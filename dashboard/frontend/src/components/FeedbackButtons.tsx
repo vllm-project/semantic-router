@@ -1,25 +1,24 @@
 import React, { useState, useCallback } from 'react'
 import styles from './FeedbackButtons.module.css'
 
-const FEEDBACK_API = '/api/router/api/v1/feedback'
+const OUTCOMES_API = '/api/router/v1/router/outcomes'
 
 export interface FeedbackSubmitParams {
-  winnerModel: string
-  loserModel?: string
+  modelId: string
+  verdict: 'good_fit' | 'underpowered'
   category?: string
   query?: string
-  tie?: boolean
 }
 
 interface FeedbackButtonsProps {
   /** Model ID for this response */
   modelId: string
+  /** Router Replay record id for the routed response */
+  replayId: string
   /** Optional category/decision name */
   category?: string
   /** Optional query for context */
   query?: string
-  /** When in A/B mode, other model IDs (thumbs down picks other as winner) */
-  otherModelIds?: string[]
   onSuccess?: () => void
   onError?: (message: string) => void
 }
@@ -62,11 +61,11 @@ function ThumbDownIcon() {
 
 const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
   modelId,
+  replayId,
   category,
   query,
-  otherModelIds = [],
   onSuccess,
-  onError
+  onError,
 }) => {
   // Which button is visually selected: 'up', 'down', or null
   const [selection, setSelection] = useState<'up' | 'down' | null>(null)
@@ -77,85 +76,101 @@ const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
 
   const clearError = () => setErrorMessage(null)
 
-  const submitFeedback = useCallback(async (params: FeedbackSubmitParams) => {
-    const body: Record<string, unknown> = {
-      winner_model: params.winnerModel,
-      decision_name: params.category || undefined,
-      query: params.query || undefined,
-      tie: params.tie ?? false
-    }
-    if (params.loserModel) body.loser_model = params.loserModel
-
-    const res = await fetch(FEEDBACK_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    })
-
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      const err = data?.error
-      const msg = (err && typeof err === 'object' && typeof err.message === 'string')
-        ? err.message
-        : (typeof data?.message === 'string' ? data.message : res.statusText)
-      throw new Error(msg || 'Feedback request failed')
-    }
-    return data
-  }, [])
-
-  const handleClick = useCallback(async (direction: 'up' | 'down') => {
-    if (loading) return
-
-    // If same button clicked again, do nothing
-    if (selection === direction) return
-
-    // Toggle visual selection
-    setSelection(direction)
-    setErrorMessage(null)
-
-    // Only submit to API once
-    if (submitted) return
-
-    // Determine if we can submit for this direction
-    if (direction === 'up') {
-      // Thumbs up: winner = this model
-      setLoading(true)
-      try {
-        await submitFeedback({ winnerModel: modelId, category, query })
-        setSubmitted(true)
-        onSuccess?.()
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to submit feedback'
-        setErrorMessage(message)
-        setSelection(null) // Reset on error so user can retry
-        onError?.(message)
-      } finally {
-        setLoading(false)
+  const submitFeedback = useCallback(
+    async (params: FeedbackSubmitParams) => {
+      const metadata: Record<string, string> = {}
+      if (params.category) {
+        metadata.decision = params.category
       }
-    } else if (direction === 'down' && otherModelIds.length > 0) {
-      // Thumbs down in A/B mode: other model wins, this model loses
-      setLoading(true)
-      try {
-        await submitFeedback({
-          winnerModel: otherModelIds[0],
-          loserModel: modelId,
-          category,
-          query
-        })
-        setSubmitted(true)
-        onSuccess?.()
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to submit feedback'
-        setErrorMessage(message)
-        setSelection(null)
-        onError?.(message)
-      } finally {
-        setLoading(false)
+      if (params.query) {
+        metadata.query = params.query
       }
-    }
-    // Thumbs down in single-model mode: visual only.
-    // API requires winner_model, which we can't provide without a comparison model.
-  }, [loading, selection, submitted, submitFeedback, modelId, category, query, otherModelIds, onSuccess, onError])
+
+      const body = {
+        replay_id: replayId,
+        source: 'user',
+        target: 'model',
+        target_ref: params.modelId,
+        verdict: params.verdict,
+        reason: params.verdict === 'good_fit' ? 'positive_feedback' : 'negative_feedback',
+        score: 1,
+        metadata,
+      }
+
+      const res = await fetch(OUTCOMES_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const err = data?.error
+        const msg =
+          err && typeof err === 'object' && typeof err.message === 'string'
+            ? err.message
+            : typeof data?.message === 'string'
+              ? data.message
+              : res.statusText
+        throw new Error(msg || 'Feedback request failed')
+      }
+      return data
+    },
+    [replayId],
+  )
+
+  const handleClick = useCallback(
+    async (direction: 'up' | 'down') => {
+      if (loading) return
+
+      // If same button clicked again, do nothing
+      if (selection === direction) return
+
+      // Toggle visual selection
+      setSelection(direction)
+      setErrorMessage(null)
+
+      // Only submit to API once
+      if (submitted) return
+
+      // Determine if we can submit for this direction
+      if (direction === 'up') {
+        setLoading(true)
+        try {
+          await submitFeedback({ modelId, verdict: 'good_fit', category, query })
+          setSubmitted(true)
+          onSuccess?.()
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to submit feedback'
+          setErrorMessage(message)
+          setSelection(null) // Reset on error so user can retry
+          onError?.(message)
+        } finally {
+          setLoading(false)
+        }
+      } else if (direction === 'down') {
+        setLoading(true)
+        try {
+          await submitFeedback({
+            modelId,
+            verdict: 'underpowered',
+            category,
+            query,
+          })
+          setSubmitted(true)
+          onSuccess?.()
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to submit feedback'
+          setErrorMessage(message)
+          setSelection(null)
+          onError?.(message)
+        } finally {
+          setLoading(false)
+        }
+      }
+    },
+    [loading, selection, submitted, submitFeedback, modelId, category, query, onSuccess, onError],
+  )
 
   return (
     <div className={styles.container}>
@@ -191,13 +206,18 @@ const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
           )}
         </button>
       </div>
-      {submitted && (
-        <span className={styles.sentLabel}>Feedback Sent!</span>
-      )}
+      {submitted && <span className={styles.sentLabel}>Feedback Sent!</span>}
       {errorMessage && (
         <div className={styles.error} role="alert">
           {errorMessage}
-          <button type="button" className={styles.dismissError} onClick={clearError} aria-label="Dismiss">×</button>
+          <button
+            type="button"
+            className={styles.dismissError}
+            onClick={clearError}
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
         </div>
       )}
     </div>

@@ -134,11 +134,10 @@ autoscaling:
   # targetMemoryUtilizationPercentage: 80
 
 safetyGuards:
-  # -- Reject multi-replica router deployments when config uses local learning
-  # selector state (elo, rl_driven, or gmtrouter). Disable only when selector
-  # learning state is intentionally externalized or the algorithm is used in a
-  # read-only/non-learning mode.
-  rejectMultiReplicaLocalSelectorState: true
+  # -- Reject multi-replica router deployments when Router Learning uses
+  # request-time local state. Disable only when accepting replica-local learning
+  # divergence or when routing traffic with sticky sessions.
+  rejectMultiReplicaLocalLearningState: true
 # Node selector
 nodeSelector: {}
 # Tolerations

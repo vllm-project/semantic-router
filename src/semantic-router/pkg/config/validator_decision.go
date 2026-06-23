@@ -195,9 +195,12 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 	}
 	if normalizedType == "session_aware" || algorithm.SessionAware != nil {
 		return fmt.Errorf(
-			"decision '%s': algorithm.type=session_aware has moved to global.router.learning.adaptations.session_aware; remove algorithm.type=session_aware and enable global router.learning.adaptations.session_aware. If this decision needs an explicit base selector, configure a normal algorithm.type; otherwise omit algorithm",
+			"decision '%s': algorithm.type=session_aware is no longer supported; remove algorithm.type=session_aware and enable global.router.learning.protection. If this decision needs an explicit base selector, configure a normal algorithm.type; otherwise omit algorithm",
 			decisionName,
 		)
+	}
+	if err := validateMigratedLearningAlgorithm(decisionName, normalizedType, algorithm); err != nil {
+		return err
 	}
 
 	configuredBlocks := configuredAlgorithmBlocks(algorithm)
@@ -240,6 +243,34 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 	return nil
 }
 
+func validateMigratedLearningAlgorithm(decisionName string, normalizedType string, algorithm *AlgorithmConfig) error {
+	migrations := map[string]string{
+		"elo":             "global.router.learning.adaptation",
+		"rl_driven":       "global.router.learning.adaptation",
+		"gmtrouter":       "global.router.learning.adaptation",
+		"bandit":          "global.router.learning.adaptation",
+		"personalization": "global.router.learning.adaptation",
+	}
+	if target, ok := migrations[normalizedType]; ok {
+		return fmt.Errorf(
+			"decision '%s': algorithm.type=%s has moved to %s; remove the learning algorithm type and choose a request-time base algorithm only when needed",
+			decisionName,
+			normalizedType,
+			target,
+		)
+	}
+	if algorithm.Elo != nil {
+		return fmt.Errorf("decision '%s': algorithm.elo is no longer supported; use global.router.learning.adaptation", decisionName)
+	}
+	if algorithm.RLDriven != nil {
+		return fmt.Errorf("decision '%s': algorithm.rl_driven is no longer supported; use global.router.learning.adaptation", decisionName)
+	}
+	if algorithm.GMTRouter != nil {
+		return fmt.Errorf("decision '%s': algorithm.gmtrouter is no longer supported; use global.router.learning.adaptation", decisionName)
+	}
+	return nil
+}
+
 func configuredAlgorithmBlocks(algorithm *AlgorithmConfig) []string {
 	configuredBlocks := make([]string, 0, 13)
 	addBlock := func(name string, configured bool) {
@@ -270,12 +301,9 @@ func expectedAlgorithmBlock(normalizedType string) (string, bool) {
 		"ratings":       "ratings",
 		"remom":         "remom",
 		"fusion":        "fusion",
-		"elo":           "elo",
 		"router_dc":     "router_dc",
 		"automix":       "automix",
 		"hybrid":        "hybrid",
-		"rl_driven":     "rl_driven",
-		"gmtrouter":     "gmtrouter",
 		"latency_aware": "latency_aware",
 		"multi_factor":  "multi_factor",
 	}
