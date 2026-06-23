@@ -120,15 +120,8 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 		recordAgenticSessionDecision(selCtx, result, defaultCandidateModelRef, ctx)
 		return defaultCandidateModelRef, string(method)
 	}
-	if result.SessionPolicy != nil && ctx != nil {
-		ctx.VSRSessionPolicy = result.SessionPolicy.ToMap()
-	}
 	recordSelCtx, result, selectedModelRef, learningApplied := r.applyRouterLearning(selCtx, result, selectedModelRef, ctx)
-	if result.SessionPolicy != nil && ctx != nil {
-		ctx.VSRSessionPolicy = result.SessionPolicy.ToMap()
-	}
-	selectedModelRef, gateApplied := r.applyPostSelectionGate(selCtx, result, selectedModelRef, ctx, method)
-	logSelectionResult(method, result, selectedModelRef, gateApplied, learningApplied)
+	logSelectionResult(method, result, selectedModelRef, learningApplied)
 	selection.RecordSelection(string(method), selCtx.DecisionName, selectedModelRef.Model, result.Tier, result.Score)
 	recordAgenticSessionDecision(recordSelCtx, result, selectedModelRef, ctx)
 	return selectedModelRef, string(method)
@@ -150,7 +143,7 @@ func (r *OpenAIRouter) selectSingleCandidateModel(
 		AllScores:     map[string]float64{defaultCandidateModelRef.Model: 1.0},
 	}
 	recordSelCtx, result, selectedModelRef, learningApplied := r.applyRouterLearning(selCtx, result, defaultCandidateModelRef, ctx)
-	logSelectionResult(selection.MethodStatic, result, selectedModelRef, false, learningApplied)
+	logSelectionResult(selection.MethodStatic, result, selectedModelRef, learningApplied)
 	recordAgenticSessionDecision(recordSelCtx, result, selectedModelRef, ctx)
 	return selectedModelRef, "single"
 }
@@ -217,19 +210,6 @@ func (r *OpenAIRouter) applyHybridModelCosts(selector *selection.HybridSelector)
 	}
 }
 
-func (r *OpenAIRouter) applyPostSelectionGate(
-	selCtx *selection.SelectionContext,
-	result *selection.SelectionResult,
-	selectedModelRef *config.ModelRef,
-	ctx *RequestContext,
-	method selection.SelectionMethod,
-) (*config.ModelRef, bool) {
-	if method == selection.MethodSessionAware || result.Method == selection.MethodSessionAware {
-		return selectedModelRef, false
-	}
-	return r.applyModelSwitchGate(selCtx, result, selectedModelRef, ctx)
-}
-
 func selectedModelRefFromResult(selCtx *selection.SelectionContext, result *selection.SelectionResult) *config.ModelRef {
 	for i := range selCtx.CandidateModels {
 		if selCtx.CandidateModels[i].Model == result.SelectedModel ||
@@ -240,12 +220,7 @@ func selectedModelRefFromResult(selCtx *selection.SelectionContext, result *sele
 	return nil
 }
 
-func logSelectionResult(method selection.SelectionMethod, result *selection.SelectionResult, selected *config.ModelRef, gateApplied bool, learningApplied bool) {
-	if gateApplied {
-		logging.Infof("[ModelSelection] Gate enforced stay on %s (method=%s, score=%.4f, confidence=%.2f): %s",
-			selected.Model, method, result.Score, result.Confidence, result.Reasoning)
-		return
-	}
+func logSelectionResult(method selection.SelectionMethod, result *selection.SelectionResult, selected *config.ModelRef, learningApplied bool) {
 	if learningApplied {
 		logging.Infof("[ModelSelection] Router Learning adjusted selection to %s (base_method=%s, score=%.4f, confidence=%.2f): %s",
 			selected.Model, method, result.Score, result.Confidence, result.Reasoning)
@@ -482,80 +457,6 @@ func (r *OpenAIRouter) getLatencyAwarePercentiles(algorithm *config.AlgorithmCon
 		return 0, 0
 	}
 	return algorithm.LatencyAware.TPOTPercentile, algorithm.LatencyAware.TTFTPercentile
-}
-
-// processUserFeedbackForElo automatically updates Elo ratings based on detected user feedback signals.
-// This implements "automatic scoring by signals" - when the FeedbackDetector classifies user
-// follow-up messages as "satisfied" or "wrong_answer", we automatically update Elo ratings.
-//
-// Signal mapping:
-// - "satisfied" → Model performed well, record as implicit win
-// - "wrong_answer" → Model performed poorly, record as implicit loss
-// - "need_clarification" / "want_different" → Neutral, no Elo update
-//
-// For single-model feedback (no comparison), we use a "virtual opponent" approach:
-// - The model competes against an expected baseline (rating 1500)
-// - "satisfied" = win against baseline
-// - "wrong_answer" = loss against baseline
-func (r *OpenAIRouter) processUserFeedbackForElo(userFeedbackSignals []string, model string, ctx *RequestContext) {
-	if len(userFeedbackSignals) == 0 || model == "" {
-		return
-	}
-
-	// Get Elo selector from registry
-	if r.ModelSelector == nil {
-		return
-	}
-
-	eloSelector, ok := r.ModelSelector.Get(selection.MethodElo)
-	if !ok || eloSelector == nil {
-		return
-	}
-
-	// Get decision name safely
-	decisionName := ""
-	if ctx.VSRSelectedDecision != nil {
-		decisionName = ctx.VSRSelectedDecision.Name
-	}
-
-	// Process each feedback signal
-	for _, signal := range userFeedbackSignals {
-		var feedback *selection.Feedback
-
-		switch signal {
-		case "satisfied":
-			// Model performed well - record as win against virtual baseline
-			feedback = &selection.Feedback{
-				Query:        ctx.RequestQuery,
-				WinnerModel:  model,
-				LoserModel:   "", // Empty = self-feedback mode
-				DecisionName: decisionName,
-				Tie:          false,
-			}
-			logging.Infof("[AutoFeedback] User satisfied with %s, recording positive Elo feedback", model)
-
-		case "wrong_answer":
-			// Model performed poorly - record as loss against virtual baseline
-			feedback = &selection.Feedback{
-				Query:        ctx.RequestQuery,
-				WinnerModel:  "", // Empty = model loses
-				LoserModel:   model,
-				DecisionName: decisionName,
-				Tie:          false,
-			}
-			logging.Infof("[AutoFeedback] User reported wrong answer from %s, recording negative Elo feedback", model)
-
-		default:
-			// "need_clarification" and "want_different" are neutral - no Elo update
-			logging.Debugf("[AutoFeedback] Neutral feedback signal %s, no Elo update", signal)
-			continue
-		}
-
-		// Submit feedback to Elo selector
-		if err := eloSelector.UpdateFeedback(context.Background(), feedback); err != nil {
-			logging.Warnf("[AutoFeedback] Failed to update Elo: %v", err)
-		}
-	}
 }
 
 // extractSessionContext extracts session ID, user ID, and conversation history from the RequestContext.

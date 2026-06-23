@@ -65,7 +65,6 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	logSignalEvaluationResults(ctx, signalLatency, signals)
 	tracing.EndSignalSpan(signalSpan, collectMatchedSignalRules(signals), 1.0, signalLatency)
 	ctx.TraceContext = signalCtx
-	r.processUserFeedbackForElo(signals.MatchedUserFeedbackRules, originalModel, ctx)
 	return signals, nil
 }
 

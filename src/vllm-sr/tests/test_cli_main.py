@@ -226,6 +226,8 @@ def test_inject_algorithm_replaces_stale_type_specific_blocks(tmp_path: Path):
                                 "type": "rl_driven",
                                 "rl_driven": {"storage_path": "/tmp/rl.json"},
                                 "gmtrouter": {"storage_path": "/tmp/gmt.json"},
+                                "bandit": {"strategy": "thompson"},
+                                "personalization": {"per_user": True},
                             },
                         },
                     ]
@@ -266,7 +268,7 @@ def test_inject_latency_aware_algorithm_keeps_matching_config_block(tmp_path: Pa
                             "name": "latency",
                             "algorithm": {
                                 "type": "hybrid",
-                                "hybrid": {"elo_weight": 0.6},
+                                "hybrid": {"experience_weight": 0.6},
                             },
                         },
                     ]

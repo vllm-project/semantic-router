@@ -25,6 +25,16 @@ from cli.commands.eval import (
 from cli.commands.eval import (
     eval as eval_command,
 )
+from cli.commands.recipe_learning import (
+    EvalCase,
+    build_recipe_learning_artifact,
+    candidate_replay_endpoints,
+    default_replay_endpoint,
+    fetch_replay_payload,
+    normalize_replay_endpoint,
+    normalize_replay_payload,
+)
+from cli.commands.recipe_learning_metrics import record_switched
 from click.testing import CliRunner
 
 # ---------------------------------------------------------------------------
@@ -172,6 +182,347 @@ def test_summarize_response_decision_result_with_signal_confidences() -> None:
     assert "economics" in summary
     assert "signal confidences" in summary
     assert "0.95" in summary
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: offline Router Learning recipe-learning command
+# ---------------------------------------------------------------------------
+
+
+def _sample_learning_record() -> dict[str, Any]:
+    return {
+        "id": "replay-1",
+        "request_id": "req-1",
+        "decision": "simple_general",
+        "decision_tier": 1,
+        "original_model": "frontier",
+        "selected_model": "small",
+        "prompt_tokens": 1000,
+        "cached_prompt_tokens": 250,
+        "total_tokens": 1100,
+        "actual_cost": 0.2,
+        "baseline_cost": 0.5,
+        "cost_savings": 0.3,
+        "route_diagnostics": {
+            "decision": "simple_general",
+            "selected_model": "small",
+            "original_model": "frontier",
+        },
+        "learning": {
+            "adaptation": {
+                "action": "propose_switch",
+                "candidate_set": "decision",
+                "strategy": "routing_sampling",
+                "sampling": {"used": True},
+            },
+            "protection": {
+                "action": "hold_current",
+                "scope": "conversation",
+            },
+        },
+        "outcomes": [
+            {
+                "source": "eval",
+                "target": "model",
+                "target_ref": "small",
+                "verdict": "overprovisioned",
+                "score": 1,
+            }
+        ],
+    }
+
+
+def test_eval_help_includes_recipe_learning_subcommand() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(eval_command, ["--help"])
+
+    assert result.exit_code == 0
+    assert "recipe-learning" in result.output
+
+
+def test_recipe_learning_normalizes_replay_endpoint() -> None:
+    endpoint = normalize_replay_endpoint("http://localhost:8080", 25)
+
+    assert endpoint.startswith("http://localhost:8080/v1/router_replay")
+    assert "showDetails=true" in endpoint
+    assert "limit=25" in endpoint
+
+
+def test_recipe_learning_default_replay_endpoint_uses_listener_port() -> None:
+    assert default_replay_endpoint().startswith(
+        "http://localhost:8899/v1/router_replay"
+    )
+
+
+def test_recipe_learning_candidates_include_listener_fallback_for_api_port() -> None:
+    endpoints = candidate_replay_endpoints("http://router.example:8080", 25)
+
+    assert endpoints[0].startswith("http://router.example:8080/v1/router_replay")
+    assert endpoints[1].startswith("http://router.example:8899/v1/router_replay")
+
+
+def test_recipe_learning_fetch_tries_listener_fallback(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class _Response:
+        def __init__(self, status_code: int, payload: dict[str, Any]) -> None:
+            self.status_code = status_code
+            self._payload = payload
+            self.text = json.dumps(payload)
+
+        def json(self) -> dict[str, Any]:
+            return self._payload
+
+    def _fake_get(url: str, timeout: int) -> _Response:
+        calls.append(url)
+        if ":8080/" in url:
+            return _Response(404, {"error": "not found"})
+        return _Response(
+            200, {"object": "router_replay.list", "data": [_sample_learning_record()]}
+        )
+
+    monkeypatch.setattr(requests, "get", _fake_get)
+
+    payload = fetch_replay_payload("http://router.example:8080", 2, 1)
+
+    assert payload["object"] == "router_replay.list"
+    assert calls[0].startswith("http://router.example:8080/v1/router_replay")
+    assert calls[1].startswith("http://router.example:8899/v1/router_replay")
+
+
+def test_recipe_learning_normalizes_router_replay_payload() -> None:
+    payload = {"object": "router_replay.list", "data": [_sample_learning_record()]}
+
+    assert normalize_replay_payload(payload)[0]["id"] == "replay-1"
+
+
+def test_recipe_learning_switch_metric_ignores_initial_auto_route() -> None:
+    record = {
+        "original_model": "auto",
+        "selected_model": "qwen/qwen3.6-rocm",
+        "learning": {"protection": {"action": "establish_baseline"}},
+    }
+
+    assert record_switched(record) is False
+
+
+def test_recipe_learning_switch_metric_uses_learning_switch_action() -> None:
+    record = {
+        "original_model": "auto",
+        "selected_model": "qwen/qwen3.6-rocm",
+        "learning": {"protection": {"action": "allow_switch"}},
+    }
+
+    assert record_switched(record) is True
+
+
+def test_recipe_learning_artifact_contains_metrics_patch_candidates_and_seed_pack() -> (
+    None
+):
+    recipe = {
+        "version": "v0.3",
+        "routing": {
+            "decisions": [
+                {
+                    "name": "simple_general",
+                    "adaptations": {"protection": {"stability_weight": 1.0}},
+                }
+            ]
+        },
+    }
+    artifact = build_recipe_learning_artifact([_sample_learning_record()], {}, recipe)
+
+    assert artifact["object"] == "router_learning.recipe_learning"
+    assert artifact["metrics"]["overall"]["records"] == 1
+    assert artifact["metrics"]["per_tier"]["tier_1"]["records"] == 1
+    assert artifact["metrics"]["per_tier"]["tier_1"]["decision_tiers"] == {"tier_1": 1}
+    assert artifact["findings"]
+    assert artifact["findings"][0]["id"].startswith("rlf_")
+    assert artifact["findings"][0]["affected_decisions"] == ["simple_general"]
+    assert artifact["findings"][0]["next_action"]
+    assert artifact["recipe_patch"]["suggestions"]
+    assert artifact["recipe_patch"]["suggestions"][0]["finding_id"].startswith("rlf_")
+    assert artifact["candidate_recipes"]
+    assert artifact["candidate_recipes"][0]["recipe"] is not None
+    candidate_decision = artifact["candidate_recipes"][0]["recipe"]["routing"][
+        "decisions"
+    ][0]
+    assert candidate_decision["adaptations"]["adaptation"]["candidate_set"] == "tier"
+    assert artifact["experiment_results"]["candidates"]
+    assert "per_tier" in artifact["experiment_results"]["candidates"][0]["deltas"]
+    seed_record = artifact["experience_seed_pack"]["records"][0]
+    assert seed_record["decision_id"] == "simple_general"
+    assert seed_record["quality_seed"] == 0.5
+    assert seed_record["seed_weight"] == 1
+    assert seed_record["source_metric"] == "model_outcomes"
+    assert seed_record["support"] == {"model_outcomes": 1}
+    assert seed_record["overprovisioned_count"] == 1
+    assert "quality_prior" not in seed_record
+    assert "decision" not in seed_record
+
+
+def test_recipe_learning_detects_route_model_and_protection_gaps() -> None:
+    record = {
+        "id": "replay-route-miss",
+        "request_id": "req-route-miss",
+        "decision": "simple_general",
+        "decision_tier": 1,
+        "original_model": "small",
+        "selected_model": "frontier",
+        "actual_cost": 2.5,
+        "latency_ms": 1500,
+        "route_diagnostics": {
+            "decision": "simple_general",
+            "selected_model": "frontier",
+            "original_model": "small",
+        },
+        "learning": {
+            "adaptation": {
+                "action": "propose_switch",
+                "candidate_set": "global",
+                "strategy": "routing_sampling",
+                "sampling": {"used": True},
+            }
+        },
+        "outcomes": [
+            {
+                "source": "eval",
+                "target": "provider",
+                "target_ref": "frontier-provider",
+                "verdict": "failed",
+            }
+        ],
+    }
+    cases = {
+        "replay-route-miss": EvalCase(
+            replay_id="replay-route-miss",
+            expected_decision="domain_math",
+            expected_model="small",
+            max_cost=1.0,
+            max_latency_ms=1000,
+        )
+    }
+    recipe = {
+        "version": "v0.3",
+        "routing": {
+            "decisions": [
+                {"name": "simple_general", "priority": 50},
+                {"name": "domain_math", "priority": 40},
+            ]
+        },
+    }
+
+    artifact = build_recipe_learning_artifact([record], cases, recipe)
+    finding_types = {item["type"] for item in artifact["findings"]}
+
+    assert {
+        "wrong_decision",
+        "wrong_model_selection",
+        "missing_protection",
+        "overly_broad_candidate_set",
+        "provider_reliability",
+        "latency_violation",
+        "cost_violation",
+    }.issubset(finding_types)
+    suggestions = artifact["recipe_patch"]["suggestions"]
+    assert any(item["path"].endswith("/priority") for item in suggestions)
+    assert any(item["path"].endswith("/protection/mode") for item in suggestions)
+    assert any(item.get("value") == "decision" for item in suggestions)
+    materialized = [
+        candidate["recipe"]
+        for candidate in artifact["candidate_recipes"]
+        if candidate.get("recipe") is not None
+    ]
+    assert any(
+        recipe["routing"]["decisions"][0].get("priority") == 40
+        for recipe in materialized
+    )
+    assert any(
+        recipe["routing"]["decisions"][0]
+        .get("adaptations", {})
+        .get("protection", {})
+        .get("mode")
+        == "apply"
+        for recipe in materialized
+    )
+    assert artifact["metrics"]["per_tier"]["tier_1"]["records"] == 1
+    assert any(
+        candidate["deltas"]["per_tier"].get("tier_1")
+        for candidate in artifact["experiment_results"]["candidates"]
+    )
+
+
+def test_recipe_learning_command_reads_file_and_writes_artifacts(tmp_path) -> None:
+    replay_path = tmp_path / "replay.json"
+    recipe_path = tmp_path / "recipe.yaml"
+    output_dir = tmp_path / "out"
+    replay_path.write_text(
+        json.dumps(
+            {"object": "router_replay.list", "data": [_sample_learning_record()]}
+        ),
+        encoding="utf-8",
+    )
+    recipe_path.write_text(
+        """
+version: v0.3
+routing:
+  decisions:
+    - name: simple_general
+      adaptations:
+        protection:
+          stability_weight: 1.0
+""".strip(),
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        eval_command,
+        [
+            "recipe-learning",
+            "--replay-file",
+            str(replay_path),
+            "--recipe-file",
+            str(recipe_path),
+            "--output-dir",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "candidate recipes:" in result.output
+    assert (output_dir / "summary.json").exists()
+    assert (output_dir / "experiment_results.json").exists()
+
+
+def test_recipe_learning_report_only_skips_patch_generation(tmp_path) -> None:
+    replay_path = tmp_path / "replay.json"
+    replay_path.write_text(
+        json.dumps(
+            {"object": "router_replay.list", "data": [_sample_learning_record()]}
+        ),
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        eval_command,
+        [
+            "recipe-learning",
+            "--replay-file",
+            str(replay_path),
+            "--report-only",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    artifact = json.loads(result.output)
+    assert artifact["findings"]
+    assert artifact["recipe_patch"]["mode"] == "report_only"
+    assert artifact["recipe_patch"]["suggestions"] == []
+    assert artifact["candidate_recipes"] == []
 
 
 # ---------------------------------------------------------------------------

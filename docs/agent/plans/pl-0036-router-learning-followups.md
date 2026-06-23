@@ -1,97 +1,92 @@
-# Router Learning Follow-Up Closure
+# Router Learning Adaptation and Protection
 
 ## Goal
 
-Implement the remaining follow-up work from
-`website/docs/proposals/router-learning-memory-and-adaptations.md`: shared
-Router Learning runtime contracts, experience, adaptation composition,
-stateful algorithm migration, distributed-states guidance, architecture eval,
-AMD validation, and a GitHub PR.
+Implement the current
+`website/docs/proposals/router-learning-memory-and-adaptations.md` proposal:
+clean-break Router Learning API, adaptation, protection, routing sampling,
+outcome ingestion, replay diagnostics, offline recipe-learning hooks, local
+validation, AMD validation, and PR update.
 
 ## Scope
 
-- Keep the public Router Learning API clean-break only.
+- Replace old public learning config names instead of compatibility aliasing
+  them.
+- Expose public runtime concepts as `adaptation` and `protection`.
 - Keep request-time routing fail-open and free of synchronous external storage
   reads.
-- Treat Router Replay as the durable event log.
-- Treat states as low-latency runtime memory owned by enabled adaptations.
-- Treat experience as materialized historical evidence generated from replay,
-  eval, or overrides and read from local snapshots.
-- Move learning-style selector states into Router Learning adaptations.
-- Validate local behavior before AMD deployment validation.
+- Use Router Replay as the durable event log.
+- Keep online protection state and model experience in process for the first
+  implementation.
+- Implement `routing_sampling` as the day-0 online adaptation strategy.
+- Let decisions bypass or observe learning without hard-coded privacy,
+  security, or local-only concepts.
+- Validate the implementation locally before AMD deployment validation.
 
 ## Exit Criteria
 
-- A second adaptation can run through the same internal input/output contract
-  used by `session_aware`.
-- Headers and replay can represent multiple learning adaptations and the final
-  composed decision.
-- Experience has an internal materialized snapshot contract and fail-open
+- Router config accepts `global.router.learning.adaptation` and
+  `global.router.learning.protection`.
+- Router config rejects old public learning config names without rewrite or
+  compatibility fill.
+- Decision config supports `adaptations.mode`, `adaptations.adaptation.mode`,
+  `adaptations.protection.mode`, optional
+  `adaptations.protection.stability_weight`, and optional
+  `adaptations.protection.switch_margin`.
+- Runtime ordering is:
+  `base selector -> protection preflight -> adaptation -> protection switch guard -> final model`.
+- Adaptation supports `candidate_set: decision`, `tier`, and `global`.
+- Adaptation implements `strategy: routing_sampling` with posterior mean,
+  guarded sampling, reliability/cost/latency/cache adjustments, and replay
   diagnostics.
-- `elo`, `rl_driven`/Thompson, and `gmtrouter` no longer expose public
-  decision-local learning algorithm config; their migrated capabilities live
-  under Router Learning adaptations.
-- Bandit day0 supports `linucb` by default and `linear_thompson` as a supported
-  mode, with weighted `quality`, `cost`, and `latency` goals.
-- Distributed-states semantics are documented in deployment guidance.
-- Architecture eval reports route correctness, base/final model, adaptation
-  method/mode/action/reason/scope, cache/cost delta, unnecessary switch rate,
-  bypass behavior, replay coverage, and p50/p95 overhead.
-- Local gates pass.
+- Protection supports `conversation` and `session` scopes, identity headers,
+  sampling suppression, switch guard, cache/tool-loop/session protection, and
+  deterministic rescue.
+- Outcomes can be ingested through `POST /v1/router/outcomes`, linked by
+  `replay_id`, and used to update model-targeted online experience.
+- Response headers use compact multi-header learning diagnostics.
+- Router Replay records typed `learning.protection_preflight`,
+  `learning.adaptation`, and `learning.protection` diagnostics.
+- Offline recipe-learning hooks can export replay/outcome evidence and report
+  useful metrics or findings.
+- Local gates from `make agent-report` pass or have concrete environment
+  evidence.
 - AMD validation passes against the agentic recipe and captures routing,
-  learning, replay, dashboard, and API evidence.
-- The final branch is pushed and a GitHub PR is opened.
+  protection, adaptation, replay, dashboard, API, and cache evidence.
+- The PR title, description, and content match the final implementation.
 
 ## Task List
 
-- [x] RLF-001 Rebase the proposal follow-up plan onto latest `origin/main`.
-- [x] RLF-002 Add a shared Router Learning runtime contract and deterministic
-  adaptation composer.
-- [x] RLF-003 Move learning headers and replay diagnostics to method-keyed
-  multi-adaptation output.
-- [x] RLF-004 Add internal experience snapshot contracts and diagnostics.
-- [x] RLF-005 Add global/decision config for `bandit`, `elo`, and
-  `personalization` adaptations across Go router and Python CLI schema.
-- [x] RLF-006 Migrate bandit day0 (`linucb`, `linear_thompson`) into Router
-  Learning states and replay update paths.
-- [x] RLF-007 Migrate Elo states into Router Learning states and feedback paths.
-- [x] RLF-008 Migrate GMTRouter personalization states into Router Learning.
-- [x] RLF-009 Reject old public `algorithm.type` paths for migrated learning
-  algorithms with actionable errors.
-- [x] RLF-010 Add architecture eval fixtures and reports.
-- [x] RLF-011 Update tutorials, proposal status, and deployment/distributed
-  states guidance.
-- [x] RLF-012 Run local gates and fix failures.
-- [x] RLF-013 Run AMD deployment validation.
-- [x] RLF-014 Push branch and open PR.
+- [x] RLA-001 Update proposal to current clean-break architecture.
+- [ ] RLA-002 Replace Go and Python config schema with adaptation/protection.
+- [ ] RLA-003 Replace runtime learning contracts with typed adaptation and
+  protection pipeline.
+- [ ] RLA-004 Implement protection state, preflight, switch guard, and rescue.
+- [ ] RLA-005 Implement model experience and `routing_sampling`.
+- [ ] RLA-006 Add outcome ingestion API and online experience updates.
+- [ ] RLA-007 Update response headers and Router Replay diagnostics.
+- [ ] RLA-008 Update recipe, docs, examples, and tests.
+- [ ] RLA-009 Run local validation gates and fix failures.
+- [ ] RLA-010 Run AMD deployment validation and capture evidence.
+- [ ] RLA-011 Update PR title, description, and final content.
 
 ## Next Action
 
-Monitor PR review and follow-up comments. Local focused tests,
-`make agent-validate`, `make agent-lint`, `make vllm-sr-test`,
-`make test-semantic-router`, and `make agent-ci-gate` passed before AMD
-deployment validation. AMD validation ran on PR head `6c162e31` with the
-`agentic-saars.yaml` recipe and PR images:
-
-- Router Envoy ready on `:8899`, dashboard ready on `:8700`, and the vLLM ROCm
-  backend serving the recipe aliases.
-- Conversation-scope routing covered simple/local, privacy bypass, high-care
-  legal/health, complex/code, independent new conversations, and tool-loop
-  hard locks with `x-vsr-learning-*` headers.
-- Temporary session-scope validation covered first-selected session protection
-  across conversations and idle-time release to a stronger model.
-- Router Replay captured method-keyed learning diagnostics, and vLLM metrics
-  exposed prefix-cache counters.
-- PR #2258 is open at
-  `https://github.com/vllm-project/semantic-router/pull/2258`; checks are
-  green/neutral and merge is blocked only by review policy.
+Finish the runtime cutover from old method-keyed learning adapters to the
+adaptation/protection pipeline. The current worktree has partial config and CLI
+schema changes; next edits should make `src/semantic-router/pkg/extproc` compile
+against the clean-break API and then add outcome/replay/header coverage.
 
 ## Operating Rules
 
 - Do not reintroduce config rewrite or compatibility migration for old learning
-  algorithm paths.
+  config names.
+- Do not mention external reference projects in repo docs or code.
 - Do not make request routing depend on synchronous external storage.
-- Do not expose broad public `states.enabled` or `experience.enabled` toggles.
+- Do not expose broad public `memory.enabled`, `states.enabled`, or
+  `experience.enabled` toggles.
+- Keep policy/result structures typed; use `map[string]interface{}` only at
+  serialization boundaries.
 - Keep implementation slices independently testable.
 - Record intentional architecture gaps in this plan or indexed tech debt rather
   than leaving them only in chat.
@@ -99,6 +94,5 @@ deployment validation. AMD validation ran on PR head `6c162e31` with the
 ## Related Docs
 
 - `website/docs/proposals/router-learning-memory-and-adaptations.md`
-- `docs/agent/plans/pl-0035-router-learning-session-aware.md`
 - `docs/agent/change-surfaces.md`
 - `docs/agent/module-boundaries.md`

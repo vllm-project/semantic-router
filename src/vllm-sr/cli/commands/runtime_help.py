@@ -25,9 +25,8 @@ svm        - SVM selector using shared ML model-selection settings
 mlp        - MLP selector using shared ML model-selection settings
 multi_factor - Quality, latency, cost, and load scoring
 
-Cross-request learning lives under global.router.learning.adaptations
-instead of --algorithm. Use adaptations.elo, adaptations.bandit, or
-adaptations.personalization for feedback-driven learning.
+Cross-request learning lives under global.router.learning.adaptation and
+global.router.learning.protection instead of --algorithm.
 
 Examples:
     # Basic usage (uses config.yaml, Docker target)

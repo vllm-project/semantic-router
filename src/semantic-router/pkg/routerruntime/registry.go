@@ -1,7 +1,6 @@
 package routerruntime
 
 import (
-	"context"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -24,9 +23,9 @@ type Registry struct {
 
 // LearningRuntime is the narrow API-server seam for Router Learning state.
 // The implementation lives with the router runtime; the API server only needs
-// to forward explicit feedback without depending on extproc internals.
+// to forward typed outcomes without depending on extproc internals.
 type LearningRuntime interface {
-	UpdateFeedback(context.Context, *selection.Feedback) int
+	OutcomeRuntime
 }
 
 func NewRegistry(cfg *config.RouterConfig) *Registry {

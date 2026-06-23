@@ -2,31 +2,40 @@
 
 ## Overview
 
-Router Learning uses Router Memory in layers. The hot path uses in-process
-online state. Router Replay remains the durable event log for audit, debugging,
-and eval.
+Router Learning uses in-process online state on the hot path and Router Replay
+as the durable event log. Request routing does not depend on synchronous
+external storage reads.
 
 ## Key Advantages
 
-- Keeps request routing free of required external storage reads.
-- Reuses the existing Router Replay service and storage backends.
-- Stores full learning diagnostics under `learning.adaptations`.
-- Separates payload capture policy from learning behavior.
+- Keeps hot-path learning reads local and bounded.
+- Preserves Router Replay as the durable audit and eval source of truth.
+- Separates mutable protection state from long-lived replay evidence.
+- Gives offline recipe learning the data it needs without slowing requests.
 
 ## What Problem Does It Solve?
 
-Learning adaptations need state from earlier requests, but synchronous storage
-calls would make routing fragile. The router keeps low-latency online state in
-memory and writes durable event records through Router Replay. Evals and future
-experience materializers can read replay records without changing the request
-path.
+Learning needs history, but request routing cannot scan storage or replay logs
+on every call. The router keeps compact in-process state for protection and
+adaptation, then writes durable replay records for audit, debugging, outcomes,
+and offline recipe experiments.
 
 ## When to Use
 
-- You need to debug why an adaptation stayed or switched models.
-- You want evals to replay model choices and cache evidence.
-- You need durable audit records for Router Learning decisions.
-- You plan to build replay-derived experience later.
+- You need detailed learning diagnostics beyond compact response headers.
+- You want evals or agents to inspect routing evidence after the request.
+- You want outcomes to update online experience while remaining linked to a
+  replay record.
+- You plan to run offline recipe learning from production or test replay data.
+
+## Layers
+
+| Layer | Hot path | Responsibility |
+| --- | --- | --- |
+| Protection state | Yes | Current protected model, identity scope, turn count, cache/tool-loop evidence, and switch history. |
+| Model experience | Yes | Quality, overuse, reliability, latency, cache, and cost evidence for adaptation. |
+| Router Replay | No | Durable route, response, outcome, and learning diagnostics. |
+| Offline recipe learning | No | Evals, findings, candidate recipes, recipe patches, and experience seed packs. |
 
 ## Configuration
 
@@ -45,26 +54,74 @@ Learning diagnostics are written into replay records when replay is enabled:
 ```json
 {
   "learning": {
-    "adaptations": {
-      "session_aware": {
-        "action": "stay",
-        "reason": "stay_has_best_adjusted_score",
-        "identity": {
-          "session": {
-            "source": "header:x-session-id",
-            "status": "present",
-            "hash": "4f2a8c0e9b7d3411"
-          },
-          "conversation": {
-            "source": "header:x-conversation-id",
-            "status": "present",
-            "hash": "0bb97f4a3c812efe"
-          }
-        },
-        "memory_cached_tokens": 2048,
-        "last_cache_accounting_source": "backend_reported"
-      }
+    "protection_preflight": {
+      "action": "allow_sampling",
+      "scope": "conversation",
+      "reason": "no_tool_or_protocol_state"
+    },
+    "adaptation": {
+      "strategy": "routing_sampling",
+      "candidate_set": "decision",
+      "base_model": "small-model",
+      "proposal_model": "frontier-model",
+      "reason": "posterior_win"
+    },
+    "protection": {
+      "action": "allow_switch",
+      "base_model": "small-model",
+      "proposal_model": "frontier-model",
+      "final_model": "frontier-model",
+      "switch_cost": 0.03,
+      "reason": "switch_allowed"
     }
   }
 }
 ```
+
+Raw session, conversation, user, tenant, and workspace identifiers should not be
+stored in learning diagnostics. Store bounded hashes and source/status fields.
+
+## Outcomes
+
+Submit typed feedback through the replay-linked outcome endpoint:
+
+```http
+POST /v1/router/outcomes
+```
+
+```json
+{
+  "replay_id": "replay_123",
+  "source": "agent",
+  "target": "model",
+  "target_ref": "frontier-model",
+  "verdict": "good_fit",
+  "reason": "solved_complex_task",
+  "score": 1.0
+}
+```
+
+`target: model` outcomes update online model experience. `target: route`,
+`target: policy`, `target: stability`, `target: provider`, and
+`target: router` outcomes are kept for replay and offline recipe learning unless
+a typed online consumer exists.
+
+## Recipe Learning Command
+
+Run the offline loop from replay:
+
+```bash
+vllm-sr eval recipe-learning \
+  --replay-file replay.json \
+  --recipe-file config.yaml \
+  --output-dir ./router-learning-report
+```
+
+The command writes:
+
+- `metrics.json`
+- `findings.json`
+- `experiment_results.json`
+- `recipe_patch.json`
+- `experience_seed_pack.json`
+- candidate recipe YAML files when `--recipe-file` is provided

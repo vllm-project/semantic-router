@@ -1,6 +1,6 @@
 """Configuration validator for vLLM Semantic Router."""
 
-from typing import Dict, Any, List
+from typing import Any, List
 from cli.config_contract import (
     build_projection_reference_index,
     build_signal_reference_index,
@@ -26,7 +26,6 @@ from cli.models import (
 )
 from pydantic import ValidationError as PydanticValidationError
 from cli.utils import get_logger
-from cli.consts import EXTERNAL_API_MODEL_FORMATS
 from cli.validation_error import ValidationError
 from cli.validator_projection_embedding import (
     validate_embedding_modality_compatibility,
@@ -50,21 +49,19 @@ ALGORITHM_CONFIG_BLOCKS = (
     "confidence",
     "ratings",
     "remom",
-    "elo",
     "router_dc",
     "automix",
     "hybrid",
-    "rl_driven",
-    "gmtrouter",
     "latency_aware",
     "multi_factor",
-    "session_aware",
 )
 
 MIGRATED_LEARNING_ALGORITHM_TARGETS = {
-    "elo": "global.router.learning.adaptations.elo",
-    "rl_driven": "global.router.learning.adaptations.bandit",
-    "gmtrouter": "global.router.learning.adaptations.personalization",
+    "elo": "global.router.learning.adaptation",
+    "rl_driven": "global.router.learning.adaptation",
+    "gmtrouter": "global.router.learning.adaptation",
+    "bandit": "global.router.learning.adaptation",
+    "personalization": "global.router.learning.adaptation",
 }
 
 
@@ -178,12 +175,16 @@ def configured_algorithm_blocks(algorithm: Any) -> List[str]:
 
 def validate_migrated_learning_algorithm(decision, normalized_type: str):
     algorithm = decision.algorithm
-    if normalized_type == "session_aware" or algorithm.session_aware is not None:
+    if (
+        normalized_type == "session_aware"
+        or getattr(algorithm, "session_aware", None) is not None
+    ):
         return ValidationError(
-            f"decision '{decision.name}' algorithm.type=session_aware has moved to "
-            "global.router.learning.adaptations.session_aware; remove "
+            f"decision '{decision.name}' algorithm.type=session_aware is no longer supported; "
+            "remove "
             "algorithm.type=session_aware and configure a normal base algorithm only "
-            "when this decision needs one",
+            "when this decision needs one. Enable global.router.learning.protection "
+            "for session or conversation protection.",
             field=f"decisions.{decision.name}.algorithm",
         )
     if normalized_type in MIGRATED_LEARNING_ALGORITHM_TARGETS:
@@ -200,7 +201,7 @@ def validate_migrated_learning_blocks(decision) -> List[ValidationError]:
     errors = []
     algorithm = decision.algorithm
     for block_name, target in MIGRATED_LEARNING_ALGORITHM_TARGETS.items():
-        if getattr(algorithm, block_name) is not None:
+        if getattr(algorithm, block_name, None) is not None:
             errors.append(
                 ValidationError(
                     f"decision '{decision.name}' algorithm.{block_name} has moved to "
@@ -570,7 +571,7 @@ def _maybe_hybrid_weight_error(
     # Weights are normalized at runtime, so they need not sum to 1.0 — but an
     # all-zero set leaves the selector with nothing to normalize, so reject it.
     total = (
-        (0.3 if h.elo_weight is None else h.elo_weight)
+        (0.3 if h.experience_weight is None else h.experience_weight)
         + (0.3 if h.router_dc_weight is None else h.router_dc_weight)
         + (0.2 if h.automix_weight is None else h.automix_weight)
         + (0.2 if h.cost_weight is None else h.cost_weight)
@@ -622,9 +623,6 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
 
         algo = decision.algorithm
         algo_type = algo.type
-
-        if algo_type == "session_aware":
-            continue
 
         # Validate algorithm type
         if algo_type not in all_types:

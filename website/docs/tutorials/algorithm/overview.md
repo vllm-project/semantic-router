@@ -104,8 +104,8 @@ flowchart TD
 
 ### Selection Algorithms
 
-Session-aware continuity is configured as Router Learning, not as a decision
-algorithm. See [Session-Aware Learning](../learning/session-aware). There is no
+Conversation and session protection is configured as Router Learning, not as a
+decision algorithm. See [Protection](../learning/protection). There is no
 `algorithm/selection/session-aware` tutorial in the clean v0.3 surface because
 `algorithm.type: session_aware` is not a supported public algorithm.
 
@@ -120,8 +120,9 @@ algorithm. See [Session-Aware Learning](../learning/session-aware). There is no
 - [Static](./selection/static)
 - [SVM](./selection/svm)
 
-Feedback-driven Elo, bandit/Thompson, and personalization behavior lives under
-[Router Learning](../learning/adaptations), not `decision.algorithm`.
+Future feedback-driven model-choice strategies belong under
+[Router Learning](../learning/adaptations), not `decision.algorithm`. The
+current Router Learning strategy is `routing_sampling`.
 
 ### Looper Algorithms
 

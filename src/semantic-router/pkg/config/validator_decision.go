@@ -195,7 +195,7 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 	}
 	if normalizedType == "session_aware" || algorithm.SessionAware != nil {
 		return fmt.Errorf(
-			"decision '%s': algorithm.type=session_aware has moved to global.router.learning.adaptations.session_aware; remove algorithm.type=session_aware and enable global router.learning.adaptations.session_aware. If this decision needs an explicit base selector, configure a normal algorithm.type; otherwise omit algorithm",
+			"decision '%s': algorithm.type=session_aware is no longer supported; remove algorithm.type=session_aware and enable global.router.learning.protection. If this decision needs an explicit base selector, configure a normal algorithm.type; otherwise omit algorithm",
 			decisionName,
 		)
 	}
@@ -245,9 +245,11 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 
 func validateMigratedLearningAlgorithm(decisionName string, normalizedType string, algorithm *AlgorithmConfig) error {
 	migrations := map[string]string{
-		"elo":       "global.router.learning.adaptations.elo",
-		"rl_driven": "global.router.learning.adaptations.bandit",
-		"gmtrouter": "global.router.learning.adaptations.personalization",
+		"elo":             "global.router.learning.adaptation",
+		"rl_driven":       "global.router.learning.adaptation",
+		"gmtrouter":       "global.router.learning.adaptation",
+		"bandit":          "global.router.learning.adaptation",
+		"personalization": "global.router.learning.adaptation",
 	}
 	if target, ok := migrations[normalizedType]; ok {
 		return fmt.Errorf(
@@ -258,13 +260,13 @@ func validateMigratedLearningAlgorithm(decisionName string, normalizedType strin
 		)
 	}
 	if algorithm.Elo != nil {
-		return fmt.Errorf("decision '%s': algorithm.elo has moved to global.router.learning.adaptations.elo", decisionName)
+		return fmt.Errorf("decision '%s': algorithm.elo is no longer supported; use global.router.learning.adaptation", decisionName)
 	}
 	if algorithm.RLDriven != nil {
-		return fmt.Errorf("decision '%s': algorithm.rl_driven has moved to global.router.learning.adaptations.bandit", decisionName)
+		return fmt.Errorf("decision '%s': algorithm.rl_driven is no longer supported; use global.router.learning.adaptation", decisionName)
 	}
 	if algorithm.GMTRouter != nil {
-		return fmt.Errorf("decision '%s': algorithm.gmtrouter has moved to global.router.learning.adaptations.personalization", decisionName)
+		return fmt.Errorf("decision '%s': algorithm.gmtrouter is no longer supported; use global.router.learning.adaptation", decisionName)
 	}
 	return nil
 }

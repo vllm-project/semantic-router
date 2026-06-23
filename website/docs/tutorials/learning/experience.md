@@ -2,41 +2,47 @@
 
 ## Overview
 
-Experience is the materialized Router Learning evidence derived from replay
-records, evals, or operator overrides. It is the roadmap layer for historical
-facts that should influence future routing without adding storage reads to
-every request.
+Experience is the online Router Learning evidence used by adaptation. It is
+kept in process on the request path and summarized from bounded outcomes and
+telemetry. Offline recipe learning can export seed-pack artifacts for cold-start
+analysis and future warmup flows, but the first public API does not expose a
+runtime seed-pack import switch.
 
 ## Key Advantages
 
 - Keeps expensive aggregation out of the request path.
-- Turns replay history into compact read-time evidence.
-- Gives adaptations a shared place for learned routing facts.
+- Turns outcomes and telemetry into compact read-time evidence.
+- Gives adaptation a typed place for learned model-choice facts.
 - Preserves Router Replay as the event log source of truth.
 
 ## What Problem Does It Solve?
 
-Some routing evidence needs many past requests: quality gaps, handoff
-penalties, remaining-turn estimates, reward statistics, model health, or tenant
-preferences. Reading all events during a request would be too slow. Experience
-is precomputed into snapshots that adaptations can load into local memory.
+Some routing evidence needs past requests: model fit, overuse, provider
+failures, latency, cache reuse, and effective cost. Reading all events during a
+request would be too slow. The router updates compact model experience in
+memory and writes durable evidence to Router Replay for offline analysis.
 
 ## When to Use
 
-- A learning adaptation needs aggregate evidence from replay or evals.
-- An operator wants to override known model quality or handoff costs.
-- Offline evals produce experience that should influence online routing.
-- A learning adaptation needs materialized evidence beyond its live in-process
-  states.
+- Adaptation needs aggregate evidence from outcomes and runtime telemetry.
+- An operator wants offline evals to explain cold-start model quality evidence.
+- Offline recipe learning needs seed-pack artifacts for experiments or future
+  warmup flows.
 
 ## Configuration
 
-The current implementation does not require public experience config.
-Experience gets a public API only when materializers and refresh semantics are
-available.
+The current public API does not expose `experience.enabled`,
+`experience.source`, or a runtime seed-pack import field. If adaptation is
+enabled, model experience is part of the `routing_sampling` implementation.
 
-Until public experience materializers are implemented, session-aware learning
-uses in-process states plus model pricing, cache accounting, switch history, and
-internal lookup-table migration material when present. Bandit, Elo, and
-personalization record missing experience views until replay/eval materializers
-exist.
+Online experience is keyed by matched decision, decision tier, and model:
+
+```text
+decision_id + decision_tier + model
+  -> decision_tier + model
+  -> model
+```
+
+Outcome ingestion updates model-targeted experience. Route, policy, stability,
+provider, and router outcomes feed replay diagnostics and offline recipe
+learning instead of directly mutating model quality.

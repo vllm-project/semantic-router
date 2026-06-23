@@ -169,7 +169,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'tutorials/learning/overview',
             'tutorials/learning/adaptations',
-            'tutorials/learning/session-aware',
+            'tutorials/learning/protection',
             'tutorials/learning/memory-and-replay',
             'tutorials/learning/decision-adaptations',
             'tutorials/learning/experience',

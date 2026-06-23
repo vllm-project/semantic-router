@@ -339,7 +339,6 @@ func addStandardDecisionHeaders(builder *responseHeaderMutationBuilder, ctx *Req
 	builder.addString(headers.VSRLearningActions, learningPolicyPairHeader(ctx, learningPolicyFieldAction))
 	builder.addString(headers.VSRLearningScopes, learningPolicyPairHeader(ctx, learningPolicyFieldScope))
 	builder.addString(headers.VSRLearningReasons, learningPolicyPairHeader(ctx, learningPolicyFieldReason))
-	builder.addString(headers.VSRLearningModes, learningPolicyPairHeader(ctx, learningPolicyFieldMode))
 	builder.addBool(headers.VSRInjectedSystemPrompt, ctx.VSRInjectedSystemPrompt)
 	builder.addString(headers.RouterReplayID, ctx.RouterReplayID)
 	if ctx.VSRCacheSimilarity > 0 {
@@ -374,67 +373,62 @@ func addMatchedSignalHeaders(builder *responseHeaderMutationBuilder, ctx *Reques
 }
 
 func sessionPolicyPhase(ctx *RequestContext) string {
-	if policy, ok := sessionAwareLearningPolicyForContext(ctx); ok {
+	if policy, ok := protectionLearningPolicyForContext(ctx); ok {
 		if phase := policy.SessionPhase(); phase != "" {
 			return phase
 		}
 	}
-	if ctx == nil || ctx.VSRSessionPolicy == nil {
-		return ""
-	}
-	phase, ok := ctx.VSRSessionPolicy[string(learningPolicyFieldPhase)].(string)
-	if !ok {
-		return ""
-	}
-	return strings.TrimSpace(phase)
+	return ""
 }
 
 func learningPolicyMethodsHeader(ctx *RequestContext) string {
 	policies := learningPoliciesForHeaders(ctx)
-	methods := sortedRouterLearningPolicyMethods(policies)
-	if len(methods) == 0 {
+	if len(policies) == 0 {
 		return ""
 	}
-	values := make([]string, 0, len(methods))
-	for _, method := range methods {
-		values = append(values, sanitizeWarningField(string(method)))
+	values := make([]string, 0, len(policies))
+	for _, policy := range policies {
+		values = append(values, sanitizeWarningField(string(policy.Method)))
 	}
 	return strings.Join(values, ",")
 }
 
 func learningPolicyPairHeader(ctx *RequestContext, field routerLearningPolicyField) string {
 	policies := learningPoliciesForHeaders(ctx)
-	methods := sortedRouterLearningPolicyMethods(policies)
-	if len(methods) == 0 {
+	if len(policies) == 0 {
 		return ""
 	}
-	pairs := make([]string, 0, len(methods))
-	for _, method := range methods {
-		policy := policies[method]
+	pairs := make([]string, 0, len(policies))
+	for _, policy := range policies {
 		value := policy.StringField(field)
 		if value == "" {
 			continue
 		}
-		pairs = append(pairs, sanitizeWarningField(string(method))+"="+sanitizeWarningField(value))
+		pairs = append(pairs, sanitizeWarningField(string(policy.Method))+"="+sanitizeWarningField(value))
 	}
 	return strings.Join(pairs, ",")
 }
 
-func learningPoliciesForHeaders(ctx *RequestContext) map[routerLearningMethod]routerLearningPolicy {
+func learningPoliciesForHeaders(ctx *RequestContext) []routerLearningPolicy {
 	if ctx == nil {
 		return nil
 	}
-	if len(ctx.VSRLearningPolicies) > 0 {
-		return ctx.VSRLearningPolicies
+	if !ctx.VSRLearningPolicies.Empty() {
+		policies := make([]routerLearningPolicy, 0, 2)
+		if policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodAdaptation); ok {
+			policies = append(policies, policy)
+		}
+		if policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodProtection); ok {
+			policies = append(policies, policy)
+		}
+		return policies
 	}
 	if ctx.VSRLearningPolicy == nil || ctx.VSRLearningPolicy.Empty() {
 		return nil
 	}
-	adaptation := ctx.VSRLearningPolicy.Adaptation
-	if adaptation == "" {
-		adaptation = routerLearningMethodSessionAware
+	policy := *ctx.VSRLearningPolicy
+	if policy.Method == "" {
+		policy.Method = routerLearningMethodProtection
 	}
-	return map[routerLearningMethod]routerLearningPolicy{
-		adaptation: *ctx.VSRLearningPolicy,
-	}
+	return []routerLearningPolicy{policy}
 }

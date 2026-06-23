@@ -210,7 +210,7 @@ def _execute_serve(
     default=None,
     help="Request-time base algorithm override: static, router_dc, automix, hybrid, "
     "latency_aware, knn, kmeans, svm, mlp, or multi_factor. "
-    "Cross-request learning uses global.router.learning.adaptations.",
+    "Cross-request learning uses global.router.learning.adaptation/protection.",
 )
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(

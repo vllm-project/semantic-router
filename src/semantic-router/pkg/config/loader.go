@@ -208,17 +208,26 @@ func rejectRemovedRouterLearningFields(raw map[string]interface{}) error {
 	modelSelection := nestedStringMap(router["model_selection"])
 
 	removedGlobal := make([]string, 0)
-	for _, field := range []string{"session_aware", "model_switch_gate", "lookup_tables", "elo"} {
+	for _, field := range []string{
+		"session_aware",
+		"model_switch_gate",
+		"lookup_tables",
+		"elo",
+		"rl_driven",
+		"gmtrouter",
+		"bandit",
+		"personalization",
+	} {
 		if _, ok := modelSelection[field]; ok {
 			removedGlobal = append(removedGlobal, "global.router.model_selection."+field)
 		}
 	}
-	if strings.TrimSpace(fmt.Sprint(modelSelection["method"])) == "elo" {
-		removedGlobal = append(removedGlobal, "global.router.model_selection.method=elo")
+	if method := strings.TrimSpace(fmt.Sprint(modelSelection["method"])); removedGlobalLearningSelector(method) {
+		removedGlobal = append(removedGlobal, "global.router.model_selection.method="+method)
 	}
 	if len(removedGlobal) > 0 {
 		return fmt.Errorf(
-			"removed config fields are no longer supported: %s; use global.router.learning.adaptations for cross-request learning",
+			"removed config fields are no longer supported: %s; use global.router.learning.adaptation and global.router.learning.protection for cross-request learning",
 			strings.Join(removedGlobal, ", "),
 		)
 	}
@@ -244,7 +253,7 @@ func rejectRemovedDecisionLearningFields(index int, algorithm map[string]interfa
 	}
 	if _, ok := algorithm["session_aware"]; ok {
 		return fmt.Errorf(
-			"routing.decisions[%d].algorithm.session_aware has moved to global.router.learning.adaptations.session_aware; remove algorithm.session_aware and configure decision.adaptations.session_aware only when this decision needs apply/observe/bypass control",
+			"routing.decisions[%d].algorithm.session_aware is no longer supported; remove algorithm.session_aware and configure global.router.learning.protection plus routing.decisions[].adaptations when this decision needs apply/observe/bypass control",
 			index,
 		)
 	}
@@ -264,7 +273,7 @@ func rejectRemovedDecisionLearningFields(index int, algorithm map[string]interfa
 func removedLearningAlgorithmTypeError(index int, algorithmType string) error {
 	if algorithmType == "session_aware" {
 		return fmt.Errorf(
-			"routing.decisions[%d].algorithm.type=session_aware has moved to global.router.learning.adaptations.session_aware; remove algorithm.type=session_aware and enable router learning",
+			"routing.decisions[%d].algorithm.type=session_aware is no longer supported; remove algorithm.type=session_aware and enable global.router.learning.protection",
 			index,
 		)
 	}
@@ -280,11 +289,22 @@ func removedLearningAlgorithmTypeError(index int, algorithmType string) error {
 	return nil
 }
 
+func removedGlobalLearningSelector(method string) bool {
+	switch strings.TrimSpace(method) {
+	case "session_aware", "lookup_tables", "elo", "rl_driven", "gmtrouter", "bandit", "personalization":
+		return true
+	default:
+		return false
+	}
+}
+
 func removedDecisionLearningBlocks() map[string]string {
 	return map[string]string{
-		"elo":       "global.router.learning.adaptations.elo",
-		"rl_driven": "global.router.learning.adaptations.bandit",
-		"gmtrouter": "global.router.learning.adaptations.personalization",
+		"elo":             "global.router.learning.adaptation",
+		"rl_driven":       "global.router.learning.adaptation",
+		"gmtrouter":       "global.router.learning.adaptation",
+		"bandit":          "global.router.learning.adaptation",
+		"personalization": "global.router.learning.adaptation",
 	}
 }
 
@@ -305,46 +325,21 @@ func rejectUnsupportedGlobalRouterLearningFields(raw map[string]interface{}) err
 	if err := rejectUnknownMapFields(
 		"global.router.learning",
 		learning,
-		[]string{"enabled", "adaptations"},
+		[]string{"enabled", "adaptation", "protection"},
 	); err != nil {
 		return err
-	}
-	adaptations := nestedStringMap(learning["adaptations"])
-	if len(adaptations) == 0 {
-		return nil
 	}
 	if err := rejectUnknownMapFields(
-		"global.router.learning.adaptations",
-		adaptations,
-		[]string{"session_aware", "bandit", "elo", "personalization"},
+		"global.router.learning.adaptation",
+		nestedStringMap(learning["adaptation"]),
+		[]string{"enabled", "candidate_set", "strategy"},
 	); err != nil {
 		return err
 	}
-	if err := rejectUnsupportedSessionAwareLearningFields(
-		"global.router.learning.adaptations.session_aware",
-		nestedStringMap(adaptations["session_aware"]),
+	if err := rejectUnsupportedProtectionLearningFields(
+		"global.router.learning.protection",
+		nestedStringMap(learning["protection"]),
 		[]string{"enabled", "scope", "identity", "tuning"},
-	); err != nil {
-		return err
-	}
-	if err := rejectUnsupportedBanditLearningFields(
-		"global.router.learning.adaptations.bandit",
-		nestedStringMap(adaptations["bandit"]),
-		[]string{"enabled", "algorithm", "scope", "goals", "tuning"},
-	); err != nil {
-		return err
-	}
-	if err := rejectUnknownMapFields(
-		"global.router.learning.adaptations.elo",
-		nestedStringMap(adaptations["elo"]),
-		[]string{"enabled", "scope", "initial_rating", "k_factor"},
-	); err != nil {
-		return err
-	}
-	if err := rejectUnknownMapFields(
-		"global.router.learning.adaptations.personalization",
-		nestedStringMap(adaptations["personalization"]),
-		[]string{"enabled", "scope"},
 	); err != nil {
 		return err
 	}
@@ -364,37 +359,28 @@ func rejectUnsupportedDecisionAdaptationFields(raw map[string]interface{}) error
 			continue
 		}
 		prefix := fmt.Sprintf("routing.decisions[%d].adaptations", index)
-		if err := rejectUnknownMapFields(prefix, adaptations, []string{"session_aware", "bandit", "elo", "personalization"}); err != nil {
+		if err := rejectUnknownMapFields(prefix, adaptations, []string{"mode", "adaptation", "protection"}); err != nil {
 			return err
 		}
-		if err := rejectUnsupportedSessionAwareLearningFields(
-			prefix+".session_aware",
-			nestedStringMap(adaptations["session_aware"]),
-			[]string{"mode", "scope", "tuning"},
+		if err := rejectUnknownMapFields(
+			prefix+".adaptation",
+			nestedStringMap(adaptations["adaptation"]),
+			[]string{"mode", "candidate_set"},
 		); err != nil {
 			return err
 		}
-		if err := rejectUnsupportedBanditLearningFields(
-			prefix+".bandit",
-			nestedStringMap(adaptations["bandit"]),
-			[]string{"mode", "scope", "goals", "tuning"},
+		if err := rejectUnknownMapFields(
+			prefix+".protection",
+			nestedStringMap(adaptations["protection"]),
+			[]string{"mode", "stability_weight", "switch_margin"},
 		); err != nil {
 			return err
-		}
-		for _, name := range []string{"elo", "personalization"} {
-			if err := rejectUnknownMapFields(
-				prefix+"."+name,
-				nestedStringMap(adaptations[name]),
-				[]string{"mode"},
-			); err != nil {
-				return err
-			}
 		}
 	}
 	return nil
 }
 
-func rejectUnsupportedSessionAwareLearningFields(prefix string, raw map[string]interface{}, allowed []string) error {
+func rejectUnsupportedProtectionLearningFields(prefix string, raw map[string]interface{}, allowed []string) error {
 	if len(raw) == 0 {
 		return nil
 	}
@@ -402,7 +388,15 @@ func rejectUnsupportedSessionAwareLearningFields(prefix string, raw map[string]i
 		return err
 	}
 	if identity, ok := raw["identity"]; ok {
-		if err := rejectUnknownMapFields(prefix+".identity", nestedStringMap(identity), []string{"headers"}); err != nil {
+		identityMap := nestedStringMap(identity)
+		if err := rejectUnknownMapFields(prefix+".identity", identityMap, []string{"headers"}); err != nil {
+			return err
+		}
+		if err := rejectUnknownMapFields(
+			prefix+".identity.headers",
+			nestedStringMap(identityMap["headers"]),
+			[]string{"session", "conversation"},
+		); err != nil {
 			return err
 		}
 	}
@@ -411,28 +405,7 @@ func rejectUnsupportedSessionAwareLearningFields(prefix string, raw map[string]i
 			"idle_timeout_seconds",
 			"min_turns_before_switch",
 			"switch_margin",
-			"cache_weight",
-			"handoff_penalty",
-			"handoff_penalty_weight",
-			"switch_history_weight",
-			"max_cache_cost_multiplier",
-		}); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func rejectUnsupportedBanditLearningFields(prefix string, raw map[string]interface{}, allowed []string) error {
-	if len(raw) == 0 {
-		return nil
-	}
-	if err := rejectUnknownMapFields(prefix, raw, allowed); err != nil {
-		return err
-	}
-	if tuning, ok := raw["tuning"]; ok {
-		if err := rejectUnknownMapFields(prefix+".tuning", nestedStringMap(tuning), []string{
-			"exploration_budget",
+			"stability_weight",
 		}); err != nil {
 			return err
 		}

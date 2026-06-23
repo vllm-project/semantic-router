@@ -45,27 +45,31 @@ Learning, so sensitive traffic does not leave the local AMD backend even when it
 is complex. Domain routes normally allow Router Learning, so an active tool loop
 or protected session can keep the established model when continuity matters.
 
-## SAAR Policy
+## Router Learning Policy
 
-The recipe enables SAAR once under Router Learning:
+The recipe enables Router Learning once at the global router level:
 
 ```yaml
 global:
   router:
     learning:
       enabled: true
-      adaptations:
-        session_aware:
-          enabled: true
-          scope: conversation
+      adaptation:
+        enabled: true
+        strategy: routing_sampling
+        candidate_set: decision
+      protection:
+        enabled: true
+        scope: conversation
 ```
 
-Session-Aware Agentic Routing is not a semantic route and is not configured as a
-decision algorithm. Each decision first chooses the model it would normally use:
-simple tasks choose the local/simple alias, complex tasks choose stronger
-aliases, privacy tasks choose the local AMD alias, and domain tasks choose their
-domain aliases. SAAR then decides whether to keep the current model for a
-continuing agent conversation.
+Agentic continuity is expressed as adaptation plus protection, not as a
+semantic route or decision algorithm. Each decision first chooses the model it
+would normally use: simple tasks choose the local/simple alias, complex tasks
+choose stronger aliases, privacy tasks choose the local AMD alias, and domain
+tasks choose their domain aliases. Adaptation can propose a better model from
+runtime experience, and protection decides whether to keep the current model
+for continuity.
 
 The default recipe uses `scope: conversation`. That protects one agent run:
 turns with the same `x-conversation-id` can stay on the established model, while
@@ -77,15 +81,14 @@ For stricter applications, switch to `scope: session`:
 global:
   router:
     learning:
-      adaptations:
-        session_aware:
-          scope: session
+      protection:
+        scope: session
 ```
 
 `scope: session` protects the established model across conversations sharing
 the same `x-session-id` until the session idles out or the matched decision
-bypasses adaptation. Privacy and security decisions still bypass SAAR and stay
-local.
+bypasses adaptation. Privacy and security decisions still bypass Router
+Learning and stay local.
 
 The policy enables:
 
@@ -98,16 +101,15 @@ The policy enables:
   session-level protection
 
 The aliases keep different example pricing values. That is intentional:
-session-aware learning uses handoff cost and cached-input pricing when
-estimating prefix-cache loss. Switching between cheap aliases is easier to
+protection uses handoff cost and cached-input pricing when estimating
+prefix-cache loss. Switching between cheap aliases is easier to
 justify than switching into or out of expensive frontier aliases.
 
 Hard policy decisions opt out with:
 
 ```yaml
 adaptations:
-  session_aware:
-    mode: bypass
+  mode: bypass
 ```
 
 ## Run
@@ -165,8 +167,8 @@ long-context headroom on a single MI300X.
 OpenAI-compatible API server. The image name does not imply an OpenAI-hosted
 model; this recipe still serves the local Qwen checkpoint through vLLM.
 
-The cache parameters are explicit so SAAR experiments have visible token-cache
-behavior:
+The cache parameters are explicit so Router Learning experiments have visible
+token-cache behavior:
 
 - `--enable-prefix-caching` enables automatic prefix reuse across requests.
 - `--prefix-caching-hash-algo sha256` uses collision-resistant prefix hashes.
@@ -209,9 +211,9 @@ https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/recip
 
 `Qwen/Qwen3.6-35B-A3B` is the default for this recipe because it is a newer
 open-weight Qwen3.6 checkpoint and is tuned for agentic coding and thinking
-preservation, which maps directly to the SAAR goal of stable multi-turn tool
-workflows. The MI300X 192 GB HBM class leaves enough headroom for this
-non-FP8 model in the single-backend agentic profile.
+preservation, which maps directly to the Router Learning goal of stable
+multi-turn tool workflows. The MI300X 192 GB HBM class leaves enough headroom
+for this non-FP8 model in the single-backend agentic profile.
 
 `Qwen/Qwen3.6-27B` is a reasonable dense alternative if the workload
 prioritizes dense coding behavior over MoE throughput. `Qwen/Qwen3.5-122B-A10B`
@@ -234,27 +236,26 @@ Conversation-scope behavior should be validated with:
 - same-session multi-run: a new `x-conversation-id` can re-route inside the
   same `x-session-id`
 - tool-loop stability: tool-result turns keep the established model and emit
-  `x-vsr-learning-actions: session_aware=hard_lock` with
-  `x-vsr-learning-scopes: session_aware=conversation`
+  `x-vsr-learning-actions: protection=hold_current` with
+  `x-vsr-learning-scopes: protection=conversation`
 
 Session-scope behavior should be validated by changing only
-`global.router.learning.adaptations.session_aware.scope` to `session` and
-running a same-session multi-run test:
+`global.router.learning.protection.scope` to `session` and running a
+same-session multi-run test:
 
 - the first non-bypass run establishes the session model
 - a later run with a different `x-conversation-id` stays on that model
 - privacy or security runs still bypass and route to `qwen/qwen3.6-rocm`
 
 The `x-vsr-learning-*` header family is the compact response surface for this
-check. It reports method-keyed learning mode, action, reason, and scope, for
-example:
+check. It reports active learning methods plus method-keyed action, reason, and
+scope, for example:
 
 ```http
-x-vsr-learning-methods: session_aware
-x-vsr-learning-actions: session_aware=hard_lock
-x-vsr-learning-scopes: session_aware=conversation
-x-vsr-learning-reasons: session_aware=hard_lock=tool_loop
-x-vsr-learning-modes: session_aware=apply
+x-vsr-learning-methods: adaptation,protection
+x-vsr-learning-actions: adaptation=keep_base,protection=hold_current
+x-vsr-learning-scopes: protection=conversation
+x-vsr-learning-reasons: adaptation=base_best,protection=cache_cost_high
 ```
 
 Use `x-vsr-replay-id` to inspect full Router Replay diagnostics, including base

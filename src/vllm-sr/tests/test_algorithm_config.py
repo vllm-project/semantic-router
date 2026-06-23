@@ -121,7 +121,7 @@ class TestHybridSelectionConfig:
     def test_default_weights(self):
         """Test Hybrid config default weights."""
         config = HybridSelectionConfig()
-        assert config.elo_weight == 0.3
+        assert config.experience_weight == 0.3
         assert config.router_dc_weight == 0.3
         assert config.automix_weight == 0.2
         assert config.cost_weight == 0.2
@@ -129,14 +129,14 @@ class TestHybridSelectionConfig:
     def test_custom_weights(self):
         """Test Hybrid config with custom weights."""
         config = HybridSelectionConfig(
-            elo_weight=0.5,
+            experience_weight=0.5,
             router_dc_weight=0.3,
             automix_weight=0.1,
             cost_weight=0.1,
         )
         # Weights should sum to 1.0
         total = (
-            config.elo_weight
+            config.experience_weight
             + config.router_dc_weight
             + config.automix_weight
             + config.cost_weight
@@ -276,12 +276,14 @@ class TestAlgorithmConfigIntegration:
         assert config.multi_factor.weights.quality == 0.4
 
     def test_learning_algorithm_type_specific_blocks_are_rejected(self):
-        """Learning systems live under global.router.learning.adaptations."""
+        """Learning systems live under global.router.learning."""
         for removed_type, removed_block in {
             "session_aware": {"base_method": "static"},
             "elo": {"k_factor": 48.0},
             "rl_driven": {"storage_path": "/tmp/rl.json"},
             "gmtrouter": {"num_layers": 3},
+            "bandit": {"strategy": "thompson"},
+            "personalization": {"per_user": True},
         }.items():
             with pytest.raises(PydanticValidationError):
                 AlgorithmConfig(
@@ -334,7 +336,7 @@ class TestAlgorithmConfigIntegration:
         config = AlgorithmConfig(
             type="hybrid",
             hybrid=HybridSelectionConfig(
-                elo_weight=0.4,
+                experience_weight=0.4,
                 router_dc_weight=0.3,
                 automix_weight=0.2,
                 cost_weight=0.1,
@@ -342,7 +344,7 @@ class TestAlgorithmConfigIntegration:
         )
         assert config.type == "hybrid"
         total = (
-            config.hybrid.elo_weight
+            config.hybrid.experience_weight
             + config.hybrid.router_dc_weight
             + config.hybrid.automix_weight
             + config.hybrid.cost_weight

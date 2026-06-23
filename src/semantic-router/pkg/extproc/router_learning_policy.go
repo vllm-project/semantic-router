@@ -5,57 +5,89 @@ import "strings"
 const routerLearningPolicyName = "router_learning"
 
 type routerLearningPolicy struct {
-	Adaptation routerLearningMethod
-	Mode       string
-	Scope      string
-	Action     routerLearningAction
-	Reason     string
-	Details    routerLearningPolicyDetails
-	Experience routerLearningExperienceDiagnostics
+	Method  routerLearningMethod
+	Mode    string
+	Scope   string
+	Action  routerLearningAction
+	Reason  string
+	Details routerLearningPolicyDetails
+}
+
+type routerLearningPolicies struct {
+	Adaptation routerLearningPolicy
+	Protection routerLearningPolicy
 }
 
 func newRouterLearningPolicy(method routerLearningMethod) routerLearningPolicy {
 	return routerLearningPolicy{
-		Adaptation: method,
+		Method: method,
 	}
 }
 
+func (p routerLearningPolicies) Empty() bool {
+	return p.Adaptation.Empty() && p.Protection.Empty()
+}
+
+func (p *routerLearningPolicies) Set(policy routerLearningPolicy) {
+	if p == nil || policy.Empty() {
+		return
+	}
+	switch policy.Method {
+	case routerLearningMethodAdaptation:
+		p.Adaptation = policy
+	case routerLearningMethodProtection, "":
+		p.Protection = policy
+	}
+}
+
+func (p routerLearningPolicies) Policy(method routerLearningMethod) (routerLearningPolicy, bool) {
+	switch method {
+	case routerLearningMethodAdaptation:
+		if !p.Adaptation.Empty() {
+			return p.Adaptation, true
+		}
+	case routerLearningMethodProtection:
+		if !p.Protection.Empty() {
+			return p.Protection, true
+		}
+	}
+	return routerLearningPolicy{}, false
+}
+
 func (p routerLearningPolicy) Empty() bool {
-	return p.Adaptation == "" &&
+	return p.Method == "" &&
 		p.Mode == "" &&
 		p.Scope == "" &&
 		p.Action == "" &&
 		p.Reason == "" &&
-		p.Details.Empty() &&
-		p.Experience.Empty()
+		p.Details.Empty()
 }
 
 func (p routerLearningPolicy) ToMap() map[string]interface{} {
 	if p.Empty() {
 		return nil
 	}
-	fields := newRouterLearningPolicyFields()
-	p.Details.appendTo(fields)
-	if !p.Experience.Empty() {
-		p.Experience.appendLearningPolicyFields(fields)
+	out := p.Details.ToMap()
+	if out == nil {
+		out = map[string]interface{}{}
 	}
-	fields.SetString(learningPolicyFieldLearning, routerLearningPolicyName)
-	if p.Adaptation != "" {
-		fields.SetString(learningPolicyFieldAdaptation, string(p.Adaptation))
+	setLearningPolicyString(out, learningPolicyFieldLearning, routerLearningPolicyName)
+	if p.Method != "" {
+		setLearningPolicyString(out, learningPolicyFieldMethod, string(p.Method))
 	}
 	if strings.TrimSpace(p.Mode) != "" {
-		fields.SetString(learningPolicyFieldMode, p.Mode)
+		setLearningPolicyString(out, learningPolicyFieldMode, p.Mode)
 	}
 	if strings.TrimSpace(p.Scope) != "" {
-		fields.SetString(learningPolicyFieldScope, p.Scope)
+		setLearningPolicyString(out, learningPolicyFieldScope, p.Scope)
 	}
 	if p.Action != "" {
-		fields.SetString(learningPolicyFieldAction, string(p.Action))
+		setLearningPolicyString(out, learningPolicyFieldAction, string(p.Action))
 	}
 	if strings.TrimSpace(p.Reason) != "" {
-		fields.SetString(learningPolicyFieldReason, p.Reason)
+		setLearningPolicyString(out, learningPolicyFieldReason, p.Reason)
 	}
-	return fields.ToMap()
+	return out
 }
 
 func (p routerLearningPolicy) String(key string) string {
@@ -68,8 +100,8 @@ func (p routerLearningPolicy) StringField(field routerLearningPolicyField) strin
 		if !p.Empty() {
 			return routerLearningPolicyName
 		}
-	case learningPolicyFieldAdaptation:
-		return string(p.Adaptation)
+	case learningPolicyFieldMethod:
+		return string(p.Method)
 	case learningPolicyFieldMode:
 		return strings.TrimSpace(p.Mode)
 	case learningPolicyFieldScope:
@@ -79,7 +111,7 @@ func (p routerLearningPolicy) StringField(field routerLearningPolicyField) strin
 	case learningPolicyFieldReason:
 		return strings.TrimSpace(p.Reason)
 	default:
-		return newRouterLearningPolicyFieldsFromPolicy(p).String(field)
+		return p.Details.StringField(field)
 	}
 	return ""
 }
@@ -89,71 +121,114 @@ func (p routerLearningPolicy) Bool(key string) bool {
 }
 
 func (p routerLearningPolicy) BoolField(field routerLearningPolicyField) bool {
-	return newRouterLearningPolicyFieldsFromPolicy(p).Bool(field)
+	return p.Details.BoolField(field)
 }
 
 func (p routerLearningPolicy) SessionPhase() string {
-	if trace := p.Details.SessionAwareTrace(); trace != nil {
+	if trace := p.Details.ProtectionTrace(); trace != nil {
 		return strings.TrimSpace(string(trace.Phase))
 	}
 	return p.StringField(learningPolicyFieldPhase)
 }
 
+func setLearningPolicyString(out map[string]interface{}, field routerLearningPolicyField, value string) {
+	if out == nil || field == "" || strings.TrimSpace(value) == "" {
+		return
+	}
+	out[string(field)] = strings.TrimSpace(value)
+}
+
+func setLearningPolicyNumber(out map[string]interface{}, field routerLearningPolicyField, value float64) {
+	if out == nil || field == "" || value == 0 {
+		return
+	}
+	out[string(field)] = value
+}
+
+func setLearningPolicyInt(out map[string]interface{}, field routerLearningPolicyField, value int) {
+	if out == nil || field == "" || value == 0 {
+		return
+	}
+	out[string(field)] = value
+}
+
+func setLearningPolicyValue(out map[string]interface{}, field routerLearningPolicyField, value interface{}) {
+	if out == nil || field == "" || value == nil {
+		return
+	}
+	out[string(field)] = value
+}
+
+func mergeLearningPolicyMap(out map[string]interface{}, values map[string]interface{}) {
+	if out == nil {
+		return
+	}
+	for key, value := range values {
+		if strings.TrimSpace(key) == "" || value == nil {
+			continue
+		}
+		out[key] = value
+	}
+}
+
 func (p routerLearningPolicy) CurrentModel() string {
-	if trace := p.Details.SessionAwareTrace(); trace != nil {
+	if trace := p.Details.ProtectionTrace(); trace != nil {
 		return strings.TrimSpace(trace.CurrentModel)
 	}
 	return p.StringField(learningPolicyFieldCurrentModel)
 }
 
 func (p routerLearningPolicy) BaseSelectedModel() string {
-	if trace := p.Details.SessionAwareTrace(); trace != nil {
+	if trace := p.Details.ProtectionTrace(); trace != nil {
 		return strings.TrimSpace(trace.BaseSelectedModel)
 	}
 	return p.StringField(learningPolicyFieldBaseSelectedModel)
 }
 
 func (p routerLearningPolicy) SelectedModel() string {
-	if trace := p.Details.SessionAwareTrace(); trace != nil {
+	if p.Action == routerLearningActionObserve {
+		if finalModel := p.StringField(learningPolicyFieldFinalModel); finalModel != "" {
+			return finalModel
+		}
+	}
+	if trace := p.Details.ProtectionTrace(); trace != nil {
 		return strings.TrimSpace(trace.SelectedModel)
 	}
 	return p.StringField(learningPolicyFieldSelectedModel)
 }
 
 func (p routerLearningPolicy) HardLocked() bool {
-	if trace := p.Details.SessionAwareTrace(); trace != nil {
+	if trace := p.Details.ProtectionTrace(); trace != nil {
 		return trace.HardLocked
 	}
 	return p.BoolField(learningPolicyFieldHardLocked)
 }
 
 func (p routerLearningPolicy) HardLockReason() string {
-	if trace := p.Details.SessionAwareTrace(); trace != nil {
+	if trace := p.Details.ProtectionTrace(); trace != nil {
 		return strings.TrimSpace(trace.HardLockReason)
 	}
 	return p.StringField(learningPolicyFieldHardLockReason)
 }
 
 func (p routerLearningPolicy) DecisionReason() string {
-	if trace := p.Details.SessionAwareTrace(); trace != nil {
+	if trace := p.Details.ProtectionTrace(); trace != nil {
 		return strings.TrimSpace(trace.DecisionReason)
 	}
 	return p.StringField(learningPolicyFieldDecisionReason)
 }
 
-func sessionAwareLearningPolicyForContext(ctx *RequestContext) (routerLearningPolicy, bool) {
+func protectionLearningPolicyForContext(ctx *RequestContext) (routerLearningPolicy, bool) {
 	if ctx == nil {
 		return routerLearningPolicy{}, false
 	}
-	if len(ctx.VSRLearningPolicies) > 0 {
-		if policy, ok := ctx.VSRLearningPolicies[routerLearningMethodSessionAware]; ok && !policy.Empty() {
-			return policy, true
-		}
+	if policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodProtection); ok {
+		return policy, true
 	}
 	if ctx.VSRLearningPolicy == nil || ctx.VSRLearningPolicy.Empty() {
 		return routerLearningPolicy{}, false
 	}
-	if ctx.VSRLearningPolicy.Adaptation == "" || ctx.VSRLearningPolicy.Adaptation == routerLearningMethodSessionAware {
+	if ctx.VSRLearningPolicy.Method == "" || ctx.VSRLearningPolicy.Method == routerLearningMethodProtection {
 		return *ctx.VSRLearningPolicy, true
 	}
 	return routerLearningPolicy{}, false

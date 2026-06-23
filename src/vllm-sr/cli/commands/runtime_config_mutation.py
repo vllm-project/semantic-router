@@ -54,6 +54,8 @@ RETIRED_ALGORITHM_CONFIG_BLOCKS = (
     "elo",
     "rl_driven",
     "gmtrouter",
+    "bandit",
+    "personalization",
 )
 
 EXPECTED_CONFIG_BLOCK_BY_ALGORITHM = {

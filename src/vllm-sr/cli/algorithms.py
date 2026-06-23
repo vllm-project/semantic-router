@@ -227,8 +227,8 @@ class HybridSelectionConfig(BaseModel):
     Combines multiple selection methods with configurable weights.
     """
 
-    # Legacy name for feedback-derived Router Learning evidence (0-1).
-    elo_weight: float | None = Field(default=0.3, ge=0, le=1)
+    # Weight for feedback-derived experience evidence (0-1).
+    experience_weight: float | None = Field(default=0.3, ge=0, le=1)
 
     # Weight for RouterDC embedding similarity (0-1)
     router_dc_weight: float | None = Field(default=0.3, ge=0, le=1)
@@ -300,8 +300,8 @@ class AlgorithmConfig(BaseModel):
        - "knn", "kmeans", "svm", "mlp": Shared ML model-selection selectors
        - "multi_factor": Combine quality, latency, cost, and load
 
-    Cross-request learning systems such as Elo, bandit/Thompson, and
-    personalization live under global.router.learning.adaptations.
+    Cross-request learning systems live under global.router.learning.adaptation
+    and global.router.learning.protection.
     """
 
     model_config = ConfigDict(extra="forbid")

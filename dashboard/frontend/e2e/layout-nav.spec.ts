@@ -411,11 +411,11 @@ test.describe('Layout top navigation', () => {
     const menuItems = menu.getByRole('menuitem');
     await expect(menuItems.nth(0)).toHaveText('Global Config');
     await expect(menuItems.nth(1)).toHaveText('Evaluation');
-    await expect(menuItems.nth(2)).toHaveText('Ratings');
+    await expect(menuItems.nth(2)).toHaveText('ML Setup');
     await expect(menu.getByRole('menuitem', { name: 'Global Config' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Evaluation' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Replay' })).toHaveCount(0);
-    await expect(menu.getByRole('menuitem', { name: 'Ratings' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Ratings' })).toHaveCount(0);
     await expect(menu.getByText('Operations')).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'ML Setup' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'MCP Servers' })).toBeVisible();

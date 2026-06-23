@@ -693,8 +693,7 @@ routing:
           max_concurrent: 3
           on_error: skip
       adaptations:
-        session_aware:
-          mode: bypass
+        mode: bypass
       plugins:
         - type: router_replay
           configuration:
@@ -827,7 +826,7 @@ routing:
             # deletes the correct dissenter; see bench/grounded_fusion/FINDINGS.md.
 
     - name: terse_feedback_route
-      description: Terse-answer route that allows Elo Router Learning to adjust feedback-driven routing.
+      description: Terse-answer route that allows Router Learning adaptation to adjust feedback-driven routing.
       priority: 160
       rules:
         operator: AND
@@ -840,7 +839,7 @@ routing:
         - model: qwen3-32b
           use_reasoning: false
       adaptations:
-        elo:
+        adaptation:
           mode: apply
       plugins:
         - type: fast_response
@@ -947,14 +946,14 @@ routing:
       algorithm:
         type: hybrid
         hybrid:
-          elo_weight: 0.4
+          experience_weight: 0.4
           router_dc_weight: 0.3
           automix_weight: 0.2
           cost_weight: 0.1
           quality_gap_threshold: 0.08
           normalize_scores: true
-    - name: spanish_bandit_route
-      description: Spanish-language route that observes bandit Router Learning with Milvus RAG.
+    - name: spanish_adaptive_route
+      description: Spanish-language route that observes Router Learning adaptation with Milvus RAG.
       priority: 135
       rules:
         operator: AND
@@ -967,15 +966,11 @@ routing:
         - model: qwen3-32b
           use_reasoning: true
       adaptations:
-        bandit:
+        adaptation:
           mode: observe
-          scope: decision
-          goals:
-            quality: 1.0
-            cost: 0.2
-            latency: 0.1
-          tuning:
-            exploration_budget: 0.03
+        protection:
+          stability_weight: 1.2
+          switch_margin: 0.04
       plugins:
         - type: rag
           configuration:
@@ -996,8 +991,8 @@ routing:
               metadata_field: metadata
               filter_expression: locale == "es"
 
-    - name: admin_personalized_route
-      description: Admin route with personalization Router Learning and external API RAG.
+    - name: admin_adaptive_route
+      description: Admin route with Router Learning adaptation and external API RAG.
       priority: 130
       rules:
         operator: AND
@@ -1008,7 +1003,7 @@ routing:
         - model: qwen3-32b
           use_reasoning: true
       adaptations:
-        personalization:
+        adaptation:
           mode: apply
       plugins:
         - type: rag
@@ -1343,7 +1338,7 @@ global:
         discount_factor: 0.9
         use_logprob_verification: true
       hybrid:
-        elo_weight: 0.4
+        experience_weight: 0.4
         router_dc_weight: 0.25
         automix_weight: 0.25
         cost_weight: 0.1
@@ -1373,41 +1368,22 @@ global:
           pretrained_path: models/model-selection/mlp.pt
     learning:
       enabled: true
-      adaptations:
-        session_aware:
-          enabled: true
-          scope: conversation
-          identity:
-            headers:
-              session: x-session-id
-              conversation: x-conversation-id
-          tuning:
-            idle_timeout_seconds: 300
-            min_turns_before_switch: 1
-            switch_margin: 0.05
-            cache_weight: 0.20
-            handoff_penalty: 0.05
-            handoff_penalty_weight: 1.0
-            switch_history_weight: 0.04
-            max_cache_cost_multiplier: 2.5
-        bandit:
-          enabled: false
-          algorithm: linucb
-          scope: decision
-          goals:
-            quality: 1.0
-            cost: 0.25
-            latency: 0.1
-          tuning:
-            exploration_budget: 0.05
-        elo:
-          enabled: false
-          scope: decision
-          initial_rating: 1200
-          k_factor: 32
-        personalization:
-          enabled: false
-          scope: decision
+      adaptation:
+        enabled: true
+        candidate_set: decision
+        strategy: routing_sampling
+      protection:
+        enabled: true
+        scope: conversation
+        identity:
+          headers:
+            session: x-session-id
+            conversation: x-conversation-id
+        tuning:
+          idle_timeout_seconds: 300
+          min_turns_before_switch: 1
+          switch_margin: 0.05
+          stability_weight: 1.0
 
   services:
     api:

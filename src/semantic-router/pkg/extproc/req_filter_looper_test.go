@@ -10,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 func TestShouldUseLooper(t *testing.T) {
@@ -266,9 +267,11 @@ func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
 		VSRSelectedDecisionConfidence: 0,
 		VSRSelectedCategory:           "programming",
 		RouterReplayID:                "replay-123",
-		VSRSessionPolicy: map[string]interface{}{
-			"phase": "tool_loop",
-		},
+		VSRLearningPolicies: testLearningPolicies(
+			replayTestProtectionPolicyWithTrace(&selection.SessionPolicyTrace{
+				Phase: "tool_loop",
+			}),
+		),
 	}
 
 	response := (&OpenAIRouter{}).createLooperResponse(resp, reqCtx)

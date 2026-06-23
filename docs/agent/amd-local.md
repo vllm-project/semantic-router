@@ -35,14 +35,13 @@ the endpoint as PR evidence:
 - `session` scope: keep the same `x-session-id` across multiple
   `x-conversation-id` values and verify the established session model is
   protected until `idle_timeout_seconds` releases it or a decision uses
-  `adaptations.session_aware.mode: bypass`.
+  `adaptations.mode: bypass`.
 - Privacy, security, and local-only decisions should bypass Router Learning and
   route to the local model even when the previous protected model was remote.
 - Responses should include compact learning headers such as
   `x-vsr-learning-methods`, `x-vsr-learning-actions`,
-  `x-vsr-learning-scopes`, `x-vsr-learning-reasons`, and
-  `x-vsr-learning-modes`; full details should be joined through
-  `x-vsr-replay-id` and Router Replay.
+  `x-vsr-learning-scopes`, and `x-vsr-learning-reasons`; full details should
+  be joined through `x-vsr-replay-id` and Router Replay.
 - Dashboard and API readiness require the Envoy/OpenAI endpoint, router status,
   replay diagnostics, and dashboard health to be available from the validation
   host before reporting the AMD router address.

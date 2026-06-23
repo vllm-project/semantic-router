@@ -7,11 +7,11 @@ import (
 )
 
 const (
-	replaySessionActionNone     = "none"
-	replaySessionActionSelect   = "select"
-	replaySessionActionStay     = "stay"
-	replaySessionActionSwitch   = "switch"
-	replaySessionActionHardLock = "hard_lock"
+	replaySessionActionNone              = "none"
+	replaySessionActionEstablishBaseline = "establish_baseline"
+	replaySessionActionStay              = "stay"
+	replaySessionActionSwitch            = "switch"
+	replaySessionActionHardLock          = "hard_lock"
 )
 
 func buildReplayRouteDiagnostics(
@@ -34,7 +34,7 @@ func buildReplayRouteDiagnostics(
 		SessionAction:    replaySessionActionNone,
 	}
 
-	if policy, ok := sessionAwareLearningPolicyForContext(ctx); ok {
+	if policy, ok := protectionLearningPolicyForContext(ctx); ok {
 		diagnostics.SessionPolicyApplied = true
 		diagnostics.SessionPhase = policy.SessionPhase()
 		diagnostics.PreviousModel = policy.CurrentModel()
@@ -43,58 +43,50 @@ func buildReplayRouteDiagnostics(
 		diagnostics.HardLockReason = policy.HardLockReason()
 		diagnostics.DecisionReason = policy.DecisionReason()
 		diagnostics.SessionAction = replaySessionAction(diagnostics, policy.HardLocked())
-		diagnostics.SessionReason = replaySessionReason(diagnostics)
+		diagnostics.SessionReason = replaySessionReason(diagnostics, policy)
 		return diagnostics
 	}
 
-	policy := ctx.VSRSessionPolicy
-	if len(policy) == 0 {
-		return diagnostics
-	}
-
-	diagnostics.SessionPolicyApplied = true
-	diagnostics.SessionPhase = replayPolicyString(policy, string(learningPolicyFieldPhase))
-	diagnostics.PreviousModel = replayPolicyString(policy, string(learningPolicyFieldCurrentModel))
-	diagnostics.ProposalModel = firstNonEmpty(replayPolicyString(policy, string(learningPolicyFieldBaseSelectedModel)), diagnostics.ProposalModel)
-	diagnostics.SelectedModel = firstNonEmpty(replayPolicyString(policy, string(learningPolicyFieldSelectedModel)), diagnostics.SelectedModel)
-	diagnostics.HardLockReason = replayPolicyString(policy, string(learningPolicyFieldHardLockReason))
-	diagnostics.DecisionReason = replayPolicyString(policy, string(learningPolicyFieldDecisionReason))
-	diagnostics.SessionAction = replaySessionAction(diagnostics, replayPolicyBool(policy, string(learningPolicyFieldHardLocked)))
-	diagnostics.SessionReason = replaySessionReason(diagnostics)
 	return diagnostics
 }
 
 func buildReplayLearningDiagnostics(ctx *RequestContext) *routerreplay.LearningDiagnostics {
 	policies := learningPoliciesForReplay(ctx)
-	if len(policies) == 0 {
+	if policies.Empty() && (ctx == nil || ctx.VSRLearningProtectionPreflight == nil) {
 		return nil
 	}
-	adaptations := make(map[string]map[string]interface{}, len(policies))
-	for method, policy := range policies {
-		adaptations[string(method)] = policy.ToMap()
+	diagnostics := &routerreplay.LearningDiagnostics{}
+	if ctx != nil && ctx.VSRLearningProtectionPreflight != nil {
+		diagnostics.ProtectionPreflight = ctx.VSRLearningProtectionPreflight
 	}
-	return &routerreplay.LearningDiagnostics{
-		Adaptations: adaptations,
+	if policy, ok := policies.Policy(routerLearningMethodAdaptation); ok {
+		diagnostics.Adaptation = policy.toReplayAdaptation()
 	}
+	if policy, ok := policies.Policy(routerLearningMethodProtection); ok {
+		diagnostics.Protection = policy.toReplayProtection()
+	}
+	return diagnostics
 }
 
-func learningPoliciesForReplay(ctx *RequestContext) map[routerLearningMethod]routerLearningPolicy {
+func learningPoliciesForReplay(ctx *RequestContext) routerLearningPolicies {
 	if ctx == nil {
-		return nil
+		return routerLearningPolicies{}
 	}
-	if len(ctx.VSRLearningPolicies) > 0 {
+	if !ctx.VSRLearningPolicies.Empty() {
 		return ctx.VSRLearningPolicies
 	}
 	if ctx.VSRLearningPolicy == nil || ctx.VSRLearningPolicy.Empty() {
-		return nil
+		return routerLearningPolicies{}
 	}
-	adaptation := ctx.VSRLearningPolicy.Adaptation
-	if adaptation == "" {
-		adaptation = routerLearningMethodSessionAware
+	method := ctx.VSRLearningPolicy.Method
+	if method == "" {
+		method = routerLearningMethodProtection
 	}
-	return map[routerLearningMethod]routerLearningPolicy{
-		adaptation: *ctx.VSRLearningPolicy,
-	}
+	policies := routerLearningPolicies{}
+	policy := *ctx.VSRLearningPolicy
+	policy.Method = method
+	policies.Set(policy)
+	return policies
 }
 
 func replaySessionAction(diagnostics *routerreplay.RouteDiagnostics, hardLocked bool) string {
@@ -102,7 +94,7 @@ func replaySessionAction(diagnostics *routerreplay.RouteDiagnostics, hardLocked 
 		return replaySessionActionHardLock
 	}
 	if diagnostics.PreviousModel == "" {
-		return replaySessionActionSelect
+		return replaySessionActionEstablishBaseline
 	}
 	if diagnostics.SelectedModel == diagnostics.PreviousModel {
 		return replaySessionActionStay
@@ -110,7 +102,10 @@ func replaySessionAction(diagnostics *routerreplay.RouteDiagnostics, hardLocked 
 	return replaySessionActionSwitch
 }
 
-func replaySessionReason(diagnostics *routerreplay.RouteDiagnostics) string {
+func replaySessionReason(diagnostics *routerreplay.RouteDiagnostics, policy routerLearningPolicy) string {
+	if policyReason := strings.TrimSpace(policy.Reason); policyReason != "" {
+		return policyReason
+	}
 	if diagnostics.SessionAction == replaySessionActionHardLock && diagnostics.HardLockReason != "" {
 		return diagnostics.HardLockReason
 	}
@@ -120,28 +115,6 @@ func replaySessionReason(diagnostics *routerreplay.RouteDiagnostics) string {
 	return diagnostics.SessionAction
 }
 
-func replayPolicyString(policy map[string]interface{}, key string) string {
-	value, ok := policy[key]
-	if !ok {
-		return ""
-	}
-	switch typed := value.(type) {
-	case string:
-		return strings.TrimSpace(typed)
-	default:
-		return ""
-	}
-}
-
-func replayPolicyBool(policy map[string]interface{}, key string) bool {
-	value, ok := policy[key]
-	if !ok {
-		return false
-	}
-	typed, ok := value.(bool)
-	return ok && typed
-}
-
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {
@@ -149,4 +122,12 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func sessionPolicyMapForReplay(ctx *RequestContext) map[string]interface{} {
+	policy, ok := protectionLearningPolicyForContext(ctx)
+	if !ok {
+		return nil
+	}
+	return cloneReplayInterfaceMap(policy.ToMap())
 }

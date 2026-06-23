@@ -3,57 +3,53 @@ package extproc
 import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 
 type routerLearningPolicyDetails struct {
-	SessionAware    *sessionAwareLearningDiagnostics
-	Bandit          *routerLearningBanditDiagnostics
-	Elo             *routerLearningEloDiagnostics
-	Personalization *routerLearningPersonalizationDiagnostics
+	Adaptation *routerLearningAdaptationDiagnostics
+	Protection *routerLearningProtectionDiagnostics
 }
 
 func (d routerLearningPolicyDetails) Empty() bool {
-	return d.SessionAware == nil &&
-		d.Bandit == nil &&
-		d.Elo == nil &&
-		d.Personalization == nil
+	return d.Adaptation == nil && d.Protection == nil
 }
 
-func (d routerLearningPolicyDetails) ActiveMethods() []routerLearningMethod {
-	methods := []routerLearningMethod{}
-	if d.SessionAware != nil {
-		methods = append(methods, routerLearningMethodSessionAware)
-	}
-	if d.Bandit != nil {
-		methods = append(methods, routerLearningMethodBandit)
-	}
-	if d.Elo != nil {
-		methods = append(methods, routerLearningMethodElo)
-	}
-	if d.Personalization != nil {
-		methods = append(methods, routerLearningMethodPersonalization)
-	}
-	return methods
-}
-
-func (d routerLearningPolicyDetails) SessionAwareTrace() *selection.SessionPolicyTrace {
-	if d.SessionAware == nil {
+func (d routerLearningPolicyDetails) ProtectionTrace() *selection.SessionPolicyTrace {
+	if d.Protection == nil {
 		return nil
 	}
-	return d.SessionAware.trace
+	return d.Protection.trace
 }
 
-func (d routerLearningPolicyDetails) appendTo(fields *routerLearningPolicyFields) {
-	if fields == nil {
-		return
+func (d routerLearningPolicyDetails) ToMap() map[string]interface{} {
+	out := map[string]interface{}{}
+	if d.Adaptation != nil {
+		mergeLearningPolicyMap(out, d.Adaptation.toPolicyMap())
 	}
-	if d.SessionAware != nil {
-		d.SessionAware.appendLearningPolicyFields(fields)
+	if d.Protection != nil {
+		mergeLearningPolicyMap(out, d.Protection.toPolicyMap())
 	}
-	if d.Bandit != nil {
-		d.Bandit.appendLearningPolicyFields(fields)
+	if len(out) == 0 {
+		return nil
 	}
-	if d.Elo != nil {
-		d.Elo.appendLearningPolicyFields(fields)
+	return out
+}
+
+func (d routerLearningPolicyDetails) StringField(field routerLearningPolicyField) string {
+	if d.Adaptation != nil {
+		if value := d.Adaptation.stringField(field); value != "" {
+			return value
+		}
 	}
-	if d.Personalization != nil {
-		d.Personalization.appendLearningPolicyFields(fields)
+	if d.Protection != nil {
+		return d.Protection.stringField(field)
 	}
+	return ""
+}
+
+func (d routerLearningPolicyDetails) BoolField(field routerLearningPolicyField) bool {
+	if d.Adaptation != nil && d.Adaptation.boolField(field) {
+		return true
+	}
+	if d.Protection != nil {
+		return d.Protection.boolField(field)
+	}
+	return false
 }

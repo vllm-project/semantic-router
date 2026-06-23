@@ -5,168 +5,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
-type routerLearningAdapter interface {
-	Method() routerLearningMethod
-	Apply(routerLearningInput) (routerLearningAdaptationResult, bool)
-	Observe(routerLearningInput, routerLearningComposition)
-}
-
-type routerLearningAdapterFactory struct {
-	method routerLearningMethod
-	build  func(*OpenAIRouter) routerLearningAdapter
-}
-
-type routerLearningAdapterRegistry struct {
-	factories []routerLearningAdapterFactory
-}
-
-type routerLearningBaseAdapter struct {
-	router *OpenAIRouter
-}
-
-func (a routerLearningBaseAdapter) Observe(routerLearningInput, routerLearningComposition) {}
-
-type sessionAwareLearningAdapter struct {
-	routerLearningBaseAdapter
-}
-
-func newSessionAwareLearningAdapter(router *OpenAIRouter) routerLearningAdapter {
-	return sessionAwareLearningAdapter{
-		routerLearningBaseAdapter: routerLearningBaseAdapter{router: router},
-	}
-}
-
-func (a sessionAwareLearningAdapter) Method() routerLearningMethod {
-	return routerLearningMethodSessionAware
-}
-
-func (a sessionAwareLearningAdapter) Apply(input routerLearningInput) (routerLearningAdaptationResult, bool) {
-	if a.router == nil {
-		return routerLearningAdaptationResult{}, false
-	}
-	return a.router.applySessionAwareLearning(input)
-}
-
-type banditLearningAdapter struct {
-	routerLearningBaseAdapter
-}
-
-func newBanditLearningAdapter(router *OpenAIRouter) routerLearningAdapter {
-	return banditLearningAdapter{
-		routerLearningBaseAdapter: routerLearningBaseAdapter{router: router},
-	}
-}
-
-func (a banditLearningAdapter) Method() routerLearningMethod {
-	return routerLearningMethodBandit
-}
-
-func (a banditLearningAdapter) Apply(input routerLearningInput) (routerLearningAdaptationResult, bool) {
-	if a.router == nil {
-		return routerLearningAdaptationResult{}, false
-	}
-	return a.router.applyBanditLearning(input)
-}
-
-func (a banditLearningAdapter) Observe(input routerLearningInput, composed routerLearningComposition) {
-	if a.router != nil {
-		a.router.observeBanditSelection(input, composed)
-	}
-}
-
-type eloLearningAdapter struct {
-	routerLearningBaseAdapter
-}
-
-func newEloLearningAdapter(router *OpenAIRouter) routerLearningAdapter {
-	return eloLearningAdapter{
-		routerLearningBaseAdapter: routerLearningBaseAdapter{router: router},
-	}
-}
-
-func (a eloLearningAdapter) Method() routerLearningMethod {
-	return routerLearningMethodElo
-}
-
-func (a eloLearningAdapter) Apply(input routerLearningInput) (routerLearningAdaptationResult, bool) {
-	if a.router == nil {
-		return routerLearningAdaptationResult{}, false
-	}
-	return a.router.applyEloLearning(input)
-}
-
-type personalizationLearningAdapter struct {
-	routerLearningBaseAdapter
-}
-
-func newPersonalizationLearningAdapter(router *OpenAIRouter) routerLearningAdapter {
-	return personalizationLearningAdapter{
-		routerLearningBaseAdapter: routerLearningBaseAdapter{router: router},
-	}
-}
-
-func (a personalizationLearningAdapter) Method() routerLearningMethod {
-	return routerLearningMethodPersonalization
-}
-
-func (a personalizationLearningAdapter) Apply(input routerLearningInput) (routerLearningAdaptationResult, bool) {
-	if a.router == nil {
-		return routerLearningAdaptationResult{}, false
-	}
-	return a.router.applyPersonalizationLearning(input)
-}
-
-func (r *OpenAIRouter) routerLearningAdapters() []routerLearningAdapter {
-	return defaultRouterLearningAdapterRegistry().Adapters(r)
-}
-
-func defaultRouterLearningAdapterRegistry() routerLearningAdapterRegistry {
-	return newRouterLearningAdapterRegistry([]routerLearningAdapterFactory{
-		{method: routerLearningMethodSessionAware, build: newSessionAwareLearningAdapter},
-		{method: routerLearningMethodBandit, build: newBanditLearningAdapter},
-		{method: routerLearningMethodElo, build: newEloLearningAdapter},
-		{method: routerLearningMethodPersonalization, build: newPersonalizationLearningAdapter},
-	})
-}
-
-func newRouterLearningAdapterRegistry(factories []routerLearningAdapterFactory) routerLearningAdapterRegistry {
-	registry := routerLearningAdapterRegistry{
-		factories: make([]routerLearningAdapterFactory, 0, len(factories)),
-	}
-	seen := map[routerLearningMethod]struct{}{}
-	for _, factory := range factories {
-		if factory.method == "" || factory.build == nil {
-			continue
-		}
-		if _, ok := seen[factory.method]; ok {
-			continue
-		}
-		seen[factory.method] = struct{}{}
-		registry.factories = append(registry.factories, factory)
-	}
-	return registry
-}
-
-func (r routerLearningAdapterRegistry) Methods() []routerLearningMethod {
-	methods := make([]routerLearningMethod, 0, len(r.factories))
-	for _, factory := range r.factories {
-		methods = append(methods, factory.method)
-	}
-	return methods
-}
-
-func (r routerLearningAdapterRegistry) Adapters(router *OpenAIRouter) []routerLearningAdapter {
-	adapters := make([]routerLearningAdapter, 0, len(r.factories))
-	for _, factory := range r.factories {
-		adapter := factory.build(router)
-		if adapter == nil || adapter.Method() != factory.method {
-			continue
-		}
-		adapters = append(adapters, adapter)
-	}
-	return adapters
-}
-
 func (r *OpenAIRouter) applyRouterLearning(
 	selCtx *selection.SelectionContext,
 	baseResult *selection.SelectionResult,
@@ -178,18 +16,68 @@ func (r *OpenAIRouter) applyRouterLearning(
 		baseResult:       baseResult,
 		selectedModelRef: selectedModelRef,
 		ctx:              ctx,
-		experience:       r.routerLearningExperienceSnapshot(),
 	}
-	var results []routerLearningAdaptationResult
-	adapters := r.routerLearningAdapters()
-	for _, adapter := range adapters {
-		if result, ok := adapter.Apply(input); ok {
-			results = append(results, result)
-		}
+
+	preflight := r.applyProtectionPreflight(input)
+	adaptation := r.applyLearningAdaptation(input, preflight)
+	protection := r.applyProtectionSwitch(input, preflight, adaptation)
+	recordRouterLearningPolicies(ctx, preflight, adaptation, protection)
+
+	finalCtx := firstNonNilSelectionContext(protection.selectionContext, adaptation.selectionContext, selCtx)
+	finalResult := firstNonNilSelectionResult(protection.selectionResult, adaptation.selectionResult, baseResult)
+	finalRef := firstNonNilModelRef(protection.selectedModelRef, adaptation.selectedModelRef, selectedModelRef)
+	applied := learningChangesModel(baseResult, finalResult)
+	return finalCtx, finalResult, finalRef, applied
+}
+
+func (r *OpenAIRouter) applyLearningAdaptation(
+	input routerLearningInput,
+	preflight routerLearningProtectionPreflight,
+) routerLearningDecision {
+	cfg, ok := r.adaptationConfig(input.selCtx, input.baseResult, input.selectedModelRef, input.ctx)
+	if !ok {
+		return routerLearningDecision{}
 	}
-	composed := composeRouterLearning(input, results)
-	for _, adapter := range adapters {
-		adapter.Observe(input, composed)
+	mode := adaptationMode(input.ctx)
+	strategy, ok := routerLearningAdaptationStrategies.Strategy(cfg)
+	if !ok {
+		return baseAdaptationDecision(
+			input,
+			adaptationPolicy(mode, routerLearningActionKeepBase, "strategy_unavailable", nil),
+		)
 	}
-	return composed.selectionContext, composed.selectionResult, composed.selectedModelRef, composed.applied
+	return strategy.Select(r, input, preflight, cfg)
+}
+
+func recordRouterLearningPolicies(
+	ctx *RequestContext,
+	preflight routerLearningProtectionPreflight,
+	adaptation routerLearningDecision,
+	protection routerLearningDecision,
+) {
+	if ctx == nil {
+		return
+	}
+	var policies routerLearningPolicies
+	if !preflight.policy.Empty() {
+		policies.Set(preflight.policy)
+		ctx.VSRLearningProtectionPreflight = preflight.policy.toReplayProtection()
+	}
+	if !adaptation.policy.Empty() {
+		policies.Set(adaptation.policy)
+	}
+	if !protection.policy.Empty() {
+		policies.Set(protection.policy)
+	}
+	if policies.Empty() {
+		return
+	}
+	ctx.VSRLearningPolicies = policies
+	if policy, ok := policies.Policy(routerLearningMethodProtection); ok {
+		ctx.VSRLearningPolicy = &policy
+		return
+	}
+	if policy, ok := policies.Policy(routerLearningMethodAdaptation); ok {
+		ctx.VSRLearningPolicy = &policy
+	}
 }

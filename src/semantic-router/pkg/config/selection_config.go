@@ -182,7 +182,7 @@ type AutoMixSelectionConfig struct {
 }
 
 type HybridSelectionConfig struct {
-	EloWeight           float64 `yaml:"elo_weight,omitempty"`
+	ExperienceWeight    float64 `yaml:"experience_weight,omitempty"`
 	RouterDCWeight      float64 `yaml:"router_dc_weight,omitempty"`
 	AutoMixWeight       float64 `yaml:"automix_weight,omitempty"`
 	CostWeight          float64 `yaml:"cost_weight,omitempty"`

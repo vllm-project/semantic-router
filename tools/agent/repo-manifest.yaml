@@ -136,7 +136,6 @@ docs:
 - docs/agent/plans/pl-0032-architecture-scorecard-ratchet.md
 - docs/agent/plans/pl-0033-v0-3-themis-release-closure.md
 - docs/agent/plans/pl-0034-fusion-api.md
-- docs/agent/plans/pl-0035-router-learning-session-aware.md
 - docs/agent/plans/pl-0036-router-learning-followups.md
 - docs/agent/tech-debt/td-006-structural-rule-exceptions.md
 - docs/agent/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
@@ -273,9 +272,6 @@ doc_governance:
   - path: docs/agent/plans/pl-0034-fusion-api.md
     steward: router-core
     freshness: update while Fusion API implementation and AMD regression work is active
-  - path: docs/agent/plans/pl-0035-router-learning-session-aware.md
-    steward: router-core
-    freshness: update while Router Learning session-aware migration and AMD regression work is active
   - path: docs/agent/plans/pl-0036-router-learning-followups.md
     steward: router-core
     freshness: update while Router Learning follow-up implementation, eval, and AMD validation work is active

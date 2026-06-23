@@ -80,7 +80,7 @@ No single ranking signal is reliable for every workload: pure cost, pure similar
 algorithm:
   type: hybrid
   hybrid:
-    elo_weight: 0.3              # Legacy name for feedback-derived learning evidence
+    experience_weight: 0.3              # Feedback-derived experience evidence
     router_dc_weight: 0.3        # Weight for embedding similarity
     automix_weight: 0.2          # Weight for POMDP value
     cost_weight: 0.2             # Weight for cost consideration
@@ -92,7 +92,7 @@ algorithm:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `elo_weight` | float | `0.3` | Legacy weight name for feedback-derived learning evidence (0-1) |
+| `experience_weight` | float | `0.3` | Weight for feedback-derived experience evidence (0-1) |
 | `router_dc_weight` | float | `0.3` | Weight for RouterDC embedding similarity (0–1) |
 | `automix_weight` | float | `0.2` | Weight for AutoMix POMDP value (0–1) |
 | `cost_weight` | float | `0.2` | Weight for cost consideration (0–1) |
@@ -101,6 +101,6 @@ algorithm:
 
 ## Feedback
 
-Hybrid does not own feedback state. Feedback-driven ratings and bandit rewards
-belong under `global.router.learning.adaptations`; Hybrid may consume
-read-only learning evidence when that integration is available.
+Hybrid does not own feedback state. Online model-choice experience belongs
+under `global.router.learning.adaptation`; Hybrid may consume read-only
+learning evidence when that integration is available.

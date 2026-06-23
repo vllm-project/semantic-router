@@ -1,139 +1,90 @@
-# Learning Adaptations
+# Adaptation
 
 ## Overview
 
-Learning adaptations run after a semantic decision and its base model selection.
-They can use Router Learning states and experience to keep, switch, or observe a
-model choice across requests.
-
-The public adaptation namespace is:
-
-```yaml
-global:
-  router:
-    learning:
-      enabled: true
-      adaptations:
-        session_aware:
-          enabled: true
-        bandit:
-          enabled: true
-        elo:
-          enabled: false
-        personalization:
-          enabled: false
-```
-
-Most decisions do not need local adaptation config. Use
-`routing.decisions[].adaptations.<name>` only when a decision needs `apply`,
-`observe`, `bypass`, or sparse tuning overrides.
+Adaptation is online model-choice learning. It runs after the matched decision
+and base selector, then proposes a model from an allowed candidate set.
 
 ## Key Advantages
 
-- Keeps cross-request learning out of `decision.algorithm`.
-- Lets hard policy decisions bypass learning explicitly.
-- Gives every adaptation the same method-keyed diagnostics shape.
-- Keeps request routing fail-open when states or experience are missing.
+- Improves model choice without rewriting semantic decisions on the request path.
+- Keeps the default search space narrow with `candidate_set: decision`.
+- Can share evidence across a route tier when `candidate_set: tier` is enabled.
+- Uses protection before random sampling and before final model switches.
+- Writes compact headers and detailed replay diagnostics for offline analysis.
 
 ## What Problem Does It Solve?
 
-Agents and long-running sessions need stable routing behavior, but base
-selection algorithms only score the current request. Learning adaptations add
-bounded cross-request context after the base route: active tool loops, warm
-prefix cache, explicit feedback, cost tradeoffs, and future personalization.
-
-This keeps the base algorithm simple while making the final route aware of
-session continuity and learned evidence.
+Static recipes encode what the operator knows at deploy time. In production,
+the router also observes model fit, overuse, provider failures, latency, cache
+reuse, and effective cost. Adaptation turns that bounded evidence into an
+online model proposal while the recipe remains the policy source of truth.
 
 ## When to Use
 
-- A route should stay on the current model during an active conversation or
-  session.
-- A decision is a privacy or policy boundary and must bypass learning.
-- You want to observe what learning would do before allowing it to change
-  routes.
-- You want conservative bandit behavior for explicit feedback or cost-aware
-  exploration.
+- A decision has multiple candidate models and runtime outcomes can improve the
+  choice.
+- Related decisions share a tier and should learn from each other's model
+  evidence.
+- You want online exploration, but only when protection says the current agent
+  state is safe to explore.
+- You want offline evals to seed model experience without changing the recipe
+  immediately.
 
-## Adaptation Types
+## Configuration
 
-| Adaptation | Status | Scope | States | Best For |
-| --- | --- | --- | --- | --- |
-| `session_aware` | Supported | `conversation` or `session` | Current model, tool-loop state, cache evidence, switch history | Agent continuity and prefix-cache protection |
-| `bandit` | Day-0 | `decision` by default | Impressions and explicit feedback rewards | Cost/quality exploration with bounded online learning |
-| `elo` | Day-0 | `decision` by default | Pairwise feedback ratings | Feedback-driven quality ranking |
-| `personalization` | Day-0 | `decision` by default | User preference states | Personalized routing from explicit feedback |
-
-`session_aware` is the first production adaptation. `bandit` has a conservative
-day-0 runtime: without reward states, an exploration budget, or explicit
-cost/latency goals, it records diagnostics but keeps the base model. `elo` and
-`personalization` also use conservative day-0 states: without explicit feedback,
-they record diagnostics and keep the base model. None of these should be
-configured as `decision.algorithm.type`.
-
-## Bandit Example
+The first strategy is `routing_sampling`:
 
 ```yaml
 global:
   router:
     learning:
       enabled: true
-      adaptations:
-        bandit:
-          enabled: true
-          algorithm: linucb
-          scope: decision
-          goals:
-            quality: 0.7
-            cost: 0.2
-            latency: 0.1
-          tuning:
-            exploration_budget: 0.05
+      adaptation:
+        enabled: true
+        strategy: routing_sampling
+        candidate_set: decision
 ```
 
-Use `goals` as a weighted map. The router normalizes weights internally.
-`quality` uses base selector scores or explicit feedback reward states, `cost`
-uses configured model pricing, and `latency` is reserved for runtime latency
-states.
+## Candidate Sets
 
-Explicit feedback submitted to `/api/v1/feedback` updates enabled Router
-Learning states. Decision-scoped adaptations use `decision_name`; session-scoped
-adaptations require `session_id`; conversation-scoped adaptations require both
-`session_id` and `conversation_id`. `personalization` additionally requires
-`user_id`.
+| Value | Candidate models |
+| --- | --- |
+| `decision` | Models from the matched decision's `modelRefs`. |
+| `tier` | Union of `modelRefs` from decisions with the same `decision.tier`. |
+| `global` | All deployed models in the recipe's model/provider inventory. |
 
-## Configuration
+`decision` is the safest default. `tier` lets related routes share candidates.
+`global` is broadest and can propose deployed models that do not appear in the
+matched decision's `modelRefs`, so it uses stricter cost and reliability guards.
 
-```yaml
-routing:
-  decisions:
-    - name: privacy_boundary
-      adaptations:
-        session_aware:
-          mode: bypass
-        bandit:
-          mode: bypass
-        elo:
-          mode: observe
-        personalization:
-          mode: bypass
-```
+## Routing Sampling
 
-Use `bypass` when a decision is a hard policy boundary. Use `observe` when an
-adaptation should emit headers and replay diagnostics without changing the final
-model.
+`routing_sampling` scores each candidate from model experience:
+
+- offline or neutral quality seed
+- `good_fit`, `underpowered`, `overprovisioned`, and `failed` outcomes
+- latency evidence
+- cache reuse evidence
+- effective input cost
+- reliability evidence
+
+When protection allows exploration, the strategy can sample from the candidate
+posterior. When protection suppresses exploration, it scores by deterministic
+posterior mean.
+
+Protection still gets the final say. A sampled or mean-selected candidate must
+clear the switch guard before it becomes the final model.
 
 ## Diagnostics
 
-Response headers stay compact and method-keyed:
+Headers stay compact:
 
 ```http
-x-vsr-learning-methods: bandit,session_aware
-x-vsr-learning-actions: bandit=switch,session_aware=stay
-x-vsr-learning-scopes: bandit=decision,session_aware=conversation
-x-vsr-learning-reasons: bandit=score_win,session_aware=cache_hot
-x-vsr-learning-modes: bandit=apply,session_aware=apply
+x-vsr-learning-methods: adaptation,protection
+x-vsr-learning-actions: adaptation=keep_base,protection=hold_current
+x-vsr-learning-reasons: adaptation=base_best,protection=cache_cost_high
 ```
 
-Full score details, state-key hashes, experience status, and identity
-diagnostics belong in Router Replay under `learning.adaptations`.
+Router Replay stores candidate scores, posterior mean, sampled value, base
+model, proposal model, final model, candidate set, strategy, and reason.

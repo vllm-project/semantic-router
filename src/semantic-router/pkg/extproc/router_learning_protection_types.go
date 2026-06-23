@@ -42,12 +42,3 @@ func (s learningSelectionResult) UpdateFeedback(context.Context, *selection.Feed
 }
 func (s learningSelectionResult) Tier() selection.AlgorithmTier                { return selection.TierSupported }
 func (s learningSelectionResult) ExternalDependencies() []selection.Dependency { return nil }
-
-type sessionAwareLearningIdentity struct {
-	sessionID          string
-	conversationID     string
-	memoryKey          string
-	scope              string
-	sessionHeader      string
-	conversationHeader string
-}

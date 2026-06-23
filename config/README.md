@@ -23,7 +23,7 @@ Inside canonical `config.yaml`:
 - structure `density` features now use built-in multilingual text-unit normalization; the contract no longer exposes a per-rule `normalize_by` switch
 - the dashboard and DSL builder now expose the same projection surface directly; see `website/docs/tutorials/projection/overview.md` and the maintained `deploy/recipes/balance.{yaml,dsl}` pair for end-to-end usage
 - `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog` expose router-wide overrides explicitly
-- `global.router.learning.adaptations` adds cross-request Router Learning after the base decision algorithm. `session_aware` provides agentic stay-vs-switch policy; `bandit` provides conservative day-0 feedback/cost-aware scoring; `elo` provides day-0 pairwise rating states; `personalization` provides day-0 user preference states. Decisions can opt out with `routing.decisions[].adaptations.<name>.mode: bypass`. `decision.algorithm.type=session_aware|elo|rl_driven|gmtrouter` is no longer a supported public algorithm.
+- `global.router.learning.adaptation` adds online model-choice learning after the base decision algorithm. `global.router.learning.protection` protects agentic continuity, cache, tool loops, and handoff cost. Decisions can opt out with `routing.decisions[].adaptations.mode: bypass`, use component-level `adaptations.adaptation.mode` / `adaptations.protection.mode`, or override the adaptation search space with `adaptations.adaptation.candidate_set`. `decision.algorithm.type=session_aware|elo|rl_driven|gmtrouter|bandit|personalization` is no longer a supported public algorithm.
 - `global.services.router_replay.enabled` is the router-wide replay default; when it is on, decisions inherit replay capture unless a route-local `router_replay` plugin sets `enabled: false`
 - embedding fallback tuning such as `global.model_catalog.embeddings.semantic.embedding_config.top_k` lives under the router-owned model catalog, not under individual signal rules
 - prototype-aware exemplar compression and label scoring live alongside their owning signal families: `global.model_catalog.embeddings.semantic.embedding_config.prototype_scoring`, `global.model_catalog.modules.classifier.preference.prototype_scoring`, `global.model_catalog.kbs[].prototype_scoring`, and `global.model_catalog.modules.complexity.prototype_scoring`
@@ -70,7 +70,7 @@ Latest official tutorials mirror the same top-level taxonomy:
   - `tutorials/signal/learned/` for embedding- and classifier-driven signals
 - `tutorials/decision/`
 - `tutorials/algorithm/` with one page per algorithm
-- `tutorials/learning/` for cross-request Router Learning adaptations such as session-aware stay-vs-switch policy
+- `tutorials/learning/` for cross-request Router Learning adaptation and protection
 - `tutorials/plugin/` with one page per plugin
 - `tutorials/global/`
 

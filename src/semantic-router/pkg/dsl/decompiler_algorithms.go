@@ -14,9 +14,6 @@ var algorithmFieldExporters = map[string]algorithmFieldExporter{
 	"remom": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		remomAlgorithmToFields(algo.ReMoM, fields)
 	},
-	"elo": func(algo *config.AlgorithmConfig, fields map[string]Value) {
-		eloAlgorithmToFields(algo.Elo, fields)
-	},
 	"router_dc": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		routerDCAlgorithmToFields(algo.RouterDC, fields)
 	},
@@ -25,12 +22,6 @@ var algorithmFieldExporters = map[string]algorithmFieldExporter{
 	},
 	"hybrid": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		hybridAlgorithmToFields(algo.Hybrid, fields)
-	},
-	"rl_driven": func(algo *config.AlgorithmConfig, fields map[string]Value) {
-		rlDrivenAlgorithmToFields(algo.RLDriven, fields)
-	},
-	"gmtrouter": func(algo *config.AlgorithmConfig, fields map[string]Value) {
-		gmtRouterAlgorithmToFields(algo.GMTRouter, fields)
 	},
 	"latency_aware": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		latencyAwareAlgorithmToFields(algo.LatencyAware, fields)
@@ -109,20 +100,6 @@ func remomAlgorithmToFields(r *config.ReMoMAlgorithmConfig, fields map[string]Va
 	setIntValue(fields, "max_responses_per_round", r.MaxResponsesPerRound)
 }
 
-func eloAlgorithmToFields(e *config.EloSelectionConfig, fields map[string]Value) {
-	if e == nil {
-		return
-	}
-	setFloatValue(fields, "initial_rating", e.InitialRating)
-	setFloatValue(fields, "k_factor", e.KFactor)
-	setBoolTrueValue(fields, "category_weighted", e.CategoryWeighted)
-	setFloatValue(fields, "decay_factor", e.DecayFactor)
-	setIntValue(fields, "min_comparisons", e.MinComparisons)
-	setFloatValue(fields, "cost_scaling_factor", e.CostScalingFactor)
-	setStringValue(fields, "storage_path", e.StoragePath)
-	setStringValue(fields, "auto_save_interval", e.AutoSaveInterval)
-}
-
 func routerDCAlgorithmToFields(r *config.RouterDCSelectionConfig, fields map[string]Value) {
 	if r == nil {
 		return
@@ -152,54 +129,12 @@ func hybridAlgorithmToFields(h *config.HybridSelectionConfig, fields map[string]
 	if h == nil {
 		return
 	}
-	setFloatValue(fields, "elo_weight", h.EloWeight)
+	setFloatValue(fields, "experience_weight", h.ExperienceWeight)
 	setFloatValue(fields, "router_dc_weight", h.RouterDCWeight)
 	setFloatValue(fields, "automix_weight", h.AutoMixWeight)
 	setFloatValue(fields, "cost_weight", h.CostWeight)
 	setFloatValue(fields, "quality_gap_threshold", h.QualityGapThreshold)
 	setBoolTrueValue(fields, "normalize_scores", h.NormalizeScores)
-}
-
-func rlDrivenAlgorithmToFields(r *config.RLDrivenSelectionConfig, fields map[string]Value) {
-	if r == nil {
-		return
-	}
-	setFloatValue(fields, "exploration_rate", r.ExplorationRate)
-	setFloatValue(fields, "exploration_decay", r.ExplorationDecay)
-	setFloatValue(fields, "min_exploration", r.MinExploration)
-	setBoolTrueValue(fields, "use_thompson_sampling", r.UseThompsonSampling)
-	setBoolTrueValue(fields, "enable_personalization", r.EnablePersonalization)
-	setFloatValue(fields, "personalization_blend", r.PersonalizationBlend)
-	setFloatValue(fields, "session_context_weight", r.SessionContextWeight)
-	setFloatValue(fields, "implicit_feedback_weight", r.ImplicitFeedbackWeight)
-	setBoolTrueValue(fields, "cost_awareness", r.CostAwareness)
-	setFloatValue(fields, "cost_weight", r.CostWeight)
-	setStringValue(fields, "storage_path", r.StoragePath)
-	setStringValue(fields, "auto_save_interval", r.AutoSaveInterval)
-	setBoolTrueValue(fields, "use_router_r1_rewards", r.UseRouterR1Rewards)
-	setFloatValue(fields, "cost_reward_alpha", r.CostRewardAlpha)
-	setFloatValue(fields, "format_reward_penalty", r.FormatRewardPenalty)
-	setBoolTrueValue(fields, "enable_llm_routing", r.EnableLLMRouting)
-	setStringValue(fields, "router_r1_server_url", r.RouterR1ServerURL)
-	setStringValue(fields, "llm_routing_fallback", r.LLMRoutingFallback)
-	setBoolTrueValue(fields, "enable_multi_round_aggregation", r.EnableMultiRoundAggregation)
-	setIntValue(fields, "max_aggregation_rounds", r.MaxAggregationRounds)
-}
-
-func gmtRouterAlgorithmToFields(g *config.GMTRouterSelectionConfig, fields map[string]Value) {
-	if g == nil {
-		return
-	}
-	setBoolTrueValue(fields, "enable_personalization", g.EnablePersonalization)
-	setIntValue(fields, "history_sample_size", g.HistorySampleSize)
-	setIntValue(fields, "embedding_dimension", g.EmbeddingDimension)
-	setIntValue(fields, "num_gnn_layers", g.NumGNNLayers)
-	setIntValue(fields, "attention_heads", g.AttentionHeads)
-	setIntValue(fields, "min_interactions_for_personalization", g.MinInteractionsForPersonalization)
-	setIntValue(fields, "max_interactions_per_user", g.MaxInteractionsPerUser)
-	setStringArrayValue(fields, "feedback_types", g.FeedbackTypes)
-	setStringValue(fields, "model_path", g.ModelPath)
-	setStringValue(fields, "storage_path", g.StoragePath)
 }
 
 func latencyAwareAlgorithmToFields(l *config.LatencyAwareAlgorithmConfig, fields map[string]Value) {
@@ -246,12 +181,6 @@ func setFloatValue(fields map[string]Value, key string, value float64) {
 func setBoolTrueValue(fields map[string]Value, key string, value bool) {
 	if value {
 		fields[key] = BoolValue{V: true}
-	}
-}
-
-func setStringArrayValue(fields map[string]Value, key string, values []string) {
-	if len(values) > 0 {
-		fields[key] = stringsToArray(values)
 	}
 }
 

@@ -189,14 +189,11 @@ export type AlgorithmType =
   | 'sequential'
   | 'ratings'
   | 'static'
-  | 'elo'
   | 'router_dc'
   | 'automix'
   | 'hybrid'
   | 'remom'
   | 'fusion'
-  | 'rl_driven'
-  | 'gmtrouter'
   | 'latency_aware'
   | 'knn'
   | 'kmeans'
@@ -212,13 +209,10 @@ export interface AlgorithmConfig {
   ratings?: GenericAlgorithmConfig
   remom?: GenericAlgorithmConfig
   fusion?: GenericAlgorithmConfig
-  elo?: GenericAlgorithmConfig
   router_dc?: GenericAlgorithmConfig
   automix?: GenericAlgorithmConfig
   autoMix?: GenericAlgorithmConfig
   hybrid?: GenericAlgorithmConfig
-  rl_driven?: GenericAlgorithmConfig
-  gmtrouter?: GenericAlgorithmConfig
   knn?: GenericAlgorithmConfig
   kmeans?: GenericAlgorithmConfig
   svm?: GenericAlgorithmConfig
