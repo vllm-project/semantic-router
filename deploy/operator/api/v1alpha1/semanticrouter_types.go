@@ -1242,9 +1242,9 @@ type DecisionConfig struct {
 	// +optional
 	Plugins []runtime.RawExtension `json:"plugins,omitempty" yaml:"plugins,omitempty"`
 
-	// Algorithm configures model selection for this decision. It is preserved as
-	// a router-owned object so supported algorithms such as session_aware can
-	// evolve without requiring the operator CRD to duplicate every nested field.
+	// Algorithm configures base model selection for this decision. It is
+	// preserved as a router-owned object so supported algorithms can evolve
+	// without requiring the operator CRD to duplicate every nested field.
 	// +optional
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Type=object

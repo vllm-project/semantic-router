@@ -166,7 +166,7 @@ Request-level override:
 
 ## Grounding-Aware Synthesis
 
-By default the judge reads raw panel text with no grounding oracle. Grounding-aware synthesis scores each panel response for **faithfulness** *before* the judge runs, then ranks and filters the panel so the judge synthesizes from the most-grounded responses. It makes **no extra LLM calls** — it uses local encoder models (the hallucination/groundedness detector and an NLI entailment model).
+By default the judge reads raw panel text with no grounding oracle. Grounding-aware synthesis scores each panel response for **faithfulness** *before* the judge runs, then uses those scores to guide synthesis toward the better-grounded responses. It makes **no extra LLM calls** — it uses local encoder models (the hallucination/groundedness detector and an NLI entailment model).
 
 Reference selection (what each answer is scored against):
 
@@ -174,7 +174,13 @@ Reference selection (what each answer is scored against):
 - `panel` — score answers against each other via cross-model NLI; the panel acts as its own mutual reference (no external dependency, works on any query).
 - `hybrid` (default) — use `context` when the request carries it, otherwise `panel`.
 
-> Grounding measures faithfulness/consistency, not truth. With no authoritative source it can down-weight the least-supported responses, not certify correctness.
+Policy (how the scores are used):
+
+- `weight` (default) — keep every response and instruct the judge to weight each panel answer by its score, while explicitly protecting a correct lone dissenter.
+- `annotate` — keep every response and pass the scores to the judge as notes, without a weighting instruction.
+- `filter` — hard-drop responses scoring below `min_score` (always keeping `min_keep`); only this policy uses `min_score`/`min_keep`.
+
+> Grounding measures faithfulness/consistency, not truth. With no authoritative source it can down-weight the least-supported responses, not certify correctness. **Hard-dropping** the least mutually-consistent response (the `filter` policy) measurably *hurts* on contested factual questions — three models can be confidently wrong together while the lone dissenter is right — so the default is `weight`. See `bench/grounded_fusion/FINDINGS.md` for the evaluation behind this default.
 
 Requires the hallucination detector (and, for the `panel`/cross-model path, the NLI model) to be configured under `global` hallucination mitigation. If the backends are unavailable, `on_error: skip` falls back to plain Fusion.
 
@@ -187,13 +193,14 @@ algorithm:
     grounding:
       enabled: true
       reference: hybrid          # hybrid | context | panel
-      min_score: 0.0             # drop responses scoring below this (0-1)
-      min_keep: 1                # always keep at least this many
+      policy: weight             # weight | annotate | filter
+      min_score: 0.0             # filter policy only: drop below this (0-1)
+      min_keep: 1                # filter policy only: keep at least this many
       nli_contradiction_penalty: 1.0
       on_error: skip             # skip (fall back to plain fusion) | fail
 ```
 
-When enabled, the Fusion response `trace.grounding` records the reference mode and per-response `score`, `flagged_spans`, and whether each was `dropped`.
+When enabled, the Fusion response `trace.grounding` records the reference mode, the `policy`, and per-response `score`, `flagged_spans`, and whether each was `dropped` (only under the `filter` policy).
 
 ### Grounding parameters
 
@@ -201,7 +208,8 @@ When enabled, the Fusion response `trace.grounding` records the reference mode a
 |-----------|------|---------|-------------|
 | `enabled` | bool | `false` | Enable grounding-aware synthesis |
 | `reference` | string | `hybrid` | `hybrid`, `context`, or `panel` |
-| `min_score` | float | `0.0` | Drop responses scoring below this (0–1) |
-| `min_keep` | int | `1` | Always keep at least this many top-scoring responses |
+| `policy` | string | `weight` | `weight` (soft-weight, keep all), `annotate` (notes, keep all), or `filter` (hard-drop) |
+| `min_score` | float | `0.0` | `filter` policy only: drop responses scoring below this (0–1) |
+| `min_keep` | int | `1` | `filter` policy only: keep at least this many top-scoring responses |
 | `nli_contradiction_penalty` | float | `1.0` | Weight of a peer contradiction in the `panel` reference |
 | `on_error` | string | `skip` | `skip` (fall back to plain Fusion) or `fail` |

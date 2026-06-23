@@ -156,12 +156,57 @@ def load_draco(
     return samples
 
 
+def load_jsonl(
+    path: str,
+    max_samples: int | None = None,
+    domains: list[str] | None = None,
+    seed: int = 42,
+) -> list[DracoSample]:
+    """Load a generic rubric-graded dataset from JSONL (one row per line).
+
+    Each line mirrors a DRACO row -- ``{id, problem, domain, answer}`` where
+    ``answer`` is the weighted rubric -- plus an optional ``context`` (gold passage)
+    surfaced in ``metadata["context"]``. This is the seam for context-mode grounding:
+    a context-grounded benchmark (RAGTruth / HotpotQA-with-gold-passages reshaped to
+    this row format) is scored against its real source rather than panel agreement.
+    """
+    samples: list[DracoSample] = []
+    for raw_line in Path(path).expanduser().read_text().splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        row = json.loads(line)
+        samples.append(
+            DracoSample(
+                id=str(row["id"]),
+                problem=str(row["problem"]),
+                domain=str(row.get("domain", "unknown")),
+                rubric=_parse_rubric(str(row["id"]), row["answer"]),
+                metadata={"context": str(row.get("context", "") or "")},
+            )
+        )
+
+    if domains:
+        wanted = {d.lower() for d in domains}
+        samples = [s for s in samples if s.domain.lower() in wanted]
+    rng = random.Random(seed)
+    rng.shuffle(samples)
+    if max_samples is not None:
+        samples = samples[:max_samples]
+    return samples
+
+
 def get_dataset(name: str, **kwargs) -> list[DracoSample]:
-    """Dispatch a dataset by name. Currently only ``draco`` is supported."""
+    """Dispatch a dataset by name (``draco`` or a generic rubric-graded ``jsonl``)."""
     name = name.lower()
     if name == "draco":
         path = kwargs.pop("path", None) or kwargs.pop("draco_path", None)
         if not path:
             raise ValueError("draco dataset requires path=/path/to/draco.json")
         return load_draco(path, **kwargs)
+    if name == "jsonl":
+        path = kwargs.pop("path", None) or kwargs.pop("draco_path", None)
+        if not path:
+            raise ValueError("jsonl dataset requires path=/path/to/dataset.jsonl")
+        return load_jsonl(path, **kwargs)
     raise ValueError(f"unknown dataset: {name!r}")

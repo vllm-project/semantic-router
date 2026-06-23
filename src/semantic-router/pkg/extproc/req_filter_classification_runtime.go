@@ -14,14 +14,10 @@ import (
 )
 
 var selectionMethodByAlgorithmType = map[string]selection.SelectionMethod{
-	"elo":           selection.MethodElo,
 	"router_dc":     selection.MethodRouterDC,
 	"automix":       selection.MethodAutoMix,
 	"hybrid":        selection.MethodHybrid,
-	"rl_driven":     selection.MethodRLDriven,
-	"gmtrouter":     selection.MethodGMTRouter,
 	"latency_aware": selection.MethodLatencyAware,
-	"session_aware": selection.MethodSessionAware,
 	"static":        selection.MethodStatic,
 	"knn":           selection.MethodKNN,
 	"kmeans":        selection.MethodKMeans,
@@ -69,7 +65,6 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	logSignalEvaluationResults(ctx, signalLatency, signals)
 	tracing.EndSignalSpan(signalSpan, collectMatchedSignalRules(signals), 1.0, signalLatency)
 	ctx.TraceContext = signalCtx
-	r.processUserFeedbackForElo(signals.MatchedUserFeedbackRules, originalModel, ctx)
 	return signals, nil
 }
 

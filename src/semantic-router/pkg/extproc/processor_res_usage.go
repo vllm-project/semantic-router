@@ -115,6 +115,7 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 	)
 	replayUsage := r.recordResponseCost(ctx, completionLatency, usage)
 	r.updateRouterReplayUsageCost(ctx, replayUsage)
+	r.observeRouterLearningUsageTelemetry(ctx, completionLatency, usage, replayUsage)
 }
 
 func (r *OpenAIRouter) calibrateTokenEstimator(ctx *RequestContext, actualPromptTokens int) {
@@ -312,6 +313,12 @@ func (r *OpenAIRouter) reportStreamingUsageMetrics(
 		completionTokens:           int(usage.CompletionTokens),
 	})
 	r.updateRouterReplayUsageCost(ctx, replayUsage)
+	r.observeRouterLearningUsageTelemetry(ctx, completionLatency, responseUsageMetrics{
+		promptTokens:               int(usage.PromptTokens),
+		cachedPromptTokens:         cachedPromptTokens,
+		cachedPromptTokensReported: cachedPromptTokensReported,
+		completionTokens:           int(usage.CompletionTokens),
+	}, replayUsage)
 }
 
 func costForResponseUsage(usage responseUsageMetrics, pricing config.ModelPricing) float64 {

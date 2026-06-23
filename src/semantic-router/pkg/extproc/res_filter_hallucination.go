@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -169,26 +168,24 @@ func (r *OpenAIRouter) isNLIEnabledForDecision(decision *config.Decision) bool {
 	return halConfig.UseNLI
 }
 
-// applyHallucinationWarning applies hallucination warning based on the configured action
-// Returns modified response body (for body action) and response with headers (for header action)
-func (r *OpenAIRouter) applyHallucinationWarning(response *ext_proc.ProcessingResponse, ctx *RequestContext, responseBody []byte) ([]byte, *ext_proc.ProcessingResponse) {
+// applyHallucinationWarning applies the configured hallucination action: it
+// prepends a body warning ("body"), surfaces the "hallucination" response-warnings
+// code ("header"/default), or does nothing ("none"). Returns the (possibly
+// rewritten) body and the warning code to merge into x-vsr-response-warnings, if
+// any. The span detail stays in the replay record (#2204).
+func (r *OpenAIRouter) applyHallucinationWarning(ctx *RequestContext, responseBody []byte) ([]byte, string) {
 	if !ctx.HallucinationDetected {
-		return responseBody, response
+		return responseBody, ""
 	}
 
-	action := r.getHallucinationActionForDecision(ctx.VSRSelectedDecision)
-	includeDetails := r.shouldIncludeHallucinationDetails(ctx.VSRSelectedDecision)
-
-	switch action {
-	case "header":
-		return responseBody, r.addHallucinationWarningHeaders(response, ctx)
+	switch r.getHallucinationActionForDecision(ctx.VSRSelectedDecision) {
 	case "body":
-		return r.prependHallucinationWarningToBody(responseBody, ctx, includeDetails), response
+		includeDetails := r.shouldIncludeHallucinationDetails(ctx.VSRSelectedDecision)
+		return r.prependHallucinationWarningToBody(responseBody, ctx, includeDetails), ""
 	case "none":
-		return responseBody, response
-	default:
-		// Default to header
-		return responseBody, r.addHallucinationWarningHeaders(response, ctx)
+		return responseBody, ""
+	default: // "header"
+		return responseBody, headers.ResponseWarningHallucination
 	}
 }
 
@@ -204,62 +201,6 @@ func (r *OpenAIRouter) shouldIncludeHallucinationDetails(decision *config.Decisi
 	}
 
 	return halConfig.IncludeHallucinationDetails
-}
-
-// addHallucinationWarningHeaders adds warning headers to the response when hallucination is detected
-func (r *OpenAIRouter) addHallucinationWarningHeaders(response *ext_proc.ProcessingResponse, ctx *RequestContext) *ext_proc.ProcessingResponse {
-	if !ctx.HallucinationDetected {
-		return response
-	}
-
-	// Get the body response from the response
-	bodyResponse, ok := response.Response.(*ext_proc.ProcessingResponse_ResponseBody)
-	if !ok {
-		return response
-	}
-
-	// Create header mutation with hallucination warning
-	headerMutation := &ext_proc.HeaderMutation{
-		SetHeaders: []*core.HeaderValueOption{
-			{
-				Header: &core.HeaderValue{
-					Key:      headers.HallucinationDetected,
-					RawValue: []byte("true"),
-				},
-			},
-		},
-	}
-
-	// Add fact-check-needed header if fact check was triggered
-	if ctx.FactCheckNeeded {
-		headerMutation.SetHeaders = append(headerMutation.SetHeaders, &core.HeaderValueOption{
-			Header: &core.HeaderValue{
-				Key:      headers.FactCheckNeeded,
-				RawValue: []byte("true"),
-			},
-		})
-	}
-
-	if len(ctx.HallucinationSpans) > 0 {
-		spansSummary := strings.Join(ctx.HallucinationSpans, "; ")
-		if len(spansSummary) > 500 {
-			spansSummary = spansSummary[:500] + "..." // Truncate long spans
-		}
-		headerMutation.SetHeaders = append(headerMutation.SetHeaders, &core.HeaderValueOption{
-			Header: &core.HeaderValue{
-				Key:      headers.HallucinationSpans,
-				RawValue: []byte(spansSummary),
-			},
-		})
-	}
-
-	// Update the response with the header mutation
-	if bodyResponse.ResponseBody.Response == nil {
-		bodyResponse.ResponseBody.Response = &ext_proc.CommonResponse{}
-	}
-	bodyResponse.ResponseBody.Response.HeaderMutation = headerMutation
-
-	return response
 }
 
 // prependHallucinationWarningToBody prepends warning text to the response content
@@ -382,81 +323,24 @@ func (r *OpenAIRouter) checkUnverifiedFactualResponse(ctx *RequestContext) {
 		ctx.FactCheckConfidence)
 }
 
-// applyUnverifiedFactualWarning applies unverified factual warning based on the configured action
-// Returns modified response body (for body action) and response with headers (for header action)
-func (r *OpenAIRouter) applyUnverifiedFactualWarning(response *ext_proc.ProcessingResponse, ctx *RequestContext, responseBody []byte) ([]byte, *ext_proc.ProcessingResponse) {
+// applyUnverifiedFactualWarning applies the configured action for an unverified
+// factual response: prepends a body warning ("body"), surfaces the
+// "unverified_factual" response-warnings code ("header"/default), or does nothing
+// ("none"). Returns the (possibly rewritten) body and the warning code to merge,
+// if any. The fact-check verification context stays in the replay record (#2204).
+func (r *OpenAIRouter) applyUnverifiedFactualWarning(ctx *RequestContext, responseBody []byte) ([]byte, string) {
 	if !ctx.UnverifiedFactualResponse {
-		return responseBody, response
+		return responseBody, ""
 	}
 
-	action := r.getUnverifiedFactualActionForDecision(ctx.VSRSelectedDecision)
-
-	switch action {
-	case "header":
-		return responseBody, r.addUnverifiedFactualWarningHeaders(response, ctx)
+	switch r.getUnverifiedFactualActionForDecision(ctx.VSRSelectedDecision) {
 	case "body":
-		return r.prependUnverifiedFactualWarningToBody(responseBody), response
+		return r.prependUnverifiedFactualWarningToBody(responseBody), ""
 	case "none":
-		return responseBody, response
-	default:
-		// Default to header
-		return responseBody, r.addUnverifiedFactualWarningHeaders(response, ctx)
+		return responseBody, ""
+	default: // "header"
+		return responseBody, headers.ResponseWarningUnverifiedFactual
 	}
-}
-
-// addUnverifiedFactualWarningHeaders adds warning headers when a factual response
-// could not be verified due to lack of tool context
-func (r *OpenAIRouter) addUnverifiedFactualWarningHeaders(response *ext_proc.ProcessingResponse, ctx *RequestContext) *ext_proc.ProcessingResponse {
-	if !ctx.UnverifiedFactualResponse {
-		return response
-	}
-
-	// Get the body response from the response
-	bodyResponse, ok := response.Response.(*ext_proc.ProcessingResponse_ResponseBody)
-	if !ok {
-		return response
-	}
-
-	// Create header mutation with unverified warning
-	headerMutation := &ext_proc.HeaderMutation{
-		SetHeaders: []*core.HeaderValueOption{
-			{
-				Header: &core.HeaderValue{
-					Key:      headers.UnverifiedFactualResponse,
-					RawValue: []byte("true"),
-				},
-			},
-			{
-				Header: &core.HeaderValue{
-					Key:      headers.FactCheckNeeded,
-					RawValue: []byte("true"),
-				},
-			},
-			{
-				Header: &core.HeaderValue{
-					Key:      headers.VerificationContextMissing,
-					RawValue: []byte("true"),
-				},
-			},
-		},
-	}
-
-	// Update the response with the header mutation
-	if bodyResponse.ResponseBody.Response == nil {
-		bodyResponse.ResponseBody.Response = &ext_proc.CommonResponse{}
-	}
-
-	// Merge with existing headers if any
-	if bodyResponse.ResponseBody.Response.HeaderMutation != nil {
-		bodyResponse.ResponseBody.Response.HeaderMutation.SetHeaders = append(
-			bodyResponse.ResponseBody.Response.HeaderMutation.SetHeaders,
-			headerMutation.SetHeaders...,
-		)
-	} else {
-		bodyResponse.ResponseBody.Response.HeaderMutation = headerMutation
-	}
-
-	return response
 }
 
 // prependUnverifiedFactualWarningToBody prepends unverified factual warning text to the response content
