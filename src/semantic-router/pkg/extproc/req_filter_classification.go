@@ -85,8 +85,7 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 
 	// If only one model, no need for selection algorithm
 	if len(selCtx.CandidateModels) == 1 {
-		recordAgenticSessionDecision(selCtx, nil, defaultCandidateModelRef, ctx)
-		return defaultCandidateModelRef, "single"
+		return r.selectSingleCandidateModel(selCtx, defaultCandidateModelRef, ctx)
 	}
 
 	// Determine selection method: per-decision algorithm takes precedence over global config
@@ -121,19 +120,37 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 		recordAgenticSessionDecision(selCtx, result, defaultCandidateModelRef, ctx)
 		return defaultCandidateModelRef, string(method)
 	}
-	if result.SessionPolicy != nil && ctx != nil {
-		ctx.VSRSessionPolicy = result.SessionPolicy.ToMap()
-	}
-	selectedModelRef, gateApplied := r.applyPostSelectionGate(selCtx, result, selectedModelRef, ctx, method)
-	logSelectionResult(method, result, selectedModelRef, gateApplied)
+	recordSelCtx, result, selectedModelRef, learningApplied := r.applyRouterLearning(selCtx, result, selectedModelRef, ctx)
+	logSelectionResult(method, result, selectedModelRef, learningApplied)
 	selection.RecordSelection(string(method), selCtx.DecisionName, selectedModelRef.Model, result.Tier, result.Score)
-	recordAgenticSessionDecision(selCtx, result, selectedModelRef, ctx)
+	recordAgenticSessionDecision(recordSelCtx, result, selectedModelRef, ctx)
 	return selectedModelRef, string(method)
 }
 
+func (r *OpenAIRouter) selectSingleCandidateModel(
+	selCtx *selection.SelectionContext,
+	defaultCandidateModelRef *config.ModelRef,
+	ctx *RequestContext,
+) (*config.ModelRef, string) {
+	result := &selection.SelectionResult{
+		SelectedModel: defaultCandidateModelRef.Model,
+		LoRAName:      defaultCandidateModelRef.LoRAName,
+		Score:         1.0,
+		Confidence:    1.0,
+		Method:        selection.MethodStatic,
+		Tier:          selection.TierSupported,
+		Reasoning:     "single candidate",
+		AllScores:     map[string]float64{defaultCandidateModelRef.Model: 1.0},
+	}
+	recordSelCtx, result, selectedModelRef, learningApplied := r.applyRouterLearning(selCtx, result, defaultCandidateModelRef, ctx)
+	logSelectionResult(selection.MethodStatic, result, selectedModelRef, learningApplied)
+	recordAgenticSessionDecision(recordSelCtx, result, selectedModelRef, ctx)
+	return selectedModelRef, "single"
+}
+
 func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMethod, algorithm *config.AlgorithmConfig) selection.Selector {
-	if method == selection.MethodSessionAware && algorithm != nil && algorithm.SessionAware != nil {
-		return r.newDecisionSessionAwareSelector(algorithm.SessionAware)
+	if method == selection.MethodHybrid && algorithm != nil && algorithm.Hybrid != nil {
+		return r.newDecisionHybridSelector(algorithm.Hybrid)
 	}
 	if r.ModelSelector == nil {
 		return nil
@@ -142,41 +159,55 @@ func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMetho
 	return selector
 }
 
-func (r *OpenAIRouter) newDecisionSessionAwareSelector(decisionCfg *config.SessionAwareSelectionConfig) selection.Selector {
-	cfg := selection.DefaultSessionAwareConfig()
+func (r *OpenAIRouter) newDecisionHybridSelector(decisionCfg *config.HybridSelectionConfig) selection.Selector {
+	var cfg *selection.HybridConfig
 	if r != nil && r.Config != nil {
-		cfg = buildSessionAwareSelectionConfig(r.Config, decisionCfg)
-	} else if decisionCfg != nil {
-		applySessionAwareSelectionConfig(cfg, *decisionCfg)
+		cfg = buildHybridSelectionConfig(r.Config, decisionCfg)
+	} else {
+		cfg = selection.DefaultHybridConfig()
 	}
-	selector := selection.NewSessionAwareSelector(cfg)
-	if r == nil {
-		return selector
-	}
-	if r.Config != nil && r.Config.ModelConfig != nil {
-		selector.InitializeFromConfig(r.Config.ModelConfig)
-	}
-	if r.LookupTable != nil {
+
+	eloSelector, routerDCSelector, autoMixSelector := r.hybridComponentSelectors()
+
+	selector := selection.NewHybridSelectorWithComponents(cfg, eloSelector, routerDCSelector, autoMixSelector)
+	r.applyHybridModelCosts(selector)
+	if r != nil && r.LookupTable != nil {
 		selector.SetLookupTable(r.LookupTable)
-	}
-	if r.ModelSelector != nil && cfg.BaseMethod != "" && cfg.BaseMethod != selection.MethodSessionAware {
-		baseSelector, _ := r.ModelSelector.Get(cfg.BaseMethod)
-		selector.SetBaseSelector(baseSelector)
 	}
 	return selector
 }
 
-func (r *OpenAIRouter) applyPostSelectionGate(
-	selCtx *selection.SelectionContext,
-	result *selection.SelectionResult,
-	selectedModelRef *config.ModelRef,
-	ctx *RequestContext,
-	method selection.SelectionMethod,
-) (*config.ModelRef, bool) {
-	if method == selection.MethodSessionAware || result.Method == selection.MethodSessionAware {
-		return selectedModelRef, false
+// hybridComponentSelectors resolves the underlying elo/routerDC/autoMix selectors
+// that the hybrid selector composes, when they are registered on the router.
+func (r *OpenAIRouter) hybridComponentSelectors() (*selection.EloSelector, *selection.RouterDCSelector, *selection.AutoMixSelector) {
+	if r == nil || r.ModelSelector == nil {
+		return nil, nil, nil
 	}
-	return r.applyModelSwitchGate(selCtx, result, selectedModelRef, ctx)
+	var eloSelector *selection.EloSelector
+	var routerDCSelector *selection.RouterDCSelector
+	var autoMixSelector *selection.AutoMixSelector
+	if selector, ok := r.ModelSelector.Get(selection.MethodElo); ok {
+		eloSelector, _ = selector.(*selection.EloSelector)
+	}
+	if selector, ok := r.ModelSelector.Get(selection.MethodRouterDC); ok {
+		routerDCSelector, _ = selector.(*selection.RouterDCSelector)
+	}
+	if selector, ok := r.ModelSelector.Get(selection.MethodAutoMix); ok {
+		autoMixSelector, _ = selector.(*selection.AutoMixSelector)
+	}
+	return eloSelector, routerDCSelector, autoMixSelector
+}
+
+// applyHybridModelCosts seeds per-model prompt pricing into the hybrid selector.
+func (r *OpenAIRouter) applyHybridModelCosts(selector *selection.HybridSelector) {
+	if r == nil || r.Config == nil || r.Config.ModelConfig == nil {
+		return
+	}
+	for model, params := range r.Config.ModelConfig {
+		if params.Pricing.PromptPer1M > 0 {
+			selector.SetModelCost(model, params.Pricing.PromptPer1M)
+		}
+	}
 }
 
 func selectedModelRefFromResult(selCtx *selection.SelectionContext, result *selection.SelectionResult) *config.ModelRef {
@@ -189,9 +220,9 @@ func selectedModelRefFromResult(selCtx *selection.SelectionContext, result *sele
 	return nil
 }
 
-func logSelectionResult(method selection.SelectionMethod, result *selection.SelectionResult, selected *config.ModelRef, gateApplied bool) {
-	if gateApplied {
-		logging.Infof("[ModelSelection] Gate enforced stay on %s (method=%s, score=%.4f, confidence=%.2f): %s",
+func logSelectionResult(method selection.SelectionMethod, result *selection.SelectionResult, selected *config.ModelRef, learningApplied bool) {
+	if learningApplied {
+		logging.Infof("[ModelSelection] Router Learning adjusted selection to %s (base_method=%s, score=%.4f, confidence=%.2f): %s",
 			selected.Model, method, result.Score, result.Confidence, result.Reasoning)
 		return
 	}
@@ -426,80 +457,6 @@ func (r *OpenAIRouter) getLatencyAwarePercentiles(algorithm *config.AlgorithmCon
 		return 0, 0
 	}
 	return algorithm.LatencyAware.TPOTPercentile, algorithm.LatencyAware.TTFTPercentile
-}
-
-// processUserFeedbackForElo automatically updates Elo ratings based on detected user feedback signals.
-// This implements "automatic scoring by signals" - when the FeedbackDetector classifies user
-// follow-up messages as "satisfied" or "wrong_answer", we automatically update Elo ratings.
-//
-// Signal mapping:
-// - "satisfied" → Model performed well, record as implicit win
-// - "wrong_answer" → Model performed poorly, record as implicit loss
-// - "need_clarification" / "want_different" → Neutral, no Elo update
-//
-// For single-model feedback (no comparison), we use a "virtual opponent" approach:
-// - The model competes against an expected baseline (rating 1500)
-// - "satisfied" = win against baseline
-// - "wrong_answer" = loss against baseline
-func (r *OpenAIRouter) processUserFeedbackForElo(userFeedbackSignals []string, model string, ctx *RequestContext) {
-	if len(userFeedbackSignals) == 0 || model == "" {
-		return
-	}
-
-	// Get Elo selector from registry
-	if r.ModelSelector == nil {
-		return
-	}
-
-	eloSelector, ok := r.ModelSelector.Get(selection.MethodElo)
-	if !ok || eloSelector == nil {
-		return
-	}
-
-	// Get decision name safely
-	decisionName := ""
-	if ctx.VSRSelectedDecision != nil {
-		decisionName = ctx.VSRSelectedDecision.Name
-	}
-
-	// Process each feedback signal
-	for _, signal := range userFeedbackSignals {
-		var feedback *selection.Feedback
-
-		switch signal {
-		case "satisfied":
-			// Model performed well - record as win against virtual baseline
-			feedback = &selection.Feedback{
-				Query:        ctx.RequestQuery,
-				WinnerModel:  model,
-				LoserModel:   "", // Empty = self-feedback mode
-				DecisionName: decisionName,
-				Tie:          false,
-			}
-			logging.Infof("[AutoFeedback] User satisfied with %s, recording positive Elo feedback", model)
-
-		case "wrong_answer":
-			// Model performed poorly - record as loss against virtual baseline
-			feedback = &selection.Feedback{
-				Query:        ctx.RequestQuery,
-				WinnerModel:  "", // Empty = model loses
-				LoserModel:   model,
-				DecisionName: decisionName,
-				Tie:          false,
-			}
-			logging.Infof("[AutoFeedback] User reported wrong answer from %s, recording negative Elo feedback", model)
-
-		default:
-			// "need_clarification" and "want_different" are neutral - no Elo update
-			logging.Debugf("[AutoFeedback] Neutral feedback signal %s, no Elo update", signal)
-			continue
-		}
-
-		// Submit feedback to Elo selector
-		if err := eloSelector.UpdateFeedback(context.Background(), feedback); err != nil {
-			logging.Warnf("[AutoFeedback] Failed to update Elo: %v", err)
-		}
-	}
 }
 
 // extractSessionContext extracts session ID, user ID, and conversation history from the RequestContext.

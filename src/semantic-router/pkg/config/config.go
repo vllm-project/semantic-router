@@ -74,6 +74,7 @@ type RouterConfig struct {
 	LLMObservability `yaml:",inline"`
 	APIServer        `yaml:",inline"`
 	RouterOptions    `yaml:",inline"`
+	RouterLearning   RouterLearningConfig `yaml:"learning,omitempty"`
 
 	// Dynamic user-facing routing configuration.
 	IntelligentRouting `yaml:",inline"`

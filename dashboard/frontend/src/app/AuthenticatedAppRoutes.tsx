@@ -32,7 +32,6 @@ const MonitoringPage = lazy(() => import('../pages/MonitoringPage'))
 const OpenClawPage = lazy(() => import('../pages/OpenClawPage'))
 const PlaygroundFullscreenPage = lazy(() => import('../pages/PlaygroundFullscreenPage'))
 const PlaygroundPage = lazy(() => import('../pages/PlaygroundPage'))
-const RatingsPage = lazy(() => import('../pages/RatingsPage'))
 const SecurityPolicyPage = lazy(() => import('../pages/SecurityPolicyPage'))
 const SetupWizardPage = lazy(() => import('../pages/SetupWizardPage'))
 const StatusPage = lazy(() => import('../pages/StatusPage'))
@@ -61,7 +60,6 @@ const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
   logs: <LogsPage />,
   monitoring: <MonitoringPage />,
   playground: <PlaygroundPage />,
-  ratings: <RatingsPage />,
   security: <SecurityPolicyPage />,
   status: <StatusPage />,
   topology: <TopologyPage />,
