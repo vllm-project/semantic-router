@@ -27,6 +27,29 @@ result, and how to improve the experiment next.
   graduate-level questions the dissenter (often the strongest model) carries the
   correct minority view. **Consistency ≠ correctness.**
 
+## Status / production decision (2026-06)
+
+Acting on the headline result, the grounding stage now exposes a `grounding.policy`
+lever and **defaults to `weight` (soft down-weighting, no hard-drop)**:
+
+- `weight` (default) — keep every panel response; the judge is told to weight each
+  answer by its groundedness score and to protect a correct lone dissenter.
+- `annotate` — keep every response; pass the scores to the judge as notes only.
+- `filter` — the prior hard-drop (below `min_score`); now opt-in.
+
+**Decided:** we do **not** hard-drop facts by default — `filter` is known to regress
+quality on contested factual items (this document).
+
+**Still open (to validate in follow-up CRs, not in this change):**
+
+1. Does `weight`/`annotate` actually *beat* plain fusion, or is it merely
+   non-harmful? Run `make_configs.py --policy weight` / `--policy annotate` arms
+   against the `off` baseline.
+2. Is the scorer (Level-1 Spearman +0.21) strong enough that soft-weighting on it
+   improves synthesis? Discrimination ≠ usefulness-as-a-weight.
+
+This change ships the policy + default; the efficacy A/B above is deferred.
+
 ## What was measured
 
 Two levels (most eval efforts only do level 2 and then can't explain a null/noisy

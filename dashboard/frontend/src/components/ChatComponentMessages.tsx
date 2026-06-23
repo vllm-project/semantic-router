@@ -76,7 +76,6 @@ function AssistantRatingsMessage({
   onToggleToolCard,
   prevUserQuery,
 }: AssistantRatingsMessageProps) {
-  const otherModelIds = message.choices?.map(choice => choice.model).filter((model): model is string => model != null) ?? []
   const searchSources = getSearchSources(message)
 
   return (
@@ -106,13 +105,13 @@ function AssistantRatingsMessage({
               </ErrorBoundary>
               {message.isStreaming && index === 0 ? <span className={styles.cursor}>▊</span> : null}
             </div>
-            {!message.isStreaming && choice.model ? (
+            {!message.isStreaming && choice.model && message.headers?.['x-vsr-replay-id'] ? (
               <div className={styles.choiceActions}>
                 <FeedbackButtons
                   modelId={choice.model}
+                  replayId={message.headers['x-vsr-replay-id']}
                   category={message.headers?.['x-vsr-selected-decision']}
                   query={prevUserQuery}
-                  otherModelIds={otherModelIds.filter(model => model !== choice.model)}
                 />
               </div>
             ) : null}
@@ -245,9 +244,12 @@ const MessageCard = memo(function MessageCard({
         {showCopyAction ? (
           <div className={styles.messageActionRow}>
             <MessageActionBar content={message.content} />
-            {message.role === 'assistant' && message.headers?.['x-vsr-selected-model'] ? (
+            {message.role === 'assistant'
+              && message.headers?.['x-vsr-selected-model']
+              && message.headers?.['x-vsr-replay-id'] ? (
               <FeedbackButtons
                 modelId={message.headers['x-vsr-selected-model']}
+                replayId={message.headers['x-vsr-replay-id']}
                 category={message.headers['x-vsr-selected-decision']}
                 query={prevUserQuery}
               />

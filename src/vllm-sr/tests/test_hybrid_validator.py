@@ -69,7 +69,7 @@ providers:
 def test_validate_user_config_rejects_all_zero_hybrid_weights():
     config = _parse_config(
         _hybrid_config_yaml(
-            "        elo_weight: 0\n        router_dc_weight: 0\n"
+            "        experience_weight: 0\n        router_dc_weight: 0\n"
             "        automix_weight: 0\n        cost_weight: 0"
         )
     )
@@ -103,7 +103,7 @@ decisions:
     algorithm:
       type: "hybrid"
       hybrid:
-        elo_weight: 0.6
+        experience_weight: 0.6
         router_dc_weight: 0.4
 providers:
   models:

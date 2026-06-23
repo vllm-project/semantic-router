@@ -184,19 +184,15 @@ function extractDecisionAlgorithm(
     ratings: algorithm.ratings,
     remom: algorithm.remom,
     fusion: algorithm.fusion,
-    elo: algorithm.elo,
     router_dc: algorithm.router_dc,
     automix: algorithm.automix,
     autoMix: algorithm.autoMix ?? algorithm.automix,
     hybrid: algorithm.hybrid,
-    rl_driven: algorithm.rl_driven,
-    gmtrouter: algorithm.gmtrouter,
     knn: algorithm.knn,
     kmeans: algorithm.kmeans,
     svm: algorithm.svm,
     mlp: algorithm.mlp,
     multi_factor: algorithm.multi_factor,
-    session_aware: algorithm.session_aware,
   }
 }
 

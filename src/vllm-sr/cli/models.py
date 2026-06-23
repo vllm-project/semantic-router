@@ -3,7 +3,14 @@
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictStr,
+    model_validator,
+)
 
 from .algorithms import AlgorithmConfig, ModelRef
 
@@ -820,6 +827,94 @@ class ImageGenPluginConfig(BaseModel):
     timeout_seconds: Optional[int] = Field(default=None, ge=1)
 
 
+class DecisionLearningAdaptationConfig(BaseModel):
+    """Decision-local control for Router Learning adaptation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[Literal["apply", "observe", "bypass"]] = None
+    candidate_set: Optional[Literal["decision", "tier", "global"]] = None
+
+
+class DecisionLearningProtectionConfig(BaseModel):
+    """Decision-local control for Router Learning protection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[Literal["apply", "observe", "bypass"]] = None
+    stability_weight: Optional[float] = Field(default=None, ge=0.0)
+    switch_margin: Optional[float] = Field(default=None, ge=0.0)
+
+
+class DecisionAdaptationsConfig(BaseModel):
+    """Decision-local Router Learning controls."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[Literal["apply", "observe", "bypass"]] = None
+    adaptation: Optional[DecisionLearningAdaptationConfig] = None
+    protection: Optional[DecisionLearningProtectionConfig] = None
+
+
+class RouterLearningAdaptationConfig(BaseModel):
+    """Global Router Learning adaptation controls."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: Optional[StrictBool] = None
+    strategy: Optional[Literal["routing_sampling"]] = None
+    candidate_set: Optional[Literal["decision", "tier", "global"]] = None
+
+
+class RouterLearningIdentityHeadersConfig(BaseModel):
+    """Header names used by Router Learning protection identity."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    session: Optional[StrictStr] = None
+    conversation: Optional[StrictStr] = None
+
+
+class RouterLearningIdentityConfig(BaseModel):
+    """Identity configuration used by Router Learning protection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    headers: Optional[RouterLearningIdentityHeadersConfig] = None
+
+
+class RouterLearningProtectionTuningConfig(BaseModel):
+    """Global Router Learning protection tuning."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    idle_timeout_seconds: Optional[int] = Field(default=None, ge=0)
+    min_turns_before_switch: Optional[int] = Field(default=None, ge=0)
+    switch_margin: Optional[float] = Field(default=None, ge=0.0)
+    stability_weight: Optional[float] = Field(default=None, ge=0.0)
+
+
+class RouterLearningProtectionConfig(BaseModel):
+    """Global Router Learning protection controls."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: Optional[StrictBool] = None
+    scope: Optional[Literal["conversation", "session"]] = None
+    identity: Optional[RouterLearningIdentityConfig] = None
+    tuning: Optional[RouterLearningProtectionTuningConfig] = None
+
+
+class RouterLearningConfig(BaseModel):
+    """Global Router Learning controls."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: Optional[StrictBool] = None
+    adaptation: Optional[RouterLearningAdaptationConfig] = None
+    protection: Optional[RouterLearningProtectionConfig] = None
+
+
 class Decision(BaseModel):
     """Routing decision configuration."""
 
@@ -831,6 +926,7 @@ class Decision(BaseModel):
     rules: Rules
     modelRefs: List[ModelRef] = Field(alias="modelRefs")
     algorithm: Optional[AlgorithmConfig] = None  # Multi-model orchestration algorithm
+    adaptations: Optional[DecisionAdaptationsConfig] = None
     plugins: Optional[List[PluginConfig]] = []
 
 

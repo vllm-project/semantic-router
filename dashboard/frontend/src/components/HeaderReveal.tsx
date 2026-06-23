@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import styles from './HeaderReveal.module.css'
+import { formatLearningHeaderValue, isLearningHeader } from './headerLearningDisplay'
 
 interface HeaderRevealProps {
   headers: Record<string, string>
@@ -109,6 +110,23 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Selected Modality',
     description: 'The modality chosen by the router',
   },
+  // Router Learning headers
+  'x-vsr-learning-methods': {
+    label: 'Learning',
+    description: 'Router Learning methods summarized by this response',
+  },
+  'x-vsr-learning-actions': {
+    label: 'Learning Action',
+    description: 'Method-keyed Router Learning actions',
+  },
+  'x-vsr-learning-scopes': {
+    label: 'Learning Scope',
+    description: 'Method-keyed identity scopes used by Router Learning',
+  },
+  'x-vsr-learning-reasons': {
+    label: 'Learning Reason',
+    description: 'Method-keyed compact reasons for Router Learning actions',
+  },
   // Plugin status headers
   'x-vsr-cache-hit': {
     label: 'Cache Status',
@@ -199,6 +217,8 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
     model: displayHeaders.filter(
       ([key]) => key === 'x-vsr-selected-model' || key === 'x-vsr-selected-modality',
     ),
+    // Router Learning headers: bounded primary adaptation summary
+    learning: displayHeaders.filter(([key]) => key.startsWith('x-vsr-learning')),
     // Plugin status headers: cache, reasoning, context, security, quality
     plugin: displayHeaders.filter(
       ([key]) =>
@@ -222,13 +242,16 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
         <div className={styles.sectionItems}>
           {items.map(([key, value]) => {
             const info = HEADER_INFO[key]
+            const displayValue = isLearningHeader(key)
+              ? formatLearningHeaderValue(key, value)
+              : value
             return (
               <div
                 key={key}
                 className={`${styles.headerItem} ${isPrimary ? styles.headerItemPrimary : ''}`}
               >
                 <div className={styles.headerLabel}>{info.label}</div>
-                <div className={styles.headerValue}>{value}</div>
+                <div className={styles.headerValue}>{displayValue}</div>
               </div>
             )
           })}
@@ -240,11 +263,12 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
   return (
     <div className={`${styles.overlay} ${!isVisible ? styles.fadeOut : ''}`}>
       <div className={styles.container}>
-        <div className={styles.title}>Signal Driven Decision</div>
+        <div className={styles.title}>Router Decision</div>
         <div className={styles.sections}>
           {renderSection('RESPONSE', groupedHeaders.response, true)}
           {renderSection('MODEL', groupedHeaders.model, true)}
           {renderSection('DECISION', groupedHeaders.decision, true)}
+          {renderSection('LEARNING', groupedHeaders.learning)}
           {renderSection('SIGNALS', groupedHeaders.signals)}
           {renderSection('PLUGIN', groupedHeaders.plugin)}
           {renderSection('LOOPER', groupedHeaders.looper)}

@@ -189,21 +189,17 @@ export type AlgorithmType =
   | 'sequential'
   | 'ratings'
   | 'static'
-  | 'elo'
   | 'router_dc'
   | 'automix'
   | 'hybrid'
   | 'remom'
   | 'fusion'
-  | 'rl_driven'
-  | 'gmtrouter'
   | 'latency_aware'
   | 'knn'
   | 'kmeans'
   | 'svm'
   | 'mlp'
   | 'multi_factor'
-  | 'session_aware'
 
 export interface AlgorithmConfig {
   type: AlgorithmType
@@ -213,19 +209,15 @@ export interface AlgorithmConfig {
   ratings?: GenericAlgorithmConfig
   remom?: GenericAlgorithmConfig
   fusion?: GenericAlgorithmConfig
-  elo?: GenericAlgorithmConfig
   router_dc?: GenericAlgorithmConfig
   automix?: GenericAlgorithmConfig
   autoMix?: GenericAlgorithmConfig
   hybrid?: GenericAlgorithmConfig
-  rl_driven?: GenericAlgorithmConfig
-  gmtrouter?: GenericAlgorithmConfig
   knn?: GenericAlgorithmConfig
   kmeans?: GenericAlgorithmConfig
   svm?: GenericAlgorithmConfig
   mlp?: GenericAlgorithmConfig
   multi_factor?: GenericAlgorithmConfig
-  session_aware?: GenericAlgorithmConfig
 }
 
 export type RawDecisionAlgorithmConfig = Omit<Partial<AlgorithmConfig>, 'type'> & {

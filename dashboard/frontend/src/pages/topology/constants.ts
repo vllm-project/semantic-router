@@ -112,21 +112,17 @@ export const ALGORITHM_ICONS: Record<AlgorithmType, string> = {
   sequential: 'SEQ',
   ratings: 'RT',
   static: 'ST',
-  elo: 'ELO',
   router_dc: 'RDC',
   automix: 'AM',
   hybrid: 'HY',
   remom: 'RM',
   fusion: 'FU',
-  rl_driven: 'RL',
-  gmtrouter: 'GMT',
   latency_aware: 'LAT',
   knn: 'KNN',
   kmeans: 'KM',
   svm: 'SVM',
   mlp: 'MLP',
   multi_factor: 'MF',
-  session_aware: 'SA',
 }
 
 // ============== Algorithm Colors (NVIDIA Dark Theme) ==============
@@ -136,21 +132,17 @@ export const ALGORITHM_COLORS: Record<AlgorithmType, { background: string; borde
   sequential: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
   ratings: { background: '#8fd400', border: '#76b900' }, // Light Green
   static: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
-  elo: { background: '#718096', border: '#4a5568' }, // Medium Gray
   router_dc: { background: '#556b7d', border: '#3d4a59' }, // Cool Gray
   remom: { background: '#76b900', border: '#5a8f00' }, // NVIDIA Green (same as plugins)
   fusion: { background: '#60784f', border: '#455a36' }, // Muted Green
   automix: { background: '#5d6d7e', border: '#3d4a59' }, // Steel Gray
   hybrid: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  rl_driven: { background: '#556b7d', border: '#3d4a59' }, // Cool Gray
-  gmtrouter: { background: '#4f5f6f', border: '#364555' }, // Steel Gray
   latency_aware: { background: '#5a6c7d', border: '#3d4a59' }, // Blue Gray
   knn: { background: '#687887', border: '#4b5968' },
   kmeans: { background: '#596b5d', border: '#3f5144' },
   svm: { background: '#6d687a', border: '#504a5c' },
   mlp: { background: '#586d7a', border: '#40515d' },
   multi_factor: { background: '#4e6f63', border: '#38534a' },
-  session_aware: { background: '#6a704d', border: '#4f5438' },
 }
 
 // ============== Reasoning Effort Display (NVIDIA Dark Theme) ==============
