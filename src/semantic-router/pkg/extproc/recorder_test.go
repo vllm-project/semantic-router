@@ -6,6 +6,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 func replayRoutingRecordMetadataTestContext() *RequestContext {
@@ -19,13 +20,15 @@ func replayRoutingRecordMetadataTestContext() *RequestContext {
 		VSRSelectionMethod:            "router_dc",
 		VSRCacheHit:                   true,
 		ExpectStreamingResponse:       true,
-		VSRSessionPolicy: map[string]interface{}{
-			"phase":               "user_turn",
-			"current_model":       "model-a",
-			"base_selected_model": "model-c",
-			"selected_model":      "model-b",
-			"decision_reason":     "switch_has_best_adjusted_score",
-		},
+		VSRLearningPolicies: testLearningPolicies(
+			replayTestProtectionPolicyWithTrace(&selection.SessionPolicyTrace{
+				Phase:             "user_turn",
+				CurrentModel:      "model-a",
+				BaseSelectedModel: "model-c",
+				SelectedModel:     "model-b",
+				DecisionReason:    "switch_has_best_adjusted_score",
+			}),
+		),
 		VSRSelectedDecision: &config.Decision{
 			Name:     "balance",
 			Tier:     3,
@@ -59,6 +62,136 @@ func TestBuildReplayRoutingRecordCapturesSessionAndDecisionMetadata(t *testing.T
 	assertReplayRoutingMetadata(t, record)
 	assertReplayRouteDiagnostics(t, record)
 	assertReplayMatchedSignals(t, record)
+}
+
+func TestBuildReplayRoutingRecordCapturesLearningAdaptations(t *testing.T) {
+	ctx := replayRoutingRecordMetadataTestContext()
+	ctx.VSRLearningProtectionPreflight = replayTestLearningPolicy(
+		routerLearningMethodProtection,
+		"apply",
+		routerLearningActionAllowSampling,
+		"no_tool_or_protocol_state",
+		"conversation",
+	).toReplayProtection()
+	ctx.VSRLearningPolicies = testLearningPolicies(
+		replayTestLearningPolicy(
+			routerLearningMethodProtection,
+			"apply",
+			routerLearningActionHoldCurrent,
+			"cache_cost_high",
+			"conversation",
+		),
+		replayTestLearningPolicy(
+			routerLearningMethodAdaptation,
+			"observe",
+			routerLearningActionObserve,
+			"observe_only",
+			"",
+		),
+	)
+
+	record := buildReplayRoutingRecord(ctx, "model-a", "model-b", "balance")
+
+	if record.Learning == nil {
+		t.Fatal("expected learning diagnostics")
+	}
+	if got := record.Learning.ProtectionPreflight.Action; got != "allow_sampling" {
+		t.Fatalf("expected protection preflight action recorded, got %#v", record.Learning.ProtectionPreflight)
+	}
+	if got := record.Learning.Protection.Action; got != "hold_current" {
+		t.Fatalf("expected protection action recorded, got %#v", record.Learning.Protection)
+	}
+	if got := record.Learning.Adaptation.Mode; got != "observe" {
+		t.Fatalf("expected adaptation mode recorded, got %#v", record.Learning.Adaptation)
+	}
+}
+
+func TestBuildReplayRoutingRecordPrefersTypedLearningSessionPolicy(t *testing.T) {
+	ctx := replayRoutingRecordMetadataTestContext()
+	policy := newRouterLearningPolicy(routerLearningMethodProtection)
+	policy.Details.Protection = newRouterLearningProtectionDiagnostics(
+		&selection.SessionPolicyTrace{
+			Phase:             "typed_phase",
+			CurrentModel:      "model-a",
+			BaseSelectedModel: "model-c",
+			SelectedModel:     "model-b",
+			DecisionReason:    "typed_policy_wins",
+		},
+		routerLearningIdentityDiagnostics{},
+	)
+	ctx.VSRLearningPolicies = testLearningPolicies(policy)
+
+	record := buildReplayRoutingRecord(ctx, "model-a", "model-b", "balance")
+	diagnostics := record.RouteDiagnostics
+	if diagnostics == nil {
+		t.Fatal("expected route diagnostics")
+	}
+	if diagnostics.SessionPhase != "typed_phase" ||
+		diagnostics.PreviousModel != "model-a" ||
+		diagnostics.SelectedModel != "model-b" ||
+		diagnostics.SessionReason != "typed_policy_wins" {
+		t.Fatalf("expected replay diagnostics from typed learning policy, got %#v", diagnostics)
+	}
+}
+
+func TestBuildReplayRoutingRecordUsesObservedFinalModel(t *testing.T) {
+	ctx := replayRoutingRecordMetadataTestContext()
+	policy := newRouterLearningPolicy(routerLearningMethodProtection)
+	policy.Mode = config.DecisionAdaptationModeObserve
+	policy.Action = routerLearningActionObserve
+	policy.Reason = "observe_only"
+	policy.Scope = config.RouterLearningScopeConversation
+	policy.Details.Protection = newRouterLearningProtectionDiagnostics(
+		&selection.SessionPolicyTrace{
+			Phase:             "user_turn",
+			CurrentModel:      "model-a",
+			BaseSelectedModel: "model-c",
+			SelectedModel:     "would-have-held-model",
+			DecisionReason:    "switch_guard_hold",
+		},
+		routerLearningIdentityDiagnostics{},
+	)
+	policy.Details.Protection.finalModel = "model-b"
+	ctx.VSRLearningPolicies = testLearningPolicies(policy)
+
+	record := buildReplayRoutingRecord(ctx, "model-a", "model-b", "balance")
+	diagnostics := record.RouteDiagnostics
+	if diagnostics == nil {
+		t.Fatal("expected route diagnostics")
+	}
+	if diagnostics.SelectedModel != "model-b" ||
+		diagnostics.SelectedModel == "would-have-held-model" ||
+		diagnostics.SessionReason != "observe_only" {
+		t.Fatalf("expected observe diagnostics to keep actual final model, got %#v", diagnostics)
+	}
+}
+
+func replayTestLearningPolicy(
+	method routerLearningMethod,
+	mode string,
+	action routerLearningAction,
+	reason string,
+	scope string,
+) routerLearningPolicy {
+	policy := newRouterLearningPolicy(method)
+	policy.Mode = mode
+	policy.Action = action
+	policy.Reason = reason
+	policy.Scope = scope
+	return policy
+}
+
+func replayTestProtectionPolicyWithTrace(trace *selection.SessionPolicyTrace) routerLearningPolicy {
+	policy := newRouterLearningPolicy(routerLearningMethodProtection)
+	policy.Mode = config.DecisionAdaptationModeApply
+	policy.Action = routerLearningActionAllowSwitch
+	policy.Reason = "switch_allowed"
+	policy.Scope = config.RouterLearningScopeConversation
+	policy.Details.Protection = newRouterLearningProtectionDiagnostics(
+		trace,
+		routerLearningIdentityDiagnostics{},
+	)
+	return policy
 }
 
 func assertReplayRoutingMetadata(t *testing.T, record routerreplay.RoutingRecord) {
@@ -95,20 +228,70 @@ func assertReplayRouteDiagnostics(t *testing.T, record routerreplay.RoutingRecor
 	if diagnostics == nil {
 		t.Fatal("expected route diagnostics")
 	}
+	assertReplayRouteDecision(t, diagnostics)
+	assertReplayRouteModels(t, diagnostics)
+	assertReplayRouteSession(t, diagnostics)
+}
+
+func assertReplayRouteDecision(t *testing.T, diagnostics *routerreplay.RouteDiagnostics) {
+	t.Helper()
 	if diagnostics.Decision != "balance" || diagnostics.SelectionMethod != "router_dc" {
 		t.Fatalf("unexpected diagnostics decision/method: %#v", diagnostics)
 	}
+	if diagnostics.DecisionReason != "switch_has_best_adjusted_score" {
+		t.Fatalf("expected raw decision reason preserved in details, got %#v", diagnostics)
+	}
+}
+
+func assertReplayRouteModels(t *testing.T, diagnostics *routerreplay.RouteDiagnostics) {
+	t.Helper()
 	if diagnostics.OriginalModel != "model-a" ||
 		diagnostics.ProposalModel != "model-c" ||
 		diagnostics.PreviousModel != "model-a" ||
 		diagnostics.SelectedModel != "model-b" {
 		t.Fatalf("unexpected diagnostics models: %#v", diagnostics)
 	}
+}
+
+func assertReplayRouteSession(t *testing.T, diagnostics *routerreplay.RouteDiagnostics) {
+	t.Helper()
 	if !diagnostics.SessionPolicyApplied ||
 		diagnostics.SessionAction != "switch" ||
 		diagnostics.SessionPhase != "user_turn" ||
-		diagnostics.SessionReason != "switch_has_best_adjusted_score" {
+		diagnostics.SessionReason != "switch_allowed" {
 		t.Fatalf("unexpected diagnostics session summary: %#v", diagnostics)
+	}
+}
+
+func TestBuildReplayRoutingRecordUsesBaselineSessionAction(t *testing.T) {
+	ctx := replayRoutingRecordMetadataTestContext()
+	ctx.VSRLearningPolicies = testLearningPolicies(
+		replayTestProtectionPolicyWithTrace(&selection.SessionPolicyTrace{
+			Phase:             "user_turn",
+			BaseSelectedModel: "model-a",
+			SelectedModel:     "model-a",
+			DecisionReason:    "missing_previous_model",
+		}),
+	)
+	policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodProtection)
+	if !ok {
+		t.Fatal("expected protection policy fixture")
+	}
+	policy.Action = routerLearningActionEstablishBaseline
+	policy.Reason = "new_conversation"
+	ctx.VSRLearningPolicies.Set(policy)
+
+	record := buildReplayRoutingRecord(ctx, "model-a", "model-a", "balance")
+	diagnostics := record.RouteDiagnostics
+	if diagnostics == nil {
+		t.Fatal("expected route diagnostics")
+	}
+	if diagnostics.SessionAction != replaySessionActionEstablishBaseline ||
+		diagnostics.SessionReason != "new_conversation" {
+		t.Fatalf("expected baseline replay summary, got %#v", diagnostics)
+	}
+	if diagnostics.DecisionReason != "missing_previous_model" {
+		t.Fatalf("expected raw trace reason preserved, got %#v", diagnostics)
 	}
 }
 

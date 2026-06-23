@@ -16,6 +16,7 @@ import click
 import requests
 
 from cli.commands.common import exit_with_logged_error
+from cli.commands.recipe_learning import recipe_learning
 from cli.consts import DEFAULT_API_PORT
 from cli.utils import get_logger
 
@@ -286,7 +287,7 @@ def _summarize_response(payload: dict[str, Any]) -> str:
     return json.dumps(payload, indent=2, ensure_ascii=False)
 
 
-@click.command()
+@click.group(invoke_without_command=True)
 @click.option(
     "--prompt",
     default=None,
@@ -318,8 +319,10 @@ def _summarize_response(payload: dict[str, Any]) -> str:
     show_default=True,
     help="HTTP request timeout in seconds.",
 )
+@click.pass_context
 @exit_with_logged_error(log)
 def eval(
+    ctx: click.Context,
     prompt: str | None,
     messages_json: str | None,
     endpoint: str | None,
@@ -327,6 +330,9 @@ def eval(
     timeout: int,
 ) -> None:
     """Evaluate a prompt/messages against the router /api/v1/eval endpoint."""
+
+    if ctx.invoked_subcommand is not None:
+        return
 
     if (prompt is None and messages_json is None) or (
         prompt is not None and messages_json is not None
@@ -368,3 +374,6 @@ def eval(
         return
 
     click.echo(_summarize_response(payload))
+
+
+eval.add_command(recipe_learning)

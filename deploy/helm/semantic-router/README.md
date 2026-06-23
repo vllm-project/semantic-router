@@ -298,7 +298,7 @@ the locked chart dependencies.
 | resources.requests | object | `{"cpu":"1","memory":"3Gi"}` | Resource requests |
 | response-api-redis.architecture | string | `"standalone"` |  |
 | response-api-redis.auth.enabled | bool | `false` |  |
-| safetyGuards.rejectMultiReplicaLocalSelectorState | bool | `true` | Reject multi-replica router deployments when config uses local learning selector state (elo, rl_driven, or gmtrouter). Disable only when selector learning state is intentionally externalized or the algorithm is used in a read-only/non-learning mode. |
+| safetyGuards.rejectMultiReplicaLocalLearningState | bool | `true` | Reject multi-replica router deployments when config enables Router Learning request-time local state. Disable only when accepting replica-local learning divergence or using sticky routing. |
 | securityContext.allowPrivilegeEscalation | bool | `false` | Allow privilege escalation |
 | securityContext.runAsNonRoot | bool | `false` | Run as non-root user |
 | semantic-cache-milvus.cluster.enabled | bool | `false` |  |

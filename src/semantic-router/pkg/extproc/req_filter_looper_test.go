@@ -10,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 func TestShouldUseLooper(t *testing.T) {
@@ -21,7 +22,7 @@ func TestShouldUseLooper(t *testing.T) {
 				{Model: "model-a"},
 				{Model: "model-b"},
 			},
-			Algorithm: &config.AlgorithmConfig{Type: "elo"},
+			Algorithm: &config.AlgorithmConfig{Type: "router_dc"},
 		}
 
 		assert.False(t, router.shouldUseLooper(decision))
@@ -31,7 +32,7 @@ func TestShouldUseLooper(t *testing.T) {
 		router := &OpenAIRouter{
 			Config: &config.RouterConfig{Looper: config.LooperConfig{Endpoint: "http://looper"}},
 		}
-		selectionAlgorithms := []string{"static", "elo", "router_dc", "automix", "hybrid", "knn", "kmeans", "svm", "mlp", "gmtrouter", "latency_aware"}
+		selectionAlgorithms := []string{"static", "router_dc", "automix", "hybrid", "knn", "kmeans", "svm", "mlp", "multi_factor", "latency_aware"}
 
 		for _, algorithmType := range selectionAlgorithms {
 			decision := &config.Decision{
@@ -85,7 +86,7 @@ func TestShouldUseLooper(t *testing.T) {
 		decision := &config.Decision{
 			Name:      "routing",
 			ModelRefs: []config.ModelRef{{Model: "model-a"}},
-			Algorithm: &config.AlgorithmConfig{Type: "elo"},
+			Algorithm: &config.AlgorithmConfig{Type: "router_dc"},
 		}
 
 		assert.False(t, router.shouldUseLooper(decision))
@@ -266,9 +267,11 @@ func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
 		VSRSelectedDecisionConfidence: 0,
 		VSRSelectedCategory:           "programming",
 		RouterReplayID:                "replay-123",
-		VSRSessionPolicy: map[string]interface{}{
-			"phase": "tool_loop",
-		},
+		VSRLearningPolicies: testLearningPolicies(
+			replayTestProtectionPolicyWithTrace(&selection.SessionPolicyTrace{
+				Phase: "tool_loop",
+			}),
+		),
 	}
 
 	response := (&OpenAIRouter{}).createLooperResponse(resp, reqCtx)

@@ -98,9 +98,7 @@ func apiRoutes() []apiRoute {
 		{EndpointMetadata: EndpointMetadata{Path: "/api/v1/embeddings/models", Method: "GET", Description: "Get information about loaded embedding models"}, Handler: (*ClassificationAPIServer).handleEmbeddingModelsInfo},
 		{EndpointMetadata: EndpointMetadata{Path: "/v1/models", Method: "GET", Description: "OpenAI-compatible model listing"}, Handler: (*ClassificationAPIServer).handleOpenAIModels},
 		{EndpointMetadata: EndpointMetadata{Path: "/metrics/classification", Method: "GET", Description: "Get classification metrics and statistics"}, Handler: (*ClassificationAPIServer).handleClassificationMetrics},
-		{EndpointMetadata: EndpointMetadata{Path: "/api/v1/feedback", Method: "POST", Description: "Submit model-selection feedback"}, Handler: (*ClassificationAPIServer).handleFeedback, RequestBody: jsonBody()},
-		{EndpointMetadata: EndpointMetadata{Path: "/api/v1/ratings", Method: "GET", Description: "List stored feedback ratings"}, Handler: (*ClassificationAPIServer).handleGetRatings},
-		{EndpointMetadata: EndpointMetadata{Path: "/api/v1/rl-state", Method: "GET", Description: "Inspect runtime selector learning state"}, Handler: (*ClassificationAPIServer).handleRLState},
+		{EndpointMetadata: EndpointMetadata{Path: "/v1/router/outcomes", Method: "POST", Description: "Submit Router Learning outcome feedback linked to a replay record"}, Handler: (*ClassificationAPIServer).handleRouterOutcome, RequestBody: jsonBody()},
 
 		{EndpointMetadata: EndpointMetadata{Path: "/config/kbs", Method: "GET", Description: "List configured knowledge bases"}, Handler: (*ClassificationAPIServer).handleListKnowledgeBases},
 		{EndpointMetadata: EndpointMetadata{Path: "/config/kbs", Method: "POST", Description: "Create a managed knowledge base"}, Handler: (*ClassificationAPIServer).handleCreateKnowledgeBase, RequestBody: jsonBody()},

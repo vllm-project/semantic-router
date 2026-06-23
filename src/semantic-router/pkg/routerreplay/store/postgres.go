@@ -26,7 +26,7 @@ const postgresInsertQueryTemplate = `
 		INSERT INTO %s (
 			id, timestamp, request_id, decision, decision_tier, decision_priority, category,
 			original_model, selected_model, reasoning_mode,
-			signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace, session_policy, route_diagnostics, learning,
+			signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace, session_policy, route_diagnostics, learning, outcomes,
 			request_body, response_body, response_status,
 			from_cache, streaming, request_body_truncated, response_body_truncated,
 			guardrails_enabled, jailbreak_enabled, pii_enabled,
@@ -36,7 +36,7 @@ const postgresInsertQueryTemplate = `
 			prompt_tokens, cached_prompt_tokens, completion_tokens, total_tokens,
 			actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 			session_id, turn_index, previous_response_id, conversation_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56)
 	`
 
 const postgresCreateTableQueryTemplate = `
@@ -61,6 +61,7 @@ const postgresCreateTableQueryTemplate = `
 			session_policy JSONB,
 			route_diagnostics JSONB,
 			learning JSONB,
+			outcomes JSONB,
 			request_body TEXT,
 			response_body TEXT,
 			response_status INTEGER,
@@ -105,6 +106,7 @@ const postgresCreateTableQueryTemplate = `
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS session_policy JSONB;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS route_diagnostics JSONB;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS learning JSONB;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS outcomes JSONB;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS prompt TEXT;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS prompt_truncated BOOLEAN DEFAULT FALSE;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS tool_definitions TEXT;
@@ -356,6 +358,45 @@ func (p *PostgresStore) AttachResponse(ctx context.Context, id string, body stri
 		result, err := p.db.ExecContext(ctx, query, id, body, truncated)
 		if err != nil {
 			return fmt.Errorf("failed to update response: %w", err)
+		}
+
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return fmt.Errorf("record with ID %s not found", id)
+		}
+
+		return nil
+	}
+
+	if p.asyncWrites {
+		p.asyncChan <- asyncOp{fn: fn}
+		return nil
+	}
+
+	return fn()
+}
+
+// AppendOutcome links post-route feedback to a replay record.
+func (p *PostgresStore) AppendOutcome(ctx context.Context, id string, outcome Outcome) error {
+	outcomeJSON, err := json.Marshal([]Outcome{cloneOutcome(outcome)})
+	if err != nil {
+		return fmt.Errorf("failed to marshal outcome: %w", err)
+	}
+
+	//nolint:gosec // tableName is validated during store creation
+	query := fmt.Sprintf(`
+		UPDATE %s
+		SET outcomes = COALESCE(outcomes, '[]'::jsonb) || $2::jsonb
+		WHERE id = $1
+	`, p.tableName)
+
+	fn := func() error {
+		result, err := p.db.ExecContext(ctx, query, id, outcomeJSON)
+		if err != nil {
+			return fmt.Errorf("failed to append outcome: %w", err)
 		}
 
 		rows, err := result.RowsAffected()

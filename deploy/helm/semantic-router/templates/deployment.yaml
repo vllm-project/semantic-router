@@ -4,23 +4,32 @@
 {{- else -}}
 {{- $routerMultiReplica = gt (int .Values.replicaCount) 1 -}}
 {{- end -}}
-{{- $localSelectorStateDecisions := list -}}
 {{- $config := (get .Values "config") | default (dict) -}}
-{{- $routing := (get $config "routing") | default (dict) -}}
-{{- range $decision := ((get $routing "decisions") | default (list)) -}}
-{{- $algorithm := (get $decision "algorithm") | default (dict) -}}
-{{- $algorithmType := (get $algorithm "type") | default "" -}}
-{{- if or (eq $algorithmType "elo") (eq $algorithmType "rl_driven") (eq $algorithmType "gmtrouter") -}}
-{{- $localSelectorStateDecisions = append $localSelectorStateDecisions ((get $decision "name") | default "<unnamed>") -}}
+{{- $global := (get $config "global") | default (dict) -}}
+{{- $router := (get $global "router") | default (dict) -}}
+{{- $learning := (get $router "learning") | default (dict) -}}
+{{- $learningEnabled := false -}}
+{{- if hasKey $learning "enabled" -}}
+{{- $learningEnabled = get $learning "enabled" -}}
 {{- end -}}
+{{- $adaptation := (get $learning "adaptation") | default (dict) -}}
+{{- $protection := (get $learning "protection") | default (dict) -}}
+{{- $adaptationEnabled := true -}}
+{{- if hasKey $adaptation "enabled" -}}
+{{- $adaptationEnabled = get $adaptation "enabled" -}}
 {{- end -}}
+{{- $protectionEnabled := true -}}
+{{- if hasKey $protection "enabled" -}}
+{{- $protectionEnabled = get $protection "enabled" -}}
+{{- end -}}
+{{- $localLearningStateEnabled := and $learningEnabled (or $adaptationEnabled $protectionEnabled) -}}
 {{- $safetyGuards := (get .Values "safetyGuards") | default (dict) -}}
-{{- $rejectMultiReplicaLocalSelectorState := true -}}
-{{- if hasKey $safetyGuards "rejectMultiReplicaLocalSelectorState" -}}
-{{- $rejectMultiReplicaLocalSelectorState = get $safetyGuards "rejectMultiReplicaLocalSelectorState" -}}
+{{- $rejectMultiReplicaLocalLearningState := true -}}
+{{- if hasKey $safetyGuards "rejectMultiReplicaLocalLearningState" -}}
+{{- $rejectMultiReplicaLocalLearningState = get $safetyGuards "rejectMultiReplicaLocalLearningState" -}}
 {{- end -}}
-{{- if and $rejectMultiReplicaLocalSelectorState $routerMultiReplica (gt (len $localSelectorStateDecisions) 0) -}}
-{{- fail (printf "multi-replica router deployments cannot use local learning selector state for decisions [%s]; configure a shared selector-state store or set safetyGuards.rejectMultiReplicaLocalSelectorState=false after accepting replica-local learning divergence" (join ", " $localSelectorStateDecisions)) -}}
+{{- if and $rejectMultiReplicaLocalLearningState $routerMultiReplica $localLearningStateEnabled -}}
+{{- fail "multi-replica router deployments cannot use Router Learning local state; disable global.router.learning, use one router replica, or set safetyGuards.rejectMultiReplicaLocalLearningState=false after accepting replica-local learning divergence" -}}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment

@@ -17,11 +17,7 @@ func recordAgenticSessionDecision(
 	if selCtx == nil || selectedModelRef == nil || ctx == nil || selCtx.SessionID == "" {
 		return
 	}
-	policy := ctx.VSRSessionPolicy
-	if policy == nil && result != nil && result.SessionPolicy != nil {
-		policy = result.SessionPolicy.ToMap()
-		ctx.VSRSessionPolicy = policy
-	}
+	policy := sessionPolicyMapForTelemetry(ctx, result)
 	activeToolLoop := false
 	previousModel := ctx.PreviousModel
 	if selCtx.AgenticSession != nil {
@@ -39,4 +35,17 @@ func recordAgenticSessionDecision(
 		Policy:         policy,
 		Timestamp:      time.Now(),
 	})
+}
+
+func sessionPolicyMapForTelemetry(
+	ctx *RequestContext,
+	result *selection.SelectionResult,
+) map[string]interface{} {
+	if policy, ok := protectionLearningPolicyForContext(ctx); ok {
+		return policy.ToMap()
+	}
+	if result != nil && result.SessionPolicy != nil {
+		return result.SessionPolicy.ToMap()
+	}
+	return nil
 }
