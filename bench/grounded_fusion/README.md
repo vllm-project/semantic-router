@@ -164,6 +164,19 @@ has 4 rows (resume didn't regenerate); every `answers_*.jsonl` row shares the sa
 `panel_sha256` per `id` (byte-identical panel across arms). The in-package Go tests
 (`fusion_cached_panel_test.go`) already assert B/C/D arm isolation without the stack.
 
+**Smoke result (N=4, not powered — machinery validation only).** A 4-item
+Medicine/Law smoke (panel `qwen3:8b,llama3.1:8b,gemma3:12b`, judge `qwen3:14b`,
+grader `qwen3:32b`) ran the full chain to `verdict.json`. The pipeline behaved
+correctly — panels byte-identical across arms, the pre-registered rule returned
+**`INCONCLUSIVE`** (it refuses to judge until fusion beats one model, which 4 items
+cannot establish). Directionally every signal pointed the same way as `FINDINGS.md`:
+per-arm mean normalized DRACO was solo (A) ≈ placebo (D) > plain fusion (B) ≈ weight
+(C); `C_vs_B` was non-significant and `C_vs_A`/`B_vs_A` straddled zero. **Do not read
+science into N=4** — this only confirms the harness produces a valid verdict. A
+statistically powered run needs ≥20–25 items/domain (overnight locally) and, ideally,
+a grader from a different model family than the judge (the local zoo has none, so
+`qwen3:32b` breaks model-identity but not family).
+
 **Context mode (next step, sequenced after the DRACO smoke passes):** the dataset
 seam is in place — `get_dataset("jsonl", ...)` reads gold passages into
 `metadata["context"]`, `items.py` threads them, and the driver injects context as a
