@@ -112,6 +112,72 @@ func TestEmbeddingModelsConfig(t *testing.T) {
 	}
 }
 
+func TestEmbeddingModelsConfigDeepCopyWithRemoteEndpoint(t *testing.T) {
+	original := &EmbeddingModelsConfig{
+		EmbeddingConfig: &HNSWEmbeddingConfig{
+			Backend:         "openai_compatible",
+			ModelType:       "remote",
+			TargetDimension: 1024,
+		},
+		Endpoint: &EmbeddingEndpointConfig{
+			BaseURL:        "http://embedding-service:8000/v1",
+			Model:          "BAAI/bge-m3",
+			APIKeyEnv:      "EMBEDDING_API_KEY",
+			TimeoutSeconds: 5,
+			MaxRetries:     2,
+			Dimensions:     1024,
+		},
+	}
+
+	copy := original.DeepCopy()
+	if copy == original {
+		t.Fatal("DeepCopy returned the original EmbeddingModelsConfig pointer")
+	}
+	if copy.EmbeddingConfig == original.EmbeddingConfig {
+		t.Fatal("DeepCopy reused the original EmbeddingConfig pointer")
+	}
+	if copy.Endpoint == original.Endpoint {
+		t.Fatal("DeepCopy reused the original Endpoint pointer")
+	}
+	if *copy.Endpoint != *original.Endpoint {
+		t.Fatalf("Endpoint copy = %+v, want %+v", *copy.Endpoint, *original.Endpoint)
+	}
+
+	copy.Endpoint.Model = "changed-model"
+	if original.Endpoint.Model != "BAAI/bge-m3" {
+		t.Fatalf("mutating copied Endpoint changed original model to %q", original.Endpoint.Model)
+	}
+
+	var nilModels *EmbeddingModelsConfig
+	if nilModels.DeepCopy() != nil {
+		t.Fatal("nil EmbeddingModelsConfig DeepCopy returned non-nil")
+	}
+}
+
+func TestEmbeddingEndpointConfigDeepCopy(t *testing.T) {
+	original := &EmbeddingEndpointConfig{
+		BaseURL:        "http://embedding-service:8000/v1",
+		Model:          "BAAI/bge-m3",
+		APIKeyEnv:      "EMBEDDING_API_KEY",
+		TimeoutSeconds: 5,
+		MaxRetries:     2,
+		Dimensions:     1024,
+	}
+
+	copy := original.DeepCopy()
+	if copy == original {
+		t.Fatal("DeepCopy returned the original EmbeddingEndpointConfig pointer")
+	}
+	if *copy != *original {
+		t.Fatalf("Endpoint copy = %+v, want %+v", *copy, *original)
+	}
+
+	var nilEndpoint *EmbeddingEndpointConfig
+	if nilEndpoint.DeepCopy() != nil {
+		t.Fatal("nil EmbeddingEndpointConfig DeepCopy returned non-nil")
+	}
+}
+
 func TestHNSWEmbeddingConfig(t *testing.T) {
 	tests := []struct {
 		name   string
