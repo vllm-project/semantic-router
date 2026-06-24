@@ -35,18 +35,30 @@ const (
 // decision.algorithm.type=fusion. Model is the judge/calling model; analysis
 // models come from analysis_models when set, otherwise from decision.modelRefs.
 type FusionAlgorithmConfig struct {
-	Model                        string                 `yaml:"model,omitempty" json:"model,omitempty"`
-	AnalysisModels               []string               `yaml:"analysis_models,omitempty" json:"analysis_models,omitempty"`
-	MaxConcurrent                int                    `yaml:"max_concurrent,omitempty" json:"max_concurrent,omitempty"`
-	MaxCompletionTokens          int                    `yaml:"max_completion_tokens,omitempty" json:"max_completion_tokens,omitempty"`
-	Temperature                  *float64               `yaml:"temperature,omitempty" json:"temperature,omitempty"`
-	IncludeAnalysis              *bool                  `yaml:"include_analysis,omitempty" json:"include_analysis,omitempty"`
-	OnError                      string                 `yaml:"on_error,omitempty" json:"on_error,omitempty"`
-	AnalysisTemplate             string                 `yaml:"analysis_template,omitempty" json:"analysis_template,omitempty"`
-	SynthesisTemplate            string                 `yaml:"synthesis_template,omitempty" json:"synthesis_template,omitempty"`
-	JudgePromptVersion           string                 `yaml:"judge_prompt_version,omitempty" json:"judge_prompt_version,omitempty"`
-	IncludeIntermediateResponses *bool                  `yaml:"include_intermediate_responses,omitempty" json:"include_intermediate_responses,omitempty"`
-	Grounding                    *FusionGroundingConfig `yaml:"grounding,omitempty" json:"grounding,omitempty"`
+	Model                        string                  `yaml:"model,omitempty" json:"model,omitempty"`
+	AnalysisModels               []string                `yaml:"analysis_models,omitempty" json:"analysis_models,omitempty"`
+	MaxConcurrent                int                     `yaml:"max_concurrent,omitempty" json:"max_concurrent,omitempty"`
+	MaxCompletionTokens          int                     `yaml:"max_completion_tokens,omitempty" json:"max_completion_tokens,omitempty"`
+	Temperature                  *float64                `yaml:"temperature,omitempty" json:"temperature,omitempty"`
+	IncludeAnalysis              *bool                   `yaml:"include_analysis,omitempty" json:"include_analysis,omitempty"`
+	OnError                      string                  `yaml:"on_error,omitempty" json:"on_error,omitempty"`
+	AnalysisTemplate             string                  `yaml:"analysis_template,omitempty" json:"analysis_template,omitempty"`
+	SynthesisTemplate            string                  `yaml:"synthesis_template,omitempty" json:"synthesis_template,omitempty"`
+	JudgePromptVersion           string                  `yaml:"judge_prompt_version,omitempty" json:"judge_prompt_version,omitempty"`
+	IncludeIntermediateResponses *bool                   `yaml:"include_intermediate_responses,omitempty" json:"include_intermediate_responses,omitempty"`
+	Grounding                    *FusionGroundingConfig  `yaml:"grounding,omitempty" json:"grounding,omitempty"`
+	Escalation                   *FusionEscalationConfig `yaml:"escalation,omitempty" json:"escalation,omitempty"`
+}
+
+// FusionEscalationConfig makes a fusion decision adaptive: the full panel runs
+// only when the request matched one of hard_complexity_rules (reusing the
+// existing binary complexity signal — no new classifier). Otherwise the query is
+// treated as easy and answered with a single judge-model call, so operators do
+// not pay the N+2 panel cost on easy traffic routed to a fusion decision. When
+// disabled (default), every request runs the full panel as before.
+type FusionEscalationConfig struct {
+	Enabled             bool     `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	HardComplexityRules []string `yaml:"hard_complexity_rules,omitempty" json:"hard_complexity_rules,omitempty"`
 }
 
 // FusionGroundingConfig configures the optional grounding stage that scores each
@@ -61,6 +73,15 @@ type FusionGroundingConfig struct {
 	MinKeep                 int     `yaml:"min_keep,omitempty" json:"min_keep,omitempty"`
 	NLIContradictionPenalty float64 `yaml:"nli_contradiction_penalty,omitempty" json:"nli_contradiction_penalty,omitempty"`
 	OnError                 string  `yaml:"on_error,omitempty" json:"on_error,omitempty"`
+
+	// EarlyExitEnabled turns on panel-agreement early-exit: when the panel is
+	// unanimous (every response's cross-model consistency score is at or above
+	// early_exit_min_consistency) the separate analysis judge call is skipped and
+	// the judge synthesizes directly, saving one of the two judge calls. It only
+	// applies to panel-mode scoring (cross-model NLI) and never fires when a
+	// dissenter is present, so it does not drop the correct minority view.
+	EarlyExitEnabled        bool    `yaml:"early_exit_enabled,omitempty" json:"early_exit_enabled,omitempty"`
+	EarlyExitMinConsistency float64 `yaml:"early_exit_min_consistency,omitempty" json:"early_exit_min_consistency,omitempty"`
 }
 
 // FusionRuntimeConfig registers direct Fusion model slugs. The panel and judge
@@ -143,6 +164,29 @@ func ValidateFusionAlgorithmConfig(cfg *FusionAlgorithmConfig) error {
 	if err := ValidateFusionGroundingConfig(cfg.Grounding); err != nil {
 		return err
 	}
+	if err := ValidateFusionEscalationConfig(cfg.Escalation); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ValidateFusionEscalationConfig validates the escalation block. When enabled it
+// must name at least one complexity rule, otherwise nothing would ever count as
+// hard and every request would silently fall back to the single-model path.
+func ValidateFusionEscalationConfig(cfg *FusionEscalationConfig) error {
+	if cfg == nil || !cfg.Enabled {
+		return nil
+	}
+	hasRule := false
+	for _, rule := range cfg.HardComplexityRules {
+		if strings.TrimSpace(rule) != "" {
+			hasRule = true
+			break
+		}
+	}
+	if !hasRule {
+		return fmt.Errorf("escalation.hard_complexity_rules must list at least one rule when escalation is enabled")
+	}
 	return nil
 }
 
@@ -172,6 +216,9 @@ func ValidateFusionGroundingConfig(cfg *FusionGroundingConfig) error {
 	}
 	if cfg.NLIContradictionPenalty < 0 {
 		return fmt.Errorf("grounding.nli_contradiction_penalty must be >= 0")
+	}
+	if cfg.EarlyExitMinConsistency < 0 || cfg.EarlyExitMinConsistency > 1 {
+		return fmt.Errorf("grounding.early_exit_min_consistency must be between 0 and 1")
 	}
 	return validateFusionOnError(cfg.OnError)
 }

@@ -113,12 +113,13 @@ func (r *OpenAIRouter) handleLooperExecution(
 		"response_api":     isResponseAPIRequest(reqCtx),
 	})
 	looperReq := &looper.Request{
-		OriginalRequest: openAIRequest,
-		ModelRefs:       decision.ModelRefs,
-		ModelParams:     r.getModelParams(),
-		Algorithm:       decision.Algorithm,
-		IsStreaming:     streaming,
-		DecisionName:    decision.Name,
+		OriginalRequest:   openAIRequest,
+		ModelRefs:         decision.ModelRefs,
+		ModelParams:       r.getModelParams(),
+		Algorithm:         decision.Algorithm,
+		IsStreaming:       streaming,
+		DecisionName:      decision.Name,
+		MatchedComplexity: reqCtx.VSRMatchedComplexity,
 	}
 	if decision.Algorithm.Type == "fusion" {
 		fusionOverride, err := parseFusionRequestConfig(reqCtx.OriginalRequestBody)
