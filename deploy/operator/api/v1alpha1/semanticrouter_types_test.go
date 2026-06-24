@@ -70,6 +70,25 @@ func TestEmbeddingModelsConfig(t *testing.T) {
 			},
 			want: `{"qwen3_model_path":"models/qwen3-embedding","gemma_model_path":"models/gemma-embedding","mmbert_model_path":"models/mmbert-embedding","use_cpu":true}`,
 		},
+		{
+			name: "remote endpoint configuration",
+			config: EmbeddingModelsConfig{
+				EmbeddingConfig: &HNSWEmbeddingConfig{
+					Backend:         "openai_compatible",
+					ModelType:       "remote",
+					TargetDimension: 1024,
+				},
+				Endpoint: &EmbeddingEndpointConfig{
+					BaseURL:        "http://embedding-service:8000/v1",
+					Model:          "BAAI/bge-m3",
+					APIKeyEnv:      "EMBEDDING_API_KEY",
+					TimeoutSeconds: 5,
+					MaxRetries:     2,
+					Dimensions:     1024,
+				},
+			},
+			want: `{"embedding_config":{"backend":"openai_compatible","model_type":"remote","target_dimension":1024},"endpoint":{"base_url":"http://embedding-service:8000/v1","model":"BAAI/bge-m3","api_key_env":"EMBEDDING_API_KEY","timeout_seconds":5,"max_retries":2,"dimensions":1024}}`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -154,6 +173,15 @@ func TestHNSWEmbeddingConfig(t *testing.T) {
 			},
 			valid: true,
 		},
+		{
+			name: "remote OpenAI-compatible backend configuration",
+			config: HNSWEmbeddingConfig{
+				Backend:         "openai_compatible",
+				ModelType:       "remote",
+				TargetDimension: 1024,
+			},
+			valid: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -171,6 +199,9 @@ func TestHNSWEmbeddingConfig(t *testing.T) {
 			}
 
 			// Verify field values are preserved
+			if config.Backend != tt.config.Backend {
+				t.Errorf("Backend = %v, want %v", config.Backend, tt.config.Backend)
+			}
 			if config.ModelType != tt.config.ModelType {
 				t.Errorf("ModelType = %v, want %v", config.ModelType, tt.config.ModelType)
 			}
