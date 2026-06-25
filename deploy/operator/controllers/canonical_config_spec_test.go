@@ -134,7 +134,7 @@ func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 							"algorithm": {
 								"type": "hybrid",
 								"hybrid": {
-									"elo_weight": 0.4,
+									"experience_weight": 0.4,
 									"router_dc_weight": 0.4,
 									"automix_weight": 0.2,
 									"normalize_scores": true
@@ -176,7 +176,7 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 						Algorithm: rawCanonicalRoutingJSON(t, `{
 							"type": "hybrid",
 							"hybrid": {
-								"elo_weight": 0.4,
+								"experience_weight": 0.4,
 								"router_dc_weight": 0.4,
 								"automix_weight": 0.2,
 								"normalize_scores": true
@@ -200,7 +200,7 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 	if algorithm == nil || algorithm.Type != "hybrid" || algorithm.Hybrid == nil {
 		t.Fatalf("expected hybrid algorithm to survive typed decision conversion, got %#v", algorithm)
 	}
-	if algorithm.Hybrid.EloWeight != 0.4 || !algorithm.Hybrid.NormalizeScores {
+	if algorithm.Hybrid.ExperienceWeight != 0.4 || !algorithm.Hybrid.NormalizeScores {
 		t.Fatalf("expected hybrid fields to survive typed decision conversion, got %#v", algorithm.Hybrid)
 	}
 	if canonical.Routing.Decisions[0].Rules.Conditions[0].Type != "event" {
@@ -294,7 +294,7 @@ func assertCanonicalAgenticWorkflowDecision(t *testing.T, decisions []routerconf
 	if decision.Algorithm == nil || decision.Algorithm.Type != "hybrid" || decision.Algorithm.Hybrid == nil {
 		t.Fatalf("expected hybrid algorithm, got %#v", decision.Algorithm)
 	}
-	if decision.Algorithm.Hybrid.EloWeight != 0.4 || !decision.Algorithm.Hybrid.NormalizeScores {
+	if decision.Algorithm.Hybrid.ExperienceWeight != 0.4 || !decision.Algorithm.Hybrid.NormalizeScores {
 		t.Fatalf("expected hybrid fields, got %#v", decision.Algorithm.Hybrid)
 	}
 }
