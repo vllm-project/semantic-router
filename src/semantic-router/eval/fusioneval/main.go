@@ -20,7 +20,7 @@
 // Build/run (needs the candle lib + NLI model + a running Ollama):
 //
 //	cd src/semantic-router && \
-//	  CGO_LDFLAGS="-L$PWD/../../candle-binding/target/release" go build -o ../../bin/fusioneval ./cmd/fusioneval
+//	  CGO_LDFLAGS="-L$PWD/../../candle-binding/target/release" go build -o ../../bin/fusioneval ./eval/fusioneval
 //	LD_LIBRARY_PATH=$PWD/../../candle-binding/target/release ../../bin/fusioneval \
 //	  --items items.jsonl --nli-model models/mom-halugate-explainer \
 //	  --endpoint http://localhost:11435/v1/chat/completions \

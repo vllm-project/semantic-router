@@ -129,7 +129,7 @@ needs the candle lib + NLI model + an Ollama endpoint, not the router config dan
 ```bash
 # 0. Build the driver (needs the candle lib on the linker path).
 cd src/semantic-router && \
-  CGO_LDFLAGS="-L$PWD/../../candle-binding/target/release" go build -o ../../bin/fusioneval ./cmd/fusioneval
+  CGO_LDFLAGS="-L$PWD/../../candle-binding/target/release" go build -o ../../bin/fusioneval ./eval/fusioneval
 cd ../..
 
 # 1. Dump items + start the no-think Ollama proxy.
@@ -217,7 +217,7 @@ DRACO ships no source docs, so context mode needs a context-grounded dataset.
 | `FINDINGS.md` | evaluation write-up: bugs fixed, results, next experiments |
 | **Cached-panel multi-arm** | (the paired evaluator that settles `weight` efficacy) |
 | `items.py` | dump DRACO items as JSONL for the `fusioneval` driver |
-| `../../src/semantic-router/cmd/fusioneval` | Go driver: cache panel once, run arms A–D from the identical panel via the real candle NLI |
+| `../../src/semantic-router/eval/fusioneval` | Go driver: cache panel once, run arms A–D from the identical panel via the real candle NLI |
 | `grade_only.py` | grade the driver's `answers_{arm}.jsonl` (reuses `evaluate.grade_sample`) |
 | `compare_multiarm.py` | N-arm paired comparison + pre-registered KEEP/KILL `verdict.json` |
 | `test_compare_multiarm.py` | unit tests for the verdict logic (no model needed) |
