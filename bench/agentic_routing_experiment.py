@@ -13,6 +13,7 @@ import csv
 import json
 import math
 import random
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -208,6 +209,15 @@ def parse_args() -> argparse.Namespace:
         "--learning-architecture",
         action="store_true",
         help="Run deterministic Router Learning architecture fixtures.",
+    )
+    parser.add_argument(
+        "--profile",
+        default=None,
+        help=(
+            "Gate the --learning-architecture summary against a named profile "
+            "(pr/release) or a profile JSON path. Writes a verdict and exits "
+            "non-zero on failure so CI/release pipelines can gate."
+        ),
     )
     parser.add_argument(
         "--agentic-policy",
@@ -1184,6 +1194,89 @@ def write_learning_architecture_outputs(out_dir: Path) -> dict[str, Any]:
     return summary
 
 
+PROFILE_DIR = Path(__file__).with_name("profiles") / "router_learning"
+
+
+def load_profile(name_or_path: str) -> dict[str, Any]:
+    """Load a Router Learning eval profile by short name (pr/release) or explicit path."""
+    candidate = Path(name_or_path)
+    if not candidate.exists():
+        candidate = PROFILE_DIR / f"{name_or_path}.json"
+    if not candidate.exists():
+        available = sorted(p.stem for p in PROFILE_DIR.glob("*.json"))
+        raise FileNotFoundError(
+            f"profile {name_or_path!r} not found; available: {', '.join(available) or '(none)'}"
+        )
+    profile = json.loads(candidate.read_text())
+    if "thresholds" not in profile or not isinstance(profile["thresholds"], dict):
+        raise ValueError(f"profile {candidate} missing a 'thresholds' object")
+    return profile
+
+
+def evaluate_against_profile(
+    summary: dict[str, Any], profile: dict[str, Any]
+) -> dict[str, Any]:
+    """Check a learning-architecture summary against a profile's min/max thresholds.
+
+    Returns a deterministic verdict dict: per-metric checks (with observed value,
+    bound, and pass flag) plus an overall ``passed`` boolean. A metric that is
+    absent from the summary, or ``None`` (e.g. bypass_correctness_pct when there
+    are no bypass cases), is reported as a failure so a profile can never be
+    silently satisfied by missing data.
+    """
+    checks: list[dict[str, Any]] = []
+    for metric, bounds in sorted(profile.get("thresholds", {}).items()):
+        observed = summary.get(metric)
+        failures: list[str] = []
+        if observed is None:
+            failures.append("missing-or-null")
+        else:
+            if "min" in bounds and observed < bounds["min"]:
+                failures.append(f"{observed} < min {bounds['min']}")
+            if "max" in bounds and observed > bounds["max"]:
+                failures.append(f"{observed} > max {bounds['max']}")
+        checks.append(
+            {
+                "metric": metric,
+                "observed": observed,
+                "min": bounds.get("min"),
+                "max": bounds.get("max"),
+                "passed": not failures,
+                "detail": "; ".join(failures) if failures else "ok",
+            }
+        )
+    failed = [c for c in checks if not c["passed"]]
+    return {
+        "profile": profile.get("profile", "unknown"),
+        "passed": not failed,
+        "n_checks": len(checks),
+        "n_failed": len(failed),
+        "checks": checks,
+        "failed_metrics": [c["metric"] for c in failed],
+    }
+
+
+def render_verdict(verdict: dict[str, Any]) -> str:
+    """Concise human-readable PASS/FAIL verdict for CI logs / PR comments."""
+    status = "PASS" if verdict["passed"] else "FAIL"
+    lines = [
+        f"Router Learning eval [{verdict['profile']}]: {status} "
+        f"({verdict['n_checks'] - verdict['n_failed']}/{verdict['n_checks']} checks passed)"
+    ]
+    for c in verdict["checks"]:
+        mark = "✓" if c["passed"] else "✗"
+        bound = []
+        if c["min"] is not None:
+            bound.append(f"min {c['min']}")
+        if c["max"] is not None:
+            bound.append(f"max {c['max']}")
+        lines.append(
+            f"  {mark} {c['metric']} = {c['observed']} [{', '.join(bound)}]"
+            + ("" if c["passed"] else f"  <-- {c['detail']}")
+        )
+    return "\n".join(lines)
+
+
 def render_learning_architecture_report(
     summary: dict[str, Any], rows: list[dict[str, Any]]
 ) -> str:
@@ -1361,8 +1454,34 @@ def render_ablation_svg(summary: dict[str, Any]) -> str:
 def main() -> None:
     args = parse_args()
     out_dir = args.output_dir or default_output_dir()
+    if args.profile and not args.learning_architecture:
+        print(
+            "error: --profile is only valid with --learning-architecture",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     if args.learning_architecture:
         summary = write_learning_architecture_outputs(out_dir)
+        if args.profile:
+            profile = load_profile(args.profile)
+            verdict = evaluate_against_profile(summary, profile)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            (out_dir / "learning_architecture_verdict.json").write_text(
+                json.dumps(verdict, indent=2, sort_keys=True) + "\n"
+            )
+            print(render_verdict(verdict), file=sys.stderr)
+            print(
+                json.dumps(
+                    {
+                        "output_dir": str(out_dir),
+                        "summary": summary,
+                        "verdict": verdict,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            sys.exit(0 if verdict["passed"] else 1)
     elif args.ablation:
         summary = write_ablation_outputs(
             DEFAULT_SCENARIOS,

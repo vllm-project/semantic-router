@@ -156,3 +156,87 @@ def test_learning_architecture_eval_reports_required_metrics(tmp_path):
     assert "Router Learning Architecture Eval" in report
     assert "conversation-cache-stay" in report
     assert "privacy-bypass-local" in report
+
+
+def test_pr_and_release_profiles_pass_on_deterministic_fixtures(tmp_path):
+    exp = load_experiment_module()
+    summary = exp.write_learning_architecture_outputs(tmp_path)
+    for profile_name in ("pr", "release"):
+        profile = exp.load_profile(profile_name)
+        verdict = exp.evaluate_against_profile(summary, profile)
+        assert verdict[
+            "passed"
+        ], f"{profile_name} profile should pass: {verdict['failed_metrics']}"
+        assert verdict["n_failed"] == 0
+        assert verdict["profile"] == profile_name
+
+
+def test_profile_gate_catches_regression():
+    exp = load_experiment_module()
+    profile = exp.load_profile("pr")
+    degraded = {
+        "route_correctness_pct": 82.0,
+        "replay_explainability_coverage_pct": 100.0,
+        "bypass_correctness_pct": 100.0,
+        "unnecessary_switch_rate_pct": 31.0,
+        "cost_savings_pct": -3.0,
+        "cache_token_delta": 5000,
+        "p95_overhead_ms": 120.0,
+    }
+    verdict = exp.evaluate_against_profile(degraded, profile)
+    assert verdict["passed"] is False
+    assert set(verdict["failed_metrics"]) == {
+        "route_correctness_pct",
+        "unnecessary_switch_rate_pct",
+        "cost_savings_pct",
+        "p95_overhead_ms",
+    }
+
+
+def test_profile_gate_fails_on_missing_metric():
+    exp = load_experiment_module()
+    profile = exp.load_profile("pr")
+    # Absent / None metrics must fail, never silently satisfy the gate.
+    verdict = exp.evaluate_against_profile({"route_correctness_pct": 100.0}, profile)
+    assert verdict["passed"] is False
+    assert verdict["n_failed"] == 6
+    none_check = exp.evaluate_against_profile(
+        {
+            **{
+                k: 100.0
+                for k in (
+                    "route_correctness_pct",
+                    "replay_explainability_coverage_pct",
+                )
+            },
+            "bypass_correctness_pct": None,
+            "unnecessary_switch_rate_pct": 0.0,
+            "cost_savings_pct": 10.0,
+            "cache_token_delta": 0,
+            "p95_overhead_ms": 1.0,
+        },
+        profile,
+    )
+    assert none_check["passed"] is False
+    assert "bypass_correctness_pct" in none_check["failed_metrics"]
+
+
+def test_load_profile_unknown_name_raises():
+    exp = load_experiment_module()
+    try:
+        exp.load_profile("does-not-exist")
+    except FileNotFoundError as e:
+        assert "available" in str(e)
+    else:
+        raise AssertionError("expected FileNotFoundError for unknown profile")
+
+
+def test_unknown_profile_via_explicit_path(tmp_path):
+    exp = load_experiment_module()
+    p = tmp_path / "custom.json"
+    p.write_text(
+        '{"profile":"custom","thresholds":{"route_correctness_pct":{"min":50.0}}}'
+    )
+    profile = exp.load_profile(str(p))
+    verdict = exp.evaluate_against_profile({"route_correctness_pct": 75.0}, profile)
+    assert verdict["passed"] is True
