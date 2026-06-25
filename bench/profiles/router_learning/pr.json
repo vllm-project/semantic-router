@@ -1,0 +1,13 @@
+{
+  "profile": "pr",
+  "description": "Per-PR gate for Router Learning architecture evals. Run against the deterministic fixtures; these are hand-constructed to route perfectly, so correctness/explainability must stay at ceiling. Latency bounds carry headroom for CI host noise.",
+  "thresholds": {
+    "route_correctness_pct":            {"min": 100.0},
+    "replay_explainability_coverage_pct": {"min": 100.0},
+    "bypass_correctness_pct":           {"min": 100.0},
+    "unnecessary_switch_rate_pct":      {"max": 20.0},
+    "cost_savings_pct":                 {"min": 0.0},
+    "cache_token_delta":                {"max": 100000},
+    "p95_overhead_ms":                  {"max": 50.0}
+  }
+}
