@@ -200,6 +200,7 @@ FactCHD_dataset/
 
 .vllm-sr/
 .codex-go-cache/
+.copilot-tmp/
 
 # AWS deployment files (contain instance IPs and IDs)
 src/training/cache_embeddings/aws/vllm-instance-*.txt
