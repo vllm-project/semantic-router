@@ -1316,6 +1316,13 @@ spec:
                       embedding_config:
                         description: Embedding configuration for embedding-based classification
                         properties:
+                          backend:
+                            description: Backend selects the embedding provider backend.
+                            enum:
+                            - candle
+                            - openvino
+                            - openai_compatible
+                            type: string
                           enable_soft_matching:
                             default: true
                             description: EnableSoftMatching enables soft matching
@@ -1330,11 +1337,12 @@ spec:
                           model_type:
                             description: |-
                               ModelType specifies which embedding model to use
-                              Options: "qwen3" (1024-dim, 32K context), "gemma" (768-dim, 8K context), "mmbert" (64-768-dim, multilingual)
+                              Options: "qwen3" (1024-dim, 32K context), "gemma" (768-dim, 8K context), "mmbert" (64-768-dim, multilingual), "remote" (external provider)
                             enum:
                             - qwen3
                             - gemma
                             - mmbert
+                            - remote
                             type: string
                           preload_embeddings:
                             default: true
@@ -1344,14 +1352,9 @@ spec:
                           target_dimension:
                             description: |-
                               TargetDimension is the embedding dimension to use (default: 768)
-                              Supported dimensions: 64, 128, 256, 512, 768
-                              For mmBERT, lower dimensions provide faster performance with slight accuracy trade-off
-                            enum:
-                            - 64
-                            - 128
-                            - 256
-                            - 512
-                            - 768
+                              For mmBERT, supported local dimensions are 64, 128, 256, 512, 768.
+                              External providers may use other positive dimensions such as 1024, 1536, or 3072.
+                            minimum: 1
                             type: integer
                           target_layer:
                             description: |-
@@ -1362,6 +1365,40 @@ spec:
                             - 6
                             - 11
                             - 22
+                            type: integer
+                        type: object
+                      endpoint:
+                        description: |-
+                          Endpoint configures an external embedding provider endpoint.
+                          The API key should be injected into the semantic router pod environment
+                          and referenced by APIKeyEnv rather than stored directly in the CR.
+                        properties:
+                          api_key_env:
+                            description: APIKeyEnv names the environment variable
+                              containing the provider API key.
+                            type: string
+                          base_url:
+                            description: BaseURL is the base URL for the embedding
+                              endpoint, typically ending in /v1.
+                            type: string
+                          dimensions:
+                            description: Dimensions requests a provider-side output
+                              dimension when supported.
+                            minimum: 1
+                            type: integer
+                          max_retries:
+                            description: MaxRetries is the maximum number of retry
+                              attempts for embedding calls.
+                            minimum: 0
+                            type: integer
+                          model:
+                            description: Model is the embedding model name sent to
+                              the external provider.
+                            type: string
+                          timeout_seconds:
+                            description: TimeoutSeconds is the request timeout for
+                              embedding calls.
+                            minimum: 0
                             type: integer
                         type: object
                       gemma_model_path:
