@@ -9,6 +9,7 @@ type Decision struct {
 	Rules               RuleCombination            `yaml:"rules"`
 	ModelRefs           []ModelRef                 `yaml:"modelRefs,omitempty"`
 	Algorithm           *AlgorithmConfig           `yaml:"algorithm,omitempty"`
+	Adaptations         DecisionAdaptationsConfig  `yaml:"adaptations,omitempty"`
 	Plugins             []DecisionPlugin           `yaml:"plugins,omitempty"`
 	CandidateIterations []CandidateIterationConfig `yaml:"candidateIterations,omitempty"`
 	// Emits carries declarative side-effect directives produced by EMIT blocks
@@ -65,15 +66,15 @@ type AlgorithmConfig struct {
 	Ratings      *RatingsAlgorithmConfig      `yaml:"ratings,omitempty"`
 	ReMoM        *ReMoMAlgorithmConfig        `yaml:"remom,omitempty"`
 	Fusion       *FusionAlgorithmConfig       `yaml:"fusion,omitempty"`
-	Elo          *EloSelectionConfig          `yaml:"elo,omitempty"`
+	Elo          *EloSelectionConfig          `yaml:"-"`
 	RouterDC     *RouterDCSelectionConfig     `yaml:"router_dc,omitempty"`
 	AutoMix      *AutoMixSelectionConfig      `yaml:"automix,omitempty"`
 	Hybrid       *HybridSelectionConfig       `yaml:"hybrid,omitempty"`
-	RLDriven     *RLDrivenSelectionConfig     `yaml:"rl_driven,omitempty"`
-	GMTRouter    *GMTRouterSelectionConfig    `yaml:"gmtrouter,omitempty"`
+	RLDriven     *RLDrivenSelectionConfig     `yaml:"-"`
+	GMTRouter    *GMTRouterSelectionConfig    `yaml:"-"`
 	LatencyAware *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
 	MultiFactor  *MultiFactorSelectionConfig  `yaml:"multi_factor,omitempty"`
-	SessionAware *SessionAwareSelectionConfig `yaml:"session_aware,omitempty"`
+	SessionAware *SessionAwareSelectionConfig `yaml:"-"`
 	OnError      string                       `yaml:"on_error,omitempty"`
 }
 

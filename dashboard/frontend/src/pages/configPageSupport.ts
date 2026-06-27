@@ -591,16 +591,6 @@ export interface CanonicalSystemModels {
 export interface ModelSelectionConfig {
   enabled?: boolean
   method?: string
-  elo?: {
-    initial_rating?: number
-    k_factor?: number
-    category_weighted?: boolean
-    decay_factor?: number
-    min_comparisons?: number
-    cost_scaling_factor?: number
-    storage_path?: string
-    auto_save_interval?: string
-  }
   router_dc?: {
     temperature?: number
     dimension_size?: number
@@ -619,7 +609,7 @@ export interface ModelSelectionConfig {
     use_logprob_verification?: boolean
   }
   hybrid?: {
-    elo_weight?: number
+    experience_weight?: number
     router_dc_weight?: number
     automix_weight?: number
     cost_weight?: number

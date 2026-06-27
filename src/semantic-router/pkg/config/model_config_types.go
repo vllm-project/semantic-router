@@ -187,7 +187,7 @@ type ExternalModelConfig struct {
 	TimeoutSeconds int                    `yaml:"llm_timeout_seconds,omitempty"`
 	ParserType     string                 `yaml:"parser_type,omitempty"`
 	Threshold      float32                `yaml:"threshold,omitempty"`
-	AccessKey      string                 `yaml:"access_key,omitempty"`
+	AccessKey      string                 `yaml:"access_key,omitempty" json:"-"`
 	MaxTokens      int                    `yaml:"max_tokens,omitempty"`
 	Temperature    float64                `yaml:"temperature,omitempty"`
 }
@@ -281,7 +281,7 @@ type VLLMEndpoint struct {
 	Port                int    `yaml:"port"`
 	Weight              int    `yaml:"weight,omitempty"`
 	Type                string `yaml:"type,omitempty"`
-	APIKey              string `yaml:"api_key,omitempty"`
+	APIKey              string `yaml:"api_key,omitempty" json:"-"`
 	ProviderProfileName string `yaml:"provider_profile,omitempty"`
 	Model               string `yaml:"model,omitempty"`
 	Protocol            string `yaml:"protocol,omitempty"`
@@ -309,7 +309,7 @@ type ModelParams struct {
 	Pricing            ModelPricing      `yaml:"pricing,omitempty"`
 	ReasoningFamily    string            `yaml:"reasoning_family,omitempty"`
 	LoRAs              []LoRAAdapter     `yaml:"loras,omitempty"`
-	AccessKey          string            `yaml:"access_key,omitempty"`
+	AccessKey          string            `yaml:"access_key,omitempty" json:"-"`
 	ParamSize          string            `yaml:"param_size,omitempty"`
 	ContextWindowSize  int               `yaml:"context_window_size,omitempty"`
 	APIFormat          string            `yaml:"api_format,omitempty"`

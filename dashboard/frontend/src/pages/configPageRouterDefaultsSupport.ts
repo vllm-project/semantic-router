@@ -528,7 +528,7 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'router_core':
       return [
         { name: 'config_source', label: 'Config Source', type: 'select', options: ['file', 'kubernetes'], required: true },
-        { name: 'strategy', label: 'Routing Strategy', type: 'text', placeholder: 'static, elo, router_dc, automix...' },
+        { name: 'strategy', label: 'Routing Strategy', type: 'text', placeholder: 'static, router_dc, automix...' },
         { name: 'auto_model_name', label: 'Auto Model Name', type: 'text', placeholder: 'MoM' },
         { name: 'auto_model_names', label: 'Auto Model Aliases (JSON)', type: 'json', placeholder: '["vllm-sr/auto","auto","MoM"]' },
         { name: 'include_config_models_in_list', label: 'Include Config Models In List', type: 'boolean' },
@@ -710,12 +710,11 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'model_selection':
       return [
         { name: 'enabled', label: 'Enable Model Selection', type: 'boolean' },
-        { name: 'default_algorithm', label: 'Method', type: 'select', options: ['knn', 'kmeans', 'svm', 'elo', 'router_dc', 'automix', 'hybrid'], required: true },
+        { name: 'default_algorithm', label: 'Method', type: 'select', options: ['knn', 'kmeans', 'svm', 'router_dc', 'automix', 'hybrid'], required: true },
         { name: 'models_path', label: 'ML Models Path', type: 'text', placeholder: 'models/model_selection' },
         { name: 'knn', label: 'KNN Config (JSON)', type: 'json' },
         { name: 'kmeans', label: 'KMeans Config (JSON)', type: 'json' },
         { name: 'svm', label: 'SVM Config (JSON)', type: 'json' },
-        { name: 'elo', label: 'ELO Config (JSON)', type: 'json' },
         { name: 'router_dc', label: 'RouterDC Config (JSON)', type: 'json' },
         { name: 'automix', label: 'AutoMix Config (JSON)', type: 'json' },
         { name: 'hybrid', label: 'Hybrid Config (JSON)', type: 'json' },
@@ -782,7 +781,6 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
       knn: asObject(ml?.knn) || {},
       kmeans: asObject(ml?.kmeans) || {},
       svm: asObject(ml?.svm) || {},
-      elo: asObject(selection?.elo) || {},
       router_dc: asObject(selection?.router_dc) || {},
       automix: asObject(selection?.automix) || {},
       hybrid: asObject(selection?.hybrid) || {},
@@ -837,7 +835,6 @@ function saveForKey(key: RouterSystemKey, data: EditFormData): Partial<ConfigDat
     return buildNestedPatch(GLOBAL_SECTION_PATHS[key], {
       enabled: Boolean(data.enabled),
       method: data.default_algorithm,
-      elo: asObject(data.elo) || {},
       router_dc: asObject(data.router_dc) || {},
       automix: asObject(data.automix) || {},
       hybrid: asObject(data.hybrid) || {},

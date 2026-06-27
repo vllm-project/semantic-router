@@ -70,7 +70,7 @@ def test_serve_help_describes_docker_only_runtime():
     assert "--topology" not in result.output
     assert "--log-level" in result.output
     assert "latency_aware" in result.output
-    assert "session_aware" in result.output
+    assert "session_aware" not in result.output
     assert "--sim-image" in result.output
     assert "router_r1" not in result.output
     assert "thompson" not in result.output
@@ -192,7 +192,9 @@ def test_inject_algorithm_into_config_updates_all_decisions(tmp_path: Path):
         )
     )
 
-    rewritten_path = runtime_commands.inject_algorithm_into_config(config_path, "elo")
+    rewritten_path = runtime_commands.inject_algorithm_into_config(
+        config_path, "multi_factor"
+    )
 
     with rewritten_path.open() as handle:
         rewritten = yaml.safe_load(handle)
@@ -200,7 +202,7 @@ def test_inject_algorithm_into_config_updates_all_decisions(tmp_path: Path):
     assert rewritten_path != config_path
     assert [
         decision["algorithm"]["type"] for decision in rewritten["routing"]["decisions"]
-    ] == ["elo", "elo"]
+    ] == ["multi_factor", "multi_factor"]
 
 
 def test_inject_algorithm_replaces_stale_type_specific_blocks(tmp_path: Path):
@@ -224,6 +226,8 @@ def test_inject_algorithm_replaces_stale_type_specific_blocks(tmp_path: Path):
                                 "type": "rl_driven",
                                 "rl_driven": {"storage_path": "/tmp/rl.json"},
                                 "gmtrouter": {"storage_path": "/tmp/gmt.json"},
+                                "bandit": {"strategy": "thompson"},
+                                "personalization": {"per_user": True},
                             },
                         },
                     ]
@@ -264,7 +268,7 @@ def test_inject_latency_aware_algorithm_keeps_matching_config_block(tmp_path: Pa
                             "name": "latency",
                             "algorithm": {
                                 "type": "hybrid",
-                                "hybrid": {"elo_weight": 0.6},
+                                "hybrid": {"experience_weight": 0.6},
                             },
                         },
                     ]
@@ -327,7 +331,7 @@ def test_serve_uses_algorithm_translated_config(monkeypatch, tmp_path: Path):
             "--config",
             str(config_path),
             "--algorithm",
-            "elo",
+            "multi_factor",
             "--image-pull-policy",
             "never",
         ],
@@ -344,10 +348,10 @@ def test_serve_uses_algorithm_translated_config(monkeypatch, tmp_path: Path):
         == "/app/.vllm-sr/runtime-config.yaml"
     )
     assert captured["env_vars"]["VLLM_SR_SOURCE_CONFIG_PATH"] == "/app/config.yaml"
-    assert captured["env_vars"]["VLLM_SR_ALGORITHM_OVERRIDE"] == "elo"
+    assert captured["env_vars"]["VLLM_SR_ALGORITHM_OVERRIDE"] == "multi_factor"
     assert captured["source_config_file"] == str(config_path)
     assert captured["runtime_config_file"] == str(effective_config)
-    assert translated["routing"]["decisions"][0]["algorithm"]["type"] == "elo"
+    assert translated["routing"]["decisions"][0]["algorithm"]["type"] == "multi_factor"
     assert captured["pull_policy"] == "never"
 
 

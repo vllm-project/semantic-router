@@ -205,14 +205,14 @@ def test_resolve_effective_config_path_combines_algorithm_and_platform_overrides
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
-        algorithm="elo",
+        algorithm="multi_factor",
         setup_mode=False,
         platform="amd",
     )
 
     assert effective_path == tmp_path / ".vllm-sr" / "runtime-config.yaml"
     effective = yaml.safe_load(effective_path.read_text())
-    assert effective["routing"]["decisions"][0]["algorithm"]["type"] == "elo"
+    assert effective["routing"]["decisions"][0]["algorithm"]["type"] == "multi_factor"
     assert (
         effective["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"]
         is False

@@ -169,15 +169,6 @@ function validateRouteInput(
         })
       }
     }
-    if (algorithm.algoType === 'elo') {
-      const k = fields['k_factor']
-      if (k !== undefined && k !== '' && typeof k === 'number' && k <= 0) {
-        issues.push({
-          level: 'warning',
-          message: `k_factor should be positive (got ${k})`,
-        })
-      }
-    }
     if (algorithm.algoType === 'latency_aware') {
       for (const key of ['tpot_percentile', 'ttft_percentile']) {
         const v = fields[key]
@@ -206,7 +197,7 @@ function validateRouteInput(
     if (
       validModels.length < 2 &&
       (algorithm.algoType !== 'fusion' || fusionPanelModels < 2) &&
-      ['confidence', 'ratings', 'fusion', 'elo', 'hybrid', 'automix'].includes(algorithm.algoType)
+      ['confidence', 'ratings', 'fusion', 'hybrid', 'automix'].includes(algorithm.algoType)
     ) {
       issues.push({
         level: 'constraint',

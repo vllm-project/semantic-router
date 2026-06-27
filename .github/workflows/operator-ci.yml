@@ -9,6 +9,7 @@ on:
       - 'v*'
     paths:
       - 'deploy/operator/**'
+      - 'src/semantic-router/pkg/config/**'
       - '.github/workflows/operator-ci.yml'
   pull_request:
     branches:
@@ -16,6 +17,7 @@ on:
       - develop
     paths:
       - 'deploy/operator/**'
+      - 'src/semantic-router/pkg/config/**'
       - '.github/workflows/operator-ci.yml'
 
 env:

@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 func TestBuildResponseHeaderMutation_IncludesExtendedMatchedSignalHeaders(t *testing.T) {
@@ -50,9 +51,11 @@ func TestBuildResponseHeaderMutation_EmitsZeroDecisionConfidence(t *testing.T) {
 		VSRSelectedDecisionConfidence: 0,
 		VSRSelectedModel:              "qwen-small",
 		VSRContextTokenCount:          42,
-		VSRSessionPolicy: map[string]interface{}{
-			"phase": "provider_state",
-		},
+		VSRLearningPolicies: testLearningPolicies(
+			replayTestProtectionPolicyWithTrace(&selection.SessionPolicyTrace{
+				Phase: "provider_state",
+			}),
+		),
 	}
 
 	mutation := buildResponseHeaderMutation(ctx, true)
@@ -382,6 +385,132 @@ func TestBuildResponseHeaderMutation_EmitsWarningsAlongsideStandardHeaders(t *te
 		headerMap[headers.VSRProtocolWarnings],
 	)
 	assert.Equal(t, "math", headerMap[headers.VSRSelectedCategory])
+}
+
+func TestBuildResponseHeaderMutation_EmitsSplitRouterLearningHeaders(t *testing.T) {
+	ctx := &RequestContext{
+		VSRLearningPolicy: headerTestLearningPolicy(
+			routerLearningMethodProtection,
+			"apply",
+			routerLearningActionAllowSwitch,
+			"switch_allowed",
+			"conversation",
+		),
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "protection", headerMap[headers.VSRLearningMethods])
+	assert.Equal(t, "protection=allow_switch", headerMap[headers.VSRLearningActions])
+	assert.Equal(t, "protection=conversation", headerMap[headers.VSRLearningScopes])
+	assert.Equal(t, "protection=switch_allowed", headerMap[headers.VSRLearningReasons])
+}
+
+func TestBuildResponseHeaderMutation_EmitsBaselineLearningHeaders(t *testing.T) {
+	ctx := &RequestContext{
+		VSRLearningPolicy: headerTestLearningPolicy(
+			routerLearningMethodProtection,
+			"apply",
+			routerLearningActionEstablishBaseline,
+			"new_conversation",
+			"conversation",
+		),
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "protection", headerMap[headers.VSRLearningMethods])
+	assert.Equal(t, "protection=establish_baseline", headerMap[headers.VSRLearningActions])
+	assert.Equal(t, "protection=conversation", headerMap[headers.VSRLearningScopes])
+	assert.Equal(t, "protection=new_conversation", headerMap[headers.VSRLearningReasons])
+}
+
+func TestBuildResponseHeaderMutation_EmitsNonApplyLearningActionWithoutModeHeader(t *testing.T) {
+	ctx := &RequestContext{
+		VSRLearningPolicy: headerTestLearningPolicy(
+			routerLearningMethodProtection,
+			"observe",
+			routerLearningActionHoldCurrent,
+			"tool_or_protocol_state",
+			"session",
+		),
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "protection=hold_current", headerMap[headers.VSRLearningActions])
+	assert.Equal(t, "protection=session", headerMap[headers.VSRLearningScopes])
+	assert.NotContains(t, headerMap, "x-vsr-learning-modes")
+}
+
+func TestBuildResponseHeaderMutation_EmitsMultipleLearningPolicies(t *testing.T) {
+	ctx := &RequestContext{
+		VSRLearningPolicies: testLearningPolicies(
+			*headerTestLearningPolicy(
+				routerLearningMethodProtection,
+				"apply",
+				routerLearningActionHoldCurrent,
+				"cache_cost_high",
+				"conversation",
+			),
+			*headerTestLearningPolicy(
+				routerLearningMethodAdaptation,
+				"observe",
+				routerLearningActionObserve,
+				"observe_only",
+				"",
+			),
+		),
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "adaptation,protection", headerMap[headers.VSRLearningMethods])
+	assert.Equal(t, "adaptation=observe,protection=hold_current", headerMap[headers.VSRLearningActions])
+	assert.Equal(t, "protection=conversation", headerMap[headers.VSRLearningScopes])
+	assert.Equal(t, "adaptation=observe_only,protection=cache_cost_high", headerMap[headers.VSRLearningReasons])
+	assert.NotContains(t, headerMap, "x-vsr-learning-modes")
+}
+
+func TestBuildResponseHeaderMutation_OmitsEmptyLearningPolicies(t *testing.T) {
+	ctx := &RequestContext{
+		VSRLearningPolicies: testLearningPolicies(
+			routerLearningPolicy{},
+			routerLearningPolicy{},
+		),
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.NotContains(t, headerMap, headers.VSRLearningMethods)
+	assert.NotContains(t, headerMap, headers.VSRLearningActions)
+	assert.NotContains(t, headerMap, headers.VSRLearningScopes)
+	assert.NotContains(t, headerMap, headers.VSRLearningReasons)
+}
+
+func headerTestLearningPolicy(
+	method routerLearningMethod,
+	mode string,
+	action routerLearningAction,
+	reason string,
+	scope string,
+) *routerLearningPolicy {
+	policy := newRouterLearningPolicy(method)
+	policy.Mode = mode
+	policy.Action = action
+	policy.Reason = reason
+	policy.Scope = scope
+	return &policy
 }
 
 func TestNormalizeProtocol(t *testing.T) {

@@ -80,7 +80,6 @@ export const ANALYSIS_OPERATIONS_MENU_SECTIONS: LayoutMenuSection[] = [
     items: [
       { kind: 'config', label: 'Global Config', configSection: 'global-config' },
       { kind: 'route', label: 'Evaluation', to: '/evaluation' },
-      { kind: 'route', label: 'Ratings', to: '/ratings' },
       { kind: 'route', label: 'ML Setup', to: '/ml-setup' },
       { kind: 'config', label: 'MCP Setup', configSection: 'mcp' },
     ],

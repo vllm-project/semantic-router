@@ -118,19 +118,15 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
     'remom',
     'fusion',
     'static',
-    'elo',
     'router_dc',
     'automix',
     'hybrid',
-    'rl_driven',
-    'gmtrouter',
     'latency_aware',
     'knn',
     'kmeans',
     'svm',
     'mlp',
     'multi_factor',
-    'session_aware',
   ],
 
   booleans: ['true', 'false'],
@@ -173,7 +169,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Algorithm types
       [
-        /\b(confidence|ratings|remom|fusion|static|elo|router_dc|automix|hybrid|rl_driven|gmtrouter|latency_aware|knn|kmeans|svm|mlp|multi_factor|session_aware)\b/,
+        /\b(confidence|ratings|remom|fusion|static|router_dc|automix|hybrid|latency_aware|knn|kmeans|svm|mlp|multi_factor)\b/,
         'type.algorithm',
       ],
 
@@ -336,19 +332,15 @@ const ALGO_TYPE_SUGGESTIONS = [
   { label: 'remom', detail: 'ReMoM algorithm' },
   { label: 'fusion', detail: 'Fusion panel deliberation' },
   { label: 'static', detail: 'Static model assignment' },
-  { label: 'elo', detail: 'Elo rating algorithm' },
   { label: 'router_dc', detail: 'Router DC algorithm' },
   { label: 'automix', detail: 'AutoMix algorithm' },
   { label: 'hybrid', detail: 'Hybrid routing' },
-  { label: 'rl_driven', detail: 'Reinforcement-learning model selection' },
-  { label: 'gmtrouter', detail: 'Graph-based personalized routing' },
   { label: 'latency_aware', detail: 'Latency-aware routing' },
   { label: 'knn', detail: 'KNN model-selection classifier' },
   { label: 'kmeans', detail: 'KMeans model-selection classifier' },
   { label: 'svm', detail: 'SVM model-selection classifier' },
   { label: 'mlp', detail: 'MLP model-selection classifier' },
   { label: 'multi_factor', detail: 'Quality/latency/cost/load scoring' },
-  { label: 'session_aware', detail: 'Agentic stay-vs-switch policy' },
 ]
 
 /**

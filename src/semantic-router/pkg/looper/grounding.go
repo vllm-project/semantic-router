@@ -64,6 +64,7 @@ type groundingScore struct {
 // FusionGroundingTrace is attached to FusionTrace for observability.
 type FusionGroundingTrace struct {
 	ReferenceMode string           `json:"reference_mode,omitempty"`
+	Policy        string           `json:"policy,omitempty"`
 	Scores        []groundingScore `json:"scores,omitempty"`
 }
 
@@ -103,9 +104,20 @@ func (l *FusionLooper) applyGrounding(
 		return panel, nil, "", nil
 	}
 
-	kept = filterPanelByScore(panel, scores, cfg)
+	// Policy decides what we do with the scores. Only `filter` drops responses;
+	// `weight`/`annotate` keep the full panel and let the judge soft-weight from
+	// the groundedness notes (the synthesis prompt is annotated in runFusionFinal).
+	// Hard-dropping the least mutually-consistent response regresses quality on
+	// contested factual items (see bench/grounded_fusion/FINDINGS.md), so it is no
+	// longer the default.
+	if cfg.GroundingPolicy == config.FusionGroundingPolicyFilter {
+		kept = filterPanelByScore(panel, scores, cfg)
+	} else {
+		kept = panel
+	}
 	logging.ComponentEvent("looper", "fusion_grounding_applied", map[string]interface{}{
 		"reference_mode": referenceMode,
+		"policy":         cfg.GroundingPolicy,
 		"panel_in":       len(panel),
 		"panel_kept":     len(kept),
 	})
@@ -385,6 +397,25 @@ func formatGroundingNotes(scores []groundingScore) string {
 		b.WriteString("\n")
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// groundingSynthesisNotes renders the groundedness notes for the final synthesis
+// prompt. For the `weight` policy it prepends an explicit instruction to weight
+// each panel answer by its score (while protecting a correct lone dissenter);
+// `annotate` emits the notes without that instruction. `filter` returns empty —
+// the panel was already pruned, so the judge needs no per-response weighting.
+func groundingSynthesisNotes(scores []groundingScore, policy string) string {
+	if policy == config.FusionGroundingPolicyFilter {
+		return ""
+	}
+	notes := formatGroundingNotes(scores)
+	if notes == "" {
+		return ""
+	}
+	if policy == config.FusionGroundingPolicyWeight {
+		return "Weight each panel answer by its groundedness score below: prefer better-supported answers and treat flagged/contradicted claims with extra skepticism. Do not discard a lower-scoring answer if it is the only one that is correct — consistency is not the same as correctness.\n\n" + notes
+	}
+	return notes
 }
 
 func modelName(r *ModelResponse) string {
