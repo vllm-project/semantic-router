@@ -1308,24 +1308,29 @@ ROUTE test {
 	}
 }
 
-func TestNegativeCompileRemovedSessionAwareAlgorithm(t *testing.T) {
-	input := `
+func TestNegativeCompileRemovedLearningAlgorithms(t *testing.T) {
+	for _, algorithmType := range []string{"session_aware", "elo", "rl_driven", "gmtrouter"} {
+		t.Run(algorithmType, func(t *testing.T) {
+			input := fmt.Sprintf(`
 SIGNAL domain test { description: "test" }
 ROUTE test {
   PRIORITY 1
   WHEN domain("test")
   MODEL "m:1b"
-  ALGORITHM session_aware {
+  ALGORITHM %s {
     base_method: "hybrid"
   }
 }
-`
-	_, errs := Compile(input)
-	if len(errs) == 0 {
-		t.Fatal("expected compile error for removed session_aware algorithm, got none")
-	}
-	if !strings.Contains(errs[0].Error(), `unknown algorithm type "session_aware"`) {
-		t.Fatalf("unexpected error for removed session_aware algorithm: %v", errs)
+`, algorithmType)
+			_, errs := Compile(input)
+			if len(errs) == 0 {
+				t.Fatalf("expected compile error for removed %s algorithm, got none", algorithmType)
+			}
+			want := fmt.Sprintf(`unknown algorithm type "%s"`, algorithmType)
+			if !strings.Contains(errs[0].Error(), want) {
+				t.Fatalf("unexpected error for removed %s algorithm: %v", algorithmType, errs)
+			}
+		})
 	}
 }
 
@@ -1432,28 +1437,6 @@ func TestCompileAllAlgorithmTypes(t *testing.T) {
 			},
 		},
 		{
-			name:     "elo",
-			algoType: "elo",
-			body:     `initial_rating: 1500.0 k_factor: 32.0 category_weighted: true decay_factor: 0.95 min_comparisons: 10 cost_scaling_factor: 0.5 storage_path: "/tmp/elo"`,
-			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.Elo == nil {
-					t.Fatal("expected elo config")
-				}
-				if algo.Elo.InitialRating != 1500.0 {
-					t.Errorf("initial_rating = %v, want 1500", algo.Elo.InitialRating)
-				}
-				if algo.Elo.KFactor != 32.0 {
-					t.Errorf("k_factor = %v, want 32", algo.Elo.KFactor)
-				}
-				if !algo.Elo.CategoryWeighted {
-					t.Error("expected category_weighted = true")
-				}
-				if algo.Elo.StoragePath != "/tmp/elo" {
-					t.Errorf("storage_path = %q, want /tmp/elo", algo.Elo.StoragePath)
-				}
-			},
-		},
-		{
 			name:     "router_dc",
 			algoType: "router_dc",
 			body:     `temperature: 0.8 dimension_size: 128 min_similarity: 0.3 use_query_contrastive: true use_model_contrastive: false`,
@@ -1494,51 +1477,16 @@ func TestCompileAllAlgorithmTypes(t *testing.T) {
 		{
 			name:     "hybrid",
 			algoType: "hybrid",
-			body:     `elo_weight: 0.3 router_dc_weight: 0.3 automix_weight: 0.2 cost_weight: 0.2`,
+			body:     `experience_weight: 0.3 router_dc_weight: 0.3 automix_weight: 0.2 cost_weight: 0.2`,
 			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
 				if algo.Hybrid == nil {
 					t.Fatal("expected hybrid config")
 				}
-				if algo.Hybrid.EloWeight != 0.3 {
-					t.Errorf("elo_weight = %v, want 0.3", algo.Hybrid.EloWeight)
+				if algo.Hybrid.ExperienceWeight != 0.3 {
+					t.Errorf("experience_weight = %v, want 0.3", algo.Hybrid.ExperienceWeight)
 				}
 				if algo.Hybrid.CostWeight != 0.2 {
 					t.Errorf("cost_weight = %v, want 0.2", algo.Hybrid.CostWeight)
-				}
-			},
-		},
-		{
-			name:     "rl_driven",
-			algoType: "rl_driven",
-			body:     `exploration_rate: 0.1 use_thompson_sampling: true enable_personalization: false`,
-			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.RLDriven == nil {
-					t.Fatal("expected rl_driven config")
-				}
-				if algo.RLDriven.ExplorationRate != 0.1 {
-					t.Errorf("exploration_rate = %v, want 0.1", algo.RLDriven.ExplorationRate)
-				}
-				if !algo.RLDriven.UseThompsonSampling {
-					t.Error("expected use_thompson_sampling = true")
-				}
-			},
-		},
-		{
-			name:     "gmtrouter",
-			algoType: "gmtrouter",
-			body:     `enable_personalization: true history_sample_size: 50 model_path: "/models/gmt"`,
-			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.GMTRouter == nil {
-					t.Fatal("expected gmtrouter config")
-				}
-				if !algo.GMTRouter.EnablePersonalization {
-					t.Error("expected enable_personalization = true")
-				}
-				if algo.GMTRouter.HistorySampleSize != 50 {
-					t.Errorf("history_sample_size = %d, want 50", algo.GMTRouter.HistorySampleSize)
-				}
-				if algo.GMTRouter.ModelPath != "/models/gmt" {
-					t.Errorf("model_path = %q, want /models/gmt", algo.GMTRouter.ModelPath)
 				}
 			},
 		},

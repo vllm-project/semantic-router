@@ -59,7 +59,9 @@ type OpenAIRouter struct {
 	// paths back through package-global API-server state.
 	RuntimeRegistry *routerruntime.Registry
 
-	lookupTableCancel func()
+	routerLearningMu      sync.Mutex
+	routerLearningRuntime *routerLearningRuntime
+	lookupTableCancel     func()
 }
 
 // Close releases background resources held by the router (e.g. lookup table

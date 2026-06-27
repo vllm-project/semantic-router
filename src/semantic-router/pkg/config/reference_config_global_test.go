@@ -16,7 +16,6 @@ func assertReferenceConfigRouterGlobalCoverage(t testingT, router map[string]int
 
 func assertReferenceConfigRouterSelectionCoverage(t testingT, modelSelection map[string]interface{}) {
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml"), reflect.TypeOf(MLSelectionConfig{}), "global.router.model_selection.ml")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "elo"), reflect.TypeOf(EloSelectionConfig{}), "global.router.model_selection.elo")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "router_dc"), reflect.TypeOf(RouterDCSelectionConfig{}), "global.router.model_selection.router_dc")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "automix"), reflect.TypeOf(AutoMixSelectionConfig{}), "global.router.model_selection.automix")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "hybrid"), reflect.TypeOf(HybridSelectionConfig{}), "global.router.model_selection.hybrid")
@@ -27,15 +26,17 @@ func assertReferenceConfigRouterSelectionCoverage(t testingT, modelSelection map
 }
 
 func assertReferenceConfigRouterLearningCoverage(t testingT, learning map[string]interface{}) {
-	adaptations := mustMapAt(t, learning, "adaptations")
-	sessionAware := mustMapAt(t, adaptations, "session_aware")
-	identity := mustMapAt(t, sessionAware, "identity")
+	adaptation := mustMapAt(t, learning, "adaptation")
+	protection := mustMapAt(t, learning, "protection")
+	identity := mustMapAt(t, protection, "identity")
+	identityHeaders := mustMapAt(t, identity, "headers")
 
 	assertMapCoversStructFields(t, learning, reflect.TypeOf(RouterLearningConfig{}), "global.router.learning")
-	assertMapCoversStructFields(t, adaptations, reflect.TypeOf(RouterLearningAdaptations{}), "global.router.learning.adaptations")
-	assertMapCoversStructFields(t, sessionAware, reflect.TypeOf(SessionAwareLearningConfig{}), "global.router.learning.adaptations.session_aware")
-	assertMapCoversStructFields(t, identity, reflect.TypeOf(SessionAwareIdentityConfig{}), "global.router.learning.adaptations.session_aware.identity")
-	assertMapCoversStructFields(t, mustMapAt(t, sessionAware, "tuning"), reflect.TypeOf(SessionAwareLearningTuning{}), "global.router.learning.adaptations.session_aware.tuning")
+	assertMapCoversStructFields(t, adaptation, reflect.TypeOf(RouterLearningAdaptationConfig{}), "global.router.learning.adaptation")
+	assertMapCoversStructFields(t, protection, reflect.TypeOf(RouterLearningProtectionConfig{}), "global.router.learning.protection")
+	assertMapCoversStructFields(t, identity, reflect.TypeOf(RouterLearningIdentityConfig{}), "global.router.learning.protection.identity")
+	assertMapCoversStructFields(t, identityHeaders, reflect.TypeOf(RouterLearningIdentityHeadersConfig{}), "global.router.learning.protection.identity.headers")
+	assertMapCoversStructFields(t, mustMapAt(t, protection, "tuning"), reflect.TypeOf(RouterLearningProtectionTuning{}), "global.router.learning.protection.tuning")
 }
 
 func assertReferenceConfigServiceGlobalCoverage(t testingT, services map[string]interface{}) {

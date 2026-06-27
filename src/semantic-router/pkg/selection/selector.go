@@ -281,6 +281,9 @@ type Feedback struct {
 	// SessionID identifies the session for multi-turn context (optional)
 	SessionID string
 
+	// ConversationID identifies a run within the session (optional)
+	ConversationID string
+
 	// FeedbackType indicates the type of implicit feedback (optional)
 	// Values: "satisfied", "need_clarification", "wrong_answer", "want_different"
 	FeedbackType string

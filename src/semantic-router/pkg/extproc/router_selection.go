@@ -259,7 +259,7 @@ func buildHybridSelectionConfig(
 	intelligentRouting := cfg.IntelligentRouting
 	hybridCfg := intelligentRouting.ModelSelection.Hybrid
 	result := &selection.HybridConfig{
-		EloWeight:           hybridCfg.EloWeight,
+		ExperienceWeight:    hybridCfg.ExperienceWeight,
 		RouterDCWeight:      hybridCfg.RouterDCWeight,
 		AutoMixWeight:       hybridCfg.AutoMixWeight,
 		CostWeight:          hybridCfg.CostWeight,
@@ -270,8 +270,8 @@ func buildHybridSelectionConfig(
 	if decisionCfg == nil {
 		return result
 	}
-	if decisionCfg.EloWeight != 0 {
-		result.EloWeight = decisionCfg.EloWeight
+	if decisionCfg.ExperienceWeight != 0 {
+		result.ExperienceWeight = decisionCfg.ExperienceWeight
 	}
 	if decisionCfg.RouterDCWeight != 0 {
 		result.RouterDCWeight = decisionCfg.RouterDCWeight
