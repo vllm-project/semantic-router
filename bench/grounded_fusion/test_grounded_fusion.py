@@ -7,7 +7,7 @@ import json
 import os
 import re
 
-from bench.grounded_fusion.datasets import load_draco
+from bench.grounded_fusion.datasets import get_dataset, load_draco, load_jsonl
 from bench.grounded_fusion.llm_client import ChatResult
 from bench.grounded_fusion.rubric_judge import RubricJudge
 
@@ -98,3 +98,36 @@ def test_parse_tolerates_fences_and_prose():
     )
     assert parsed["a"]["matched"] is True
     assert RubricJudge._parse("garbage") == {}
+
+
+# ---- generic JSONL loader (context-mode seam) ------------------------------
+
+
+def test_load_jsonl_carries_context(tmp_path):
+    rubric = {
+        "sections": [
+            {
+                "id": "acc",
+                "title": "Factual Accuracy",
+                "criteria": [{"id": "c1", "weight": 10, "requirement": "states X"}],
+            }
+        ]
+    }
+    row = {
+        "id": "ctx-1",
+        "problem": "summarize the passage",
+        "domain": "Medicine",
+        "context": "the gold source passage",
+        "answer": rubric,
+    }
+    path = tmp_path / "ds.jsonl"
+    path.write_text(json.dumps(row) + "\n")
+
+    samples = load_jsonl(str(path))
+    assert len(samples) == 1
+    s = samples[0]
+    assert s.id == "ctx-1"
+    assert s.metadata["context"] == "the gold source passage"
+    assert s.rubric.max_positive_score == 10
+    # get_dataset dispatches the same loader.
+    assert get_dataset("jsonl", path=str(path))[0].id == "ctx-1"

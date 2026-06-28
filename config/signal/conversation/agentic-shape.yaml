@@ -41,3 +41,9 @@ routing:
             type: assistant_tool_cycle
         predicate:
           gte: 1
+      - name: current_tool_loop
+        description: The current request is continuing an active tool loop.
+        feature:
+          type: exists
+          source:
+            type: active_tool_loop

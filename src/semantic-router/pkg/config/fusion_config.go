@@ -16,6 +16,19 @@ const (
 	FusionGroundingReferenceHybrid  = "hybrid"  // detector against context if present, else cross-model NLI
 	FusionGroundingReferenceContext = "context" // detector against provided RAG/tool context only
 	FusionGroundingReferencePanel   = "panel"   // cross-model NLI only (panel as its own reference)
+
+	// Grounding policy modes select how the groundedness scores are used.
+	//   - weight:   keep every response, tell the judge to weight each panel
+	//               answer by its groundedness score (soft down-weighting).
+	//   - annotate: keep every response, surface groundedness notes to the judge
+	//               without a weighting instruction.
+	//   - filter:   hard-drop responses below min_score (keep min_keep).
+	// The default is weight. Hard-dropping the least mutually-consistent response
+	// regresses quality on contested factual items (it deletes the correct
+	// dissenter); see bench/grounded_fusion/FINDINGS.md.
+	FusionGroundingPolicyWeight   = "weight"
+	FusionGroundingPolicyAnnotate = "annotate"
+	FusionGroundingPolicyFilter   = "filter"
 )
 
 // FusionAlgorithmConfig configures Fusion-style panel execution for
@@ -43,6 +56,7 @@ type FusionAlgorithmConfig struct {
 type FusionGroundingConfig struct {
 	Enabled                 bool    `yaml:"enabled,omitempty" json:"enabled,omitempty"`
 	Reference               string  `yaml:"reference,omitempty" json:"reference,omitempty"`
+	Policy                  string  `yaml:"policy,omitempty" json:"policy,omitempty"`
 	MinScore                float64 `yaml:"min_score,omitempty" json:"min_score,omitempty"`
 	MinKeep                 int     `yaml:"min_keep,omitempty" json:"min_keep,omitempty"`
 	NLIContradictionPenalty float64 `yaml:"nli_contradiction_penalty,omitempty" json:"nli_contradiction_penalty,omitempty"`
@@ -143,6 +157,12 @@ func ValidateFusionGroundingConfig(cfg *FusionGroundingConfig) error {
 	default:
 		return fmt.Errorf("grounding.reference must be one of %q, %q or %q, got %q",
 			FusionGroundingReferenceHybrid, FusionGroundingReferenceContext, FusionGroundingReferencePanel, cfg.Reference)
+	}
+	switch strings.TrimSpace(cfg.Policy) {
+	case "", FusionGroundingPolicyWeight, FusionGroundingPolicyAnnotate, FusionGroundingPolicyFilter:
+	default:
+		return fmt.Errorf("grounding.policy must be one of %q, %q or %q, got %q",
+			FusionGroundingPolicyWeight, FusionGroundingPolicyAnnotate, FusionGroundingPolicyFilter, cfg.Policy)
 	}
 	if cfg.MinScore < 0 || cfg.MinScore > 1 {
 		return fmt.Errorf("grounding.min_score must be between 0 and 1")

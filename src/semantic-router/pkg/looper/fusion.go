@@ -38,6 +38,7 @@ type fusionExecutionConfig struct {
 
 	GroundingEnabled                 bool
 	GroundingReference               string
+	GroundingPolicy                  string
 	GroundingMinScore                float64
 	GroundingMinKeep                 int
 	GroundingNLIContradictionPenalty float64
@@ -121,7 +122,7 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 	}
 
 	analysis, analysisResp := l.runFusionAnalysis(ctx, req, cfg, groundedPanel, groundingScores)
-	finalResp, err := l.runFusionFinal(ctx, req, cfg, groundedPanel, analysis)
+	finalResp, err := l.runFusionFinal(ctx, req, cfg, groundedPanel, analysis, groundingScores)
 	if err != nil {
 		return nil, err
 	}
@@ -179,6 +180,13 @@ func applyGroundingDefaults(cfg *fusionExecutionConfig) {
 	}
 	if cfg.GroundingReference == "" {
 		cfg.GroundingReference = config.FusionGroundingReferenceHybrid
+	}
+	if cfg.GroundingPolicy == "" {
+		// Default to soft down-weighting: hard-dropping the least mutually
+		// consistent response regresses quality on contested factual items
+		// (see bench/grounded_fusion/FINDINGS.md). Set policy=filter for the
+		// prior drop behavior.
+		cfg.GroundingPolicy = config.FusionGroundingPolicyWeight
 	}
 	if cfg.GroundingMinKeep <= 0 {
 		cfg.GroundingMinKeep = 1
@@ -243,6 +251,7 @@ func mergeFusionGroundingConfig(dst *fusionExecutionConfig, src *config.FusionGr
 	}
 	dst.GroundingEnabled = src.Enabled
 	dst.GroundingReference = src.Reference
+	dst.GroundingPolicy = src.Policy
 	dst.GroundingMinScore = src.MinScore
 	dst.GroundingMinKeep = src.MinKeep
 	dst.GroundingNLIContradictionPenalty = src.NLIContradictionPenalty
@@ -316,6 +325,14 @@ func (l *FusionLooper) executeFusionPanel(
 	req *Request,
 	cfg fusionExecutionConfig,
 ) ([]*ModelResponse, []FusionFailedModel, error) {
+	// Paired multi-arm evaluation supplies the panel verbatim so every arm
+	// synthesizes from a byte-identical panel (see bench/grounded_fusion). Skip
+	// the live model calls and feed the cached panel straight into grounding +
+	// synthesis, which are source-agnostic over []*ModelResponse.
+	if len(req.CachedPanel) > 0 {
+		return req.CachedPanel, nil, nil
+	}
+
 	results := make(chan fusionPanelResult, len(cfg.AnalysisModels))
 	sem := make(chan struct{}, cfg.MaxConcurrent)
 	for i, model := range cfg.AnalysisModels {
@@ -433,8 +450,14 @@ func (l *FusionLooper) runFusionFinal(
 	cfg fusionExecutionConfig,
 	panelResponses []*ModelResponse,
 	analysis *FusionAnalysis,
+	groundingScores []groundingScore,
 ) (*ModelResponse, error) {
 	prompt := buildFusionFinalPrompt(cfg, extractOriginalContent(req.OriginalRequest), panelResponses, analysis)
+	// Under weight/annotate policies the panel was not pruned, so the judge needs
+	// the per-response groundedness signal at synthesis time to soft-weight.
+	if notes := groundingSynthesisNotes(groundingScores, cfg.GroundingPolicy); notes != "" {
+		prompt = prompt + "\n\n" + notes
+	}
 	finalReq := appendFusionStageMessage(req.OriginalRequest, prompt)
 	resp, err := l.callFusionModel(ctx, &Request{OriginalRequest: finalReq, ModelParams: req.ModelParams}, cfg, cfg.Model, true, false, len(panelResponses)+2)
 	if err != nil {
@@ -558,6 +581,7 @@ func buildFusionTrace(
 	if len(groundingScores) > 0 {
 		trace.Grounding = &FusionGroundingTrace{
 			ReferenceMode: groundingMode,
+			Policy:        cfg.GroundingPolicy,
 			Scores:        groundingScores,
 		}
 	}
