@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
-import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 
@@ -103,7 +101,10 @@ def main() -> int:
 
     MockLLMRouterHandler.selected_model = args.selected_model
     server = HTTPServer((args.host, args.port), MockLLMRouterHandler)
-    print(f"{MockLLMRouterHandler.log_prefix} listening on {args.host}:{args.port}", flush=True)
+    print(
+        f"{MockLLMRouterHandler.log_prefix} listening on {args.host}:{args.port}",
+        flush=True,
+    )
     print(f"{MockLLMRouterHandler.log_prefix} health=/health route=/route", flush=True)
     try:
         server.serve_forever()

@@ -49,11 +49,11 @@ func TestLLMRouterPromptRenderer_LoadsFromFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTemp() error = %v", err)
 	}
-	if _, err := tmpFile.WriteString(`Decision={{.decision_name}}`); err != nil {
-		t.Fatalf("WriteString() error = %v", err)
+	if _, writeErr := tmpFile.WriteString(`Decision={{.decision_name}}`); writeErr != nil {
+		t.Fatalf("WriteString() error = %v", writeErr)
 	}
-	if err := tmpFile.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
+	if closeErr := tmpFile.Close(); closeErr != nil {
+		t.Fatalf("Close() error = %v", closeErr)
 	}
 
 	renderer, err := NewLLMRouterPromptRenderer(&RLDrivenConfig{
@@ -142,22 +142,22 @@ func TestRLDrivenSelectorSelectWithLLMRouter_UsesRenderedTemplate(t *testing.T) 
 		t.Fatalf("SelectedModel = %q, want model-a", result.SelectedModel)
 	}
 
-	if !strings.Contains(receivedQuery, "Decision=route-a") {
-		t.Fatalf("rendered query missing decision name: %q", receivedQuery)
-	}
-	if !strings.Contains(receivedQuery, "Description=A test decision") {
-		t.Fatalf("rendered query missing decision description: %q", receivedQuery)
-	}
-	if !strings.Contains(receivedQuery, "Domains=math") {
-		t.Fatalf("rendered query missing matched domains: %q", receivedQuery)
-	}
-	if !strings.Contains(receivedQuery, "Keywords=vector") {
-		t.Fatalf("rendered query missing matched keywords: %q", receivedQuery)
-	}
-	if !strings.Contains(receivedQuery, "Labels=domain:math,keyword:vector") {
-		t.Fatalf("rendered query missing labels: %q", receivedQuery)
-	}
-	if !strings.Contains(receivedQuery, "Models=model-a model-b") {
-		t.Fatalf("rendered query missing candidate models: %q", receivedQuery)
+	assertContainsAll(t, receivedQuery, map[string]string{
+		"decision name":        "Decision=route-a",
+		"decision description": "Description=A test decision",
+		"matched domains":      "Domains=math",
+		"matched keywords":     "Keywords=vector",
+		"labels":               "Labels=domain:math,keyword:vector",
+		"candidate models":     "Models=model-a model-b",
+	})
+}
+
+func assertContainsAll(t *testing.T, got string, expectations map[string]string) {
+	t.Helper()
+
+	for label, want := range expectations {
+		if !strings.Contains(got, want) {
+			t.Fatalf("rendered query missing %s: %q", label, got)
+		}
 	}
 }
