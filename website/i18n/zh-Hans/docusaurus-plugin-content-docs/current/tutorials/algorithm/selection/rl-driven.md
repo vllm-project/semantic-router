@@ -53,7 +53,10 @@ algorithm:
     cost_reward_alpha: 0.3
     format_reward_penalty: -1.0
     enable_llm_routing: false
-    router_r1_server_url: ""
+    llm_router_server_url: ""
+    llm_router_query_template: |
+      Decision name: {{.decision_name}}
+      Query: {{.query}}
     llm_routing_fallback: thompson
     enable_multi_round_aggregation: false
     max_aggregation_rounds: 3

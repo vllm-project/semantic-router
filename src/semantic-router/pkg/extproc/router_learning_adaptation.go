@@ -1,13 +1,16 @@
 package extproc
 
 import (
+	"context"
 	"math"
 	"math/rand"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
@@ -60,6 +63,10 @@ func (r *OpenAIRouter) applyRoutingSamplingAdaptation(
 		return baseAdaptationDecision(input, adaptationPolicy(mode, routerLearningActionKeepBase, "candidate_set_empty", nil))
 	}
 
+	if llmDecision, ok := r.tryLLMRouterAdaptation(input, learningCtx, cfg, mode, candidateSet, strategy); ok {
+		return llmDecision
+	}
+
 	usedSampling := adaptationSamplingAllowed(mode, preflight)
 	seed := int64(0)
 	if usedSampling {
@@ -92,6 +99,156 @@ func (r *OpenAIRouter) applyRoutingSamplingAdaptation(
 		changesModel:     learningChangesModel(input.baseResult, result),
 		policy:           policy,
 	}
+}
+
+func (r *OpenAIRouter) tryLLMRouterAdaptation(
+	input routerLearningInput,
+	learningCtx *selection.SelectionContext,
+	cfg config.RouterLearningAdaptationConfig,
+	mode string,
+	candidateSet string,
+	strategy string,
+) (routerLearningDecision, bool) {
+	if !cfg.EnableLLMRouting {
+		return routerLearningDecision{}, false
+	}
+	serverURL := strings.TrimSpace(cfg.LLMRouterServerURL)
+	if serverURL == "" {
+		return routerLearningDecision{}, false
+	}
+
+	renderer, err := newRouterLearningLLMRouterPromptRenderer(r, cfg)
+	if err != nil {
+		logging.ComponentWarnEvent("extproc", "router_learning_llm_router_template_unavailable", map[string]interface{}{
+			"error":         err.Error(),
+			"server_url":    serverURL,
+			"decision_name": learningCtx.DecisionName,
+		})
+		return routerLearningDecision{}, false
+	}
+
+	query, err := renderer.Render(learningCtx)
+	if err != nil {
+		logging.ComponentWarnEvent("extproc", "router_learning_llm_router_render_failed", map[string]interface{}{
+			"error":         err.Error(),
+			"server_url":    serverURL,
+			"decision_name": learningCtx.DecisionName,
+		})
+		return routerLearningDecision{}, false
+	}
+
+	requestCtx := context.Background()
+	if input.ctx != nil && input.ctx.TraceContext != nil {
+		requestCtx = input.ctx.TraceContext
+	}
+
+	client := selection.NewLLMRouterClient(serverURL)
+	response, err := client.Route(requestCtx, query)
+	if err != nil {
+		logging.ComponentWarnEvent("extproc", "router_learning_llm_router_call_failed", map[string]interface{}{
+			"error":         err.Error(),
+			"server_url":    serverURL,
+			"decision_name": learningCtx.DecisionName,
+		})
+		return routerLearningDecision{}, false
+	}
+
+	ref := modelRefForName(learningCtx.CandidateModels, response.SelectedModel)
+	if ref == nil {
+		logging.ComponentWarnEvent("extproc", "router_learning_llm_router_selected_invalid_model", map[string]interface{}{
+			"selected_model": response.SelectedModel,
+			"server_url":     serverURL,
+			"decision_name":  learningCtx.DecisionName,
+		})
+		return routerLearningDecision{}, false
+	}
+
+	baseResult := input.baseResult
+	result := cloneSelectionResult(baseResult)
+	if result == nil {
+		result = &selection.SelectionResult{}
+	}
+	result.SelectedModel = ref.Model
+	result.LoRAName = ref.LoRAName
+	result.Method = baseSelectionMethod(baseResult)
+	result.Tier = baseSelectionTier(baseResult)
+	result.Reasoning = "router_learning adaptation: llm_router"
+	if result.AllScores == nil {
+		result.AllScores = map[string]float64{}
+	}
+
+	policy := adaptationPolicy(mode, routerLearningActionProposeSwitch, "llm_router_selected", &routerLearningAdaptationDiagnostics{
+		candidateSet:  candidateSet,
+		strategy:      "llm_router",
+		baseModel:     selectedModelName(baseResult),
+		proposalModel: result.SelectedModel,
+		decision:      strings.TrimSpace(learningCtx.DecisionName),
+		decisionTier:  decisionTier(input.ctx),
+	})
+
+	if mode == config.DecisionAdaptationModeObserve || result.SelectedModel == selectedModelName(baseResult) {
+		policy.Action = routerLearningActionObserve
+		policy.Reason = "llm_router_observe"
+		return baseAdaptationDecision(input, policy), true
+	}
+
+	return routerLearningDecision{
+		selectionContext: learningCtx,
+		selectionResult:  result,
+		selectedModelRef: ref,
+		changesModel:     learningChangesModel(baseResult, result),
+		policy:           policy,
+	}, true
+}
+
+func newRouterLearningLLMRouterPromptRenderer(
+	r *OpenAIRouter,
+	cfg config.RouterLearningAdaptationConfig,
+) (*selection.LLMRouterPromptRenderer, error) {
+	rendererCfg := &selection.RLDrivenConfig{
+		EnableLLMRouting:           true,
+		LLMRouterServerURL:         strings.TrimSpace(cfg.LLMRouterServerURL),
+		LLMRouterQueryTemplate:     cfg.LLMRouterQueryTemplate,
+		LLMRouterQueryTemplateFile: resolveRouterLearningTemplatePath(r, cfg.LLMRouterQueryTemplateFile),
+	}
+	return selection.NewLLMRouterPromptRenderer(rendererCfg)
+}
+
+func resolveRouterLearningTemplatePath(r *OpenAIRouter, templatePath string) string {
+	trimmed := strings.TrimSpace(templatePath)
+	if trimmed == "" {
+		return ""
+	}
+	if filepath.IsAbs(trimmed) {
+		return trimmed
+	}
+	if r == nil || r.Config == nil || strings.TrimSpace(r.Config.ConfigBaseDir) == "" {
+		return trimmed
+	}
+	return filepath.Clean(filepath.Join(r.Config.ConfigBaseDir, trimmed))
+}
+
+func cloneSelectionResult(result *selection.SelectionResult) *selection.SelectionResult {
+	if result == nil {
+		return nil
+	}
+	clone := *result
+	clone.AllScores = cloneSelectionScores(result.AllScores)
+	return &clone
+}
+
+func baseSelectionMethod(result *selection.SelectionResult) selection.SelectionMethod {
+	if result == nil {
+		return selection.MethodStatic
+	}
+	return result.Method
+}
+
+func baseSelectionTier(result *selection.SelectionResult) selection.AlgorithmTier {
+	if result == nil {
+		return selection.TierSupported
+	}
+	return result.Tier
 }
 
 func baseAdaptationDecision(input routerLearningInput, policy routerLearningPolicy) routerLearningDecision {

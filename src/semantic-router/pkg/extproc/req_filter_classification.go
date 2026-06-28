@@ -248,7 +248,7 @@ func firstValidCandidateModelRef(selCtx *selection.SelectionContext) *config.Mod
 // extproc state.
 func (r *OpenAIRouter) buildSelectionContext(
 	modelRefs []config.ModelRef,
-	decisionName string,
+	decision *config.Decision,
 	query string,
 	algorithm *config.AlgorithmConfig,
 	categoryName string,
@@ -259,11 +259,32 @@ func (r *OpenAIRouter) buildSelectionContext(
 	latencyAwareTPOTPercentile, latencyAwareTTFTPercentile := r.getLatencyAwarePercentiles(algorithm)
 
 	sessionID, userID, conversationHistory := r.extractSessionContext(reqCtx)
+	decisionName := ""
+	decisionDescription := ""
+	if decision != nil {
+		decisionName = decision.Name
+		decisionDescription = decision.Description
+	}
+
+	var matchedDomains []string
+	var matchedKeywords []string
+	requestID := ""
+	if reqCtx != nil {
+		matchedDomains = append([]string(nil), reqCtx.VSRMatchedDomains...)
+		matchedKeywords = append([]string(nil), reqCtx.VSRMatchedKeywords...)
+		requestID = reqCtx.RequestID
+	}
+	labels := deriveSelectionLabels(reqCtx)
 
 	return &selection.SelectionContext{
 		Query:                      query,
 		DecisionName:               decisionName,
+		DecisionDescription:        decisionDescription,
 		CategoryName:               categoryName,
+		MatchedDomains:             matchedDomains,
+		MatchedKeywords:            matchedKeywords,
+		Labels:                     labels,
+		Tags:                       labels,
 		CandidateModels:            modelRefs,
 		CandidateIterations:        candidateIterations,
 		CostWeight:                 costWeight,
@@ -271,11 +292,54 @@ func (r *OpenAIRouter) buildSelectionContext(
 		LatencyAwareTPOTPercentile: latencyAwareTPOTPercentile,
 		LatencyAwareTTFTPercentile: latencyAwareTTFTPercentile,
 		UserID:                     userID,
+		RequestID:                  requestID,
 		SessionID:                  sessionID,
 		AgenticSession:             r.buildAgenticSessionContext(reqCtx, modelRefs, sessionID, userID),
 		ConversationHistory:        conversationHistory,
 		CacheAffinityCtx:           r.buildCacheAffinityContext(reqCtx, modelRefs),
 	}
+}
+
+func deriveSelectionLabels(reqCtx *RequestContext) []string {
+	if reqCtx == nil {
+		return nil
+	}
+
+	seen := make(map[string]struct{})
+	labels := make([]string, 0, 16)
+	add := func(prefix string, values []string) {
+		for _, value := range values {
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+			label := prefix + value
+			if _, ok := seen[label]; ok {
+				continue
+			}
+			seen[label] = struct{}{}
+			labels = append(labels, label)
+		}
+	}
+
+	add("domain:", reqCtx.VSRMatchedDomains)
+	add("keyword:", reqCtx.VSRMatchedKeywords)
+	add("context:", reqCtx.VSRMatchedContext)
+	add("structure:", reqCtx.VSRMatchedStructure)
+	add("complexity:", reqCtx.VSRMatchedComplexity)
+	add("modality:", reqCtx.VSRMatchedModality)
+	add("authz:", reqCtx.VSRMatchedAuthz)
+	add("jailbreak:", reqCtx.VSRMatchedJailbreak)
+	add("pii:", reqCtx.VSRMatchedPII)
+	add("kb:", reqCtx.VSRMatchedKB)
+	add("conversation:", reqCtx.VSRMatchedConversation)
+	add("event:", reqCtx.VSRMatchedEvent)
+	add("preference:", reqCtx.VSRMatchedPreference)
+	add("language:", reqCtx.VSRMatchedLanguage)
+	add("fact_check:", reqCtx.VSRMatchedFactCheck)
+	add("projection:", reqCtx.VSRMatchedProjection)
+
+	return labels
 }
 
 func (r *OpenAIRouter) buildAgenticSessionContext(

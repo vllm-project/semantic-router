@@ -70,7 +70,7 @@ class MockVLLMHandler(BaseHTTPRequestHandler):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8002)
-    parser.add_argument("--host", type=str, default="127.0.0.1")
+    parser.add_argument("--host", type=str, default="0.0.0.0")
     args = parser.parse_args()
 
     server = HTTPServer((args.host, args.port), MockVLLMHandler)
