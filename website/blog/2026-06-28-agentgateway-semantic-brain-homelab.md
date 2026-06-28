@@ -1,9 +1,9 @@
 ---
 slug: agentgateway-semantic-brain-homelab
 title: "Giving AgentGateway a Semantic Brain with vLLM Semantic Router"
-description: A homelab case study on replacing keyword-based model routing with vLLM Semantic Router and AgentGateway ExtProc — two YAML files, 1ms routing, and fewer misroutes.
-authors: [anupsharma, aayushsaini101]
-tags: [agentgateway, homelab, routing, extproc, community, vllm, semantic-router]
+description: Replace keyword-based model routing with vLLM Semantic Router and AgentGateway ExtProc — two YAML files, 1ms routing, and fewer misroutes across local and cloud backends.
+authors: [aayushsaini101,anupsharma]
+tags: [agentgateway, routing, extproc, community, vllm, semantic-router, agents]
 image: /img/agentgateway-semantic-brain-homelab/hero.png
 ---
 
@@ -13,17 +13,15 @@ image: /img/agentgateway-semantic-brain-homelab/hero.png
 
 </div>
 
-*Community story cross-posted from [Anup Sharma's Homelab AI Series on DEV](https://dev.to/anup_sharma_86fa94612fe3c/giving-agentgateway-a-semantic-brain-with-vllm-semantic-router-inside-my-homelab-542f). Part 3 of the series — [Part 1](https://dev.to/anup_sharma_86fa94612fe3c) | [Part 2](https://dev.to/anup_sharma_86fa94612fe3c).*
+Agent systems that span multiple models — a local endpoint for coding, a frontier cloud model for deep reasoning, and a fast general-purpose model for everyday tasks — all face the same routing question: **how should each request be directed to the right backend?**
 
-Running a personal AI agent across multiple models — a local Ollama instance for coding, a frontier cloud model for deep reasoning, and a fast general-purpose model for everyday tasks — eventually surfaces the same question: **how should each request be routed to the right model?**
-
-In this homelab deployment, the Pi agent routed traffic through a 100-line Python script for months. It worked until it did not. This post documents what changed when that script was replaced with **vLLM Semantic Router** running as an **Envoy ExtProc sidecar** inside [AgentGateway](https://agentgateway.dev/).
+Many deployments start with a lightweight Python proxy or keyword matcher in front of the gateway. That approach works at small scale, but misroutes grow quickly as traffic, languages, and task types diversify. This post shows how **vLLM Semantic Router** running as an **Envoy ExtProc sidecar** inside [AgentGateway](https://agentgateway.dev/) replaces that pattern with semantic, config-driven routing.
 
 <!-- truncate -->
 
 ## The Problem: Keyword Routing Does Not Scale
 
-In Part 1 of the series, Anup Sharma built Pi — a personal AI agent that runs 24/7 from a Mac Mini. AgentGateway sat in front of three backends:
+A typical multi-model agent gateway fronts three backends:
 
 | Backend | Model | Role |
 | --- | --- | --- |
@@ -31,7 +29,7 @@ In Part 1 of the series, Anup Sharma built Pi — a personal AI agent that runs 
 | OpenAI | `gpt-4o` | Deep reasoning |
 | Google | `gemini-2.5-flash` | Fast general tasks |
 
-The routing logic was a simple keyword matcher:
+The routing layer was a simple keyword matcher:
 
 ```python
 # router.py — keyword-based routing
@@ -48,7 +46,7 @@ else:
     intent = "simple"
 ```
 
-After two weeks of daily use, the rough numbers looked like this:
+After two weeks of sustained traffic, the rough numbers looked like this:
 
 | Metric | With Python Router |
 | --- | --- |
@@ -57,48 +55,29 @@ After two weeks of daily use, the rough numbers looked like this:
 | Routing latency (Python proxy hop) | ~45ms |
 | Keyword list maintenance | Manual, weekly tweaks |
 
-Eighteen percent misroutes is not just wasted spend — it produces worse answers. When Pi's cron jobs sent "summarize this week's calendar and suggest optimizations" to the 7B local model instead of Gemini or GPT-4o, the output was noticeably worse. Mixed-language prompts and domain surprises (recipe research, sourdough hydration ratios) silently fell through to the wrong lane.
+Eighteen percent misroutes is not just wasted spend — it produces worse answers. Scheduled agent jobs that sent "summarize this week's calendar and suggest optimizations" to the 7B local model instead of Gemini or GPT-4o returned noticeably weaker output. Mixed-language prompts and unanticipated domains silently fell through to the wrong lane.
 
-The setup needed a routing layer that **understood** the prompt, not just scanned it for keywords.
+The architecture needed a routing layer that **understood** the prompt, not just scanned it for keywords.
 
 ## Enter vLLM Semantic Router + AgentGateway
 
-Through discussions with AgentGateway maintainers Keith Mattix and John Howard, the homelab adopted first-class ExtProc integration with vLLM Semantic Router. The architecture is straightforward.
+AgentGateway maintainers Keith Mattix and John Howard helped shape first-class ExtProc integration with vLLM Semantic Router. The resulting architecture is straightforward.
 
 Instead of a Python reverse proxy sitting in front of the gateway, Semantic Router runs as an **Envoy ExtProc sidecar**. AgentGateway pauses the request, sends the HTTP body to the SR gRPC endpoint, receives a header mutation (`x-selected-model: qwen-coder`), and resumes routing. Zero proxy hops. Zero Python processes. Just gRPC-native intelligence inside the gateway's own request lifecycle.
 
 Semantic Router uses an embedded **mmBERT** model (a 2D Matryoshka embedding model, ~130MB) to classify every prompt and compare it against **model descriptions defined in YAML**. No keyword lists. No regex. Actual embeddings.
 
-```text
-┌─────────────────────────────────────────────────────┐
-│                  Client (Pi Agent)                   │
-│             POST /v1/chat/completions                │
-│                  model: "MoM"                        │
-└────────────────────────┬────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────┐
-│              AgentGateway (:3000)                     │
-│                                                       │
-│  1. Receive request                                   │
-│  2. Pause → send body to ExtProc (gRPC :50051)       │
-│  3. SR analyzes prompt with mmBERT embeddings         │
-│  4. SR returns header: x-selected-model: qwen-coder  │
-│  5. Resume → match route by header → forward          │
-└──────┬──────────────┬──────────────┬────────────────┘
-       │              │              │
-       ▼              ▼              ▼
-   ┌────────┐   ┌──────────┐   ┌──────────┐
-   │ Ollama  │   │ OpenAI   │   │ Gemini   │
-   │ :11434  │   │ Cloud    │   │ Cloud    │
-   └────────┘   └──────────┘   └──────────┘
-```
+<div align="center">
+
+![AgentGateway request flow with vLLM Semantic Router ExtProc sidecar and multi-backend routing](/img/agentgateway-semantic-brain-homelab/architecture-flow.png)
+
+</div>
 
 For Kubernetes deployments, the same pattern is documented in the [Install with agentgateway](/docs/installation/k8s/agentgateway) guide.
 
 ## The Setup: Two YAML Files, No Code
 
-The entire homelab setup is defined in two config files.
+The full integration is defined in two config files.
 
 ### 1. Semantic Router config (`config.yaml`)
 
@@ -184,7 +163,7 @@ routing:
 
 The key insight: each model is described in natural language, and Semantic Router uses those descriptions as semantic anchors. When a new prompt arrives, the router embeds it and compares it against these descriptions using cosine similarity. The closest match wins.
 
-### 2. AgentGateway config (`homelab_config.yaml`)
+### 2. AgentGateway config (`agentgateway_config.yaml`)
 
 This tells AgentGateway to call Semantic Router as an ExtProc sidecar and route based on the header it sets:
 
@@ -262,11 +241,11 @@ binds:
 
 Notice the separation of concerns: **Semantic Router never touches API keys**. It classifies the prompt and mutates a header. AgentGateway owns downstream auth. That is exactly how production gateways are designed — routing intelligence decoupled from security posture.
 
-The `failureMode: failOpen` setting means if the SR container crashes or restarts, AgentGateway falls through to the default Gemini route. During SR container restarts, Pi's requests still get answered without a single error.
+The `failureMode: failOpen` setting means if the SR container crashes or restarts, AgentGateway falls through to the default Gemini route. During SR container restarts, client requests still get answered without interruption.
 
 ## ARM64 on Apple Silicon: Two Bugs, Two PRs
 
-The homelab runs on an Apple Silicon Mac Mini. Everything installed fine, the SR container started, and then:
+On ARM64 hosts (including Apple Silicon), the SR container may start while embeddings remain unavailable:
 
 ```json
 {
@@ -346,7 +325,7 @@ info  request
   duration=22537ms
 ```
 
-One millisecond of routing overhead. The rest is Ollama generation time.
+One millisecond of routing overhead. The rest is upstream generation time.
 
 On container boot, the full pipeline appears in the logs:
 
@@ -358,9 +337,9 @@ On container boot, the full pipeline appears in the logs:
  "model_selection":true,"extproc_port":50051,"decisions":"MoM"}
 ```
 
-Fourteen selection algorithms are registered out of the box — multi-factor, ELO, RL-driven, hybrid, latency-aware, session-aware, KNN, SVM, K-means, and more. This deployment uses `multi_factor` with cost-heavy weighting, but switching algorithms is a single YAML change.
+Fourteen selection algorithms are registered out of the box — multi-factor, ELO, RL-driven, hybrid, latency-aware, session-aware, KNN, SVM, K-means, and more. The reference configuration uses `multi_factor` with cost-heavy weighting, but switching algorithms is a single YAML change.
 
-## The Numbers After Two Weeks
+## Measured Results
 
 | Metric | Python Router | vLLM Semantic Router |
 | --- | --- | --- |
@@ -372,11 +351,11 @@ Fourteen selection algorithms are registered out of the box — multi-factor, EL
 | Language support | English keywords only | Multi-language (embedding-based) |
 | Config | 100 lines of Python | 2 YAML files |
 
-The cost savings come from fewer misroutes. When "explain the async/await pattern in Rust" correctly goes to local Ollama instead of GPT-4o, that is a $0.003 request instead of $0.03. Across hundreds of daily requests from Pi's cron jobs and direct usage, the difference adds up quickly.
+The cost savings come from fewer misroutes. When "explain the async/await pattern in Rust" correctly goes to local Ollama instead of GPT-4o, that is a $0.003 request instead of $0.03. Across hundreds of daily agent requests, the difference adds up quickly.
 
 ## Why Agent Builders Should Care
 
-Whether the deployment is a personal Pi on a Mac Mini or a production fleet in Kubernetes, agents benefit from a routing layer that understands prompts:
+Whether the deployment runs on a single host or a production fleet in Kubernetes, agents benefit from a routing layer that understands prompts:
 
 1. **Cost control is the primary agent problem.** Agents generate a lot of requests. Without intelligent routing, every request goes to the most expensive model. Semantic Router's `multi_factor` algorithm explicitly weighs cost, latency, and quality.
 
@@ -388,19 +367,19 @@ Whether the deployment is a personal Pi on a Mac Mini or a production fleet in K
 
 ## What's Next
 
-With routing intelligence in place, the homelab's next focus areas are:
+Common follow-on work for this architecture includes:
 
-- **Observability** — wiring Jaeger and Prometheus to trace every request from Pi → AgentGateway → Semantic Router → upstream LLM. AgentGateway already emits OpenTelemetry-compatible spans.
+- **Observability** — wiring Jaeger and Prometheus to trace every request from client → AgentGateway → Semantic Router → upstream LLM. AgentGateway already emits OpenTelemetry-compatible spans.
 - **More models** — adding specialized models (medical, legal) with just a new model card in YAML. Semantic Router figures out when to use them.
 
-For homelab AI setups — or agent fleets at any scale — the combination of AgentGateway and vLLM Semantic Router turns a keyword-based proxy into a proper ML-powered routing plane, running on a Mac Mini in a living room.
+AgentGateway plus vLLM Semantic Router turns a keyword-based proxy into an ML-powered routing plane — with the same ExtProc pattern usable from a single-node setup to a multi-model Kubernetes deployment.
 
 ## Get Started
 
 - [Install with agentgateway](/docs/installation/k8s/agentgateway) — Kubernetes integration guide
 - [Gateway API Inference Extension with agentgateway](/docs/installation/k8s/gateway-api-inference-extension) — route to InferencePools with header-based selection
 - [Multi-factor selection algorithm](/docs/tutorials/algorithm/selection/multi-factor) — cost, latency, and quality weighting
-- [Original DEV community post](https://dev.to/anup_sharma_86fa94612fe3c/giving-agentgateway-a-semantic-brain-with-vllm-semantic-router-inside-my-homelab-542f) — full homelab series with Parts 1–3
+- [Community write-up on DEV](https://dev.to/anup_sharma_86fa94612fe3c/giving-agentgateway-a-semantic-brain-with-vllm-semantic-router-inside-my-homelab-542f) — extended narrative by Anup Sharma
 
 ---
 
