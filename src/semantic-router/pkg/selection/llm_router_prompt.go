@@ -76,20 +76,27 @@ type LLMRouterPromptRenderer struct {
 // file or an inline YAML string. When both are empty, it falls back to the
 // repository default template.
 func NewLLMRouterPromptRenderer(cfg *RLDrivenConfig) (*LLMRouterPromptRenderer, error) {
-	source := defaultLLMRouterQueryTemplate
-
-	if cfg != nil {
-		if filePath := strings.TrimSpace(cfg.LLMRouterQueryTemplateFile); filePath != "" {
-			templateBytes, err := os.ReadFile(filePath)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read llm router query template file %q: %w", filePath, err)
-			}
-			source = string(templateBytes)
-		} else if inline := strings.TrimSpace(cfg.LLMRouterQueryTemplate); inline != "" {
-			source = inline
-		}
+	if cfg == nil {
+		return newLLMRouterPromptRenderer(defaultLLMRouterQueryTemplate)
 	}
 
+	if filePath := strings.TrimSpace(cfg.LLMRouterQueryTemplateFile); filePath != "" {
+		templateBytes, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read llm router query template file %q: %w", filePath, err)
+		}
+		return newLLMRouterPromptRenderer(string(templateBytes))
+	}
+
+	source := defaultLLMRouterQueryTemplate
+	if inline := strings.TrimSpace(cfg.LLMRouterQueryTemplate); inline != "" {
+		source = inline
+	}
+
+	return newLLMRouterPromptRenderer(source)
+}
+
+func newLLMRouterPromptRenderer(source string) (*LLMRouterPromptRenderer, error) {
 	tmpl, err := template.New("llm_router_query").Funcs(template.FuncMap{
 		"join": strings.Join,
 	}).Option("missingkey=zero").Parse(source)
