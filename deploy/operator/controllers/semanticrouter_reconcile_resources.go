@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -236,64 +237,59 @@ func (r *SemanticRouterReconciler) reconcileIngress(ctx context.Context, sr *vll
 	return nil
 }
 
-func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) error {
+func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, baseSR *vllmv1alpha1.SemanticRouter) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		current := &vllmv1alpha1.SemanticRouter{}
-		if err := r.Get(ctx, types.NamespacedName{Name: sr.Name, Namespace: sr.Namespace}, current); err != nil {
-			return err
-		}
+		sr.Status.ObservedGeneration = sr.Generation
 
 		deployment := &appsv1.Deployment{}
 		err := r.Get(ctx, types.NamespacedName{Name: sr.Name, Namespace: sr.Namespace}, deployment)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				current.Status.Replicas = 0
-				current.Status.ReadyReplicas = 0
-				current.Status.ObservedGeneration = current.Generation
-				current.Status.Phase = "Pending"
-				meta.SetStatusCondition(&current.Status.Conditions, metav1.Condition{
+				sr.Status.Replicas = 0
+				sr.Status.ReadyReplicas = 0
+				sr.Status.Phase = "Pending"
+				meta.SetStatusCondition(&sr.Status.Conditions, metav1.Condition{
 					Type:    typeAvailableSemanticRouter,
 					Status:  metav1.ConditionFalse,
 					Reason:  "DeploymentNotFound",
 					Message: "Deployment has not been created yet",
 				})
-				return r.Status().Update(ctx, current)
+				return r.Status().Patch(ctx, sr, client.MergeFrom(baseSR))
 			}
 			return err
 		}
 
-		current.Status.Replicas = deployment.Status.Replicas
-		current.Status.ReadyReplicas = deployment.Status.ReadyReplicas
-		current.Status.ObservedGeneration = current.Generation
+		sr.Status.Replicas = deployment.Status.Replicas
+		sr.Status.ReadyReplicas = deployment.Status.ReadyReplicas
 
 		if deployment.Status.ReadyReplicas == 0 {
-			current.Status.Phase = "Pending"
-			meta.SetStatusCondition(&current.Status.Conditions, metav1.Condition{
+			sr.Status.Phase = "Pending"
+			meta.SetStatusCondition(&sr.Status.Conditions, metav1.Condition{
 				Type:    typeAvailableSemanticRouter,
 				Status:  metav1.ConditionFalse,
 				Reason:  "Pending",
 				Message: "No replicas are ready",
 			})
 		} else if deployment.Status.ReadyReplicas < deployment.Status.Replicas {
-			current.Status.Phase = "Progressing"
-			meta.SetStatusCondition(&current.Status.Conditions, metav1.Condition{
+			sr.Status.Phase = "Progressing"
+			meta.SetStatusCondition(&sr.Status.Conditions, metav1.Condition{
 				Type:    typeProgressingSemanticRouter,
 				Status:  metav1.ConditionTrue,
 				Reason:  "Progressing",
 				Message: fmt.Sprintf("%d/%d replicas ready", deployment.Status.ReadyReplicas, deployment.Status.Replicas),
 			})
 		} else {
-			current.Status.Phase = "Running"
-			meta.SetStatusCondition(&current.Status.Conditions, metav1.Condition{
+			sr.Status.Phase = "Running"
+			meta.SetStatusCondition(&sr.Status.Conditions, metav1.Condition{
 				Type:    typeAvailableSemanticRouter,
 				Status:  metav1.ConditionTrue,
 				Reason:  "AllReplicasReady",
 				Message: "All replicas are ready",
 			})
-			meta.RemoveStatusCondition(&current.Status.Conditions, typeProgressingSemanticRouter)
+			meta.RemoveStatusCondition(&sr.Status.Conditions, typeProgressingSemanticRouter)
 		}
 
-		return r.Status().Update(ctx, current)
+		return r.Status().Patch(ctx, sr, client.MergeFrom(baseSR))
 	})
 }
 
