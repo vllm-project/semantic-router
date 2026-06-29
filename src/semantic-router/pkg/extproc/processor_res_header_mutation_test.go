@@ -15,7 +15,10 @@ import (
 )
 
 func TestBuildResponseHeaderMutation_IncludesExtendedMatchedSignalHeaders(t *testing.T) {
+	// Matched signal headers are demoted to the debug surface (#2205), so the
+	// request opts into x-vsr-debug to exercise them.
 	ctx := &RequestContext{
+		Headers:              map[string]string{headers.VSRDebug: "true"},
 		VSRMatchedKeywords:   []string{"keyword:math"},
 		VSRMatchedEmbeddings: []string{"embedding:math"},
 		VSRMatchedDomains:    []string{"domain:math"},
@@ -46,7 +49,11 @@ func TestBuildResponseHeaderMutation_IncludesExtendedMatchedSignalHeaders(t *tes
 }
 
 func TestBuildResponseHeaderMutation_EmitsZeroDecisionConfidence(t *testing.T) {
+	// The decision/confidence/model facts ride on the default surface; the
+	// session phase and context-token count are demoted to x-vsr-debug (#2205),
+	// so the request opts into debug to exercise all five fields together.
 	ctx := &RequestContext{
+		Headers:                       map[string]string{headers.VSRDebug: "true"},
 		VSRSelectedDecisionName:       "agentic_routing",
 		VSRSelectedDecisionConfidence: 0,
 		VSRSelectedModel:              "qwen-small",
@@ -165,6 +172,7 @@ func TestBuildResponseHeaderMutation_NilContextReturnsNil(t *testing.T) {
 
 func TestBuildResponseHeaderMutation_EmitsRetentionDirectiveHeaders(t *testing.T) {
 	ctx := &RequestContext{
+		Headers:                 map[string]string{headers.VSRDebug: "true"},
 		VSRSelectedDecisionName: "agentic_routing",
 		VSRSelectedModel:        "qwen-small",
 		EmittedRetention: &config.RetentionDirective{
@@ -186,6 +194,7 @@ func TestBuildResponseHeaderMutation_EmitsRetentionDirectiveHeaders(t *testing.T
 func TestBuildResponseHeaderMutation_OmitsUnsetRetentionHeaders(t *testing.T) {
 	// Tri-state: only fields the directive explicitly set are emitted.
 	ctx := &RequestContext{
+		Headers:                 map[string]string{headers.VSRDebug: "true"},
 		VSRSelectedDecisionName: "agentic_routing",
 		VSRSelectedModel:        "qwen-small",
 		EmittedRetention:        &config.RetentionDirective{PreferPrefixRetention: boolPtr(true)},
@@ -207,6 +216,7 @@ func TestBuildResponseHeaderMutation_EmitsExplicitZeroTTLTurns(t *testing.T) {
 	// are rejected). Regression guard against the old "*TTLTurns > 0" gate that
 	// silently dropped the header for an explicit zero.
 	ctx := &RequestContext{
+		Headers:                 map[string]string{headers.VSRDebug: "true"},
 		VSRSelectedDecisionName: "agentic_routing",
 		VSRSelectedModel:        "qwen-small",
 		EmittedRetention:        &config.RetentionDirective{TTLTurns: intPtr(0)},
@@ -224,6 +234,7 @@ func TestBuildResponseHeaderMutation_EmitsExplicitFalseRetentionBools(t *testing
 	// set bool field of value false must still be emitted as "false" (not
 	// suppressed), so the wire contract is symmetric across every field.
 	ctx := &RequestContext{
+		Headers:                 map[string]string{headers.VSRDebug: "true"},
 		VSRSelectedDecisionName: "agentic_routing",
 		VSRSelectedModel:        "qwen-small",
 		EmittedRetention: &config.RetentionDirective{
@@ -371,7 +382,7 @@ func TestBuildResponseHeaderMutation_EmitsWarningsAlongsideStandardHeaders(t *te
 				Severity: ir.WarningSeverityLossy,
 			}},
 		},
-		VSRSelectedCategory: "math",
+		VSRSelectedDecisionName: "math_decision",
 	}
 
 	mutation := buildResponseHeaderMutation(ctx, true)
@@ -384,11 +395,16 @@ func TestBuildResponseHeaderMutation_EmitsWarningsAlongsideStandardHeaders(t *te
 		"lossy;top_k_drop_on_openai_backend;top_k",
 		headerMap[headers.VSRProtocolWarnings],
 	)
-	assert.Equal(t, "math", headerMap[headers.VSRSelectedCategory])
+	// The warnings ride alongside the default-surface routing facts (#2205).
+	assert.Equal(t, "math_decision", headerMap[headers.VSRSelectedDecision])
 }
 
 func TestBuildResponseHeaderMutation_EmitsSplitRouterLearningHeaders(t *testing.T) {
+	// Router Learning headers are part of the intermediate decision detail and
+	// are demoted to the x-vsr-debug surface (#2205), so the request opts into
+	// debug to exercise them.
 	ctx := &RequestContext{
+		Headers: map[string]string{headers.VSRDebug: "true"},
 		VSRLearningPolicy: headerTestLearningPolicy(
 			routerLearningMethodProtection,
 			"apply",
@@ -409,7 +425,9 @@ func TestBuildResponseHeaderMutation_EmitsSplitRouterLearningHeaders(t *testing.
 }
 
 func TestBuildResponseHeaderMutation_EmitsBaselineLearningHeaders(t *testing.T) {
+	// Demoted to the x-vsr-debug surface (#2205), so opt into debug.
 	ctx := &RequestContext{
+		Headers: map[string]string{headers.VSRDebug: "true"},
 		VSRLearningPolicy: headerTestLearningPolicy(
 			routerLearningMethodProtection,
 			"apply",
@@ -430,7 +448,9 @@ func TestBuildResponseHeaderMutation_EmitsBaselineLearningHeaders(t *testing.T) 
 }
 
 func TestBuildResponseHeaderMutation_EmitsNonApplyLearningActionWithoutModeHeader(t *testing.T) {
+	// Demoted to the x-vsr-debug surface (#2205), so opt into debug.
 	ctx := &RequestContext{
+		Headers: map[string]string{headers.VSRDebug: "true"},
 		VSRLearningPolicy: headerTestLearningPolicy(
 			routerLearningMethodProtection,
 			"observe",
@@ -450,7 +470,9 @@ func TestBuildResponseHeaderMutation_EmitsNonApplyLearningActionWithoutModeHeade
 }
 
 func TestBuildResponseHeaderMutation_EmitsMultipleLearningPolicies(t *testing.T) {
+	// Demoted to the x-vsr-debug surface (#2205), so opt into debug.
 	ctx := &RequestContext{
+		Headers: map[string]string{headers.VSRDebug: "true"},
 		VSRLearningPolicies: testLearningPolicies(
 			*headerTestLearningPolicy(
 				routerLearningMethodProtection,
