@@ -2,10 +2,10 @@
 """Simple mock vLLM server for testing keyword classification routing.
 Returns echo-style responses that include routing headers for verification.
 """
+import argparse
 import json
 import time
-import argparse
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 
 class MockVLLMHandler(BaseHTTPRequestHandler):
