@@ -2,6 +2,8 @@ package extproc
 
 import (
 	"fmt"
+	"net/http"
+	"strings"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -55,7 +57,7 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		return nil, err
 	}
 
-	originalModel := fast.Model
+	originalModel := strings.TrimSpace(fast.Model)
 	if ctx.RequestModel == "" {
 		ctx.RequestModel = originalModel
 	}
@@ -139,9 +141,23 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 	case selectedModel != "":
 		return r.handleAutoModelRouting(openAIRequest, originalModel, decisionName, reasoningDecision, selectedModel, ctx, response)
 	default:
-		// Auto model without selection - no routing needed
-		ctx.RequestModel = originalModel
-		return response, nil
+		// Auto model selected no concrete model (e.g. empty or contentless
+		// messages). Fall back to the configured default model instead of
+		// forwarding the unresolved auto-model name, which would reach the
+		// backend without resolvable credentials and surface as a misleading
+		// upstream "401 No api key" rather than a clear client error.
+		if r.Config.DefaultModel != "" {
+			logging.ComponentDebugEvent("extproc", "auto_routing_default_fallback", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"model":      r.Config.DefaultModel,
+			})
+			return r.handleSpecifiedModelRouting(openAIRequest, r.Config.DefaultModel, decisionName, ctx)
+		}
+		logging.ComponentWarnEvent("extproc", "auto_routing_no_selection", map[string]interface{}{
+			"request_id": ctx.RequestID,
+		})
+		metrics.RecordRequestError(originalModel, "no_model_selected")
+		return r.createErrorResponse(http.StatusBadRequest, "unable to route request: no model selected and no default model configured"), nil
 	}
 }
 
@@ -233,6 +249,18 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 		"request_id": ctx.RequestID,
 		"model":      originalModel,
 	})
+
+	// Reject models that are not configured. Without this guard an unknown
+	// model is forwarded with no resolvable backend credential and surfaces as
+	// a misleading upstream "401 No api key" instead of a clear client error.
+	if len(r.Config.GetEndpointsForModel(originalModel)) == 0 {
+		logging.ComponentWarnEvent("extproc", "specified_model_not_found", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"model":      originalModel,
+		})
+		metrics.RecordRequestError(originalModel, "model_not_found")
+		return r.createErrorResponse(http.StatusBadRequest, fmt.Sprintf("model %q is not available", originalModel)), nil
+	}
 
 	// Track VSR decision information for non-auto models
 	ctx.VSRSelectedDecisionName = decisionName

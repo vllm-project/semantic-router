@@ -4,22 +4,26 @@ Tests for CLI algorithm support as required by PR #1196 review.
 Addresses @Xunzhuo's comment: "we should have a detailed test in the CLI PR"
 """
 
+import sys
+from pathlib import Path
+
 import pytest
-from cli.algorithms import (
+from pydantic import ValidationError as PydanticValidationError
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from cli.algorithms import (  # noqa: E402
     AlgorithmConfig,
     AutoMixSelectionConfig,
-    EloSelectionConfig,
     FusionAlgorithmConfig,
-    GMTRouterConfig,
     HybridSelectionConfig,
     MultiFactorSelectionConfig,
     RatingsAlgorithmConfig,
     ReMoMAlgorithmConfig,
-    RLDrivenSelectionConfig,
     RouterDCSelectionConfig,
-    SessionAwareSelectionConfig,
 )
-from pydantic import ValidationError as PydanticValidationError
 
 
 class TestAlgorithmConfigTypes:
@@ -37,7 +41,6 @@ class TestAlgorithmConfigTypes:
         """Test that selection algorithm types are accepted."""
         selection_types = [
             "static",
-            "elo",
             "router_dc",
             "automix",
             "hybrid",
@@ -47,8 +50,6 @@ class TestAlgorithmConfigTypes:
             "mlp",
             "multi_factor",
             "latency_aware",
-            "rl_driven",
-            "gmtrouter",
         ]
 
         for algo_type in selection_types:
@@ -64,37 +65,6 @@ class TestAlgorithmConfigTypes:
         """Test that on_error can be set to 'fail'."""
         config = AlgorithmConfig(type="static", on_error="fail")
         assert config.on_error == "fail"
-
-
-class TestEloSelectionConfig:
-    """Test Elo rating selection configuration."""
-
-    def test_default_values(self):
-        """Test Elo config default values."""
-        config = EloSelectionConfig()
-        assert config.initial_rating == 1500.0
-        assert config.k_factor == 32.0
-        assert config.category_weighted is True
-        assert config.decay_factor == 0.0
-        assert config.min_comparisons == 5
-
-    def test_custom_k_factor(self):
-        """Test Elo config with custom K-factor."""
-        config = EloSelectionConfig(k_factor=64.0)
-        assert config.k_factor == 64.0
-
-    def test_k_factor_validation(self):
-        """Test that K-factor must be within valid range."""
-        with pytest.raises(PydanticValidationError):
-            EloSelectionConfig(k_factor=0.5)  # Below minimum (1)
-
-        with pytest.raises(PydanticValidationError):
-            EloSelectionConfig(k_factor=150)  # Above maximum (100)
-
-    def test_storage_path(self):
-        """Test Elo config with storage path."""
-        config = EloSelectionConfig(storage_path="/tmp/elo_ratings.json")
-        assert config.storage_path == "/tmp/elo_ratings.json"
 
 
 class TestRouterDCSelectionConfig:
@@ -151,7 +121,7 @@ class TestHybridSelectionConfig:
     def test_default_weights(self):
         """Test Hybrid config default weights."""
         config = HybridSelectionConfig()
-        assert config.elo_weight == 0.3
+        assert config.experience_weight == 0.3
         assert config.router_dc_weight == 0.3
         assert config.automix_weight == 0.2
         assert config.cost_weight == 0.2
@@ -159,127 +129,19 @@ class TestHybridSelectionConfig:
     def test_custom_weights(self):
         """Test Hybrid config with custom weights."""
         config = HybridSelectionConfig(
-            elo_weight=0.5,
+            experience_weight=0.5,
             router_dc_weight=0.3,
             automix_weight=0.1,
             cost_weight=0.1,
         )
         # Weights should sum to 1.0
         total = (
-            config.elo_weight
+            config.experience_weight
             + config.router_dc_weight
             + config.automix_weight
             + config.cost_weight
         )
         assert abs(total - 1.0) < 0.01
-
-
-class TestGMTRouterConfig:
-    """Test GMTRouter (GNN-based) selection configuration."""
-
-    def test_default_values(self):
-        """Test GMTRouter config default values."""
-        config = GMTRouterConfig()
-        assert config.enable_personalization is True
-        assert config.history_sample_size == 5
-        assert config.embedding_dimension == 768
-        assert config.num_gnn_layers == 2
-        assert config.attention_heads == 8
-        assert config.min_interactions_for_personalization == 3
-        assert config.max_interactions_per_user == 100
-        assert config.feedback_types == ["rating", "ranking"]
-        assert config.num_layers == 2
-        assert config.hidden_dim == 64
-        assert config.num_heads == 4
-        assert config.learn_preferences is True
-
-    def test_num_layers_validation(self):
-        """Test that num_layers is within valid range."""
-        with pytest.raises(PydanticValidationError):
-            GMTRouterConfig(num_layers=0)  # Must be >= 1
-
-        with pytest.raises(PydanticValidationError):
-            GMTRouterConfig(num_layers=10)  # Must be <= 5
-
-    def test_model_path(self):
-        """Test GMTRouter config with model path."""
-        config = GMTRouterConfig(
-            model_path="/models/gmtrouter.pt",
-            storage_path="/var/lib/vsr/gmt_graph.json",
-            feedback_types=["rating", "ranking", "response"],
-        )
-        assert config.model_path == "/models/gmtrouter.pt"
-        assert config.storage_path == "/var/lib/vsr/gmt_graph.json"
-        assert config.feedback_types == ["rating", "ranking", "response"]
-
-
-class TestRLDrivenSelectionConfig:
-    """Test canonical rl_driven selection configuration."""
-
-    def test_default_values(self):
-        """Test RL-driven config default values."""
-        config = RLDrivenSelectionConfig()
-        assert config.exploration_rate == 0.3
-        assert config.exploration_decay == 0.99
-        assert config.min_exploration == 0.05
-        assert config.use_thompson_sampling is True
-        assert config.enable_personalization is True
-        assert config.personalization_blend == 0.7
-        assert config.session_context_weight == 0.3
-        assert config.implicit_feedback_weight == 0.5
-        assert config.cost_awareness is True
-        assert config.cost_weight == 0.2
-        assert config.auto_save_interval == "30s"
-        assert config.use_router_r1_rewards is True
-        assert config.cost_reward_alpha == 0.3
-        assert config.format_reward_penalty == -1.0
-
-    def test_storage_and_router_r1_fields(self):
-        """Test persistence and Router-R1 fields."""
-        config = RLDrivenSelectionConfig(
-            storage_path="/var/lib/vsr/rl_state.json",
-            auto_save_interval="45s",
-            enable_llm_routing=True,
-            router_r1_server_url="http://router-r1:8080",
-            llm_routing_fallback="error",
-            enable_multi_round_aggregation=True,
-            max_aggregation_rounds=4,
-        )
-        assert config.storage_path == "/var/lib/vsr/rl_state.json"
-        assert config.auto_save_interval == "45s"
-        assert config.enable_llm_routing is True
-        assert config.router_r1_server_url == "http://router-r1:8080"
-        assert config.llm_routing_fallback == "error"
-        assert config.enable_multi_round_aggregation is True
-        assert config.max_aggregation_rounds == 4
-
-
-class TestSessionAwareSelectionConfig:
-    """Test session-aware selection configuration."""
-
-    def test_base_method_field(self):
-        """Test that session-aware uses base_method rather than fallback_method."""
-        config = SessionAwareSelectionConfig(base_method="static")
-        assert config.base_method == "static"
-
-        with pytest.raises(PydanticValidationError):
-            SessionAwareSelectionConfig(fallback_method="static")
-
-    def test_cache_cost_multiplier_is_not_inverted(self):
-        """Expensive-model cache pressure must not become weaker than neutral."""
-        config = SessionAwareSelectionConfig(max_cache_cost_multiplier=1.0)
-        assert config.max_cache_cost_multiplier == 1.0
-
-        with pytest.raises(PydanticValidationError):
-            SessionAwareSelectionConfig(max_cache_cost_multiplier=0.5)
-
-    def test_remaining_turn_prior_horizon_is_positive(self):
-        """The remaining-turn prior horizon must be explicit positive depth."""
-        config = SessionAwareSelectionConfig(remaining_turn_prior_horizon=1)
-        assert config.remaining_turn_prior_horizon == 1
-
-        with pytest.raises(PydanticValidationError):
-            SessionAwareSelectionConfig(remaining_turn_prior_horizon=0)
 
 
 class TestMultiFactorSelectionConfig:
@@ -393,25 +255,6 @@ class TestFusionAlgorithmConfig:
 class TestAlgorithmConfigIntegration:
     """Integration tests for AlgorithmConfig with nested configs."""
 
-    def test_elo_algorithm_config(self):
-        """Test AlgorithmConfig with Elo selection."""
-        config = AlgorithmConfig(
-            type="elo",
-            elo=EloSelectionConfig(k_factor=48.0, min_comparisons=10),
-        )
-        assert config.type == "elo"
-        assert config.elo.k_factor == 48.0
-        assert config.elo.min_comparisons == 10
-
-    def test_rl_driven_algorithm_config(self):
-        """Test AlgorithmConfig with canonical RL-driven config."""
-        config = AlgorithmConfig(
-            type="rl_driven",
-            rl_driven=RLDrivenSelectionConfig(storage_path="/tmp/rl.json"),
-        )
-        assert config.type == "rl_driven"
-        assert config.rl_driven.storage_path == "/tmp/rl.json"
-
     def test_ratings_algorithm_config(self):
         """Test AlgorithmConfig with ratings looper config."""
         config = AlgorithmConfig(
@@ -420,16 +263,6 @@ class TestAlgorithmConfigIntegration:
         )
         assert config.type == "ratings"
         assert config.ratings.max_concurrent == 3
-
-    def test_gmtrouter_algorithm_config(self):
-        """Test AlgorithmConfig with GMTRouter."""
-        config = AlgorithmConfig(
-            type="gmtrouter",
-            gmtrouter=GMTRouterConfig(num_layers=3, hidden_dim=128),
-        )
-        assert config.type == "gmtrouter"
-        assert config.gmtrouter.num_layers == 3
-        assert config.gmtrouter.hidden_dim == 128
 
     def test_multi_factor_algorithm_config(self):
         """Test AlgorithmConfig with multi_factor selection config."""
@@ -442,8 +275,24 @@ class TestAlgorithmConfigIntegration:
         assert config.type == "multi_factor"
         assert config.multi_factor.weights.quality == 0.4
 
+    def test_learning_algorithm_type_specific_blocks_are_rejected(self):
+        """Learning systems live under global.router.learning."""
+        for removed_type, removed_block in {
+            "session_aware": {"base_method": "static"},
+            "elo": {"k_factor": 48.0},
+            "rl_driven": {"storage_path": "/tmp/rl.json"},
+            "gmtrouter": {"num_layers": 3},
+            "bandit": {"strategy": "thompson"},
+            "personalization": {"per_user": True},
+        }.items():
+            with pytest.raises(PydanticValidationError):
+                AlgorithmConfig(
+                    type=removed_type,
+                    **{removed_type: removed_block},
+                )
+
     def test_removed_algorithm_type_specific_blocks_are_rejected(self):
-        """Thompson and Router-R1 are rl_driven modes, not top-level algorithms."""
+        """Thompson and Router-R1 are Router Learning or future execution modes."""
         with pytest.raises(PydanticValidationError):
             AlgorithmConfig(
                 type="thompson",
@@ -487,7 +336,7 @@ class TestAlgorithmConfigIntegration:
         config = AlgorithmConfig(
             type="hybrid",
             hybrid=HybridSelectionConfig(
-                elo_weight=0.4,
+                experience_weight=0.4,
                 router_dc_weight=0.3,
                 automix_weight=0.2,
                 cost_weight=0.1,
@@ -495,7 +344,7 @@ class TestAlgorithmConfigIntegration:
         )
         assert config.type == "hybrid"
         total = (
-            config.hybrid.elo_weight
+            config.hybrid.experience_weight
             + config.hybrid.router_dc_weight
             + config.hybrid.automix_weight
             + config.hybrid.cost_weight

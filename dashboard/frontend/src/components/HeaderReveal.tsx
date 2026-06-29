@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import styles from './HeaderReveal.module.css'
+import { formatLearningHeaderValue, isLearningHeader } from './headerLearningDisplay'
 
 interface HeaderRevealProps {
   headers: Record<string, string>
@@ -111,24 +112,20 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
   },
   // Router Learning headers
   'x-vsr-learning-methods': {
-    label: 'Learning Methods',
+    label: 'Learning',
     description: 'Router Learning methods summarized by this response',
   },
   'x-vsr-learning-actions': {
-    label: 'Learning Actions',
+    label: 'Learning Action',
     description: 'Method-keyed Router Learning actions',
   },
   'x-vsr-learning-scopes': {
-    label: 'Learning Scopes',
+    label: 'Learning Scope',
     description: 'Method-keyed identity scopes used by Router Learning',
   },
   'x-vsr-learning-reasons': {
-    label: 'Learning Reasons',
+    label: 'Learning Reason',
     description: 'Method-keyed compact reasons for Router Learning actions',
-  },
-  'x-vsr-learning-modes': {
-    label: 'Learning Modes',
-    description: 'Method-keyed Router Learning modes',
   },
   // Plugin status headers
   'x-vsr-cache-hit': {
@@ -245,13 +242,16 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
         <div className={styles.sectionItems}>
           {items.map(([key, value]) => {
             const info = HEADER_INFO[key]
+            const displayValue = isLearningHeader(key)
+              ? formatLearningHeaderValue(key, value)
+              : value
             return (
               <div
                 key={key}
                 className={`${styles.headerItem} ${isPrimary ? styles.headerItemPrimary : ''}`}
               >
                 <div className={styles.headerLabel}>{info.label}</div>
-                <div className={styles.headerValue}>{value}</div>
+                <div className={styles.headerValue}>{displayValue}</div>
               </div>
             )
           })}
@@ -263,7 +263,7 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
   return (
     <div className={`${styles.overlay} ${!isVisible ? styles.fadeOut : ''}`}>
       <div className={styles.container}>
-        <div className={styles.title}>Signal Driven Decision</div>
+        <div className={styles.title}>Router Decision</div>
         <div className={styles.sections}>
           {renderSection('RESPONSE', groupedHeaders.response, true)}
           {renderSection('MODEL', groupedHeaders.model, true)}
