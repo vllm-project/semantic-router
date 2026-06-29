@@ -161,7 +161,10 @@ func (r *OpenAIRouter) performCacheLookup(
 			"category":   categoryName,
 			"threshold":  threshold,
 		})
-		response := http.CreateCacheHitResponse(cachedResponse, ctx.ExpectStreamingResponse, categoryName, ctx.VSRSelectedDecisionName, ctx.VSRMatchedKeywords, ctx.VSRCacheSimilarity)
+		// Intermediate cache detail (category, matched keywords, similarity) is
+		// demoted to the x-vsr-debug surface (#2205).
+		cacheCategory, cacheKeywords, cacheSimilarity := cacheDetailForSurface(ctx, categoryName)
+		response := http.CreateCacheHitResponse(cachedResponse, ctx.ExpectStreamingResponse, cacheCategory, ctx.VSRSelectedDecisionName, cacheKeywords, cacheSimilarity)
 		r.updateRouterReplayStatus(ctx, 200, ctx.ExpectStreamingResponse)
 		r.attachRouterReplayResponse(ctx, cachedResponse, true)
 		ctx.TraceContext = spanCtx
@@ -184,4 +187,15 @@ func cacheQueryForContext(ctx *RequestContext) string {
 		return ctx.CacheQuery
 	}
 	return ctx.RequestQuery
+}
+
+// cacheDetailForSurface returns the intermediate cache-hit detail (category,
+// matched keywords, similarity) when the request opted into x-vsr-debug, and
+// empty values otherwise. CreateCacheHitResponse omits the empties, demoting
+// the detail off the lean default surface (#2205).
+func cacheDetailForSurface(ctx *RequestContext, categoryName string) (string, []string, float32) {
+	if !debugHeadersRequested(ctx) {
+		return "", nil, 0
+	}
+	return categoryName, ctx.VSRMatchedKeywords, ctx.VSRCacheSimilarity
 }

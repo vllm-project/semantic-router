@@ -250,7 +250,10 @@ func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
 		Iterations:    2,
 		AlgorithmType: "elo",
 	}
+	// The looper trace, matched signals, category and session phase are demoted
+	// to x-vsr-debug (#2205), so this tracked-headers test opts into debug.
 	reqCtx := &RequestContext{
+		Headers:                       map[string]string{headers.VSRDebug: "true"},
 		VSRMatchedKeywords:            []string{"python"},
 		VSRMatchedEmbeddings:          []string{"coding"},
 		VSRMatchedContext:             []string{"memory"},
@@ -297,6 +300,54 @@ func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
 	assert.Equal(t, "tool_loop", headerMap[headers.VSRSessionPhase])
 	assert.Equal(t, "replay-123", headerMap[headers.RouterReplayID])
 	assert.Equal(t, "42", headerMap[headers.VSRContextTokenCount])
+}
+
+func TestCreateLooperResponseDefaultSurfaceIsLean(t *testing.T) {
+	// Without x-vsr-debug the looper response carries only content-type, the
+	// keystone headers and the final routing facts (#2205). The execution trace,
+	// matched signals, category and session phase are demoted.
+	resp := &looper.Response{
+		Body:          []byte(`{"ok":true}`),
+		ContentType:   "application/json",
+		Model:         "model-b",
+		ModelsUsed:    []string{"model-a", "model-b"},
+		Iterations:    2,
+		AlgorithmType: "elo",
+	}
+	reqCtx := &RequestContext{
+		VSRMatchedKeywords:            []string{"python"},
+		VSRContextTokenCount:          42,
+		VSRSelectedModel:              "model-b",
+		VSRSelectedDecisionName:       "coding",
+		VSRSelectedDecisionConfidence: 0,
+		VSRSelectedCategory:           "programming",
+		RouterReplayID:                "replay-123",
+		VSRLearningPolicies: testLearningPolicies(
+			replayTestProtectionPolicyWithTrace(&selection.SessionPolicyTrace{
+				Phase: "tool_loop",
+			}),
+		),
+	}
+
+	response := (&OpenAIRouter{}).createLooperResponse(resp, reqCtx)
+	headerMap := headerValuesByName(response.GetImmediateResponse().Headers.SetHeaders)
+
+	// content-type, keystone and final routing facts ride on the default surface.
+	assert.Equal(t, "application/json", headerMap["content-type"])
+	assert.Equal(t, headers.SchemaVersionValue, headerMap[headers.VSRSchemaVersion])
+	assert.Equal(t, headers.ResponsePathLooper, headerMap[headers.VSRResponsePath])
+	assert.Equal(t, "model-b", headerMap[headers.VSRSelectedModel])
+	assert.Equal(t, "coding", headerMap[headers.VSRSelectedDecision])
+	assert.Equal(t, "0.0000", headerMap[headers.VSRSelectedConfidence])
+	assert.Equal(t, "replay-123", headerMap[headers.RouterReplayID])
+
+	// The demoted detail headers are absent.
+	assert.NotContains(t, headerMap, headers.VSRLooperModel)
+	assert.NotContains(t, headerMap, headers.VSRLooperIterations)
+	assert.NotContains(t, headerMap, headers.VSRMatchedKeywords)
+	assert.NotContains(t, headerMap, headers.VSRContextTokenCount)
+	assert.NotContains(t, headerMap, headers.VSRSelectedCategory)
+	assert.NotContains(t, headerMap, headers.VSRSessionPhase)
 }
 
 func TestGetReasoningInfoFromDecision(t *testing.T) {
