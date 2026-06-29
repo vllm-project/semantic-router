@@ -96,8 +96,18 @@ var (
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
 		},
 		{
+			name:     "remom",
+			validate: validateReMoMContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
 			name:     "fusion",
 			validate: validateFusionContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
+			name:     "flow",
+			validate: validateFlowContracts,
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
 		},
 		{

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/openai/openai-go"
 	"github.com/stretchr/testify/assert"
@@ -108,6 +109,123 @@ func TestFusionLooperRecordsPartialPanelFailures(t *testing.T) {
 	require.Len(t, fusionTrace["failed_models"], 1)
 	failed := fusionTrace["failed_models"].([]interface{})[0].(map[string]interface{})
 	assert.Equal(t, "panel-b", failed["model"])
+}
+
+func TestMergeFusionRequestConfigCoversAdvancedOptions(t *testing.T) {
+	includeAnalysis := false
+	includeResponses := false
+	temperature := 0.2
+	dst := fusionExecutionConfig{
+		IncludeAnalysis:              true,
+		IncludeIntermediateResponses: true,
+	}
+
+	mergeFusionRequestConfig(&dst, &config.FusionRequestConfig{
+		Model:                        "judge",
+		AnalysisModels:               []string{"panel-a", "panel-b"},
+		MaxConcurrent:                2,
+		MaxCompletionTokens:          512,
+		RoundTimeoutSeconds:          12,
+		MinSuccessfulResponses:       1,
+		Temperature:                  &temperature,
+		IncludeAnalysis:              &includeAnalysis,
+		IncludeIntermediateResponses: &includeResponses,
+		OnError:                      config.FusionOnErrorFail,
+		AnalysisTemplate:             "analysis {{prompt}}",
+		SynthesisTemplate:            "synthesis {{analysis}}",
+		JudgePromptVersion:           "fusion-custom",
+		Grounding: &config.FusionGroundingConfig{
+			Enabled:                 true,
+			Reference:               config.FusionGroundingReferenceContext,
+			Policy:                  config.FusionGroundingPolicyAnnotate,
+			MinScore:                0.4,
+			MinKeep:                 2,
+			NLIContradictionPenalty: 0.7,
+			OnError:                 config.FusionOnErrorFail,
+		},
+	})
+
+	assert.Equal(t, "judge", dst.Model)
+	assert.Equal(t, []string{"panel-a", "panel-b"}, dst.AnalysisModels)
+	assert.Equal(t, 2, dst.MaxConcurrent)
+	assert.Equal(t, 512, dst.MaxCompletionTokens)
+	assert.Equal(t, 12, dst.RoundTimeoutSeconds)
+	assert.Equal(t, 1, dst.MinSuccessfulResponses)
+	require.NotNil(t, dst.Temperature)
+	assert.Equal(t, 0.2, *dst.Temperature)
+	assert.False(t, dst.IncludeAnalysis)
+	assert.False(t, dst.IncludeIntermediateResponses)
+	assert.Equal(t, config.FusionOnErrorFail, dst.OnError)
+	assert.Equal(t, "analysis {{prompt}}", dst.AnalysisTemplate)
+	assert.Equal(t, "synthesis {{analysis}}", dst.SynthesisTemplate)
+	assert.Equal(t, "fusion-custom", dst.JudgePromptVersion)
+	assert.True(t, dst.GroundingEnabled)
+	assert.Equal(t, config.FusionGroundingReferenceContext, dst.GroundingReference)
+	assert.Equal(t, config.FusionGroundingPolicyAnnotate, dst.GroundingPolicy)
+	assert.Equal(t, 0.4, dst.GroundingMinScore)
+	assert.Equal(t, 2, dst.GroundingMinKeep)
+	assert.Equal(t, 0.7, dst.GroundingNLIContradictionPenalty)
+	assert.Equal(t, config.FusionOnErrorFail, dst.GroundingOnError)
+}
+
+func TestFusionLooperPanelQuorumSkipsSlowWorker(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "1", r.Header.Get("x-vsr-fusion-depth"))
+		var payload struct {
+			Model    string `json:"model"`
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		w.Header().Set("Content-Type", "application/json")
+		switch payload.Model {
+		case "panel-a", "panel-b":
+			writeFusionTestCompletion(w, payload.Model, payload.Model+" answer", http.StatusOK)
+		case "panel-c":
+			select {
+			case <-r.Context().Done():
+				return
+			case <-time.After(5 * time.Second):
+				writeFusionTestCompletion(w, payload.Model, "too late", http.StatusOK)
+			}
+		case "judge":
+			prompt := ""
+			if len(payload.Messages) > 0 {
+				prompt = payload.Messages[len(payload.Messages)-1].Content
+			}
+			if strings.Contains(prompt, "return only valid JSON") {
+				writeFusionTestCompletion(w, payload.Model, `{"consensus":["a+b"],"contradictions":[],"partial_coverage":[],"unique_insights":[],"blind_spots":[]}`, http.StatusOK)
+				return
+			}
+			writeFusionTestCompletion(w, payload.Model, "final from quorum panel", http.StatusOK)
+		default:
+			t.Fatalf("unexpected model call: %s", payload.Model)
+		}
+	}))
+	defer server.Close()
+
+	req := newFusionTestRequest()
+	req.Algorithm = &config.AlgorithmConfig{
+		Type: "fusion",
+		Fusion: &config.FusionAlgorithmConfig{
+			Model:                  "judge",
+			AnalysisModels:         []string{"panel-a", "panel-b", "panel-c"},
+			MaxConcurrent:          3,
+			MinSuccessfulResponses: 2,
+			OnError:                config.FusionOnErrorSkip,
+		},
+	}
+
+	resp, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "final from quorum panel", extractMessageContent(t, resp.Body))
+
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(resp.Body, &body))
+	fusionTrace := body["fusion"].(map[string]interface{})
+	assert.Len(t, fusionTrace["responses"], 2)
 }
 
 type fusionToolCallObservation struct {
@@ -409,6 +527,18 @@ func TestFusionAnalysisPromptRequestsCompactJSON(t *testing.T) {
 	assert.Contains(t, prompt, "at most two concise strings")
 }
 
+func TestFusionFinalPromptIncludesSystemOutputContract(t *testing.T) {
+	outputContract := "Your response should be in the following format:\nExplanation: <brief explanation>\nExact Answer: <answer>\nConfidence: <0-100>"
+	prompt := buildFusionFinalPrompt(fusionExecutionConfig{}, "Compute the invariant.", outputContract, []*ModelResponse{
+		{Model: "panel-a", Content: "Exact Answer: Z+Z"},
+	}, nil)
+
+	assert.Contains(t, prompt, "Required output contract")
+	assert.Contains(t, prompt, "Exact Answer:")
+	assert.Contains(t, prompt, "Confidence:")
+	assert.Contains(t, prompt, "Do not reveal hidden reasoning")
+}
+
 func TestParseFusionAnalysisAcceptsFencedJSON(t *testing.T) {
 	analysis, err := parseFusionAnalysis("```json\n{\"consensus\":[\"agree\"],\"contradictions\":[],\"partial_coverage\":[],\"unique_insights\":[],\"blind_spots\":[]}\n```")
 
@@ -416,6 +546,30 @@ func TestParseFusionAnalysisAcceptsFencedJSON(t *testing.T) {
 	require.NotNil(t, analysis)
 	assert.Equal(t, []string{"agree"}, analysis.Consensus)
 	assert.False(t, analysis.ParseFailed)
+}
+
+func TestParseFusionAnalysisExtractsJSONFromReasoningText(t *testing.T) {
+	analysis, err := parseFusionAnalysis("The comparison is:\n{\"consensus\":[\"same fix\"],\"contradictions\":[],\"partial_coverage\":[],\"unique_insights\":[],\"blind_spots\":[]}\nDone.")
+
+	require.NoError(t, err)
+	require.NotNil(t, analysis)
+	assert.Equal(t, []string{"same fix"}, analysis.Consensus)
+}
+
+func TestParseFusionAnalysisRepairsLooseJSONObject(t *testing.T) {
+	analysis, err := parseFusionAnalysis("```json\n{`consensus`:[\"agree\",],`contradictions`:[],`partial_coverage`:[],`unique_insights`:[],`blind_spots`:[],}\n```")
+
+	require.NoError(t, err)
+	require.NotNil(t, analysis)
+	assert.Equal(t, []string{"agree"}, analysis.Consensus)
+}
+
+func TestParseFusionAnalysisRepairsInvalidStringEscapes(t *testing.T) {
+	analysis, err := parseFusionAnalysis(`{"consensus":["same \(escaped\) text"],"contradictions":[],"partial_coverage":[],"unique_insights":[],"blind_spots":[]}`)
+
+	require.NoError(t, err)
+	require.NotNil(t, analysis)
+	assert.Equal(t, []string{`same \(escaped\) text`}, analysis.Consensus)
 }
 
 func newFusionTestRequest() *Request {
@@ -451,26 +605,44 @@ func newFusionStubServer(
 			prompt = payload.Messages[len(payload.Messages)-1].Content
 		}
 		content, status := respond(payload.Model, prompt)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"id":      "chatcmpl-test",
-			"object":  "chat.completion",
-			"created": 1,
-			"model":   payload.Model,
-			"choices": []map[string]interface{}{
-				{
-					"index": 0,
-					"message": map[string]interface{}{
-						"role":    "assistant",
-						"content": content,
-					},
-					"finish_reason": "stop",
-				},
-			},
-			"usage": fusionTestUsage(payload.Model),
-		})
+		writeFusionTestCompletion(w, payload.Model, content, status)
 	}))
+}
+
+func writeFusionTestCompletion(w http.ResponseWriter, model string, content string, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":      "chatcmpl-test",
+		"object":  "chat.completion",
+		"created": 1,
+		"model":   model,
+		"choices": []map[string]interface{}{
+			{
+				"index": 0,
+				"message": map[string]interface{}{
+					"role":    "assistant",
+					"content": content,
+				},
+				"finish_reason": "stop",
+			},
+		},
+		"usage": fusionTestUsage(model),
+	})
+}
+
+func extractMessageContent(t *testing.T, body []byte) string {
+	t.Helper()
+	var payload struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	require.NoError(t, json.Unmarshal(body, &payload))
+	require.NotEmpty(t, payload.Choices)
+	return payload.Choices[0].Message.Content
 }
 
 func fusionTestUsage(model string) map[string]int64 {

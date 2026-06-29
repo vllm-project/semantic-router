@@ -1,0 +1,259 @@
+version: v0.3
+
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    timeout: 1200s
+
+global:
+  router:
+    auto_model_names:
+      - vllm-sr/auto
+  integrations:
+    looper:
+      endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
+      timeout_seconds: 900
+
+providers:
+  defaults:
+    default_model: gemini-worker
+    default_reasoning_effort: medium
+    reasoning_families:
+      openrouter:
+        type: reasoning_effort
+        parameter: reasoning_effort
+  models:
+    - name: gemini-worker
+      provider_model_id: google/gemini-3.1-pro-preview
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 2
+        cached_input_per_1m: 0
+        completion_per_1m: 12
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: gpt-worker
+      provider_model_id: openai/gpt-5.5
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 5
+        cached_input_per_1m: 0
+        completion_per_1m: 30
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: opus-worker
+      provider_model_id: anthropic/claude-opus-4.8
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 15
+        cached_input_per_1m: 0
+        completion_per_1m: 75
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+
+routing:
+  modelCards:
+    - name: gemini-worker
+      context_window_size: 1000000
+      description: OpenRouter worker for broad reasoning and final ReMoM synthesis.
+      capabilities: [chat, code, reasoning, long-context]
+      quality_score: 0.94
+      modality: text
+      tags: [deployment:openrouter, role:synthesis]
+    - name: gpt-worker
+      context_window_size: 1048576
+      description: OpenRouter worker for frontier reasoning.
+      capabilities: [chat, code, reasoning, long-context]
+      quality_score: 0.94
+      modality: text
+      tags: [deployment:openrouter, role:worker]
+    - name: opus-worker
+      context_window_size: 1000000
+      description: OpenRouter worker for long-horizon reasoning.
+      capabilities: [chat, code, reasoning, long-context]
+      quality_score: 0.95
+      modality: text
+      tags: [deployment:openrouter, role:worker]
+
+  signals:
+    keywords:
+      - name: gpqa_diamond_mcq
+        operator: OR
+        keywords:
+          - GPQA
+          - Diamond
+          - multiple choice
+          - "ANSWER:"
+          - "A)"
+          - "B)"
+          - "C)"
+          - "D)"
+          - "Question:"
+          - "Answer:"
+      - name: hard_science_reasoning
+        operator: OR
+        keywords:
+          - chemistry
+          - physics
+          - biology
+          - quantum
+          - molecule
+          - protein
+          - reaction
+          - theorem
+          - derive
+          - calculate
+
+  decisions:
+    - name: gpqa_diamond_remom
+      description: GPQA-Diamond hard MCQ reasoning using ReMoM over a heterogeneous OpenRouter panel.
+      priority: 100
+      rules:
+        operator: OR
+        conditions:
+          - type: keyword
+            name: gpqa_diamond_mcq
+          - type: keyword
+            name: hard_science_reasoning
+      output_contract: >-
+        Return exactly one final multiple-choice answer letter: A, B, C, or D.
+        Do not include prose, labels, or punctuation.
+      output_contract_spec:
+        type: choice
+        choice_set:
+          values: [A, B, C, D]
+        render:
+          mode: value
+      modelRefs:
+        - model: gemini-worker
+          use_reasoning: true
+          reasoning_effort: high
+        - model: gpt-worker
+          use_reasoning: true
+          reasoning_effort: high
+        - model: opus-worker
+          use_reasoning: true
+          reasoning_effort: high
+      algorithm:
+        type: remom
+        remom:
+          breadth_schedule: [3]
+          model_distribution: round_robin
+          temperature: 0.2
+          include_reasoning: false
+          compaction_strategy: last_n_tokens
+          compaction_tokens: 1200
+          synthesis_model: gemini-worker
+          max_concurrent: 3
+          round_timeout_seconds: 90
+          min_successful_responses: 2
+          max_responses_per_round: 3
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            You are solving a strict benchmark problem. Compare the reference responses against the original problem, identify the strongest answer, and return only the final answer in the format requested by the benchmark.
+
+            Original Problem:
+            {{.OriginalContent}}
+
+            Reference Responses:
+            {{range $i, $resp := .ReferenceResponses}}
+            Reference {{add $i 1}}{{if $resp.Model}} ({{$resp.Model}}){{end}}:
+            {{if $resp.Reasoning}}
+            Reasoning:
+            {{$resp.Reasoning}}
+
+            Answer:
+            {{end}}
+            {{$resp.Content}}
+            {{end}}
+
+            If this is a multiple-choice question, return exactly one final answer letter: A, B, C, or D. Do not include prose, labels, or punctuation.
+
+    - name: gpqa_diamond_fallback_remom
+      description: Catch-all fallback for GPQA-Diamond and hard MCQ traffic not matched by the primary signal.
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      output_contract: >-
+        Return exactly one final multiple-choice answer letter: A, B, C, or D.
+        Do not include prose, labels, or punctuation.
+      output_contract_spec:
+        type: choice
+        choice_set:
+          values: [A, B, C, D]
+        render:
+          mode: value
+      modelRefs:
+        - model: gemini-worker
+          use_reasoning: true
+          reasoning_effort: high
+        - model: gpt-worker
+          use_reasoning: true
+          reasoning_effort: high
+        - model: opus-worker
+          use_reasoning: true
+          reasoning_effort: high
+      algorithm:
+        type: remom
+        remom:
+          breadth_schedule: [3]
+          model_distribution: round_robin
+          temperature: 0.2
+          include_reasoning: false
+          compaction_strategy: last_n_tokens
+          compaction_tokens: 1200
+          synthesis_model: gemini-worker
+          max_concurrent: 3
+          round_timeout_seconds: 90
+          min_successful_responses: 2
+          max_responses_per_round: 3
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            You are solving a strict benchmark problem. Compare the reference
+            responses against the original problem and return only the final
+            answer in the requested format.
+
+            Original Problem:
+            {{.OriginalContent}}
+
+            Reference Responses:
+            {{range $i, $resp := .ReferenceResponses}}
+            Reference {{add $i 1}}{{if $resp.Model}} ({{$resp.Model}}){{end}}:
+            {{if $resp.Reasoning}}
+            Reasoning:
+            {{$resp.Reasoning}}
+
+            Answer:
+            {{end}}
+            {{$resp.Content}}
+            {{end}}
+
+            If this is a multiple-choice question, return exactly one final answer letter: A, B, C, or D. Do not include prose, labels, or punctuation.

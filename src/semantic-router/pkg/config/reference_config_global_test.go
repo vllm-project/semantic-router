@@ -172,7 +172,13 @@ func assertReferenceConfigIntegrationGlobalCoverage(t testingT, integrations map
 		"global.integrations.tools.advanced_filtering.weights",
 	)
 	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper"), reflect.TypeOf(LooperConfig{}), "global.integrations.looper")
+	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper", "remom"), reflect.TypeOf(ReMoMRuntimeConfig{}), "global.integrations.looper.remom")
 	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper", "fusion"), reflect.TypeOf(FusionRuntimeConfig{}), "global.integrations.looper.fusion")
+	flow := mustMapAt(t, integrations, "looper", "flow")
+	assertMapCoversStructFields(t, flow, reflect.TypeOf(FlowRuntimeConfig{}), "global.integrations.looper.flow")
+	assertMapCoversStructFields(t, mustMapAt(t, flow, "state"), reflect.TypeOf(WorkflowStateRuntimeConfig{}), "global.integrations.looper.flow.state")
+	assertMapCoversStructFields(t, mustMapAt(t, flow, "state", "file"), reflect.TypeOf(WorkflowStateFileConfig{}), "global.integrations.looper.flow.state.file")
+	assertMapCoversStructFields(t, mustMapAt(t, flow, "state", "redis"), reflect.TypeOf(WorkflowStateRedisConfig{}), "global.integrations.looper.flow.state.redis")
 }
 
 func assertReferenceConfigModelCatalogCoverage(t testingT, modelCatalog map[string]interface{}) {
