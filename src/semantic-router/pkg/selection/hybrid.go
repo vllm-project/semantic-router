@@ -31,8 +31,8 @@ import (
 // HybridConfig configures the Hybrid selector that combines multiple methods
 // Based on arXiv:2404.14618 - Hybrid LLM: Cost-Efficient Quality-Aware Query Routing
 type HybridConfig struct {
-	// EloWeight is the weight for Elo rating contribution (0-1)
-	EloWeight float64 `yaml:"elo_weight"`
+	// ExperienceWeight is the weight for feedback-derived experience contribution (0-1)
+	ExperienceWeight float64 `yaml:"experience_weight"`
 
 	// RouterDCWeight is the weight for embedding similarity contribution (0-1)
 	RouterDCWeight float64 `yaml:"router_dc_weight"`
@@ -56,7 +56,7 @@ type HybridConfig struct {
 // DefaultHybridConfig returns the default Hybrid configuration
 func DefaultHybridConfig() *HybridConfig {
 	return &HybridConfig{
-		EloWeight:           0.3,
+		ExperienceWeight:    0.3,
 		RouterDCWeight:      0.3,
 		AutoMixWeight:       0.2,
 		CostWeight:          0.2,
@@ -67,7 +67,7 @@ func DefaultHybridConfig() *HybridConfig {
 }
 
 // HybridSelector combines multiple selection methods for robust routing
-// It uses weighted combination of Elo ratings, embedding similarity,
+// It uses weighted combination of experience ratings, embedding similarity,
 // and POMDP values, with optional cost-aware optimization.
 type HybridSelector struct {
 	config *HybridConfig
@@ -125,7 +125,7 @@ func (h *HybridSelector) Method() SelectionMethod {
 	return MethodHybrid
 }
 
-// SetEloSelector sets the Elo component
+// SetEloSelector sets the Experience component
 func (h *HybridSelector) SetEloSelector(elo *EloSelector) {
 	h.eloSelector = elo
 }
@@ -156,7 +156,7 @@ func (h *HybridSelector) SetLookupTable(lt lookuptable.LookupTable) {
 //
 // TODO: integrate into model upgrade decision logic in Select.
 //
-//nolint:unused // Reserved for upcoming lookup-table consumption.
+//lint:ignore U1000 reserved for upcoming lookup-table consumption by model upgrade decision logic
 func (h *HybridSelector) resolveQualityGap(taskFamily, currentModel, candidateModel string) float64 {
 	if h.lookupTable != nil && taskFamily != "" && currentModel != "" && candidateModel != "" {
 		if gap, ok := h.lookupTable.QualityGap(taskFamily, currentModel, candidateModel); ok {
@@ -176,11 +176,11 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 	componentScores := make(map[string]map[string]float64)
 	var componentResults []*SelectionResult
 
-	// Get Elo scores
-	if h.eloSelector != nil && h.config.EloWeight > 0 {
+	// Get feedback-derived experience scores
+	if h.eloSelector != nil && h.config.ExperienceWeight > 0 {
 		result, err := h.eloSelector.Select(ctx, selCtx)
 		if err == nil && result != nil {
-			componentScores["elo"] = result.AllScores
+			componentScores["experience"] = result.AllScores
 			componentResults = append(componentResults, result)
 		}
 	}
@@ -220,12 +220,12 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 
 	h.applyCacheAffinity(combinedScores, selCtx)
 
-	logging.Infof("[HybridSelector] Combining scores (weights: elo=%.2f, dc=%.2f, am=%.2f, cost=%.2f):",
-		h.config.EloWeight, h.config.RouterDCWeight, h.config.AutoMixWeight, h.config.CostWeight)
+	logging.Infof("[HybridSelector] Combining scores (weights: experience=%.2f, dc=%.2f, am=%.2f, cost=%.2f):",
+		h.config.ExperienceWeight, h.config.RouterDCWeight, h.config.AutoMixWeight, h.config.CostWeight)
 	for _, model := range selCtx.CandidateModels {
-		var eloScore, dcScore, amScore float64
-		if scores, ok := componentScores["elo"]; ok {
-			eloScore = scores[model.Model]
+		var experienceScore, dcScore, amScore float64
+		if scores, ok := componentScores["experience"]; ok {
+			experienceScore = scores[model.Model]
 		}
 		if scores, ok := componentScores["router_dc"]; ok {
 			dcScore = scores[model.Model]
@@ -233,8 +233,8 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 		if scores, ok := componentScores["automix"]; ok {
 			amScore = scores[model.Model]
 		}
-		logging.Infof("[HybridSelector]   %s: elo=%.4f, dc=%.4f, am=%.4f → combined=%.4f",
-			model.Model, eloScore, dcScore, amScore, combinedScores[model.Model])
+		logging.Infof("[HybridSelector]   %s: experience=%.4f, dc=%.4f, am=%.4f → combined=%.4f",
+			model.Model, experienceScore, dcScore, amScore, combinedScores[model.Model])
 	}
 
 	bestModel, bestScore := h.selectBestModel(selCtx.CandidateModels, combinedScores)
@@ -377,9 +377,9 @@ func (h *HybridSelector) combineScores(componentScores map[string]map[string]flo
 
 	// Weight mapping
 	weights := map[string]float64{
-		"elo":       h.config.EloWeight,
-		"router_dc": h.config.RouterDCWeight,
-		"automix":   h.config.AutoMixWeight,
+		"experience": h.config.ExperienceWeight,
+		"router_dc":  h.config.RouterDCWeight,
+		"automix":    h.config.AutoMixWeight,
 	}
 
 	// Calculate total weight for normalization
@@ -508,9 +508,9 @@ func (h *HybridSelector) calculateConfidence(results []*SelectionResult, selecte
 func (h *HybridSelector) buildReasoning(componentScores map[string]map[string]float64, selectedModel string) string {
 	parts := []string{}
 
-	if scores, ok := componentScores["elo"]; ok {
+	if scores, ok := componentScores["experience"]; ok {
 		if score, ok := scores[selectedModel]; ok {
-			parts = append(parts, fmt.Sprintf("Elo=%.3f", score))
+			parts = append(parts, fmt.Sprintf("Experience=%.3f", score))
 		}
 	}
 
@@ -527,7 +527,7 @@ func (h *HybridSelector) buildReasoning(componentScores map[string]map[string]fl
 	}
 
 	weightsStr := fmt.Sprintf("weights=[elo:%.2f, dc:%.2f, am:%.2f, cost:%.2f]",
-		h.config.EloWeight, h.config.RouterDCWeight, h.config.AutoMixWeight, h.config.CostWeight)
+		h.config.ExperienceWeight, h.config.RouterDCWeight, h.config.AutoMixWeight, h.config.CostWeight)
 
 	if len(parts) > 0 {
 		return fmt.Sprintf("Hybrid combination: [%s], %s", strings.Join(parts, " "), weightsStr)

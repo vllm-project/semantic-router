@@ -134,11 +134,10 @@ autoscaling:
   # targetMemoryUtilizationPercentage: 80
 
 safetyGuards:
-  # -- Reject multi-replica router deployments when config uses local learning
-  # selector state (elo, rl_driven, or gmtrouter). Disable only when selector
-  # learning state is intentionally externalized or the algorithm is used in a
-  # read-only/non-learning mode.
-  rejectMultiReplicaLocalSelectorState: true
+  # -- Reject multi-replica router deployments when Router Learning uses
+  # request-time local state. Disable only when accepting replica-local learning
+  # divergence or when routing traffic with sticky sessions.
+  rejectMultiReplicaLocalLearningState: true
 # Node selector
 nodeSelector: {}
 # Tolerations
@@ -550,6 +549,16 @@ dashboard:
     existingSecret: ""
     # -- Key within existingSecret holding the JWT signing secret.
     existingSecretKey: "jwt-secret"
+  # -- Extra environment variables for the dashboard container, appended after the
+  # chart-managed TARGET_* vars. Use this to set optional integration env the chart
+  # does not expose explicitly (for example OPENCLAW_*, TARGET_ENVOY_URL, or
+  # PROXY_OVERRIDE_ORIGIN) without forking the chart. Standard core/v1 EnvVar list.
+  # Avoid redefining a chart-managed var (TARGET_*, DASHBOARD_JWT_SECRET): it
+  # produces a duplicate env key and Kubernetes applies last-wins.
+  extraEnv: []
+  # -- Extra envFrom sources for the dashboard container (configMapRef / secretRef).
+  # Standard core/v1 EnvFromSource list.
+  envFrom: []
   # -- Pod-level security context. The default fsGroup matches the non-root user
   # (UID/GID 65532) baked into the upstream dashboard image, ensuring the
   # persistence PVC mount at /app/data is writable by the binary. Without this,

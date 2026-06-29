@@ -304,6 +304,10 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
         { label: 'Config source', value: stringOrFallback(section?.config_source, 'file') },
         { label: 'Strategy', value: stringOrFallback(section?.strategy) },
         { label: 'Auto model name', value: stringOrFallback(section?.auto_model_name) },
+        {
+          label: 'Auto model aliases',
+          value: Array.isArray(section?.auto_model_names) ? section.auto_model_names.join(', ') : 'Not set',
+        },
       ]
     case 'response_api':
       return [
@@ -524,8 +528,9 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'router_core':
       return [
         { name: 'config_source', label: 'Config Source', type: 'select', options: ['file', 'kubernetes'], required: true },
-        { name: 'strategy', label: 'Routing Strategy', type: 'text', placeholder: 'static, elo, router_dc, automix...' },
+        { name: 'strategy', label: 'Routing Strategy', type: 'text', placeholder: 'static, router_dc, automix...' },
         { name: 'auto_model_name', label: 'Auto Model Name', type: 'text', placeholder: 'MoM' },
+        { name: 'auto_model_names', label: 'Auto Model Aliases (JSON)', type: 'json', placeholder: '["vllm-sr/auto","auto","MoM"]' },
         { name: 'include_config_models_in_list', label: 'Include Config Models In List', type: 'boolean' },
         { name: 'streamed_body', label: 'Streamed Body (JSON)', type: 'json', placeholder: '{"enabled":false}' },
       ]
@@ -705,12 +710,11 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'model_selection':
       return [
         { name: 'enabled', label: 'Enable Model Selection', type: 'boolean' },
-        { name: 'default_algorithm', label: 'Method', type: 'select', options: ['knn', 'kmeans', 'svm', 'elo', 'router_dc', 'automix', 'hybrid'], required: true },
+        { name: 'default_algorithm', label: 'Method', type: 'select', options: ['knn', 'kmeans', 'svm', 'router_dc', 'automix', 'hybrid'], required: true },
         { name: 'models_path', label: 'ML Models Path', type: 'text', placeholder: 'models/model_selection' },
         { name: 'knn', label: 'KNN Config (JSON)', type: 'json' },
         { name: 'kmeans', label: 'KMeans Config (JSON)', type: 'json' },
         { name: 'svm', label: 'SVM Config (JSON)', type: 'json' },
-        { name: 'elo', label: 'ELO Config (JSON)', type: 'json' },
         { name: 'router_dc', label: 'RouterDC Config (JSON)', type: 'json' },
         { name: 'automix', label: 'AutoMix Config (JSON)', type: 'json' },
         { name: 'hybrid', label: 'Hybrid Config (JSON)', type: 'json' },
@@ -735,6 +739,7 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
       config_source: router?.config_source,
       strategy: router?.strategy,
       auto_model_name: router?.auto_model_name,
+      auto_model_names: Array.isArray(router?.auto_model_names) ? router.auto_model_names : [],
       include_config_models_in_list: router?.include_config_models_in_list,
       streamed_body: asObject(router?.streamed_body) || {},
     }
@@ -776,7 +781,6 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
       knn: asObject(ml?.knn) || {},
       kmeans: asObject(ml?.kmeans) || {},
       svm: asObject(ml?.svm) || {},
-      elo: asObject(selection?.elo) || {},
       router_dc: asObject(selection?.router_dc) || {},
       automix: asObject(selection?.automix) || {},
       hybrid: asObject(selection?.hybrid) || {},
@@ -798,6 +802,7 @@ function saveForKey(key: RouterSystemKey, data: EditFormData): Partial<ConfigDat
       config_source: data.config_source,
       strategy: data.strategy,
       auto_model_name: data.auto_model_name,
+      auto_model_names: Array.isArray(data.auto_model_names) ? data.auto_model_names : [],
       include_config_models_in_list: Boolean(data.include_config_models_in_list),
       streamed_body: asObject(data.streamed_body) || {},
     }) as Partial<ConfigData>
@@ -830,7 +835,6 @@ function saveForKey(key: RouterSystemKey, data: EditFormData): Partial<ConfigDat
     return buildNestedPatch(GLOBAL_SECTION_PATHS[key], {
       enabled: Boolean(data.enabled),
       method: data.default_algorithm,
-      elo: asObject(data.elo) || {},
       router_dc: asObject(data.router_dc) || {},
       automix: asObject(data.automix) || {},
       hybrid: asObject(data.hybrid) || {},

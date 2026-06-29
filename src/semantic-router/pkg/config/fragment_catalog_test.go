@@ -28,8 +28,7 @@ func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 	requiredAlgorithmFragments := map[string]string{
 		"automix":       filepath.Join("selection", "automix.yaml"),
 		"confidence":    filepath.Join("looper", "confidence.yaml"),
-		"elo":           filepath.Join("selection", "elo.yaml"),
-		"gmtrouter":     filepath.Join("selection", "gmtrouter.yaml"),
+		"fusion":        filepath.Join("looper", "fusion.yaml"),
 		"hybrid":        filepath.Join("selection", "hybrid.yaml"),
 		"kmeans":        filepath.Join("selection", "kmeans.yaml"),
 		"knn":           filepath.Join("selection", "knn.yaml"),
@@ -38,9 +37,7 @@ func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 		"multi_factor":  filepath.Join("selection", "multi-factor.yaml"),
 		"ratings":       filepath.Join("looper", "ratings.yaml"),
 		"remom":         filepath.Join("looper", "remom.yaml"),
-		"rl_driven":     filepath.Join("selection", "rl-driven.yaml"),
 		"router_dc":     filepath.Join("selection", "router-dc.yaml"),
-		"session_aware": filepath.Join("selection", "session-aware.yaml"),
 		"static":        filepath.Join("selection", "static.yaml"),
 		"svm":           filepath.Join("selection", "svm.yaml"),
 	}

@@ -1,7 +1,7 @@
 package ir
 
 // WarningReason is the stable machine token surfaced in the
-// x-vsr-lossiness-warnings response header and in the
+// x-vsr-protocol-warnings response header and in the
 // vsr_translation_lossy_total metric "reason" label.
 //
 // Stability contract: existing reason tokens are part of the wire/metric

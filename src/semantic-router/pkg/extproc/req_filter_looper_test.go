@@ -10,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 func TestShouldUseLooper(t *testing.T) {
@@ -21,7 +22,7 @@ func TestShouldUseLooper(t *testing.T) {
 				{Model: "model-a"},
 				{Model: "model-b"},
 			},
-			Algorithm: &config.AlgorithmConfig{Type: "elo"},
+			Algorithm: &config.AlgorithmConfig{Type: "router_dc"},
 		}
 
 		assert.False(t, router.shouldUseLooper(decision))
@@ -31,7 +32,7 @@ func TestShouldUseLooper(t *testing.T) {
 		router := &OpenAIRouter{
 			Config: &config.RouterConfig{Looper: config.LooperConfig{Endpoint: "http://looper"}},
 		}
-		selectionAlgorithms := []string{"static", "elo", "router_dc", "automix", "hybrid", "knn", "kmeans", "svm", "mlp", "gmtrouter", "latency_aware"}
+		selectionAlgorithms := []string{"static", "router_dc", "automix", "hybrid", "knn", "kmeans", "svm", "mlp", "multi_factor", "latency_aware"}
 
 		for _, algorithmType := range selectionAlgorithms {
 			decision := &config.Decision{
@@ -60,6 +61,24 @@ func TestShouldUseLooper(t *testing.T) {
 		assert.True(t, router.shouldUseLooper(decision))
 	})
 
+	t.Run("allows fusion with algorithm analysis models", func(t *testing.T) {
+		router := &OpenAIRouter{
+			Config: &config.RouterConfig{Looper: config.LooperConfig{Endpoint: "http://looper"}},
+		}
+		decision := &config.Decision{
+			Name: "fusion",
+			Algorithm: &config.AlgorithmConfig{
+				Type: "fusion",
+				Fusion: &config.FusionAlgorithmConfig{
+					Model:          "judge",
+					AnalysisModels: []string{"model-a"},
+				},
+			},
+		}
+
+		assert.True(t, router.shouldUseLooper(decision))
+	})
+
 	t.Run("requires multiple models for non-remom algorithms", func(t *testing.T) {
 		router := &OpenAIRouter{
 			Config: &config.RouterConfig{Looper: config.LooperConfig{Endpoint: "http://looper"}},
@@ -67,7 +86,7 @@ func TestShouldUseLooper(t *testing.T) {
 		decision := &config.Decision{
 			Name:      "routing",
 			ModelRefs: []config.ModelRef{{Model: "model-a"}},
-			Algorithm: &config.AlgorithmConfig{Type: "elo"},
+			Algorithm: &config.AlgorithmConfig{Type: "router_dc"},
 		}
 
 		assert.False(t, router.shouldUseLooper(decision))
@@ -77,7 +96,7 @@ func TestShouldUseLooper(t *testing.T) {
 		router := &OpenAIRouter{
 			Config: &config.RouterConfig{Looper: config.LooperConfig{Endpoint: "http://looper"}},
 		}
-		looperAlgorithms := []string{"confidence", "ratings"}
+		looperAlgorithms := []string{"confidence", "ratings", "fusion"}
 
 		for _, algorithmType := range looperAlgorithms {
 			decision := &config.Decision{
@@ -94,6 +113,134 @@ func TestShouldUseLooper(t *testing.T) {
 	})
 }
 
+func TestParseFusionRequestConfig(t *testing.T) {
+	fusion, err := parseFusionRequestConfig([]byte(`{
+		"model":"vllm-sr/fusion",
+		"plugins":[{
+			"id":"fusion",
+			"model":"judge",
+			"analysis_models":["panel-a","panel-b"],
+			"max_concurrent":2,
+			"max_completion_tokens":512,
+			"temperature":0.2
+		}]
+	}`))
+	require.NoError(t, err)
+	require.NotNil(t, fusion)
+	assert.Equal(t, "judge", fusion.Model)
+	assert.Equal(t, []string{"panel-a", "panel-b"}, fusion.AnalysisModels)
+	assert.Equal(t, 2, fusion.MaxConcurrent)
+	assert.Equal(t, 512, fusion.MaxCompletionTokens)
+	require.NotNil(t, fusion.Temperature)
+	assert.Equal(t, 0.2, *fusion.Temperature)
+}
+
+func TestParseFusionRequestConfigRejectsInvalidOnError(t *testing.T) {
+	_, err := parseFusionRequestConfig([]byte(`{
+		"model":"vllm-sr/fusion",
+		"plugins":[{
+			"id":"fusion",
+			"on_error":"ignore"
+		}]
+	}`))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "on_error must be one of")
+}
+
+func TestResolveDirectFusionDecisionUsesMatchedFusionDecision(t *testing.T) {
+	matchedDecision := &config.Decision{
+		Name: "fusion-route",
+		ModelRefs: []config.ModelRef{
+			{Model: "panel-a"},
+			{Model: "panel-b"},
+		},
+		Algorithm: &config.AlgorithmConfig{
+			Type: "fusion",
+			Fusion: &config.FusionAlgorithmConfig{
+				Model: "judge",
+			},
+		},
+	}
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{},
+	}
+
+	decision, status, err := router.resolveDirectFusionDecision(&RequestContext{
+		VSRSelectedDecision: matchedDecision,
+	})
+	require.NoError(t, err)
+	assert.Zero(t, status)
+	require.NotNil(t, decision)
+	assert.Equal(t, "fusion-route", decision.Name)
+	assert.Equal(t, "fusion", decision.Algorithm.Type)
+	assert.Equal(t, "judge", decision.Algorithm.Fusion.Model)
+	require.Len(t, decision.ModelRefs, 2)
+	assert.Equal(t, "panel-a", decision.ModelRefs[0].Model)
+}
+
+func TestResolveDirectFusionDecisionRejectsNonFusionMatchedDecision(t *testing.T) {
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{},
+	}
+
+	_, status, err := router.resolveDirectFusionDecision(&RequestContext{
+		VSRSelectedDecision: &config.Decision{
+			Name:      "static-route",
+			Algorithm: &config.AlgorithmConfig{Type: "static"},
+		},
+	})
+	require.Error(t, err)
+	assert.Equal(t, 400, status)
+	assert.Contains(t, err.Error(), "no eligible Fusion decision matched")
+}
+
+func TestResolveDirectFusionDecisionAllowsRequestOnlyPluginPanel(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	ctx := &RequestContext{
+		OriginalRequestBody: []byte(`{
+			"model":"vllm-sr/fusion",
+			"plugins":[{
+				"id":"fusion",
+				"model":"judge",
+				"analysis_models":["panel-a","panel-b"]
+			}]
+		}`),
+	}
+
+	decision, status, err := router.resolveDirectFusionDecision(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, status)
+	require.NotNil(t, decision)
+	assert.Equal(t, directFusionDecisionName, decision.Name)
+	assert.Equal(t, "fusion", decision.Algorithm.Type)
+	assert.Empty(t, decision.ModelRefs)
+}
+
+func TestDecisionCandidatesForFusionModelOnlyIncludesFusionDecisions(t *testing.T) {
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				Decisions: []config.Decision{
+					{
+						Name:      "static-route",
+						Algorithm: &config.AlgorithmConfig{Type: "static"},
+					},
+					{
+						Name:      "fusion-route",
+						Algorithm: &config.AlgorithmConfig{Type: "fusion"},
+					},
+				},
+			},
+		},
+	}
+
+	assert.Nil(t, router.decisionCandidatesForRequestModel("vllm-sr/auto"))
+
+	candidates := router.decisionCandidatesForRequestModel("vllm-sr/fusion")
+	require.Len(t, candidates, 1)
+	assert.Equal(t, "fusion-route", candidates[0].Name)
+}
+
 func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
 	resp := &looper.Response{
 		Body:          []byte(`{"ok":true}`),
@@ -103,7 +250,10 @@ func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
 		Iterations:    2,
 		AlgorithmType: "elo",
 	}
+	// The looper trace, matched signals, category and session phase are demoted
+	// to x-vsr-debug (#2205), so this tracked-headers test opts into debug.
 	reqCtx := &RequestContext{
+		Headers:                       map[string]string{headers.VSRDebug: "true"},
 		VSRMatchedKeywords:            []string{"python"},
 		VSRMatchedEmbeddings:          []string{"coding"},
 		VSRMatchedContext:             []string{"memory"},
@@ -120,9 +270,11 @@ func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
 		VSRSelectedDecisionConfidence: 0,
 		VSRSelectedCategory:           "programming",
 		RouterReplayID:                "replay-123",
-		VSRSessionPolicy: map[string]interface{}{
-			"phase": "tool_loop",
-		},
+		VSRLearningPolicies: testLearningPolicies(
+			replayTestProtectionPolicyWithTrace(&selection.SessionPolicyTrace{
+				Phase: "tool_loop",
+			}),
+		),
 	}
 
 	response := (&OpenAIRouter{}).createLooperResponse(resp, reqCtx)
@@ -148,6 +300,54 @@ func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
 	assert.Equal(t, "tool_loop", headerMap[headers.VSRSessionPhase])
 	assert.Equal(t, "replay-123", headerMap[headers.RouterReplayID])
 	assert.Equal(t, "42", headerMap[headers.VSRContextTokenCount])
+}
+
+func TestCreateLooperResponseDefaultSurfaceIsLean(t *testing.T) {
+	// Without x-vsr-debug the looper response carries only content-type, the
+	// keystone headers and the final routing facts (#2205). The execution trace,
+	// matched signals, category and session phase are demoted.
+	resp := &looper.Response{
+		Body:          []byte(`{"ok":true}`),
+		ContentType:   "application/json",
+		Model:         "model-b",
+		ModelsUsed:    []string{"model-a", "model-b"},
+		Iterations:    2,
+		AlgorithmType: "elo",
+	}
+	reqCtx := &RequestContext{
+		VSRMatchedKeywords:            []string{"python"},
+		VSRContextTokenCount:          42,
+		VSRSelectedModel:              "model-b",
+		VSRSelectedDecisionName:       "coding",
+		VSRSelectedDecisionConfidence: 0,
+		VSRSelectedCategory:           "programming",
+		RouterReplayID:                "replay-123",
+		VSRLearningPolicies: testLearningPolicies(
+			replayTestProtectionPolicyWithTrace(&selection.SessionPolicyTrace{
+				Phase: "tool_loop",
+			}),
+		),
+	}
+
+	response := (&OpenAIRouter{}).createLooperResponse(resp, reqCtx)
+	headerMap := headerValuesByName(response.GetImmediateResponse().Headers.SetHeaders)
+
+	// content-type, keystone and final routing facts ride on the default surface.
+	assert.Equal(t, "application/json", headerMap["content-type"])
+	assert.Equal(t, headers.SchemaVersionValue, headerMap[headers.VSRSchemaVersion])
+	assert.Equal(t, headers.ResponsePathLooper, headerMap[headers.VSRResponsePath])
+	assert.Equal(t, "model-b", headerMap[headers.VSRSelectedModel])
+	assert.Equal(t, "coding", headerMap[headers.VSRSelectedDecision])
+	assert.Equal(t, "0.0000", headerMap[headers.VSRSelectedConfidence])
+	assert.Equal(t, "replay-123", headerMap[headers.RouterReplayID])
+
+	// The demoted detail headers are absent.
+	assert.NotContains(t, headerMap, headers.VSRLooperModel)
+	assert.NotContains(t, headerMap, headers.VSRLooperIterations)
+	assert.NotContains(t, headerMap, headers.VSRMatchedKeywords)
+	assert.NotContains(t, headerMap, headers.VSRContextTokenCount)
+	assert.NotContains(t, headerMap, headers.VSRSelectedCategory)
+	assert.NotContains(t, headerMap, headers.VSRSessionPhase)
 }
 
 func TestGetReasoningInfoFromDecision(t *testing.T) {
@@ -214,6 +414,7 @@ func TestBuildHeaderMutationsForLooperIncludesAuthorizationAndPluginHeaders(t *t
 	setHeaders, removeHeaders := router.buildHeaderMutationsForLooper(decision, "model-a")
 	headerMap := headerValuesByName(setHeaders)
 
+	assert.Equal(t, "model-a", headerMap[headers.SelectedModel])
 	assert.Equal(t, "model-a", headerMap[headers.VSRSelectedModel])
 	assert.Equal(t, "Bearer secret", headerMap["Authorization"])
 	assert.Equal(t, "1", headerMap["x-extra"])
@@ -236,6 +437,64 @@ func TestHandleLooperInternalRequestRewritesModel(t *testing.T) {
 		`{"model":"model-b","messages":[{"role":"user","content":"hi"}]}`,
 		string(body),
 	)
+
+	headerMap := headerValuesByName(response.GetRequestBody().Response.HeaderMutation.SetHeaders)
+	assert.Equal(t, "model-b", headerMap[headers.SelectedModel])
+	assert.Equal(t, "model-b", headerMap[headers.VSRSelectedModel])
+	assert.Contains(t, response.GetRequestBody().Response.HeaderMutation.RemoveHeaders, "content-length")
+}
+
+func TestHandleLooperInternalRequestWithPluginsResolvesProviderModelAlias(t *testing.T) {
+	router := &OpenAIRouter{
+		Cache: &spyCache{},
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				Decisions: []config.Decision{
+					{
+						Name:      "fusion_alias",
+						ModelRefs: []config.ModelRef{{Model: "panel-a"}},
+					},
+				},
+			},
+			BackendModels: config.BackendModels{
+				ModelConfig: map[string]config.ModelParams{
+					"panel-a": {
+						PreferredEndpoints: []string{"panel-backend"},
+						ExternalModelIDs: map[string]string{
+							"vllm": "qwen2.5-omni-7b",
+						},
+					},
+				},
+				VLLMEndpoints: []config.VLLMEndpoint{
+					{
+						Name:    "panel-backend",
+						Address: "127.0.0.1",
+						Port:    8000,
+						Type:    "vllm",
+						Weight:  1,
+					},
+				},
+			},
+		},
+	}
+	ctx := &RequestContext{
+		LooperRequest: true,
+		Headers: map[string]string{
+			headers.VSRLooperDecision: "fusion_alias",
+		},
+		OriginalRequestBody: []byte(`{"model":"panel-a","messages":[{"role":"user","content":"hi"}]}`),
+	}
+
+	response, err := router.handleLooperInternalRequestWithPlugins("panel-a", ctx)
+	require.NoError(t, err)
+	require.NotNil(t, response.GetRequestBody())
+
+	body := response.GetRequestBody().Response.GetBodyMutation().GetBody()
+	assert.Contains(t, string(body), `"model":"qwen2.5-omni-7b"`)
+
+	headerMap := headerValuesByName(response.GetRequestBody().Response.HeaderMutation.SetHeaders)
+	assert.Equal(t, "panel-a", headerMap[headers.SelectedModel])
+	assert.Equal(t, "panel-a", headerMap[headers.VSRSelectedModel])
 }
 
 func headerValuesByName(headers []*core.HeaderValueOption) map[string]string {

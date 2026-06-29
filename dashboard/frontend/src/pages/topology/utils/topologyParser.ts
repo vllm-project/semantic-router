@@ -38,7 +38,8 @@ export function parseConfigToTopology(config: ConfigData): ParsedTopology {
 function extractGlobalPlugins(config: ConfigData): GlobalPluginConfig[] {
   const plugins: GlobalPluginConfig[] = []
   const promptGuard = config.global?.model_catalog?.modules?.prompt_guard || config.prompt_guard
-  const piiModel = config.global?.model_catalog?.modules?.classifier?.pii || config.classifier?.pii_model
+  const piiModel =
+    config.global?.model_catalog?.modules?.classifier?.pii || config.classifier?.pii_model
   const semanticCache = config.global?.stores?.semantic_cache || config.semantic_cache
   const promptGuardModel = promptGuard?.model_id || promptGuard?.model_ref
   const piiModelRef = piiModel?.model_id || piiModel?.model_ref
@@ -98,18 +99,18 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
 
   // Python CLI format: decisions array
   if (routingDecisions && routingDecisions.length > 0) {
-    routingDecisions.forEach(decision => {
+    routingDecisions.forEach((decision) => {
       const rules = parseRuleCombination(decision.rules)
       const algorithm = extractDecisionAlgorithm(decision.algorithm)
 
-      const plugins: PluginConfig[] = (decision.plugins || []).map(p => ({
+      const plugins: PluginConfig[] = (decision.plugins || []).map((p) => ({
         type: p.type as PluginConfig['type'],
         enabled: p.enabled ?? true,
         configuration: p.configuration,
       }))
 
-      const modelRefs: ModelRefConfig[] = (decision.modelRefs || []).map(ref => {
-        const modelConfig = config.providers?.models?.find(m => m.name === ref.model)
+      const modelRefs: ModelRefConfig[] = (decision.modelRefs || []).map((ref) => {
+        const modelConfig = config.providers?.models?.find((m) => m.name === ref.model)
         return {
           model: ref.model,
           use_reasoning: ref.use_reasoning,
@@ -134,7 +135,7 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
   else if (config.categories && config.categories.length > 0) {
     config.categories.forEach((cat, index) => {
       const modelScores = normalizeModelScores(cat.model_scores)
-      const modelRefs: ModelRefConfig[] = modelScores.map(ms => {
+      const modelRefs: ModelRefConfig[] = modelScores.map((ms) => {
         const modelConfig = config.model_config?.[ms.model]
         return {
           model: ms.model,
@@ -182,19 +183,16 @@ function extractDecisionAlgorithm(
     latency_aware: algorithm.latency_aware,
     ratings: algorithm.ratings,
     remom: algorithm.remom,
-    elo: algorithm.elo,
+    fusion: algorithm.fusion,
     router_dc: algorithm.router_dc,
     automix: algorithm.automix,
     autoMix: algorithm.autoMix ?? algorithm.automix,
     hybrid: algorithm.hybrid,
-    rl_driven: algorithm.rl_driven,
-    gmtrouter: algorithm.gmtrouter,
     knn: algorithm.knn,
     kmeans: algorithm.kmeans,
     svm: algorithm.svm,
     mlp: algorithm.mlp,
     multi_factor: algorithm.multi_factor,
-    session_aware: algorithm.session_aware,
   }
 }
 
@@ -244,7 +242,7 @@ function extractModels(config: ConfigData): ModelConfig[] {
   const models: ModelConfig[] = []
 
   // From providers.models
-  config.providers?.models?.forEach(model => {
+  config.providers?.models?.forEach((model) => {
     models.push({
       name: model.name,
       reasoning_family: model.reasoning_family,
@@ -263,7 +261,7 @@ function extractModels(config: ConfigData): ModelConfig[] {
   // From model_config (Legacy)
   if (config.model_config) {
     Object.entries(config.model_config).forEach(([name, cfg]) => {
-      if (!models.find(m => m.name === name)) {
+      if (!models.find((m) => m.name === name)) {
         models.push({
           name,
           reasoning_family: cfg.reasoning_family,
@@ -285,7 +283,10 @@ interface NormalizedModelScore {
 }
 
 function normalizeModelScores(
-  modelScores: Array<{ model: string; score: number; use_reasoning?: boolean }> | Record<string, number> | undefined
+  modelScores:
+    | Array<{ model: string; score: number; use_reasoning?: boolean }>
+    | Record<string, number>
+    | undefined,
 ): NormalizedModelScore[] {
   if (!modelScores) return []
   if (Array.isArray(modelScores)) return modelScores
@@ -323,7 +324,7 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     projection: [],
   }
 
-  signals.forEach(signal => {
+  signals.forEach((signal) => {
     if (groups[signal.type]) {
       groups[signal.type].push(signal)
     }

@@ -1,11 +1,24 @@
 import styles from './HeaderDisplay.module.css'
+import { formatLearningHeaderValue, isLearningHeader } from './headerLearningDisplay'
 
 interface HeaderDisplayProps {
   headers: Record<string, string>
 }
 
 // Header metadata for display
-const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'warning' | 'danger' }> = {
+const HEADER_INFO: Record<
+  string,
+  { label: string; type: 'info' | 'success' | 'warning' | 'danger' }
+> = {
+  // v0.4 keystone headers (#2203)
+  'x-vsr-schema-version': {
+    label: 'Schema Version',
+    type: 'info',
+  },
+  'x-vsr-response-path': {
+    label: 'Response Path',
+    type: 'info',
+  },
   'x-vsr-selected-model': {
     label: 'Model',
     type: 'info',
@@ -26,25 +39,29 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'Reasoning',
     type: 'info',
   },
+  'x-vsr-learning-methods': {
+    label: 'Learning',
+    type: 'info',
+  },
+  'x-vsr-learning-actions': {
+    label: 'Learning Action',
+    type: 'info',
+  },
+  'x-vsr-learning-scopes': {
+    label: 'Learning Scope',
+    type: 'info',
+  },
+  'x-vsr-learning-reasons': {
+    label: 'Learning Reason',
+    type: 'info',
+  },
   'x-vsr-fast-response': {
     label: 'Fast Response',
     type: 'success',
   },
-  'x-vsr-jailbreak-blocked': {
-    label: 'Jailbreak Blocked',
-    type: 'danger',
-  },
-  'x-vsr-pii-violation': {
-    label: 'PII Violation',
-    type: 'danger',
-  },
-  'x-vsr-hallucination-detected': {
-    label: 'Hallucination',
+  'x-vsr-response-warnings': {
+    label: 'Response Warnings',
     type: 'warning',
-  },
-  'x-vsr-fact-check-needed': {
-    label: 'Fact Check',
-    type: 'info',
   },
   'x-vsr-matched-keywords': {
     label: 'Keywords',
@@ -163,13 +180,19 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
 }
 
 function shouldSummarizeHeaderValue(key: string, values: string[]): boolean {
-  return values.length > 1 && (key.startsWith('x-vsr-matched-') || key === 'x-vsr-looper-models-used')
+  return (
+    values.length > 1 && (key.startsWith('x-vsr-matched-') || key === 'x-vsr-looper-models-used')
+  )
 }
 
 function summarizeHeaderValue(key: string, rawValue: string): string {
+  if (isLearningHeader(key)) {
+    return formatLearningHeaderValue(key, rawValue)
+  }
+
   const values = rawValue
     .split(',')
-    .map(value => value.trim())
+    .map((value) => value.trim())
     .filter(Boolean)
 
   if (!shouldSummarizeHeaderValue(key, values)) {
@@ -194,7 +217,11 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
           const info = HEADER_INFO[key]
           const displayValue = summarizeHeaderValue(key, value)
           return (
-            <div key={key} className={`${styles.header} ${styles[info.type]}`} title={`${info.label}: ${value}`}>
+            <div
+              key={key}
+              className={`${styles.header} ${styles[info.type]}`}
+              title={`${info.label}: ${value}`}
+            >
               <span className={styles.label}>{info.label}</span>
               <span className={styles.value}>{displayValue}</span>
             </div>

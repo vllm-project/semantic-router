@@ -14,62 +14,56 @@ log = get_logger(__name__)
 
 ALGORITHM_TYPES = [
     "static",
-    "elo",
     "router_dc",
     "automix",
     "hybrid",
-    "rl_driven",
-    "gmtrouter",
     "latency_aware",
     "knn",
     "kmeans",
     "svm",
     "mlp",
     "multi_factor",
-    "session_aware",
 ]
 
 ALGORITHM_HINTS = {
-    "elo": "  Tip: Submit feedback via POST /api/v1/feedback",
     "router_dc": "  Tip: Ensure models have 'description' fields",
     "automix": "  Tip: Configure model 'pricing' for cost optimization",
     "hybrid": "  Tip: Configure weights in decision.algorithm.hybrid",
-    "rl_driven": "  Tip: Configure persistence in decision.algorithm.rl_driven.storage_path",
     "latency_aware": "  Tip: Configure decision.algorithm.latency_aware with TPOT or TTFT percentiles",
     "knn": "  Tip: Configure global.router.model_selection.ml.knn for trained KNN routing",
     "kmeans": "  Tip: Configure global.router.model_selection.ml.kmeans for cluster routing",
     "svm": "  Tip: Configure global.router.model_selection.ml.svm for trained SVM routing",
     "mlp": "  Tip: Configure global.router.model_selection.ml.mlp for trained MLP routing",
     "multi_factor": "  Tip: Configure decision.algorithm.multi_factor for SLO-aware scoring",
-    "session_aware": "  Tip: Preserve agentic continuity with decision.algorithm.session_aware",
-    "gmtrouter": "  Tip: Learns user preferences via graph neural network",
 }
 
 ALGORITHM_CONFIG_BLOCKS = (
     "confidence",
     "ratings",
     "remom",
-    "elo",
+    "fusion",
     "router_dc",
     "automix",
     "hybrid",
-    "rl_driven",
-    "gmtrouter",
     "latency_aware",
     "multi_factor",
+)
+
+RETIRED_ALGORITHM_CONFIG_BLOCKS = (
     "session_aware",
+    "elo",
+    "rl_driven",
+    "gmtrouter",
+    "bandit",
+    "personalization",
 )
 
 EXPECTED_CONFIG_BLOCK_BY_ALGORITHM = {
-    "elo": "elo",
     "router_dc": "router_dc",
     "automix": "automix",
     "hybrid": "hybrid",
-    "rl_driven": "rl_driven",
-    "gmtrouter": "gmtrouter",
     "latency_aware": "latency_aware",
     "multi_factor": "multi_factor",
-    "session_aware": "session_aware",
 }
 
 DEFAULT_CONFIG_BLOCK_BY_ALGORITHM: dict[str, dict[str, object]] = {
@@ -289,7 +283,7 @@ def _replace_algorithm_config(
     normalized_algorithm: str,
 ) -> None:
     expected_block = EXPECTED_CONFIG_BLOCK_BY_ALGORITHM.get(normalized_algorithm)
-    for block in ALGORITHM_CONFIG_BLOCKS:
+    for block in (*ALGORITHM_CONFIG_BLOCKS, *RETIRED_ALGORITHM_CONFIG_BLOCKS):
         if block != expected_block:
             algorithm_config.pop(block, None)
     algorithm_config["type"] = normalized_algorithm

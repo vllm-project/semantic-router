@@ -49,6 +49,15 @@ type Request struct {
 	// DecisionName is the name of the decision that triggered this looper execution
 	// Used by extproc to lookup decision configuration and apply plugins
 	DecisionName string
+
+	// Fusion carries request-level plugins[].id=fusion overrides.
+	Fusion *config.FusionRequestConfig
+
+	// CachedPanel, when non-nil, is used verbatim as the fusion panel instead of
+	// calling the analysis models. It exists for paired multi-arm evaluation where
+	// every arm must synthesize from a byte-identical panel (see
+	// bench/grounded_fusion). Nil in production; only the fusioneval driver sets it.
+	CachedPanel []*ModelResponse
 }
 
 // Response contains the output from looper execution
@@ -77,6 +86,11 @@ type Response struct {
 	// IntermediateResponses contains intermediate responses from multi-round algorithms (e.g., ReMoM)
 	// This is used for visualization in the dashboard
 	IntermediateResponses interface{} `json:"intermediate_responses,omitempty"`
+
+	// Usage is the aggregated token usage across all model calls made during
+	// this execution. It mirrors the usage block embedded in Body so callers
+	// (extproc, dashboard, metrics) can read totals without re-parsing the body.
+	Usage TokenUsage `json:"usage,omitempty"`
 }
 
 // Looper defines the interface for multi-model execution strategies
@@ -108,6 +122,8 @@ func FactoryWithSelectionRegistry(
 		return NewRatingsLooper(cfg)
 	case "remom":
 		return NewReMoMLooper(cfg)
+	case "fusion":
+		return NewFusionLooper(cfg)
 	case "rl_driven":
 		return NewRLDrivenLooperWithSelectionRegistry(cfg, selectorRegistry)
 	default:

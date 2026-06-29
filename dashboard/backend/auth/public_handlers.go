@@ -32,6 +32,12 @@ func bootstrapCanRegisterHandler(svc *Service) http.HandlerFunc {
 	}
 }
 
+// hashBootstrapPassword is an indirection over Service.HashPassword so tests
+// can observe that no bcrypt work happens once the bootstrap window is closed.
+var hashBootstrapPassword = func(svc *Service, password string) (string, error) {
+	return svc.HashPassword(password)
+}
+
 func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -54,7 +60,23 @@ func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 			return
 		}
 
-		hash, err := svc.HashPassword(req.Password)
+		// Fast-reject before the expensive bcrypt hash: once an admin exists this
+		// request is certain to fail, and hashing first lets unauthenticated
+		// callers burn a full cost-12 bcrypt round per request for as long as the
+		// bootstrap endpoint stays enabled. This check is a cheap pre-filter
+		// only; BootstrapRegister re-checks under its lock, which remains the
+		// correctness gate for concurrent requests.
+		canBootstrap, err := svc.CanBootstrap(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !canBootstrap {
+			http.Error(w, "bootstrap is disabled", http.StatusConflict)
+			return
+		}
+
+		hash, err := hashBootstrapPassword(svc, req.Password)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

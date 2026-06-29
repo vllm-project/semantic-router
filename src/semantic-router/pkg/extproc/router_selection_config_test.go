@@ -80,7 +80,18 @@ func gmtRouterLearningDecision() config.Decision {
 }
 
 func TestBuildModelSelectionConfigPreservesLearningDefaultsWhenUnset(t *testing.T) {
-	got := buildModelSelectionConfig(&config.RouterConfig{})
+	defaults := config.DefaultGlobalConfig()
+	got := buildModelSelectionConfig(&defaults)
+
+	defaultRouterDC := selection.DefaultRouterDCConfig()
+	if !reflect.DeepEqual(got.RouterDC, defaultRouterDC) {
+		t.Fatalf("RouterDC default drift:\n got: %+v\nwant: %+v", got.RouterDC, defaultRouterDC)
+	}
+
+	defaultHybrid := selection.DefaultHybridConfig()
+	if !reflect.DeepEqual(got.Hybrid, defaultHybrid) {
+		t.Fatalf("Hybrid default drift:\n got: %+v\nwant: %+v", got.Hybrid, defaultHybrid)
+	}
 
 	defaultRL := selection.DefaultRLDrivenConfig()
 	if !reflect.DeepEqual(got.RLDriven, defaultRL) {
@@ -90,6 +101,53 @@ func TestBuildModelSelectionConfigPreservesLearningDefaultsWhenUnset(t *testing.
 	defaultGMT := selection.DefaultGMTRouterConfig()
 	if !reflect.DeepEqual(got.GMTRouter, defaultGMT) {
 		t.Fatalf("GMTRouter default drift:\n got: %+v\nwant: %+v", got.GMTRouter, defaultGMT)
+	}
+}
+
+func TestBuildModelSelectionConfigPreservesExplicitFalseOverrides(t *testing.T) {
+	cfg := config.DefaultGlobalConfig()
+	cfg.IntelligentRouting.ModelSelection.RouterDC.UseCapabilities = false
+	cfg.IntelligentRouting.ModelSelection.Hybrid.NormalizeScores = false
+
+	got := buildModelSelectionConfig(&cfg)
+
+	if got.RouterDC == nil {
+		t.Fatal("expected RouterDC config to be built")
+	}
+	if got.RouterDC.UseCapabilities {
+		t.Fatalf("expected explicit router_dc.use_capabilities=false to be preserved, got %+v", got.RouterDC)
+	}
+	if got.RouterDC.Temperature != selection.DefaultRouterDCConfig().Temperature {
+		t.Fatalf("expected router_dc defaults to survive explicit false override, got %+v", got.RouterDC)
+	}
+
+	if got.Hybrid == nil {
+		t.Fatal("expected Hybrid config to be built")
+	}
+	if got.Hybrid.NormalizeScores {
+		t.Fatalf("expected explicit hybrid.normalize_scores=false to be preserved, got %+v", got.Hybrid)
+	}
+	if got.Hybrid.RouterDCWeight != selection.DefaultHybridConfig().RouterDCWeight {
+		t.Fatalf("expected hybrid defaults to survive explicit false override, got %+v", got.Hybrid)
+	}
+}
+
+func TestBuildHybridSelectionConfigMergesDecisionOverrides(t *testing.T) {
+	cfg := config.DefaultGlobalConfig()
+
+	got := buildHybridSelectionConfig(&cfg, &config.HybridSelectionConfig{
+		ExperienceWeight: 0.6,
+		RouterDCWeight:   0.4,
+	})
+
+	if got == nil {
+		t.Fatal("expected Hybrid config to be built")
+	}
+	if got.ExperienceWeight != 0.6 || got.RouterDCWeight != 0.4 {
+		t.Fatalf("expected decision-scoped hybrid weights, got %+v", got)
+	}
+	if got.AutoMixWeight != selection.DefaultHybridConfig().AutoMixWeight || !got.NormalizeScores {
+		t.Fatalf("expected decision-scoped hybrid config to preserve remaining defaults, got %+v", got)
 	}
 }
 

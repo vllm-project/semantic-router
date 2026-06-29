@@ -225,7 +225,10 @@ const TopologyFlow: React.FC = () => {
               <div className={styles.toolbarRow}>
                 <button
                   type="button"
-                  className={`${styles.toolBtn} ${focusMode ? styles.toolBtnActive : ''}`}
+                  role="switch"
+                  aria-checked={focusMode}
+                  aria-label="Toggle focus mode"
+                  className={`${styles.focusSwitch} ${focusMode ? styles.focusSwitchOn : ''}`}
                   onClick={() => {
                     setFocusMode(prev => {
                       const next = !prev
@@ -234,7 +237,10 @@ const TopologyFlow: React.FC = () => {
                     })
                   }}
                 >
-                  {focusMode ? 'On' : 'Off'}
+                  <span className={styles.focusSwitchTrack} aria-hidden="true">
+                    <span className={styles.focusSwitchThumb} />
+                  </span>
+                  <span className={styles.focusSwitchText}>{focusMode ? 'On' : 'Off'}</span>
                 </button>
                 {focusedDecisionName && (
                   <button
@@ -264,15 +270,15 @@ const TopologyFlow: React.FC = () => {
             fitViewOptions={{ padding: 0.16, minZoom: 0.15, maxZoom: 1.0 }}
             defaultViewport={{ x: 0, y: 0, zoom: 0.32 }}
           >
-            <Background 
+            <Background
               variant={BackgroundVariant.Dots}
               gap={20}
               size={1}
               color={isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)'}
             />
             <Controls />
-            <MiniMap 
-              nodeColor={getNodeColor} 
+            <MiniMap
+              nodeColor={getNodeColor}
               maskColor={isDark ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.3)'}
               style={{
                 backgroundColor: isDark ? '#141414' : '#ffffff',

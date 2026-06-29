@@ -29,7 +29,20 @@ export interface SignalConfig {
   name: string
   description?: string
   latency: string
-  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | StructureSignalConfig | ComplexitySignalConfig | ModalitySignalConfig | AuthzSignalConfig | JailbreakSignalConfig | PIISignalConfig | KBSignalConfig | ProjectionSignalConfig | GenericSignalConfig
+  config:
+    | KeywordSignalConfig
+    | EmbeddingSignalConfig
+    | DomainSignalConfig
+    | ContextSignalConfig
+    | StructureSignalConfig
+    | ComplexitySignalConfig
+    | ModalitySignalConfig
+    | AuthzSignalConfig
+    | JailbreakSignalConfig
+    | PIISignalConfig
+    | KBSignalConfig
+    | ProjectionSignalConfig
+    | GenericSignalConfig
 }
 
 export interface KeywordSignalConfig {
@@ -176,20 +189,17 @@ export type AlgorithmType =
   | 'sequential'
   | 'ratings'
   | 'static'
-  | 'elo'
   | 'router_dc'
   | 'automix'
   | 'hybrid'
   | 'remom'
-  | 'rl_driven'
-  | 'gmtrouter'
+  | 'fusion'
   | 'latency_aware'
   | 'knn'
   | 'kmeans'
   | 'svm'
   | 'mlp'
   | 'multi_factor'
-  | 'session_aware'
 
 export interface AlgorithmConfig {
   type: AlgorithmType
@@ -198,19 +208,16 @@ export interface AlgorithmConfig {
   latency_aware?: LatencyAwareAlgorithmConfig
   ratings?: GenericAlgorithmConfig
   remom?: GenericAlgorithmConfig
-  elo?: GenericAlgorithmConfig
+  fusion?: GenericAlgorithmConfig
   router_dc?: GenericAlgorithmConfig
   automix?: GenericAlgorithmConfig
   autoMix?: GenericAlgorithmConfig
   hybrid?: GenericAlgorithmConfig
-  rl_driven?: GenericAlgorithmConfig
-  gmtrouter?: GenericAlgorithmConfig
   knn?: GenericAlgorithmConfig
   kmeans?: GenericAlgorithmConfig
   svm?: GenericAlgorithmConfig
   mlp?: GenericAlgorithmConfig
   multi_factor?: GenericAlgorithmConfig
-  session_aware?: GenericAlgorithmConfig
 }
 
 export type RawDecisionAlgorithmConfig = Omit<Partial<AlgorithmConfig>, 'type'> & {
@@ -347,8 +354,8 @@ export interface TestQueryResult {
   evaluatedRules?: EvaluatedRule[]
   routingLatency?: number
   warning?: string
-  isFallbackDecision?: boolean  // True if matched decision is a system fallback
-  fallbackReason?: string       // Reason for fallback (e.g., "low_confidence", "no_match")
+  isFallbackDecision?: boolean // True if matched decision is a system fallback
+  fallbackReason?: string // Reason for fallback (e.g., "low_confidence", "no_match")
 }
 
 export interface MatchedSignal {
@@ -379,7 +386,7 @@ export interface ParsedTopology {
   decisions: DecisionConfig[]
   models: ModelConfig[]
   strategy: 'priority' | 'confidence'
-  defaultModel?: string  // Default/fallback model when no decision matches
+  defaultModel?: string // Default/fallback model when no decision matches
 }
 
 // ============== View Mode ==============
@@ -570,11 +577,13 @@ export interface ConfigData {
     description?: string
     system_prompt?: string
     mmlu_categories?: string[]
-    model_scores?: Array<{
-      model: string
-      score: number
-      use_reasoning?: boolean
-    }> | Record<string, number>
+    model_scores?:
+      | Array<{
+          model: string
+          score: number
+          use_reasoning?: boolean
+        }>
+      | Record<string, number>
   }>
   model_config?: {
     [key: string]: {

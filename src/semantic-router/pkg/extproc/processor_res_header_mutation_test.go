@@ -11,10 +11,14 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 func TestBuildResponseHeaderMutation_IncludesExtendedMatchedSignalHeaders(t *testing.T) {
+	// Matched signal headers are demoted to the debug surface (#2205), so the
+	// request opts into x-vsr-debug to exercise them.
 	ctx := &RequestContext{
+		Headers:              map[string]string{headers.VSRDebug: "true"},
 		VSRMatchedKeywords:   []string{"keyword:math"},
 		VSRMatchedEmbeddings: []string{"embedding:math"},
 		VSRMatchedDomains:    []string{"domain:math"},
@@ -45,14 +49,20 @@ func TestBuildResponseHeaderMutation_IncludesExtendedMatchedSignalHeaders(t *tes
 }
 
 func TestBuildResponseHeaderMutation_EmitsZeroDecisionConfidence(t *testing.T) {
+	// The decision/confidence/model facts ride on the default surface; the
+	// session phase and context-token count are demoted to x-vsr-debug (#2205),
+	// so the request opts into debug to exercise all five fields together.
 	ctx := &RequestContext{
+		Headers:                       map[string]string{headers.VSRDebug: "true"},
 		VSRSelectedDecisionName:       "agentic_routing",
 		VSRSelectedDecisionConfidence: 0,
 		VSRSelectedModel:              "qwen-small",
 		VSRContextTokenCount:          42,
-		VSRSessionPolicy: map[string]interface{}{
-			"phase": "provider_state",
-		},
+		VSRLearningPolicies: testLearningPolicies(
+			replayTestProtectionPolicyWithTrace(&selection.SessionPolicyTrace{
+				Phase: "provider_state",
+			}),
+		),
 	}
 
 	mutation := buildResponseHeaderMutation(ctx, true)
@@ -67,18 +77,22 @@ func TestBuildResponseHeaderMutation_EmitsZeroDecisionConfidence(t *testing.T) {
 	assert.Equal(t, "42", headerMap[headers.VSRContextTokenCount])
 }
 
-func TestBuildResponseHeaderMutation_ProtocolMarkersDefaultToOpenAI(t *testing.T) {
+func TestBuildResponseHeaderMutation_SameProtocolOmitsMarkers(t *testing.T) {
+	// Default ctx: client and upstream both normalize to "openai" — no
+	// cross-protocol translation, so the protocol markers are omitted (#2206).
 	ctx := &RequestContext{}
 
 	mutation := buildResponseHeaderMutation(ctx, true)
 	require.NotNil(t, mutation)
 
 	headerMap := mutationToMap(mutation.SetHeaders)
-	assert.Equal(t, "openai", headerMap[headers.VSRInboundProtocol])
-	assert.Equal(t, "openai", headerMap[headers.VSROutboundProtocol])
+	assert.NotContains(t, headerMap, headers.VSRClientProtocol)
+	assert.NotContains(t, headerMap, headers.VSRUpstreamProtocol)
 }
 
-func TestBuildResponseHeaderMutation_ProtocolMarkersReflectAnthropicIngress(t *testing.T) {
+func TestBuildResponseHeaderMutation_SameProtocolAnthropicOmitsMarkers(t *testing.T) {
+	// Anthropic in and anthropic out is still same-protocol (no translation),
+	// so the markers are omitted (#2206).
 	ctx := &RequestContext{
 		ClientProtocol: config.ClientProtocolAnthropic,
 		APIFormat:      config.APIFormatAnthropic,
@@ -88,8 +102,39 @@ func TestBuildResponseHeaderMutation_ProtocolMarkersReflectAnthropicIngress(t *t
 	require.NotNil(t, mutation)
 
 	headerMap := mutationToMap(mutation.SetHeaders)
-	assert.Equal(t, "anthropic", headerMap[headers.VSRInboundProtocol])
-	assert.Equal(t, "anthropic", headerMap[headers.VSROutboundProtocol])
+	assert.NotContains(t, headerMap, headers.VSRClientProtocol)
+	assert.NotContains(t, headerMap, headers.VSRUpstreamProtocol)
+}
+
+func TestBuildResponseHeaderMutation_CrossProtocolEmitsMarkers(t *testing.T) {
+	// Anthropic client translated to an OpenAI upstream — cross-protocol, so
+	// both markers are emitted (#2206).
+	ctx := &RequestContext{
+		ClientProtocol: config.ClientProtocolAnthropic,
+		APIFormat:      "openai",
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "anthropic", headerMap[headers.VSRClientProtocol])
+	assert.Equal(t, "openai", headerMap[headers.VSRUpstreamProtocol])
+}
+
+func TestBuildResponseHeaderMutation_DebugHeaderEmitsMarkersOnSameProtocol(t *testing.T) {
+	// Same-protocol (both openai), but the request opted into debug headers via
+	// x-vsr-debug, so the markers are emitted anyway (#2216).
+	ctx := &RequestContext{
+		Headers: map[string]string{headers.VSRDebug: "true"},
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "openai", headerMap[headers.VSRClientProtocol])
+	assert.Equal(t, "openai", headerMap[headers.VSRUpstreamProtocol])
 }
 
 func TestBuildResponseHeaderMutation_ProtocolMarkersEmittedOnFailedResponse(t *testing.T) {
@@ -101,8 +146,8 @@ func TestBuildResponseHeaderMutation_ProtocolMarkersEmittedOnFailedResponse(t *t
 	require.NotNil(t, mutation)
 
 	headerMap := mutationToMap(mutation.SetHeaders)
-	assert.Equal(t, "anthropic", headerMap[headers.VSRInboundProtocol])
-	assert.Equal(t, "openai", headerMap[headers.VSROutboundProtocol])
+	assert.Equal(t, "anthropic", headerMap[headers.VSRClientProtocol])
+	assert.Equal(t, "openai", headerMap[headers.VSRUpstreamProtocol])
 
 	// Existing pre-PR3 markers stay gated by isSuccessful.
 	assert.NotContains(t, headerMap, headers.VSRSelectedCategory)
@@ -127,6 +172,7 @@ func TestBuildResponseHeaderMutation_NilContextReturnsNil(t *testing.T) {
 
 func TestBuildResponseHeaderMutation_EmitsRetentionDirectiveHeaders(t *testing.T) {
 	ctx := &RequestContext{
+		Headers:                 map[string]string{headers.VSRDebug: "true"},
 		VSRSelectedDecisionName: "agentic_routing",
 		VSRSelectedModel:        "qwen-small",
 		EmittedRetention: &config.RetentionDirective{
@@ -148,6 +194,7 @@ func TestBuildResponseHeaderMutation_EmitsRetentionDirectiveHeaders(t *testing.T
 func TestBuildResponseHeaderMutation_OmitsUnsetRetentionHeaders(t *testing.T) {
 	// Tri-state: only fields the directive explicitly set are emitted.
 	ctx := &RequestContext{
+		Headers:                 map[string]string{headers.VSRDebug: "true"},
 		VSRSelectedDecisionName: "agentic_routing",
 		VSRSelectedModel:        "qwen-small",
 		EmittedRetention:        &config.RetentionDirective{PreferPrefixRetention: boolPtr(true)},
@@ -169,6 +216,7 @@ func TestBuildResponseHeaderMutation_EmitsExplicitZeroTTLTurns(t *testing.T) {
 	// are rejected). Regression guard against the old "*TTLTurns > 0" gate that
 	// silently dropped the header for an explicit zero.
 	ctx := &RequestContext{
+		Headers:                 map[string]string{headers.VSRDebug: "true"},
 		VSRSelectedDecisionName: "agentic_routing",
 		VSRSelectedModel:        "qwen-small",
 		EmittedRetention:        &config.RetentionDirective{TTLTurns: intPtr(0)},
@@ -186,6 +234,7 @@ func TestBuildResponseHeaderMutation_EmitsExplicitFalseRetentionBools(t *testing
 	// set bool field of value false must still be emitted as "false" (not
 	// suppressed), so the wire contract is symmetric across every field.
 	ctx := &RequestContext{
+		Headers:                 map[string]string{headers.VSRDebug: "true"},
 		VSRSelectedDecisionName: "agentic_routing",
 		VSRSelectedModel:        "qwen-small",
 		EmittedRetention: &config.RetentionDirective{
@@ -238,7 +287,7 @@ func TestAddLossinessWarnings_SingleEntry(t *testing.T) {
 	headerMap := mutationToMap(builder.setHeaders)
 	assert.Equal(t,
 		"lossy;top_k_drop_on_openai_backend;top_k",
-		headerMap[headers.VSRLossinessWarnings],
+		headerMap[headers.VSRProtocolWarnings],
 	)
 }
 
@@ -257,7 +306,7 @@ func TestAddLossinessWarnings_MultipleEntriesCommaSeparated(t *testing.T) {
 		"lossy;unsupported_block_type;messages[0].content[2],"+
 			"lossy;dropped;top_k,"+
 			"info;coerced_string;tool_choice.disable_parallel_tool_use",
-		headerMap[headers.VSRLossinessWarnings],
+		headerMap[headers.VSRProtocolWarnings],
 	)
 }
 
@@ -278,7 +327,7 @@ func TestAddLossinessWarnings_TruncationAppendsTrailer(t *testing.T) {
 	builder.addLossinessWarnings(ctx, warnings)
 
 	headerMap := mutationToMap(builder.setHeaders)
-	got := headerMap[headers.VSRLossinessWarnings]
+	got := headerMap[headers.VSRProtocolWarnings]
 
 	assert.NotEmpty(t, got)
 	// The encoded list lives close to 4 KB; the trailer itself adds a
@@ -300,7 +349,7 @@ func TestAddLossinessWarnings_SanitizesSeparatorsInFieldPaths(t *testing.T) {
 	headerMap := mutationToMap(builder.setHeaders)
 	assert.Equal(t,
 		"lossy;dropped%3Bextra%2Cbits;weird%3Bfield%2Cname",
-		headerMap[headers.VSRLossinessWarnings],
+		headerMap[headers.VSRProtocolWarnings],
 	)
 }
 
@@ -315,7 +364,7 @@ func TestAddLossinessWarnings_SanitizesCRLFInFieldPaths(t *testing.T) {
 	}})
 
 	headerMap := mutationToMap(builder.setHeaders)
-	got := headerMap[headers.VSRLossinessWarnings]
+	got := headerMap[headers.VSRProtocolWarnings]
 	assert.NotContains(t, got, "\r")
 	assert.NotContains(t, got, "\n")
 	assert.Contains(t, got, "%0D%0A")
@@ -333,20 +382,157 @@ func TestBuildResponseHeaderMutation_EmitsWarningsAlongsideStandardHeaders(t *te
 				Severity: ir.WarningSeverityLossy,
 			}},
 		},
-		VSRSelectedCategory: "math",
+		VSRSelectedDecisionName: "math_decision",
 	}
 
 	mutation := buildResponseHeaderMutation(ctx, true)
 	require.NotNil(t, mutation)
 
 	headerMap := mutationToMap(mutation.SetHeaders)
-	assert.Equal(t, "anthropic", headerMap[headers.VSRInboundProtocol])
-	assert.Equal(t, "openai", headerMap[headers.VSROutboundProtocol])
+	assert.Equal(t, "anthropic", headerMap[headers.VSRClientProtocol])
+	assert.Equal(t, "openai", headerMap[headers.VSRUpstreamProtocol])
 	assert.Equal(t,
 		"lossy;top_k_drop_on_openai_backend;top_k",
-		headerMap[headers.VSRLossinessWarnings],
+		headerMap[headers.VSRProtocolWarnings],
 	)
-	assert.Equal(t, "math", headerMap[headers.VSRSelectedCategory])
+	// The warnings ride alongside the default-surface routing facts (#2205).
+	assert.Equal(t, "math_decision", headerMap[headers.VSRSelectedDecision])
+}
+
+func TestBuildResponseHeaderMutation_EmitsSplitRouterLearningHeaders(t *testing.T) {
+	// Router Learning headers are part of the intermediate decision detail and
+	// are demoted to the x-vsr-debug surface (#2205), so the request opts into
+	// debug to exercise them.
+	ctx := &RequestContext{
+		Headers: map[string]string{headers.VSRDebug: "true"},
+		VSRLearningPolicy: headerTestLearningPolicy(
+			routerLearningMethodProtection,
+			"apply",
+			routerLearningActionAllowSwitch,
+			"switch_allowed",
+			"conversation",
+		),
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "protection", headerMap[headers.VSRLearningMethods])
+	assert.Equal(t, "protection=allow_switch", headerMap[headers.VSRLearningActions])
+	assert.Equal(t, "protection=conversation", headerMap[headers.VSRLearningScopes])
+	assert.Equal(t, "protection=switch_allowed", headerMap[headers.VSRLearningReasons])
+}
+
+func TestBuildResponseHeaderMutation_EmitsBaselineLearningHeaders(t *testing.T) {
+	// Demoted to the x-vsr-debug surface (#2205), so opt into debug.
+	ctx := &RequestContext{
+		Headers: map[string]string{headers.VSRDebug: "true"},
+		VSRLearningPolicy: headerTestLearningPolicy(
+			routerLearningMethodProtection,
+			"apply",
+			routerLearningActionEstablishBaseline,
+			"new_conversation",
+			"conversation",
+		),
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "protection", headerMap[headers.VSRLearningMethods])
+	assert.Equal(t, "protection=establish_baseline", headerMap[headers.VSRLearningActions])
+	assert.Equal(t, "protection=conversation", headerMap[headers.VSRLearningScopes])
+	assert.Equal(t, "protection=new_conversation", headerMap[headers.VSRLearningReasons])
+}
+
+func TestBuildResponseHeaderMutation_EmitsNonApplyLearningActionWithoutModeHeader(t *testing.T) {
+	// Demoted to the x-vsr-debug surface (#2205), so opt into debug.
+	ctx := &RequestContext{
+		Headers: map[string]string{headers.VSRDebug: "true"},
+		VSRLearningPolicy: headerTestLearningPolicy(
+			routerLearningMethodProtection,
+			"observe",
+			routerLearningActionHoldCurrent,
+			"tool_or_protocol_state",
+			"session",
+		),
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "protection=hold_current", headerMap[headers.VSRLearningActions])
+	assert.Equal(t, "protection=session", headerMap[headers.VSRLearningScopes])
+	assert.NotContains(t, headerMap, "x-vsr-learning-modes")
+}
+
+func TestBuildResponseHeaderMutation_EmitsMultipleLearningPolicies(t *testing.T) {
+	// Demoted to the x-vsr-debug surface (#2205), so opt into debug.
+	ctx := &RequestContext{
+		Headers: map[string]string{headers.VSRDebug: "true"},
+		VSRLearningPolicies: testLearningPolicies(
+			*headerTestLearningPolicy(
+				routerLearningMethodProtection,
+				"apply",
+				routerLearningActionHoldCurrent,
+				"cache_cost_high",
+				"conversation",
+			),
+			*headerTestLearningPolicy(
+				routerLearningMethodAdaptation,
+				"observe",
+				routerLearningActionObserve,
+				"observe_only",
+				"",
+			),
+		),
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "adaptation,protection", headerMap[headers.VSRLearningMethods])
+	assert.Equal(t, "adaptation=observe,protection=hold_current", headerMap[headers.VSRLearningActions])
+	assert.Equal(t, "protection=conversation", headerMap[headers.VSRLearningScopes])
+	assert.Equal(t, "adaptation=observe_only,protection=cache_cost_high", headerMap[headers.VSRLearningReasons])
+	assert.NotContains(t, headerMap, "x-vsr-learning-modes")
+}
+
+func TestBuildResponseHeaderMutation_OmitsEmptyLearningPolicies(t *testing.T) {
+	ctx := &RequestContext{
+		VSRLearningPolicies: testLearningPolicies(
+			routerLearningPolicy{},
+			routerLearningPolicy{},
+		),
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.NotContains(t, headerMap, headers.VSRLearningMethods)
+	assert.NotContains(t, headerMap, headers.VSRLearningActions)
+	assert.NotContains(t, headerMap, headers.VSRLearningScopes)
+	assert.NotContains(t, headerMap, headers.VSRLearningReasons)
+}
+
+func headerTestLearningPolicy(
+	method routerLearningMethod,
+	mode string,
+	action routerLearningAction,
+	reason string,
+	scope string,
+) *routerLearningPolicy {
+	policy := newRouterLearningPolicy(method)
+	policy.Mode = mode
+	policy.Action = action
+	policy.Reason = reason
+	policy.Scope = scope
+	return &policy
 }
 
 func TestNormalizeProtocol(t *testing.T) {

@@ -129,7 +129,7 @@
   white-space: nowrap;
 }
 
-.maintainer {
+.steering {
   background: rgba(15, 23, 42, 0.08);
   color: var(--site-text);
 }
