@@ -189,7 +189,7 @@ def docker_start_jaeger(
         f"{stack_layout.jaeger_otlp_port}:4317",
         "-p",
         f"{stack_layout.jaeger_ui_port}:16686",
-        "jaegertracing/all-in-one:latest",
+        "docker.io/jaegertracing/all-in-one:latest",
     ]
     return _run_service_start(cmd, "Jaeger")
 
@@ -245,7 +245,7 @@ def docker_start_prometheus(
         f"{os.path.abspath(prometheus_data_dir)}:/prometheus",
         "-p",
         f"{stack_layout.prometheus_port}:9090",
-        "prom/prometheus:v2.53.0",
+        "docker.io/prom/prometheus:v2.53.0",
         "--config.file=/etc/prometheus/prometheus.yaml",
         "--storage.tsdb.path=/prometheus/data",
         "--storage.tsdb.retention.time=15d",
@@ -308,7 +308,7 @@ def docker_start_grafana(
         f"{os.path.abspath(os.path.join(grafana_dir, 'llm-router-dashboard.serve.json'))}:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro",
         "-p",
         f"{stack_layout.grafana_port}:3000",
-        "grafana/grafana:11.5.1",
+        "docker.io/grafana/grafana:11.5.1",
     ]
     return _run_service_start(cmd, "Grafana")
 
@@ -350,7 +350,7 @@ def docker_start_redis(
         network_name,
         "-p",
         f"{stack_layout.redis_port}:6379",
-        "redis:7-alpine",
+        "docker.io/library/redis:7-alpine",
     ]
     return _run_service_start(cmd, "Redis")
 
@@ -398,7 +398,7 @@ def docker_start_postgres(
         "POSTGRES_PASSWORD=router-secret",
         "-p",
         f"{stack_layout.postgres_port}:5432",
-        "postgres:16-alpine",
+        "docker.io/library/postgres:16-alpine",
     ]
     return _run_service_start(cmd, "Postgres")
 
@@ -466,7 +466,7 @@ def docker_start_milvus(
         f"{stack_layout.milvus_port}:19530",
         "-v",
         f"{os.path.abspath(milvus_data_dir)}:/var/lib/milvus:z",
-        "milvusdb/milvus:v2.3.3",
+        "docker.io/milvusdb/milvus:v2.3.3",
         "milvus",
         "run",
         "standalone",
