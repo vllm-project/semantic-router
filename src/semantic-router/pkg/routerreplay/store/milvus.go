@@ -420,6 +420,20 @@ func (m *MilvusStore) AttachResponse(ctx context.Context, id string, body string
 	return m.upsertRecord(ctx, record)
 }
 
+// AppendOutcome links post-route feedback to a record.
+func (m *MilvusStore) AppendOutcome(ctx context.Context, id string, outcome Outcome) error {
+	record, found, err := m.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	record.Outcomes = append(record.Outcomes, cloneOutcome(outcome))
+	return m.upsertRecord(ctx, record)
+}
+
 // UpdateHallucinationStatus updates hallucination detection results for a record.
 func (m *MilvusStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error {
 	record, found, err := m.Get(ctx, id)

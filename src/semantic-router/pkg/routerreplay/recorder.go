@@ -22,13 +22,24 @@ const (
 )
 
 type (
-	Signal              = store.Signal
-	LearningDiagnostics = store.LearningDiagnostics
-	RouteDiagnostics    = store.RouteDiagnostics
-	RoutingRecord       = store.Record
-	ToolTrace           = store.ToolTrace
-	ToolTraceStep       = store.ToolTraceStep
-	UsageCost           = store.UsageCost
+	Signal                        = store.Signal
+	LearningDiagnostics           = store.LearningDiagnostics
+	LearningAdaptationDiagnostics = store.LearningAdaptationDiagnostics
+	LearningCandidateScore        = store.LearningCandidateScore
+	LearningCandidateTrace        = store.LearningCandidateTrace
+	LearningIdentityDiagnostics   = store.LearningIdentityDiagnostics
+	LearningIdentityHeaders       = store.LearningIdentityHeaders
+	LearningIdentityPart          = store.LearningIdentityPart
+	LearningPolicyDiagnostics     = store.LearningPolicyDiagnostics
+	LearningProtectionDiagnostics = store.LearningProtectionDiagnostics
+	LearningRescueDiagnostics     = store.LearningRescueDiagnostics
+	LearningSamplingDiagnostics   = store.LearningSamplingDiagnostics
+	Outcome                       = store.Outcome
+	RouteDiagnostics              = store.RouteDiagnostics
+	RoutingRecord                 = store.Record
+	ToolTrace                     = store.ToolTrace
+	ToolTraceStep                 = store.ToolTraceStep
+	UsageCost                     = store.UsageCost
 )
 
 type Recorder struct {
@@ -215,6 +226,11 @@ func (r *Recorder) AttachResponse(id string, responseBody []byte) error {
 	body, truncated := truncateBody(responseBody, r.maxBodyBytes)
 	ctx := context.Background()
 	return r.storage.AttachResponse(ctx, id, body, truncated)
+}
+
+func (r *Recorder) AppendOutcome(id string, outcome Outcome) error {
+	ctx := context.Background()
+	return r.storage.AppendOutcome(ctx, id, outcome)
 }
 
 // UpdateHallucinationStatus updates hallucination detection results for a record.

@@ -1,5 +1,7 @@
 package config
 
+import "strings"
+
 const (
 	// RouterLearningScopeConversation protects one agent conversation while
 	// allowing later conversations in the same session to be re-evaluated.
@@ -7,94 +9,206 @@ const (
 	// RouterLearningScopeSession protects the whole declared agent session.
 	RouterLearningScopeSession = "session"
 
-	// DecisionAdaptationModeApply lets an adaptation change the selected model.
+	// DecisionAdaptationModeApply lets learning affect the final selected model.
 	DecisionAdaptationModeApply = "apply"
 	// DecisionAdaptationModeObserve computes diagnostics but leaves selection unchanged.
 	DecisionAdaptationModeObserve = "observe"
-	// DecisionAdaptationModeBypass disables an adaptation for a hard policy route.
+	// DecisionAdaptationModeBypass disables learning for a hard policy route.
 	DecisionAdaptationModeBypass = "bypass"
+
+	// RouterLearningCandidateSetDecision lets adaptation search within the matched decision.
+	RouterLearningCandidateSetDecision = "decision"
+	// RouterLearningCandidateSetTier lets adaptation search the matched decision tier.
+	RouterLearningCandidateSetTier = "tier"
+	// RouterLearningCandidateSetGlobal lets adaptation search the deployed model inventory.
+	RouterLearningCandidateSetGlobal = "global"
+
+	// RouterLearningStrategyRoutingSampling is the default online model-choice algorithm.
+	RouterLearningStrategyRoutingSampling = "routing_sampling"
 )
 
-// RouterLearningConfig is the public cross-request routing intelligence surface.
-// It owns adaptation registration while concrete storage controls remain with
-// existing services such as global.services.router_replay.
+const (
+	routerLearningDefaultSessionHeader      = "x-session-id"
+	routerLearningDefaultConversationHeader = "x-conversation-id"
+)
+
+// RouterLearningConfig is the public cross-request routing intelligence
+// surface. Adaptation proposes model-choice improvements; protection controls
+// exploration and model switches for agent continuity.
 type RouterLearningConfig struct {
-	Enabled     bool                      `yaml:"enabled,omitempty"`
-	Adaptations RouterLearningAdaptations `yaml:"adaptations,omitempty"`
+	Enabled    bool                           `yaml:"enabled,omitempty"`
+	Adaptation RouterLearningAdaptationConfig `yaml:"adaptation,omitempty"`
+	Protection RouterLearningProtectionConfig `yaml:"protection,omitempty"`
 }
 
-// RouterLearningAdaptations contains globally registered learning adaptations.
-type RouterLearningAdaptations struct {
-	SessionAware SessionAwareLearningConfig `yaml:"session_aware,omitempty"`
+// RouterLearningAdaptationConfig configures online model-choice learning.
+type RouterLearningAdaptationConfig struct {
+	Enabled      *bool  `yaml:"enabled,omitempty"`
+	CandidateSet string `yaml:"candidate_set,omitempty"`
+	Strategy     string `yaml:"strategy,omitempty"`
 }
 
-// SessionAwareLearningConfig configures session-aware Router Learning.
-type SessionAwareLearningConfig struct {
-	Enabled  bool                       `yaml:"enabled,omitempty"`
-	Scope    string                     `yaml:"scope,omitempty"`
-	Identity SessionAwareIdentityConfig `yaml:"identity,omitempty"`
-	Tuning   SessionAwareLearningTuning `yaml:"tuning,omitempty"`
+// RouterLearningProtectionConfig configures online stability protection.
+type RouterLearningProtectionConfig struct {
+	Enabled  *bool                          `yaml:"enabled,omitempty"`
+	Scope    string                         `yaml:"scope,omitempty"`
+	Identity RouterLearningIdentityConfig   `yaml:"identity,omitempty"`
+	Tuning   RouterLearningProtectionTuning `yaml:"tuning,omitempty"`
 }
 
-// SessionAwareIdentityConfig declares where session-aware learning reads
-// stable client identity. Unknown header keys are preserved for future
-// adaptations but the session-aware runtime currently uses session and
-// conversation.
-type SessionAwareIdentityConfig struct {
-	Headers map[string]string `yaml:"headers,omitempty"`
+// RouterLearningIdentityConfig declares where protection reads stable client
+// identity. The runtime currently uses the session and conversation keys.
+type RouterLearningIdentityConfig struct {
+	Headers RouterLearningIdentityHeadersConfig `yaml:"headers,omitempty"`
 }
 
-// SessionAwareLearningTuning exposes the stable session-aware knobs that remain
-// meaningful after moving the feature out of decision.algorithm.
-type SessionAwareLearningTuning struct {
-	IdleTimeoutSeconds     *int     `yaml:"idle_timeout_seconds,omitempty"`
-	MinTurnsBeforeSwitch   *int     `yaml:"min_turns_before_switch,omitempty"`
-	SwitchMargin           *float64 `yaml:"switch_margin,omitempty"`
-	CacheWeight            *float64 `yaml:"cache_weight,omitempty"`
-	HandoffPenalty         *float64 `yaml:"handoff_penalty,omitempty"`
-	HandoffPenaltyWeight   *float64 `yaml:"handoff_penalty_weight,omitempty"`
-	SwitchHistoryWeight    *float64 `yaml:"switch_history_weight,omitempty"`
-	MaxCacheCostMultiplier *float64 `yaml:"max_cache_cost_multiplier,omitempty"`
+// RouterLearningIdentityHeadersConfig is intentionally typed. The public
+// protection identity shape supports only the headers used by the protection
+// runtime; future identity needs should add typed fields instead of accepting
+// arbitrary header keys.
+type RouterLearningIdentityHeadersConfig struct {
+	Session      *string `yaml:"session,omitempty"`
+	Conversation *string `yaml:"conversation,omitempty"`
+}
+
+// RouterLearningProtectionTuning exposes the stable protection knobs.
+type RouterLearningProtectionTuning struct {
+	IdleTimeoutSeconds   *int     `yaml:"idle_timeout_seconds,omitempty"`
+	MinTurnsBeforeSwitch *int     `yaml:"min_turns_before_switch,omitempty"`
+	SwitchMargin         *float64 `yaml:"switch_margin,omitempty"`
+	StabilityWeight      *float64 `yaml:"stability_weight,omitempty"`
 }
 
 // DecisionAdaptationsConfig lets one matched decision control globally enabled
-// learning adaptations.
+// learning. The name stays plural because it controls multiple learning
+// components at the decision boundary.
 type DecisionAdaptationsConfig struct {
-	SessionAware *DecisionSessionAwareAdaptationConfig `yaml:"session_aware,omitempty"`
+	Mode       string                            `yaml:"mode,omitempty"`
+	Adaptation *DecisionLearningAdaptationConfig `yaml:"adaptation,omitempty"`
+	Protection *DecisionLearningProtectionConfig `yaml:"protection,omitempty"`
 }
 
-// DecisionSessionAwareAdaptationConfig controls the session-aware adaptation
-// for one decision. Empty mode inherits the default apply behavior.
-type DecisionSessionAwareAdaptationConfig struct {
-	Mode   string                     `yaml:"mode,omitempty"`
-	Scope  string                     `yaml:"scope,omitempty"`
-	Tuning SessionAwareLearningTuning `yaml:"tuning,omitempty"`
+// DecisionLearningAdaptationConfig controls decision-local model-choice
+// learning. Empty mode and candidate_set inherit the global learning defaults.
+type DecisionLearningAdaptationConfig struct {
+	Mode         string `yaml:"mode,omitempty"`
+	CandidateSet string `yaml:"candidate_set,omitempty"`
 }
 
-func (cfg SessionAwareLearningConfig) EffectiveScope() string {
+// DecisionLearningProtectionConfig controls decision-local stability
+// protection. Empty mode inherits apply.
+type DecisionLearningProtectionConfig struct {
+	Mode            string   `yaml:"mode,omitempty"`
+	StabilityWeight *float64 `yaml:"stability_weight,omitempty"`
+	SwitchMargin    *float64 `yaml:"switch_margin,omitempty"`
+}
+
+func (cfg RouterLearningAdaptationConfig) EffectiveCandidateSet() string {
+	if cfg.CandidateSet == "" {
+		return RouterLearningCandidateSetDecision
+	}
+	return cfg.CandidateSet
+}
+
+func (cfg RouterLearningAdaptationConfig) EffectiveEnabled() bool {
+	return cfg.Enabled == nil || *cfg.Enabled
+}
+
+func (cfg RouterLearningAdaptationConfig) EffectiveStrategy() string {
+	if cfg.Strategy == "" {
+		return RouterLearningStrategyRoutingSampling
+	}
+	return cfg.Strategy
+}
+
+func (cfg RouterLearningProtectionConfig) EffectiveEnabled() bool {
+	return cfg.Enabled == nil || *cfg.Enabled
+}
+
+func (cfg RouterLearningProtectionConfig) EffectiveScope() string {
 	if cfg.Scope == "" {
 		return RouterLearningScopeConversation
 	}
 	return cfg.Scope
 }
 
-func (cfg SessionAwareLearningConfig) HeaderName(key string) string {
-	if cfg.Identity.Headers != nil && cfg.Identity.Headers[key] != "" {
-		return cfg.Identity.Headers[key]
-	}
+func (cfg RouterLearningProtectionConfig) HeaderName(key string) string {
 	switch key {
 	case "session":
-		return "x-session-id"
+		if cfg.Identity.Headers.Session != nil {
+			if value := strings.TrimSpace(*cfg.Identity.Headers.Session); value != "" {
+				return value
+			}
+		}
+		return routerLearningDefaultSessionHeader
 	case "conversation":
-		return "x-conversation-id"
+		if cfg.Identity.Headers.Conversation != nil {
+			if value := strings.TrimSpace(*cfg.Identity.Headers.Conversation); value != "" {
+				return value
+			}
+		}
+		return routerLearningDefaultConversationHeader
 	default:
 		return ""
 	}
 }
 
-func (cfg DecisionAdaptationsConfig) SessionAwareMode() string {
-	if cfg.SessionAware == nil || cfg.SessionAware.Mode == "" {
+func (cfg DecisionAdaptationsConfig) EffectiveMode() string {
+	if cfg.Mode == "" {
 		return DecisionAdaptationModeApply
 	}
-	return cfg.SessionAware.Mode
+	return cfg.Mode
+}
+
+func (cfg DecisionAdaptationsConfig) AdaptationMode() string {
+	decisionMode := cfg.EffectiveMode()
+	if decisionMode == DecisionAdaptationModeBypass {
+		return decisionMode
+	}
+	if cfg.Adaptation == nil || cfg.Adaptation.Mode == "" {
+		return decisionMode
+	}
+	if decisionMode == DecisionAdaptationModeObserve && cfg.Adaptation.Mode == DecisionAdaptationModeApply {
+		return DecisionAdaptationModeObserve
+	}
+	return cfg.Adaptation.Mode
+}
+
+func (cfg DecisionAdaptationsConfig) AdaptationCandidateSet(globalCandidateSet string) string {
+	if cfg.Adaptation != nil && cfg.Adaptation.CandidateSet != "" {
+		return cfg.Adaptation.CandidateSet
+	}
+	if globalCandidateSet == "" {
+		return RouterLearningCandidateSetDecision
+	}
+	return globalCandidateSet
+}
+
+func (cfg DecisionAdaptationsConfig) ProtectionMode() string {
+	decisionMode := cfg.EffectiveMode()
+	if decisionMode == DecisionAdaptationModeBypass {
+		return decisionMode
+	}
+	if cfg.Protection == nil || cfg.Protection.Mode == "" {
+		return decisionMode
+	}
+	if decisionMode == DecisionAdaptationModeObserve && cfg.Protection.Mode == DecisionAdaptationModeApply {
+		return DecisionAdaptationModeObserve
+	}
+	return cfg.Protection.Mode
+}
+
+func (cfg DecisionAdaptationsConfig) ApplyProtectionTuning(
+	tuning RouterLearningProtectionTuning,
+) RouterLearningProtectionTuning {
+	if cfg.Protection == nil {
+		return tuning
+	}
+	if cfg.Protection.StabilityWeight != nil {
+		tuning.StabilityWeight = cfg.Protection.StabilityWeight
+	}
+	if cfg.Protection.SwitchMargin != nil {
+		tuning.SwitchMargin = cfg.Protection.SwitchMargin
+	}
+	return tuning
 }

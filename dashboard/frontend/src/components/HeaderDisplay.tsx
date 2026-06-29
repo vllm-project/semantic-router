@@ -1,4 +1,5 @@
 import styles from './HeaderDisplay.module.css'
+import { formatLearningHeaderValue, isLearningHeader } from './headerLearningDisplay'
 
 interface HeaderDisplayProps {
   headers: Record<string, string>
@@ -39,23 +40,19 @@ const HEADER_INFO: Record<
     type: 'info',
   },
   'x-vsr-learning-methods': {
-    label: 'Learning Methods',
+    label: 'Learning',
     type: 'info',
   },
   'x-vsr-learning-actions': {
-    label: 'Learning Actions',
+    label: 'Learning Action',
     type: 'info',
   },
   'x-vsr-learning-scopes': {
-    label: 'Learning Scopes',
+    label: 'Learning Scope',
     type: 'info',
   },
   'x-vsr-learning-reasons': {
-    label: 'Learning Reasons',
-    type: 'info',
-  },
-  'x-vsr-learning-modes': {
-    label: 'Learning Modes',
+    label: 'Learning Reason',
     type: 'info',
   },
   'x-vsr-fast-response': {
@@ -189,6 +186,10 @@ function shouldSummarizeHeaderValue(key: string, values: string[]): boolean {
 }
 
 function summarizeHeaderValue(key: string, rawValue: string): string {
+  if (isLearningHeader(key)) {
+    return formatLearningHeaderValue(key, rawValue)
+  }
+
   const values = rawValue
     .split(',')
     .map((value) => value.trim())

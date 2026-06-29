@@ -29,23 +29,22 @@ global:
   router:
     learning:
       enabled: true
-      adaptations:
-        session_aware:
-          enabled: true
-          scope: conversation
-          identity:
-            headers:
-              session: x-session-id
-              conversation: x-conversation-id
-          tuning:
-            idle_timeout_seconds: 300
-            min_turns_before_switch: 1
-            switch_margin: 0.05
-            cache_weight: 0.20
-            handoff_penalty: 0.05
-            handoff_penalty_weight: 1.0
-            switch_history_weight: 0.04
-            max_cache_cost_multiplier: 2.5
+      adaptation:
+        enabled: true
+        candidate_set: decision
+        strategy: routing_sampling
+      protection:
+        enabled: true
+        scope: conversation
+        identity:
+          headers:
+            session: x-session-id
+            conversation: x-conversation-id
+        tuning:
+          idle_timeout_seconds: 300
+          min_turns_before_switch: 1
+          switch_margin: 0.05
+          stability_weight: 1.0
 
 providers:
   defaults:
@@ -931,8 +930,7 @@ routing:
         - model: qwen/qwen3.6-rocm
           use_reasoning: false
       adaptations:
-        session_aware:
-          mode: bypass
+        mode: bypass
       plugins:
         - type: router_replay
           configuration:
@@ -960,8 +958,7 @@ routing:
         - model: qwen/qwen3.6-rocm
           use_reasoning: false
       adaptations:
-        session_aware:
-          mode: bypass
+        mode: bypass
       plugins:
         - type: router_replay
           configuration:

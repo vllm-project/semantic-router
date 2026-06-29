@@ -115,11 +115,10 @@ The compact response header surface is method-keyed so more adaptations can be
 added later:
 
 ```http
-x-vsr-learning-methods: session_aware
-x-vsr-learning-actions: session_aware=hard_lock
-x-vsr-learning-scopes: session_aware=conversation
-x-vsr-learning-reasons: session_aware=hard_lock=tool_loop
-x-vsr-learning-modes: session_aware=apply
+x-vsr-learning-methods: adaptation,protection
+x-vsr-learning-actions: adaptation=keep_base,protection=hold_current
+x-vsr-learning-scopes: protection=conversation
+x-vsr-learning-reasons: adaptation=base_best,protection=tool_or_protocol_state
 ```
 
 Use those headers for live client display. Use `x-vsr-replay-id` for the full
@@ -135,14 +134,17 @@ global:
   router:
     learning:
       enabled: true
-      adaptations:
-        session_aware:
-          enabled: true
-          scope: conversation
-          identity:
-            headers:
-              session: x-session-id
-              conversation: x-conversation-id
+      adaptation:
+        enabled: true
+        strategy: routing_sampling
+        candidate_set: decision
+      protection:
+        enabled: true
+        scope: conversation
+        identity:
+          headers:
+            session: x-session-id
+            conversation: x-conversation-id
 ```
 
 Use `scope: conversation` when one agent run should stay stable, but a later
@@ -156,9 +158,8 @@ For stricter products, change only the scope:
 global:
   router:
     learning:
-      adaptations:
-        session_aware:
-          scope: session
+      protection:
+        scope: session
 ```
 
 With `scope: session`, the first selected model can be protected across
@@ -181,8 +182,7 @@ routing:
       modelRefs:
         - model: qwen/qwen3.6-rocm
       adaptations:
-        session_aware:
-          mode: bypass
+        mode: bypass
 ```
 
 That gives the router a clean rule: learning can protect continuity, but it
@@ -356,8 +356,8 @@ Expected shape:
 ```http
 x-vsr-selected-model: qwen/qwen3.6-rocm
 x-vsr-selected-decision: simple_math_fast_path
-x-vsr-learning-actions: session_aware=select
-x-vsr-learning-scopes: session_aware=conversation
+x-vsr-learning-actions: protection=allow_switch
+x-vsr-learning-scopes: protection=conversation
 ```
 
 Try a privacy request:
@@ -383,7 +383,7 @@ Expected shape:
 ```http
 x-vsr-selected-model: qwen/qwen3.6-rocm
 x-vsr-selected-decision: local_privacy_policy
-x-vsr-learning-actions: session_aware=bypass
+x-vsr-learning-actions: protection=bypass
 ```
 
 For domain routes, use prompts that naturally carry the domain signal, such as
@@ -456,7 +456,7 @@ Cost savings come from two places:
 2. Router Learning avoids unnecessary switches that would discard continuity or
    prefix locality.
 
-The earlier SAAR validation for the same session-aware mechanism reported a
+Earlier Router Learning validation for the same protection mechanism reported a
 **78.71% estimated physical-model cost reduction** across **21,600**
 deterministic turns, mostly by preventing unsafe or low-value switches. In this
 AMD guide, the absolute dollar number depends on the logical model prices you
@@ -485,11 +485,11 @@ Before connecting a local agent to `http://<host>:8899/v1`, check these:
 | Router endpoint | `curl http://<host>:8899/v1/models` returns the logical models. |
 | Dashboard | `http://<host>:8700` opens and shows live router state. |
 | Simple route | `x-vsr-selected-decision: simple_math_fast_path` and local model. |
-| Privacy route | `local_privacy_policy`, local model, `session_aware=bypass`. |
+| Privacy route | `local_privacy_policy`, local model, `protection=bypass`. |
 | Domain route | Matching domain decision such as `domain_code_complex` or `domain_stem_research`. |
 | Conversation protect | New conversation can re-route under `scope: conversation`. |
 | Session protect | New conversation stays on the first model under `scope: session`. |
-| Tool-loop protect | Tool-result turns emit `hard_lock` with reason `tool_loop`. |
+| Tool/protocol protect | Tool-result turns emit `hold_current` with reason `tool_or_protocol_state`. |
 | Replay | `x-vsr-replay-id` resolves to a Router Replay record. |
 | Prefix cache | vLLM `/metrics` shows prefix cache or KV-cache counters changing under repeated-prefix traffic. |
 
