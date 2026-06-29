@@ -195,7 +195,7 @@ docker-push-vllm-sr-sim:
 docker-help:
 docker-help: ## Show help for Docker-related make targets and environment variables
 	@echo "Environment Variables:"
-	@echo "  CONTAINER_RUNTIME - Container runtime (default: docker; Podman is not supported)"
+	@echo "  CONTAINER_RUNTIME - Container runtime: docker (default) or podman"
 	@echo "  DOCKER_REGISTRY   - Docker registry (default: ghcr.io/vllm-project/semantic-router)"
 	@echo "  DOCKER_TAG        - Docker tag (default: latest)"
 	@echo "  SKIP_ROUTER_IMAGE - set to 1 only when the local router image is already up to date"

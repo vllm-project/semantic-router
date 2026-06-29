@@ -57,6 +57,15 @@ LOG_PREFIX_ACCESS = "[access_logs]"
 DEFAULT_NOFILE_LIMIT = 65536
 MIN_NOFILE_LIMIT = 8192
 
+# Container runtime selection
+CONTAINER_RUNTIME_DOCKER = "docker"
+CONTAINER_RUNTIME_PODMAN = "podman"
+SUPPORTED_CONTAINER_RUNTIMES = (
+    CONTAINER_RUNTIME_DOCKER,
+    CONTAINER_RUNTIME_PODMAN,
+)
+CONTAINER_RUNTIME_ENV = "CONTAINER_RUNTIME"
+
 # External API model formats (routed through Envoy to external API endpoints)
 # These models don't require vLLM endpoints - they use external APIs like Anthropic
 EXTERNAL_API_MODEL_FORMATS = ["anthropic"]

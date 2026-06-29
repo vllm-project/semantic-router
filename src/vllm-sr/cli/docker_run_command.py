@@ -67,7 +67,13 @@ def append_amd_gpu_passthrough(cmd, normalized_platform):
 
 
 def append_host_gateway(cmd, runtime):
-    if runtime == "docker":
+    """Map host.docker.internal to the container host.
+
+    Docker has supported ``--add-host=...:host-gateway`` since 20.10. Podman
+    has supported the same magic value since 4.7. Both runtimes use the same
+    flag spelling, so we add it unconditionally for the supported runtimes.
+    """
+    if runtime in ("docker", "podman"):
         cmd.append("--add-host=host.docker.internal:host-gateway")
 
 
@@ -105,6 +111,15 @@ def append_nvidia_gpu_passthrough(cmd):
         log.info(
             "NVIDIA GPU passthrough disabled by VLLM_SR_NVIDIA_GPU_PASSTHROUGH environment variable"
         )
+        return
+
+    runtime = cmd[0] if cmd else ""
+    if runtime == "podman":
+        # Podman uses CDI (`--device nvidia.com/gpu=all`); fall back to passing
+        # `--gpus all` only for Docker, which understands the nvidia container
+        # toolkit shim natively.
+        cmd.extend(["--device", "nvidia.com/gpu=all"])
+        log.info("NVIDIA GPU passthrough enabled via CDI (--device nvidia.com/gpu=all)")
         return
 
     cmd.extend(["--gpus", "all"])
