@@ -381,7 +381,7 @@ Ubuntu 22.04 + Python 3.10.
 
 Fix: this is already addressed in
 [`Dockerfile.cuda`](../../src/vllm-sr/Dockerfile.cuda) (the pip
-install line includes `'click>=8.0'`). If you see this on a stale local
+install line includes `'click>=8.1.7'`). If you see this on a stale local
 build, rebuild the image.
 
 ### `Error: mmBERT model not initialized` in the log
