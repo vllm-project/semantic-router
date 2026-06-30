@@ -209,7 +209,7 @@ def _execute_serve(
     type=click.Choice(ALGORITHM_TYPES, case_sensitive=False),
     default=None,
     help="Request-time base algorithm override: static, router_dc, automix, hybrid, "
-    "latency_aware, knn, kmeans, svm, mlp, or multi_factor. "
+    "workflows, latency_aware, knn, kmeans, svm, mlp, or multi_factor. "
     "Cross-request learning uses global.router.learning.adaptation/protection.",
 )
 @click.option("--target", default=None, help=TARGET_HELP)

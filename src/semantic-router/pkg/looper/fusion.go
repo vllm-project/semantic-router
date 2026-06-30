@@ -28,6 +28,8 @@ type fusionExecutionConfig struct {
 	AnalysisModels               []string
 	MaxConcurrent                int
 	MaxCompletionTokens          int
+	RoundTimeoutSeconds          int
+	MinSuccessfulResponses       int
 	Temperature                  *float64
 	IncludeAnalysis              bool
 	IncludeIntermediateResponses bool
@@ -111,7 +113,14 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 
 	panelResponses, failedModels, err := l.executeFusionPanel(ctx, req, cfg)
 	if err != nil {
-		return nil, err
+		if cfg.OnError == config.FusionOnErrorFail || len(panelResponses) == 0 {
+			return nil, err
+		}
+		logging.ComponentWarnEvent("looper", "fusion_panel_partial", map[string]interface{}{
+			"decision":  req.DecisionName,
+			"responses": len(panelResponses),
+			"error":     err.Error(),
+		})
 	}
 
 	// Grounding (optional) ranks/filters the panel before the judge. It makes no
@@ -138,177 +147,6 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 	return l.formatFusionJSONResponse(finalResp, modelsUsed, iterations, cfg, trace, usage)
 }
 
-func (l *FusionLooper) resolveFusionExecutionConfig(req *Request) fusionExecutionConfig {
-	cfg := fusionExecutionConfig{
-		IncludeAnalysis:              true,
-		IncludeIntermediateResponses: true,
-	}
-
-	algorithmHasAnalysisModels := false
-	if req.Algorithm != nil && req.Algorithm.Fusion != nil {
-		algorithmHasAnalysisModels = len(req.Algorithm.Fusion.AnalysisModels) > 0
-		mergeFusionAlgorithmConfig(&cfg, req.Algorithm.Fusion)
-	}
-	if len(req.ModelRefs) > 0 && !algorithmHasAnalysisModels {
-		cfg.AnalysisModels = modelRefsToNames(req.ModelRefs)
-	}
-	if len(cfg.AnalysisModels) == 0 {
-		cfg.AnalysisModels = modelRefsToNames(req.ModelRefs)
-	}
-	if req.Fusion != nil && fusionRequestEnabled(req.Fusion) {
-		mergeFusionRequestConfig(&cfg, req.Fusion)
-	}
-	cfg.OnError = strings.TrimSpace(cfg.OnError)
-	if cfg.OnError == "" {
-		cfg.OnError = config.FusionOnErrorSkip
-	}
-	if cfg.JudgePromptVersion == "" {
-		cfg.JudgePromptVersion = config.DefaultFusionJudgePromptVersion
-	}
-	cfg.AnalysisModels = normalizeModelNames(cfg.AnalysisModels)
-	if cfg.MaxConcurrent <= 0 || cfg.MaxConcurrent > len(cfg.AnalysisModels) {
-		cfg.MaxConcurrent = len(cfg.AnalysisModels)
-	}
-	applyGroundingDefaults(&cfg)
-	return cfg
-}
-
-// applyGroundingDefaults fills in grounding defaults when grounding is enabled.
-func applyGroundingDefaults(cfg *fusionExecutionConfig) {
-	if !cfg.GroundingEnabled {
-		return
-	}
-	if cfg.GroundingReference == "" {
-		cfg.GroundingReference = config.FusionGroundingReferenceHybrid
-	}
-	if cfg.GroundingPolicy == "" {
-		// Default to soft down-weighting: hard-dropping the least mutually
-		// consistent response regresses quality on contested factual items
-		// (see bench/grounded_fusion/FINDINGS.md). Set policy=filter for the
-		// prior drop behavior.
-		cfg.GroundingPolicy = config.FusionGroundingPolicyWeight
-	}
-	if cfg.GroundingMinKeep <= 0 {
-		cfg.GroundingMinKeep = 1
-	}
-	if cfg.GroundingNLIContradictionPenalty <= 0 {
-		cfg.GroundingNLIContradictionPenalty = 1.0
-	}
-	if strings.TrimSpace(cfg.GroundingOnError) == "" {
-		cfg.GroundingOnError = cfg.OnError
-	}
-}
-
-func validateFusionExecutionConfig(cfg fusionExecutionConfig) error {
-	switch cfg.OnError {
-	case config.FusionOnErrorSkip, config.FusionOnErrorFail:
-		return nil
-	default:
-		return fmt.Errorf("fusion on_error must be %q or %q, got %q", config.FusionOnErrorSkip, config.FusionOnErrorFail, cfg.OnError)
-	}
-}
-
-func mergeFusionAlgorithmConfig(dst *fusionExecutionConfig, src *config.FusionAlgorithmConfig) {
-	if src.Model != "" {
-		dst.Model = src.Model
-	}
-	if len(src.AnalysisModels) > 0 {
-		dst.AnalysisModels = append([]string(nil), src.AnalysisModels...)
-	}
-	if src.MaxConcurrent > 0 {
-		dst.MaxConcurrent = src.MaxConcurrent
-	}
-	if src.MaxCompletionTokens > 0 {
-		dst.MaxCompletionTokens = src.MaxCompletionTokens
-	}
-	if src.Temperature != nil {
-		dst.Temperature = src.Temperature
-	}
-	if src.IncludeAnalysis != nil {
-		dst.IncludeAnalysis = *src.IncludeAnalysis
-	}
-	if src.IncludeIntermediateResponses != nil {
-		dst.IncludeIntermediateResponses = *src.IncludeIntermediateResponses
-	}
-	if src.OnError != "" {
-		dst.OnError = src.OnError
-	}
-	if src.AnalysisTemplate != "" {
-		dst.AnalysisTemplate = src.AnalysisTemplate
-	}
-	if src.SynthesisTemplate != "" {
-		dst.SynthesisTemplate = src.SynthesisTemplate
-	}
-	if src.JudgePromptVersion != "" {
-		dst.JudgePromptVersion = src.JudgePromptVersion
-	}
-	mergeFusionGroundingConfig(dst, src.Grounding)
-}
-
-func mergeFusionGroundingConfig(dst *fusionExecutionConfig, src *config.FusionGroundingConfig) {
-	if src == nil {
-		return
-	}
-	dst.GroundingEnabled = src.Enabled
-	dst.GroundingReference = src.Reference
-	dst.GroundingPolicy = src.Policy
-	dst.GroundingMinScore = src.MinScore
-	dst.GroundingMinKeep = src.MinKeep
-	dst.GroundingNLIContradictionPenalty = src.NLIContradictionPenalty
-	dst.GroundingOnError = src.OnError
-}
-
-func mergeFusionRequestConfig(dst *fusionExecutionConfig, src *config.FusionRequestConfig) {
-	if src.Model != "" {
-		dst.Model = src.Model
-	}
-	if len(src.AnalysisModels) > 0 {
-		dst.AnalysisModels = append([]string(nil), src.AnalysisModels...)
-	}
-	if src.MaxConcurrent > 0 {
-		dst.MaxConcurrent = src.MaxConcurrent
-	}
-	if src.MaxCompletionTokens > 0 {
-		dst.MaxCompletionTokens = src.MaxCompletionTokens
-	}
-	if src.Temperature != nil {
-		dst.Temperature = src.Temperature
-	}
-	if src.OnError != "" {
-		dst.OnError = src.OnError
-	}
-}
-
-func fusionRequestEnabled(req *config.FusionRequestConfig) bool {
-	return req.Enabled == nil || *req.Enabled
-}
-
-func modelRefsToNames(modelRefs []config.ModelRef) []string {
-	names := make([]string, 0, len(modelRefs))
-	for _, ref := range modelRefs {
-		if ref.LoRAName != "" {
-			names = append(names, ref.LoRAName)
-			continue
-		}
-		names = append(names, ref.Model)
-	}
-	return names
-}
-
-func normalizeModelNames(names []string) []string {
-	seen := make(map[string]bool, len(names))
-	result := make([]string, 0, len(names))
-	for _, name := range names {
-		trimmed := strings.TrimSpace(name)
-		if trimmed == "" || seen[trimmed] {
-			continue
-		}
-		seen[trimmed] = true
-		result = append(result, trimmed)
-	}
-	return result
-}
-
 func (l *FusionLooper) validateFusionModels(cfg fusionExecutionConfig) error {
 	for _, model := range append(append([]string{}, cfg.AnalysisModels...), cfg.Model) {
 		for _, fusionName := range l.cfg.Fusion.EffectiveModelNames() {
@@ -333,45 +171,116 @@ func (l *FusionLooper) executeFusionPanel(
 		return req.CachedPanel, nil, nil
 	}
 
+	panelCtx := ctx
+	cancel := func() {}
+	if cfg.RoundTimeoutSeconds > 0 {
+		panelCtx, cancel = context.WithTimeout(ctx, time.Duration(cfg.RoundTimeoutSeconds)*time.Second)
+	}
+	defer cancel()
+
 	results := make(chan fusionPanelResult, len(cfg.AnalysisModels))
 	sem := make(chan struct{}, cfg.MaxConcurrent)
 	for i, model := range cfg.AnalysisModels {
 		go func(index int, modelName string) {
-			sem <- struct{}{}
+			select {
+			case sem <- struct{}{}:
+			case <-panelCtx.Done():
+				results <- fusionPanelResult{index: index, model: modelName, err: panelCtx.Err()}
+				return
+			}
 			defer func() { <-sem }()
-			resp, err := l.callFusionModel(ctx, req, cfg, modelName, false, false, index+1)
+			resp, err := l.callFusionModel(panelCtx, req, cfg, modelName, false, false, index+1)
 			results <- fusionPanelResult{index: index, model: modelName, resp: resp, err: err}
 		}(i, model)
 	}
 
-	ordered := make([]*ModelResponse, len(cfg.AnalysisModels))
-	var failed []FusionFailedModel
+	collector := newFusionPanelCollector(cfg, cancel)
 	for range cfg.AnalysisModels {
 		select {
 		case result := <-results:
-			if result.err != nil {
-				failed = append(failed, FusionFailedModel{Model: result.model, Error: result.err.Error()})
-				if cfg.OnError == config.FusionOnErrorFail {
-					return nil, failed, fmt.Errorf("fusion panel model %q failed: %w", result.model, result.err)
-				}
-				continue
+			responses, err, done := collector.handleResult(result)
+			if done {
+				return responses, collector.failed, err
 			}
-			ordered[result.index] = result.resp
-		case <-ctx.Done():
-			return nil, failed, ctx.Err()
+		case <-panelCtx.Done():
+			responses, err := collector.handleTimeout(panelCtx.Err())
+			return responses, collector.failed, err
 		}
 	}
 
+	responses := collector.responses()
+	if len(responses) == 0 {
+		return nil, collector.failed, fmt.Errorf("fusion panel failed: all %d analysis models failed", len(cfg.AnalysisModels))
+	}
+	return responses, collector.failed, nil
+}
+
+type fusionPanelCollector struct {
+	cfg       fusionExecutionConfig
+	cancel    context.CancelFunc
+	ordered   []*ModelResponse
+	failed    []FusionFailedModel
+	successes int
+}
+
+func newFusionPanelCollector(cfg fusionExecutionConfig, cancel context.CancelFunc) *fusionPanelCollector {
+	return &fusionPanelCollector{
+		cfg:     cfg,
+		cancel:  cancel,
+		ordered: make([]*ModelResponse, len(cfg.AnalysisModels)),
+	}
+}
+
+func (c *fusionPanelCollector) handleResult(result fusionPanelResult) ([]*ModelResponse, error, bool) {
+	if result.err != nil {
+		c.failed = append(c.failed, FusionFailedModel{Model: result.model, Error: result.err.Error()})
+		if c.cfg.OnError == config.FusionOnErrorFail {
+			c.cancel()
+			return nil, fmt.Errorf("fusion panel model %q failed: %w", result.model, result.err), true
+		}
+		return nil, nil, false
+	}
+	c.ordered[result.index] = result.resp
+	c.successes++
+	if c.successes < c.cfg.MinSuccessfulResponses {
+		return nil, nil, false
+	}
+	c.logQuorum()
+	c.cancel()
+	return c.responses(), nil, true
+}
+
+func (c *fusionPanelCollector) handleTimeout(err error) ([]*ModelResponse, error) {
+	responses := c.responses()
+	if len(responses) > 0 && c.cfg.OnError != config.FusionOnErrorFail {
+		c.failed = append(c.failed, FusionFailedModel{Model: "panel", Error: err.Error()})
+		return responses, err
+	}
+	return nil, err
+}
+
+func (c *fusionPanelCollector) responses() []*ModelResponse {
+	return compactFusionPanelResponses(c.ordered)
+}
+
+func (c *fusionPanelCollector) logQuorum() {
+	if c.successes >= len(c.cfg.AnalysisModels) {
+		return
+	}
+	logging.ComponentEvent("looper", "fusion_panel_quorum_reached", map[string]interface{}{
+		"responses": c.successes,
+		"panel":     len(c.cfg.AnalysisModels),
+	})
+}
+
+func compactFusionPanelResponses(ordered []*ModelResponse) []*ModelResponse {
 	responses := make([]*ModelResponse, 0, len(ordered))
 	for _, resp := range ordered {
 		if resp != nil {
 			responses = append(responses, resp)
 		}
 	}
-	if len(responses) == 0 {
-		return nil, failed, fmt.Errorf("fusion panel failed: all %d analysis models failed", len(cfg.AnalysisModels))
-	}
-	return responses, failed, nil
+	return responses
 }
 
 func (l *FusionLooper) callFusionModel(
@@ -452,7 +361,9 @@ func (l *FusionLooper) runFusionFinal(
 	analysis *FusionAnalysis,
 	groundingScores []groundingScore,
 ) (*ModelResponse, error) {
-	prompt := buildFusionFinalPrompt(cfg, extractOriginalContent(req.OriginalRequest), panelResponses, analysis)
+	original := extractOriginalContent(req.OriginalRequest)
+	outputContract := requestOutputContract(req.OriginalRequest, req.OutputContract)
+	prompt := buildFusionFinalPrompt(cfg, original, outputContract, panelResponses, analysis)
 	// Under weight/annotate policies the panel was not pruned, so the judge needs
 	// the per-response groundedness signal at synthesis time to soft-weight.
 	if notes := groundingSynthesisNotes(groundingScores, cfg.GroundingPolicy); notes != "" {
@@ -463,6 +374,8 @@ func (l *FusionLooper) runFusionFinal(
 	if err != nil {
 		return nil, fmt.Errorf("fusion final synthesis failed for judge model %q: %w", cfg.Model, err)
 	}
+	applyJSONActionOutputContract(req.OutputContractSpec, resp, panelResponses)
+	applyFinalOutputContract(req.OutputContractSpec, resp)
 	return resp, nil
 }
 
@@ -482,11 +395,15 @@ Panel responses:
 func buildFusionFinalPrompt(
 	cfg fusionExecutionConfig,
 	original string,
+	outputContract string,
 	responses []*ModelResponse,
 	analysis *FusionAnalysis,
 ) string {
 	if cfg.SynthesisTemplate != "" {
-		return renderFusionPrompt(cfg.SynthesisTemplate, original, responses, analysis)
+		return appendOutputContractForPrompt(
+			renderFusionPrompt(cfg.SynthesisTemplate, original, responses, analysis),
+			outputContract,
+		)
 	}
 	analysisBlock := "No structured analysis is available. Synthesize directly from the panel responses."
 	if analysis != nil && !analysis.ParseFailed {
@@ -494,7 +411,12 @@ func buildFusionFinalPrompt(
 			analysisBlock = string(data)
 		}
 	}
-	return fmt.Sprintf(`You are the Fusion calling model. Produce the final answer for the user using the panel responses and structured analysis. Resolve contradictions explicitly and do not mention internal model names unless the user asks.
+	prompt := fmt.Sprintf(`You are the Fusion calling model. Produce the final answer for the user using the panel responses and structured analysis. Resolve contradictions explicitly and do not mention internal model names unless the user asks.
+
+Rules:
+- Preserve the original output contract exactly.
+- Do not reveal hidden reasoning, scratch work, panel reasoning, tool traces, or internal deliberation.
+- Provide a concise explanation only when the original output contract asks for one.
 
 Original prompt:
 %s
@@ -506,6 +428,8 @@ Panel responses:
 %s
 
 Final answer:`, original, analysisBlock, formatPanelResponses(responses))
+
+	return appendOutputContractForPrompt(prompt, outputContract)
 }
 
 func renderFusionPrompt(template string, original string, responses []*ModelResponse, analysis *FusionAnalysis) string {
@@ -543,25 +467,20 @@ func formatFusionAnalysisForPrompt(analysis *FusionAnalysis) string {
 }
 
 func parseFusionAnalysis(content string) (*FusionAnalysis, error) {
-	candidate := strings.TrimSpace(content)
-	if strings.HasPrefix(candidate, "```") {
-		candidate = strings.TrimPrefix(candidate, "```json")
-		candidate = strings.TrimPrefix(candidate, "```")
-		candidate = strings.TrimSuffix(candidate, "```")
-		candidate = strings.TrimSpace(candidate)
+	candidates := jsonObjectParseCandidates(content)
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("empty fusion analysis response")
 	}
-	if !json.Valid([]byte(candidate)) {
-		start := strings.Index(candidate, "{")
-		end := strings.LastIndex(candidate, "}")
-		if start >= 0 && end > start {
-			candidate = candidate[start : end+1]
+	var failures []string
+	for _, candidate := range candidates {
+		var analysis FusionAnalysis
+		if err := json.Unmarshal([]byte(candidate), &analysis); err == nil {
+			return &analysis, nil
+		} else {
+			failures = append(failures, err.Error())
 		}
 	}
-	var analysis FusionAnalysis
-	if err := json.Unmarshal([]byte(candidate), &analysis); err != nil {
-		return nil, err
-	}
-	return &analysis, nil
+	return nil, fmt.Errorf("%s", strings.Join(failures, "; "))
 }
 
 func buildFusionTrace(

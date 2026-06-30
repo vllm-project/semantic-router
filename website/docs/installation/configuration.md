@@ -48,6 +48,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `global.stores` groups shared storage-backed services such as `semantic_cache`, `memory`, and `vector_store`
 - `global.integrations` groups helper runtime integrations such as `tools` and `looper`
 - `global.integrations.looper.fusion` defines direct Fusion model slugs. The built-in default is `vllm-sr/fusion`; add aliases such as `openrouter/fusion` explicitly only when you want them. Judge and panel settings stay per-decision under `routing.decisions[].algorithm.fusion`.
+- `global.integrations.looper.flow` defines direct Router Flow model slugs. The built-in default is `vllm-sr/flow`; workflow planning and worker policy stay per-decision under `routing.decisions[].algorithm.workflows`.
 - `global.model_catalog` groups router-owned model assets such as embeddings, system models, external models, reusable classifiers, and model-backed modules
 - `global.model_catalog.embeddings.semantic.embedding_config.top_k` limits how many ranked embedding rules are emitted for routing after scoring; the built-in default is `1`
 - `prototype_scoring` is the shared prototype-aware scoring block for embedding-backed signal families; use it under `global.model_catalog.embeddings.semantic.embedding_config`, `global.model_catalog.modules.classifier.preference`, `global.model_catalog.kbs[]`, and `global.model_catalog.modules.complexity` when you want exemplar banks compressed into representative prototypes

@@ -117,6 +117,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
     'ratings',
     'remom',
     'fusion',
+    'workflows',
     'static',
     'router_dc',
     'automix',
@@ -169,7 +170,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Algorithm types
       [
-        /\b(confidence|ratings|remom|fusion|static|router_dc|automix|hybrid|latency_aware|knn|kmeans|svm|mlp|multi_factor)\b/,
+        /\b(confidence|ratings|remom|fusion|workflows|static|router_dc|automix|hybrid|latency_aware|knn|kmeans|svm|mlp|multi_factor)\b/,
         'type.algorithm',
       ],
 
@@ -331,6 +332,7 @@ const ALGO_TYPE_SUGGESTIONS = [
   { label: 'ratings', detail: 'Ratings-based routing' },
   { label: 'remom', detail: 'ReMoM algorithm' },
   { label: 'fusion', detail: 'Fusion panel deliberation' },
+  { label: 'workflows', detail: 'Router Flow orchestration' },
   { label: 'static', detail: 'Static model assignment' },
   { label: 'router_dc', detail: 'Router DC algorithm' },
   { label: 'automix', detail: 'AutoMix algorithm' },

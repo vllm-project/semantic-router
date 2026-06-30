@@ -35,8 +35,9 @@ const postgresInsertQueryTemplate = `
 			hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans,
 			prompt_tokens, cached_prompt_tokens, completion_tokens, total_tokens,
 			actual_cost, baseline_cost, cost_savings, currency, baseline_model,
-			session_id, turn_index, previous_response_id, conversation_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56)
+			session_id, turn_index, previous_response_id, conversation_id,
+			cache_similarity, context_token_count
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58)
 	`
 
 const postgresCreateTableQueryTemplate = `
@@ -124,6 +125,8 @@ const postgresCreateTableQueryTemplate = `
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS turn_index INTEGER;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS previous_response_id VARCHAR(255);
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS conversation_id VARCHAR(255);
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS cache_similarity REAL DEFAULT 0;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS context_token_count INTEGER DEFAULT 0;
 		CREATE INDEX IF NOT EXISTS idx_{{table}}_timestamp ON {{table}} (timestamp DESC);
 		CREATE INDEX IF NOT EXISTS idx_{{table}}_created_at ON {{table}} (created_at);
 		CREATE INDEX IF NOT EXISTS idx_{{table}}_request_id ON {{table}} (request_id);

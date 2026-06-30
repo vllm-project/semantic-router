@@ -7,8 +7,8 @@ before emitting any answer. Ollama's NATIVE ``/api/chat`` *does* honor
 ``"think": false``. This shim accepts OpenAI requests, forwards them to the native
 endpoint with thinking off, and returns an OpenAI-shaped response.
 
-Point ``global.integrations.looper.model_endpoints`` at this proxy:
-    http://localhost:11435/v1/chat/completions
+Point provider ``backend_refs[].base_url`` at this proxy:
+    http://localhost:11435/v1
 
 Run:
     .venv-bench/bin/python -m bench.grounded_fusion.ollama_proxy --port 11435
