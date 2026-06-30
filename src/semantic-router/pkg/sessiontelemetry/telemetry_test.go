@@ -189,6 +189,54 @@ func TestEvictionScanThrottled(t *testing.T) {
 	require.False(t, present, "scan must run after evictInterval and evict the stale entry")
 }
 
+func TestExpiredKeyResetsBeforeThrottledSweep(t *testing.T) {
+	ResetForTesting()
+	t.Cleanup(ResetForTesting)
+
+	orig := nowFn
+	t.Cleanup(func() { nowFn = orig })
+
+	base := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	nowFn = func() time.Time { return base }
+
+	p := TurnParams{
+		RequestID:        "r1",
+		Model:            "m",
+		PromptTokens:     10,
+		CompletionTokens: 5,
+		Chat: &ChatInput{
+			UserID:   "u1",
+			Messages: []ChatMessage{{Role: "user", Content: "a"}},
+		},
+	}
+	RecordTurn(p)
+
+	var key string
+	mu.Lock()
+	for k := range store {
+		key = k
+	}
+	mu.Unlock()
+
+	// Same session returns after ttl but before the throttled sweep would run.
+	nowFn = func() time.Time { return base.Add(ttl + time.Second) }
+	mu.Lock()
+	lastEvict = base.Add(ttl) // keep evictLocked within evictInterval, so no full sweep
+	mu.Unlock()
+
+	p.RequestID = "r2"
+	p.PromptTokens = 3
+	p.CompletionTokens = 2
+	RecordTurn(p)
+
+	mu.Lock()
+	defer mu.Unlock()
+	st := store[key]
+	require.NotNil(t, st)
+	assert.Equal(t, int64(3), st.cumulativePrompt, "expired per-key state must reset, not accumulate")
+	assert.Equal(t, int64(2), st.cumulativeCompletion)
+}
+
 // =====================================================================
 // PR 2 — per-turn pricing metadata and cumulative_cost
 // =====================================================================

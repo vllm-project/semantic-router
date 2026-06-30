@@ -186,6 +186,9 @@ func recordTurnState(key string, p TurnParams, costThisTurn float64, t time.Time
 
 	evictLocked(t)
 	st := store[key]
+	if st != nil && t.Sub(st.lastSeen) > ttl {
+		st = nil
+	}
 	if st == nil {
 		st = &turnState{}
 		store[key] = st
