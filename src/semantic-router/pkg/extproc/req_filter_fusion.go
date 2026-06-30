@@ -38,6 +38,9 @@ func (r *OpenAIRouter) resolveDirectFusionDecision(ctx *RequestContext) (*config
 	if isFusionDecision(ctx.VSRSelectedDecision) {
 		return ctx.VSRSelectedDecision, 0, nil
 	}
+	if ctx.VSRSelectedDecision != nil {
+		return nil, 400, fmt.Errorf("no eligible Fusion decision matched for model %q", ctx.RequestModel)
+	}
 
 	plugin, err := parseFusionRequestConfig(ctx.OriginalRequestBody)
 	if err != nil {
@@ -45,6 +48,9 @@ func (r *OpenAIRouter) resolveDirectFusionDecision(ctx *RequestContext) (*config
 	}
 	if plugin != nil && fusionRequestOverrideEnabled(plugin) && len(plugin.AnalysisModels) > 0 {
 		return buildRequestOnlyFusionDecision(), 0, nil
+	}
+	if decision := r.defaultLooperDecisionByAlgorithm("fusion"); decision != nil {
+		return decision, 0, nil
 	}
 
 	return nil, 400, fmt.Errorf("no eligible Fusion decision matched for model %q and no request plugins[].id=fusion analysis_models override was provided", ctx.RequestModel)
@@ -55,16 +61,55 @@ func isFusionDecision(decision *config.Decision) bool {
 }
 
 func (r *OpenAIRouter) decisionCandidatesForRequestModel(modelName string) []config.Decision {
-	if r == nil || r.Config == nil || !r.Config.IsFusionModelName(modelName) {
+	if r == nil || r.Config == nil {
 		return nil
 	}
 	candidates := make([]config.Decision, 0)
-	for _, decision := range r.Config.Decisions {
-		if isFusionDecision(&decision) {
-			candidates = append(candidates, decision)
+	if r.Config.IsReMoMModelName(modelName) {
+		for _, decision := range r.Config.Decisions {
+			if isReMoMDecision(&decision) {
+				candidates = append(candidates, decision)
+			}
+		}
+		return candidates
+	}
+	if r.Config.IsFusionModelName(modelName) {
+		for _, decision := range r.Config.Decisions {
+			if isFusionDecision(&decision) {
+				candidates = append(candidates, decision)
+			}
+		}
+		return candidates
+	}
+	if r.Config.IsFlowModelName(modelName) {
+		for _, decision := range r.Config.Decisions {
+			if isFlowDecision(&decision) {
+				candidates = append(candidates, decision)
+			}
+		}
+		return candidates
+	}
+	return nil
+}
+
+func (r *OpenAIRouter) defaultLooperDecisionByAlgorithm(algorithmType string) *config.Decision {
+	if r == nil || r.Config == nil {
+		return nil
+	}
+	var selected *config.Decision
+	for i := range r.Config.Decisions {
+		decision := &r.Config.Decisions[i]
+		if decision.Algorithm == nil || decision.Algorithm.Type != algorithmType {
+			continue
+		}
+		if !hasLooperModelInputs(decision) {
+			continue
+		}
+		if selected == nil || decision.Priority > selected.Priority {
+			selected = decision
 		}
 	}
-	return candidates
+	return selected
 }
 
 func buildRequestOnlyFusionDecision() *config.Decision {

@@ -118,8 +118,8 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		targetModel = selectedModel
 	}
 
-	if r.Config != nil && r.Config.IsFusionModelName(originalModel) {
-		return r.handleDirectFusionExecution(openAIRequest, originalModel, ctx)
+	if directResp, handled, err := r.handleDirectLoopModel(openAIRequest, originalModel, ctx); handled || err != nil {
+		return directResp, err
 	}
 
 	// Anthropic model routing
@@ -159,6 +159,25 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		metrics.RecordRequestError(originalModel, "no_model_selected")
 		return r.createErrorResponse(http.StatusBadRequest, "unable to route request: no model selected and no default model configured"), nil
 	}
+}
+
+func (r *OpenAIRouter) handleDirectLoopModel(openAIRequest *openai.ChatCompletionNewParams, originalModel string, ctx *RequestContext) (*ext_proc.ProcessingResponse, bool, error) {
+	if r.Config == nil {
+		return nil, false, nil
+	}
+	if r.Config.IsReMoMModelName(originalModel) {
+		resp, err := r.handleDirectReMoMExecution(openAIRequest, originalModel, ctx)
+		return resp, true, err
+	}
+	if r.Config.IsFusionModelName(originalModel) {
+		resp, err := r.handleDirectFusionExecution(openAIRequest, originalModel, ctx)
+		return resp, true, err
+	}
+	if r.Config.IsFlowModelName(originalModel) {
+		resp, err := r.handleDirectFlowExecution(openAIRequest, originalModel, ctx)
+		return resp, true, err
+	}
+	return nil, false, nil
 }
 
 // handleAutoModelRouting handles routing for auto model selection

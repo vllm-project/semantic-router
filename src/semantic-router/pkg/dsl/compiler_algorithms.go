@@ -14,6 +14,12 @@ var algorithmSubConfigCompilers = map[string]algorithmSubConfigCompiler{
 	"remom": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
 		algo.ReMoM = c.compileReMoMAlgo(fields)
 	},
+	"fusion": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
+		algo.Fusion = c.compileFusionAlgo(fields)
+	},
+	"workflows": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
+		algo.Workflows = c.compileWorkflowsAlgo(fields)
+	},
 	"router_dc": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
 		algo.RouterDC = c.compileRouterDCAlgo(fields)
 	},
@@ -152,8 +158,17 @@ func fillReMoMRuntimeFields(cfg *config.ReMoMAlgorithmConfig, fields map[string]
 	if v, ok := getStringField(fields, "synthesis_template"); ok {
 		cfg.SynthesisTemplate = v
 	}
+	if v, ok := getStringField(fields, "synthesis_model"); ok {
+		cfg.SynthesisModel = v
+	}
 	if v, ok := getIntField(fields, "max_concurrent"); ok {
 		cfg.MaxConcurrent = v
+	}
+	if v, ok := getIntField(fields, "round_timeout_seconds"); ok {
+		cfg.RoundTimeoutSeconds = v
+	}
+	if v, ok := getIntField(fields, "min_successful_responses"); ok {
+		cfg.MinSuccessfulResponses = v
 	}
 	if v, ok := getStringField(fields, "on_error"); ok {
 		cfg.OnError = v
@@ -170,6 +185,167 @@ func fillReMoMResponseFields(cfg *config.ReMoMAlgorithmConfig, fields map[string
 	if v, ok := getIntField(fields, "max_responses_per_round"); ok {
 		cfg.MaxResponsesPerRound = v
 	}
+}
+
+func (c *Compiler) compileFusionAlgo(fields map[string]Value) *config.FusionAlgorithmConfig {
+	cfg := &config.FusionAlgorithmConfig{}
+	fillFusionModelFields(cfg, fields)
+	fillFusionRuntimeFields(cfg, fields)
+	fillFusionResponseFields(cfg, fields)
+	fillFusionPromptFields(cfg, fields)
+	return cfg
+}
+
+func fillFusionModelFields(cfg *config.FusionAlgorithmConfig, fields map[string]Value) {
+	if v, ok := getStringField(fields, "model"); ok {
+		cfg.Model = v
+	}
+	if v, ok := getStringArrayField(fields, "analysis_models"); ok {
+		cfg.AnalysisModels = v
+	}
+}
+
+func fillFusionRuntimeFields(cfg *config.FusionAlgorithmConfig, fields map[string]Value) {
+	if v, ok := getIntField(fields, "max_concurrent"); ok {
+		cfg.MaxConcurrent = v
+	}
+	if v, ok := getIntField(fields, "max_completion_tokens"); ok {
+		cfg.MaxCompletionTokens = v
+	}
+	if v, ok := getIntField(fields, "round_timeout_seconds"); ok {
+		cfg.RoundTimeoutSeconds = v
+	}
+	if v, ok := getIntField(fields, "min_successful_responses"); ok {
+		cfg.MinSuccessfulResponses = v
+	}
+	if v, ok := getFloat64Field(fields, "temperature"); ok {
+		cfg.Temperature = &v
+	}
+	if v, ok := getStringField(fields, "on_error"); ok {
+		cfg.OnError = v
+	}
+}
+
+func fillFusionResponseFields(cfg *config.FusionAlgorithmConfig, fields map[string]Value) {
+	if v, ok := getBoolField(fields, "include_analysis"); ok {
+		cfg.IncludeAnalysis = &v
+	}
+	if v, ok := getBoolField(fields, "include_intermediate_responses"); ok {
+		cfg.IncludeIntermediateResponses = &v
+	}
+}
+
+func fillFusionPromptFields(cfg *config.FusionAlgorithmConfig, fields map[string]Value) {
+	if v, ok := getStringField(fields, "analysis_template"); ok {
+		cfg.AnalysisTemplate = v
+	}
+	if v, ok := getStringField(fields, "synthesis_template"); ok {
+		cfg.SynthesisTemplate = v
+	}
+	if v, ok := getStringField(fields, "judge_prompt_version"); ok {
+		cfg.JudgePromptVersion = v
+	}
+}
+
+func (c *Compiler) compileWorkflowsAlgo(fields map[string]Value) *config.WorkflowsAlgorithmConfig {
+	cfg := &config.WorkflowsAlgorithmConfig{}
+	compileWorkflowIdentity(fields, cfg)
+	cfg.Roles = compileWorkflowRoles(fields)
+	cfg.Final = compileWorkflowFinalField(fields)
+	compileWorkflowPlanner(fields, cfg)
+	compileWorkflowLimits(fields, cfg)
+	return cfg
+}
+
+func compileWorkflowIdentity(fields map[string]Value, cfg *config.WorkflowsAlgorithmConfig) {
+	if v, ok := getStringField(fields, "mode"); ok {
+		cfg.Mode = v
+	}
+	if v, ok := getStringField(fields, "template"); ok {
+		cfg.Template = v
+	}
+}
+
+func compileWorkflowFinalField(fields map[string]Value) config.WorkflowFinalConfig {
+	if final, ok := fields["final"].(ObjectValue); ok {
+		return compileWorkflowFinal(final)
+	}
+	return config.WorkflowFinalConfig{}
+}
+
+func compileWorkflowPlanner(fields map[string]Value, cfg *config.WorkflowsAlgorithmConfig) {
+	if planner, ok := fields["planner"].(ObjectValue); ok {
+		if v, ok := getStringField(planner.Fields, "model"); ok {
+			cfg.Planner.Model = v
+		}
+	}
+	if v, ok := getStringField(fields, "planner.model"); ok {
+		cfg.Planner.Model = v
+	}
+}
+
+func compileWorkflowLimits(fields map[string]Value, cfg *config.WorkflowsAlgorithmConfig) {
+	if v, ok := getIntField(fields, "max_steps"); ok {
+		cfg.MaxSteps = v
+	}
+	if v, ok := getIntField(fields, "max_parallel"); ok {
+		cfg.MaxParallel = v
+	}
+	if v, ok := getIntField(fields, "max_completion_tokens"); ok {
+		cfg.MaxCompletionTokens = v
+	}
+	if v, ok := getIntField(fields, "round_timeout_seconds"); ok {
+		cfg.RoundTimeoutSeconds = v
+	}
+	if v, ok := getIntField(fields, "min_successful_responses"); ok {
+		cfg.MinSuccessfulResponses = v
+	}
+	if v, ok := getFloat64Field(fields, "temperature"); ok {
+		cfg.Temperature = &v
+	}
+	if v, ok := getBoolField(fields, "include_intermediate_responses"); ok {
+		cfg.IncludeIntermediateResponses = &v
+	}
+	if v, ok := getStringField(fields, "on_error"); ok {
+		cfg.OnError = v
+	}
+}
+
+func compileWorkflowRoles(fields map[string]Value) []config.WorkflowRoleConfig {
+	raw, ok := fields["roles"].(ArrayValue)
+	if !ok {
+		return nil
+	}
+	roles := make([]config.WorkflowRoleConfig, 0, len(raw.Items))
+	for _, item := range raw.Items {
+		roleObj, ok := item.(ObjectValue)
+		if !ok {
+			continue
+		}
+		role := config.WorkflowRoleConfig{}
+		if v, ok := getStringField(roleObj.Fields, "name"); ok {
+			role.Name = v
+		}
+		if models, ok := getStringArrayField(roleObj.Fields, "models"); ok {
+			role.Models = models
+		}
+		if v, ok := getStringField(roleObj.Fields, "prompt"); ok {
+			role.Prompt = v
+		}
+		roles = append(roles, role)
+	}
+	return roles
+}
+
+func compileWorkflowFinal(final ObjectValue) config.WorkflowFinalConfig {
+	cfg := config.WorkflowFinalConfig{}
+	if v, ok := getStringField(final.Fields, "model"); ok {
+		cfg.Model = v
+	}
+	if v, ok := getStringField(final.Fields, "prompt"); ok {
+		cfg.Prompt = v
+	}
+	return cfg
 }
 
 func (c *Compiler) compileRouterDCAlgo(fields map[string]Value) *config.RouterDCSelectionConfig {

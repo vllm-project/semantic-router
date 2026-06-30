@@ -20,6 +20,7 @@ static_resources:
           "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
           stat_prefix: ingress_http
           codec_type: AUTO
+          stream_idle_timeout: {{ listener.timeout | default('1200s') }}
           route_config:
             name: local_route
             virtual_hosts:
@@ -43,6 +44,15 @@ static_resources:
                   - name: x-selected-model
                     string_match:
                       exact: "{{ model.name }}"
+                {% if model.route_request_headers %}
+                request_headers_to_add:
+                {% for header in model.route_request_headers %}
+                - header:
+                    key: {{ header.key | tojson }}
+                    value: {{ header.value | tojson }}
+                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                {% endfor %}
+                {% endif %}
                 route:
                   cluster: {{ model.cluster_name }}_cluster
                   timeout: {{ listener.timeout | default('1200s') }}
@@ -75,6 +85,15 @@ static_resources:
               # Default route (no x-selected-model header)
               - match:
                   prefix: "/"
+                {% if models and models[0].route_request_headers %}
+                request_headers_to_add:
+                {% for header in models[0].route_request_headers %}
+                - header:
+                    key: {{ header.key | tojson }}
+                    value: {{ header.value | tojson }}
+                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                {% endfor %}
+                {% endif %}
                 route:
                   {% if models %}
                   # Route to first model by default

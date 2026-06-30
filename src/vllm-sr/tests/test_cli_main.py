@@ -291,6 +291,46 @@ def test_inject_latency_aware_algorithm_keeps_matching_config_block(tmp_path: Pa
     }
 
 
+def test_inject_workflows_algorithm_keeps_matching_config_block(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": "v0.3",
+                "routing": {
+                    "decisions": [
+                        {
+                            "name": "flow",
+                            "modelRefs": [{"model": "worker-a"}],
+                            "algorithm": {
+                                "type": "hybrid",
+                                "hybrid": {"experience_weight": 0.6},
+                            },
+                        },
+                    ]
+                },
+            },
+            sort_keys=False,
+        )
+    )
+
+    rewritten_path = runtime_commands.inject_algorithm_into_config(
+        config_path, "workflows"
+    )
+
+    with rewritten_path.open() as handle:
+        rewritten = yaml.safe_load(handle)
+
+    assert rewritten["routing"]["decisions"][0]["algorithm"] == {
+        "type": "workflows",
+        "workflows": {
+            "template": "micro_agent",
+            "mode": "static",
+            "roles": [{"name": "worker", "models": ["worker-a"]}],
+        },
+    }
+
+
 def test_serve_uses_algorithm_translated_config(monkeypatch, tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
