@@ -42,26 +42,34 @@ def configure_openclaw_support(
     )
 
     if runtime == "docker":
-        _attach_docker_socket(mount_specs)
+        _attach_docker_socket(mount_specs, runtime)
         _attach_docker_cli(
             mount_specs,
             env_vars,
             resolve_docker_cli=resolve_docker_cli,
         )
+    elif runtime == "podman":
+        # Podman exposes a Docker-Engine-API-compatible socket. The dashboard
+        # image already ships a real `docker` CLI; mounting podman.sock at the
+        # canonical /var/run/docker.sock path lets the in-image docker CLI
+        # drive container lifecycle (start/stop/inspect/logs) through podman
+        # transparently — no Go-side changes needed.
+        _attach_docker_socket(mount_specs, runtime)
+        env_vars["OPENCLAW_CONTAINER_RUNTIME"] = "docker"
+        log.info(
+            "Podman runtime: dashboard will use the in-image Docker CLI against "
+            "the mounted podman.sock for container lifecycle"
+        )
 
 
-def _attach_docker_socket(mount_specs):
-    docker_socket = os.getenv("VLLM_SR_DOCKER_SOCKET")
-    socket_candidates = []
-    if docker_socket:
-        socket_candidates.append(docker_socket)
-    else:
-        socket_candidates.append("/var/run/docker.sock")
-        xdg_runtime_dir = os.getenv("XDG_RUNTIME_DIR")
-        if xdg_runtime_dir:
-            socket_candidates.append(os.path.join(xdg_runtime_dir, "docker.sock"))
-        with suppress(Exception):
-            socket_candidates.append(f"/run/user/{os.getuid()}/docker.sock")
+def _attach_docker_socket(mount_specs, runtime: str = "docker"):
+    """Mount the active runtime's daemon socket at /var/run/docker.sock.
+
+    Both Docker and Podman expose a Docker-Engine-API-compatible UNIX socket.
+    We always mount it at the canonical container path /var/run/docker.sock so
+    the dashboard's in-image docker CLI works without runtime-specific config.
+    """
+    socket_candidates = _socket_candidates(runtime)
 
     resolved_socket = next(
         (
@@ -73,13 +81,41 @@ def _attach_docker_socket(mount_specs):
     )
     if resolved_socket:
         mount_specs.append(f"{resolved_socket}:/var/run/docker.sock")
-        log.info(f"Mounting Docker socket for dashboard OpenClaw: {resolved_socket}")
+        log.info(
+            f"Mounting {runtime} socket for dashboard OpenClaw: "
+            f"{resolved_socket} -> /var/run/docker.sock"
+        )
         return
 
     log.warning(
-        "Docker socket not found (checked: "
+        f"{runtime.capitalize()} socket not found (checked: "
         f"{', '.join(socket_candidates)}); dashboard OpenClaw create/start/stop may be unavailable"
     )
+
+
+def _socket_candidates(runtime: str) -> list[str]:
+    """Return ordered candidate paths for the runtime's API socket."""
+    override = os.getenv("VLLM_SR_DOCKER_SOCKET")
+    if override:
+        return [override]
+
+    if runtime == "podman":
+        candidates: list[str] = []
+        candidates.append("/run/podman/podman.sock")  # rootful systemd socket
+        xdg_runtime_dir = os.getenv("XDG_RUNTIME_DIR")
+        if xdg_runtime_dir:
+            candidates.append(os.path.join(xdg_runtime_dir, "podman", "podman.sock"))
+        with suppress(Exception):
+            candidates.append(f"/run/user/{os.getuid()}/podman/podman.sock")
+        return candidates
+
+    candidates = ["/var/run/docker.sock"]
+    xdg_runtime_dir = os.getenv("XDG_RUNTIME_DIR")
+    if xdg_runtime_dir:
+        candidates.append(os.path.join(xdg_runtime_dir, "docker.sock"))
+    with suppress(Exception):
+        candidates.append(f"/run/user/{os.getuid()}/docker.sock")
+    return candidates
 
 
 def _attach_docker_cli(mount_specs, env_vars, *, resolve_docker_cli):
