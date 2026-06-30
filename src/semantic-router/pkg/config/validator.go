@@ -76,6 +76,11 @@ var (
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
 		},
 		{
+			name:     "memory",
+			validate: validateMemoryContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
 			name:     "embedding",
 			validate: validateEmbeddingContracts,
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
