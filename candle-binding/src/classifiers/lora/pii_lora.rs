@@ -4,14 +4,22 @@
 
 use crate::core::{ModelErrorType, UnifiedError};
 use crate::model_architectures::lora::bert_lora::HighPerformanceBertTokenClassifier;
+use crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier;
 use crate::model_error;
 use candle_core::Result;
+use std::path::Path;
 use std::time::Instant;
+
+/// Classifier backend enum to avoid Box<dyn Trait>
+enum TokenClassifierBackend {
+    Bert(HighPerformanceBertTokenClassifier),
+    ModernBert(TraditionalModernBertTokenClassifier),
+}
 
 /// PII detector with real token classification model inference (merged LoRA models)
 pub struct PIILoRAClassifier {
-    /// High-performance BERT token classifier for PII detection
-    bert_token_classifier: HighPerformanceBertTokenClassifier,
+    /// Classifier backend (either BERT or ModernBERT/mmBERT)
+    backend: TokenClassifierBackend,
     /// Confidence threshold for PII detection
     confidence_threshold: f32,
     /// PII type labels
@@ -47,26 +55,55 @@ impl PIILoRAClassifier {
         let pii_types = Self::load_labels_from_config(model_path)?;
         let num_classes = pii_types.len();
 
-        // Create high-performance BERT token classifier for PII detection
-        let bert_token_classifier =
-            HighPerformanceBertTokenClassifier::new(model_path, num_classes, use_cpu).map_err(
-                |e| {
+        let backend = if Self::is_modernbert(model_path) {
+            let classifier = TraditionalModernBertTokenClassifier::new(model_path, use_cpu)
+                .map_err(|e| {
                     let unified_err = model_error!(
                         ModelErrorType::LoRA,
                         "PII token classifier creation",
-                        format!("Failed to create BERT token classifier: {}", e),
+                        format!("Failed to create ModernBERT token classifier: {}", e),
                         model_path
                     );
                     candle_core::Error::from(unified_err)
-                },
-            )?;
+                })?;
+            TokenClassifierBackend::ModernBert(classifier)
+        } else {
+            let classifier =
+                HighPerformanceBertTokenClassifier::new(model_path, num_classes, use_cpu).map_err(
+                    |e| {
+                        let unified_err = model_error!(
+                            ModelErrorType::LoRA,
+                            "PII token classifier creation",
+                            format!("Failed to create BERT token classifier: {}", e),
+                            model_path
+                        );
+                        candle_core::Error::from(unified_err)
+                    },
+                )?;
+            TokenClassifierBackend::Bert(classifier)
+        };
 
         Ok(Self {
-            bert_token_classifier,
+            backend,
             confidence_threshold: 0.5,
             pii_types,
             model_path: model_path.to_string(),
         })
+    }
+
+    /// Check if model is ModernBERT/mmBERT architecture
+    fn is_modernbert(model_path: &str) -> bool {
+        let config_path = Path::new(model_path).join("config.json");
+        if let Ok(config_str) = std::fs::read_to_string(&config_path) {
+            if let Ok(config) = serde_json::from_str::<serde_json::Value>(&config_str) {
+                let model_type = config
+                    .get("model_type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                return model_type == "modernbert";
+            }
+        }
+        false
     }
 
     /// Load PII labels from model config.json using unified config loader
@@ -79,23 +116,38 @@ impl PIILoRAClassifier {
         }
     }
 
+    /// Classify tokens using the appropriate backend
+    fn classify_with_backend(&self, text: &str) -> Result<Vec<(String, usize, f32)>> {
+        match &self.backend {
+            TokenClassifierBackend::Bert(c) => c
+                .classify_tokens(text)
+                .map_err(|e| candle_core::Error::Msg(e.to_string())),
+            TokenClassifierBackend::ModernBert(c) => c
+                .classify_tokens(text)
+                .map_err(|e| candle_core::Error::Msg(e.to_string()))
+                .map(|results| {
+                    results
+                        .into_iter()
+                        .map(|(token, class, conf, _, _)| (token, class, conf))
+                        .collect()
+                }),
+        }
+    }
+
     /// Detect PII using real token classification model inference
     pub fn detect_pii(&self, text: &str) -> Result<PIIResult> {
         let start_time = Instant::now();
 
-        // Use real BERT token classifier for PII detection
-        let token_results = self
-            .bert_token_classifier
-            .classify_tokens(text)
-            .map_err(|e| {
-                let unified_err = model_error!(
-                    ModelErrorType::LoRA,
-                    "PII token classification",
-                    format!("PII token classification failed: {}", e),
-                    text
-                );
-                candle_core::Error::from(unified_err)
-            })?;
+        // Use real token classifier for PII detection
+        let token_results = self.classify_with_backend(text).map_err(|e| {
+            let unified_err = model_error!(
+                ModelErrorType::LoRA,
+                "PII token classification",
+                format!("PII token classification failed: {}", e),
+                text
+            );
+            candle_core::Error::from(unified_err)
+        })?;
 
         // Create individual occurrences with their own confidence scores
         let mut occurrences = Vec::new();
