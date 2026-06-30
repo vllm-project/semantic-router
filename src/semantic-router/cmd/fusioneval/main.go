@@ -67,6 +67,7 @@ type options struct {
 	temperature float64
 	maxTokens   int
 	maxItems    int
+	timeout     int
 }
 
 // item is one evaluation question. The Python side (datasets.py) owns DRACO
@@ -149,6 +150,7 @@ func parseFlags() options {
 	flag.Float64Var(&opt.temperature, "temperature", 0, "sampling temperature for all calls")
 	flag.IntVar(&opt.maxTokens, "max-tokens", 0, "max completion tokens (0 = backend default)")
 	flag.IntVar(&opt.maxItems, "max-items", 0, "cap items processed (0 = all); use for a smoke run")
+	flag.IntVar(&opt.timeout, "timeout", 300, "per-request HTTP timeout in seconds (raise for cold model loads)")
 	flag.Parse()
 
 	opt.arms = splitCSV(*arms)
@@ -182,7 +184,7 @@ func run(opt options) error {
 	}
 	looper.SetGroundingBackends(realNLI(), nil)
 
-	looperCfg := &config.LooperConfig{Endpoint: opt.endpoint}
+	looperCfg := &config.LooperConfig{Endpoint: opt.endpoint, TimeoutSeconds: opt.timeout}
 	client := looper.NewClient(looperCfg)
 	fusion := looper.NewFusionLooper(looperCfg)
 

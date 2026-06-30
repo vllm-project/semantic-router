@@ -11,6 +11,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // FusionLooper implements Fusion-style multi-model deliberation:
@@ -43,6 +44,11 @@ type fusionExecutionConfig struct {
 	GroundingMinKeep                 int
 	GroundingNLIContradictionPenalty float64
 	GroundingOnError                 string
+	GroundingEarlyExitEnabled        bool
+	GroundingEarlyExitMinConsistency float64
+
+	EscalationEnabled   bool
+	EscalationHardRules []string
 }
 
 type FusionAnalysis struct {
@@ -83,22 +89,13 @@ type fusionPanelResult struct {
 	err   error
 }
 
-func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
+func (l *FusionLooper) Execute(ctx context.Context, req *Request) (resp *Response, err error) {
 	l.client.SetDecisionName(req.DecisionName)
 	l.client.SetFusionDepth(1)
 	defer l.client.SetFusionDepth(0)
 
-	cfg := l.resolveFusionExecutionConfig(req)
-	if len(cfg.AnalysisModels) == 0 {
-		return nil, fmt.Errorf("fusion analysis_models cannot be empty")
-	}
-	if cfg.Model == "" {
-		cfg.Model = cfg.AnalysisModels[0]
-	}
-	if err := validateFusionExecutionConfig(cfg); err != nil {
-		return nil, err
-	}
-	if err := l.validateFusionModels(cfg); err != nil {
+	cfg, err := l.prepareFusionExecution(req)
+	if err != nil {
 		return nil, err
 	}
 
@@ -109,33 +106,57 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 		"streaming":       req.IsStreaming,
 	})
 
+	// Per-request metrics. Timed from here so config/validation errors above (not
+	// real traffic) are excluded; the named return err lets the defer classify
+	// the final status.
+	defer recordFusionOutcome(req.DecisionName, time.Now(), &err)
+
+	// Adaptive escalation: when enabled and the request did not match a configured
+	// hard-complexity rule, the query is easy — answer with a single judge-model
+	// call instead of paying the N+2 panel cost. Eval (CachedPanel) always runs the
+	// full panel so arms stay comparable.
+	if shouldEscalateToSingleModel(cfg, req) {
+		metrics.RecordFusionEscalationBypass(req.DecisionName)
+		logging.ComponentEvent("looper", "fusion_escalation_bypass", map[string]interface{}{
+			"decision":           req.DecisionName,
+			"judge_model":        cfg.Model,
+			"matched_complexity": req.MatchedComplexity,
+		})
+		return l.runFusionSingleModel(ctx, req, cfg)
+	}
+
+	panelStart := time.Now()
 	panelResponses, failedModels, err := l.executeFusionPanel(ctx, req, cfg)
+	metrics.RecordFusionStageDuration("panel", time.Since(panelStart).Seconds())
 	if err != nil {
 		return nil, err
 	}
+	recordFusionPanelMetrics(panelResponses, failedModels)
 
 	// Grounding (optional) ranks/filters the panel before the judge. It makes no
 	// model calls, so usage is summed from the full panel (the real cost paid).
+	groundingStart := time.Now()
 	groundedPanel, groundingScores, groundingMode, err := l.applyGrounding(req, cfg, panelResponses)
+	metrics.RecordFusionStageDuration("grounding", time.Since(groundingStart).Seconds())
 	if err != nil {
 		return nil, err
 	}
+	recordFusionGroundingMetrics(cfg, groundingMode, groundingScores)
 
-	analysis, analysisResp := l.runFusionAnalysis(ctx, req, cfg, groundedPanel, groundingScores)
+	// Panel-agreement early-exit: when the panel is unanimous, skip the separate
+	// analysis judge call and synthesize directly (saves one judge call). Only
+	// fires in panel mode with no dissenter, so it never deletes a minority view.
+	analysis, analysisResp, earlyExit := l.runFusionAnalysisStage(ctx, req, cfg, groundedPanel, groundingScores, groundingMode)
+
+	synthesisStart := time.Now()
 	finalResp, err := l.runFusionFinal(ctx, req, cfg, groundedPanel, analysis, groundingScores)
+	metrics.RecordFusionStageDuration("synthesis", time.Since(synthesisStart).Seconds())
 	if err != nil {
 		return nil, err
 	}
 	usage := SumUsage(panelResponses...).Add(analysisResp, finalResp)
-
 	trace := buildFusionTrace(cfg, groundedPanel, failedModels, analysis, groundingMode, groundingScores)
-	modelsUsed := orderedFusionModelsUsed(cfg.AnalysisModels, cfg.Model)
-	iterations := len(cfg.AnalysisModels) + 2
-
-	if req.IsStreaming {
-		return l.formatFusionStreamingResponse(finalResp, modelsUsed, iterations, cfg, trace, usage)
-	}
-	return l.formatFusionJSONResponse(finalResp, modelsUsed, iterations, cfg, trace, usage)
+	return l.finalizeFusionResponse(req, cfg, finalResp, trace, usage, earlyExit)
 }
 
 func (l *FusionLooper) resolveFusionExecutionConfig(req *Request) fusionExecutionConfig {
@@ -233,16 +254,9 @@ func mergeFusionAlgorithmConfig(dst *fusionExecutionConfig, src *config.FusionAl
 	if src.OnError != "" {
 		dst.OnError = src.OnError
 	}
-	if src.AnalysisTemplate != "" {
-		dst.AnalysisTemplate = src.AnalysisTemplate
-	}
-	if src.SynthesisTemplate != "" {
-		dst.SynthesisTemplate = src.SynthesisTemplate
-	}
-	if src.JudgePromptVersion != "" {
-		dst.JudgePromptVersion = src.JudgePromptVersion
-	}
+	mergeFusionPromptConfig(dst, src)
 	mergeFusionGroundingConfig(dst, src.Grounding)
+	mergeFusionEscalationConfig(dst, src.Escalation)
 }
 
 func mergeFusionGroundingConfig(dst *fusionExecutionConfig, src *config.FusionGroundingConfig) {
@@ -256,6 +270,8 @@ func mergeFusionGroundingConfig(dst *fusionExecutionConfig, src *config.FusionGr
 	dst.GroundingMinKeep = src.MinKeep
 	dst.GroundingNLIContradictionPenalty = src.NLIContradictionPenalty
 	dst.GroundingOnError = src.OnError
+	dst.GroundingEarlyExitEnabled = src.EarlyExitEnabled
+	dst.GroundingEarlyExitMinConsistency = src.EarlyExitMinConsistency
 }
 
 func mergeFusionRequestConfig(dst *fusionExecutionConfig, src *config.FusionRequestConfig) {

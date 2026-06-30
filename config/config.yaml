@@ -817,6 +817,8 @@ routing:
             min_keep: 1                # filter policy only: keep at least this many
             nli_contradiction_penalty: 1.0
             on_error: skip             # skip (fall back to plain fusion) | fail
+            early_exit_enabled: false  # panel-mode only: skip analysis when panel is unanimous
+            early_exit_min_consistency: 0.0  # every response must score >= this (0-1) to early-exit
             # policy controls how the scores are used:
             #   weight   (default) keep every response; tell the judge to weight
             #            each answer by its score (a correct lone dissenter is kept).
@@ -824,6 +826,12 @@ routing:
             #   filter   hard-drop responses below min_score (keep min_keep).
             # filter regresses quality on contested factual questions because it
             # deletes the correct dissenter; see bench/grounded_fusion/FINDINGS.md.
+          # Adaptive escalation: run the full panel only for hard queries (those
+          # matching a complexity rule below); answer easy queries with one judge
+          # call. Disabled by default.
+          escalation:
+            enabled: false
+            hard_complexity_rules: []  # e.g. ["reasoning_complexity:hard"]
 
     - name: terse_feedback_route
       description: Terse-answer route that allows Router Learning adaptation to adjust feedback-driven routing.
