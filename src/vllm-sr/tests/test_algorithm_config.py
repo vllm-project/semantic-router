@@ -23,6 +23,10 @@ from cli.algorithms import (  # noqa: E402
     RatingsAlgorithmConfig,
     ReMoMAlgorithmConfig,
     RouterDCSelectionConfig,
+    WorkflowFinalConfig,
+    WorkflowPlannerConfig,
+    WorkflowRoleConfig,
+    WorkflowsAlgorithmConfig,
 )
 
 
@@ -31,7 +35,7 @@ class TestAlgorithmConfigTypes:
 
     def test_valid_looper_types(self):
         """Test that looper algorithm types are accepted."""
-        looper_types = ["confidence", "ratings", "remom", "fusion"]
+        looper_types = ["confidence", "ratings", "remom", "fusion", "workflows"]
 
         for algo_type in looper_types:
             config = AlgorithmConfig(type=algo_type)
@@ -182,6 +186,38 @@ class TestReMoMAlgorithmConfig:
         with pytest.raises(PydanticValidationError):
             ReMoMAlgorithmConfig()  # Missing required field
 
+    def test_model_distribution_validation(self):
+        """Test ReMoM model distribution enum validation."""
+        config = ReMoMAlgorithmConfig(
+            breadth_schedule=[3, 2],
+            model_distribution="round_robin",
+        )
+        assert config.model_distribution == "round_robin"
+
+        with pytest.raises(PydanticValidationError):
+            ReMoMAlgorithmConfig(
+                breadth_schedule=[3, 2],
+                model_distribution="uniform",
+            )
+
+    def test_quorum_and_timeout_controls(self):
+        """Test ReMoM long-tail controls."""
+        config = ReMoMAlgorithmConfig(
+            breadth_schedule=[3],
+            synthesis_model="model-b",
+            round_timeout_seconds=120,
+            min_successful_responses=2,
+        )
+        assert config.synthesis_model == "model-b"
+        assert config.round_timeout_seconds == 120
+        assert config.min_successful_responses == 2
+
+        with pytest.raises(PydanticValidationError):
+            ReMoMAlgorithmConfig(
+                breadth_schedule=[3],
+                round_timeout_seconds=0,
+            )
+
 
 class TestFusionAlgorithmConfig:
     """Test Fusion multi-model deliberation configuration."""
@@ -213,6 +249,20 @@ class TestFusionAlgorithmConfig:
 
         with pytest.raises(PydanticValidationError):
             FusionAlgorithmConfig(max_completion_tokens=0)
+
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(round_timeout_seconds=0)
+
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(min_successful_responses=0)
+
+    def test_quorum_and_timeout_controls(self):
+        config = FusionAlgorithmConfig(
+            round_timeout_seconds=90,
+            min_successful_responses=2,
+        )
+        assert config.round_timeout_seconds == 90
+        assert config.min_successful_responses == 2
 
     def test_on_error_validation(self):
         assert FusionAlgorithmConfig(on_error="fail").on_error == "fail"
@@ -274,6 +324,59 @@ class TestAlgorithmConfigIntegration:
         )
         assert config.type == "multi_factor"
         assert config.multi_factor.weights.quality == 0.4
+
+    def test_workflows_algorithm_config(self):
+        """Test AlgorithmConfig with workflows dynamic config."""
+        config = AlgorithmConfig(
+            type="workflows",
+            workflows=WorkflowsAlgorithmConfig(
+                mode="dynamic",
+                planner=WorkflowPlannerConfig(
+                    model="qwen-coordinator",
+                    max_completion_tokens=1024,
+                ),
+                max_steps=6,
+                max_parallel=3,
+                round_timeout_seconds=90,
+                min_successful_responses=2,
+            ),
+        )
+        assert config.type == "workflows"
+        assert config.workflows.mode == "dynamic"
+        assert config.workflows.planner.model == "qwen-coordinator"
+        assert config.workflows.planner.max_completion_tokens == 1024
+        assert config.workflows.max_steps == 6
+        assert config.workflows.round_timeout_seconds == 90
+        assert config.workflows.min_successful_responses == 2
+
+    def test_workflows_planner_positive_limits(self):
+        with pytest.raises(PydanticValidationError):
+            WorkflowPlannerConfig(model="qwen-coordinator", max_completion_tokens=0)
+
+        with pytest.raises(PydanticValidationError):
+            WorkflowsAlgorithmConfig(round_timeout_seconds=0)
+
+        with pytest.raises(PydanticValidationError):
+            WorkflowsAlgorithmConfig(min_successful_responses=0)
+
+    def test_workflows_static_roles_config(self):
+        """Test AlgorithmConfig with workflows static role config."""
+        config = AlgorithmConfig(
+            type="workflows",
+            workflows=WorkflowsAlgorithmConfig(
+                mode="static",
+                roles=[
+                    WorkflowRoleConfig(name="thinker", models=["worker-a"]),
+                    WorkflowRoleConfig(name="verifier", models=["worker-b"]),
+                ],
+                final=WorkflowFinalConfig(model="worker-b"),
+            ),
+        )
+        assert config.workflows.roles is not None
+        assert config.workflows.roles[0].name == "thinker"
+        assert config.workflows.roles[0].models == ["worker-a"]
+        assert config.workflows.final is not None
+        assert config.workflows.final.model == "worker-b"
 
     def test_learning_algorithm_type_specific_blocks_are_rejected(self):
         """Learning systems live under global.router.learning."""

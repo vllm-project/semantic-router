@@ -1,0 +1,13 @@
+algorithm:
+  type: workflows
+  workflows:
+    mode: dynamic
+    planner:
+      model: qwen-coordinator
+      max_completion_tokens: 2048
+    max_steps: 6
+    max_parallel: 3
+    round_timeout_seconds: 90
+    min_successful_responses: 2
+    include_intermediate_responses: true
+    on_error: skip

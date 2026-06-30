@@ -18,6 +18,7 @@ static     - Use first configured model (default, no learning)
 router_dc  - Query-model matching via embedding similarity
 automix    - Cost-quality optimization using POMDP
 hybrid     - Combine multiple methods with configurable weights
+workflows  - Router Flow static/dynamic micro-agent orchestration
 latency_aware - TPOT/TTFT percentile-aware selection
 knn        - KNN selector using shared ML model-selection settings
 kmeans     - KMeans selector using shared ML model-selection settings
@@ -43,6 +44,9 @@ Examples:
 
     # Use latency-aware selection
     vllm-sr serve --algorithm latency_aware
+
+    # Use Router Flow static workflows
+    vllm-sr serve --algorithm workflows
 
     # Custom image
     vllm-sr serve --image ghcr.io/vllm-project/semantic-router/vllm-sr:latest

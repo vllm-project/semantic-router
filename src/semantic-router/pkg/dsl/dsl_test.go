@@ -2261,15 +2261,19 @@ ROUTE test {
   MODEL "m1:7b", "m2:3b"
   ALGORITHM remom {
     breadth_schedule: [8, 4, 2]
-    model_distribution: "uniform"
+    model_distribution: "round_robin"
     temperature: 0.8
     include_reasoning: true
-    compaction_strategy: "summarize"
+    compaction_strategy: "last_n_tokens"
     compaction_tokens: 512
     synthesis_template: "custom-template"
+    synthesis_model: "m2:3b"
     max_concurrent: 8
+    round_timeout_seconds: 90
+    min_successful_responses: 2
     on_error: "skip"
     include_intermediate_responses: true
+    max_responses_per_round: 4
   }
 }`
 	cfg, errs := Compile(input)
@@ -2280,10 +2284,10 @@ ROUTE test {
 	if len(r.BreadthSchedule) != 3 || r.BreadthSchedule[2] != 2 {
 		t.Errorf("breadth_schedule = %v", r.BreadthSchedule)
 	}
-	if r.ModelDistribution != "uniform" {
+	if r.ModelDistribution != "round_robin" {
 		t.Errorf("model_distribution = %q", r.ModelDistribution)
 	}
-	if r.CompactionStrategy != "summarize" {
+	if r.CompactionStrategy != "last_n_tokens" {
 		t.Errorf("compaction_strategy = %q", r.CompactionStrategy)
 	}
 	if r.CompactionTokens != 512 {
@@ -2292,11 +2296,23 @@ ROUTE test {
 	if r.SynthesisTemplate != "custom-template" {
 		t.Errorf("synthesis_template = %q", r.SynthesisTemplate)
 	}
+	if r.SynthesisModel != "m2:3b" {
+		t.Errorf("synthesis_model = %q", r.SynthesisModel)
+	}
 	if r.MaxConcurrent != 8 {
 		t.Errorf("max_concurrent = %d", r.MaxConcurrent)
 	}
+	if r.RoundTimeoutSeconds != 90 {
+		t.Errorf("round_timeout_seconds = %d", r.RoundTimeoutSeconds)
+	}
+	if r.MinSuccessfulResponses != 2 {
+		t.Errorf("min_successful_responses = %d", r.MinSuccessfulResponses)
+	}
 	if !r.IncludeIntermediateResponses {
 		t.Error("expected include_intermediate_responses = true")
+	}
+	if r.MaxResponsesPerRound != 4 {
+		t.Errorf("max_responses_per_round = %d", r.MaxResponsesPerRound)
 	}
 }
 
