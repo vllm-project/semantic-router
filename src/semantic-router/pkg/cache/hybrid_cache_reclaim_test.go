@@ -147,3 +147,59 @@ func TestStopBackgroundReclaimIdempotent(t *testing.T) {
 	h.stopBackgroundReclaim()
 	h.stopBackgroundReclaim()
 }
+
+// TestStopBackgroundReclaimWaitsForInFlightReclaim locks in the property that
+// stopBackgroundReclaim blocks until the goroutine has fully exited, including a
+// reclaim pass that is already in flight. This is what makes Close()'s nil-out of
+// the in-memory structures safe: by the time stop returns, no pass can still be
+// about to take the write lock and touch them.
+func TestStopBackgroundReclaimWaitsForInFlightReclaim(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var finished atomic.Bool
+
+	h := &HybridCache{
+		enabled:    true,
+		ttlSeconds: 600,
+		reclaimFn: func(context.Context) error {
+			close(started) // a pass is now in flight (only the first tick gets here)
+			<-release      // simulate a slow RebuildFromMilvus still running
+			finished.Store(true)
+			return nil
+		},
+	}
+	// Drive a fast ticker and wire reclaimDone the way startBackgroundReclaim does.
+	h.stopReclaim = make(chan struct{})
+	h.reclaimDone = make(chan struct{})
+	h.reclaimTicker = time.NewTicker(5 * time.Millisecond)
+	go func() {
+		defer close(h.reclaimDone)
+		h.backgroundReclaim()
+	}()
+
+	<-started // ensure a reclaim pass is in flight before we stop
+
+	stopReturned := make(chan struct{})
+	go func() {
+		h.stopBackgroundReclaim()
+		close(stopReturned)
+	}()
+
+	// stop must NOT return while a reclaim pass is still running.
+	select {
+	case <-stopReturned:
+		t.Fatal("stopBackgroundReclaim returned before the in-flight reclaim pass finished")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// Let the in-flight pass complete; stop must now return promptly.
+	close(release)
+	select {
+	case <-stopReturned:
+	case <-time.After(time.Second):
+		t.Fatal("stopBackgroundReclaim did not return after the in-flight reclaim pass finished")
+	}
+	if !finished.Load() {
+		t.Fatal("expected the in-flight reclaim pass to complete before stop returned")
+	}
+}

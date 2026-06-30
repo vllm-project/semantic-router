@@ -15,7 +15,10 @@ const (
 	// often than this regardless of how short the configured TTL is.
 	minReclaimInterval = 60 * time.Second
 
-	// reclaimTimeout bounds a single background reclaim pass.
+	// reclaimTimeout bounds a single background reclaim pass. A pass runs a full
+	// RebuildFromMilvus, which holds the cache write lock for its whole body, so
+	// this is also the worst-case window during which lookups/writes are blocked
+	// by reclamation. It matches the startup-rebuild timeout for consistency.
 	reclaimTimeout = 5 * time.Minute
 )
 
@@ -54,6 +57,7 @@ func (h *HybridCache) startBackgroundReclaim() {
 
 	interval := reclaimIntervalForTTL(h.ttlSeconds)
 	h.stopReclaim = make(chan struct{})
+	h.reclaimDone = make(chan struct{})
 	h.reclaimTicker = time.NewTicker(interval)
 
 	logging.ComponentEvent("cache", "hybrid_cache_reclaim_started", map[string]interface{}{
@@ -61,7 +65,10 @@ func (h *HybridCache) startBackgroundReclaim() {
 		"ttl_seconds":      h.ttlSeconds,
 	})
 
-	go h.backgroundReclaim()
+	go func() {
+		defer close(h.reclaimDone)
+		h.backgroundReclaim()
+	}()
 }
 
 // backgroundReclaim reclaims entries that Milvus has expired on each tick until
@@ -84,8 +91,13 @@ func (h *HybridCache) backgroundReclaim() {
 	}
 }
 
-// stopBackgroundReclaim signals the reclaim goroutine to exit and stops its
-// ticker. Safe to call multiple times and when reclaim was never started.
+// stopBackgroundReclaim signals the reclaim goroutine to exit, stops its ticker,
+// and blocks until the goroutine has actually returned. Blocking matters: it is
+// called from Close() before the write lock is taken, so a reclaim pass already
+// in flight can still acquire h.mu, finish, and exit — guaranteeing no pass is
+// running by the time Close() nils out the in-memory structures (no
+// use-after-close). Safe to call multiple times and when reclaim was never
+// started.
 func (h *HybridCache) stopBackgroundReclaim() {
 	h.closeOnce.Do(func() {
 		if h.stopReclaim != nil {
@@ -93,6 +105,12 @@ func (h *HybridCache) stopBackgroundReclaim() {
 		}
 		if h.reclaimTicker != nil {
 			h.reclaimTicker.Stop()
+		}
+		if h.reclaimDone != nil {
+			<-h.reclaimDone
+			logging.ComponentEvent("cache", "hybrid_cache_reclaim_stopped", map[string]interface{}{
+				"ttl_seconds": h.ttlSeconds,
+			})
 		}
 	})
 }

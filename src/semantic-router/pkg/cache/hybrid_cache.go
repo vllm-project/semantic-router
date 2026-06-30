@@ -94,6 +94,7 @@ type HybridCache struct {
 	// all-time high-water mark. See issue #2288.
 	reclaimTicker *time.Ticker
 	stopReclaim   chan struct{}
+	reclaimDone   chan struct{} // closed by the reclaim goroutine on exit; lets stop block until it has returned
 	closeOnce     sync.Once
 	reclaimFn     func(context.Context) error // defaults to RebuildFromMilvus; overridable in tests
 }
@@ -567,8 +568,12 @@ func (h *HybridCache) Close() error {
 		return nil
 	}
 
-	// Stop the background reclaim goroutine before taking the write lock so a
-	// reclaim pass in flight can finish and release the lock (avoids deadlock).
+	// Stop the background reclaim goroutine before taking the write lock. This
+	// is ordered (not locked) on purpose: stopBackgroundReclaim blocks until the
+	// goroutine has exited, and an in-flight reclaim pass needs h.mu to finish,
+	// so we must release the lock to it first. By the time we acquire the write
+	// lock below, no reclaim pass can still be running — which is what makes the
+	// subsequent nil-out of embeddings/idMap/hnswIndex safe (no use-after-close).
 	h.stopBackgroundReclaim()
 
 	h.mu.Lock()
