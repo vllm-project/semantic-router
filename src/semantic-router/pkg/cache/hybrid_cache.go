@@ -88,6 +88,14 @@ type HybridCache struct {
 
 	// Concurrency control
 	mu sync.RWMutex
+
+	// Background TTL reclamation: drops in-memory entries that Milvus has
+	// already expired so the index tracks the live working set rather than the
+	// all-time high-water mark. See issue #2288.
+	reclaimTicker *time.Ticker
+	stopReclaim   chan struct{}
+	closeOnce     sync.Once
+	reclaimFn     func(context.Context) error // defaults to RebuildFromMilvus; overridable in tests
 }
 
 // HybridCacheOptions contains configuration for the hybrid cache
@@ -190,6 +198,11 @@ func NewHybridCache(options HybridCacheOptions) (*HybridCache, error) {
 			})
 			// Don't fail initialization, just log warning and continue with empty index
 		}
+
+		// Start periodic TTL reclamation (reuses the same rebuild path). Gated
+		// on the rebuild mechanism being enabled so the DisableRebuildOnStartup
+		// opt-out also suppresses the recurring Milvus re-query.
+		cache.startBackgroundReclaim()
 	} else {
 		logging.ComponentWarnEvent("cache", "hybrid_cache_rebuild_skipped", map[string]interface{}{
 			"source":      "startup",
@@ -553,6 +566,10 @@ func (h *HybridCache) Close() error {
 	if !h.enabled {
 		return nil
 	}
+
+	// Stop the background reclaim goroutine before taking the write lock so a
+	// reclaim pass in flight can finish and release the lock (avoids deadlock).
+	h.stopBackgroundReclaim()
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
