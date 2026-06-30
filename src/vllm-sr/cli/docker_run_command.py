@@ -105,7 +105,7 @@ def maybe_append_amd_gpu_passthrough(cmd, enable_amd_gpu: bool):
         append_amd_gpu_passthrough(cmd, _normalize_platform(PLATFORM_AMD))
 
 
-def append_nvidia_gpu_passthrough(cmd):
+def append_nvidia_gpu_passthrough(cmd, runtime: str):
     passthrough_enabled = os.getenv("VLLM_SR_NVIDIA_GPU_PASSTHROUGH", "1").lower()
     if passthrough_enabled in ["0", "false", "no", "off"]:
         log.info(
@@ -113,7 +113,6 @@ def append_nvidia_gpu_passthrough(cmd):
         )
         return
 
-    runtime = cmd[0] if cmd else ""
     if runtime == "podman":
         # Podman uses CDI (`--device nvidia.com/gpu=all`); fall back to passing
         # `--gpus all` only for Docker, which understands the nvidia container
@@ -127,6 +126,6 @@ def append_nvidia_gpu_passthrough(cmd):
     log.info("NVIDIA GPU passthrough enabled (--gpus all --runtime nvidia)")
 
 
-def maybe_append_nvidia_gpu_passthrough(cmd, enable_nvidia_gpu: bool):
+def maybe_append_nvidia_gpu_passthrough(cmd, enable_nvidia_gpu: bool, runtime: str):
     if enable_nvidia_gpu:
-        append_nvidia_gpu_passthrough(cmd)
+        append_nvidia_gpu_passthrough(cmd, runtime)
