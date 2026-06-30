@@ -59,3 +59,42 @@ func TestRecordJSONOmitsDemotedHeaderFieldsWhenZero(t *testing.T) {
 		t.Fatalf("expected context_token_count omitted when zero, got %s", js)
 	}
 }
+
+// TestPostgresBackendWiresDemotedHeaderFields guards the Postgres column wiring
+// for the two demoted-header values (#2254). Unlike the JSON backends
+// (memory/redis/milvus/qdrant) which marshal the whole Record, Postgres maps
+// columns explicitly — so a struct field with no matching column in the
+// CREATE/INSERT/SELECT/scan chain is silently dropped under
+// store_backend: postgres (the documented default). This pins every link.
+func TestPostgresBackendWiresDemotedHeaderFields(t *testing.T) {
+	for _, col := range []string{"cache_similarity", "context_token_count"} {
+		if !strings.Contains(postgresCreateTableQueryTemplate, col) {
+			t.Errorf("CREATE TABLE template missing %q — column never provisioned", col)
+		}
+		if !strings.Contains(postgresInsertQueryTemplate, col) {
+			t.Errorf("INSERT template missing %q — value never written under store_backend: postgres", col)
+		}
+		if !strings.Contains(postgresRecordSelectColumns, col) {
+			t.Errorf("SELECT column list missing %q — value never read back under store_backend: postgres", col)
+		}
+	}
+
+	// SELECT column list and scan destinations must stay 1:1; otherwise every
+	// scanned column shifts. The insert-side alignment test does not cover this.
+	selectCols := splitSQLColumnList(postgresRecordSelectColumns)
+	scanDests := (&postgresRecordRow{}).scanDestinations()
+	if len(selectCols) != len(scanDests) {
+		t.Fatalf("SELECT columns (%d) vs scan destinations (%d) count mismatch", len(selectCols), len(scanDests))
+	}
+}
+
+func splitSQLColumnList(list string) []string {
+	parts := strings.Split(list, ",")
+	cols := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			cols = append(cols, trimmed)
+		}
+	}
+	return cols
+}
