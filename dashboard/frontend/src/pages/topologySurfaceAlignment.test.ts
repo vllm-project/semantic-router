@@ -59,6 +59,7 @@ describe('topology v0.3 surface alignment', () => {
     expect(SIGNAL_TYPES).toEqual(expect.arrayContaining(['conversation', 'event']))
     expect(ALGORITHM_ICONS).toMatchObject({
       fusion: 'FU',
+      workflows: 'FL',
       mlp: 'MLP',
       multi_factor: 'MF',
     })

@@ -194,6 +194,7 @@ export type AlgorithmType =
   | 'hybrid'
   | 'remom'
   | 'fusion'
+  | 'workflows'
   | 'latency_aware'
   | 'knn'
   | 'kmeans'
@@ -209,6 +210,7 @@ export interface AlgorithmConfig {
   ratings?: GenericAlgorithmConfig
   remom?: GenericAlgorithmConfig
   fusion?: GenericAlgorithmConfig
+  workflows?: GenericAlgorithmConfig
   router_dc?: GenericAlgorithmConfig
   automix?: GenericAlgorithmConfig
   autoMix?: GenericAlgorithmConfig

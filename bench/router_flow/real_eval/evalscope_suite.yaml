@@ -1,0 +1,238 @@
+defaults:
+  api_url: http://127.0.0.1:8899/v1
+  api_key: EMPTY
+  eval_type: openai_api
+  eval_batch_size: 8
+  generation_config:
+    temperature: 0
+    max_tokens: 8192
+    batch_size: 8
+    timeout: 900
+    retries: 2
+    retry_interval: 15
+
+models:
+  auto: vllm-sr/auto
+
+model_labels:
+  auto: VSR 1.0 Pro
+
+benchmarks:
+  - id: gpqa_d
+    public_name: GPQA-D
+    dataset: gpqa_diamond
+    metric: mean_acc
+    tier: core
+    default_run: true
+    smoke_limit: 20
+    formal_limit: 198
+    eval_batch_size: 2
+    generation_config:
+      batch_size: 2
+      max_tokens: 32768
+    notes: Multiple-choice science reasoning. This is the first format-contract regression target.
+
+  - id: hle_text
+    public_name: Humanity's Last Exam
+    dataset: hle
+    metric: acc
+    tier: core
+    default_run: true
+    smoke_limit: 20
+    formal_limit: 2500
+    eval_batch_size: 4
+    generation_config:
+      batch_size: 4
+    dataset_args:
+      extra_params:
+        include_multi_modal: false
+    smoke_dataset_args:
+      subset_list:
+        - Math
+    smoke_generation_config:
+      max_tokens: 8192
+    judge_strategy: auto
+    judge_model_args:
+      model_id: gpt-worker
+      api_url: http://127.0.0.1:8899/v1
+      api_key: EMPTY
+      generation_config:
+        temperature: 0
+        max_tokens: 1024
+    notes: Text-only HLE run. Multimodal HLE needs a vision-capable router path.
+
+  - id: live_code_bench
+    public_name: LiveCodeBench
+    dataset: live_code_bench
+    metric: acc
+    tier: core
+    default_run: true
+    smoke_limit: 10
+    formal_limit: 175
+    eval_batch_size: 24
+    generation_config:
+      batch_size: 24
+      max_tokens: 32768
+    dataset_args:
+      subset_list:
+        - v6
+      extra_params:
+        start_date: "2025-01-01"
+        end_date: "2025-04-30"
+        debug: false
+        review_timeout: 30
+    smoke_dataset_args:
+      extra_params:
+        start_date: "2025-01-01"
+        end_date: "2025-04-30"
+        debug: false
+    formal_generation_config:
+      retries: 5
+      batch_size: 24
+    sandbox:
+      enabled: true
+    notes: Jan-Apr 2025 LiveCodeBench slice, matching the public technical-report window. Requires sandboxed code execution.
+
+  - id: scicode
+    public_name: SciCode
+    dataset: scicode
+    metric: main_problem_pass_rate
+    tier: core
+    default_run: true
+    smoke_limit: 10
+    formal_limit: 65
+    eval_batch_size: 24
+    generation_config:
+      batch_size: 24
+      max_tokens: 32768
+    dataset_args:
+      extra_params:
+        provide_background: true
+    formal_generation_config:
+      retries: 3
+      batch_size: 24
+    sandbox:
+      enabled: true
+    sandbox_prepare:
+      image: scicode-benchmark:latest
+      context: evalscope:benchmarks/scicode/docker
+    notes: Scientific code generation with provided background enabled. First run builds or downloads the SciCode sandbox image.
+
+  - id: openai_mrcr_32k
+    public_name: MRCRv2
+    dataset: openai_mrcr
+    metric: mrcr_score
+    tier: core
+    default_run: true
+    smoke_limit: 5
+    formal_limit: 0
+    eval_batch_size: 2
+    generation_config:
+      batch_size: 2
+    dataset_args:
+      extra_params:
+        max_context_size: 131072
+        needle_count: [8]
+    smoke_dataset_args:
+      extra_params:
+        min_context_size: 65536
+        max_context_size: 262144
+        needle_count: [2]
+    notes: Formal run uses the public-report style 8-needle MRCR slice capped at 128K context.
+
+  - id: aa_lcr
+    public_name: Long Context Reasoning
+    dataset: aa_lcr
+    metric: acc
+    tier: core
+    default_run: true
+    smoke_limit: 3
+    formal_limit: 100
+    eval_batch_size: 2
+    generation_config:
+      batch_size: 2
+    notes: Artificial Analysis long-context retrieval. Very long prompts; included in the aligned core matrix.
+
+  - id: swe_bench_verified_mini_oracle
+    public_name: SWE Bench Pro aligned smoke
+    dataset: swe_bench_verified_mini
+    metric: mean_acc
+    tier: heavy
+    default_run: false
+    smoke_limit: 5
+    formal_limit: 50
+    eval_batch_size: 1
+    dataset_args:
+      extra_params:
+        build_docker_images: true
+        pull_remote_images_if_available: true
+        inference_dataset_id: princeton-nlp/SWE-bench_bm25_13K
+    notes: Lower-cost SWE-bench oracle-mode baseline. SWE Bench Pro requires the agentic adapter.
+
+  - id: swe_bench_verified_mini_agentic
+    public_name: SWE Bench Pro agentic smoke
+    dataset: swe_bench_verified_mini_agentic
+    metric: mean_acc
+    tier: heavy
+    default_run: false
+    smoke_limit: 3
+    formal_limit: 50
+    eval_batch_size: 1
+    generation_config:
+      temperature: 0.7
+      max_tokens: 8192
+      timeout: 900
+      retries: 1
+      stream: true
+      parallel_tool_calls: true
+    dataset_args:
+      extra_params:
+        action_protocol: backticks
+        max_steps: 250
+        command_timeout: 60
+        build_docker_images: true
+        pull_remote_images_if_available: true
+    notes: Closest EvalScope path to the public SWE scaffolding, but expensive and Docker-heavy.
+
+  - id: terminal_bench_2_1
+    public_name: TerminalBench 2.1
+    dataset: terminal_bench_v2_1
+    metric: acc
+    tier: heavy
+    default_run: false
+    smoke_limit: 5
+    formal_limit: 89
+    eval_batch_size: 1
+    dataset_args:
+      extra_params:
+        agent_name: terminus-2
+        max_turns: 200
+        terminus2_kwargs:
+          proactive_summarization_threshold: 0
+    notes: Requires evalscope[terminal_bench], Python >=3.12, Docker, and a supported agent wrapper.
+
+  - id: tau3_banking
+    public_name: Tau3 Banking
+    dataset: tau3_bench
+    metric: acc
+    tier: heavy
+    default_run: false
+    smoke_limit: 5
+    formal_limit: 0
+    dataset_args:
+      subset_list:
+        - banking_knowledge
+      extra_params:
+        retrieval_config: bm25
+        retrieval_config_kwargs: {}
+    notes: Banking knowledge domain from Tau3. Needs tau2[knowledge] and user-simulator config.
+
+  - id: charxiv_reasoning
+    public_name: CharXiv Reasoning
+    dataset: charxiv_reasoning
+    metric: acc
+    tier: adapter_needed
+    default_run: false
+    smoke_limit: 0
+    formal_limit: 0
+    notes: Not in EvalScope text LLM adapters today. Needs a VLM/custom adapter before it is comparable.

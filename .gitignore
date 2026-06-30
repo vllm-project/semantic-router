@@ -40,6 +40,10 @@ extproc-server
 .vscode/
 *.swp
 *.swo
+tmp/
+output/
+artifacts/
+bench/router_flow/scorecards/
 
 # Dependency directories
 vendor/
