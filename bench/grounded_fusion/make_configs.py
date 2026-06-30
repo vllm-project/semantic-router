@@ -3,7 +3,7 @@
 Both configs are identical except ``algorithm.fusion.grounding.enabled``. They:
   - add a deterministic ``deliberate_sentinel`` regex keyword rule + a top-priority
     fusion decision keyed to it (the harness prepends the sentinel to every prompt),
-  - point the fusion panel/judge at local Ollama models via looper.model_endpoints,
+  - bind the fusion panel/judge to a local Ollama proxy via provider backend_refs,
   - wire the NLI model (models/mom-halugate-explainer) so PANEL-mode grounding
     actually fires instead of silently falling back to plain fusion.
 
@@ -22,9 +22,9 @@ import yaml
 SENTINEL = "deliberate-eval"
 PANEL = ["qwen3:8b", "llama3.1:8b", "gemma3:12b"]
 JUDGE = "qwen3:14b"
-OLLAMA = "http://localhost:11435/v1/chat/completions"
 OLLAMA_BACKEND = {
-    "base_url": "http://127.0.0.1:11434/v1",
+    "base_url": "http://localhost:11435/v1",
+    "provider": "openai",
     "chat_path": "/chat/completions",
 }
 
@@ -141,10 +141,6 @@ def build(base: dict, grounding_on: bool, policy: str = "weight") -> dict:
     for store in ("semantic_cache", "memory", "vector_store"):
         if store in c["global"].get("stores", {}):
             c["global"]["stores"][store]["enabled"] = False
-
-    # looper -> Ollama for every panel/judge model
-    looper = c["global"]["integrations"]["looper"]
-    looper["model_endpoints"] = dict.fromkeys([*PANEL, JUDGE], OLLAMA)
 
     # Ensure hallucination_mitigation is enabled so the detector + NLI model init
     # (initializeHallucinationDetector -> wireFusionGroundingBackends). The NLI

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 
-import { getAlgorithmFieldSchema } from '@/lib/dslMutations'
-import type { ASTAlgoSpec, ASTModelRef, ASTPluginRef } from '@/types/dsl'
+import { getAlgorithmFieldSchema, serializeFields } from '@/lib/dslMutations'
+import type { ASTAlgoSpec, ASTModelRef, ASTPluginRef, DSLFieldObject } from '@/types/dsl'
 import type { RouteAlgoInput, RouteModelInput, RoutePluginInput } from '@/lib/dslMutations'
 
 import styles from './BuilderPage.module.css'
@@ -47,16 +47,11 @@ function generateRouteDslPreview(
   }
   if (algorithm?.algoType) {
     lines.push('')
-    const aFields = Object.entries(algorithm.fields).filter(([, v]) => v !== undefined && v !== '')
-    if (aFields.length > 0) {
+    const aFields = filterPreviewFields(algorithm.fields)
+    const algoFields = serializeFields(aFields, '    ')
+    if (algoFields.trim()) {
       lines.push(`  ALGORITHM ${algorithm.algoType} {`)
-      aFields.forEach(([k, v]) => {
-        let formatted: string
-        if (Array.isArray(v)) formatted = `[${v.join(', ')}]`
-        else if (typeof v === 'string') formatted = `"${v}"`
-        else formatted = String(v)
-        lines.push(`    ${k}: ${formatted}`)
-      })
+      lines.push(algoFields)
       lines.push(`  }`)
     } else {
       lines.push(`  ALGORITHM ${algorithm.algoType}`)
@@ -66,14 +61,9 @@ function generateRouteDslPreview(
     lines.push('')
     plugins.forEach((p) => {
       if (p.fields && Object.keys(p.fields).length > 0) {
+        const pluginFields = serializeFields(filterPreviewFields(p.fields), '    ')
         lines.push(`  PLUGIN ${p.name} {`)
-        Object.entries(p.fields).forEach(([k, v]) => {
-          let formatted: string
-          if (Array.isArray(v)) formatted = `[${v.join(', ')}]`
-          else if (typeof v === 'string') formatted = `"${v}"`
-          else formatted = String(v)
-          lines.push(`    ${k}: ${formatted}`)
-        })
+        if (pluginFields.trim()) lines.push(pluginFields)
         lines.push(`  }`)
       } else {
         lines.push(`  PLUGIN ${p.name}`)
@@ -82,6 +72,12 @@ function generateRouteDslPreview(
   }
   lines.push('}')
   return lines.join('\n')
+}
+
+function filterPreviewFields(fields: DSLFieldObject): DSLFieldObject {
+  return Object.fromEntries(
+    Object.entries(fields).filter(([, value]) => value !== undefined && value !== null && value !== ''),
+  ) as DSLFieldObject
 }
 
 interface ValidationIssue {
@@ -155,6 +151,46 @@ function validateRouteInput(
         })
       }
     }
+    if (algorithm.algoType === 'workflows') {
+      const mode = typeof fields['mode'] === 'string' ? fields['mode'] : ''
+      if (mode === 'dynamic' && !extractWorkflowPlannerModel(fields)) {
+        issues.push({
+          level: 'error',
+          message: 'workflows mode=dynamic requires planner.model',
+        })
+      }
+      if (mode === 'dynamic' && Array.isArray(fields['roles']) && fields['roles'].length > 0) {
+        issues.push({
+          level: 'error',
+          message: 'workflows mode=dynamic cannot include static roles',
+        })
+      }
+      if (mode === 'dynamic' && isObjectRecord(fields['final'])) {
+        issues.push({
+          level: 'error',
+          message: 'workflows mode=dynamic cannot include static final',
+        })
+      }
+      if (mode !== 'dynamic') {
+        issues.push(...validateWorkflowStaticRoles(fields, models))
+      }
+      for (const key of ['max_steps', 'max_parallel', 'max_completion_tokens']) {
+        const v = fields[key]
+        if (v !== undefined && v !== '' && typeof v === 'number' && v < 0) {
+          issues.push({
+            level: 'error',
+            message: `${key} cannot be negative (got ${v})`,
+          })
+        }
+      }
+      const temp = fields['temperature']
+      if (temp !== undefined && temp !== '' && typeof temp === 'number' && temp < 0) {
+        issues.push({
+          level: 'error',
+          message: `temperature cannot be negative (got ${temp})`,
+        })
+      }
+    }
     if (algorithm.algoType === 'fusion') {
       const maxTokens = fields['max_completion_tokens']
       if (
@@ -197,7 +233,7 @@ function validateRouteInput(
     if (
       validModels.length < 2 &&
       (algorithm.algoType !== 'fusion' || fusionPanelModels < 2) &&
-      ['confidence', 'ratings', 'fusion', 'hybrid', 'automix'].includes(algorithm.algoType)
+      ['confidence', 'ratings', 'fusion', 'workflows', 'hybrid', 'automix'].includes(algorithm.algoType)
     ) {
       issues.push({
         level: 'constraint',
@@ -207,6 +243,62 @@ function validateRouteInput(
   }
 
   return issues
+}
+
+function extractWorkflowPlannerModel(fields: Record<string, unknown>): string {
+  const dotted = fields['planner.model']
+  if (typeof dotted === 'string') return dotted.trim()
+  const planner = fields['planner']
+  if (planner && typeof planner === 'object' && !Array.isArray(planner)) {
+    const model = (planner as Record<string, unknown>)['model']
+    if (typeof model === 'string') return model.trim()
+  }
+  return ''
+}
+
+function validateWorkflowStaticRoles(
+  fields: Record<string, unknown>,
+  models: RouteModelInput[],
+): ValidationIssue[] {
+  const roles = fields['roles']
+  if (!Array.isArray(roles) || roles.length === 0) {
+    return [{ level: 'error', message: 'workflows mode=static requires roles' }]
+  }
+
+  const issues: ValidationIssue[] = []
+  const allowed = new Set(models.map((m) => m.model).filter((m) => m.trim()))
+  roles.forEach((role, roleIndex) => {
+    if (!isObjectRecord(role)) {
+      issues.push({ level: 'error', message: `workflows roles[${roleIndex}] must be an object` })
+      return
+    }
+    const roleName = typeof role.name === 'string' ? role.name.trim() : ''
+    if (!roleName) {
+      issues.push({ level: 'error', message: `workflows roles[${roleIndex}].name is required` })
+    }
+    const roleModels = Array.isArray(role.models) ? role.models : []
+    if (roleModels.length === 0) {
+      issues.push({ level: 'error', message: `workflows role "${roleName || roleIndex}" needs models` })
+    }
+    roleModels.forEach((model, modelIndex) => {
+      const modelName = typeof model === 'string' ? model.trim() : ''
+      if (!modelName) {
+        issues.push({ level: 'error', message: `workflows roles[${roleIndex}].models[${modelIndex}] is empty` })
+      } else if (!allowed.has(modelName)) {
+        issues.push({ level: 'error', message: `workflows role "${roleName || roleIndex}" uses model outside route: ${modelName}` })
+      }
+    })
+  })
+
+  const final = fields['final']
+  if (isObjectRecord(final) && typeof final.model === 'string' && final.model.trim() && !allowed.has(final.model.trim())) {
+    issues.push({ level: 'error', message: `workflows final model is outside route: ${final.model}` })
+  }
+  return issues
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
 // ===================================================================
