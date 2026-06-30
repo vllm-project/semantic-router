@@ -5,6 +5,7 @@ export const ALGORITHM_TYPES = [
   'ratings',
   'remom',
   'fusion',
+  'workflows',
   'static',
   'router_dc',
   'automix',
@@ -24,6 +25,7 @@ export const ALGORITHM_DESCRIPTIONS: Record<string, string> = {
   ratings: 'Execute all models concurrently and return multiple choices for comparison',
   remom: 'Multi-round parallel reasoning with intelligent synthesis (ReMoM)',
   fusion: 'Parallel panel deliberation with judge analysis and final synthesis',
+  workflows: 'Router Flow orchestration with static or dynamic micro-agent plans',
   static: 'Use static scores from configuration (no extra fields)',
   router_dc: 'Dual-contrastive learning for query-model matching',
   automix: 'POMDP-based cost-quality optimization (arXiv:2310.12963)',
@@ -108,7 +110,7 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
           key: 'model_distribution',
           label: 'Model Distribution',
           type: 'select',
-          options: ['', 'weighted', 'equal', 'first_only'],
+          options: ['', 'weighted', 'equal', 'round_robin', 'first_only'],
         },
         { key: 'temperature', label: 'Temperature', type: 'number', placeholder: '1.0' },
         {
@@ -131,10 +133,31 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
           description: 'Tokens to keep (last_n_tokens strategy)',
         },
         {
+          key: 'synthesis_model',
+          label: 'Synthesis Model',
+          type: 'string',
+          placeholder: 'model from modelRefs',
+          description: 'Optional modelRef to use for the final ReMoM synthesis round',
+        },
+        {
           key: 'max_concurrent',
           label: 'Max Concurrent',
           type: 'number',
           placeholder: '0 (no limit)',
+        },
+        {
+          key: 'round_timeout_seconds',
+          label: 'Round Timeout',
+          type: 'number',
+          placeholder: '0 (wait for all)',
+          description: 'Stop waiting for a round after this many seconds',
+        },
+        {
+          key: 'min_successful_responses',
+          label: 'Min Successful',
+          type: 'number',
+          placeholder: '0 (all calls)',
+          description: 'Return from a round after this many successful responses',
         },
         { key: 'on_error', label: 'On Error', type: 'select', options: ['', 'skip', 'fail'] },
         {
@@ -174,6 +197,20 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
           type: 'number',
           placeholder: '512',
         },
+        {
+          key: 'round_timeout_seconds',
+          label: 'Round Timeout',
+          type: 'number',
+          placeholder: '0 (wait for all)',
+          description: 'Stop waiting for panel responses after this many seconds',
+        },
+        {
+          key: 'min_successful_responses',
+          label: 'Min Successful',
+          type: 'number',
+          placeholder: '0 (all calls)',
+          description: 'Continue once this many panel responses succeed',
+        },
         { key: 'temperature', label: 'Temperature', type: 'number', placeholder: '0.2' },
         {
           key: 'include_analysis',
@@ -194,6 +231,83 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
           type: 'string',
           placeholder: 'fusion-v1',
         },
+      ]
+    case 'workflows':
+      return [
+        {
+          key: 'mode',
+          label: 'Mode',
+          type: 'select',
+          options: ['', 'static', 'dynamic'],
+          description: 'Use dynamic when a planner model should generate the execution flow',
+        },
+        {
+          key: 'template',
+          label: 'Template',
+          type: 'string',
+          placeholder: 'micro_agent',
+        },
+        {
+          key: 'planner',
+          label: 'Planner',
+          type: 'json',
+          placeholder: '{ "model": "qwen-coordinator" }',
+          description: 'Required for dynamic mode; the model must also be configured globally',
+        },
+        {
+          key: 'roles',
+          label: 'Static Roles',
+          type: 'json',
+          placeholder: '[{ "name": "worker", "models": ["qwen-worker"] }]',
+          description: 'Required for static mode; role models must be in route models',
+        },
+        {
+          key: 'final',
+          label: 'Static Final',
+          type: 'json',
+          placeholder: '{ "model": "qwen-worker" }',
+          description: 'Optional static final synthesis model and prompt',
+        },
+        {
+          key: 'max_steps',
+          label: 'Max Steps',
+          type: 'number',
+          placeholder: '6',
+        },
+        {
+          key: 'max_parallel',
+          label: 'Max Parallel',
+          type: 'number',
+          placeholder: '3',
+        },
+        {
+          key: 'max_completion_tokens',
+          label: 'Max Completion Tokens',
+          type: 'number',
+          placeholder: '1024',
+        },
+        {
+          key: 'round_timeout_seconds',
+          label: 'Round Timeout',
+          type: 'number',
+          placeholder: '0 (wait for all)',
+          description: 'Stop waiting for a workflow step or final synthesis after this many seconds',
+        },
+        {
+          key: 'min_successful_responses',
+          label: 'Min Successful',
+          type: 'number',
+          placeholder: '0 (all calls)',
+          description: 'Continue once this many parallel workers succeed',
+        },
+        { key: 'temperature', label: 'Temperature', type: 'number', placeholder: '0.2' },
+        {
+          key: 'include_intermediate_responses',
+          label: 'Include Trace',
+          type: 'boolean',
+          description: 'Return plan and worker responses in the Flow trace',
+        },
+        { key: 'on_error', label: 'On Error', type: 'select', options: ['', 'skip', 'fail'] },
       ]
     case 'router_dc':
       return [

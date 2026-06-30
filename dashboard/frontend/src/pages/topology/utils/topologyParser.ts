@@ -184,6 +184,7 @@ function extractDecisionAlgorithm(
     ratings: algorithm.ratings,
     remom: algorithm.remom,
     fusion: algorithm.fusion,
+    workflows: algorithm.workflows,
     router_dc: algorithm.router_dc,
     automix: algorithm.automix,
     autoMix: algorithm.autoMix ?? algorithm.automix,

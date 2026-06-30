@@ -1,0 +1,126 @@
+defaults:
+  api_url: http://127.0.0.1:8899/v1
+  api_key: EMPTY
+  eval_type: openai_api
+  eval_batch_size: 24
+  generation_config:
+    temperature: 1.0
+    top_p: 0.95
+    max_tokens: 32768
+    batch_size: 24
+    timeout: 1800
+    retries: 2
+    retry_interval: 15
+
+models:
+  auto: vllm-sr/auto
+
+model_labels:
+  auto: VSR 1.0
+
+benchmarks:
+  - id: hle_text
+    public_name: Humanity's Last Exam
+    dataset: hle
+    metric: acc
+    tier: core
+    default_run: true
+    smoke_limit: 24
+    formal_limit: 2500
+    eval_batch_size: 24
+    generation_config:
+      temperature: 1.0
+      top_p: 0.95
+      max_tokens: 32768
+      batch_size: 24
+      timeout: 1800
+      retries: 2
+    dataset_args:
+      extra_params:
+        include_multi_modal: false
+    smoke_dataset_args:
+      subset_list:
+        - Math
+    judge_strategy: auto
+    judge_model_args:
+      model_id: gpt55-judge
+      api_url: http://127.0.0.1:8899/v1
+      api_key: EMPTY
+      generation_config:
+        temperature: 0
+        max_tokens: 1024
+    notes: >-
+      GLM-5.2 native is not rerun; official Hugging Face HLE text reference is
+      40.5. Official GLM settings target max generation length 163840, but the
+      OpenRouter z-ai/glm-5.2 endpoint currently caps max completion tokens at
+      32768, so this suite records the provider cap and keeps batch_size 24.
+      HLE judge scoring uses a local router-exposed GPT-5.5 judge model so
+      EvalScope does not put provider secrets in command-line arguments.
+
+  - id: swe_bench_verified_mini_agentic
+    public_name: SWE Bench Verified Mini Agentic
+    dataset: swe_bench_verified_mini_agentic
+    metric: mean_acc
+    tier: heavy
+    default_run: false
+    smoke_limit: 3
+    formal_limit: 50
+    eval_batch_size: 1
+    generation_config:
+      temperature: 1.0
+      top_p: 1.0
+      max_tokens: 32768
+      batch_size: 1
+      timeout: 1800
+      retries: 1
+      retry_interval: 30
+      stream: true
+      parallel_tool_calls: true
+    dataset_args:
+      extra_params:
+        action_protocol: backticks
+        max_steps: 250
+        command_timeout: 60
+        build_docker_images: true
+        pull_remote_images_if_available: true
+    notes: >-
+      Lower-cost 50-sample agentic shakeout for the GLM-5.2-only SWE recipe.
+      This is not the official SWE-Bench Pro row and must not be published as
+      SWE-Bench Pro evidence. EvalScope's agentic Docker harness is not safely
+      batchable inside one process; keep eval_batch_size 1 and use resumable
+      outer shards to reach high throughput.
+
+  - id: swe_bench_pro
+    public_name: SWE Bench Pro
+    dataset: swe_bench_pro
+    metric: acc
+    tier: heavy
+    default_run: false
+    smoke_limit: 1
+    formal_limit: 500
+    eval_batch_size: 1
+    generation_config:
+      temperature: 1.0
+      top_p: 1.0
+      max_tokens: 32768
+      batch_size: 1
+      timeout: 1800
+      retries: 1
+      retry_interval: 30
+      stream: true
+      parallel_tool_calls: true
+    dataset_args:
+      extra_params:
+        action_protocol: backticks
+        max_steps: 250
+        command_timeout: 60
+        eval_timeout: 3600
+        dockerhub_username: jefzda
+    notes: >-
+      Official SWE-Bench Pro row. GLM-5.2 native is not rerun; official
+      Hugging Face SWE-Bench Pro reference is 62.1. Official GLM settings use
+      OpenHands, temperature 1, top_p 1, max_new_tokens 32768, and a 400K
+      context window. EvalScope's SWE-Bench Pro adapter drives one Docker
+      sandboxed agent loop per sample and is not safely batchable inside one
+      process, so eval_batch_size remains 1 and throughput should come from
+      resumable outer shards only after smoke passes.

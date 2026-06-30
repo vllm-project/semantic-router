@@ -3171,9 +3171,22 @@ func TestHandleModelsRequest(t *testing.T) {
 		},
 	}
 
+	cfgWithLooperOnly := &config.RouterConfig{
+		Looper: config.LooperConfig{
+			Endpoint: "http://looper",
+		},
+	}
+
 	cfgWithFusion := &config.RouterConfig{
 		Looper: config.LooperConfig{
 			Endpoint: "http://looper",
+		},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{
+				Name:      "fusion-route",
+				ModelRefs: []config.ModelRef{{Model: "panel-a"}},
+				Algorithm: &config.AlgorithmConfig{Type: "fusion"},
+			}},
 		},
 	}
 
@@ -3183,6 +3196,42 @@ func TestHandleModelsRequest(t *testing.T) {
 			Fusion: config.FusionRuntimeConfig{
 				ModelNames: []string{"vllm-sr/fusion", "custom/fusion"},
 			},
+		},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{
+				Name:      "fusion-route",
+				ModelRefs: []config.ModelRef{{Model: "panel-a"}},
+				Algorithm: &config.AlgorithmConfig{Type: "fusion"},
+			}},
+		},
+	}
+
+	cfgWithReMoM := &config.RouterConfig{
+		Looper: config.LooperConfig{
+			Endpoint: "http://looper",
+		},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{
+				Name:      "remom-route",
+				ModelRefs: []config.ModelRef{{Model: "worker-a"}},
+				Algorithm: &config.AlgorithmConfig{
+					Type:  "remom",
+					ReMoM: &config.ReMoMAlgorithmConfig{BreadthSchedule: []int{1}},
+				},
+			}},
+		},
+	}
+
+	cfgWithFlow := &config.RouterConfig{
+		Looper: config.LooperConfig{
+			Endpoint: "http://looper",
+		},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{
+				Name:      "flow-route",
+				ModelRefs: []config.ModelRef{{Model: "worker-a"}},
+				Algorithm: &config.AlgorithmConfig{Type: "workflows"},
+			}},
 		},
 	}
 
@@ -3208,18 +3257,39 @@ func TestHandleModelsRequest(t *testing.T) {
 			expectedCount:  5,
 		},
 		{
-			name:           "GET /v1/models - includes fusion model when looper is enabled",
+			name:           "GET /v1/models - does not expose loop models when only looper endpoint is enabled",
+			config:         cfgWithLooperOnly,
+			path:           "/v1/models",
+			expectedModels: []string{"vllm-sr/auto", "auto", "MoM"},
+			expectedCount:  3,
+		},
+		{
+			name:           "GET /v1/models - includes remom model when remom decision is configured",
+			config:         cfgWithReMoM,
+			path:           "/v1/models",
+			expectedModels: []string{"vllm-sr/auto", "auto", "MoM", "vllm-sr/remom"},
+			expectedCount:  4,
+		},
+		{
+			name:           "GET /v1/models - includes fusion model when fusion decision is configured",
 			config:         cfgWithFusion,
 			path:           "/v1/models",
 			expectedModels: []string{"vllm-sr/auto", "auto", "MoM", "vllm-sr/fusion"},
 			expectedCount:  4,
 		},
 		{
-			name:           "GET /v1/models - includes configured fusion aliases when looper is enabled",
+			name:           "GET /v1/models - includes configured fusion aliases when fusion decision is configured",
 			config:         cfgWithFusionAliases,
 			path:           "/v1/models",
 			expectedModels: []string{"vllm-sr/auto", "auto", "MoM", "vllm-sr/fusion", "custom/fusion"},
 			expectedCount:  5,
+		},
+		{
+			name:           "GET /v1/models - includes flow model when workflows decision is configured",
+			config:         cfgWithFlow,
+			path:           "/v1/models",
+			expectedModels: []string{"vllm-sr/auto", "auto", "MoM", "vllm-sr/flow"},
+			expectedCount:  4,
 		},
 		{
 			name:           "GET /v1/models?model=auto - only auto model (default)",
