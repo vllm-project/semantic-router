@@ -172,7 +172,6 @@ RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false |
     rm -rf src
 
 COPY nlp-binding/src/ ./src/
-COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go ./
 
 RUN find target -name "libnlp_binding.so" -delete 2>/dev/null; \
     find target -name "libnlp_binding.a" -delete 2>/dev/null; \
