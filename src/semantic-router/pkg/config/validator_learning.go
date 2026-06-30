@@ -31,13 +31,78 @@ func validateRouterLearningAdaptationConfig(cfg RouterLearningAdaptationConfig) 
 		return err
 	}
 	switch strings.TrimSpace(cfg.Strategy) {
-	case "", RouterLearningStrategyRoutingSampling:
+	case "",
+		RouterLearningStrategyRoutingSampling,
+		RouterLearningStrategyLinUCB,
+		RouterLearningStrategyLinearThompson:
 	default:
 		return fmt.Errorf(
-			"global.router.learning.adaptation.strategy must be %q, got %q",
+			"global.router.learning.adaptation.strategy must be one of %q, %q, %q; got %q",
 			RouterLearningStrategyRoutingSampling,
+			RouterLearningStrategyLinUCB,
+			RouterLearningStrategyLinearThompson,
 			cfg.Strategy,
 		)
+	}
+	if cfg.LinUCB != nil {
+		if err := validateLinUCBConfig(
+			"global.router.learning.adaptation.linucb",
+			*cfg.LinUCB,
+		); err != nil {
+			return err
+		}
+	}
+	if cfg.LinearThompson != nil {
+		if err := validateLinearThompsonConfig(
+			"global.router.learning.adaptation.linear_thompson",
+			*cfg.LinearThompson,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateLinUCBConfig(prefix string, cfg RouterLearningLinUCBConfig) error {
+	if cfg.Dim != nil {
+		if *cfg.Dim < minLinUCBDim || *cfg.Dim > maxLinUCBDim {
+			return fmt.Errorf("%s.dim must be in [%d, %d], got %d",
+				prefix, minLinUCBDim, maxLinUCBDim, *cfg.Dim)
+		}
+	}
+	if cfg.Alpha != nil {
+		if *cfg.Alpha < 0 || *cfg.Alpha > maxLinUCBAlpha {
+			return fmt.Errorf("%s.alpha must be in [0, %g], got %g",
+				prefix, maxLinUCBAlpha, *cfg.Alpha)
+		}
+	}
+	if cfg.Lambda != nil {
+		if *cfg.Lambda <= 0 || *cfg.Lambda > maxLinUCBLambda {
+			return fmt.Errorf("%s.lambda must be in (0, %g], got %g",
+				prefix, maxLinUCBLambda, *cfg.Lambda)
+		}
+	}
+	return nil
+}
+
+func validateLinearThompsonConfig(prefix string, cfg RouterLearningLinearThompsonConfig) error {
+	if cfg.Dim != nil {
+		if *cfg.Dim < minLinUCBDim || *cfg.Dim > maxLinUCBDim {
+			return fmt.Errorf("%s.dim must be in [%d, %d], got %d",
+				prefix, minLinUCBDim, maxLinUCBDim, *cfg.Dim)
+		}
+	}
+	if cfg.Sigma != nil {
+		if *cfg.Sigma < 0 || *cfg.Sigma > maxLinearThompsonSigma {
+			return fmt.Errorf("%s.sigma must be in [0, %g], got %g",
+				prefix, maxLinearThompsonSigma, *cfg.Sigma)
+		}
+	}
+	if cfg.Lambda != nil {
+		if *cfg.Lambda <= 0 || *cfg.Lambda > maxLinUCBLambda {
+			return fmt.Errorf("%s.lambda must be in (0, %g], got %g",
+				prefix, maxLinUCBLambda, *cfg.Lambda)
+		}
 	}
 	return nil
 }
