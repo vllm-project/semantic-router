@@ -95,4 +95,3 @@ def test_maybe_append_nvidia_gpu_passthrough_skips_when_disabled():
         cmd, enable_nvidia_gpu=False, runtime="docker"
     )
     assert cmd == []
-

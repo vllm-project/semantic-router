@@ -209,9 +209,7 @@ def _docker_daemon_looks_like_podman(version_info: dict) -> bool:
 def _exit_unsupported_runtime(runtime_hint: str, message: str) -> None:
     log.error(message)
     log.error(f"Unsupported container runtime: {runtime_hint}")
-    log.error(
-        f"Set {CONTAINER_RUNTIME_ENV}=docker or {CONTAINER_RUNTIME_ENV}=podman."
-    )
+    log.error(f"Set {CONTAINER_RUNTIME_ENV}=docker or {CONTAINER_RUNTIME_ENV}=podman.")
     sys.exit(1)
 
 

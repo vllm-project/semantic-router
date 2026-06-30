@@ -26,8 +26,11 @@ class _Result:
         self.returncode = returncode
 
 
-def _stub_docker_version(monkeypatch, *, podman_daemon: bool = False, daemon_ok: bool = True):
+def _stub_docker_version(
+    monkeypatch, *, podman_daemon: bool = False, daemon_ok: bool = True
+):
     """Make subprocess.run return a Docker-shaped daemon response."""
+
     def fake_run(cmd, *args, **kwargs):
         if cmd[1] == "--version":
             return _Result("Docker version 27.1.1, build deadbeef")
@@ -115,7 +118,9 @@ def test_detect_container_runtime_rejects_native_windows(monkeypatch):
         docker_runtime.get_container_runtime()
 
 
-def test_detect_container_runtime_falls_back_to_podman_when_only_podman_exists(monkeypatch):
+def test_detect_container_runtime_falls_back_to_podman_when_only_podman_exists(
+    monkeypatch,
+):
     monkeypatch.delenv("CONTAINER_RUNTIME", raising=False)
     monkeypatch.setattr(
         docker_runtime.shutil,

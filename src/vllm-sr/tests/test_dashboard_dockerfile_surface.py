@@ -62,8 +62,13 @@ def test_dashboard_dockerfile_copies_model_eval_scripts_and_requirements() -> No
 def test_vllm_sr_dockerfile_stays_router_only() -> None:
     content = VLLM_SR_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert "ARG RUST_RUNTIME_COMPAT_IMAGE=docker.io/rustlang/rust:nightly-bullseye" in content
-    assert "ARG GO_RUNTIME_COMPAT_IMAGE=docker.io/library/golang:1.24-bullseye" in content
+    assert (
+        "ARG RUST_RUNTIME_COMPAT_IMAGE=docker.io/rustlang/rust:nightly-bullseye"
+        in content
+    )
+    assert (
+        "ARG GO_RUNTIME_COMPAT_IMAGE=docker.io/library/golang:1.24-bullseye" in content
+    )
     assert "GLIBC_2.39+" in content
     assert 'ENTRYPOINT ["/app/start-router.sh"]' in content
     assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
@@ -105,9 +110,17 @@ def test_vllm_sr_rocm_dockerfile_uses_fully_qualified_base_images() -> None:
     """
     content = VLLM_SR_ROCM_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert "ARG RUST_RUNTIME_COMPAT_IMAGE=docker.io/rustlang/rust:nightly-bullseye" in content
-    assert "ARG ONNX_RUST_RUNTIME_COMPAT_IMAGE=docker.io/library/rust:1.90-bullseye" in content
-    assert "ARG GO_RUNTIME_COMPAT_IMAGE=docker.io/library/golang:1.24-bullseye" in content
+    assert (
+        "ARG RUST_RUNTIME_COMPAT_IMAGE=docker.io/rustlang/rust:nightly-bullseye"
+        in content
+    )
+    assert (
+        "ARG ONNX_RUST_RUNTIME_COMPAT_IMAGE=docker.io/library/rust:1.90-bullseye"
+        in content
+    )
+    assert (
+        "ARG GO_RUNTIME_COMPAT_IMAGE=docker.io/library/golang:1.24-bullseye" in content
+    )
     assert "FROM docker.io/rocm/dev-ubuntu-22.04:7.0" in content
 
 
