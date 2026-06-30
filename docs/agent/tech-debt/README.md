@@ -66,6 +66,10 @@ Every debt entry should include:
 - [TD042 FFI Embedding File Carries Pre-Existing Structure-Rules Debt](td-042-ffi-embedding-structure-debt.md)
 - [TD043 candle-binding/semantic-router.go Carries Pre-Existing Cyclomatic Complexity Debt](td-043-semantic-router-go-cyclop-debt.md)
 
+### PL0035 Router Flow Workflows
+
+- [TD044 Flow Tool State Durability Follow-Up](td-044-flow-tool-state-durability-gap.md)
+
 ## Retired Debt Policy
 
 Retired TD files are removed from this directory. Keep the ID in commit history

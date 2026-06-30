@@ -80,4 +80,6 @@ Tasks use stable IDs and checkbox status:
 - [pl-0033-v0-3-themis-release-closure.md](pl-0033-v0-3-themis-release-closure.md)
 - [pl-0032-architecture-scorecard-ratchet.md](pl-0032-architecture-scorecard-ratchet.md)
 - [pl-0034-fusion-api.md](pl-0034-fusion-api.md)
+- [pl-0035-router-flow-workflows.md](pl-0035-router-flow-workflows.md)
 - [pl-0036-router-learning-followups.md](pl-0036-router-learning-followups.md)
+- [pl-0037-router-flow-eval-campaign.md](pl-0037-router-flow-eval-campaign.md)

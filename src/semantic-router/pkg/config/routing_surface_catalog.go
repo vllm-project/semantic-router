@@ -75,6 +75,7 @@ var decisionAlgorithmCatalog = []AlgorithmCatalogEntry{
 	{Type: "router_dc", Tier: "supported"},
 	{Type: "static", Tier: "supported"},
 	{Type: "svm", Tier: "experimental"},
+	{Type: "workflows", Tier: "experimental"},
 }
 
 // supportedDecisionAlgorithmTypes is derived from the catalog for backwards compatibility

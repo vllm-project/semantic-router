@@ -20,7 +20,8 @@ const postgresRecordSelectColumns = `
 	hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans,
 	prompt_tokens, cached_prompt_tokens, completion_tokens, total_tokens,
 	actual_cost, baseline_cost, cost_savings, currency, baseline_model,
-	session_id, turn_index, previous_response_id, conversation_id
+	session_id, turn_index, previous_response_id, conversation_id,
+	cache_similarity, context_token_count
 `
 
 type postgresRowScanner interface {
@@ -186,6 +187,8 @@ func (record postgresInsertRecord) args() []interface{} {
 		record.record.TurnIndex,
 		emptyStringSQL(record.record.PreviousResponseID),
 		emptyStringSQL(record.record.ConversationID),
+		record.record.CacheSimilarity,
+		record.record.ContextTokenCount,
 	}
 }
 
@@ -274,6 +277,8 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.turnIndex,
 		&row.previousResponseID,
 		&row.conversationID,
+		&row.record.CacheSimilarity,
+		&row.record.ContextTokenCount,
 	}
 }
 

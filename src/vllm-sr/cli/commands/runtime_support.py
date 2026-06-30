@@ -46,6 +46,7 @@ PASSTHROUGH_ENV_RULES = (
     ("VLLM_SR_DETERMINISTIC_EMBEDDINGS", False),
     ("ANTHROPIC_API_KEY", True),
     ("OPENAI_API_KEY", True),
+    ("OPENROUTER_API_KEY", True),
     ("OPENCLAW_BASE_IMAGE", False),
     ("SR_LOG_LEVEL", False),
     ("SR_LOG_ENCODING", False),
