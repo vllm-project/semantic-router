@@ -13,11 +13,13 @@ import (
 )
 
 type routerLearningRuntime struct {
-	mu              sync.Mutex
-	config          *config.RouterConfig
-	replayRecorder  *routerreplay.Recorder
-	replayRecorders map[string]*routerreplay.Recorder
-	experience      map[string]*routerLearningModelExperience
+	mu                  sync.Mutex
+	config              *config.RouterConfig
+	replayRecorder      *routerreplay.Recorder
+	replayRecorders     map[string]*routerreplay.Recorder
+	experience          map[string]*routerLearningModelExperience
+	contextualStates    map[string]*routerLearningContextualState
+	contextualStatesMu  sync.Mutex
 }
 
 func (rt *routerLearningRuntime) UpdateOutcome(
@@ -250,10 +252,11 @@ func newRouterLearningRuntime(
 	replayRecorders map[string]*routerreplay.Recorder,
 ) *routerLearningRuntime {
 	return &routerLearningRuntime{
-		config:          cfg,
-		replayRecorder:  replayRecorder,
-		replayRecorders: replayRecorders,
-		experience:      map[string]*routerLearningModelExperience{},
+		config:           cfg,
+		replayRecorder:   replayRecorder,
+		replayRecorders:  replayRecorders,
+		experience:       map[string]*routerLearningModelExperience{},
+		contextualStates: map[string]*routerLearningContextualState{},
 	}
 }
 
@@ -365,4 +368,26 @@ func modelExperienceKey(decisionName string, decisionTier int, model string) str
 		decisionName = "_global"
 	}
 	return decisionName + "|" + strconv.Itoa(decisionTier) + "|" + model
+}
+
+// contextualState returns the per-strategy contextual bandit state, lazily
+// initialising it on first call. Each strategy gets its own state bucket
+// keyed by strategy name; switching strategies mid-deployment thus drops
+// the matrix state for the prior strategy until that strategy is re-enabled.
+func (rt *routerLearningRuntime) contextualState(
+	strategy string,
+	dim int,
+	lambda float64,
+) *routerLearningContextualState {
+	if rt == nil {
+		return nil
+	}
+	rt.contextualStatesMu.Lock()
+	defer rt.contextualStatesMu.Unlock()
+	if existing, ok := rt.contextualStates[strategy]; ok && existing.dimension() == dim {
+		return existing
+	}
+	state := newRouterLearningContextualState(dim, lambda)
+	rt.contextualStates[strategy] = state
+	return state
 }
