@@ -355,7 +355,7 @@ RUN python3 -m venv "${VIRTUAL_ENV}" && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir \
       'onnxruntime-gpu==1.22.0' \
       'huggingface_hub[cli]==1.5.0' \
-      'click>=8.0' && \
+      'click>=8.1.7' && \
     ORT_DIR="$("${VIRTUAL_ENV}/bin/python" -c 'import pathlib, onnxruntime; print(pathlib.Path(onnxruntime.__file__).resolve().parent / "capi")')" && \
     mkdir -p /opt/onnxruntime && \
     ln -sfn "$ORT_DIR" /opt/onnxruntime/capi && \
