@@ -92,6 +92,8 @@ func apiRoutes() []apiRoute {
 		{EndpointMetadata: EndpointMetadata{Path: "/api/v1/embeddings", Method: "POST", Description: "Generate text embeddings"}, Handler: (*ClassificationAPIServer).handleEmbeddings, RequestBody: jsonBody()},
 		{EndpointMetadata: EndpointMetadata{Path: "/api/v1/similarity", Method: "POST", Description: "Calculate pairwise text similarity"}, Handler: (*ClassificationAPIServer).handleSimilarity, RequestBody: jsonBody()},
 		{EndpointMetadata: EndpointMetadata{Path: "/api/v1/similarity/batch", Method: "POST", Description: "Calculate batch text-similarity matches"}, Handler: (*ClassificationAPIServer).handleBatchSimilarity, RequestBody: jsonBody()},
+		{EndpointMetadata: EndpointMetadata{Path: "/v1/rerank", Method: "POST", Description: "Rerank documents against a query (Cohere/vLLM-compatible)"}, Handler: (*ClassificationAPIServer).handleRerank, RequestBody: jsonBody()},
+		{EndpointMetadata: EndpointMetadata{Path: "/api/v1/rerank", Method: "POST", Description: "Rerank documents against a query (native-namespace alias)"}, Handler: (*ClassificationAPIServer).handleRerank, RequestBody: jsonBody()},
 
 		{EndpointMetadata: EndpointMetadata{Path: "/info/models", Method: "GET", Description: "Get information about loaded models"}, Handler: (*ClassificationAPIServer).handleModelsInfo},
 		{EndpointMetadata: EndpointMetadata{Path: "/info/classifier", Method: "GET", Description: "Get classifier information and status"}, Handler: (*ClassificationAPIServer).handleClassifierInfo},

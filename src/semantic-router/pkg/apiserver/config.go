@@ -157,6 +157,39 @@ type BatchSimilarityResponse struct {
 	ProcessingTimeMs float32                `json:"processing_time_ms"` // Processing time in milliseconds
 }
 
+// RerankRequest represents a request to rerank documents against a query.
+// The schema is compatible with the Cohere / vLLM /v1/rerank API.
+type RerankRequest struct {
+	Query           string   `json:"query"`                      // Query text
+	Documents       []string `json:"documents"`                  // Documents to rerank
+	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
+	TopN            int      `json:"top_n,omitempty"`            // Max results to return (0 = return all)
+	ReturnDocuments bool     `json:"return_documents,omitempty"` // Echo the document text in each result
+	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128, 64
+	QualityPriority float32  `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
+	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model
+}
+
+// RerankDocument carries the echoed document text when return_documents is set.
+type RerankDocument struct {
+	Text string `json:"text"`
+}
+
+// RerankResult represents a single reranked document.
+type RerankResult struct {
+	Index          int             `json:"index"`              // Index of the document in the input array
+	RelevanceScore float32         `json:"relevance_score"`    // Relevance score (higher = more relevant)
+	Document       *RerankDocument `json:"document,omitempty"` // Present only when return_documents=true
+}
+
+// RerankResponse represents the response of a rerank request (Cohere/vLLM-compatible).
+type RerankResponse struct {
+	Model            string         `json:"model"`              // Model used to score
+	Results          []RerankResult `json:"results"`            // Reranked results, sorted by score (descending)
+	TotalDocuments   int            `json:"total_documents"`    // Total number of documents processed
+	ProcessingTimeMs float32        `json:"processing_time_ms"` // Processing time in milliseconds
+}
+
 // EndpointInfo represents information about an API endpoint
 type EndpointInfo struct {
 	Path        string `json:"path"`

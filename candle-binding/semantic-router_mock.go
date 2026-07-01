@@ -385,6 +385,52 @@ func CalculateSimilarityBatch(query string, candidates []string, topK int, model
 	}, nil
 }
 
+// RerankMatch represents a single cross-encoder rerank result.
+type RerankMatch struct {
+	Index int     // Index of the document in the input array
+	Score float32 // Relevance score in [0, 1] (higher = more relevant)
+}
+
+// RerankOutput holds the result of cross-encoder reranking.
+type RerankOutput struct {
+	Matches          []RerankMatch // Matches, sorted by score (descending)
+	ProcessingTimeMs float32       // Processing time in milliseconds
+}
+
+// mockCrossEncoderInitialized tracks mock init state so non-cgo tests can
+// exercise both the available and unavailable (503) rerank paths. Defaults to
+// false until InitCrossEncoder is called, mirroring the real binding.
+var mockCrossEncoderInitialized bool
+
+// InitCrossEncoder marks the mock cross-encoder as initialized.
+func InitCrossEncoder(modelPath string, useCPU bool) error {
+	mockCrossEncoderInitialized = true
+	return nil
+}
+
+// IsCrossEncoderInitialized reports whether InitCrossEncoder has been called.
+func IsCrossEncoderInitialized() bool {
+	return mockCrossEncoderInitialized
+}
+
+// RerankDocuments returns descending mock scores preserving input order.
+func RerankDocuments(query string, documents []string, topN int) (*RerankOutput, error) {
+	matches := make([]RerankMatch, len(documents))
+	for i := range documents {
+		matches[i] = RerankMatch{
+			Index: i,
+			Score: 0.9 - float32(i)*0.01,
+		}
+	}
+	if topN > 0 && topN < len(matches) {
+		matches = matches[:topN]
+	}
+	return &RerankOutput{
+		Matches:          matches,
+		ProcessingTimeMs: 1.0,
+	}, nil
+}
+
 // GetEmbeddingModelsInfo retrieves information about all loaded embedding models
 func GetEmbeddingModelsInfo() (*ModelsInfoOutput, error) {
 	return &ModelsInfoOutput{

@@ -1,0 +1,51 @@
+{
+  "model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+  "max_length": 512,
+  "cases": [
+    {
+      "query": "How do I cancel my subscription?",
+      "scores": [
+        0.9997751987913126,
+        0.00011815286307576364,
+        0.0009979388167718174,
+        0.056221529958454926
+      ]
+    },
+    {
+      "query": "What is the capital of France?",
+      "scores": [
+        0.999506484868887,
+        0.2678145446408958,
+        0.0016738517998613474,
+        0.07303274224516533
+      ]
+    },
+    {
+      "query": "How do I get a refund for a cancelled flight?",
+      "scores": [
+        0.8589583770362967,
+        0.08583429667156743,
+        2.803748179730047e-05,
+        1.4857937299371828e-05
+      ]
+    },
+    {
+      "query": "What is the return policy for opened electronics?",
+      "scores": [
+        0.9985602799343,
+        0.001203401157792472,
+        0.0001069390456862066,
+        0.0002154235670211186
+      ]
+    },
+    {
+      "query": "How many bags can I check for free on an international flight?",
+      "scores": [
+        0.14622521331421426,
+        0.06296284486604305,
+        0.004159098648970018,
+        0.13881202843113094
+      ]
+    }
+  ]
+}
