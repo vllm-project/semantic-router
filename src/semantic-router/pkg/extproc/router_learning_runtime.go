@@ -13,15 +13,15 @@ import (
 )
 
 type routerLearningRuntime struct {
-	mu                  sync.Mutex
-	config              *config.RouterConfig
-	replayRecorder      *routerreplay.Recorder
-	replayRecorders     map[string]*routerreplay.Recorder
-	experience          map[string]*routerLearningModelExperience
-	contextualStates    map[string]*routerLearningContextualState
-	contextualStatesMu  sync.Mutex
-	pendingUpdates      map[string]pendingContextualUpdate
-	pendingUpdatesMu    sync.Mutex
+	mu                 sync.Mutex
+	config             *config.RouterConfig
+	replayRecorder     *routerreplay.Recorder
+	replayRecorders    map[string]*routerreplay.Recorder
+	experience         map[string]*routerLearningModelExperience
+	contextualStates   map[string]*routerLearningContextualState
+	contextualStatesMu sync.Mutex
+	pendingUpdates     map[string]pendingContextualUpdate
+	pendingUpdatesMu   sync.Mutex
 }
 
 // pendingContextualUpdate bridges Phase 1 (scoring) and Phase 2 (outcome).
