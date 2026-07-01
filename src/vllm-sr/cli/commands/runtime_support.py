@@ -25,6 +25,10 @@ from cli.commands.runtime_paths import (
     _container_source_config_path,
     _write_runtime_config,
 )
+from cli.consts import (
+    CONTAINER_RUNTIME_ENV,
+    SUPPORTED_CONTAINER_RUNTIMES,
+)
 from cli.runtime_stack import resolve_runtime_stack
 from cli.service_defaults import (
     inject_local_service_runtime_defaults,
@@ -100,6 +104,34 @@ def append_passthrough_env_vars(env_vars: dict[str, str]) -> None:
         env_vars[name] = value
         logged_value = "***" if masked else value
         log.info(f"Passing environment variable: {name}={logged_value}")
+
+
+def apply_container_runtime_override(runtime: str | None) -> None:
+    """Apply ``--runtime`` to the process environment so detection picks it up.
+
+    The ``CONTAINER_RUNTIME`` environment variable is the canonical input that
+    ``cli.docker_runtime._detect_container_runtime`` reads. This helper bridges
+    the CLI flag to that env var, normalizes the value, validates it, and
+    invalidates the runtime detection cache so the next call re-resolves.
+    """
+    if runtime is None:
+        return
+    normalized = runtime.strip().lower()
+    if not normalized:
+        return
+    if normalized not in SUPPORTED_CONTAINER_RUNTIMES:
+        raise ValueError(
+            f"Unsupported --runtime value: {runtime!r}. "
+            f"Choose one of: {', '.join(SUPPORTED_CONTAINER_RUNTIMES)}."
+        )
+    os.environ[CONTAINER_RUNTIME_ENV] = normalized
+    # Reset the cached detection so subsequent get_container_runtime() calls
+    # observe the new override instead of a stale answer from earlier in the
+    # process.
+    from cli.docker_runtime import reset_container_runtime_cache  # noqa: PLC0415
+
+    reset_container_runtime_cache()
+    log.info(f"Container runtime override: {normalized}")
 
 
 def apply_runtime_mode_env_vars(

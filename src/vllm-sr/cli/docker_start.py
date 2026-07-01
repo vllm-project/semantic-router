@@ -566,7 +566,7 @@ def _build_service_run_command(
         start_immediately=start_immediately,
     )
     maybe_append_amd_gpu_passthrough(cmd, enable_amd_gpu)
-    maybe_append_nvidia_gpu_passthrough(cmd, enable_nvidia_gpu)
+    maybe_append_nvidia_gpu_passthrough(cmd, enable_nvidia_gpu, runtime)
     append_host_gateway(cmd, runtime)
     append_custom_dns(cmd)
     append_mount_specs(cmd, mount_specs)

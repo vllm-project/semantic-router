@@ -5,8 +5,8 @@
 ARG TARGETARCH
 ARG BUILDPLATFORM
 ARG GIT_SSL_NO_VERIFY=0
-ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bullseye
-ARG GO_RUNTIME_COMPAT_IMAGE=golang:1.24-bullseye
+ARG RUST_RUNTIME_COMPAT_IMAGE=docker.io/rustlang/rust:nightly-bullseye
+ARG GO_RUNTIME_COMPAT_IMAGE=docker.io/library/golang:1.24-bullseye
 
 # Stage 1: Build Rust candle-binding (CPU-only, cross-compiled for TARGETARCH)
 #
@@ -248,7 +248,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     fi
 
 # Stage 3: Final router runtime image
-FROM debian:bookworm-slim
+FROM docker.io/library/debian:bookworm-slim
 
 ENV VIRTUAL_ENV=/opt/vllm-sr-venv
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"

@@ -4,9 +4,9 @@
 ARG TARGETARCH
 ARG BUILDPLATFORM
 ARG GIT_SSL_NO_VERIFY=0
-ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bullseye
-ARG ONNX_RUST_RUNTIME_COMPAT_IMAGE=rust:1.90-bullseye
-ARG GO_RUNTIME_COMPAT_IMAGE=golang:1.24-bullseye
+ARG RUST_RUNTIME_COMPAT_IMAGE=docker.io/rustlang/rust:nightly-bullseye
+ARG ONNX_RUST_RUNTIME_COMPAT_IMAGE=docker.io/library/rust:1.90-bullseye
+ARG GO_RUNTIME_COMPAT_IMAGE=docker.io/library/golang:1.24-bullseye
 
 # Stage 1: Build Rust candle-binding (CPU-only, cross-compiled for TARGETARCH)
 #
@@ -281,7 +281,7 @@ RUN if [ "$TARGETARCH" != "amd64" ]; then \
     printf 'go-builder-complete\n' > /build/.go-builder-complete
 
 # Stage 3: Final router runtime image (ROCm 7.0 + ONNX Runtime ROCm)
-FROM rocm/dev-ubuntu-22.04:7.0
+FROM docker.io/rocm/dev-ubuntu-22.04:7.0
 ARG TARGETARCH
 
 ENV VIRTUAL_ENV=/opt/vllm-sr-venv
