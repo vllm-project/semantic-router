@@ -148,10 +148,11 @@ def verdict_for(
     wl_results = list(per_wl.values())
     has_y_win = "y_wins" in wl_results
     contextual_x_win = per_wl.get("contextual_2cluster") == "x_wins"
-    non_contextual_results = [v for k, v in per_wl.items() if k != "contextual_2cluster"]
-    only_contextual_win = (
-        contextual_x_win
-        and all(v in ("tie", "no_data") for v in non_contextual_results)
+    non_contextual_results = [
+        v for k, v in per_wl.items() if k != "contextual_2cluster"
+    ]
+    only_contextual_win = contextual_x_win and all(
+        v in ("tie", "no_data") for v in non_contextual_results
     )
 
     if has_y_win and not only_contextual_win:
@@ -194,7 +195,9 @@ def render_summary(
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--results-dir", type=Path, required=True)
-    parser.add_argument("--algorithms", default="ucb1,epsilon_greedy,routing_sampling_py")
+    parser.add_argument(
+        "--algorithms", default="ucb1,epsilon_greedy,routing_sampling_py"
+    )
     parser.add_argument(
         "--workloads",
         default=",".join(

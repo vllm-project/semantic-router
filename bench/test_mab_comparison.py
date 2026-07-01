@@ -152,8 +152,14 @@ def test_recovery_time_returns_positive_int_for_drift():
 
 def test_compare_pair_paired_seeds_only(tmp_path: Path):
     # Construct minimal JSONL fixtures.
-    rx = [{"seed": 0, "cumulative_regret_final": 10.0}, {"seed": 1, "cumulative_regret_final": 12.0}]
-    ry = [{"seed": 0, "cumulative_regret_final": 20.0}, {"seed": 1, "cumulative_regret_final": 22.0}]
+    rx = [
+        {"seed": 0, "cumulative_regret_final": 10.0},
+        {"seed": 1, "cumulative_regret_final": 12.0},
+    ]
+    ry = [
+        {"seed": 0, "cumulative_regret_final": 20.0},
+        {"seed": 1, "cumulative_regret_final": 22.0},
+    ]
     out = compare.compare_pair(rx, ry, "cumulative_regret_final", lower_is_better=True)
     assert out["n_paired"] == 2
     assert out["mean_delta"] < 0  # X is lower -> favorable
@@ -285,9 +291,14 @@ def test_linucb_py_wins_contextual_workload():
     strategy to exist. If this test ever regresses, the Python port has
     likely lost sync with the Go implementation."""
     linucb_record = runner.run_one("linucb_py", "contextual_2cluster", seed=0)
-    routing_record = runner.run_one("routing_sampling_py", "contextual_2cluster", seed=0)
+    routing_record = runner.run_one(
+        "routing_sampling_py", "contextual_2cluster", seed=0
+    )
     # Cumulative regret: lower is better.
-    assert linucb_record["cumulative_regret_final"] < routing_record["cumulative_regret_final"], (
+    assert (
+        linucb_record["cumulative_regret_final"]
+        < routing_record["cumulative_regret_final"]
+    ), (
         f"LinUCB regret {linucb_record['cumulative_regret_final']:.1f} should beat "
         f"routing_sampling_py {routing_record['cumulative_regret_final']:.1f} on contextual"
     )

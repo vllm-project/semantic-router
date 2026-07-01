@@ -79,7 +79,9 @@ def _bernoulli_seq(
     """Bernoulli rewards from a sequence of true-mean vectors (one per round)."""
     rng = random.Random(seed)
     n_arms = len(true_means_at[0])
-    rewards = [[1.0 if rng.random() < mu else 0.0 for mu in row] for row in true_means_at]
+    rewards = [
+        [1.0 if rng.random() < mu else 0.0 for mu in row] for row in true_means_at
+    ]
     optimal_arms = [max(range(n_arms), key=lambda a: row[a]) for row in true_means_at]
     return WorkloadResult(
         name=name,
@@ -120,11 +122,13 @@ def _gradual_drift(seed: int) -> WorkloadResult:
     means: list[list[float]] = []
     for t in range(horizon):
         progress = t / (horizon - 1)
-        means.append([
-            0.9 - 0.6 * progress,
-            0.5,
-            0.1 + 0.6 * progress,
-        ])
+        means.append(
+            [
+                0.9 - 0.6 * progress,
+                0.5,
+                0.1 + 0.6 * progress,
+            ]
+        )
     return _bernoulli_seq("gradual_drift", seed, means, horizon)
 
 

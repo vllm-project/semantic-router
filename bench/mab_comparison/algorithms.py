@@ -202,7 +202,9 @@ class RoutingSamplingPy:
         cost_penalty = self._cost_penalty(arm, max_cost) + 0.03 * _clamp01(
             self._input_cost_ewma[arm]
         )
-        total = self._good[arm] + self._under[arm] + self._over[arm] + self._failed[arm] + 1
+        total = (
+            self._good[arm] + self._under[arm] + self._over[arm] + self._failed[arm] + 1
+        )
         overuse_penalty = 0.03 * self._over[arm] / total
         reliability_penalty = 0.10 * self._failed[arm] / total
         latency_adjustment = -0.02 * _clamp01(self._latency_ewma[arm])
@@ -297,7 +299,9 @@ class _LearningMatrix:
     def __init__(self, dim: int, lam: float = 1.0):
         self.dim = dim
         self.a = [[lam if i == j else 0.0 for j in range(dim)] for i in range(dim)]
-        self.inv = [[1.0 / lam if i == j else 0.0 for j in range(dim)] for i in range(dim)]
+        self.inv = [
+            [1.0 / lam if i == j else 0.0 for j in range(dim)] for i in range(dim)
+        ]
         self.b = [0.0] * dim
 
     def theta(self) -> list[float]:

@@ -54,14 +54,6 @@ func newLearningMatrix(dim int, lambda float64) *learningMatrix {
 	}
 }
 
-// dimension returns the configured feature dimension.
-func (m *learningMatrix) dimension() int {
-	if m == nil {
-		return 0
-	}
-	return m.dim
-}
-
 // theta computes A^{-1} b — the ridge-regression mean estimate of the
 // reward weight vector.
 func (m *learningMatrix) theta() []float64 {

@@ -80,9 +80,7 @@ def recovery_time(
         raise ValueError("drift_round out of range")
     for t in range(drift_round + window, horizon):
         recent_hits = sum(
-            1
-            for s in range(t - window + 1, t + 1)
-            if chosen_arms[s] == optimal_arms[s]
+            1 for s in range(t - window + 1, t + 1) if chosen_arms[s] == optimal_arms[s]
         )
         if recent_hits / window >= threshold:
             return t - drift_round

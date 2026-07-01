@@ -94,7 +94,9 @@ def plot_recovery(
         records = _load_jsonl(results_dir / workload / f"{alg}.jsonl")
         if not records:
             continue
-        recoveries = [r["recovery_time"] for r in records if r.get("recovery_time") is not None]
+        recoveries = [
+            r["recovery_time"] for r in records if r.get("recovery_time") is not None
+        ]
         if not recoveries:
             continue
         labels.append(alg)
@@ -120,7 +122,9 @@ def plot_recovery(
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--results-dir", type=Path, required=True)
-    parser.add_argument("--algorithms", default="ucb1,epsilon_greedy,routing_sampling_py")
+    parser.add_argument(
+        "--algorithms", default="ucb1,epsilon_greedy,routing_sampling_py"
+    )
     parser.add_argument(
         "--workloads",
         default=",".join(

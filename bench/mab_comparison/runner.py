@@ -52,7 +52,10 @@ def run_one(
     workload = workloads.generate(workload_name, seed)
     kwargs = dict(algorithm_kwargs or {})
     # Pass cold-start prior hints if the workload calls for it and the algorithm supports them.
-    if workload_name == "cold_start_with_prior" and algorithm_name == "routing_sampling_py":
+    if (
+        workload_name == "cold_start_with_prior"
+        and algorithm_name == "routing_sampling_py"
+    ):
         kwargs.setdefault("seed_weight", 2.0)
         # Same "moderately strong prior" the Go runtime applies via QualityScore
         # (see router_learning_adaptation.go:332-335).
@@ -71,7 +74,9 @@ def run_one(
         algorithm.update(arm, reward, ctx)
         chosen[t] = arm
 
-    regret_curve = metrics.cumulative_regret(workload.rewards, workload.optimal_arms, chosen)
+    regret_curve = metrics.cumulative_regret(
+        workload.rewards, workload.optimal_arms, chosen
+    )
     rate_curve = metrics.optimal_arm_rate(workload.optimal_arms, chosen)
 
     record: dict = {
@@ -165,7 +170,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=",".join(workloads.names()),
         help="comma-separated workload names",
     )
-    parser.add_argument("--seeds", type=int, default=30, help="number of seeds (default: 30)")
+    parser.add_argument(
+        "--seeds", type=int, default=30, help="number of seeds (default: 30)"
+    )
     parser.add_argument(
         "--out-dir",
         type=Path,
