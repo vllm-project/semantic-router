@@ -348,6 +348,90 @@ returns 200, you are done.
 
 ---
 
+## Performance (CPU vs GPU)
+
+Measured with the same harness and metric as the ROCm
+[`bench/cpu-vs-gpu/`](../../bench/cpu-vs-gpu/) benchmark — Prometheus
+`llm_signal_extraction_latency_seconds` — ported to CUDA (`--gpus all`).
+Both CPU and GPU runs use the router's real signal-extraction path, so the
+comparison is apples-to-apples.
+
+- **Hardware**: NVIDIA GeForce RTX 4090 (24 GB), consumer GPU — a baseline,
+  not a datacenter number.
+- **Model**: mmBERT-32K domain/intent classifier.
+- 12 requests per size (+4 warmup), batch 1.
+
+### Signal extraction latency — all three classifiers (avg ms)
+
+All three signal classifiers (domain/intent, jailbreak, PII) extracted per
+request. GPU average latency is stable; CPU is reported alongside (see the
+variance caveat below).
+
+| Prompt tokens | domain CPU | domain GPU | jailbreak CPU | jailbreak GPU | PII CPU | PII GPU |
+|--------------:|-----------:|-----------:|--------------:|--------------:|--------:|--------:|
+| ~500          | 1,104      | 6.2        | 1,634         | 10.6          | 1,144   | 5.6     |
+| ~2,000        | 2,453      | 11.6       | 2,239         | 10.7          | 1,920   | 7.9     |
+| ~8,000        | 2,157      | 19.8       | 2,474         | 16.5          | 1,868   | 13.8    |
+| ~16,000       | 2,082      | 32.1       | 2,700         | 28.3          | 1,977   | 19.7    |
+
+GPU signal extraction stays in the single-digit-to-low-tens of ms across the
+whole 500–16K range for every classifier; CPU sits in the ~1–2.7 s band. Net:
+**GPU is roughly two orders of magnitude faster** (~65–240× on average across
+signals and sizes). The same ~100× gap reproduced across three independent
+measurement paths (the Prometheus metric above, the router's `[Perf] classifier
+inference` log line, and a direct ONNX Runtime CPU-vs-CUDA EP micro-benchmark),
+so it is not a harness artifact.
+
+> **Why this does not contradict the "CPU ≈ GPU" note below or in
+> [`onnx-binding/README.md`](../../onnx-binding/README.md).** That parity result
+> is for the **embedding** model with 2D-Matryoshka *layer early-exit* — much
+> less compute per call. The table above is the full-depth **classifier**. Light
+> early-exit embedding ≈ CPU/GPU parity; full classifier = large GPU win.
+
+### Throughput under concurrency
+
+The ext_proc classifier path handles one request at a time — there is no batch
+knob like an LLM server, so the real-world analog of "batch size / throughput"
+is concurrency: N clients hitting the router at once. Sustained over 15 s at a
+fixed ~1K-token prompt:
+
+| Concurrency | CPU QPS | CPU P50 | GPU QPS | GPU P50 |
+|------------:|--------:|--------:|--------:|--------:|
+| 1           | 0.2     | 5.2 s   | 65      | 15 ms   |
+| 8           | 0.2     | 29 s    | 78      | 101 ms  |
+| 16          | 0.2     | 61 s    | 79      | 200 ms  |
+| 32          | 0.2     | 114 s   | 80      | 399 ms  |
+
+CPU throughput is capped at ~0.2 req/s — adding clients does **not** raise it,
+it just makes requests queue and latency blow up (5 s → 114 s). GPU sustains
+~80 req/s and degrades gracefully (P50 stays sub-second at 32-way concurrency).
+That is roughly a **400× throughput** difference, and it is the clearest reason
+to put the router's classifiers on a GPU: not single-request speed, but keeping
+classification off the critical path under load.
+
+**Caveats.**
+
+- **Bounded classifier input (512 tokens).** The classifier caps its input at
+  512 tokens by design — see `MAX_CLASSIFICATION_SEQ_LEN` in
+  `onnx-binding/src/model_architectures/classification/mmbert_classifier.rs`
+  (added in `547adc6e`, "handle long prompt without oom"). So the model sees at
+  most 512 tokens regardless of prompt length, and classifier latency is
+  effectively **bounded / decoupled from context length** — that is intended
+  behavior, not a benchmark artifact. The sweep across 500–16K therefore
+  measures bounded classification plus the per-request tokenization/preprocess
+  of the full prompt, not deeper model work at longer contexts.
+- **What actually grows with prompt length** is tokenization of the full input
+  (done on the host CPU before truncation). It shows up cleanly on GPU (~6 → 32
+  ms across 500 → 16K). The larger, non-monotonic swings in the CPU column are
+  shared-host noise (heavy tail, P95 ≫ avg), not a real context-length trend —
+  so treat CPU as order-of-magnitude and the speedup as a conservative band.
+- **Where the GPU win matters**: high classifier QPS / throughput (CPU
+  seconds-per-request becomes a bottleneck under load) and GPU co-tenancy — not
+  single-request end-to-end latency, which is dominated by LLM token generation,
+  not classification.
+
+---
+
 ## Rollback
 
 If the CUDA image misbehaves, rollback is one container restart on the
@@ -430,11 +514,13 @@ patch `runtime-config.yaml` directly for a quick test.
 
 ### Performance still feels identical to CPU
 
-This is expected for small-batch BERT (the canonical mmBERT 32k
-embedding model). Upstream
-[`onnx-binding/README.md`](../../onnx-binding/README.md) reports
-CPU ≈ GPU latency at batch size 1 for sequence lengths up to 512. The
-real win from this image is:
+This applies to the **embedding** path, not the classifier. For small-batch
+mmBERT-32K *embedding* with 2D-Matryoshka layer early-exit, upstream
+[`onnx-binding/README.md`](../../onnx-binding/README.md) reports CPU ≈ GPU
+latency at batch size 1 for sequence lengths up to 512. The full-depth
+*classifier* is a different story — GPU is ~65–240× faster there (see
+[Performance (CPU vs GPU)](#performance-cpu-vs-gpu) above). If your workload is
+embedding-dominated, the real win from this image is:
 
 - **High-QPS scenarios** (many concurrent queries hitting the embedding
   model at once)
