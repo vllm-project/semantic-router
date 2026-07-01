@@ -247,6 +247,7 @@ type RequestContext struct {
 	RAGBackend          string  // Backend used for retrieval ("milvus", "external_api", "mcp", "hybrid")
 	RAGSimilarityScore  float32 // Best similarity score from retrieval
 	RAGRetrievalLatency float64 // Retrieval latency in seconds
+	RAGResultCount      int     // Number of documents returned by retrieval (vector backends only; 0 if unreported)
 
 	// Memory retrieval tracking
 	// Stores formatted memory context to be injected after system prompt
