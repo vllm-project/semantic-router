@@ -62,3 +62,35 @@ func TestBuildRequestParamsMutationsBlockedAndCaps(t *testing.T) {
 		t.Fatalf("n cap: got %v", body["n"])
 	}
 }
+
+// max_tokens_limit must also cap max_completion_tokens (the current OpenAI
+// name for the same knob). Now that the strip_unknown allowlist passes
+// max_completion_tokens through, leaving it uncapped would let clients bypass
+// the governance limit by simply renaming the field.
+func TestBuildRequestParamsMutationsCapsMaxCompletionTokens(t *testing.T) {
+	r := &OpenAIRouter{}
+	payload, err := config.NewStructuredPayload(map[string]interface{}{
+		"max_tokens_limit": 500,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	decision := &config.Decision{
+		Name: "tier_a",
+		Plugins: []config.DecisionPlugin{
+			{Type: "request_params", Configuration: payload},
+		},
+	}
+	raw := []byte(`{"model":"m","messages":[],"max_completion_tokens":9000}`)
+	out, err := r.buildRequestParamsMutations(decision, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body map[string]interface{}
+	if err := json.Unmarshal(out, &body); err != nil {
+		t.Fatal(err)
+	}
+	if int(body["max_completion_tokens"].(float64)) != 500 {
+		t.Fatalf("max_completion_tokens cap: got %v", body["max_completion_tokens"])
+	}
+}
