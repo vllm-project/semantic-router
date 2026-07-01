@@ -97,6 +97,22 @@ versus ~1–3 s on CPU — a ~1–2 order-of-magnitude speedup. See
 [`deploy/nvidia/README.md`](../../deploy/nvidia/README.md) for the full table
 and caveats.
 
+### Throughput / concurrency (NVIDIA CUDA)
+
+ext_proc classifies one request at a time (no batch knob), so throughput is
+measured via concurrency — N clients over a fixed duration, fixed prompt size,
+CPU vs GPU:
+
+```bash
+BENCH_IMAGE=vllm-sr-cuda:local CONCURRENCIES="1 8 16 32" ./bench-cuda-throughput.sh
+```
+
+`load_test.py` is the concurrent driver (stdlib only). Reference (RTX 4090):
+CPU throughput caps at ~0.2 req/s (added clients just queue — latency climbs
+from ~5 s to ~114 s), while GPU sustains ~80 req/s with sub-second P50 even at
+32-way concurrency (~400× throughput). Optional `CPUSET="10-19"` pins the router
+to specific cores on a busy host.
+
 ### SDPA vs Flash Attention
 
 Compares standard attention vs CK Flash Attention on GPU:
