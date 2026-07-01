@@ -164,11 +164,86 @@ func addEmbeddingModelRequiredFiles(cfg *config.RouterConfig, requiredFilesByMod
 }
 
 // ExtractRequiredFilesByModel derives per-model completeness requirements from
-// config-owned companion files such as category/jailbreak/PII mappings.
+// config-owned companion files such as category/jailbreak/PII mappings, plus
+// the files the configured embedding runtime hard-loads at startup.
 func ExtractRequiredFilesByModel(cfg *config.RouterConfig) map[string][]string {
 	requiredFilesByModel := make(map[string][]string)
 	collectRequiredFilesByModel(reflect.ValueOf(cfg), requiredFilesByModel)
+	collectCandleEmbeddingRequiredFiles(cfg, requiredFilesByModel)
 	return requiredFilesByModel
+}
+
+// candleEmbeddingRequiredFiles are the files the candle embedding runtime
+// hard-loads from each configured embedding model directory at startup:
+// candle-binding builds its VarBuilder from <model>/model.safetensors and the
+// tokenizer from <model>/tokenizer.json, with no fallback formats.
+var candleEmbeddingRequiredFiles = []string{"model.safetensors", "tokenizer.json"}
+
+// gemmaEmbeddingRequiredFiles extends the common candle set with the dense
+// bottleneck weights GemmaEmbeddingModel additionally hard-loads from the
+// 2_Dense/ and 3_Dense/ subdirectories (BottleneckDenseNet::load_from_path).
+var gemmaEmbeddingRequiredFiles = []string{
+	"model.safetensors",
+	"tokenizer.json",
+	"2_Dense/model.safetensors",
+	"3_Dense/model.safetensors",
+}
+
+// collectCandleEmbeddingRequiredFiles records the candle runtime's startup
+// files as per-model completeness requirements for a superset of the embedding
+// models the candle runtime may load: the qwen3/gemma/mmbert paths under the
+// candle backend, and the multimodal path whenever model_type selects it or
+// complexity rules declare image_candidates (which loads the multimodal model
+// regardless of model_type).
+//
+// Without this, an interrupted download that fetched only companion artifacts
+// (config.json, nested onnx/ exports) satisfies the generic weight heuristic
+// in IsModelComplete: the model is treated as complete, is never re-downloaded
+// on restart, and the router crash-loops at classifier init with
+// "failed to load safetensors from <model>/model.safetensors". Recording the
+// runtime-required files makes such partial downloads read as incomplete so
+// the next startup resumes the download instead of crash-looping.
+//
+// The embedding path fields are enumerated explicitly (unlike the reflective
+// ExtractModelPaths walk) because the requirement is loader-specific: only the
+// paths whose loaders hard-code these files are covered. A new embedding path
+// field needs a matching entry here to gain partial-download protection.
+func collectCandleEmbeddingRequiredFiles(cfg *config.RouterConfig, requiredFilesByModel map[string][]string) {
+	// Mirror the backend resolution in classification's
+	// ExternalModelBasedEmbeddingInitializer: empty backend defaults to
+	// candle, case- and space-insensitively. Keep the two in sync.
+	backend := strings.ToLower(strings.TrimSpace(cfg.EmbeddingModels.EmbeddingConfig.Backend))
+	if backend == "" || backend == "candle" {
+		appendRequiredFiles(requiredFilesByModel, cfg.EmbeddingModels.Qwen3ModelPath, candleEmbeddingRequiredFiles)
+		appendRequiredFiles(requiredFilesByModel, cfg.EmbeddingModels.GemmaModelPath, gemmaEmbeddingRequiredFiles)
+		appendRequiredFiles(requiredFilesByModel, cfg.EmbeddingModels.MmBertModelPath, candleEmbeddingRequiredFiles)
+	}
+
+	// The multimodal model is loaded independently of the backend value:
+	// classification's initializer branches run it whenever model_type
+	// resolves to "multimodal", and the complexity classifier additionally
+	// loads it whenever any complexity rule declares image_candidates,
+	// without any model_type gate. Keep these triggers in sync with
+	// classifier_option_rules.go.
+	modelType := strings.ToLower(strings.TrimSpace(cfg.EmbeddingModels.EmbeddingConfig.ModelType))
+	if modelType == "multimodal" || config.HasImageCandidatesInRules(cfg.ComplexityRules) {
+		appendRequiredFiles(requiredFilesByModel, cfg.EmbeddingModels.MultiModalModelPath, candleEmbeddingRequiredFiles)
+	}
+}
+
+// appendRequiredFiles records files as completeness requirements for a local
+// model path, deduplicating against already-recorded requirements.
+func appendRequiredFiles(requiredFilesByModel map[string][]string, modelPath string, files []string) {
+	if !strings.HasPrefix(modelPath, "models/") || modelPath == "models/" {
+		return
+	}
+	requiredFiles := requiredFilesByModel[modelPath]
+	for _, file := range files {
+		if !slices.Contains(requiredFiles, file) {
+			requiredFiles = append(requiredFiles, file)
+		}
+	}
+	requiredFilesByModel[modelPath] = requiredFiles
 }
 
 func collectRequiredFilesByModel(v reflect.Value, requiredFilesByModel map[string][]string) {
