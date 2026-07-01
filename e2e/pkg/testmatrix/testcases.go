@@ -61,6 +61,16 @@ var DashboardContract = []string{
 var AnthropicShimContract = []string{
 	"anthropic-messages-cache-cycle",
 	"anthropic-messages-stop-sequence",
+	// Request-side field preservation tests (depend on the shim's
+	// /debug/last-request endpoint introduced in PR #1940).
+	"anthropic-messages-image-block-preserved",
+	"anthropic-messages-top-k-preserved",
+	"anthropic-messages-metadata-user-id-preserved",
+	"anthropic-messages-tool-result-is-error-preserved",
+	"anthropic-messages-tool-result-array-content-preserved",
+	"anthropic-messages-stop-sequences-preserved",
+	"anthropic-messages-temperature-preserved",
+	"anthropic-messages-top-p-preserved",
 }
 
 // Combine preserves order while removing duplicate testcase names.
