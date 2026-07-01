@@ -23,6 +23,13 @@ const (
 	evictInterval = 1 * time.Minute
 )
 
+// maxTelemetrySessions caps the number of sessions tracked by the cumulative
+// turn store so memory stays bounded under high session cardinality even within
+// the TTL window. Mirrors last_model.go's maxLastModelSessions. It is a var (not
+// a const) so tests can exercise the eviction path without inserting tens of
+// thousands of entries.
+var maxTelemetrySessions = 50_000
+
 type turnState struct {
 	cumulativePrompt                int64
 	cumulativeCached                int64
@@ -64,6 +71,32 @@ func evictLocked(t time.Time) {
 			delete(store, k)
 		}
 	}
+}
+
+// evictOldestLocked removes the single least-recently-seen session. It is a
+// best-effort safety valve for the size cap when the throttled TTL sweep has not
+// freed room. Callers must hold mu.
+func evictOldestLocked() {
+	var oldestKey string
+	var oldestSeen time.Time
+	first := true
+	for k, v := range store {
+		if first || v.lastSeen.Before(oldestSeen) {
+			oldestKey = k
+			oldestSeen = v.lastSeen
+			first = false
+		}
+	}
+	if oldestKey != "" {
+		delete(store, oldestKey)
+	}
+}
+
+// telemetrySessionCount returns the number of tracked sessions (tests only).
+func telemetrySessionCount() int {
+	mu.Lock()
+	defer mu.Unlock()
+	return len(store)
 }
 
 // ResponseAPIInput identifies a Response API (/v1/responses) conversation.
@@ -190,6 +223,9 @@ func recordTurnState(key string, p TurnParams, costThisTurn float64, t time.Time
 		st = nil
 	}
 	if st == nil {
+		if len(store) >= maxTelemetrySessions {
+			evictOldestLocked()
+		}
 		st = &turnState{}
 		store[key] = st
 	}

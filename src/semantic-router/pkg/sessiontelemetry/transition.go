@@ -20,6 +20,14 @@ type ModelTransitionEvent struct {
 // MaxTransitionEventsPerSession limits stored events per session.
 const MaxTransitionEventsPerSession = 200
 
+// maxTransitionSessions caps the number of sessions tracked by the transition
+// store. The per-session slice was already bounded, but the session map itself
+// had no bound (and, unlike the other session stores, no TTL either), so it grew
+// one key per distinct session for the lifetime of the process. Mirrors
+// last_model.go's maxLastModelSessions. A var (not a const) so tests can
+// exercise the eviction path without inserting tens of thousands of entries.
+var maxTransitionSessions = 50_000
+
 // transitionStore holds in-memory transition events by session ID (test and debug use).
 type transitionStore struct {
 	mu     sync.RWMutex
@@ -38,7 +46,10 @@ func RecordTransition(evt ModelTransitionEvent) {
 	}
 	globalTransitionStore.mu.Lock()
 	defer globalTransitionStore.mu.Unlock()
-	list := globalTransitionStore.events[evt.SessionID]
+	list, exists := globalTransitionStore.events[evt.SessionID]
+	if !exists && len(globalTransitionStore.events) >= maxTransitionSessions {
+		globalTransitionStore.evictOldestLocked()
+	}
 	list = append(list, evt)
 	if len(list) > MaxTransitionEventsPerSession {
 		trimmed := make([]ModelTransitionEvent, MaxTransitionEventsPerSession)
@@ -46,6 +57,38 @@ func RecordTransition(evt ModelTransitionEvent) {
 		list = trimmed
 	}
 	globalTransitionStore.events[evt.SessionID] = list
+}
+
+// evictOldestLocked removes the session whose most recent transition event is
+// the oldest, bounding the session map. It is a best-effort safety valve for the
+// size cap. Callers must hold mu.
+func (s *transitionStore) evictOldestLocked() {
+	var oldestKey string
+	var oldestSeen time.Time
+	first := true
+	for k, list := range s.events {
+		if len(list) == 0 {
+			// An entry with no events is the stalest possible; evict it.
+			oldestKey = k
+			break
+		}
+		last := list[len(list)-1].Timestamp
+		if first || last.Before(oldestSeen) {
+			oldestKey = k
+			oldestSeen = last
+			first = false
+		}
+	}
+	if oldestKey != "" {
+		delete(s.events, oldestKey)
+	}
+}
+
+// transitionSessionCount returns the number of tracked sessions (tests only).
+func transitionSessionCount() int {
+	globalTransitionStore.mu.RLock()
+	defer globalTransitionStore.mu.RUnlock()
+	return len(globalTransitionStore.events)
 }
 
 // GetTransitions returns a copy of the transition events for sessionID.

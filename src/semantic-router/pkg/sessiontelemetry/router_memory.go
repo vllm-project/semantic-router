@@ -8,6 +8,14 @@ import (
 
 const routerMemoryTTL = 24 * time.Hour
 
+// maxRouterSessions caps the number of sessions tracked by the router-owned
+// memory store so memory stays bounded under high session cardinality (session
+// IDs are derived from message content, so distinct conversations create
+// distinct entries). Mirrors last_model.go's maxLastModelSessions. It is a var
+// (not a const) so tests can exercise the eviction path without inserting tens
+// of thousands of entries.
+var maxRouterSessions = 50_000
+
 // RouterSessionSnapshot is the router-owned, model-independent memory for a
 // session. It is intentionally about routing state, not prompt-visible user
 // memory.
@@ -229,6 +237,9 @@ func (s *routerSessionMemoryStore) sessionLocked(sessionID string) *routerSessio
 	if st != nil {
 		return st
 	}
+	if len(s.sessions) >= maxRouterSessions {
+		s.evictOldestLocked()
+	}
 	st = &routerSessionState{
 		sessionID:  sessionID,
 		modelTurns: make(map[string]int),
@@ -242,6 +253,25 @@ func (s *routerSessionMemoryStore) evictExpiredLocked(now time.Time) {
 		if now.Sub(v.lastSeen) > routerMemoryTTL {
 			delete(s.sessions, k)
 		}
+	}
+}
+
+// evictOldestLocked removes the single least-recently-seen session. It is a
+// best-effort safety valve for the size cap when TTL eviction did not free room.
+// Callers must hold s.mu.
+func (s *routerSessionMemoryStore) evictOldestLocked() {
+	var oldestKey string
+	var oldestSeen time.Time
+	first := true
+	for k, v := range s.sessions {
+		if first || v.lastSeen.Before(oldestSeen) {
+			oldestKey = k
+			oldestSeen = v.lastSeen
+			first = false
+		}
+	}
+	if oldestKey != "" {
+		delete(s.sessions, oldestKey)
 	}
 }
 
@@ -287,6 +317,14 @@ func ResetRouterSessionMemoryForTesting() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sessions = make(map[string]*routerSessionState)
+}
+
+// routerSessionCount returns the number of tracked sessions (tests only).
+func routerSessionCount() int {
+	s := globalRouterSessionMemory
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.sessions)
 }
 
 // setRouterSessionMemoryNowForTesting overrides the memory store clock.
