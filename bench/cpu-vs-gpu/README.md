@@ -48,6 +48,55 @@ Compares ONNX CPU vs ROCm GPU across 500/2K/8K/16K token prompts:
 BENCH_IMAGE=semantic-router:rocm REQUESTS_PER_SIZE=10 ./bench-long-context.sh
 ```
 
+### CPU vs GPU (NVIDIA CUDA)
+
+NVIDIA counterpart of the above, using ONNX Runtime's CUDA Execution Provider.
+Same metric (`llm_signal_extraction_latency_seconds`), same 500/2K/8K/16K sizes,
+across the domain / jailbreak / PII classifiers.
+
+Prerequisites: NVIDIA driver + `nvidia-container-toolkit` (so `docker run
+--gpus all` works) and the CUDA router image built from
+[`src/vllm-sr/Dockerfile.cuda`](../../src/vllm-sr/Dockerfile.cuda) (see
+[`deploy/nvidia/README.md`](../../deploy/nvidia/README.md); default tag
+`vllm-sr-cuda:local`).
+
+Download the classifiers **and** the embedding model into `models/` using the
+directory names the bench mounts (note: no `-onnx` suffix, unlike the ROCm
+setup above):
+
+```bash
+python3 -c "
+from huggingface_hub import snapshot_download
+for repo in [
+    'mmbert32k-intent-classifier-merged',
+    'mmbert32k-jailbreak-detector-merged',
+    'mmbert32k-pii-detector-merged',
+    'mmbert-embed-32k-2d-matryoshka',
+]:
+    snapshot_download(f'llm-semantic-router/{repo}',
+        local_dir=f'bench/cpu-vs-gpu/models/{repo}',
+        allow_patterns=['onnx/*', '*.json'],
+        ignore_patterns=['*.safetensors', '*.bin', '*.pt'])
+"
+```
+
+Run it:
+
+```bash
+BENCH_IMAGE=vllm-sr-cuda:local REQUESTS_PER_SIZE=10 ./bench-cuda-long-context.sh
+```
+
+All ports are env-overridable (`EXTPROC_PORT`, `API_PORT`, `METRICS_PORT`,
+`ENVOY_PORT`, `STUB_PORT`) for hosts where the defaults (50051/8080/9190/8801/
+8091) are already bound. A built-in stub upstream answers on `STUB_PORT` so
+requests return 200; the signal-extraction metric is recorded regardless.
+
+Reference numbers (RTX 4090, `vllm-sr-cuda`): GPU signal extraction stays in the
+single-digit-to-low-tens of ms across 500–16K tokens for all three classifiers,
+versus ~1–3 s on CPU — a ~1–2 order-of-magnitude speedup. See
+[`deploy/nvidia/README.md`](../../deploy/nvidia/README.md) for the full table
+and caveats.
+
 ### SDPA vs Flash Attention
 
 Compares standard attention vs CK Flash Attention on GPU:
