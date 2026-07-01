@@ -15,6 +15,15 @@ matches the *deterministic* parts (alpha/beta updates, penalty/bonus
 arithmetic) bit-for-bit; it does NOT byte-match the Go RNG output (Python's
 random.Random is not Go's math/rand). The score formula is what the
 comparison harness exercises.
+
+NOTE on LinUCBPy / LinearThompsonPy: same relationship — Python ports of
+the Go strategies in router_learning_linucb.go / router_learning_linear_thompson.go.
+Same score formula and same matrix backend algorithm (ridge-regularised
+posterior with Sherman-Morrison inverse and Cholesky sampling); different
+RNG implementation. Both are non-contextual-aware when the workload does
+not carry a context — they degrade to the ridge posterior mean of a
+single, dimensionless feature (the constant 1) which is uninteresting;
+this is why we expect KEEP_LINUCB_CONTEXTUAL_ONLY, not KEEP_LINUCB.
 """
 
 from __future__ import annotations
@@ -274,6 +283,233 @@ def _sample_gamma(shape: float, rng: random.Random) -> float:
             return d * v
 
 
+# ---- contextual bandit backend --------------------------------------------
+
+
+class _LearningMatrix:
+    """Ridge-regularised (A, b) state per arm with Sherman-Morrison inverse.
+
+    Python analogue of learningMatrix in
+    src/semantic-router/pkg/extproc/router_learning_matrix.go. Same update
+    rule and Cholesky sampling; different RNG.
+    """
+
+    def __init__(self, dim: int, lam: float = 1.0):
+        self.dim = dim
+        self.a = [[lam if i == j else 0.0 for j in range(dim)] for i in range(dim)]
+        self.inv = [[1.0 / lam if i == j else 0.0 for j in range(dim)] for i in range(dim)]
+        self.b = [0.0] * dim
+
+    def theta(self) -> list[float]:
+        out = [0.0] * self.dim
+        for i in range(self.dim):
+            row = self.inv[i]
+            s = 0.0
+            for j in range(self.dim):
+                s += row[j] * self.b[j]
+            out[i] = s
+        return out
+
+    def dot_theta(self, x: list[float]) -> float:
+        theta = self.theta()
+        return sum(v * theta[i] for i, v in enumerate(x))
+
+    def quad_inv(self, x: list[float]) -> float:
+        y = [0.0] * self.dim
+        for i in range(self.dim):
+            row = self.inv[i]
+            s = 0.0
+            for j in range(self.dim):
+                s += row[j] * x[j]
+            y[i] = s
+        q = sum(v * y[i] for i, v in enumerate(x))
+        return q if q > 0 else 0.0
+
+    def update(self, x: list[float], reward: float) -> None:
+        # y = A^{-1} x  (used by both A^{-1} update and denom)
+        y = [0.0] * self.dim
+        for i in range(self.dim):
+            row = self.inv[i]
+            s = 0.0
+            for j in range(self.dim):
+                s += row[j] * x[j]
+            y[i] = s
+        denom = 1.0 + sum(v * y[i] for i, v in enumerate(x))
+
+        # A += x x^T
+        for i in range(self.dim):
+            row = self.a[i]
+            xi = x[i]
+            for j in range(self.dim):
+                row[j] += xi * x[j]
+
+        # b += r · x
+        for i, v in enumerate(x):
+            self.b[i] += reward * v
+
+        # A^{-1} <- A^{-1} - (A^{-1} x x^T A^{-1}) / (1 + x^T A^{-1} x)
+        if abs(denom) < 1e-12:
+            return  # skip; recompute via Cholesky if this ever mattered in practice
+        for i in range(self.dim):
+            row = self.inv[i]
+            yi = y[i]
+            for j in range(self.dim):
+                row[j] -= (yi * y[j]) / denom
+
+    def sample_theta(self, sigma: float, rng: random.Random) -> list[float]:
+        mean = self.theta()
+        if sigma <= 0:
+            return mean
+        chol = _cholesky(self.inv, self.dim)
+        if chol is None:
+            return mean
+        z = [rng.gauss(0.0, 1.0) for _ in range(self.dim)]
+        out = list(mean)
+        for i in range(self.dim):
+            for j in range(i + 1):
+                out[i] += sigma * chol[i][j] * z[j]
+        return out
+
+
+def _cholesky(m: list[list[float]], dim: int) -> list[list[float]] | None:
+    """Lower-triangular Cholesky factor. Returns None if not positive-definite."""
+    l = [[0.0] * dim for _ in range(dim)]
+    for i in range(dim):
+        for j in range(i + 1):
+            s = m[i][j]
+            for k in range(j):
+                s -= l[i][k] * l[j][k]
+            if i == j:
+                if s <= 0:
+                    return None
+                l[i][i] = math.sqrt(s)
+            else:
+                l[i][j] = s / l[j][j]
+    return l
+
+
+# ---- contextual bandit algorithms ------------------------------------------
+
+
+@dataclass
+class LinUCBPy:
+    """Python port of the Go linUCB strategy in
+    src/semantic-router/pkg/extproc/router_learning_linucb.go.
+
+    score(m) = theta_m · x + alpha · sqrt(x^T A_m^{-1} x)
+
+    When the workload provides no context, x is padded to `dim` zero-vector
+    which collapses the algorithm to picking whichever arm has the ridge
+    prior with highest theta. This is intentional: it mirrors the Go
+    behaviour when the extractor produces empty features, and is the
+    reason we expect KEEP_LINUCB_CONTEXTUAL_ONLY, not KEEP_LINUCB.
+    """
+
+    dim: int = 16
+    alpha: float = 1.0
+    lam: float = 1.0
+    seed: int = 0
+    name: str = "linucb_py"
+    _arms: list[_LearningMatrix] = field(default_factory=list)
+
+    def reset(self, n_arms: int, context_dim: int | None) -> None:
+        # Feature width = provided context dim if the workload carries one, else self.dim.
+        # Both Go and Python paths make this same choice: the extractor is authoritative.
+        effective_dim = context_dim if context_dim is not None else self.dim
+        self.dim = effective_dim
+        self._arms = [_LearningMatrix(effective_dim, self.lam) for _ in range(n_arms)]
+
+    def _feature(self, context: list[float] | None) -> list[float]:
+        if context is None:
+            # No workload context: use a bias-only "feature" (constant 1
+            # in dim 0, zeros elsewhere). This makes every arm's theta
+            # collapse toward its empirical mean — same as UCB1 without
+            # the exploration term when alpha=0.
+            x = [0.0] * self.dim
+            if self.dim > 0:
+                x[0] = 1.0
+            return x
+        if len(context) == self.dim:
+            return list(context)
+        # Length mismatch: pad or truncate.
+        x = [0.0] * self.dim
+        for i in range(min(len(context), self.dim)):
+            x[i] = context[i]
+        return x
+
+    def select(self, t: int, context: list[float] | None) -> int:
+        x = self._feature(context)
+        best_arm = 0
+        best_score = float("-inf")
+        for a, arm in enumerate(self._arms):
+            mean = arm.dot_theta(x)
+            bonus = self.alpha * math.sqrt(arm.quad_inv(x)) if self.alpha > 0 else 0.0
+            score = mean + bonus
+            if score > best_score:
+                best_score = score
+                best_arm = a
+        return best_arm
+
+    def update(self, arm: int, reward: float, context: list[float] | None) -> None:
+        x = self._feature(context)
+        self._arms[arm].update(x, reward)
+
+
+@dataclass
+class LinearThompsonPy:
+    """Python port of the Go linear_thompson strategy in
+    router_learning_linear_thompson.go.
+
+    theta_tilde ~ N(theta, sigma^2 · A^{-1})
+    score(m)    = theta_tilde · x
+    """
+
+    dim: int = 16
+    sigma: float = 0.3
+    lam: float = 1.0
+    seed: int = 0
+    name: str = "linear_thompson_py"
+    _arms: list[_LearningMatrix] = field(default_factory=list)
+    _rng: random.Random | None = None
+
+    def reset(self, n_arms: int, context_dim: int | None) -> None:
+        effective_dim = context_dim if context_dim is not None else self.dim
+        self.dim = effective_dim
+        self._arms = [_LearningMatrix(effective_dim, self.lam) for _ in range(n_arms)]
+        self._rng = random.Random(self.seed)
+
+    def _feature(self, context: list[float] | None) -> list[float]:
+        # Same policy as LinUCBPy — see comment there.
+        if context is None:
+            x = [0.0] * self.dim
+            if self.dim > 0:
+                x[0] = 1.0
+            return x
+        if len(context) == self.dim:
+            return list(context)
+        x = [0.0] * self.dim
+        for i in range(min(len(context), self.dim)):
+            x[i] = context[i]
+        return x
+
+    def select(self, t: int, context: list[float] | None) -> int:
+        assert self._rng is not None
+        x = self._feature(context)
+        best_arm = 0
+        best_score = float("-inf")
+        for a, arm in enumerate(self._arms):
+            theta_tilde = arm.sample_theta(self.sigma, self._rng)
+            score = sum(v * theta_tilde[i] for i, v in enumerate(x))
+            if score > best_score:
+                best_score = score
+                best_arm = a
+        return best_arm
+
+    def update(self, arm: int, reward: float, context: list[float] | None) -> None:
+        x = self._feature(context)
+        self._arms[arm].update(x, reward)
+
+
 # ---- registry --------------------------------------------------------------
 
 
@@ -301,4 +537,6 @@ _BUILDERS: dict[str, type] = {
     "ucb1": UCB1,
     "epsilon_greedy": EpsilonGreedy,
     "routing_sampling_py": RoutingSamplingPy,
+    "linucb_py": LinUCBPy,
+    "linear_thompson_py": LinearThompsonPy,
 }

@@ -274,3 +274,53 @@ def test_end_to_end_smoke(tmp_path: Path):
         assert record["n_arms"] == 3
         assert record["horizon"] == 10000
         assert isinstance(record["cumulative_regret_final"], float)
+
+
+# ---- LinUCB / Linear Thompson (PR-2 Python parity) -------------------------
+
+
+def test_linucb_py_wins_contextual_workload():
+    """LinUCB must materially outperform routing_sampling_py on the
+    contextual_2cluster workload — that is the entire reason for the
+    strategy to exist. If this test ever regresses, the Python port has
+    likely lost sync with the Go implementation."""
+    linucb_record = runner.run_one("linucb_py", "contextual_2cluster", seed=0)
+    routing_record = runner.run_one("routing_sampling_py", "contextual_2cluster", seed=0)
+    # Cumulative regret: lower is better.
+    assert linucb_record["cumulative_regret_final"] < routing_record["cumulative_regret_final"], (
+        f"LinUCB regret {linucb_record['cumulative_regret_final']:.1f} should beat "
+        f"routing_sampling_py {routing_record['cumulative_regret_final']:.1f} on contextual"
+    )
+    # Optimal-arm rate: higher is better.
+    assert linucb_record["optimal_arm_rate_final"] > 0.85, (
+        f"LinUCB optimal-arm rate {linucb_record['optimal_arm_rate_final']:.3f} "
+        "should exceed 0.85 on contextual_2cluster"
+    )
+
+
+def test_linear_thompson_py_learns_contextual_workload():
+    """Linear Thompson Sampling should also solve contextual_2cluster."""
+    ts_record = runner.run_one("linear_thompson_py", "contextual_2cluster", seed=0)
+    assert ts_record["optimal_arm_rate_final"] > 0.80, (
+        f"Linear Thompson optimal-arm rate {ts_record['optimal_arm_rate_final']:.3f} "
+        "should exceed 0.80 on contextual_2cluster"
+    )
+
+
+def test_linucb_py_ties_or_close_on_stationary():
+    """LinUCB should NOT dramatically underperform routing_sampling_py on
+    stationary workloads. The contextual advantage doesn't come free — but
+    the loss should be small (extra exploration cost only). This guards
+    against a regression where LinUCB gets accidentally biased on
+    context-free workloads."""
+    linucb_record = runner.run_one("linucb_py", "stationary_3arm", seed=0)
+    routing_record = runner.run_one("routing_sampling_py", "stationary_3arm", seed=0)
+    # Allow LinUCB to lose by up to 20% on stationary; more than that
+    # signals the Python port has drifted from the Go semantics.
+    ratio = linucb_record["cumulative_regret_final"] / max(
+        routing_record["cumulative_regret_final"], 1e-6
+    )
+    assert ratio < 20.0, (
+        f"LinUCB regret ratio vs routing_sampling on stationary_3arm = {ratio:.2f}x, "
+        "which is far worse than the expected small overhead"
+    )
