@@ -19,6 +19,17 @@ Closes #xxxx
 - What were the actual results?
 - Any follow-up risks, gaps, or blockers?
 
+## Review Brief
+
+Review brief: N/A
+
+<!-- If required, replace N/A with:
+docs/agent/reviews/YYYY/YYYY-MM-DD-<short-kebab-title>.md
+-->
+
+- Required for large PRs when requested by the agent memory classifier.
+- The PR author confirms the brief matches the code, changed files, PR body, and validation evidence.
+
 ---
 <details>
 <summary>Semantic Router PR Checklist</summary>
@@ -27,6 +38,7 @@ Closes #xxxx
 - [ ] If the PR spans multiple modules, the title includes all relevant prefixes
 - [ ] Commits in this PR are signed off with `git commit -s`
 - [ ] The Purpose, Test Plan, and Test Result sections reflect the actual scope, commands, and blockers for this change
+- [ ] If a review brief is provided, it is author-confirmed and does not include secrets, private data, raw logs, or chain-of-thought
 
 </details>
 
