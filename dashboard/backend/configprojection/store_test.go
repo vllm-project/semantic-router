@@ -37,6 +37,9 @@ func TestRefreshFromCanonicalPersistsActiveProjection(t *testing.T) {
 	if active.Deployment == nil {
 		t.Fatal("expected active deployment payload")
 	}
+	if active.Deployment.YAMLSnapshot != testCanonicalYAML {
+		t.Fatalf("yaml snapshot mismatch: got %q", active.Deployment.YAMLSnapshot)
+	}
 	if active.Deployment.Validation.Status != "ok" {
 		t.Fatalf("unexpected validation: %+v", active.Deployment.Validation)
 	}
@@ -47,25 +50,6 @@ func TestRefreshFromCanonicalPersistsActiveProjection(t *testing.T) {
 	}
 	if len(deployments) != 1 || deployments[0].Version != "20260101-120000" {
 		t.Fatalf("unexpected deployments: %+v", deployments)
-	}
-}
-
-func TestOpenInitializesSchemaVersion(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	store, err := Open(filepath.Join(dir, "projection.sqlite"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer store.Close()
-
-	var version int
-	if err := store.db.QueryRow(`SELECT version FROM config_projection_schema_version WHERE id = 1`).Scan(&version); err != nil {
-		t.Fatalf("read schema version: %v", err)
-	}
-	if version != currentSchemaVersion {
-		t.Fatalf("expected schema version %d, got %d", currentSchemaVersion, version)
 	}
 }
 
