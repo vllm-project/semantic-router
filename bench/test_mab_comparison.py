@@ -1,3 +1,5 @@
+# ruff: noqa: PLR2004
+# ruff: noqa: PLR2004
 """Unit tests for bench.mab_comparison.
 
 Standard library + pytest only; no router runtime imports. Mirrors the
@@ -124,14 +126,14 @@ def test_routing_sampling_py_seed_weight_warm_start():
 
 def test_paired_bootstrap_ci_zero_mean_includes_zero():
     deltas = [-1.0, 1.0, -0.5, 0.5] * 10
-    mean, lo, hi = metrics.paired_bootstrap_ci(deltas, iters=2000, seed=0)
+    mean, lo, _hi = metrics.paired_bootstrap_ci(deltas, iters=2000, seed=0)
     assert lo < 0 < hi
     assert abs(mean) < 0.2
 
 
 def test_paired_bootstrap_ci_positive_mean_excludes_zero():
     deltas = [1.0] * 100
-    mean, lo, hi = metrics.paired_bootstrap_ci(deltas, iters=2000, seed=0)
+    mean, lo, _hi = metrics.paired_bootstrap_ci(deltas, iters=2000, seed=0)
     assert lo > 0
     assert abs(mean - 1.0) < 1e-9
 
@@ -262,7 +264,7 @@ def test_verdict_inconclusive_when_ties():
 
 
 def test_end_to_end_smoke(tmp_path: Path):
-    """One algorithm × one workload × 3 seeds; full runner+compare path."""
+    """One algorithm x one workload x 3 seeds; full runner+compare path."""
     out = runner.run_matrix(
         algorithms_list=["ucb1"],
         workloads_list=["stationary_3arm"],

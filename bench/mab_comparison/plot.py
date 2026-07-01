@@ -45,7 +45,7 @@ def plot_workload(
     results_dir: Path,
     out_dir: Path,
 ) -> list[Path]:
-    import matplotlib.pyplot as plt  # lazy import
+    import matplotlib.pyplot as plt  # noqa: PLC0415
 
     out_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
@@ -85,7 +85,7 @@ def plot_recovery(
     out_dir: Path,
     workload: str = "drift_at_t5000",
 ) -> Path | None:
-    import matplotlib.pyplot as plt  # lazy import
+    import matplotlib.pyplot as plt  # noqa: PLC0415
 
     out_dir.mkdir(parents=True, exist_ok=True)
     means: list[float] = []

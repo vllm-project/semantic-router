@@ -1,3 +1,5 @@
+# ruff: noqa: PLR2004
+# ruff: noqa: PLR2004
 """MAB algorithms for the comparison harness.
 
 All algorithms implement a uniform protocol:
@@ -377,19 +379,19 @@ class _LearningMatrix:
 
 def _cholesky(m: list[list[float]], dim: int) -> list[list[float]] | None:
     """Lower-triangular Cholesky factor. Returns None if not positive-definite."""
-    l = [[0.0] * dim for _ in range(dim)]
+    chol_l = [[0.0] * dim for _ in range(dim)]
     for i in range(dim):
         for j in range(i + 1):
             s = m[i][j]
             for k in range(j):
-                s -= l[i][k] * l[j][k]
+                s -= chol_l[i][k] * chol_l[j][k]
             if i == j:
                 if s <= 0:
                     return None
-                l[i][i] = math.sqrt(s)
+                chol_l[i][i] = math.sqrt(s)
             else:
-                l[i][j] = s / l[j][j]
-    return l
+                chol_l[i][j] = s / chol_l[j][j]
+    return chol_l
 
 
 # ---- contextual bandit algorithms ------------------------------------------

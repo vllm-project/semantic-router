@@ -1,4 +1,4 @@
-"""Runner: execute (algorithm × workload × seed) trajectories and write JSONL.
+"""Runner: execute (algorithm x workload x seed) trajectories and write JSONL.
 
 For each (algorithm, workload, seed) triple:
   1. generate the workload (deterministic given seed)
@@ -110,7 +110,7 @@ def run_matrix(
     out_dir: Path,
     algorithm_kwargs: dict[str, dict] | None = None,
 ) -> Path:
-    """Run the full (algorithm × workload × seed) matrix; write one JSONL per pair."""
+    """Run the full (algorithm x workload x seed) matrix; write one JSONL per pair."""
     out_dir.mkdir(parents=True, exist_ok=True)
     algorithm_kwargs = algorithm_kwargs or {}
     for workload in workloads_list:

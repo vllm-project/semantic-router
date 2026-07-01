@@ -1,3 +1,5 @@
+# ruff: noqa: PLR2004
+# ruff: noqa: PLR2004
 """Synthetic bandit workloads for MAB algorithm comparison.
 
 Each workload generates a deterministic reward sequence given a seed. The
@@ -148,10 +150,7 @@ def _contextual_2cluster(seed: int) -> WorkloadResult:
     for _ in range(horizon):
         cluster = rng.randrange(2)
         context = [1.0, 0.0] if cluster == 0 else [0.0, 1.0]
-        if cluster == 0:
-            true_means = [0.85, 0.50, 0.15]
-        else:
-            true_means = [0.15, 0.50, 0.85]
+        true_means = [0.85, 0.50, 0.15] if cluster == 0 else [0.15, 0.50, 0.85]
         rewards_row = [1.0 if rng.random() < mu else 0.0 for mu in true_means]
         optimal_arms.append(max(range(n_arms), key=lambda a, m=true_means: m[a]))
         contexts.append(context)

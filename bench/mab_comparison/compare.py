@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import argparse
 import json
-from collections import defaultdict
 from pathlib import Path
 
 from . import metrics
@@ -64,10 +63,7 @@ def compare_pair(
         return {"n_paired": 0, "favorable_to_x": False, "significant": False}
     deltas = [bx[s][metric_key] - by[s][metric_key] for s in shared]
     mean, lo, hi = metrics.paired_bootstrap_ci(deltas)
-    if lower_is_better:
-        favorable_to_x = hi < 0
-    else:
-        favorable_to_x = lo > 0
+    favorable_to_x = hi < 0 if lower_is_better else lo > 0
     return {
         "n_paired": len(shared),
         "mean_delta": mean,
