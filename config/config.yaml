@@ -1423,6 +1423,14 @@ global:
         enabled: true
         candidate_set: decision
         strategy: routing_sampling
+        linucb:
+          dim: 64
+          alpha: 1.0
+          lambda: 1.0
+        linear_thompson:
+          dim: 64
+          sigma: 0.5
+          lambda: 1.0
       protection:
         enabled: true
         scope: conversation
