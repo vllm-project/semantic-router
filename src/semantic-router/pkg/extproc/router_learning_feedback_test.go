@@ -234,3 +234,113 @@ func TestFeedbackLoopConcurrent(t *testing.T) {
 	// will be leftover. That's expected. The test passes if no panic/race.
 	t.Logf("concurrent test done: %d pending entries remaining", remaining)
 }
+
+// ===== Exact theta convergence for every verdict =====
+
+func TestFeedbackLoopPartialRewardExactTheta(t *testing.T) {
+	const dim = 2
+	const lambda = 1.0
+	x := []float64{2, 0}
+
+	// GoodFit (reward=1.0): after 100 updates,
+	//   b = 100*2.0*[1,0] = [200,0]
+	//   A = I + 100*[[4,0],[0,0]] = [[401,0],[0,1]]
+	//   theta = A^{-1} b = [200/401, 0]
+	rtGF := newFeedbackTestRuntime("gf", dim, lambda)
+	armGF := rtGF.contextualStates["gf"].arm(contextualBanditKey("gf", "d", 0, "m"))
+	for range 100 {
+		rtGF.recordPendingContextualUpdate("r", "gf", x)
+		rtGF.consumePendingContextualUpdate("r", "d", 0, "m", routerLearningOutcomeGoodFit)
+	}
+	gf := armGF.theta()[0]
+	wantGF := 200.0 / 401.0
+	if math.Abs(gf-wantGF) > 1e-9 {
+		t.Errorf("GoodFit theta[0]=%v, want %v", gf, wantGF)
+	}
+
+	// Overprovisioned (reward=0.5): b = 100*0.5*[2,0] = [100,0]
+	//   theta = [100/401, 0] — exactly half of GoodFit
+	rtOV := newFeedbackTestRuntime("ov", dim, lambda)
+	armOV := rtOV.contextualStates["ov"].arm(contextualBanditKey("ov", "d", 0, "m"))
+	for range 100 {
+		rtOV.recordPendingContextualUpdate("r", "ov", x)
+		rtOV.consumePendingContextualUpdate("r", "d", 0, "m", routerLearningOutcomeOverprovisioned)
+	}
+	ov := armOV.theta()[0]
+	wantOV := 100.0 / 401.0
+	if math.Abs(ov-wantOV) > 1e-9 {
+		t.Errorf("Overprovisioned theta[0]=%v, want %v", ov, wantOV)
+	}
+
+	// Underpowered (reward=0.1): b = 100*0.1*[2,0] = [20,0]
+	//   theta = [20/401, 0]
+	rtUN := newFeedbackTestRuntime("un", dim, lambda)
+	armUN := rtUN.contextualStates["un"].arm(contextualBanditKey("un", "d", 0, "m"))
+	for range 100 {
+		rtUN.recordPendingContextualUpdate("r", "un", x)
+		rtUN.consumePendingContextualUpdate("r", "d", 0, "m", routerLearningOutcomeUnderpowered)
+	}
+	un := armUN.theta()[0]
+	wantUN := 20.0 / 401.0
+	if math.Abs(un-wantUN) > 1e-9 {
+		t.Errorf("Underpowered theta[0]=%v, want %v", un, wantUN)
+	}
+
+	// Proportionality check: reward doubled → theta doubled
+	if math.Abs(gf/ov-2.0) > 1e-9 {
+		t.Errorf("gf/ov=%v, want 2.0 (theta should be proportional to reward)", gf/ov)
+	}
+	if math.Abs(ov/un-5.0) > 1e-9 {
+		t.Errorf("ov/un=%v, want 5.0", ov/un)
+	}
+}
+
+// ===== Full control loop: contextual + experience both live =====
+
+func TestFeedbackLoopFullControlLoop(t *testing.T) {
+	const dim = 3
+	const lambda = 1.0
+	rt := newFeedbackTestRuntime("full", dim, lambda)
+	x := []float64{1, 0.5, -0.3}
+	arm := rt.contextualStates["full"].arm(contextualBanditKey("full", "d", 0, "m"))
+
+	// Baseline: identity prior → theta = [0,0,0]
+	for i, v := range arm.theta() {
+		if v != 0 {
+			t.Errorf("prior theta[%d] = %v, want 0", i, v)
+		}
+	}
+
+	// 200 mixed-verdict cycles through the feedback loop.
+	for i := range 200 {
+		rt.recordPendingContextualUpdate("r", "full", x)
+		var v routerLearningOutcomeVerdict
+		switch i % 3 {
+		case 0:
+			v = routerLearningOutcomeGoodFit // 1.0
+		case 1:
+			v = routerLearningOutcomeOverprovisioned // 0.5
+		case 2:
+			v = routerLearningOutcomeUnderpowered // 0.1
+		}
+		rt.consumePendingContextualUpdate("r", "d", 0, "m", v)
+	}
+
+	// Avg reward = (1.0+0.5+0.1)/3 ≈ 0.5333. Theta should point roughly
+	// in x's direction (cosine > 0.99) with magnitude bounded by avg reward.
+	theta := arm.theta()
+	nx := math.Sqrt(x[0]*x[0] + x[1]*x[1] + x[2]*x[2])
+	dot, nt := 0.0, 0.0
+	for i := range theta {
+		dot += theta[i] * x[i]
+		nt += theta[i] * theta[i]
+	}
+	nt = math.Sqrt(nt)
+	cosine := dot / (nt * nx)
+	if cosine < 0.99 {
+		t.Errorf("theta should align with x (cosine=%v, want >0.99)", cosine)
+	}
+	if nt > 0.6 || nt < 0.3 {
+		t.Errorf("theta norm=%v, expect ~0.4–0.55 for avg reward 0.533", nt)
+	}
+}
