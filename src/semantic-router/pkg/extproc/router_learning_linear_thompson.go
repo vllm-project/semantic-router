@@ -68,6 +68,7 @@ func (r *OpenAIRouter) applyLinearThompsonAdaptation(
 
 	state := r.routerLearningRuntimeState().contextualState(strategyName, dim, lambda)
 	x := extractContextFeatures(learningCtx, dim)
+	r.routerLearningRuntimeState().recordPendingContextualUpdate(input.ctx.RouterReplayID, strategyName, x)
 
 	seed := int64(0)
 	effectiveSigma := sigma

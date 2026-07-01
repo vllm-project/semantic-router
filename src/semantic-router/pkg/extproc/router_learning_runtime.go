@@ -20,6 +20,17 @@ type routerLearningRuntime struct {
 	experience          map[string]*routerLearningModelExperience
 	contextualStates    map[string]*routerLearningContextualState
 	contextualStatesMu  sync.Mutex
+	pendingUpdates      map[string]pendingContextualUpdate
+	pendingUpdatesMu    sync.Mutex
+}
+
+// pendingContextualUpdate bridges Phase 1 (scoring) and Phase 2 (outcome).
+// During scoring the feature vector x is extracted; during UpdateOutcome
+// the matrix is updated with the observed reward. This struct carries x
+// across the gap.
+type pendingContextualUpdate struct {
+	strategy string
+	x        []float64
 }
 
 func (rt *routerLearningRuntime) UpdateOutcome(
@@ -51,6 +62,7 @@ func (rt *routerLearningRuntime) UpdateOutcome(
 		verdict,
 		outcome.Score,
 	)
+	rt.consumePendingContextualUpdate(outcome.ReplayID, decisionName, decisionTier, model, verdict)
 	result.Updated = 1
 	return result
 }
@@ -257,6 +269,7 @@ func newRouterLearningRuntime(
 		replayRecorders:  replayRecorders,
 		experience:       map[string]*routerLearningModelExperience{},
 		contextualStates: map[string]*routerLearningContextualState{},
+		pendingUpdates:   map[string]pendingContextualUpdate{},
 	}
 }
 
@@ -390,4 +403,77 @@ func (rt *routerLearningRuntime) contextualState(
 	state := newRouterLearningContextualState(dim, lambda)
 	rt.contextualStates[strategy] = state
 	return state
+}
+
+// recordPendingContextualUpdate saves the feature vector x for later
+// consumption by consumePendingContextualUpdate. Called during scoring
+// (Phase 1) so that UpdateOutcome (Phase 2) has the context it needs to
+// update the bandit matrix.
+func (rt *routerLearningRuntime) recordPendingContextualUpdate(replayID, strategy string, x []float64) {
+	if rt == nil || strings.TrimSpace(replayID) == "" {
+		return
+	}
+	rt.pendingUpdatesMu.Lock()
+	defer rt.pendingUpdatesMu.Unlock()
+	// Bound the map size so a flood of unscored requests cannot leak memory.
+	if len(rt.pendingUpdates) >= 2000 {
+		// Drop the oldest entry (range order is non-deterministic but
+		// acceptable for a safety valve).
+		for stale := range rt.pendingUpdates {
+			delete(rt.pendingUpdates, stale)
+			break
+		}
+	}
+	rt.pendingUpdates[replayID] = pendingContextualUpdate{
+		strategy: strategy,
+		x:        append([]float64(nil), x...),
+	}
+}
+
+// contextualBanditReward maps an outcome verdict to a reward in [0, 1].
+// GoodFit returns the maximum reward; overprovisioned and underpowered
+// return partial credit because the model was usable but suboptimal.
+func contextualBanditReward(verdict routerLearningOutcomeVerdict) float64 {
+	switch verdict {
+	case routerLearningOutcomeGoodFit:
+		return 1.0
+	case routerLearningOutcomeOverprovisioned:
+		return 0.5
+	case routerLearningOutcomeUnderpowered:
+		return 0.1
+	default: // Failed or unknown
+		return 0.0
+	}
+}
+
+// consumePendingContextualUpdate looks up the pending feature vector for
+// replayID, feeds it with the observed reward into the contextual bandit
+// matrix, and cleans up the entry. It is a no-op when there is no pending
+// update (routing_sampling path) or when the strategy state has been
+// dropped (strategy switch).
+func (rt *routerLearningRuntime) consumePendingContextualUpdate(
+	replayID, decisionName string,
+	decisionTier int,
+	model string,
+	verdict routerLearningOutcomeVerdict,
+) {
+	if rt == nil || strings.TrimSpace(replayID) == "" {
+		return
+	}
+	rt.pendingUpdatesMu.Lock()
+	pending, ok := rt.pendingUpdates[replayID]
+	delete(rt.pendingUpdates, replayID)
+	rt.pendingUpdatesMu.Unlock()
+	if !ok {
+		return
+	}
+	reward := contextualBanditReward(verdict)
+	key := contextualBanditKey(pending.strategy, decisionName, decisionTier, model)
+	rt.contextualStatesMu.Lock()
+	defer rt.contextualStatesMu.Unlock()
+	state := rt.contextualStates[pending.strategy]
+	if state == nil {
+		return
+	}
+	_ = state.arm(key).update(pending.x, reward)
 }

@@ -74,6 +74,7 @@ func (r *OpenAIRouter) applyLinUCBAdaptation(
 
 	state := r.routerLearningRuntimeState().contextualState(strategyName, dim, lambda)
 	x := extractContextFeatures(learningCtx, dim)
+	r.routerLearningRuntimeState().recordPendingContextualUpdate(input.ctx.RouterReplayID, strategyName, x)
 	scores := r.scoreLinUCBCandidates(learningCtx, input.ctx, input.baseResult, candidateSet, state, strategyName, x, alpha)
 	if len(scores) == 0 {
 		return baseAdaptationDecision(input, adaptationPolicy(mode, routerLearningActionKeepBase, "scores_missing", nil))

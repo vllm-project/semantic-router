@@ -98,6 +98,109 @@ func TestLearningMatrixSampleThetaCentersOnMean(t *testing.T) {
 	}
 }
 
+// TestLearningMatrixGoldenLinUCB compares Go LinUCB scores,
+// theta vectors and A_inv matrices against a pure-Python reference
+// implementation computed from the Li et al. 2010 paper formula.
+//
+// To regenerate the reference, run:
+//
+//	python3 tools/dev/golden_linucb_ref.py
+//
+// (See commit message for the script.)
+func TestLearningMatrixGoldenLinUCB(t *testing.T) {
+	const dim = 3
+	alpha := 1.0
+	lambda := 1.0
+	arms := []*learningMatrix{
+		newLearningMatrix(dim, lambda),
+		newLearningMatrix(dim, lambda),
+	}
+
+	// Fixed trace — values taken from the golden reference.
+	type step struct {
+		x0, x1                        []float64
+		wantScore0, wantScore1        float64
+		wantTheta0, wantTheta1        []float64
+		chosen                        int
+		reward                        float64
+	}
+	steps := []step{
+		{
+			x0: []float64{0.49671415301123, -0.13826430117118, 0.64768853810069},
+			x1: []float64{1.52302985640803, -0.23415337472334, -0.23413695694918},
+			wantScore0: 0.827854098961305, wantScore1: 1.558610875431709,
+			wantTheta0: []float64{0, 0, 0}, wantTheta1: []float64{0, 0, 0},
+			chosen: 0, reward: 1.0,
+		},
+		{
+			x0: []float64{1.57921281550739, 0.76743472915291, -0.46947438593495},
+			x1: []float64{0.54256004358596, -0.46341769281246, -0.46572975357026},
+			wantScore0: 2.016537695229867, wantScore1: 0.852074857197560,
+			wantTheta0: []float64{0.29472595616741, -0.08203929386641, 0.38430679402461},
+			wantTheta1: []float64{0, 0, 0},
+			chosen: 0, reward: 1.0,
+		},
+		{
+			x0: []float64{0.24196227156603, -1.9132802446578, -1.72491783251303},
+			x1: []float64{-0.56228752924097, -1.01283112033442, 0.31424733259527},
+			wantScore0: 2.068911692431739, wantScore1: 1.200310597262661,
+			wantTheta0: []float64{0.56550587903205, 0.06508920856173, 0.27125190557707},
+			wantTheta1: []float64{0, 0, 0},
+			chosen: 1, reward: 1.0,
+		},
+		{
+			x0: []float64{-0.90802407552121, -1.41230370133529, 1.46564876892155},
+			x1: []float64{-0.22577630048654, 0.06752820468792, -1.42474818621346},
+			wantScore0: 1.208777625617540, wantScore1: 1.263013747908694,
+			wantTheta0: []float64{0.56550587903205, 0.06508920856173, 0.27125190557707},
+			wantTheta1: []float64{-0.23037531866903, -0.41496793005516, 0.12875055131537},
+			chosen: 1, reward: 1.0,
+		},
+		{
+			x0: []float64{-0.54438272452518, 0.11092258970987, -1.1509935774223},
+			x1: []float64{0.37569801834567, -0.6006386899188, -0.29169374979328},
+			wantScore0: 0.388384328117508, wantScore1: 0.969802183310013,
+			wantTheta0: []float64{0.56550587903205, 0.06508920856173, 0.27125190557707},
+			wantTheta1: []float64{-0.35134042205708, -0.45100217599445, -0.39841370400365},
+			chosen: 1, reward: 1.0,
+		},
+	}
+
+	for i, s := range steps {
+		// Compute LinUCB scores: dotTheta(x) + alpha * sqrt(quadInv(x)).
+		s0 := arms[0].dotTheta(s.x0) + alpha*math.Sqrt(arms[0].quadInv(s.x0))
+		s1 := arms[1].dotTheta(s.x1) + alpha*math.Sqrt(arms[1].quadInv(s.x1))
+
+		if math.Abs(s0-s.wantScore0) > 1e-12 {
+			t.Errorf("step %d: Go arm0 score = %.15f, Python ref = %.15f", i, s0, s.wantScore0)
+		}
+		if math.Abs(s1-s.wantScore1) > 1e-12 {
+			t.Errorf("step %d: Go arm1 score = %.15f, Python ref = %.15f", i, s1, s.wantScore1)
+		}
+
+		// Check current theta BEFORE update matches the Python ref.
+		theta0 := arms[0].theta()
+		theta1 := arms[1].theta()
+		for j := 0; j < dim; j++ {
+			if math.Abs(theta0[j]-s.wantTheta0[j]) > 1e-12 {
+				t.Errorf("step %d: Go theta0[%d] = %.15f, Python ref = %.15f", i, j, theta0[j], s.wantTheta0[j])
+			}
+			if math.Abs(theta1[j]-s.wantTheta1[j]) > 1e-12 {
+				t.Errorf("step %d: Go theta1[%d] = %.15f, Python ref = %.15f", i, j, theta1[j], s.wantTheta1[j])
+			}
+		}
+
+		// Update chosen arm — same as Python ref.
+		xChosen := s.x0
+		if s.chosen == 1 {
+			xChosen = s.x1
+		}
+		if err := arms[s.chosen].update(xChosen, s.reward); err != nil {
+			t.Fatalf("step %d: update arm %d: %v", i, s.chosen, err)
+		}
+	}
+}
+
 func TestLearningMatrixCholeskyRoundTrip(t *testing.T) {
 	const dim = 4
 	rng := rand.New(rand.NewSource(17))
