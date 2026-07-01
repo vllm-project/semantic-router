@@ -1,0 +1,63 @@
+name: Ready To Merge (/rtm)
+
+# A contributor comments `/rtm` to merge their PR once a maintainer has
+# approved it. Verifies a maintainer approval, updates the branch if it is
+# behind (then waits for `/rtm` again so checks can run), and merges.
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+jobs:
+  rtm:
+    if: >-
+      ${{ github.event.issue.pull_request &&
+          startsWith(github.event.comment.body, '/rtm') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          MERGE_METHOD: squash # merge | squash | rebase (must be enabled in repo)
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pull_number = context.issue.number;
+            const user = context.payload.comment.user.login;
+            const reply = (body) =>
+              github.rest.issues.createComment({ owner, repo, issue_number: pull_number, body });
+
+            // Require an approving review from a maintainer (write/admin).
+            const reviews = await github.paginate(github.rest.pulls.listReviews,
+              { owner, repo, pull_number });
+            let approved = false;
+            for (const r of reviews.filter(r => r.state === 'APPROVED' && r.user)) {
+              const perm = await github.rest.repos
+                .getCollaboratorPermissionLevel({ owner, repo, username: r.user.login })
+                .then(x => x.data.permission).catch(() => 'none');
+              if (perm === 'admin' || perm === 'write') { approved = true; break; }
+            }
+            if (!approved) {
+              await reply(`@${user} this PR needs an approving review from a maintainer before \`/rtm\`.`);
+              return;
+            }
+
+            // If the branch is behind base, update it and stop so checks re-run.
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number });
+            if (pr.mergeable_state === 'behind') {
+              await github.rest.pulls.updateBranch({ owner, repo, pull_number });
+              await reply(`@${user} branch was behind \`${pr.base.ref}\`; updated it. Comment \`/rtm\` again once checks pass.`);
+              return;
+            }
+
+            try {
+              await github.rest.pulls.merge({ owner, repo, pull_number, merge_method: process.env.MERGE_METHOD });
+              await reply(`@${user} merged via \`/rtm\`. 🎉`);
+            } catch (e) {
+              await reply(`@${user} could not merge: ${e.message} (checks pending/failing or conflicts?).`);
+            }
