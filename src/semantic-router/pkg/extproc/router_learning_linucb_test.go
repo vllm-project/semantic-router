@@ -101,6 +101,7 @@ func TestLinearThompsonStrategyIsRegistered(t *testing.T) {
 // convergence test. We construct a 2-cluster contextual workload where:
 //   - "code" queries should be answered by `smart`
 //   - "story" queries should be answered by `fast`
+//
 // We feed a few hundred synthetic outcomes (good_fit on the matching arm,
 // underpowered on the other arms) and assert that LinUCB's posterior mean
 // favours the matching arm at score time, for each cluster.

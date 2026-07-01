@@ -53,10 +53,10 @@ type RouterLearningConfig struct {
 
 // RouterLearningAdaptationConfig configures online model-choice learning.
 type RouterLearningAdaptationConfig struct {
-	Enabled      *bool                          `yaml:"enabled,omitempty"`
-	CandidateSet string                         `yaml:"candidate_set,omitempty"`
-	Strategy     string                         `yaml:"strategy,omitempty"`
-	LinUCB       *RouterLearningLinUCBConfig    `yaml:"linucb,omitempty"`
+	Enabled        *bool                               `yaml:"enabled,omitempty"`
+	CandidateSet   string                              `yaml:"candidate_set,omitempty"`
+	Strategy       string                              `yaml:"strategy,omitempty"`
+	LinUCB         *RouterLearningLinUCBConfig         `yaml:"linucb,omitempty"`
 	LinearThompson *RouterLearningLinearThompsonConfig `yaml:"linear_thompson,omitempty"`
 }
 
