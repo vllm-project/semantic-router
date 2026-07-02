@@ -264,7 +264,7 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 
 	selCtx := r.buildSelectionContext(
 		result.Decision.ModelRefs,
-		decisionName,
+		result.Decision,
 		userContent,
 		result.Decision.Algorithm,
 		categoryName,

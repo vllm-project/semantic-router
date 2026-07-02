@@ -1,0 +1,75 @@
+version: v0.3
+
+listeners:
+  - name: llm-router-mock-http
+    address: 0.0.0.0
+    port: 8899
+    timeout: 60s
+
+providers:
+  defaults:
+    default_model: mock-model-a
+  models:
+    - name: mock-model-a
+      provider_model_id: mock-model-a
+      backend_refs:
+        - name: primary
+          endpoint: host.docker.internal:8002
+          protocol: http
+          weight: 100
+
+routing:
+  modelCards:
+    - name: mock-model-a
+      description: Baseline candidate for llm router verification.
+      capabilities: [chat]
+      modality: ar
+      quality_score: 0.8
+    - name: mock-model-b
+      description: Secondary candidate used by the mock router for branching.
+      capabilities: [chat]
+      modality: ar
+      quality_score: 0.9
+  decisions:
+    - name: llm-router-decision
+      description: Decision used to verify LLM router prompt emission.
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: mock-model-a
+          use_reasoning: false
+
+global:
+  router:
+    learning:
+      enabled: true
+      adaptation:
+        enabled: true
+        candidate_set: decision
+        strategy: routing_sampling
+        enable_llm_routing: true
+        llm_router_server_url: http://host.docker.internal:9001
+        llm_router_query_template: |
+          Decision name: {{.decision_name}}
+          Decision description: {{.decision_description}}
+          Query: {{.query}}
+          Matched domains: {{join .matched_domains ", "}}
+          Matched keywords: {{join .matched_keywords ", "}}
+          Labels: {{join .labels ", "}}
+          Tags: {{join .tags ", "}}
+          Available models:
+          {{- range .available_models }}
+          - {{ .name }}{{if .reasoning_description}} - {{ .reasoning_description }}{{end}}
+          {{- end }}
+  services:
+    response_api:
+      enabled: false
+    router_replay:
+      enabled: false
+  stores:
+    semantic_cache:
+      enabled: false
+    memory:
+      enabled: false

@@ -108,22 +108,29 @@ type RLDrivenConfig struct {
 	// Used for computing cost rewards
 	ModelCostPerToken map[string]float64 `yaml:"model_cost_per_token,omitempty"`
 
-	// Router-R1 LLM-as-Router Configuration (arXiv:2506.09033 Section 3.1)
+	// LLM router decision configuration.
 
-	// EnableLLMRouting enables LLM-based routing using the Router-R1 approach
+	// EnableLLMRouting enables LLM-based routing
 	// When enabled, an LLM will analyze the query and select the optimal model
 	// This implements the "think" and "route" actions from the paper
 	EnableLLMRouting bool `yaml:"enable_llm_routing"`
 
-	// RouterR1ServerURL is the URL of the Router-R1 LLM server
+	// LLMRouterServerURL is the URL of the LLM router decision server.
 	// This server should expose /route and /health endpoints
-	RouterR1ServerURL string `yaml:"router_r1_server_url"`
+	LLMRouterServerURL string `yaml:"llm_router_server_url,omitempty"`
+
+	// LLMRouterQueryTemplate defines the template used to build the query sent
+	// to the LLM router decision server.
+	LLMRouterQueryTemplate string `yaml:"llm_router_query_template,omitempty"`
+
+	// LLMRouterQueryTemplateFile loads the query template from a file.
+	LLMRouterQueryTemplateFile string `yaml:"llm_router_query_template_file,omitempty"`
 
 	// LLMRoutingFallback controls behavior when LLM routing fails
 	// Options: "thompson" (fall back to Thompson Sampling), "error" (return error)
 	LLMRoutingFallback string `yaml:"llm_routing_fallback"`
 
-	// EnableMultiRoundAggregation enables Router-R1 multi-round routing
+	// EnableMultiRoundAggregation enables multi-round routing
 	// When enabled, the router may query multiple models and aggregate responses
 	// This implements the aggregation strategy from the paper
 	EnableMultiRoundAggregation bool `yaml:"enable_multi_round_aggregation"`
@@ -143,9 +150,9 @@ func DefaultRLDrivenConfig() *RLDrivenConfig {
 		PersonalizationBlend:   0.7,
 		SessionContextWeight:   0.3,
 		ImplicitFeedbackWeight: 0.5,
-		CostAwareness:          true, // Enable by default for Router-R1
+		CostAwareness:          true, // Enable by default for LLM routing
 		CostWeight:             0.2,
-		// Router-R1 defaults
+		// LLM router defaults
 		UseRouterR1Rewards:  true,
 		CostRewardAlpha:     0.3, // 30% cost, 70% outcome
 		FormatRewardPenalty: -1.0,
@@ -290,13 +297,13 @@ type ModelPreference struct {
 	LastUpdated time.Time `json:"last_updated"`
 }
 
-// RLDrivenSelector implements reinforcement learning-based model selection
+// RLDrivenSelector implements reinforcement learning-based model selection.
 // It uses Thompson Sampling to balance exploration and exploitation while
 // learning user preferences over time.
 //
-// When EnableLLMRouting is true, this selector implements the full Router-R1
-// approach from arXiv:2506.09033, using an LLM to analyze queries and make
-// intelligent routing decisions with "think" and "route" actions.
+// When EnableLLMRouting is true, this selector uses a templated LLM router
+// decision server to analyze queries and make routing decisions with "think"
+// and "route" actions inspired by arXiv:2506.09033.
 type RLDrivenSelector struct {
 	config *RLDrivenConfig
 
@@ -330,9 +337,16 @@ type RLDrivenSelector struct {
 	// Storage backend for persistence
 	storage EloStorage
 
-	// Router-R1 LLM client for intelligent routing
-	// Requires external Router-R1 server (see src/training/rl_model_selection/router_r1_server.py)
-	routerR1Client *RouterR1Client
+	// LLM router client for intelligent routing.
+	// Requires external router server (see src/training/model_selection/rl_model_selection/router_r1_server.py)
+	llmRouterClient *LLMRouterClient
+
+	// llmRouterPromptRenderer renders queries for the external router server.
+	llmRouterPromptRenderer *LLMRouterPromptRenderer
+
+	// llmRouterPromptErr records template initialization failures so Select can
+	// fall back via the configured LLMRoutingFallback policy.
+	llmRouterPromptErr error
 }
 
 // SessionModelStats tracks within-session model performance
@@ -393,30 +407,39 @@ func NewRLDrivenSelector(cfg *RLDrivenConfig) *RLDrivenSelector {
 		}
 	}
 
-	// Initialize Router-R1 LLM client if configured
-	// Requires external server: src/training/rl_model_selection/router_r1_server.py
-	if cfg.EnableLLMRouting && cfg.RouterR1ServerURL != "" {
-		selector.routerR1Client = NewRouterR1Client(cfg.RouterR1ServerURL)
-		logging.ComponentEvent("selection", "rl_driven_router_r1_enabled", map[string]interface{}{
-			"server_url": cfg.RouterR1ServerURL,
+	// Initialize the LLM router client if configured.
+	// Requires external server: src/training/model_selection/rl_model_selection/router_r1_server.py
+	if cfg.EnableLLMRouting && cfg.LLMRouterServerURL != "" {
+		selector.llmRouterClient = NewLLMRouterClient(cfg.LLMRouterServerURL)
+		if renderer, err := NewLLMRouterPromptRenderer(cfg); err != nil {
+			selector.llmRouterPromptErr = err
+			logging.ComponentWarnEvent("selection", "rl_driven_llm_router_template_invalid", map[string]interface{}{
+				"server_url": cfg.LLMRouterServerURL,
+				"error":      err.Error(),
+			})
+		} else {
+			selector.llmRouterPromptRenderer = renderer
+		}
+		logging.ComponentEvent("selection", "rl_driven_llm_router_enabled", map[string]interface{}{
+			"server_url": cfg.LLMRouterServerURL,
 		})
 
 		// Verify connectivity
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := selector.routerR1Client.HealthCheck(ctx); err != nil {
-			logging.ComponentWarnEvent("selection", "rl_driven_router_r1_unreachable", map[string]interface{}{
-				"server_url":   cfg.RouterR1ServerURL,
+		if err := selector.llmRouterClient.HealthCheck(ctx); err != nil {
+			logging.ComponentWarnEvent("selection", "rl_driven_llm_router_unreachable", map[string]interface{}{
+				"server_url":   cfg.LLMRouterServerURL,
 				"error":        err.Error(),
 				"retry_on_use": true,
 			})
 		} else {
-			logging.ComponentEvent("selection", "rl_driven_router_r1_connected", map[string]interface{}{
-				"server_url": cfg.RouterR1ServerURL,
+			logging.ComponentEvent("selection", "rl_driven_llm_router_connected", map[string]interface{}{
+				"server_url": cfg.LLMRouterServerURL,
 			})
 		}
 	} else if cfg.EnableLLMRouting {
-		logging.ComponentWarnEvent("selection", "rl_driven_router_r1_config_missing", map[string]interface{}{
+		logging.ComponentWarnEvent("selection", "rl_driven_llm_router_config_missing", map[string]interface{}{
 			"llm_routing_enabled": true,
 		})
 	}
@@ -493,25 +516,25 @@ func (r *RLDrivenSelector) InitializeFromConfig(modelConfig map[string]config.Mo
 	})
 }
 
-// Select chooses the best model using Thompson Sampling or Router-R1 LLM routing
-// When EnableLLMRouting is configured, the selector first attempts to use an LLM
-// to analyze the query and make an intelligent routing decision (Router-R1 approach).
-// If LLM routing fails or is disabled, falls back to Thompson Sampling.
+// Select chooses the best model using Thompson Sampling or LLM router decision
+// prompting. When EnableLLMRouting is configured, the selector first attempts to
+// use an LLM to analyze the query and make an intelligent routing decision. If
+// LLM routing fails or is disabled, it falls back to Thompson Sampling.
 func (r *RLDrivenSelector) Select(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
 	if err := ValidateSelectionContext(selCtx); err != nil {
 		return nil, err
 	}
 
-	// Try Router-R1 LLM routing first if enabled
-	if r.config.EnableLLMRouting && r.routerR1Client != nil {
-		result, err := r.selectWithRouterR1(ctx, selCtx)
+	// Try LLM router decision prompting first if enabled.
+	if r.config.EnableLLMRouting && r.llmRouterClient != nil {
+		result, err := r.selectWithLLMRouter(ctx, selCtx)
 		if err == nil {
 			return result, nil
 		}
 		// Log the error and fall back
-		logging.Warnf("[RLDrivenSelector] Router-R1 LLM routing failed: %v, falling back to Thompson Sampling", err)
+		logging.Warnf("[RLDrivenSelector] LLM router routing failed: %v, falling back to Thompson Sampling", err)
 		if r.config.LLMRoutingFallback == "error" {
-			return nil, fmt.Errorf("Router-R1 LLM routing failed: %w", err)
+			return nil, fmt.Errorf("llm router routing failed: %w", err)
 		}
 	}
 
@@ -621,27 +644,32 @@ func (r *RLDrivenSelector) Select(ctx context.Context, selCtx *SelectionContext)
 	}, nil
 }
 
-// selectWithRouterR1 implements the Router-R1 LLM-as-Router approach
+// selectWithLLMRouter implements the LLM router decision approach.
 // This method uses an LLM to analyze the query and make intelligent routing decisions.
 // The LLM performs "think" (analyze query complexity, requirements) and "route"
 // (select the optimal model) actions as described in arXiv:2506.09033.
-// Requires external server: src/training/rl_model_selection/router_r1_server.py
-func (r *RLDrivenSelector) selectWithRouterR1(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
-	if r.routerR1Client == nil {
-		return nil, fmt.Errorf("Router-R1 client not initialized - set router_r1_server_url in config")
+// Requires external server: src/training/model_selection/rl_model_selection/router_r1_server.py
+func (r *RLDrivenSelector) selectWithLLMRouter(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
+	if r.llmRouterClient == nil {
+		return nil, fmt.Errorf("llm router client not initialized - set llm_router_server_url in config")
+	}
+	if r.llmRouterPromptErr != nil {
+		return nil, fmt.Errorf("llm router query template unavailable: %w", r.llmRouterPromptErr)
+	}
+	if r.llmRouterPromptRenderer == nil {
+		return nil, fmt.Errorf("llm router query renderer not initialized")
 	}
 
-	// Extract query from context - build a descriptive query including available models
-	modelNames := make([]string, 0, len(selCtx.CandidateModels))
-	for _, m := range selCtx.CandidateModels {
-		modelNames = append(modelNames, m.Model)
-	}
-	query := fmt.Sprintf("Task: %s\nAvailable models: %s", selCtx.DecisionName, strings.Join(modelNames, ", "))
-
-	// Call the Router-R1 LLM server
-	response, err := r.routerR1Client.Route(ctx, query)
+	// Render the query using the configured template and request-time context.
+	query, err := r.llmRouterPromptRenderer.Render(selCtx)
 	if err != nil {
-		return nil, fmt.Errorf("Router-R1 routing failed: %w", err)
+		return nil, fmt.Errorf("llm router query render failed: %w", err)
+	}
+
+	// Call the router server.
+	response, err := r.llmRouterClient.Route(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("llm router routing failed: %w", err)
 	}
 
 	// Validate that the selected model is in our candidate list
@@ -659,7 +687,7 @@ func (r *RLDrivenSelector) selectWithRouterR1(ctx context.Context, selCtx *Selec
 			if strings.Contains(selCtx.CandidateModels[i].Model, response.SelectedModel) ||
 				strings.Contains(response.SelectedModel, selCtx.CandidateModels[i].Model) {
 				selectedModel = &selCtx.CandidateModels[i]
-				logging.Warnf("[RLDrivenSelector] Router-R1 partial match: %s -> %s",
+				logging.Warnf("[RLDrivenSelector] LLM router partial match: %s -> %s",
 					response.SelectedModel, selectedModel.Model)
 				break
 			}
@@ -667,11 +695,11 @@ func (r *RLDrivenSelector) selectWithRouterR1(ctx context.Context, selCtx *Selec
 	}
 
 	if selectedModel == nil {
-		return nil, fmt.Errorf("Router-R1 selected invalid model: %s (not in candidates)", response.SelectedModel)
+		return nil, fmt.Errorf("llm router selected invalid model: %s (not in candidates)", response.SelectedModel)
 	}
 
 	// Build reasoning from LLM response
-	reasoning := fmt.Sprintf("Router-R1 LLM Analysis:\n%s\n\nDecision: %s",
+	reasoning := fmt.Sprintf("LLM router analysis:\n%s\n\nDecision: %s",
 		response.Thinking, response.SelectedModel)
 
 	// Increment selection count
@@ -679,7 +707,7 @@ func (r *RLDrivenSelector) selectWithRouterR1(ctx context.Context, selCtx *Selec
 	r.selectionCount++
 	r.countMu.Unlock()
 
-	logging.Infof("[RLDrivenSelector] Router-R1 selected %s (thinking: %s)",
+	logging.Infof("[RLDrivenSelector] LLM router selected %s (thinking: %s)",
 		selectedModel.Model, truncateString(response.Thinking, 100))
 
 	RecordRLSelection(selectedModel.Model, selCtx.DecisionName, selCtx.UserID, r.Tier(), 1.0)
@@ -710,7 +738,7 @@ type MultiRoundResult struct {
 	Reasoning      string             `json:"reasoning"`
 }
 
-// SelectMultiRound implements Router-R1 multi-round routing
+// SelectMultiRound implements multi-round routing
 // Instead of selecting a single model, it selects multiple models
 // to query in parallel, with responses to be aggregated.
 // This implements Section 3.3 of arXiv:2506.09033
@@ -778,7 +806,7 @@ func (r *RLDrivenSelector) SelectMultiRound(ctx context.Context, selCtx *Selecti
 }
 
 // AggregateResponses aggregates responses from multiple models
-// This implements the response aggregation from Router-R1
+// This implements the response aggregation strategy from Router-R1
 // Options: voting, confidence-weighted, best-of-n
 func (r *RLDrivenSelector) AggregateResponses(responses map[string]string, scores map[string]float64) (string, string, error) {
 	if len(responses) == 0 {

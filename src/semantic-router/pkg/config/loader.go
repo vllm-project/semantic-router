@@ -332,7 +332,7 @@ func rejectUnsupportedGlobalRouterLearningFields(raw map[string]interface{}) err
 	if err := rejectUnknownMapFields(
 		"global.router.learning.adaptation",
 		nestedStringMap(learning["adaptation"]),
-		[]string{"enabled", "candidate_set", "strategy"},
+		[]string{"enabled", "candidate_set", "strategy", "enable_llm_routing", "llm_router_server_url", "llm_router_query_template", "llm_router_query_template_file"},
 	); err != nil {
 		return err
 	}

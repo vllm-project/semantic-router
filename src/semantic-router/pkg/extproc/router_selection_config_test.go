@@ -49,7 +49,9 @@ func rlDrivenLearningDecision() config.Decision {
 				CostRewardAlpha:             0.3,
 				FormatRewardPenalty:         -0.75,
 				EnableLLMRouting:            true,
-				RouterR1ServerURL:           "http://router-r1:8080",
+				LLMRouterServerURL:          "http://router-r1:8080",
+				LLMRouterQueryTemplate:      "Decision: {{.decision_name}}",
+				LLMRouterQueryTemplateFile:  "/tmp/router-query.tmpl",
 				LLMRoutingFallback:          "error",
 				EnableMultiRoundAggregation: true,
 				MaxAggregationRounds:        4,
@@ -234,7 +236,9 @@ func assertRLDrivenLearningConfig(t *testing.T, got *selection.RLDrivenConfig) {
 	})
 	assertString(t, got.StoragePath, "/var/lib/vsr/rl_state.json", "rl_driven.storage_path")
 	assertString(t, got.AutoSaveInterval, "45s", "rl_driven.auto_save_interval")
-	assertString(t, got.RouterR1ServerURL, "http://router-r1:8080", "rl_driven.router_r1_server_url")
+	assertString(t, got.LLMRouterServerURL, "http://router-r1:8080", "rl_driven.llm_router_server_url")
+	assertString(t, got.LLMRouterQueryTemplate, "Decision: {{.decision_name}}", "rl_driven.llm_router_query_template")
+	assertString(t, got.LLMRouterQueryTemplateFile, "/tmp/router-query.tmpl", "rl_driven.llm_router_query_template_file")
 	assertString(t, got.LLMRoutingFallback, "error", "rl_driven.llm_routing_fallback")
 	assertInt(t, got.MaxAggregationRounds, 4, "rl_driven.max_aggregation_rounds")
 }
