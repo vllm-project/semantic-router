@@ -68,9 +68,10 @@ func putSearchBuffers(buf *searchBuffers) {
 type HybridCache struct {
 	SimilarityTracker // embedded — provides LastSimilarity()
 	// In-memory components (search only)
-	hnswIndex  *HNSWIndex
-	embeddings [][]float32
-	idMap      map[int]string // Entry index → Milvus ID
+	hnswIndex        *HNSWIndex
+	embeddings       [][]float32
+	idMap            map[int]string // Entry index → Milvus ID
+	hnswNeedsRebuild bool           // true while the HNSW graph is stale after an eviction (rebuilt on next add)
 
 	// External storage (all documents)
 	milvusCache *MilvusCache
@@ -294,11 +295,12 @@ func (h *HybridCache) RebuildFromMilvus(ctx context.Context) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Clear existing index
+	// Clear existing index (full rebuild from scratch satisfies any deferred rebuild).
 	loadLimit := min(len(embeddings), h.maxMemoryEntries)
 	h.embeddings = make([][]float32, 0, loadLimit)
 	h.idMap = make(map[int]string, loadLimit)
 	h.hnswIndex = newHNSWIndex(h.hnswIndex.M, h.hnswIndex.efConstruction)
+	h.hnswNeedsRebuild = false
 
 	// Rebuild HNSW index with progress logging
 	batchSize := 1000
@@ -400,7 +402,7 @@ func (h *HybridCache) AddPendingRequest(requestID string, model string, query st
 	entryIndex := len(h.embeddings)
 	h.embeddings = append(h.embeddings, embedding)
 	h.idMap[entryIndex] = requestID
-	h.addNodeHybrid(entryIndex, embedding)
+	h.addNodeHybridOrRebuild(entryIndex, embedding)
 
 	logging.Debugf("HybridCache.AddPendingRequest: added to HNSW index=%d, milvusID=%s, ttl=%d",
 		entryIndex, requestID, ttlSeconds)
@@ -473,7 +475,7 @@ func (h *HybridCache) AddEntry(requestID string, model string, query string, req
 	entryIndex := len(h.embeddings)
 	h.embeddings = append(h.embeddings, embedding)
 	h.idMap[entryIndex] = requestID
-	h.addNodeHybrid(entryIndex, embedding)
+	h.addNodeHybridOrRebuild(entryIndex, embedding)
 
 	logging.Debugf("HybridCache.AddEntry: added to HNSW index=%d, milvusID=%s, ttl=%d",
 		entryIndex, requestID, ttlSeconds)
@@ -535,7 +537,7 @@ func (h *HybridCache) AddEntriesBatch(entries []CacheEntry) error {
 		entryIndex := len(h.embeddings)
 		h.embeddings = append(h.embeddings, embeddings[i])
 		h.idMap[entryIndex] = entry.RequestID
-		h.addNodeHybrid(entryIndex, embeddings[i])
+		h.addNodeHybridOrRebuild(entryIndex, embeddings[i])
 	}
 
 	elapsed := time.Since(start)
@@ -645,7 +647,9 @@ func (h *HybridCache) evictOneUnsafe() {
 	}
 	h.idMap = newIDMap
 
-	// Mark HNSW index as stale (needs rebuild with new indices)
+	// Eviction shifts every entry index down, so the whole graph is stale. Mark
+	// for rebuild and defer it to the next add. Mirrors InMemoryCache.evictOne.
+	h.hnswNeedsRebuild = true
 	h.hnswIndex.markStale()
 
 	atomic.AddInt64(&h.evictCount, 1)
@@ -659,4 +663,35 @@ func (h *HybridCache) evictOneUnsafe() {
 		"new_size":    len(h.embeddings),
 		"max_entries": h.maxMemoryEntries,
 	})
+}
+
+// addNodeHybridOrRebuild indexes the new entry, or rebuilds the whole graph if a
+// prior eviction left it stale. Without the rebuild the graph keeps only the last
+// node after eviction, degrading the cache to ~100% misses at capacity.
+// Caller must hold a write lock. Mirrors InMemoryCache.addEntryToHNSWIndex.
+func (h *HybridCache) addNodeHybridOrRebuild(entryIndex int, embedding []float32) {
+	if h.hnswNeedsRebuild {
+		h.rebuildHNSWFromEmbeddings()
+		return
+	}
+	h.addNodeHybrid(entryIndex, embedding)
+}
+
+// rebuildHNSWFromEmbeddings rebuilds the graph from the embeddings slice, reusing
+// the existing index parameters. Caller must hold a write lock. Mirrors
+// InMemoryCache.rebuildHNSWIndex but sources vectors from embeddings, not entries.
+func (h *HybridCache) rebuildHNSWFromEmbeddings() {
+	h.hnswIndex.nodes = []*HNSWNode{}
+	h.hnswIndex.nodeIndex = make(map[int]*HNSWNode)
+	h.hnswIndex.entryPoint = -1
+	h.hnswIndex.maxLayer = -1
+
+	for i, embedding := range h.embeddings {
+		if len(embedding) > 0 {
+			h.addNodeHybrid(i, embedding)
+		}
+	}
+
+	h.hnswNeedsRebuild = false
+	logging.Debugf("HybridCache: HNSW index rebuilt with %d nodes", len(h.hnswIndex.nodes))
 }
