@@ -127,7 +127,7 @@ def test_routing_sampling_py_seed_weight_warm_start():
 def test_paired_bootstrap_ci_zero_mean_includes_zero():
     deltas = [-1.0, 1.0, -0.5, 0.5] * 10
     mean, lo, _hi = metrics.paired_bootstrap_ci(deltas, iters=2000, seed=0)
-    assert lo < 0 < hi
+    assert lo < 0 < _hi
     assert abs(mean) < 0.2
 
 
