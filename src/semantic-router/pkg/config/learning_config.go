@@ -25,6 +25,16 @@ const (
 
 	// RouterLearningStrategyRoutingSampling is the default online model-choice algorithm.
 	RouterLearningStrategyRoutingSampling = "routing_sampling"
+	// RouterLearningStrategyLinUCB is the LinUCB contextual bandit strategy
+	// (Li et al. 2010, "A Contextual-Bandit Approach to Personalized News
+	// Article Recommendation"). #2238 §"Confirmed API Direction" lists this
+	// as the day-0 default; this constant lets a deployment opt in.
+	RouterLearningStrategyLinUCB = "linucb"
+	// RouterLearningStrategyLinearThompson is the linear Thompson Sampling
+	// strategy (Agrawal & Goyal 2013, "Thompson Sampling for Contextual
+	// Bandits with Linear Payoffs"). It shares the matrix backend with LinUCB
+	// and replaces the deterministic UCB bonus with a posterior sample.
+	RouterLearningStrategyLinearThompson = "linear_thompson"
 )
 
 const (
@@ -43,9 +53,39 @@ type RouterLearningConfig struct {
 
 // RouterLearningAdaptationConfig configures online model-choice learning.
 type RouterLearningAdaptationConfig struct {
-	Enabled      *bool  `yaml:"enabled,omitempty"`
-	CandidateSet string `yaml:"candidate_set,omitempty"`
-	Strategy     string `yaml:"strategy,omitempty"`
+	Enabled        *bool                               `yaml:"enabled,omitempty"`
+	CandidateSet   string                              `yaml:"candidate_set,omitempty"`
+	Strategy       string                              `yaml:"strategy,omitempty"`
+	LinUCB         *RouterLearningLinUCBConfig         `yaml:"linucb,omitempty"`
+	LinearThompson *RouterLearningLinearThompsonConfig `yaml:"linear_thompson,omitempty"`
+}
+
+// RouterLearningLinUCBConfig configures the LinUCB contextual bandit strategy.
+//
+// Defaults track the day-0 commitment in #2238: dim=64 features, alpha=1.0
+// exploration, ridge regularization 1.0. Operators tune only when telemetry
+// shows the defaults regress on a specific decision family.
+type RouterLearningLinUCBConfig struct {
+	// Dim is the feature dimension. Default 64. Must be in [4, 256].
+	Dim *int `yaml:"dim,omitempty"`
+	// Alpha is the exploration multiplier on the UCB bonus
+	// sqrt(x^T A^{-1} x). Default 1.0. Must be in [0, 10].
+	Alpha *float64 `yaml:"alpha,omitempty"`
+	// Lambda is the ridge regularization strength on A's prior.
+	// Default 1.0. Must be in (0, 100].
+	Lambda *float64 `yaml:"lambda,omitempty"`
+}
+
+// RouterLearningLinearThompsonConfig configures the Linear Thompson Sampling
+// strategy. Shares the matrix backend with LinUCB.
+type RouterLearningLinearThompsonConfig struct {
+	// Dim is the feature dimension. Default 64. Must be in [4, 256].
+	Dim *int `yaml:"dim,omitempty"`
+	// Sigma is the posterior noise scale. Default 0.5. Must be in [0, 5].
+	Sigma *float64 `yaml:"sigma,omitempty"`
+	// Lambda is the ridge regularization strength on A's prior.
+	// Default 1.0. Must be in (0, 100].
+	Lambda *float64 `yaml:"lambda,omitempty"`
 }
 
 // RouterLearningProtectionConfig configures online stability protection.
@@ -119,6 +159,66 @@ func (cfg RouterLearningAdaptationConfig) EffectiveStrategy() string {
 		return RouterLearningStrategyRoutingSampling
 	}
 	return cfg.Strategy
+}
+
+// LinUCB defaults — kept here so they have one canonical home and the
+// validator and runtime apply identical fallbacks.
+const (
+	defaultLinUCBDim    = 64
+	defaultLinUCBAlpha  = 1.0
+	defaultLinUCBLambda = 1.0
+	maxLinUCBDim        = 256
+	minLinUCBDim        = 4
+	maxLinUCBAlpha      = 10.0
+	maxLinUCBLambda     = 100.0
+)
+
+func (cfg RouterLearningLinUCBConfig) EffectiveDim() int {
+	if cfg.Dim != nil && *cfg.Dim > 0 {
+		return *cfg.Dim
+	}
+	return defaultLinUCBDim
+}
+
+func (cfg RouterLearningLinUCBConfig) EffectiveAlpha() float64 {
+	if cfg.Alpha != nil && *cfg.Alpha >= 0 {
+		return *cfg.Alpha
+	}
+	return defaultLinUCBAlpha
+}
+
+func (cfg RouterLearningLinUCBConfig) EffectiveLambda() float64 {
+	if cfg.Lambda != nil && *cfg.Lambda > 0 {
+		return *cfg.Lambda
+	}
+	return defaultLinUCBLambda
+}
+
+// Linear Thompson defaults.
+const (
+	defaultLinearThompsonSigma = 0.5
+	maxLinearThompsonSigma     = 5.0
+)
+
+func (cfg RouterLearningLinearThompsonConfig) EffectiveDim() int {
+	if cfg.Dim != nil && *cfg.Dim > 0 {
+		return *cfg.Dim
+	}
+	return defaultLinUCBDim
+}
+
+func (cfg RouterLearningLinearThompsonConfig) EffectiveSigma() float64 {
+	if cfg.Sigma != nil && *cfg.Sigma >= 0 {
+		return *cfg.Sigma
+	}
+	return defaultLinearThompsonSigma
+}
+
+func (cfg RouterLearningLinearThompsonConfig) EffectiveLambda() float64 {
+	if cfg.Lambda != nil && *cfg.Lambda > 0 {
+		return *cfg.Lambda
+	}
+	return defaultLinUCBLambda
 }
 
 func (cfg RouterLearningProtectionConfig) EffectiveEnabled() bool {
