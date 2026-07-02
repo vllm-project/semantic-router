@@ -203,6 +203,17 @@ func TestLearningMatrixGoldenLinUCB(t *testing.T) {
 
 func TestLearningMatrixCholeskyRoundTrip(t *testing.T) {
 	const dim = 4
+	a := buildSPDTestMatrix(dim)
+	chol, err := cholesky(a, dim)
+	if err != nil {
+		t.Fatalf("cholesky: %v", err)
+	}
+	verifyCholeskyFactor(t, a, chol, dim)
+	inv := choleskyInverse(chol, dim)
+	verifyMatrixInverse(t, a, inv, dim)
+}
+
+func buildSPDTestMatrix(dim int) []float64 {
 	rng := rand.New(rand.NewSource(17))
 	a := make([]float64, dim*dim)
 	for i := 0; i < dim; i++ {
@@ -219,11 +230,11 @@ func TestLearningMatrixCholeskyRoundTrip(t *testing.T) {
 			}
 		}
 	}
-	chol, err := cholesky(a, dim)
-	if err != nil {
-		t.Fatalf("cholesky: %v", err)
-	}
-	// Verify L L^T = A.
+	return a
+}
+
+func verifyCholeskyFactor(t *testing.T, a, chol []float64, dim int) {
+	t.Helper()
 	for i := 0; i < dim; i++ {
 		for j := 0; j < dim; j++ {
 			var s float64
@@ -235,8 +246,10 @@ func TestLearningMatrixCholeskyRoundTrip(t *testing.T) {
 			}
 		}
 	}
-	inv := choleskyInverse(chol, dim)
-	// Verify A · inv == I.
+}
+
+func verifyMatrixInverse(t *testing.T, a, inv []float64, dim int) {
+	t.Helper()
 	for i := 0; i < dim; i++ {
 		for j := 0; j < dim; j++ {
 			var s float64

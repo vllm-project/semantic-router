@@ -44,55 +44,7 @@ func extractContextFeatures(selCtx *selection.SelectionContext, dim int) []float
 		return x
 	}
 	tokens := tokenizeQueryForFeatures(query)
-
-	// --- hand-rolled signal slots (first 8 dims, leave them zero if dim<8) ---
-
-	if dim >= 1 {
-		// Length bucket: log-scaled, normalised to roughly [0,1].
-		x[0] = clamp01(math.Log1p(float64(len(query))) / math.Log(2048))
-	}
-	if dim >= 2 {
-		// Question form.
-		if strings.Contains(query, "?") {
-			x[1] = 1
-		}
-	}
-	if dim >= 3 {
-		// Code-ish content hint.
-		if hasCodeHint(query) {
-			x[2] = 1
-		}
-	}
-	if dim >= 4 {
-		// Math-ish content hint.
-		if hasMathHint(query) {
-			x[3] = 1
-		}
-	}
-	if dim >= 5 {
-		// Token-count bucket (separate from char length).
-		x[4] = clamp01(math.Log1p(float64(len(tokens))) / math.Log(512))
-	}
-	if dim >= 6 {
-		// Whether the request carries a session — this is a coarse "are
-		// we in a multi-turn agentic flow" signal that often correlates
-		// with which model is preferred.
-		if selCtx.SessionID != "" {
-			x[5] = 1
-		}
-	}
-	if dim >= 7 {
-		// Decision tier as a normalised float (capped at 5 = exotic).
-		// The tier comes via DecisionName context elsewhere; we read what
-		// we have on the public selection context.
-		if selCtx.DecisionName != "" {
-			x[6] = 1
-		}
-	}
-	if dim >= 8 {
-		// Lowercase ratio — proxy for natural-language vs code-heavy.
-		x[7] = clamp01(lowercaseRatio(query))
-	}
+	fillHandRolledSignals(x, dim, query, tokens, selCtx)
 
 	// --- hashed token-bigram projection into the remaining dims ---
 
@@ -164,6 +116,33 @@ func l2NormaliseInPlace(values []float64) {
 	scale := 1.0 / math.Sqrt(norm)
 	for i := range values {
 		values[i] *= scale
+	}
+}
+
+func fillHandRolledSignals(x []float64, dim int, query string, tokens []string, selCtx *selection.SelectionContext) {
+	if dim >= 1 {
+		x[0] = clamp01(math.Log1p(float64(len(query))) / math.Log(2048))
+	}
+	if dim >= 2 && strings.Contains(query, "?") {
+		x[1] = 1
+	}
+	if dim >= 3 && hasCodeHint(query) {
+		x[2] = 1
+	}
+	if dim >= 4 && hasMathHint(query) {
+		x[3] = 1
+	}
+	if dim >= 5 {
+		x[4] = clamp01(math.Log1p(float64(len(tokens))) / math.Log(512))
+	}
+	if dim >= 6 && selCtx.SessionID != "" {
+		x[5] = 1
+	}
+	if dim >= 7 && selCtx.DecisionName != "" {
+		x[6] = 1
+	}
+	if dim >= 8 {
+		x[7] = clamp01(lowercaseRatio(query))
 	}
 }
 

@@ -45,9 +45,7 @@ func (r *OpenAIRouter) applyLinearThompsonAdaptation(
 	preflight routerLearningProtectionPreflight,
 	cfg config.RouterLearningAdaptationConfig,
 ) routerLearningDecision {
-	mode := adaptationMode(input.ctx)
-	candidateSet := cfg.EffectiveCandidateSet()
-	strategyName := cfg.EffectiveStrategy()
+	mode, candidateSet, strategyName := adaptationMode(input.ctx), cfg.EffectiveCandidateSet(), cfg.EffectiveStrategy()
 	if mode == config.DecisionAdaptationModeBypass {
 		return baseAdaptationDecision(input, adaptationPolicy(mode, routerLearningActionBypass, "decision_bypass", nil))
 	}
@@ -61,9 +59,7 @@ func (r *OpenAIRouter) applyLinearThompsonAdaptation(
 	if cfg.LinearThompson != nil {
 		tsCfg = *cfg.LinearThompson
 	}
-	dim := tsCfg.EffectiveDim()
-	sigma := tsCfg.EffectiveSigma()
-	lambda := tsCfg.EffectiveLambda()
+	dim, sigma, lambda := tsCfg.EffectiveDim(), tsCfg.EffectiveSigma(), tsCfg.EffectiveLambda()
 	usedSampling := adaptationSamplingAllowed(mode, preflight)
 
 	state := r.routerLearningRuntimeState().contextualState(strategyName, dim, lambda)
@@ -135,24 +131,7 @@ func (r *OpenAIRouter) scoreLinearThompsonCandidates(
 		if model == "" {
 			continue
 		}
-		mean := 0.0
-		predicted := 0.0
-		if len(x) == state.dimension() {
-			arm := state.arm(contextualBanditKey(strategyName, selCtx.DecisionName, tier, model))
-			if arm != nil {
-				mean = arm.dotTheta(x)
-				thetaTilde := arm.sampleTheta(sigma, rng)
-				if len(thetaTilde) == len(x) {
-					var dot float64
-					for i, v := range x {
-						dot += v * thetaTilde[i]
-					}
-					predicted = dot
-				} else {
-					predicted = mean
-				}
-			}
-		}
+		mean, predicted := linearThompsonScore(state, strategyName, selCtx.DecisionName, tier, model, x, sigma, rng)
 		exp := r.routerLearningRuntimeState().experienceSnapshot(selCtx.DecisionName, tier, model)
 		costPenalty := r.costPenalty(model, maxCost, candidateSet) +
 			0.03*clamp01(exp.InputCostMultiplierEWMA)
@@ -184,4 +163,36 @@ func (r *OpenAIRouter) scoreLinearThompsonCandidates(
 		return scores[i].score > scores[j].score
 	})
 	return scores
+}
+
+// linearThompsonScore computes the posterior mean and Thompson-sampled
+// predicted quality for a single candidate model. Extracted as a helper
+// to keep scoreLinearThompsonCandidates below the cognitive-complexity
+// threshold.
+func linearThompsonScore(
+	state *routerLearningContextualState,
+	strategyName, decisionName string,
+	tier int,
+	model string,
+	x []float64,
+	sigma float64,
+	rng *rand.Rand,
+) (mean, predicted float64) {
+	if x == nil || state == nil || len(x) != state.dimension() {
+		return 0, 0
+	}
+	arm := state.arm(contextualBanditKey(strategyName, decisionName, tier, model))
+	if arm == nil {
+		return 0, 0
+	}
+	mean = arm.dotTheta(x)
+	thetaTilde := arm.sampleTheta(sigma, rng)
+	if len(thetaTilde) != len(x) {
+		return mean, mean
+	}
+	var dot float64
+	for i, v := range x {
+		dot += v * thetaTilde[i]
+	}
+	return mean, dot
 }
