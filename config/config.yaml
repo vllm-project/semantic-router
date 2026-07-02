@@ -340,6 +340,7 @@ routing:
 
     complexity:
       - name: needs_reasoning
+        method: embedding
         threshold: 0.75
         description: Escalate multi-step reasoning or synthesis-heavy prompts.
         hard:
@@ -2151,6 +2152,10 @@ global:
           best_weight: 0.75
           top_m: 2
           margin_threshold: 0.0
+        # Optional trained classifier for complexity rules with method: model.
+        # Set model_id (HF repo or local path) + complexity_mapping_path to enable; inert by default.
+        classifier:
+          threshold: 0.6
       hallucination_mitigation:
         enabled: true
         on_hallucination_detected: annotate

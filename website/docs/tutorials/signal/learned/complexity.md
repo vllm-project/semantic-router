@@ -63,3 +63,48 @@ routing:
 ```
 
 Use `complexity` with representative hard and easy examples so the learned boundary matches your real routing cost profile. `prototype_scoring` is a family-level config under `global.model_catalog.modules.complexity`, so every complexity rule shares the same prototype-bank construction and label-scoring policy. Each rule still builds separate hard and easy prototype banks before computing the hard-vs-easy margin.
+
+## Trained Classifier Mode (`method: model`)
+
+By default a complexity rule is decided by the embedding-similarity path above. A rule can instead be decided by a fine-tuned **3-class text classifier** (`easy`/`medium`/`hard`) by setting `method: model`. This mirrors how the [Jailbreak](./jailbreak) signal supports both a trained model and a contrastive path: the choice is per rule, and both modes emit the same `rule:difficulty` output, so decisions and projections are unchanged.
+
+Set `method: model` on the rule and bind the model under `global.model_catalog`:
+
+```yaml
+global:
+  model_catalog:
+    modules:
+      complexity:
+        # prototype_scoring still applies to embedding-mode rules.
+        classifier:
+          model_id: your-org/complexity-classifier # HF repo id or local path
+          threshold: 0.6 # confidence floor (see below)
+          use_cpu: false
+          # class-index -> difficulty mapping (required for model mode)
+          complexity_mapping_path: models/complexity-classifier/complexity_mapping.json
+routing:
+  signals:
+    complexity:
+      - name: needs_reasoning
+        method: model
+        threshold: 0.6
+        description: Escalate hard prompts using the trained complexity classifier.
+```
+
+The mapping file maps the model's class indices to difficulty labels. Several naming conventions are accepted, so a checkpoint's existing mapping file can be used directly — `idx_to_label`/`label_to_idx`, HuggingFace `id_to_label`/`label_to_id`, and the category-classifier convention `idx_to_category`/`category_to_idx` (the format shipped in `category_mapping.json` alongside merged classifier checkpoints):
+
+```json
+{ "idx_to_category": { "0": "easy", "1": "hard", "2": "medium" } }
+```
+
+How it works:
+
+- The classifier runs once per request and predicts the top difficulty class plus a confidence.
+- The rule reports `name:<difficulty>` using the predicted class label.
+- `threshold` is a **confidence floor**: when the top-class confidence is below it, the rule reports the neutral `medium` band instead (a threshold of `0` always reports the predicted class). This matches the embedding path's neutral-band semantics.
+
+Notes:
+
+- Model mode is **text-only**; image/multimodal fusion remains an embedding-mode capability.
+- You can mix modes: some complexity rules can use `method: model` while others stay on the default embedding path.
+- If a rule sets `method: model` but no classifier is configured under `modules.complexity.classifier`, the rule is inert (a startup warning is logged).

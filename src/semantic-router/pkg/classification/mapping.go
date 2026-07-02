@@ -30,6 +30,24 @@ type JailbreakMapping struct {
 	IDToLabel map[string]string `json:"id_to_label"`
 }
 
+// ComplexityMapping holds the mapping between class indices and difficulty labels
+// (e.g. easy/medium/hard) for the trained complexity classifier. It accepts several
+// common naming conventions so a model's existing mapping file can be used directly:
+//   - label_to_idx / idx_to_label (router convention)
+//   - label_to_id / id_to_label (HuggingFace config convention)
+//   - category_to_idx / idx_to_category (category-classifier mapping convention,
+//     e.g. category_mapping.json shipped alongside merged classifier checkpoints)
+type ComplexityMapping struct {
+	LabelToIdx map[string]int    `json:"label_to_idx"`
+	IdxToLabel map[string]string `json:"idx_to_label"`
+	// Alternative naming (for HuggingFace compatibility)
+	LabelToID map[string]int    `json:"label_to_id"`
+	IDToLabel map[string]string `json:"id_to_label"`
+	// Alternative naming (category-classifier mapping convention)
+	CategoryToIdx map[string]int    `json:"category_to_idx"`
+	IdxToCategory map[string]string `json:"idx_to_category"`
+}
+
 // LoadCategoryMapping loads the category mapping from a JSON file
 func LoadCategoryMapping(path string) (*CategoryMapping, error) {
 	// Read the mapping file
@@ -89,6 +107,45 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 	}
 
 	return &mapping, nil
+}
+
+// LoadComplexityMapping loads the complexity difficulty mapping from a JSON file.
+// Supports both label_to_idx/idx_to_label and label_to_id/id_to_label formats.
+func LoadComplexityMapping(path string) (*ComplexityMapping, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read complexity mapping file: %w", err)
+	}
+
+	var mapping ComplexityMapping
+	if err := json.Unmarshal(data, &mapping); err != nil {
+		return nil, fmt.Errorf("failed to parse complexity mapping JSON: %w", err)
+	}
+
+	// If the canonical fields are empty but an alternative naming convention is
+	// populated, copy it into the canonical fields for internal use.
+	if len(mapping.LabelToIdx) == 0 {
+		if len(mapping.LabelToID) > 0 {
+			mapping.LabelToIdx = mapping.LabelToID
+		} else if len(mapping.CategoryToIdx) > 0 {
+			mapping.LabelToIdx = mapping.CategoryToIdx
+		}
+	}
+	if len(mapping.IdxToLabel) == 0 {
+		if len(mapping.IDToLabel) > 0 {
+			mapping.IdxToLabel = mapping.IDToLabel
+		} else if len(mapping.IdxToCategory) > 0 {
+			mapping.IdxToLabel = mapping.IdxToCategory
+		}
+	}
+
+	return &mapping, nil
+}
+
+// GetDifficultyFromIndex converts a class index to a difficulty label using the mapping.
+func (cm *ComplexityMapping) GetDifficultyFromIndex(classIndex int) (string, bool) {
+	label, ok := cm.IdxToLabel[fmt.Sprintf("%d", classIndex)]
+	return label, ok
 }
 
 // GetCategoryFromIndex converts a class index to category name using the mapping

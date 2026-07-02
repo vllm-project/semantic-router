@@ -170,7 +170,19 @@ func (c PreferenceModelConfig) ContrastiveEnabled() bool {
 }
 
 type ComplexityModelConfig struct {
-	PrototypeScoring PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
+	PrototypeScoring PrototypeScoringConfig          `yaml:"prototype_scoring,omitempty"`
+	Classifier       ComplexityClassifierModelConfig `yaml:"classifier,omitempty"`
+}
+
+// ComplexityClassifierModelConfig configures the trained ModernBERT complexity
+// classifier used by complexity rules with method "model". The model predicts a
+// difficulty class whose index is mapped to a label (e.g. easy/medium/hard) via
+// ComplexityMappingPath. ModelID is a HuggingFace repo id or local path.
+type ComplexityClassifierModelConfig struct {
+	ModelID               string  `yaml:"model_id,omitempty"`
+	Threshold             float32 `yaml:"threshold,omitempty"`
+	UseCPU                bool    `yaml:"use_cpu,omitempty"`
+	ComplexityMappingPath string  `yaml:"complexity_mapping_path,omitempty"`
 }
 
 func (c ComplexityModelConfig) WithDefaults() ComplexityModelConfig {
