@@ -59,27 +59,26 @@ func RecordTransition(evt ModelTransitionEvent) {
 	globalTransitionStore.events[evt.SessionID] = list
 }
 
-// evictOldestLocked removes the session whose most recent transition event is
-// the oldest, bounding the session map. It is a best-effort safety valve for the
+// evictOldestLocked evicts the session whose most recent transition event is the
+// oldest among a bounded random sample (approximate LRU — see
+// evictionSampleSize), bounding the session map. Best-effort safety valve for the
 // size cap. Callers must hold mu.
 func (s *transitionStore) evictOldestLocked() {
 	var oldestKey string
 	var oldestSeen time.Time
-	first := true
+	sampled := 0
 	for k, list := range s.events {
-		if len(list) == 0 {
-			// An entry with no events is the stalest possible; evict it.
-			oldestKey = k
+		// RecordTransition always stores at least one event per key.
+		last := list[len(list)-1].Timestamp
+		if sampled == 0 || last.Before(oldestSeen) {
+			oldestKey, oldestSeen = k, last
+		}
+		sampled++
+		if sampled >= evictionSampleSize {
 			break
 		}
-		last := list[len(list)-1].Timestamp
-		if first || last.Before(oldestSeen) {
-			oldestKey = k
-			oldestSeen = last
-			first = false
-		}
 	}
-	if oldestKey != "" {
+	if sampled > 0 {
 		delete(s.events, oldestKey)
 	}
 }

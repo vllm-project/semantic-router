@@ -256,21 +256,23 @@ func (s *routerSessionMemoryStore) evictExpiredLocked(now time.Time) {
 	}
 }
 
-// evictOldestLocked removes the single least-recently-seen session. It is a
-// best-effort safety valve for the size cap when TTL eviction did not free room.
-// Callers must hold s.mu.
+// evictOldestLocked evicts the oldest session among a bounded random sample
+// (approximate LRU — see evictionSampleSize). It is a best-effort safety valve
+// for the size cap when TTL eviction did not free room. Callers must hold s.mu.
 func (s *routerSessionMemoryStore) evictOldestLocked() {
 	var oldestKey string
 	var oldestSeen time.Time
-	first := true
+	sampled := 0
 	for k, v := range s.sessions {
-		if first || v.lastSeen.Before(oldestSeen) {
-			oldestKey = k
-			oldestSeen = v.lastSeen
-			first = false
+		if sampled == 0 || v.lastSeen.Before(oldestSeen) {
+			oldestKey, oldestSeen = k, v.lastSeen
+		}
+		sampled++
+		if sampled >= evictionSampleSize {
+			break
 		}
 	}
-	if oldestKey != "" {
+	if sampled > 0 {
 		delete(s.sessions, oldestKey)
 	}
 }

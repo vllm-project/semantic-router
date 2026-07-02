@@ -73,21 +73,24 @@ func evictLocked(t time.Time) {
 	}
 }
 
-// evictOldestLocked removes the single least-recently-seen session. It is a
-// best-effort safety valve for the size cap when the throttled TTL sweep has not
-// freed room. Callers must hold mu.
+// evictOldestLocked evicts the oldest session among a bounded random sample
+// (approximate LRU — see evictionSampleSize). It is a best-effort safety valve
+// for the size cap when the throttled TTL sweep has not freed room. Callers must
+// hold mu.
 func evictOldestLocked() {
 	var oldestKey string
 	var oldestSeen time.Time
-	first := true
+	sampled := 0
 	for k, v := range store {
-		if first || v.lastSeen.Before(oldestSeen) {
-			oldestKey = k
-			oldestSeen = v.lastSeen
-			first = false
+		if sampled == 0 || v.lastSeen.Before(oldestSeen) {
+			oldestKey, oldestSeen = k, v.lastSeen
+		}
+		sampled++
+		if sampled >= evictionSampleSize {
+			break
 		}
 	}
-	if oldestKey != "" {
+	if sampled > 0 {
 		delete(store, oldestKey)
 	}
 }
