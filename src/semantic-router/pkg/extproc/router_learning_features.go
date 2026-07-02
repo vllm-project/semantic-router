@@ -120,6 +120,11 @@ func l2NormaliseInPlace(values []float64) {
 }
 
 func fillHandRolledSignals(x []float64, dim int, query string, tokens []string, selCtx *selection.SelectionContext) {
+	fillBasicSignals(x, dim, query)
+	fillContextSignals(x, dim, query, tokens, selCtx)
+}
+
+func fillBasicSignals(x []float64, dim int, query string) {
 	if dim >= 1 {
 		x[0] = clamp01(math.Log1p(float64(len(query))) / math.Log(2048))
 	}
@@ -132,6 +137,9 @@ func fillHandRolledSignals(x []float64, dim int, query string, tokens []string, 
 	if dim >= 4 && hasMathHint(query) {
 		x[3] = 1
 	}
+}
+
+func fillContextSignals(x []float64, dim int, query string, tokens []string, selCtx *selection.SelectionContext) {
 	if dim >= 5 {
 		x[4] = clamp01(math.Log1p(float64(len(tokens))) / math.Log(512))
 	}
