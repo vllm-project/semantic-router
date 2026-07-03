@@ -86,6 +86,10 @@ providers:
           protocol: http
           weight: 100
           api_key_env: OPENAI_API_KEY
+          # Optional, default false. When true the router forwards the caller's
+          # inbound Authorization header verbatim to this backend and ignores
+          # api_key/api_key_env; requests without an Authorization header get 401.
+          forward_authorization_header: false
 
 routing:
   modelCards:
