@@ -4,6 +4,10 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 DASHBOARD_DOCKERFILE = REPO_ROOT / "dashboard" / "backend" / "Dockerfile"
 VLLM_SR_DOCKERFILE = REPO_ROOT / "src" / "vllm-sr" / "Dockerfile"
 VLLM_SR_ROCM_DOCKERFILE = REPO_ROOT / "src" / "vllm-sr" / "Dockerfile.rocm"
+VLLM_SR_CUDA_DOCKERFILE = REPO_ROOT / "src" / "vllm-sr" / "Dockerfile.cuda"
+VLLM_SR_CUDA_DOCKERIGNORE = (
+    REPO_ROOT / "src" / "vllm-sr" / "Dockerfile.cuda.dockerignore"
+)
 EXTPROC_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc"
 EXTPROC_ROCM_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc-rocm"
 
@@ -96,6 +100,43 @@ def test_vllm_sr_rocm_dockerfile_stays_router_only() -> None:
     assert "COPY src/vllm-sr/start-dashboard.sh" not in content
     assert "COPY dashboard/backend/config/openclaw-skills.json" not in content
     assert "COPY src/training/model_eval/" not in content
+
+
+def test_vllm_sr_cuda_dockerfile_stays_router_only() -> None:
+    content = VLLM_SR_CUDA_DOCKERFILE.read_text(encoding="utf-8")
+
+    assert "FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04" in content
+    assert "onnxruntime-gpu==1.22.0" in content
+    assert "ENV AI_BINDING=onnx" in content
+    assert 'ENTRYPOINT ["/app/start-router.sh"]' in content
+    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
+    assert (
+        "COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go /build/../nlp-binding/"
+        in content
+    )
+    assert (
+        "COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go ./"
+        not in content
+    )
+    assert "COPY --from=dashboard-builder" not in content
+    assert "COPY --from=frontend-builder" not in content
+    assert "COPY --from=wizmap-builder" not in content
+    assert "COPY src/vllm-sr/start-dashboard.sh" not in content
+    assert "COPY dashboard/backend/config/openclaw-skills.json" not in content
+    assert "COPY src/training/model_eval/" not in content
+
+
+def test_vllm_sr_cuda_dockerignore_excludes_runtime_state_and_large_unused_inputs() -> (
+    None
+):
+    content = VLLM_SR_CUDA_DOCKERIGNORE.read_text(encoding="utf-8")
+
+    assert "**/.vllm-sr/" in content
+    assert "**/milvus-data/" in content
+    assert "**/etcd/" in content
+    assert "**/postgres-data/" in content
+    assert "bench/" in content
+    assert "slides/" in content
 
 
 def test_extproc_dockerfile_copies_built_in_knowledge_bases() -> None:

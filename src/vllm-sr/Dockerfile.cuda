@@ -1,0 +1,393 @@
+# Multi-stage Dockerfile for vLLM Semantic Router (NVIDIA CUDA edition).
+# Builds an ONNX-backed router binary with CUDA dynamic loading enabled.
+# x86_64 only (CUDA runtime not relevant for arm64 servers in this profile).
+#
+# This file mirrors Dockerfile.rocm point-by-point. See header comments in each
+# stage for the ROCm -> CUDA mapping decisions. Only diverges where the
+# accelerator runtime / wheel / feature flag differs.
+#
+# NOTE: candle-binding is still built CPU-only here, identical to the ROCm
+# image. GPU acceleration is delivered via onnx-binding + ONNX Runtime CUDA
+# Execution Provider, which is the official upstream path documented in
+# `onnx-binding/Cargo.toml` (feature = "cuda"). Per upstream README, BERT-size
+# embedding inference is CPU/GPU equivalent for small batches; choose this
+# image only when you need GPU specifically (e.g. very large batches, or you
+# already have a GPU host for vLLM and want a single runtime stack).
+ARG TARGETARCH
+ARG BUILDPLATFORM
+ARG GIT_SSL_NO_VERIFY=0
+ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bullseye
+ARG ONNX_RUST_RUNTIME_COMPAT_IMAGE=rust:1.90-bullseye
+ARG GO_RUNTIME_COMPAT_IMAGE=golang:1.24-bullseye
+
+# Stage 1: Build Rust candle-binding (CPU-only, cross-compiled for TARGETARCH)
+# Identical to Dockerfile / Dockerfile.rocm. candle does not expose ROCm and
+# only exposes CUDA via a feature that pulls in cudarc + flash-attn cuda
+# kernels, which is heavy and not what we want here -- we route GPU through
+# ONNX in Stage 1r below.
+FROM --platform=$BUILDPLATFORM ${RUST_RUNTIME_COMPAT_IMAGE} AS rust-builder
+ARG TARGETARCH
+ARG GIT_SSL_NO_VERIFY
+WORKDIR /build
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+      dpkg --add-architecture arm64 && \
+      apt-get update && apt-get install -y \
+        gcc-aarch64-linux-gnu \
+        g++-aarch64-linux-gnu \
+        libssl-dev:arm64 \
+        libssl-dev \
+        pkg-config && \
+      rm -rf /var/lib/apt/lists/* && \
+      rustup target add aarch64-unknown-linux-gnu; \
+    fi
+
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+ENV PKG_CONFIG_ALLOW_CROSS=1
+ENV PKG_CONFIG_PATH_aarch64_unknown_linux_gnu=/usr/lib/aarch64-linux-gnu/pkgconfig
+
+COPY candle-binding/Cargo.toml candle-binding/Cargo.loc[k] ./
+
+RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
+    mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu \
+      cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release --no-default-features; \
+    fi && \
+    rm -rf src
+
+COPY candle-binding/src/ ./src/
+COPY candle-binding/go.mod candle-binding/semantic-router.go ./
+
+RUN find target -name "libcandle_semantic_router.so" -delete 2>/dev/null; \
+    find target -name "libcandle_semantic_router.a" -delete 2>/dev/null; \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu \
+      cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release --no-default-features; \
+    fi
+
+RUN mkdir -p /build/out && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cp target/aarch64-unknown-linux-gnu/release/libcandle_semantic_router.so /build/out/ && \
+      (cp target/aarch64-unknown-linux-gnu/release/libcandle_semantic_router.a /build/out/ 2>/dev/null || true); \
+    else \
+      cp target/release/libcandle_semantic_router.so /build/out/ && \
+      (cp target/release/libcandle_semantic_router.a /build/out/ 2>/dev/null || true); \
+    fi && \
+    echo "=== Built candle-binding library (CPU-only) ===" && \
+    ls -la /build/out/ && \
+    file /build/out/libcandle_semantic_router.so && \
+    nm -D /build/out/libcandle_semantic_router.so 2>/dev/null | grep -c " T " || true
+
+# Stage 1a: Build ml-binding (CPU-only; identical to Dockerfile.rocm).
+FROM --platform=$BUILDPLATFORM ${RUST_RUNTIME_COMPAT_IMAGE} AS ml-builder
+ARG TARGETARCH
+ARG GIT_SSL_NO_VERIFY
+WORKDIR /build
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+      dpkg --add-architecture arm64 && \
+      apt-get update && apt-get install -y \
+        gcc-aarch64-linux-gnu \
+        g++-aarch64-linux-gnu && \
+      rm -rf /var/lib/apt/lists/* && \
+      rustup target add aarch64-unknown-linux-gnu; \
+    fi
+
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+
+COPY ml-binding/Cargo.toml ml-binding/Cargo.loc[k] ./
+
+RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
+    mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release; \
+    fi && \
+    rm -rf src
+
+COPY ml-binding/src/ ./src/
+COPY ml-binding/go.mod ml-binding/ml_binding.go ./
+
+RUN find target -name "libml_semantic_router.so" -delete 2>/dev/null; \
+    find target -name "libml_semantic_router.a" -delete 2>/dev/null; \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release; \
+    fi
+
+RUN mkdir -p /build/out && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cp target/aarch64-unknown-linux-gnu/release/libml_semantic_router.so /build/out/ && \
+      (cp target/aarch64-unknown-linux-gnu/release/libml_semantic_router.a /build/out/ 2>/dev/null || true); \
+    else \
+      cp target/release/libml_semantic_router.so /build/out/ && \
+      (cp target/release/libml_semantic_router.a /build/out/ 2>/dev/null || true); \
+    fi && \
+    echo "=== Built ml-binding library ===" && \
+    ls -la /build/out/ && \
+    file /build/out/libml_semantic_router.so
+
+# Stage 1b: Build nlp-binding (BM25 + N-gram keyword classification; identical to Dockerfile.rocm).
+FROM --platform=$BUILDPLATFORM ${RUST_RUNTIME_COMPAT_IMAGE} AS nlp-builder
+ARG TARGETARCH
+ARG GIT_SSL_NO_VERIFY
+WORKDIR /build
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+      dpkg --add-architecture arm64 && \
+      apt-get update && apt-get install -y \
+        gcc-aarch64-linux-gnu \
+        g++-aarch64-linux-gnu && \
+      rm -rf /var/lib/apt/lists/* && \
+      rustup target add aarch64-unknown-linux-gnu; \
+    fi
+
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+
+COPY nlp-binding/Cargo.toml nlp-binding/Cargo.loc[k] ./
+
+RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
+    mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release; \
+    fi && \
+    rm -rf src
+
+COPY nlp-binding/src/ ./src/
+
+RUN find target -name "libnlp_binding.so" -delete 2>/dev/null; \
+    find target -name "libnlp_binding.a" -delete 2>/dev/null; \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release; \
+    fi
+
+RUN mkdir -p /build/out && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cp target/aarch64-unknown-linux-gnu/release/libnlp_binding.so /build/out/ && \
+      (cp target/aarch64-unknown-linux-gnu/release/libnlp_binding.a /build/out/ 2>/dev/null || true); \
+    else \
+      cp target/release/libnlp_binding.so /build/out/ && \
+      (cp target/release/libnlp_binding.a /build/out/ 2>/dev/null || true); \
+    fi && \
+    echo "=== Built nlp-binding library ===" && \
+    ls -la /build/out/
+
+# Stage 1r: Build Rust onnx-binding (CUDA dynamic, amd64 only).
+# ============================================================================
+# CHANGE vs Dockerfile.rocm:
+#   --features rocm-dynamic  ->  --features cuda,load-dynamic
+# Rationale:
+#   onnx-binding/Cargo.toml exposes both:
+#     cuda          = ["ort/cuda"]
+#     rocm-dynamic  = ["rocm", "ort/load-dynamic"]
+#   There is no pre-existing `cuda-dynamic` feature, so we compose:
+#     cuda + ort/load-dynamic (we add it inline; equivalent shape to rocm-dynamic).
+# ============================================================================
+FROM --platform=$BUILDPLATFORM ${ONNX_RUST_RUNTIME_COMPAT_IMAGE} AS onnx-builder
+ARG TARGETARCH
+ARG GIT_SSL_NO_VERIFY
+WORKDIR /build
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+RUN if [ "$TARGETARCH" != "amd64" ]; then \
+      echo "CUDA vllm-sr image only supports TARGETARCH=amd64, got: $TARGETARCH" && exit 1; \
+    fi
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential \
+      pkg-config \
+      libssl-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY onnx-binding/Cargo.toml onnx-binding/Cargo.loc[k] ./
+
+# Feature design note (matches rocm-dynamic pattern):
+#   onnx-binding's `cuda` feature alone (= ["ort/cuda"]) statically links the
+#   bundled CUDA EP via ort's `download-binaries`. We want load-dynamic so the
+#   runtime image's onnxruntime-gpu wheel is used (mirrors the ROCm path).
+#   We therefore compose the feature set at the cargo invocation level:
+#     cuda             -> pulls ort/cuda (enables CUDA EP code paths)
+#     ort/load-dynamic -> tells ort to dlopen libonnxruntime.so via
+#                         ORT_DYLIB_PATH at runtime
+#   This is functionally a `cuda-dynamic` feature; upstream just hasn't named
+#   it. Filing a follow-up PR to expose `cuda-dynamic` in Cargo.toml is a
+#   reasonable next step but not required to ship.
+RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
+    mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
+    OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
+    cargo build --release \
+      --no-default-features \
+      --features "cuda,ort/load-dynamic" \
+      --target x86_64-unknown-linux-gnu && \
+    rm -rf src
+
+COPY onnx-binding/src/ ./src/
+COPY onnx-binding/go.mod onnx-binding/semantic-router.go ./
+
+RUN find target -name "libonnx_semantic_router.so" -delete 2>/dev/null; \
+    find target -name "libonnx_semantic_router.a" -delete 2>/dev/null; \
+    OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
+    cargo build --release \
+      --no-default-features \
+      --features "cuda,ort/load-dynamic" \
+      --target x86_64-unknown-linux-gnu
+
+RUN mkdir -p /build/out && \
+    cp target/x86_64-unknown-linux-gnu/release/libonnx_semantic_router.so /build/out/ && \
+    (cp target/x86_64-unknown-linux-gnu/release/libonnx_semantic_router.a /build/out/ 2>/dev/null || true) && \
+    echo "=== Built onnx-binding CUDA library ===" && \
+    ls -la /build/out/ && \
+    file /build/out/libonnx_semantic_router.so
+
+# Stage 2: Build Go semantic router. Identical to Dockerfile.rocm; uses the
+# onnx build tag and go.onnx.mod.
+FROM --platform=$BUILDPLATFORM ${GO_RUNTIME_COMPAT_IMAGE} AS go-builder
+ARG TARGETARCH
+WORKDIR /build
+
+COPY --from=rust-builder /build/out/ /usr/local/lib/
+COPY --from=onnx-builder /build/out/ /usr/local/lib/
+COPY --from=ml-builder /build/out/ /usr/local/lib/
+COPY --from=nlp-builder /build/out/ /usr/local/lib/
+
+ENV LD_LIBRARY_PATH=/usr/local/lib
+
+COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candle-binding/
+COPY --from=onnx-builder /build/go.mod /build/semantic-router.go /build/../onnx-binding/
+COPY --from=onnx-builder /build/out/ /build/../onnx-binding/target/release/
+
+COPY ml-binding/go.mod ml-binding/ml_binding.go /build/../ml-binding/
+COPY --from=ml-builder /build/out/ /build/../ml-binding/target/release/
+
+COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go /build/../nlp-binding/
+COPY --from=nlp-builder /build/out/ /build/../nlp-binding/target/release/
+
+COPY src/semantic-router/ .
+
+RUN if [ "$TARGETARCH" != "amd64" ]; then \
+      echo "CUDA vllm-sr image only supports TARGETARCH=amd64, got: $TARGETARCH" && exit 1; \
+    fi && \
+    CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
+    CGO_CFLAGS="-I/build/../onnx-binding" \
+    CGO_LDFLAGS="-L/build/../onnx-binding/target/release -L/build/../ml-binding/target/release -L/build/../nlp-binding/target/release -lonnx_semantic_router -lml_semantic_router -lnlp_binding" \
+    go build -buildvcs=false -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o router ./cmd
+
+# Stage 3: Final router runtime image (CUDA 12.4 + ONNX Runtime GPU)
+# ============================================================================
+# CHANGE vs Dockerfile.rocm:
+#   FROM rocm/dev-ubuntu-22.04:7.0
+#     -> FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+#   Rationale:
+#     * Ubuntu 22.04 matches the libc baseline assumed by upstream's
+#       runtime-compat builders (glibc 2.35), so the copied binaries load.
+#     * `cudnn-runtime` includes libcudnn + libcublas which onnxruntime-gpu
+#       needs at runtime. `-devel-` would include nvcc/headers (~3 GB extra)
+#       which we do not need at runtime.
+#     * CUDA 12.4 supports compute_cap 8.9 (RTX 4090) and matches the
+#       onnxruntime-gpu==1.22.x CUDA 12.x channel.
+#   Removed apt installs: hipblas, miopen-hip, hipfft, rccl (ROCm-specific).
+#   Replaced pip wheel:
+#     onnxruntime_rocm-1.22.1 (radeon repo)
+#       -> onnxruntime-gpu==1.22.0 (PyPI; ORT 1.22 CUDA 12 build)
+#   LD_LIBRARY_PATH: dropped /opt/rocm/lib; CUDA libs live under
+#     /usr/local/cuda/lib64 and /usr/lib/x86_64-linux-gnu, both already on
+#     the default loader path in the nvidia/cuda image.
+#   Removed env var: ORT_CK_FLASH_ATTN_LIB (ROCm-specific flash-attn lib).
+#   Removed copy of libort_ck_flash_attn.so (ROCm-only artifact).
+# ============================================================================
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+ARG TARGETARCH
+
+ENV VIRTUAL_ENV=/opt/vllm-sr-venv
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN if [ "$TARGETARCH" != "amd64" ]; then \
+      echo "CUDA vllm-sr image only supports TARGETARCH=amd64, got: $TARGETARCH" && exit 1; \
+    fi
+
+# Install system dependencies. Note: no hipblas/miopen/etc.; CUDA + cuDNN
+# come from the base image.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        bash \
+        python3 \
+        python3-pip \
+        python3-venv \
+        python3-yaml \
+        curl \
+        ca-certificates; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*
+
+# Install CUDA-enabled ONNX Runtime shared library.
+# onnxruntime-gpu 1.22.x ships the CUDA 12 EP. Version-pinned to keep ABI
+# compatibility with the `=2.0.0-rc.10` `ort` Rust crate that was used to
+# build libonnx_semantic_router.so above.
+# NOTE: `click` is explicitly added because huggingface_hub==1.5.0 ships a
+# `hf` CLI entry point that imports click but does NOT declare it as a hard
+# dependency under Python 3.10 (works on 3.11 transitively). Router calls
+# `hf env` at startup; without click the CLI raises ModuleNotFoundError and
+# router fatals with "huggingface-cli not found".
+RUN python3 -m venv "${VIRTUAL_ENV}" && \
+    "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip && \
+    "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir \
+      'onnxruntime-gpu==1.22.0' \
+      'huggingface_hub[cli]==1.5.0' \
+      'click>=8.1.7' && \
+    ORT_DIR="$("${VIRTUAL_ENV}/bin/python" -c 'import pathlib, onnxruntime; print(pathlib.Path(onnxruntime.__file__).resolve().parent / "capi")')" && \
+    mkdir -p /opt/onnxruntime && \
+    ln -sfn "$ORT_DIR" /opt/onnxruntime/capi && \
+    ln -sf /opt/onnxruntime/capi/libonnxruntime.so.* /opt/onnxruntime/capi/libonnxruntime.so
+
+COPY --from=go-builder /build/router /usr/local/bin/router
+COPY --from=rust-builder /build/out/libcandle_semantic_router.so /usr/local/lib/
+COPY --from=onnx-builder /build/out/libonnx_semantic_router.so /usr/local/lib/
+COPY --from=ml-builder /build/out/libml_semantic_router.so /usr/local/lib/
+COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/
+
+# ORT_DYLIB_PATH is consumed by the `ort` Rust crate's load-dynamic mode to
+# locate libonnxruntime.so at runtime. LD_LIBRARY_PATH must also contain
+# the ORT dir so transitive deps (libonnxruntime_providers_cuda.so, etc.)
+# resolve.
+ENV ORT_DYLIB_PATH=/opt/onnxruntime/capi/libonnxruntime.so \
+    LD_LIBRARY_PATH=/usr/local/lib:/opt/onnxruntime/capi:/usr/local/cuda/lib64
+
+# Force ONNX backend (vs candle) for this image. The router supports either
+# at runtime; ROCm/CUDA images make sense only with AI_BINDING=onnx.
+ENV AI_BINDING=onnx
+
+WORKDIR /app
+RUN mkdir -p /app /app/.vllm-sr /app/config /app/models
+
+COPY config/knowledge_bases/ /app/config/knowledge_bases/
+COPY src/vllm-sr/start-router.sh /app/start-router.sh
+RUN chmod +x /app/start-router.sh
+
+EXPOSE 50051 8080 9190
+
+VOLUME ["/app/models"]
+
+ENTRYPOINT ["/app/start-router.sh"]
+CMD ["/app/config.yaml"]
