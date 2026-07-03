@@ -363,6 +363,13 @@ const (
 
 	// VSRFusionDepth marks internal Fusion subrequests to prevent recursive Fusion execution.
 	VSRFusionDepth = "x-vsr-fusion-depth"
+
+	// VSRInboundAuthorization carries the caller's original Authorization header
+	// value on internal looper requests. It is the sole source of caller identity
+	// for backends that opt into forward_authorization_header on a looper leg,
+	// keeping the caller credential separate from any static service key on the
+	// Authorization header. It is stripped before the request reaches the upstream.
+	VSRInboundAuthorization = "x-vsr-inbound-authorization"
 )
 
 // Looper Response Headers

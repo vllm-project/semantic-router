@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"fmt"
+	"strings"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -271,6 +272,8 @@ func (r *OpenAIRouter) buildRouteHeaderState(
 		return nil, errorResponse
 	}
 	state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
+	// The internal looper carrier for caller identity must never reach an upstream.
+	state.removeHeaders = append(state.removeHeaders, headers.VSRInboundAuthorization)
 	appendProfileHeaders(&state.setHeaders, profile)
 	appendCapturedPassThroughHeaders(&state.setHeaders, profile, ctx)
 	appendRoutingHeaders(&state.setHeaders, model)
@@ -292,6 +295,14 @@ func (r *OpenAIRouter) appendCredentialHeaders(
 			"error":        authErr.Error(),
 		})
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
+	}
+
+	// Opt-in per-backend passthrough: forward the caller's inbound Authorization
+	// header verbatim instead of resolving a static service key. This preserves
+	// caller identity (e.g. per-user virtual keys) through the router to gateways
+	// like LiteLLM. Static api_key/api_key_env are intentionally ignored here.
+	if state.profile != nil && state.profile.ForwardAuthorizationHeader {
+		return r.appendForwardedAuthorizationHeader(state, model, backendName, ctx)
 	}
 
 	accessKey, credErr := r.CredentialResolver.KeyForProvider(llmProvider, model, ctx.Headers)
@@ -330,6 +341,77 @@ func (r *OpenAIRouter) appendCredentialHeaders(
 		"header_name": authHeader,
 	})
 	return nil
+}
+
+// forwardedAuthorizationHeaderName is the header the caller's credential is read
+// from and written to when forward_authorization_header is enabled. Forwarding is
+// defined as verbatim Authorization passthrough, so the value is always emitted
+// under Authorization regardless of the provider profile's configured auth_header
+// (which may be a key-style header such as x-api-key).
+const forwardedAuthorizationHeaderName = "Authorization"
+
+// appendForwardedAuthorizationHeader forwards the caller's inbound Authorization
+// header verbatim to the upstream when a backend opts into
+// forward_authorization_header. It returns a 401 error response when the caller
+// did not supply an Authorization header, since there is no static key fallback
+// in this mode.
+func (r *OpenAIRouter) appendForwardedAuthorizationHeader(
+	state *routeHeaderState,
+	model string,
+	backendName string,
+	ctx *RequestContext,
+) *ext_proc.ProcessingResponse {
+	// On an internal looper leg the caller's identity travels on a dedicated
+	// header (the Authorization header there may hold the static access key), so
+	// it is the ONLY trusted source of caller identity — never fall back to
+	// Authorization, which would let a static key be forwarded as the caller.
+	// On the direct path the caller's credential is on Authorization.
+	inbound := lookupHeaderCaseInsensitive(ctx.Headers, forwardedAuthorizationHeaderName)
+	if ctx.LooperRequest {
+		inbound = lookupHeaderCaseInsensitive(ctx.Headers, headers.VSRInboundAuthorization)
+	}
+	if strings.TrimSpace(inbound) == "" {
+		logging.ComponentWarnEvent("extproc", "forward_authorization_missing", map[string]interface{}{
+			"request_id":   ctx.RequestID,
+			"model":        model,
+			"backend_name": backendName,
+		})
+		return r.createErrorResponse(401, "Missing Authorization header. This backend requires a per-request Authorization header.")
+	}
+
+	// Overwrite semantics: the caller already sent an Authorization header, so
+	// the default APPEND_IF_EXISTS_OR_ADD would leave two headers on the upstream
+	// request. Force a single header carrying the forwarded value.
+	state.setHeaders = append(state.setHeaders, &core.HeaderValueOption{
+		Header: &core.HeaderValue{
+			Key:      forwardedAuthorizationHeaderName,
+			RawValue: []byte(inbound),
+		},
+		AppendAction: core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
+	})
+	logging.ComponentDebugEvent("extproc", "forward_authorization_applied", map[string]interface{}{
+		"request_id":   ctx.RequestID,
+		"model":        model,
+		"backend_name": backendName,
+		"header_name":  forwardedAuthorizationHeaderName,
+	})
+	return nil
+}
+
+// lookupHeaderCaseInsensitive returns the value for key from headers using a
+// case-insensitive match. Inbound header keys are captured verbatim (HTTP/2
+// lowercases names, but HTTP/1.1 casing can vary), so a plain map lookup is not
+// reliable for well-known headers like Authorization.
+func lookupHeaderCaseInsensitive(headers map[string]string, key string) string {
+	if v, ok := headers[key]; ok {
+		return v
+	}
+	for k, v := range headers {
+		if strings.EqualFold(k, key) {
+			return v
+		}
+	}
+	return ""
 }
 
 func appendProfileHeaders(setHeaders *[]*core.HeaderValueOption, profile *config.ProviderProfile) {
