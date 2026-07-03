@@ -18,6 +18,7 @@ package extproc
 
 import (
 	"context"
+	"strings"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/openai/openai-go"
@@ -87,6 +88,20 @@ func hasFusionAnalysisModels(decision *config.Decision) bool {
 		len(decision.Algorithm.Fusion.AnalysisModels) > 0
 }
 
+// decisionForwardsAuthorization reports whether any candidate model in the
+// decision routes to a backend that opts into forward_authorization_header.
+func (r *OpenAIRouter) decisionForwardsAuthorization(decision *config.Decision) bool {
+	if decision == nil || r.Config == nil {
+		return false
+	}
+	for _, ref := range decision.ModelRefs {
+		if r.Config.ModelForwardsAuthorization(ref.Model) {
+			return true
+		}
+	}
+	return false
+}
+
 // handleLooperExecution executes the looper for multi-model decisions
 // Returns an ImmediateResponse with the aggregated result
 func (r *OpenAIRouter) handleLooperExecution(
@@ -97,6 +112,23 @@ func (r *OpenAIRouter) handleLooperExecution(
 ) (*ext_proc.ProcessingResponse, error) {
 	// Create looper based on algorithm type
 	l := looper.FactoryWithSelectionRegistry(&r.Config.Looper, decision.Algorithm.Type, r.ModelSelector)
+
+	// Preserve the caller's identity across internal looper re-dispatch: forward
+	// the original Authorization header so backends with
+	// forward_authorization_header receive the per-user credential rather than a
+	// static service key.
+	inboundAuthorization := lookupHeaderCaseInsensitive(reqCtx.Headers, forwardedAuthorizationHeaderName)
+	// Best-effort early 401 for the common case: if a statically-known candidate
+	// backend forwards the caller's Authorization but the caller sent none, reject
+	// up front with a clean status. This does not need to be exhaustive — the
+	// caller's identity travels on a dedicated header (not Authorization), and the
+	// internal-leg forward branch is the authoritative boundary: it 401s any leg
+	// that reaches a forward-enabled backend without a caller credential, covering
+	// models chosen at runtime (e.g. fusion analysis models, workflow planners).
+	if strings.TrimSpace(inboundAuthorization) == "" && r.decisionForwardsAuthorization(decision) {
+		return r.createErrorResponse(401, "Missing Authorization header. This route requires a per-request Authorization header."), nil
+	}
+	l.SetInboundAuthorization(inboundAuthorization)
 
 	// Build looper request.
 	// Response API requests always return JSON, so force non-streaming in the

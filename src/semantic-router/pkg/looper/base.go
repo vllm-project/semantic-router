@@ -46,6 +46,13 @@ func NewBaseLooper(cfg *config.LooperConfig) *BaseLooper {
 	}
 }
 
+// SetInboundAuthorization forwards the caller's Authorization header to the
+// underlying client so internal looper requests preserve per-user identity.
+// Embedding engines (fusion, confidence, ratings, remom, workflows) inherit it.
+func (l *BaseLooper) SetInboundAuthorization(authorization string) {
+	l.client.SetInboundAuthorization(authorization)
+}
+
 // Execute calls all models sequentially and aggregates the responses
 func (l *BaseLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
 	if len(req.ModelRefs) == 0 {

@@ -153,7 +153,10 @@ func (r *OpenAIRouter) buildHeaderMutationsForLooper(
 	ctx *RequestContext,
 ) ([]*core.HeaderValueOption, []string, *ext_proc.ProcessingResponse) {
 	setHeaders := []*core.HeaderValueOption{}
-	removeHeaders := []string{"content-length"}
+	// Always strip the internal caller-identity carrier so it never reaches an
+	// upstream, including on the non-routed branch below (defense in depth; the
+	// routed branch also strips it via buildRouteHeaderState).
+	removeHeaders := []string{"content-length", headers.VSRInboundAuthorization}
 
 	if route.found {
 		routedSetHeaders, routedRemoveHeaders, errorResponse := r.buildRoutedLooperHeaders(modelName, route, ctx)
