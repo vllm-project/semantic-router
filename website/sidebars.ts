@@ -31,6 +31,7 @@ const sidebars: SidebarsConfig = {
       label: 'Installation',
       items: [
         'installation/installation',
+        'installation/ollama',
         'installation/k8s/operator',
         'installation/configuration',
         'installation/native-backends',
