@@ -20,7 +20,7 @@ Semantic Router runs in Docker during `vllm-sr serve`. Point the router at `host
 
 ## Prerequisites
 
-- Semantic Router installed and runnable with [`vllm-sr serve`](installation) (Linux, macOS, or WSL2 with Docker)
+- Semantic Router installed and runnable with [`vllm-sr serve`](/docs/installation) (Linux, macOS, or WSL2 with Docker)
 - Ollama installed on the **same machine** that runs Docker
 - Enough disk space for at least one model (for example, `llama3.2:3b` is about 2 GB)
 
