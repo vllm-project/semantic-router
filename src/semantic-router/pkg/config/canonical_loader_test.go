@@ -601,6 +601,160 @@ routing:
 	}
 }
 
+func TestProviderBackendRefForwardAuthorizationHeaderCompilesIntoProfile(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+providers:
+  defaults:
+    default_model: gpt-worker
+  models:
+    - name: gpt-worker
+      backend_refs:
+        - name: gateway
+          base_url: https://litellm.example.com/v1
+          provider: openai
+          api_key: ignored-static-key
+          forward_authorization_header: true
+        - name: local
+          endpoint: 127.0.0.1:8000
+routing:
+  modelCards:
+    - name: gpt-worker
+  decisions:
+    - name: default
+      priority: 1
+      rules:
+        operator: OR
+        conditions: []
+      modelRefs:
+        - model: gpt-worker
+`)
+
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+
+	// The gateway backend opts into forwarding: it must have a provider profile
+	// with the flag set even though its only profile-worthy fields are base_url
+	// and provider.
+	gatewayName := cfg.ModelConfig["gpt-worker"].PreferredEndpoints[0]
+	profile, err := cfg.GetProviderProfileForEndpoint(gatewayName)
+	if err != nil {
+		t.Fatalf("GetProviderProfileForEndpoint(%q) error: %v", gatewayName, err)
+	}
+	if profile == nil {
+		t.Fatalf("expected a provider profile for %q, got nil", gatewayName)
+	}
+	if !profile.ForwardAuthorizationHeader {
+		t.Fatalf("profile.ForwardAuthorizationHeader = false, want true")
+	}
+
+	// The local backend does not opt in and has no profile-worthy fields, so it
+	// stays a legacy endpoint with no profile (default static-key behavior).
+	localName := cfg.ModelConfig["gpt-worker"].PreferredEndpoints[1]
+	localProfile, err := cfg.GetProviderProfileForEndpoint(localName)
+	if err != nil {
+		t.Fatalf("GetProviderProfileForEndpoint(%q) error: %v", localName, err)
+	}
+	if localProfile != nil && localProfile.ForwardAuthorizationHeader {
+		t.Fatalf("local backend unexpectedly opted into forward_authorization_header")
+	}
+}
+
+func TestModelForwardsAuthorization(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+providers:
+  defaults:
+    default_model: gateway-model
+  models:
+    - name: gateway-model
+      backend_refs:
+        - name: gateway
+          base_url: https://litellm.example.com/v1
+          provider: openai
+          forward_authorization_header: true
+    - name: static-model
+      backend_refs:
+        - name: local
+          endpoint: 127.0.0.1:8000
+routing:
+  modelCards:
+    - name: gateway-model
+    - name: static-model
+  decisions:
+    - name: default
+      priority: 1
+      rules:
+        operator: OR
+        conditions: []
+      modelRefs:
+        - model: gateway-model
+`)
+
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+
+	if !cfg.ModelForwardsAuthorization("gateway-model") {
+		t.Fatalf("ModelForwardsAuthorization(gateway-model) = false, want true")
+	}
+	if cfg.ModelForwardsAuthorization("static-model") {
+		t.Fatalf("ModelForwardsAuthorization(static-model) = true, want false")
+	}
+	if cfg.ModelForwardsAuthorization("unknown") {
+		t.Fatalf("ModelForwardsAuthorization(unknown) = true, want false")
+	}
+}
+
+func TestProviderBackendRefForwardAuthorizationHeaderForcesProfileCreation(t *testing.T) {
+	// A backend that sets ONLY forward_authorization_header (no base_url,
+	// provider, auth_header, etc.) must still get a provider profile so the flag
+	// reaches the request path.
+	canonicalYAML := []byte(`
+version: v0.3
+providers:
+  defaults:
+    default_model: gpt-worker
+  models:
+    - name: gpt-worker
+      backend_refs:
+        - name: local
+          endpoint: 127.0.0.1:8000
+          forward_authorization_header: true
+routing:
+  modelCards:
+    - name: gpt-worker
+  decisions:
+    - name: default
+      priority: 1
+      rules:
+        operator: OR
+        conditions: []
+      modelRefs:
+        - model: gpt-worker
+`)
+
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+
+	endpointName := cfg.ModelConfig["gpt-worker"].PreferredEndpoints[0]
+	profile, err := cfg.GetProviderProfileForEndpoint(endpointName)
+	if err != nil {
+		t.Fatalf("GetProviderProfileForEndpoint(%q) error: %v", endpointName, err)
+	}
+	if profile == nil {
+		t.Fatalf("expected a provider profile forced by forward_authorization_header, got nil")
+	}
+	if !profile.ForwardAuthorizationHeader {
+		t.Fatalf("profile.ForwardAuthorizationHeader = false, want true")
+	}
+}
+
 func TestGetModelPricingTreatsExplicitZeroPricingAsConfigured(t *testing.T) {
 	cfg := &RouterConfig{
 		BackendModels: BackendModels{

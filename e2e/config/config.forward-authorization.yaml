@@ -1,0 +1,101 @@
+# E2E fixture for per-request Authorization header passthrough (issue #2286).
+#
+# The gateway-model backend opts into forward_authorization_header, so the router
+# forwards the caller's inbound Authorization header verbatim to the upstream
+# gateway (e.g. LiteLLM) instead of injecting a static service key. Requests
+# without an Authorization header are rejected with 401. The local-model backend
+# keeps the default static-key behavior for contrast.
+version: v0.3
+listeners: []
+providers:
+  defaults:
+    default_model: gateway-model
+  models:
+    - name: gateway-model
+      external_model_ids:
+        vllm: Qwen/Qwen2.5-14B-Instruct
+      backend_refs:
+        - name: litellm-gateway
+          base_url: http://127.0.0.1:8300/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          # Forward the caller's inbound Authorization header verbatim; the
+          # static api_key/api_key_env below are intentionally ignored.
+          forward_authorization_header: true
+          weight: 1
+    - name: local-model
+      external_model_ids:
+        vllm: Qwen/Qwen2.5-14B-Instruct
+      backend_refs:
+        - name: vllm-local
+          endpoint: 127.0.0.1:8200
+          weight: 1
+          type: vllm
+routing:
+  decisions:
+    - name: gateway_default
+      description: Route user-facing traffic through the per-user gateway.
+      priority: 100
+      rules:
+        operator: OR
+        conditions:
+          - type: keyword
+            name: general_keywords
+      modelRefs:
+        - model: gateway-model
+          use_reasoning: false
+    - name: local_fallback
+      description: Route internal traffic to the local backend with a static key.
+      priority: 50
+      rules:
+        operator: OR
+        conditions:
+          - type: keyword
+            name: internal_keywords
+      modelRefs:
+        - model: local-model
+          use_reasoning: false
+  signals:
+    keywords:
+      - name: general_keywords
+        operator: OR
+        keywords:
+          - hello
+          - what is
+          - explain
+      - name: internal_keywords
+        operator: OR
+        keywords:
+          - internal
+          - debug
+          - trace
+    domains:
+      - name: general
+        description: General knowledge and conversation.
+  modelCards:
+    - name: gateway-model
+      param_size: 14b
+      description: Qwen2.5 14B routed through a per-user gateway.
+      capabilities:
+        - chat
+        - reasoning
+      quality_score: 0.85
+    - name: local-model
+      param_size: 14b
+      description: Qwen2.5 14B on a local backend with a static key.
+      capabilities:
+        - chat
+        - reasoning
+      quality_score: 0.85
+global:
+  router:
+    strategy: priority
+    clear_route_cache: true
+  services: {}
+  stores:
+    semantic_cache:
+      enabled: false
+      embedding_model: mmbert
+    memory:
+      embedding_model: mmbert

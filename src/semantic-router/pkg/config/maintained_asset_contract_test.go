@@ -23,6 +23,7 @@ var maintainedFullConfigAssets = []string{
 	repoRel("e2e", "config", "config.authz-rbac-demo.yaml"),
 	repoRel("e2e", "config", "config.authz-rbac.yaml"),
 	repoRel("e2e", "config", "config.e2e.yaml"),
+	repoRel("e2e", "config", "config.forward-authorization.yaml"),
 	repoRel("e2e", "config", "config.hallucination.yaml"),
 	repoRel("e2e", "config", "config.image-gen.yaml"),
 	repoRel("e2e", "config", "config.memory-user.yaml"),
