@@ -10,6 +10,17 @@ import (
 // eviction path without inserting tens of thousands of entries.
 var maxLastModelSessions = 50_000
 
+// evictionSampleSize bounds evictOldestLocked to an approximate (sampled) LRU:
+// rather than scanning the whole map for the true least-recently-seen entry
+// (O(N) under the write lock — which bites exactly at the cap this guards, since
+// once the map is full every new session would trigger a full scan), we sample
+// this many entries (Go map iteration order is randomized) and evict the oldest
+// of the sample. O(1), the same approach Redis uses for approximate LRU.
+// Intentionally approximate: bounding the map is what matters, evicting the
+// exact oldest does not. Shared by the evictOldestLocked of all four session
+// stores in this package.
+const evictionSampleSize = 10
+
 type lastModelState struct {
 	model    string
 	lastSeen time.Time
@@ -98,20 +109,23 @@ func (s *lastModelStore) evictExpiredLocked(t time.Time) {
 	}
 }
 
-// evictOldestLocked removes the single least-recently-seen entry. It is a
-// best-effort safety valve for the size cap when TTL eviction did not free room.
+// evictOldestLocked evicts the oldest entry among a bounded random sample
+// (approximate LRU — see evictionSampleSize). It is a best-effort safety valve
+// for the size cap when TTL eviction did not free room. Callers must hold s.mu.
 func (s *lastModelStore) evictOldestLocked() {
 	var oldestKey string
 	var oldestSeen time.Time
-	first := true
+	sampled := 0
 	for k, v := range s.sessions {
-		if first || v.lastSeen.Before(oldestSeen) {
-			oldestKey = k
-			oldestSeen = v.lastSeen
-			first = false
+		if sampled == 0 || v.lastSeen.Before(oldestSeen) {
+			oldestKey, oldestSeen = k, v.lastSeen
+		}
+		sampled++
+		if sampled >= evictionSampleSize {
+			break
 		}
 	}
-	if oldestKey != "" {
+	if sampled > 0 {
 		delete(s.sessions, oldestKey)
 	}
 }
