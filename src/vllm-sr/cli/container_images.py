@@ -77,7 +77,9 @@ def _derive_envoy_variant(image_name):
 
 def _derive_dashboard_variant(image_name):
     """Return a dashboard image variant when the base image uses official vllm-sr tags."""
-    return _derive_official_variant(image_name, VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT)
+    return _derive_official_variant(
+        image_name, VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT
+    )
 
 
 def _derive_official_variant(image_name, default_variant_image):

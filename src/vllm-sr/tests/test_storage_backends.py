@@ -30,7 +30,9 @@ def test_start_storage_backends_passes_state_root_to_milvus(monkeypatch, tmp_pat
         captured["state_root_dir"] = state_root_dir
         return 0, "", ""
 
-    monkeypatch.setattr("cli.storage_backends.container_start_milvus", fake_start_milvus)
+    monkeypatch.setattr(
+        "cli.storage_backends.container_start_milvus", fake_start_milvus
+    )
 
     stack_layout = resolve_runtime_stack()
     started = start_storage_backends(

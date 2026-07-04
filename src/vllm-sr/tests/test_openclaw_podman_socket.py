@@ -116,7 +116,9 @@ def test_container_start_vllm_sr_resolves_default_podman_socket(tmp_path, monkey
     assert "/run/podman/podman.sock:/var/run/docker.sock" in dashboard_cmd
 
 
-def test_container_start_vllm_sr_warns_when_podman_socket_missing(tmp_path, monkeypatch):
+def test_container_start_vllm_sr_warns_when_podman_socket_missing(
+    tmp_path, monkeypatch
+):
     """Podman mode should not fail if no podman socket is found — just warn."""
     config_path = tmp_path / "config.yaml"
     config_path.write_text(_CONFIG_BODY)

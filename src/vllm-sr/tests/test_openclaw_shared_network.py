@@ -1,7 +1,13 @@
 from types import SimpleNamespace
 
 import pytest
-from cli import core, container_cli, container_services, container_start, runtime_lifecycle
+from cli import (
+    core,
+    container_cli,
+    container_services,
+    container_start,
+    runtime_lifecycle,
+)
 from cli.runtime_stack import resolve_runtime_stack
 
 
@@ -46,7 +52,9 @@ def _stub_valid_container_cli(monkeypatch, tmp_path):
     return docker_bin
 
 
-def test_container_start_vllm_sr_rejects_legacy_topology_override(tmp_path, monkeypatch):
+def test_container_start_vllm_sr_rejects_legacy_topology_override(
+    tmp_path, monkeypatch
+):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
@@ -66,7 +74,9 @@ def test_container_start_vllm_sr_rejects_legacy_topology_override(tmp_path, monk
         )
 
 
-def test_container_start_vllm_sr_sets_openclaw_shared_network_env(tmp_path, monkeypatch):
+def test_container_start_vllm_sr_sets_openclaw_shared_network_env(
+    tmp_path, monkeypatch
+):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
@@ -155,7 +165,9 @@ def test_container_start_vllm_sr_places_dashboard_openclaw_runtime_flags_before_
     assert runtime_env_index < image_index
 
 
-def test_container_start_vllm_sr_mounts_host_docker_cli_by_default(tmp_path, monkeypatch):
+def test_container_start_vllm_sr_mounts_host_docker_cli_by_default(
+    tmp_path, monkeypatch
+):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
@@ -442,14 +454,20 @@ def test_start_vllm_sr_uses_isolated_network_and_container_names(monkeypatch):
         lambda _name: "running",
     )
     monkeypatch.setattr(
-        runtime_lifecycle, "container_create_network", record("container_create_network")
+        runtime_lifecycle,
+        "container_create_network",
+        record("container_create_network"),
     )
     monkeypatch.setattr(
         core, "start_fleet_sim_sidecar", record("start_fleet_sim_sidecar", True)
     )
-    monkeypatch.setattr(core, "container_start_vllm_sr", record("container_start_vllm_sr"))
     monkeypatch.setattr(
-        runtime_lifecycle, "container_network_connect", record("container_network_connect")
+        core, "container_start_vllm_sr", record("container_start_vllm_sr")
+    )
+    monkeypatch.setattr(
+        runtime_lifecycle,
+        "container_network_connect",
+        record("container_network_connect"),
     )
     monkeypatch.setattr(
         runtime_lifecycle, "container_logs_since", lambda *args, **kwargs: (0, "", "")
@@ -460,7 +478,9 @@ def test_start_vllm_sr_uses_isolated_network_and_container_names(monkeypatch):
     monkeypatch.setattr(
         runtime_lifecycle, "load_openclaw_registry", lambda *args, **kwargs: []
     )
-    monkeypatch.setattr(runtime_lifecycle, "container_logs", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        runtime_lifecycle, "container_logs", lambda *args, **kwargs: None
+    )
 
     core.start_vllm_sr("/tmp/config.yaml", env_vars={}, enable_observability=False)
 
@@ -519,7 +539,9 @@ def test_stop_vllm_sr_cleans_residual_observability_and_openclaw(monkeypatch):
         "load_openclaw_registry",
         lambda _path: [{"name": "openclaw-a"}, {"containerName": "openclaw-b"}, {}],
     )
-    monkeypatch.setattr(core, "container_stop_container", record("container_stop_container"))
+    monkeypatch.setattr(
+        core, "container_stop_container", record("container_stop_container")
+    )
     monkeypatch.setattr(
         core,
         "container_remove_container",
@@ -538,7 +560,9 @@ def test_stop_vllm_sr_cleans_residual_observability_and_openclaw(monkeypatch):
 
     core.stop_vllm_sr()
 
-    stop_calls = [args[0] for name, args, _ in calls if name == "container_stop_container"]
+    stop_calls = [
+        args[0] for name, args, _ in calls if name == "container_stop_container"
+    ]
     remove_calls = [
         args[0] for name, args, _ in calls if name == "container_remove_container"
     ]
@@ -636,7 +660,9 @@ def test_stop_vllm_sr_stops_split_runtime_containers(monkeypatch):
     )
     monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda cwd: "/tmp/openclaw")
     monkeypatch.setattr(core, "load_openclaw_registry", lambda _path: [])
-    monkeypatch.setattr(core, "container_stop_container", record("container_stop_container"))
+    monkeypatch.setattr(
+        core, "container_stop_container", record("container_stop_container")
+    )
     monkeypatch.setattr(
         core,
         "container_remove_container",
@@ -655,7 +681,9 @@ def test_stop_vllm_sr_stops_split_runtime_containers(monkeypatch):
 
     core.stop_vllm_sr()
 
-    stop_calls = [args[0] for name, args, _ in calls if name == "container_stop_container"]
+    stop_calls = [
+        args[0] for name, args, _ in calls if name == "container_stop_container"
+    ]
     remove_calls = [
         args[0] for name, args, _ in calls if name == "container_remove_container"
     ]

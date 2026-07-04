@@ -96,7 +96,9 @@ def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
     assert "ENVOY_ROUTER_API_ADDRESS=vllm-sr-router-container" in dashboard_cmd
 
 
-def test_container_start_vllm_sr_uses_role_specific_runtime_images(tmp_path, monkeypatch):
+def test_container_start_vllm_sr_uses_role_specific_runtime_images(
+    tmp_path, monkeypatch
+):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
@@ -242,14 +244,20 @@ def test_start_vllm_sr_creates_and_connects_shared_network_without_observability
         lambda _name: "running",
     )
     monkeypatch.setattr(
-        runtime_lifecycle, "container_create_network", record("container_create_network")
+        runtime_lifecycle,
+        "container_create_network",
+        record("container_create_network"),
     )
     monkeypatch.setattr(
         core, "start_fleet_sim_sidecar", record("start_fleet_sim_sidecar", True)
     )
-    monkeypatch.setattr(core, "container_start_vllm_sr", record("container_start_vllm_sr"))
     monkeypatch.setattr(
-        runtime_lifecycle, "container_network_connect", record("container_network_connect")
+        core, "container_start_vllm_sr", record("container_start_vllm_sr")
+    )
+    monkeypatch.setattr(
+        runtime_lifecycle,
+        "container_network_connect",
+        record("container_network_connect"),
     )
     monkeypatch.setattr(
         runtime_lifecycle, "container_logs_since", lambda *args, **kwargs: (0, "", "")
@@ -260,7 +268,9 @@ def test_start_vllm_sr_creates_and_connects_shared_network_without_observability
     monkeypatch.setattr(
         runtime_lifecycle, "load_openclaw_registry", lambda *args, **kwargs: []
     )
-    monkeypatch.setattr(runtime_lifecycle, "container_logs", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        runtime_lifecycle, "container_logs", lambda *args, **kwargs: None
+    )
 
     core.start_vllm_sr("/tmp/config.yaml", env_vars={}, enable_observability=False)
 
@@ -330,14 +340,20 @@ def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(monkeypatch
         lambda _name: "running",
     )
     monkeypatch.setattr(
-        runtime_lifecycle, "container_create_network", record("container_create_network")
+        runtime_lifecycle,
+        "container_create_network",
+        record("container_create_network"),
     )
     monkeypatch.setattr(
         core, "start_fleet_sim_sidecar", record("start_fleet_sim_sidecar", False)
     )
-    monkeypatch.setattr(core, "container_start_vllm_sr", record("container_start_vllm_sr"))
     monkeypatch.setattr(
-        runtime_lifecycle, "container_network_connect", record("container_network_connect")
+        core, "container_start_vllm_sr", record("container_start_vllm_sr")
+    )
+    monkeypatch.setattr(
+        runtime_lifecycle,
+        "container_network_connect",
+        record("container_network_connect"),
     )
     monkeypatch.setattr(
         runtime_lifecycle, "container_logs_since", lambda *args, **kwargs: (0, "", "")
@@ -348,7 +364,9 @@ def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(monkeypatch
     monkeypatch.setattr(
         runtime_lifecycle, "load_openclaw_registry", lambda *args, **kwargs: []
     )
-    monkeypatch.setattr(runtime_lifecycle, "container_logs", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        runtime_lifecycle, "container_logs", lambda *args, **kwargs: None
+    )
     monkeypatch.setattr(core, "_wait_and_verify_runtime", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         core, "recover_openclaw_containers", lambda *args, **kwargs: None
@@ -442,14 +460,20 @@ def test_start_vllm_sr_uses_state_root_override(monkeypatch):
         lambda _name: "running",
     )
     monkeypatch.setattr(
-        runtime_lifecycle, "container_create_network", record("container_create_network")
+        runtime_lifecycle,
+        "container_create_network",
+        record("container_create_network"),
     )
     monkeypatch.setattr(
         core, "start_fleet_sim_sidecar", record("start_fleet_sim_sidecar", True)
     )
-    monkeypatch.setattr(core, "container_start_vllm_sr", record("container_start_vllm_sr"))
     monkeypatch.setattr(
-        runtime_lifecycle, "container_network_connect", record("container_network_connect")
+        core, "container_start_vllm_sr", record("container_start_vllm_sr")
+    )
+    monkeypatch.setattr(
+        runtime_lifecycle,
+        "container_network_connect",
+        record("container_network_connect"),
     )
     monkeypatch.setattr(
         runtime_lifecycle, "container_logs_since", lambda *args, **kwargs: (0, "", "")
@@ -460,7 +484,9 @@ def test_start_vllm_sr_uses_state_root_override(monkeypatch):
     monkeypatch.setattr(
         runtime_lifecycle, "load_openclaw_registry", lambda *args, **kwargs: []
     )
-    monkeypatch.setattr(runtime_lifecycle, "container_logs", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        runtime_lifecycle, "container_logs", lambda *args, **kwargs: None
+    )
     monkeypatch.setattr(
         core, "recover_openclaw_containers", record("recover_openclaw_containers")
     )
@@ -543,7 +569,9 @@ def test_container_start_vllm_sr_applies_custom_stack_name_and_port_offset(
     assert "8280:8080" in router_cmd
 
 
-def test_container_start_vllm_sr_propagates_stack_name_to_dashboard(tmp_path, monkeypatch):
+def test_container_start_vllm_sr_propagates_stack_name_to_dashboard(
+    tmp_path, monkeypatch
+):
     """Dashboard's runtime-config sync resolves the per-stack filename via
     VLLM_SR_STACK_NAME. Without the env propagated into the dashboard container,
     sync writes to runtime-config.yaml while the CLI wrote

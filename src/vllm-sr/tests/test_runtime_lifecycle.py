@@ -9,9 +9,7 @@ def test_wait_for_router_health_fails_fast_when_router_exits(monkeypatch):
     monkeypatch.setattr(
         runtime_lifecycle, "_emit_router_startup_logs", lambda *_args, **_kwargs: None
     )
-    monkeypatch.setattr(
-        runtime_lifecycle, "container_status", lambda _name: "exited"
-    )
+    monkeypatch.setattr(runtime_lifecycle, "container_status", lambda _name: "exited")
 
     def fake_exec(*_args, **_kwargs):
         calls["exec"] += 1

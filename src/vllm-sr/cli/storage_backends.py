@@ -46,7 +46,9 @@ def start_storage_backends(
     )
 
     if "redis" in required_backends:
-        _start_backend("Redis", lambda: container_start_redis(network_name, stack_layout))
+        _start_backend(
+            "Redis", lambda: container_start_redis(network_name, stack_layout)
+        )
         started.add("redis")
 
     if "postgres" in required_backends:
