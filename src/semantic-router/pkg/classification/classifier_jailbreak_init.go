@@ -17,7 +17,28 @@ type JailbreakInitializerImpl struct {
 }
 
 func (c *JailbreakInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
-	// Try auto-detecting jailbreak classifier init first - checks for lora_config.json.
+	// A ModernBERT config.json is incompatible with the traditional Candle BERT
+	// loader, so probing Candle first logs alarming "Failed to initialize" errors
+	// before the ModernBERT fallback succeeds (#2096). When the model is detected
+	// as ModernBERT, try the ModernBERT initializer first to skip that doomed probe.
+	if isModernBertModel(modelID) {
+		if err := candle_binding.InitModernBertJailbreakClassifier(modelID, useCPU); err == nil {
+			c.usedModernBERT = true
+			logging.ComponentEvent("classifier", "jailbreak_detector_initialized", map[string]interface{}{
+				"backend":   "modernbert",
+				"model_ref": modelID,
+			})
+			return nil
+		}
+		// Detected as ModernBERT but its initializer failed (e.g. a LoRA model
+		// whose base is ModernBERT); fall through to the auto-detect path.
+		logging.ComponentDebugEvent("classifier", "jailbreak_detector_fallback_enabled", map[string]interface{}{
+			"fallback_backend": "candle_bert_auto",
+			"model_ref":        modelID,
+		})
+	}
+
+	// Try auto-detecting jailbreak classifier init - checks for lora_config.json.
 	// This enables LoRA Jailbreak models when available. InitJailbreakClassifier routes
 	// to LORA_JAILBREAK_CLASSIFIER or BERT_JAILBREAK_CLASSIFIER.
 	err := candle_binding.InitJailbreakClassifier(modelID, numClasses[0], useCPU)
