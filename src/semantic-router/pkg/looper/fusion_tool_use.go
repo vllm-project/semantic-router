@@ -11,27 +11,12 @@ func stripFusionToolUse(req *openai.ChatCompletionNewParams) *openai.ChatComplet
 	if req == nil {
 		return nil
 	}
-	data, err := json.Marshal(req)
-	if err != nil {
-		return req
-	}
-	var reqMap map[string]interface{}
-	err = json.Unmarshal(data, &reqMap)
-	if err != nil {
-		return req
-	}
-	delete(reqMap, "tools")
-	delete(reqMap, "tool_choice")
-	data, err = json.Marshal(reqMap)
-	if err != nil {
-		return req
-	}
-	var stripped openai.ChatCompletionNewParams
-	err = json.Unmarshal(data, &stripped)
-	if err != nil {
-		return req
-	}
-	return &stripped
+	stripped := cloneRequest(req)
+	stripped.Tools = nil
+	stripped.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{}
+	stripped.Functions = nil
+	stripped.FunctionCall = openai.ChatCompletionNewParamsFunctionCallUnion{}
+	return stripped
 }
 
 func appendFusionStageMessage(req *openai.ChatCompletionNewParams, content string) *openai.ChatCompletionNewParams {

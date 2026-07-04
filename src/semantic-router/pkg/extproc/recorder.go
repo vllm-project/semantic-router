@@ -234,6 +234,8 @@ func buildReplayRoutingRecord(
 		RAGBackend:           ctx.RAGBackend,
 		RAGContextLength:     len(ctx.RAGRetrievedContext),
 		RAGSimilarityScore:   ctx.RAGSimilarityScore,
+		CacheSimilarity:      ctx.VSRCacheSimilarity,
+		ContextTokenCount:    ctx.VSRContextTokenCount,
 		HallucinationEnabled: hallucinationEnabled,
 	}
 	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {

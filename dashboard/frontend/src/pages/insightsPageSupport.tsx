@@ -346,6 +346,7 @@ export function buildInsightsRecordSections(
   sections.push({
     title: 'Usage & Cost',
     fields: [
+      { label: 'Context tokens', value: formatTokenValue(record.context_token_count) },
       { label: 'Prompt tokens', value: formatTokenValue(record.prompt_tokens) },
       { label: 'Completion tokens', value: formatTokenValue(record.completion_tokens) },
       { label: 'Total tokens', value: formatTokenValue(record.total_tokens) },
@@ -368,6 +369,7 @@ export function buildInsightsRecordSections(
     title: 'Plugin Status',
     fields: [
       { label: 'Cache', value: record.from_cache ? 'Hit' : 'Miss' },
+      { label: 'Cache similarity', value: formatSimilarityValue(record.cache_similarity) },
       { label: 'Streaming', value: record.streaming ? 'On' : 'Off' },
       { label: 'Guardrails', value: buildGuardrailsValue(record) },
       { label: 'RAG', value: buildRagValue(record) },
@@ -707,4 +709,8 @@ function formatCurrencyOrNA(value?: number, currency?: string) {
 
 function formatTokenValue(value?: number) {
   return typeof value === 'number' ? value.toLocaleString('en-US') : '-'
+}
+
+function formatSimilarityValue(value?: number) {
+  return typeof value === 'number' ? value.toFixed(3) : '-'
 }

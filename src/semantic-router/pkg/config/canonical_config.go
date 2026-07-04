@@ -336,10 +336,11 @@ func normalizeCanonicalProviderModels(models []CanonicalProviderModel) (map[stri
 		params.PreferredEndpoints = make([]string, 0, len(backendRefs))
 		for index, backendRef := range backendRefs {
 			endpointName := canonicalEndpointName(model.Name, backendRef, index)
+			backendType := canonicalBackendType(backendRef)
 			endpoint := VLLMEndpoint{
 				Name:     endpointName,
 				Weight:   backendRef.Weight,
-				Type:     backendRef.Type,
+				Type:     backendType,
 				Protocol: defaultProtocol(backendRef.Protocol),
 				Model:    model.Name,
 				APIKey:   resolveBackendAPIKey(backendRef),
@@ -396,14 +397,7 @@ func normalizeExternalModelIDsFromProviderModel(model CanonicalProviderModel) ma
 
 	result := map[string]string{}
 	for _, backendRef := range canonicalBackendRefs(model) {
-		key := backendRef.Type
-		if key == "" {
-			key = backendRef.Provider
-		}
-		if key == "" {
-			key = "vllm"
-		}
-		result[key] = model.ProviderModelID
+		result[canonicalBackendType(backendRef)] = model.ProviderModelID
 	}
 	// When no backend_refs are defined (metadata-only provider model),
 	// still store the provider_model_id so pricing lookups by provider
@@ -412,6 +406,16 @@ func normalizeExternalModelIDsFromProviderModel(model CanonicalProviderModel) ma
 		result["default"] = model.ProviderModelID
 	}
 	return result
+}
+
+func canonicalBackendType(backendRef CanonicalBackendRef) string {
+	if backendRef.Type != "" {
+		return backendRef.Type
+	}
+	if backendRef.Provider != "" {
+		return backendRef.Provider
+	}
+	return "vllm"
 }
 
 func canonicalEndpointName(modelName string, backendRef CanonicalBackendRef, index int) string {

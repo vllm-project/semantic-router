@@ -213,7 +213,13 @@ func KeystoneHeaderOptions(path string) []*core.HeaderValueOption {
 	}
 }
 
-// CreateCacheHitResponse creates an immediate response from cache
+// CreateCacheHitResponse creates an immediate response from cache.
+//
+// content-type, the cache-hit marker and the final routing fact (selected
+// decision) ride on the default surface. The intermediate category,
+// cache-similarity and matched-keyword headers are demoted off the default
+// surface (#2205): each is emitted only when non-empty, so the caller demotes
+// them by passing empty values unless the request opted into x-vsr-debug.
 func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category string, decisionName string, matchedKeywords []string, similarity ...float32) *ext_proc.ProcessingResponse {
 	var responseBody []byte
 	var contentType string
@@ -230,7 +236,6 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category st
 		responseBody = buildNonStreamingCacheBody(cachedResponse)
 	}
 
-	// Build headers including VSR decision headers for cache hits
 	setHeaders := []*core.HeaderValueOption{
 		{
 			Header: &core.HeaderValue{
@@ -246,19 +251,21 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category st
 		},
 		{
 			Header: &core.HeaderValue{
-				Key:      headers.VSRSelectedCategory,
-				RawValue: []byte(category),
-			},
-		},
-		{
-			Header: &core.HeaderValue{
 				Key:      headers.VSRSelectedDecision,
 				RawValue: []byte(decisionName),
 			},
 		},
 	}
 
-	// Add cache similarity header
+	// Demoted intermediate detail (#2205): emitted only when non-empty.
+	if category != "" {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRSelectedCategory,
+				RawValue: []byte(category),
+			},
+		})
+	}
 	if len(similarity) > 0 && similarity[0] > 0 {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
@@ -267,8 +274,6 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category st
 			},
 		})
 	}
-
-	// Add matched keywords header if provided
 	if len(matchedKeywords) > 0 {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{

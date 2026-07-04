@@ -281,19 +281,30 @@ func buildResponseHeaderMutation(
 		return builder.mutation()
 	}
 
-	addStandardDecisionHeaders(builder, ctx)
-	addMatchedSignalHeaders(builder, ctx)
-	addRetentionDirectiveHeaders(builder, ctx)
+	// Final routing facts ride on every successful response. The intermediate
+	// decision/classification details, matched signals, and the retention
+	// directive headers are demoted to the x-vsr-debug surface (#2205, #2200):
+	// they remain recoverable from the replay record via x-vsr-replay-id. The
+	// retention directive's runtime effects (cache write skip, TTL override,
+	// model-switch-gate stay) are applied internally regardless of the header,
+	// so demoting the wire header does not change behavior.
+	addFinalDecisionHeaders(builder, ctx)
+	if debugHeadersRequested(ctx) {
+		addRetentionDirectiveHeaders(builder, ctx)
+		addDecisionDetailHeaders(builder, ctx)
+		addMatchedSignalHeaders(builder, ctx)
+	}
 	return builder.mutation()
 }
 
 // addRetentionDirectiveHeaders emits the matched decision's EMIT retention
-// directive to the response as x-vsr-retention-* headers so the inference pool
-// and operators can observe the router's retention intent at the wire
-// (issue #2009). Only fields the directive explicitly set are emitted, mirroring
-// the tri-state semantics of config.RetentionDirective; an unset field is
-// omitted rather than sent as a default. Emitted only on successful,
-// non-cache-hit responses (same gate as the standard decision headers).
+// directive to the response as x-vsr-retention-* headers so operators can
+// observe the router's retention intent at the wire (issue #2009). Per the v0.4
+// contract (#2200) these are demoted to the x-vsr-debug surface: the directive's
+// runtime effects are applied internally, so the headers are observability only.
+// Only fields the directive explicitly set are emitted, mirroring the tri-state
+// semantics of config.RetentionDirective; an unset field is omitted rather than
+// sent as a default.
 func addRetentionDirectiveHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
 	r := ctx.EmittedRetention
 	if r == nil {
@@ -316,15 +327,24 @@ func addRetentionDirectiveHeaders(builder *responseHeaderMutationBuilder, ctx *R
 	}
 }
 
-// addStandardDecisionHeaders adds the per-request decision headers
-// (selected category, model, reasoning, modality, etc.) emitted only on
-// successful non-cache-hit responses.
-func addStandardDecisionHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
-	builder.addString(headers.VSRSelectedCategory, ctx.VSRSelectedCategory)
+// addFinalDecisionHeaders adds the final routing facts that ride on the default
+// surface of every successful non-cache-hit response: the selected decision and
+// its confidence, the selected model, and the replay-id entry point.
+func addFinalDecisionHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
 	builder.addString(headers.VSRSelectedDecision, ctx.VSRSelectedDecisionName)
 	if ctx.VSRSelectedDecisionName != "" {
 		builder.addNonNegativeFloat(headers.VSRSelectedConfidence, ctx.VSRSelectedDecisionConfidence)
 	}
+	builder.addString(headers.VSRSelectedModel, ctx.VSRSelectedModel)
+	builder.addString(headers.RouterReplayID, ctx.RouterReplayID)
+}
+
+// addDecisionDetailHeaders adds the intermediate decision/classification details
+// (category, modality, reasoning, session phase, injected-system-prompt, cache
+// similarity). Per the v0.4 contract (#2205) these are demoted off the default
+// surface and emitted only under x-vsr-debug; they remain in the replay record.
+func addDecisionDetailHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
+	builder.addString(headers.VSRSelectedCategory, ctx.VSRSelectedCategory)
 	if ctx.ModalityClassification != nil && ctx.ModalityClassification.Modality != "" {
 		modalityValue := ctx.ModalityClassification.Modality
 		if ctx.ModalityClassification.Method != "" {
@@ -333,14 +353,12 @@ func addStandardDecisionHeaders(builder *responseHeaderMutationBuilder, ctx *Req
 		builder.addString(headers.VSRSelectedModality, modalityValue)
 	}
 	builder.addString(headers.VSRSelectedReasoning, ctx.VSRReasoningMode)
-	builder.addString(headers.VSRSelectedModel, ctx.VSRSelectedModel)
 	builder.addString(headers.VSRSessionPhase, sessionPolicyPhase(ctx))
 	builder.addString(headers.VSRLearningMethods, learningPolicyMethodsHeader(ctx))
 	builder.addString(headers.VSRLearningActions, learningPolicyPairHeader(ctx, learningPolicyFieldAction))
 	builder.addString(headers.VSRLearningScopes, learningPolicyPairHeader(ctx, learningPolicyFieldScope))
 	builder.addString(headers.VSRLearningReasons, learningPolicyPairHeader(ctx, learningPolicyFieldReason))
 	builder.addBool(headers.VSRInjectedSystemPrompt, ctx.VSRInjectedSystemPrompt)
-	builder.addString(headers.RouterReplayID, ctx.RouterReplayID)
 	if ctx.VSRCacheSimilarity > 0 {
 		builder.addFloat("x-vsr-cache-similarity", float64(ctx.VSRCacheSimilarity))
 	}

@@ -195,6 +195,18 @@ type Record struct {
 	RAGContextLength   int     `json:"rag_context_length,omitempty"`
 	RAGSimilarityScore float32 `json:"rag_similarity_score,omitempty"`
 
+	// v0.4 demoted-header replay homes (#2200, #2254): both values were removed
+	// from the default response header surface and now live only in the replay
+	// record, so they stay recoverable via x-vsr-replay-id when a request does
+	// not set x-vsr-debug.
+	//
+	// CacheSimilarity is the semantic-cache lookup similarity (0 = no lookup),
+	// formerly the x-vsr-cache-similarity header.
+	CacheSimilarity float32 `json:"cache_similarity,omitempty"`
+	// ContextTokenCount is the request context token count used for
+	// context-based routing, formerly the x-vsr-context-token-count header.
+	ContextTokenCount int `json:"context_token_count,omitempty"`
+
 	// Hallucination Detection
 	HallucinationEnabled    bool     `json:"hallucination_enabled,omitempty"`
 	HallucinationDetected   bool     `json:"hallucination_detected,omitempty"`
