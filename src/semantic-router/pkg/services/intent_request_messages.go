@@ -34,6 +34,25 @@ type intentMessageImageURL struct {
 	URL string `json:"url"`
 }
 
+// UnmarshalJSON accepts both the Chat Completions object form {"url": "..."} and
+// the Responses API bare-string form, so a string-valued image_url part cannot
+// fail the whole content-parts unmarshal (which would drop text extraction).
+func (u *intentMessageImageURL) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		u.URL = s
+		return nil
+	}
+	// Best-effort: an unknown shape (number/array/bool) yields no image rather
+	// than failing the whole content-parts unmarshal and dropping sibling text.
+	type plain intentMessageImageURL
+	var p plain
+	if err := json.Unmarshal(data, &p); err == nil {
+		*u = intentMessageImageURL(p)
+	}
+	return nil
+}
+
 type intentMessageContentPart struct {
 	Type     string                 `json:"type"`
 	Text     string                 `json:"text"`
@@ -41,11 +60,12 @@ type intentMessageContentPart struct {
 }
 
 func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
+	text := strings.TrimSpace(req.Text)
+
 	if input, ok := resolveIntentSignalInputFromMessages(req.Messages); ok {
-		return input, nil
+		return applyTopLevelTextFallback(input, text), nil
 	}
 
-	text := strings.TrimSpace(req.Text)
 	if text == "" {
 		return intentSignalInput{}, ErrEmptyText
 	}
@@ -55,6 +75,23 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 		contextText:     text,
 		currentUserText: text,
 	}, nil
+}
+
+// applyTopLevelTextFallback fills empty text slots from req.Text when the
+// messages path was accepted solely because it carries an image, so image safety
+// cannot toggle whether the caller-supplied text is scored.
+func applyTopLevelTextFallback(input intentSignalInput, text string) intentSignalInput {
+	if text == "" || strings.TrimSpace(input.evaluationText) != "" {
+		return input
+	}
+	input.evaluationText = text
+	if strings.TrimSpace(input.contextText) == "" {
+		input.contextText = text
+	}
+	if strings.TrimSpace(input.currentUserText) == "" {
+		input.currentUserText = text
+	}
+	return input
 }
 
 func resolveIntentSignalInputFromMessages(messages []IntentMessage) (intentSignalInput, bool) {
@@ -73,7 +110,10 @@ func resolveIntentSignalInputFromMessages(messages []IntentMessage) (intentSigna
 		imageURL:          history.currentUserImageURL,
 	}
 
-	if input.evaluationText == "" && len(history.nonUserMessages) > 0 {
+	// Promote system/assistant text only with no user text AND no image; the
+	// image guard stops an image-only turn from promoting assistant text, leaving
+	// the slot empty for the caller's req.Text fallback.
+	if input.evaluationText == "" && input.imageURL == "" && len(history.nonUserMessages) > 0 {
 		input.evaluationText = strings.Join(history.nonUserMessages, " ")
 		input.contextText = input.evaluationText
 	}
@@ -100,11 +140,15 @@ func extractIntentConversationHistory(messages []IntentMessage) intentConversati
 		text := extractIntentMessageText(msg.Content)
 		role := strings.ToLower(strings.TrimSpace(msg.Role))
 
-		// A user turn may carry only an image (no text). Capture the image even
-		// when the text is empty so image-modality signals still receive it.
 		if role == "user" {
 			imageURL := extractIntentMessageImageURL(msg.Content)
 			if text == "" && imageURL == "" {
+				continue
+			}
+			// An image-only turn attaches its image without clobbering the most
+			// recent user text, which stays the best text to score.
+			if text == "" {
+				history.currentUserImageURL = imageURL
 				continue
 			}
 			if history.currentUserMessage != "" {

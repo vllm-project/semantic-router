@@ -42,7 +42,7 @@ func TestBuildBatchSimilarityMatchesIncludesCandidateText(t *testing.T) {
 func TestValidateEmbeddingRequestRequiresTextsOrImages(t *testing.T) {
 	req := EmbeddingRequest{Dimension: defaultEmbeddingDimension}
 
-	code, message, ok := validateEmbeddingRequest(req)
+	code, message, ok := validateEmbeddingRequest(req, nil)
 	if ok {
 		t.Fatalf("expected empty texts and images to be invalid")
 	}
@@ -57,7 +57,7 @@ func TestValidateEmbeddingRequestAcceptsImagesOnly(t *testing.T) {
 		Dimension: defaultEmbeddingDimension,
 	}
 
-	if _, _, ok := validateEmbeddingRequest(req); !ok {
+	if _, _, ok := validateEmbeddingRequest(req, nil); !ok {
 		t.Fatalf("expected image-only request to be valid")
 	}
 }
@@ -68,12 +68,57 @@ func TestValidateEmbeddingRequestRejectsUnsafeImage(t *testing.T) {
 		Dimension: defaultEmbeddingDimension,
 	}
 
-	code, message, ok := validateEmbeddingRequest(req)
+	code, message, ok := validateEmbeddingRequest(req, nil)
 	if ok {
 		t.Fatalf("expected non-data-URI image to be rejected (SSRF guard)")
 	}
 	if code != "INVALID_IMAGE" {
 		t.Fatalf("unexpected validation error code %q: %q", code, message)
+	}
+}
+
+func TestValidateEmbeddingRequestRejectsMalformedBase64(t *testing.T) {
+	req := EmbeddingRequest{
+		Images:    []string{"data:image/png;base64,!!!!"},
+		Dimension: defaultEmbeddingDimension,
+	}
+
+	code, message, ok := validateEmbeddingRequest(req, nil)
+	if ok {
+		t.Fatalf("expected malformed base64 image to be rejected as a client error, not surface as a 500")
+	}
+	if code != "INVALID_IMAGE" {
+		t.Fatalf("unexpected validation error code %q: %q", code, message)
+	}
+}
+
+func TestValidateEmbeddingRequestAcceptsUppercaseDataURIScheme(t *testing.T) {
+	// "DATA:IMAGE/PNG;BASE64,..." passes the safety gate; it must also pass
+	// decode-validation so it is not accepted here only to 500 at the FFI, whose
+	// marker scan is case-sensitive (CanonicalDataURL normalizes it downstream).
+	req := EmbeddingRequest{
+		Images:    []string{"DATA:IMAGE/PNG;BASE64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"},
+		Dimension: defaultEmbeddingDimension,
+	}
+
+	if _, _, ok := validateEmbeddingRequest(req, nil); !ok {
+		t.Fatalf("expected uppercase-scheme data URI to be accepted")
+	}
+}
+
+func TestValidateEmbeddingRequestRejectsTooManyImages(t *testing.T) {
+	images := make([]string, maxImagesPerRequest+1)
+	for i := range images {
+		images[i] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+	}
+	req := EmbeddingRequest{Images: images, Dimension: defaultEmbeddingDimension}
+
+	code, _, ok := validateEmbeddingRequest(req, nil)
+	if ok {
+		t.Fatalf("expected more than %d images to be rejected", maxImagesPerRequest)
+	}
+	if code != "INVALID_INPUT" {
+		t.Fatalf("unexpected validation error code %q", code)
 	}
 }
 

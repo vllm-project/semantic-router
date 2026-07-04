@@ -17,6 +17,9 @@ import (
 const (
 	defaultEmbeddingDimension = 768
 	defaultEmbeddingPriority  = 0.5
+	// maxImagesPerRequest bounds images per request; each is a full SigLIP
+	// forward pass and the body-size cap alone admits very many minimal images.
+	maxImagesPerRequest = 8
 )
 
 // handleEmbeddings handles embedding generation requests
@@ -93,10 +96,8 @@ func validateEmbeddingRequest(req EmbeddingRequest, mmbertLayers []int) (string,
 	if len(req.Texts) == 0 && len(req.Images) == 0 {
 		return "INVALID_INPUT", "at least one of texts or images must be provided", false
 	}
-	for i, image := range req.Images {
-		if !imageurl.IsSafeImageDataURL(image) {
-			return "INVALID_IMAGE", fmt.Sprintf("images[%d] must be an inline base64 image data URI (data:image/<type>;base64,...)", i), false
-		}
+	if code, message, ok := validateEmbeddingImages(req.Images); !ok {
+		return code, message, false
 	}
 	if !isValidDimension(req.Dimension) {
 		return "INVALID_DIMENSION", fmt.Sprintf("dimension must be one of: 64, 128, 256, 512, 768, 1024 (got %d)", req.Dimension), false
@@ -106,6 +107,23 @@ func validateEmbeddingRequest(req EmbeddingRequest, mmbertLayers []int) (string,
 	}
 	if req.Model == "mmbert" && req.TargetLayer != 0 && !config.IsValidMmBertLayer(req.TargetLayer, mmbertLayers) {
 		return "INVALID_LAYER", fmt.Sprintf("target_layer must be one of: %s (got %d)", formatLayerList(mmbertLayers), req.TargetLayer), false
+	}
+	return "", "", true
+}
+
+// validateEmbeddingImages enforces the image-input contract: a bounded count of
+// safe inline base64 image data URIs whose payloads decode.
+func validateEmbeddingImages(images []string) (string, string, bool) {
+	if len(images) > maxImagesPerRequest {
+		return "INVALID_INPUT", fmt.Sprintf("at most %d images may be provided per request (got %d)", maxImagesPerRequest, len(images)), false
+	}
+	for i, image := range images {
+		if !imageurl.IsSafeImageDataURL(image) {
+			return "INVALID_IMAGE", fmt.Sprintf("images[%d] must be an inline base64 image data URI (data:image/<type>;base64,...)", i), false
+		}
+		if _, ok := imageurl.DecodeBase64(image); !ok {
+			return "INVALID_IMAGE", fmt.Sprintf("images[%d] is not valid base64-encoded image data", i), false
+		}
 	}
 	return "", "", true
 }
@@ -133,7 +151,13 @@ func buildEmbeddingResults(req EmbeddingRequest) ([]EmbeddingResult, int64, erro
 	}
 
 	for _, image := range req.Images {
-		output, err := candle_binding.MultiModalEncodeImageFromBase64(image, req.Dimension)
+		// Canonicalize so the FFI's case-sensitive ";base64," scan finds the
+		// payload boundary (validation already guaranteed a safe data URI).
+		encodeInput := image
+		if canonical, ok := imageurl.CanonicalDataURL(image); ok {
+			encodeInput = canonical
+		}
+		output, err := candle_binding.MultiModalEncodeImageFromBase64(encodeInput, req.Dimension)
 		if err != nil {
 			return nil, 0, err
 		}
