@@ -3,7 +3,14 @@
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictStr,
+    model_validator,
+)
 
 from .algorithms import AlgorithmConfig, ModelRef
 
@@ -820,6 +827,181 @@ class ImageGenPluginConfig(BaseModel):
     timeout_seconds: Optional[int] = Field(default=None, ge=1)
 
 
+class DecisionLearningAdaptationConfig(BaseModel):
+    """Decision-local control for Router Learning adaptation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[Literal["apply", "observe", "bypass"]] = None
+    candidate_set: Optional[Literal["decision", "tier", "global"]] = None
+
+
+class DecisionLearningProtectionConfig(BaseModel):
+    """Decision-local control for Router Learning protection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[Literal["apply", "observe", "bypass"]] = None
+    stability_weight: Optional[float] = Field(default=None, ge=0.0)
+    switch_margin: Optional[float] = Field(default=None, ge=0.0)
+
+
+class DecisionAdaptationsConfig(BaseModel):
+    """Decision-local Router Learning controls."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[Literal["apply", "observe", "bypass"]] = None
+    adaptation: Optional[DecisionLearningAdaptationConfig] = None
+    protection: Optional[DecisionLearningProtectionConfig] = None
+
+
+class RouterLearningAdaptationConfig(BaseModel):
+    """Global Router Learning adaptation controls."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: Optional[StrictBool] = None
+    strategy: Optional[Literal["routing_sampling"]] = None
+    candidate_set: Optional[Literal["decision", "tier", "global"]] = None
+
+
+class RouterLearningIdentityHeadersConfig(BaseModel):
+    """Header names used by Router Learning protection identity."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    session: Optional[StrictStr] = None
+    conversation: Optional[StrictStr] = None
+
+
+class RouterLearningIdentityConfig(BaseModel):
+    """Identity configuration used by Router Learning protection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    headers: Optional[RouterLearningIdentityHeadersConfig] = None
+
+
+class RouterLearningProtectionTuningConfig(BaseModel):
+    """Global Router Learning protection tuning."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    idle_timeout_seconds: Optional[int] = Field(default=None, ge=0)
+    min_turns_before_switch: Optional[int] = Field(default=None, ge=0)
+    switch_margin: Optional[float] = Field(default=None, ge=0.0)
+    stability_weight: Optional[float] = Field(default=None, ge=0.0)
+
+
+class RouterLearningProtectionConfig(BaseModel):
+    """Global Router Learning protection controls."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: Optional[StrictBool] = None
+    scope: Optional[Literal["conversation", "session"]] = None
+    identity: Optional[RouterLearningIdentityConfig] = None
+    tuning: Optional[RouterLearningProtectionTuningConfig] = None
+
+
+class RouterLearningConfig(BaseModel):
+    """Global Router Learning controls."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: Optional[StrictBool] = None
+    adaptation: Optional[RouterLearningAdaptationConfig] = None
+    protection: Optional[RouterLearningProtectionConfig] = None
+
+
+class OutputContractChoiceSetSpec(BaseModel):
+    """Allowed values for choice-style output contracts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    values: List[str]
+
+
+class OutputContractJSONSchemaSpec(BaseModel):
+    """Structured JSON schema selector for router-enforced output contracts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_ref: Literal["terminal_action_v1"]
+
+
+class OutputContractReferenceSpec(BaseModel):
+    """Reference selection source metadata."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: Optional[Literal["candidate_responses"]] = None
+    id_format: Optional[Literal["index", "reference_number"]] = None
+
+
+class OutputContractRenderSpec(BaseModel):
+    """How the router renders a normalized output value."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[Literal["value", "template"]] = None
+    template: Optional[str] = None
+
+
+class OutputContractExtractSpec(BaseModel):
+    """Preferred response fields for extraction."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[Literal["exact", "json_object"]] = None
+    sources: Optional[
+        List[Literal["content", "reasoning_content", "candidate_responses"]]
+    ] = None
+
+
+class OutputContractNormalizeSpec(BaseModel):
+    """Normalization policy for structured output contracts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    field_order: Optional[List[str]] = None
+    defaults: Optional[Dict[str, str]] = None
+
+
+class OutputContractViolationPolicy(BaseModel):
+    """Repair and fallback policy when output contract enforcement fails."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    repair: Optional[StrictBool] = None
+    fallback: Optional[str] = None
+
+
+class OutputContractPostprocess(BaseModel):
+    """Post-processing operation for output contract enforcement."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["dereference_selected_reference"]
+
+
+class OutputContractSpec(BaseModel):
+    """Router-executable typed output contract."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Optional[Literal["choice", "structured_json", "reference_selection"]] = None
+    choice_set: Optional[OutputContractChoiceSetSpec] = None
+    json_schema: Optional[OutputContractJSONSchemaSpec] = None
+    reference: Optional[OutputContractReferenceSpec] = None
+    render: Optional[OutputContractRenderSpec] = None
+    extract: Optional[OutputContractExtractSpec] = None
+    normalize: Optional[OutputContractNormalizeSpec] = None
+    on_violation: Optional[OutputContractViolationPolicy] = None
+    postprocess: Optional[List[OutputContractPostprocess]] = None
+
+
 class Decision(BaseModel):
     """Routing decision configuration."""
 
@@ -829,8 +1011,11 @@ class Decision(BaseModel):
     description: str
     priority: int
     rules: Rules
+    output_contract: Optional[str] = None
+    output_contract_spec: Optional[OutputContractSpec] = None
     modelRefs: List[ModelRef] = Field(alias="modelRefs")
     algorithm: Optional[AlgorithmConfig] = None  # Multi-model orchestration algorithm
+    adaptations: Optional[DecisionAdaptationsConfig] = None
     plugins: Optional[List[PluginConfig]] = []
 
 

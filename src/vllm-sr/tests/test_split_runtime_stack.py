@@ -541,3 +541,93 @@ def test_docker_start_vllm_sr_applies_custom_stack_name_and_port_offset(
     assert "9390:9190" in router_cmd
     assert "8900:8700" in dashboard_cmd
     assert "8280:8080" in router_cmd
+
+
+def test_docker_start_vllm_sr_propagates_stack_name_to_dashboard(tmp_path, monkeypatch):
+    """Dashboard's runtime-config sync resolves the per-stack filename via
+    VLLM_SR_STACK_NAME. Without the env propagated into the dashboard container,
+    sync writes to runtime-config.yaml while the CLI wrote
+    runtime-config.<stack>.yaml; router stays pinned to the stale path and
+    setup-mode never disengages.
+    """
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+    )
+
+    monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        docker_start,
+        "get_runtime_images",
+        lambda **kwargs: {
+            "router": "test-image",
+            "envoy": "test-image",
+            "dashboard": "test-image",
+        },
+    )
+    captured = _capture_run_commands(monkeypatch)
+    _stub_valid_docker_cli(monkeypatch, tmp_path)
+    monkeypatch.setenv("VLLM_SR_STACK_NAME", "audit-a")
+
+    rc, _, _ = docker_cli.docker_start_vllm_sr(
+        str(config_path),
+        {},
+        [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        network_name=None,
+        openclaw_network_name=None,
+        minimal=False,
+    )
+
+    assert rc == 0
+    router_cmd = _find_container_run_cmd(captured, "audit-a-vllm-sr-router-container")
+    dashboard_cmd = _find_container_run_cmd(
+        captured, "audit-a-vllm-sr-dashboard-container"
+    )
+    # Dashboard runs the runtime-config sync, router consumes the resolved
+    # path; both need stack-name visibility.
+    assert "VLLM_SR_STACK_NAME=audit-a" in dashboard_cmd
+    assert "VLLM_SR_STACK_NAME=audit-a" in router_cmd
+
+
+def test_docker_start_vllm_sr_omits_stack_name_env_for_default_stack(
+    tmp_path, monkeypatch
+):
+    """Default stack uses the unsuffixed runtime-config.yaml on both ends, so
+    we do not need to inject VLLM_SR_STACK_NAME and should not start doing so
+    accidentally.
+    """
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+    )
+
+    monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        docker_start,
+        "get_runtime_images",
+        lambda **kwargs: {
+            "router": "test-image",
+            "envoy": "test-image",
+            "dashboard": "test-image",
+        },
+    )
+    captured = _capture_run_commands(monkeypatch)
+    _stub_valid_docker_cli(monkeypatch, tmp_path)
+    monkeypatch.delenv("VLLM_SR_STACK_NAME", raising=False)
+
+    rc, _, _ = docker_cli.docker_start_vllm_sr(
+        str(config_path),
+        {},
+        [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        network_name="vllm-sr-network",
+        openclaw_network_name="vllm-sr-network",
+        minimal=False,
+    )
+
+    assert rc == 0
+    dashboard_cmd = _find_container_run_cmd(captured, "vllm-sr-dashboard-container")
+    router_cmd = _find_container_run_cmd(captured, "vllm-sr-router-container")
+    for token in dashboard_cmd + router_cmd:
+        assert not token.startswith(
+            "VLLM_SR_STACK_NAME="
+        ), f"unexpected stack-name env on default stack: {token}"

@@ -191,3 +191,44 @@ func TestConversation_AssistantToolCallCount(t *testing.T) {
 		t.Fatal("expected no match with 2 tool calls < 3")
 	}
 }
+
+func TestConversation_ActiveToolLoopCount(t *testing.T) {
+	rule := config.ConversationRule{
+		Name: "active_tool_loop",
+		Feature: config.ConversationFeature{
+			Type:   "exists",
+			Source: config.ConversationSource{Type: "active_tool_loop"},
+		},
+	}
+
+	activeCases := []ConversationFacts{
+		{LastMessageToolResult: true},
+		{LastMessageRole: "tool"},
+		{LastUserAfterToolResult: true},
+		{AssistantToolCallCount: 2, ToolResultCount: 1},
+	}
+	for i, facts := range activeCases {
+		val := resolveConversationValue(rule.Feature, facts)
+		if val != 1.0 {
+			t.Fatalf("active case %d: expected 1.0, got %v", i, val)
+		}
+		if !conversationPredicateMatches(rule, val) {
+			t.Fatalf("active case %d: expected active_tool_loop to match", i)
+		}
+	}
+
+	completedPriorRun := ConversationFacts{
+		LastMessageRole:         "user",
+		AssistantToolCallCount:  1,
+		ToolResultCount:         1,
+		LastMessageToolResult:   false,
+		LastUserAfterToolResult: false,
+	}
+	val := resolveConversationValue(rule.Feature, completedPriorRun)
+	if val != 0.0 {
+		t.Fatalf("completed prior run: expected 0.0, got %v", val)
+	}
+	if conversationPredicateMatches(rule, val) {
+		t.Fatal("completed prior run should not match active_tool_loop")
+	}
+}

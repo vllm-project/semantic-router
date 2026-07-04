@@ -1308,6 +1308,32 @@ ROUTE test {
 	}
 }
 
+func TestNegativeCompileRemovedLearningAlgorithms(t *testing.T) {
+	for _, algorithmType := range []string{"session_aware", "elo", "rl_driven", "gmtrouter"} {
+		t.Run(algorithmType, func(t *testing.T) {
+			input := fmt.Sprintf(`
+SIGNAL domain test { description: "test" }
+ROUTE test {
+  PRIORITY 1
+  WHEN domain("test")
+  MODEL "m:1b"
+  ALGORITHM %s {
+    base_method: "hybrid"
+  }
+}
+`, algorithmType)
+			_, errs := Compile(input)
+			if len(errs) == 0 {
+				t.Fatalf("expected compile error for removed %s algorithm, got none", algorithmType)
+			}
+			want := fmt.Sprintf(`unknown algorithm type "%s"`, algorithmType)
+			if !strings.Contains(errs[0].Error(), want) {
+				t.Fatalf("unexpected error for removed %s algorithm: %v", algorithmType, errs)
+			}
+		})
+	}
+}
+
 func TestNegativeParseErrors(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -1411,28 +1437,6 @@ func TestCompileAllAlgorithmTypes(t *testing.T) {
 			},
 		},
 		{
-			name:     "elo",
-			algoType: "elo",
-			body:     `initial_rating: 1500.0 k_factor: 32.0 category_weighted: true decay_factor: 0.95 min_comparisons: 10 cost_scaling_factor: 0.5 storage_path: "/tmp/elo"`,
-			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.Elo == nil {
-					t.Fatal("expected elo config")
-				}
-				if algo.Elo.InitialRating != 1500.0 {
-					t.Errorf("initial_rating = %v, want 1500", algo.Elo.InitialRating)
-				}
-				if algo.Elo.KFactor != 32.0 {
-					t.Errorf("k_factor = %v, want 32", algo.Elo.KFactor)
-				}
-				if !algo.Elo.CategoryWeighted {
-					t.Error("expected category_weighted = true")
-				}
-				if algo.Elo.StoragePath != "/tmp/elo" {
-					t.Errorf("storage_path = %q, want /tmp/elo", algo.Elo.StoragePath)
-				}
-			},
-		},
-		{
 			name:     "router_dc",
 			algoType: "router_dc",
 			body:     `temperature: 0.8 dimension_size: 128 min_similarity: 0.3 use_query_contrastive: true use_model_contrastive: false`,
@@ -1473,51 +1477,16 @@ func TestCompileAllAlgorithmTypes(t *testing.T) {
 		{
 			name:     "hybrid",
 			algoType: "hybrid",
-			body:     `elo_weight: 0.3 router_dc_weight: 0.3 automix_weight: 0.2 cost_weight: 0.2`,
+			body:     `experience_weight: 0.3 router_dc_weight: 0.3 automix_weight: 0.2 cost_weight: 0.2`,
 			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
 				if algo.Hybrid == nil {
 					t.Fatal("expected hybrid config")
 				}
-				if algo.Hybrid.EloWeight != 0.3 {
-					t.Errorf("elo_weight = %v, want 0.3", algo.Hybrid.EloWeight)
+				if algo.Hybrid.ExperienceWeight != 0.3 {
+					t.Errorf("experience_weight = %v, want 0.3", algo.Hybrid.ExperienceWeight)
 				}
 				if algo.Hybrid.CostWeight != 0.2 {
 					t.Errorf("cost_weight = %v, want 0.2", algo.Hybrid.CostWeight)
-				}
-			},
-		},
-		{
-			name:     "rl_driven",
-			algoType: "rl_driven",
-			body:     `exploration_rate: 0.1 use_thompson_sampling: true enable_personalization: false`,
-			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.RLDriven == nil {
-					t.Fatal("expected rl_driven config")
-				}
-				if algo.RLDriven.ExplorationRate != 0.1 {
-					t.Errorf("exploration_rate = %v, want 0.1", algo.RLDriven.ExplorationRate)
-				}
-				if !algo.RLDriven.UseThompsonSampling {
-					t.Error("expected use_thompson_sampling = true")
-				}
-			},
-		},
-		{
-			name:     "gmtrouter",
-			algoType: "gmtrouter",
-			body:     `enable_personalization: true history_sample_size: 50 model_path: "/models/gmt"`,
-			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.GMTRouter == nil {
-					t.Fatal("expected gmtrouter config")
-				}
-				if !algo.GMTRouter.EnablePersonalization {
-					t.Error("expected enable_personalization = true")
-				}
-				if algo.GMTRouter.HistorySampleSize != 50 {
-					t.Errorf("history_sample_size = %d, want 50", algo.GMTRouter.HistorySampleSize)
-				}
-				if algo.GMTRouter.ModelPath != "/models/gmt" {
-					t.Errorf("model_path = %q, want /models/gmt", algo.GMTRouter.ModelPath)
 				}
 			},
 		},
@@ -1609,28 +1578,6 @@ func TestCompileAllAlgorithmTypes(t *testing.T) {
 				}
 			},
 		},
-		{
-			name:     "session_aware",
-			algoType: "session_aware",
-			body:     `base_method: "hybrid" idle_timeout_seconds: 600 min_turns_before_switch: 2 switch_margin: 0.12 stay_bias: 0.2 tool_loop_hard_lock: true context_portability_hard_lock: false decision_drift_reset: true max_cache_cost_multiplier: 1.5 remaining_turn_prior_horizon: 6`,
-			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.SessionAware == nil {
-					t.Fatal("expected session_aware config")
-				}
-				if algo.SessionAware.BaseMethod != "hybrid" {
-					t.Errorf("base_method = %q, want hybrid", algo.SessionAware.BaseMethod)
-				}
-				if algo.SessionAware.IdleTimeoutSeconds == nil || *algo.SessionAware.IdleTimeoutSeconds != 600 {
-					t.Fatalf("idle_timeout_seconds = %#v, want 600", algo.SessionAware.IdleTimeoutSeconds)
-				}
-				if algo.SessionAware.ContextPortabilityHardLock == nil || *algo.SessionAware.ContextPortabilityHardLock {
-					t.Fatalf("context_portability_hard_lock = %#v, want false", algo.SessionAware.ContextPortabilityHardLock)
-				}
-				if algo.SessionAware.MaxCacheCostMultiplier == nil || *algo.SessionAware.MaxCacheCostMultiplier != 1.5 {
-					t.Fatalf("max_cache_cost_multiplier = %#v, want 1.5", algo.SessionAware.MaxCacheCostMultiplier)
-				}
-			},
-		},
 	}
 
 	for _, tc := range algoDSLs {
@@ -1665,12 +1612,6 @@ ROUTE test {
 }
 
 func TestDecompileCurrentAlgorithmSurfaceRoundTrips(t *testing.T) {
-	falseValue := false
-	trueValue := true
-	idleTimeout := 600
-	stayBias := 0.2
-	cacheMultiplier := 1.5
-
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{
 			{
@@ -1699,24 +1640,6 @@ func TestDecompileCurrentAlgorithmSurfaceRoundTrips(t *testing.T) {
 					},
 				},
 			},
-			{
-				Name: "session-aware-route",
-				ModelRefs: []config.ModelRef{
-					{Model: "m1"},
-					{Model: "m2"},
-				},
-				Algorithm: &config.AlgorithmConfig{
-					Type: "session_aware",
-					SessionAware: &config.SessionAwareSelectionConfig{
-						BaseMethod:                 "hybrid",
-						IdleTimeoutSeconds:         &idleTimeout,
-						StayBias:                   &stayBias,
-						ToolLoopHardLock:           &trueValue,
-						ContextPortabilityHardLock: &falseValue,
-						MaxCacheCostMultiplier:     &cacheMultiplier,
-					},
-				},
-			},
 		}},
 	}
 
@@ -1728,9 +1651,7 @@ func TestDecompileCurrentAlgorithmSurfaceRoundTrips(t *testing.T) {
 		"ALGORITHM multi_factor",
 		"latency_percentile: 99",
 		"weights:",
-		"ALGORITHM session_aware",
-		"context_portability_hard_lock: false",
-		"max_cache_cost_multiplier: 1.5",
+		"on_no_candidates: \"fail\"",
 	} {
 		if !strings.Contains(dslText, fragment) {
 			t.Fatalf("decompiled DSL missing %q:\n%s", fragment, dslText)
@@ -1752,9 +1673,8 @@ func TestDecompileCurrentAlgorithmSurfaceRoundTrips(t *testing.T) {
 	if multiFactor == nil || multiFactor.Weights == nil || multiFactor.Weights.Quality != 0.4 {
 		t.Fatalf("round-trip multi_factor weights = %#v", multiFactor)
 	}
-	sessionAware := byName["session-aware-route"].SessionAware
-	if sessionAware == nil || sessionAware.ContextPortabilityHardLock == nil || *sessionAware.ContextPortabilityHardLock {
-		t.Fatalf("round-trip session_aware context_portability_hard_lock = %#v", sessionAware)
+	if byName["multi-factor-route"].MultiFactor.SLO.MaxInflight != 20 || byName["multi-factor-route"].MultiFactor.OnNoCandidates != "fail" {
+		t.Fatalf("round-trip multi_factor details = %#v", byName["multi-factor-route"].MultiFactor)
 	}
 }
 
@@ -2341,15 +2261,19 @@ ROUTE test {
   MODEL "m1:7b", "m2:3b"
   ALGORITHM remom {
     breadth_schedule: [8, 4, 2]
-    model_distribution: "uniform"
+    model_distribution: "round_robin"
     temperature: 0.8
     include_reasoning: true
-    compaction_strategy: "summarize"
+    compaction_strategy: "last_n_tokens"
     compaction_tokens: 512
     synthesis_template: "custom-template"
+    synthesis_model: "m2:3b"
     max_concurrent: 8
+    round_timeout_seconds: 90
+    min_successful_responses: 2
     on_error: "skip"
     include_intermediate_responses: true
+    max_responses_per_round: 4
   }
 }`
 	cfg, errs := Compile(input)
@@ -2360,10 +2284,10 @@ ROUTE test {
 	if len(r.BreadthSchedule) != 3 || r.BreadthSchedule[2] != 2 {
 		t.Errorf("breadth_schedule = %v", r.BreadthSchedule)
 	}
-	if r.ModelDistribution != "uniform" {
+	if r.ModelDistribution != "round_robin" {
 		t.Errorf("model_distribution = %q", r.ModelDistribution)
 	}
-	if r.CompactionStrategy != "summarize" {
+	if r.CompactionStrategy != "last_n_tokens" {
 		t.Errorf("compaction_strategy = %q", r.CompactionStrategy)
 	}
 	if r.CompactionTokens != 512 {
@@ -2372,11 +2296,23 @@ ROUTE test {
 	if r.SynthesisTemplate != "custom-template" {
 		t.Errorf("synthesis_template = %q", r.SynthesisTemplate)
 	}
+	if r.SynthesisModel != "m2:3b" {
+		t.Errorf("synthesis_model = %q", r.SynthesisModel)
+	}
 	if r.MaxConcurrent != 8 {
 		t.Errorf("max_concurrent = %d", r.MaxConcurrent)
 	}
+	if r.RoundTimeoutSeconds != 90 {
+		t.Errorf("round_timeout_seconds = %d", r.RoundTimeoutSeconds)
+	}
+	if r.MinSuccessfulResponses != 2 {
+		t.Errorf("min_successful_responses = %d", r.MinSuccessfulResponses)
+	}
 	if !r.IncludeIntermediateResponses {
 		t.Error("expected include_intermediate_responses = true")
+	}
+	if r.MaxResponsesPerRound != 4 {
+		t.Errorf("max_responses_per_round = %d", r.MaxResponsesPerRound)
 	}
 }
 

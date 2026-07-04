@@ -1,0 +1,463 @@
+version: v0.3
+
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    timeout: 1800s
+
+global:
+  router:
+    auto_model_names:
+      - vllm-sr/auto
+  integrations:
+    looper:
+      endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
+      timeout_seconds: 1800
+
+providers:
+  defaults:
+    default_model: glm52-finalizer
+    default_reasoning_effort: high
+    reasoning_families:
+      openrouter:
+        type: reasoning_effort
+        parameter: reasoning_effort
+  models:
+    - name: glm52-planner
+      provider_model_id: z-ai/glm-5.2
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.95
+        cached_input_per_1m: 0.18
+        completion_per_1m: 3
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: glm52-patcher-a
+      provider_model_id: z-ai/glm-5.2
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.95
+        cached_input_per_1m: 0.18
+        completion_per_1m: 3
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: glm52-patcher-b
+      provider_model_id: z-ai/glm-5.2
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.95
+        cached_input_per_1m: 0.18
+        completion_per_1m: 3
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: glm52-verifier
+      provider_model_id: z-ai/glm-5.2
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.95
+        cached_input_per_1m: 0.18
+        completion_per_1m: 3
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: glm52-finalizer
+      provider_model_id: z-ai/glm-5.2
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.95
+        cached_input_per_1m: 0.18
+        completion_per_1m: 3
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+
+routing:
+  modelCards:
+    - name: glm52-planner
+      context_window_size: 1048576
+      description: GLM 5.2 planner alias for SWE-Bench Pro issue triage.
+      capabilities: [chat, code, reasoning, long-context]
+      quality_score: 0.91
+      modality: text
+      tags: [deployment:openrouter, benchmark:swe-bench-pro, role:planner, base:glm52]
+    - name: glm52-patcher-a
+      context_window_size: 1048576
+      description: GLM 5.2 patch author alias for SWE-Bench Pro.
+      capabilities: [chat, code, reasoning, long-context]
+      quality_score: 0.91
+      modality: text
+      tags: [deployment:openrouter, benchmark:swe-bench-pro, role:patcher, base:glm52]
+    - name: glm52-patcher-b
+      context_window_size: 1048576
+      description: GLM 5.2 alternate patch author alias for SWE-Bench Pro.
+      capabilities: [chat, code, reasoning, long-context]
+      quality_score: 0.91
+      modality: text
+      tags: [deployment:openrouter, benchmark:swe-bench-pro, role:patcher, base:glm52]
+    - name: glm52-verifier
+      context_window_size: 1048576
+      description: GLM 5.2 verifier alias for regression and test-risk review.
+      capabilities: [chat, code, reasoning, long-context]
+      quality_score: 0.91
+      modality: text
+      tags: [deployment:openrouter, benchmark:swe-bench-pro, role:verifier, base:glm52]
+    - name: glm52-finalizer
+      context_window_size: 1048576
+      description: GLM 5.2 finalizer alias for patch and answer contract synthesis.
+      capabilities: [chat, code, reasoning, long-context]
+      quality_score: 0.91
+      modality: text
+      tags: [deployment:openrouter, benchmark:swe-bench-pro, role:finalizer, base:glm52]
+
+  signals:
+    keywords:
+      - name: swe_agentic_any
+        operator: OR
+        keywords:
+          - "SWE-bench"
+          - "repository"
+          - "issue"
+          - "bug"
+          - "patch"
+          - "diff"
+          - "test"
+          - "pytest"
+          - "Traceback"
+      - name: swe_failure_reproduction
+        operator: OR
+        keywords:
+          - "failing test"
+          - "test failure"
+          - "AssertionError"
+          - "TypeError"
+          - "ValueError"
+          - "regression"
+          - "reproduce"
+          - "stack trace"
+      - name: swe_broad_patch_risk
+        operator: OR
+        keywords:
+          - "multiple files"
+          - "refactor"
+          - "backward compatibility"
+          - "API"
+          - "migration"
+          - "race"
+          - "thread"
+          - "async"
+          - "database"
+          - "cache"
+      - name: swe_output_contract
+        operator: OR
+        keywords:
+          - "OpenHands"
+          - "Final Answer"
+          - "mswea_bash_command"
+          - "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"
+          - "```diff"
+          - "```patch"
+          - "```bash"
+          - "apply_patch"
+          - "git diff"
+    context:
+      - name: swe_long_context
+        min_tokens: 16K
+        max_tokens: 1M
+        description: Long repository issue context or multi-file SWE-Bench Pro prompt.
+
+  projections:
+    scores:
+      - name: swe_risk_score
+        method: weighted_sum
+        inputs:
+          - type: keyword
+            name: swe_failure_reproduction
+            weight: 0.30
+          - type: keyword
+            name: swe_broad_patch_risk
+            weight: 0.30
+          - type: context
+            name: swe_long_context
+            weight: 0.25
+          - type: keyword
+            name: swe_output_contract
+            weight: 0.15
+    mappings:
+      - name: swe_risk_band
+        source: swe_risk_score
+        method: threshold_bands
+        outputs:
+          - name: swe_low_risk
+            lt: 0.35
+          - name: swe_medium_risk
+            gte: 0.35
+            lt: 0.65
+          - name: swe_high_risk
+            gte: 0.65
+
+  decisions:
+    - name: swe_high_risk_static_flow
+      description: High-risk SWE-Bench Pro tasks use planner, parallel patchers, verifier, and finalizer roles.
+      priority: 330
+      rules:
+        operator: AND
+        conditions:
+          - type: projection
+            name: swe_high_risk
+      output_contract: >-
+        Preserve the EvalScope SWE backticks protocol exactly. Every action
+        turn must contain exactly one fenced block whose opening line is
+        ```mswea_bash_command, never ```bash. Optional THOUGHT text may appear
+        before the block. When ready to submit, the single command block must
+        run `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat patch.txt`.
+        For repo-local Python verification, run from the benchmark worktree
+        root and set PYTHONPATH to that root, for example
+        `cd /testbed && PYTHONPATH=/testbed python ...` or
+        `cd /app && PYTHONPATH=/app python ...`. Do not run repo imports from
+        `/tmp` without PYTHONPATH. Do not emit multiple command blocks or prose
+        after the command block.
+      modelRefs:
+        - model: glm52-planner
+          use_reasoning: true
+          reasoning_effort: high
+        - model: glm52-patcher-a
+          use_reasoning: true
+          reasoning_effort: high
+        - model: glm52-patcher-b
+          use_reasoning: true
+          reasoning_effort: high
+        - model: glm52-verifier
+          use_reasoning: true
+          reasoning_effort: high
+        - model: glm52-finalizer
+          use_reasoning: true
+          reasoning_effort: high
+      algorithm:
+        type: workflows
+        workflows:
+          mode: static
+          template: swe-bench-pro-glm52-v1
+          roles:
+            - name: planner
+              models: [glm52-planner]
+              prompt: >-
+                Identify the failing behavior, likely files, minimal patch
+                area, and validation command. Keep the plan concise and
+                executable by a patcher.
+            - name: patcher
+              models: [glm52-patcher-a, glm52-patcher-b]
+              prompt: >-
+                Produce the smallest patch that fixes the issue without broad
+                refactors. Preserve public APIs unless the issue requires a
+                change.
+            - name: verifier
+              models: [glm52-verifier]
+              prompt: >-
+                Review the proposed patch for regressions, missed edge cases,
+                failing tests, and output-contract violations. Suggest only
+                concrete corrections.
+          final:
+            model: glm52-finalizer
+            prompt: >-
+              Synthesize the next SWE-Bench Pro agent action from the plan,
+              patch candidates, and verifier notes. Return exactly one
+              EvalScope backticks action. The command fence must start with
+              ```mswea_bash_command, not ```bash. If a candidate uses a bash
+              fence, rewrite only the fence name and preserve the best command.
+              If the action runs repo-local Python code, make it enter the
+              worktree and set PYTHONPATH to that worktree so imports use the
+              checked-out source.
+          max_steps: 4
+          max_parallel: 2
+          max_completion_tokens: 32768
+          round_timeout_seconds: 1800
+          min_successful_responses: 1
+          temperature: 1.0
+          include_intermediate_responses: false
+          on_error: skip
+
+    - name: swe_medium_risk_fusion
+      description: Medium-risk tasks use two GLM 5.2 patch candidates and GLM 5.2 synthesis.
+      priority: 220
+      rules:
+        operator: OR
+        conditions:
+          - type: projection
+            name: swe_medium_risk
+          - type: keyword
+            name: swe_failure_reproduction
+      output_contract: >-
+        Preserve the EvalScope SWE backticks protocol exactly. Every action
+        turn must contain exactly one fenced block whose opening line is
+        ```mswea_bash_command, never ```bash. Optional THOUGHT text may appear
+        before the block. When ready to submit, the single command block must
+        run `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat patch.txt`.
+        For repo-local Python verification, run from the benchmark worktree
+        root and set PYTHONPATH to that root, for example
+        `cd /testbed && PYTHONPATH=/testbed python ...` or
+        `cd /app && PYTHONPATH=/app python ...`. Do not run repo imports from
+        `/tmp` without PYTHONPATH. Do not emit multiple command blocks or prose
+        after the command block.
+      modelRefs:
+        - model: glm52-patcher-a
+          use_reasoning: true
+          reasoning_effort: high
+        - model: glm52-patcher-b
+          use_reasoning: true
+          reasoning_effort: high
+        - model: glm52-verifier
+          use_reasoning: true
+          reasoning_effort: high
+        - model: glm52-finalizer
+          use_reasoning: true
+          reasoning_effort: high
+      algorithm:
+        type: fusion
+        fusion:
+          model: glm52-finalizer
+          analysis_models: [glm52-patcher-a, glm52-patcher-b]
+          max_concurrent: 2
+          max_completion_tokens: 32768
+          round_timeout_seconds: 1200
+          min_successful_responses: 1
+          temperature: 1.0
+          include_analysis: false
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            You are the final SWE-Bench Pro patch judge.
+
+            Original harness turn:
+            {{original}}
+
+            Candidate responses:
+            {{responses}}
+
+            Choose the response most likely to pass the benchmark tests. Fix
+            only clear syntax, protocol, or regression issues. Return exactly
+            one EvalScope backticks action. The command fence must start with
+            ```mswea_bash_command, not ```bash. If a candidate uses a bash
+            fence, rewrite only the fence name and preserve the best command.
+            If the action runs repo-local Python code, make it enter the
+            worktree and set PYTHONPATH to that worktree so imports use the
+            checked-out source.
+          grounding:
+            enabled: false
+            reference: panel
+            policy: weight
+            min_score: 0.0
+            min_keep: 1
+            nli_contradiction_penalty: 1.0
+            on_error: skip
+
+    - name: swe_fallback_remom
+      description: Catch-all SWE fallback; still uses loop routing and never exposes direct GLM 5.2 as a decision.
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      output_contract: >-
+        Preserve the EvalScope SWE backticks protocol exactly. Every action
+        turn must contain exactly one fenced block whose opening line is
+        ```mswea_bash_command, never ```bash. Optional THOUGHT text may appear
+        before the block. When ready to submit, the single command block must
+        run `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat patch.txt`.
+        For repo-local Python verification, run from the benchmark worktree
+        root and set PYTHONPATH to that root, for example
+        `cd /testbed && PYTHONPATH=/testbed python ...` or
+        `cd /app && PYTHONPATH=/app python ...`. Do not run repo imports from
+        `/tmp` without PYTHONPATH. Do not emit multiple command blocks or prose
+        after the command block.
+      modelRefs:
+        - model: glm52-patcher-a
+          use_reasoning: true
+          reasoning_effort: high
+        - model: glm52-patcher-b
+          use_reasoning: true
+          reasoning_effort: high
+        - model: glm52-finalizer
+          use_reasoning: true
+          reasoning_effort: high
+      algorithm:
+        type: remom
+        remom:
+          breadth_schedule: [2]
+          model_distribution: round_robin
+          temperature: 1.0
+          include_reasoning: false
+          compaction_strategy: last_n_tokens
+          compaction_tokens: 12000
+          synthesis_model: glm52-finalizer
+          max_concurrent: 2
+          round_timeout_seconds: 1200
+          min_successful_responses: 1
+          max_responses_per_round: 2
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            Produce the next SWE-Bench Pro EvalScope backticks action from the
+            GLM-5.2 attempts.
+
+            Original harness turn:
+            {{.OriginalContent}}
+
+            Attempts:
+            {{range $i, $resp := .ReferenceResponses}}
+            Attempt {{add $i 1}}{{if $resp.Model}} ({{$resp.Model}}){{end}}:
+            {{$resp.Content}}
+            {{end}}
+
+            Return exactly one action in this form:
+
+            THOUGHT: <brief reason>
+            ```mswea_bash_command
+            <one non-interactive shell command>
+            ```
+
+            The fence name must be exactly mswea_bash_command. Do not use
+            ```bash. Do not emit multiple command blocks. If a candidate uses
+            a bash fence, rewrite only the fence name and preserve the best
+            command. If the command runs repo-local Python code, make it enter
+            the worktree and set PYTHONPATH to that worktree so imports use
+            the checked-out source. When ready to submit, the single command
+            must be exactly
+            `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat patch.txt`.

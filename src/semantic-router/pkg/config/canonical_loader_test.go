@@ -557,6 +557,50 @@ routing:
 	}
 }
 
+func TestProviderBackendRefProviderDrivesEndpointTypeForModelIDRewrite(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+providers:
+  defaults:
+    default_model: gpt-worker
+  models:
+    - name: gpt-worker
+      provider_model_id: openai/gpt-5.5
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+routing:
+  modelCards:
+    - name: gpt-worker
+  decisions:
+    - name: default
+      priority: 1
+      rules:
+        operator: OR
+        conditions: []
+      modelRefs:
+        - model: gpt-worker
+`)
+
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+
+	endpointName := cfg.ModelConfig["gpt-worker"].PreferredEndpoints[0]
+	endpoint, ok := cfg.GetEndpointByName(endpointName)
+	if !ok {
+		t.Fatalf("endpoint %q not found", endpointName)
+	}
+	if endpoint.Type != "openai" {
+		t.Fatalf("endpoint.Type = %q, want openai", endpoint.Type)
+	}
+	if got := cfg.ResolveExternalModelID("gpt-worker", endpointName); got != "openai/gpt-5.5" {
+		t.Fatalf("ResolveExternalModelID() = %q, want openai/gpt-5.5", got)
+	}
+}
+
 func TestGetModelPricingTreatsExplicitZeroPricingAsConfigured(t *testing.T) {
 	cfg := &RouterConfig{
 		BackendModels: BackendModels{

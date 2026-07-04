@@ -38,6 +38,7 @@ function buildReplayQueryString(filters: ReplayQueryFilters, pagination?: { limi
   if (pagination) {
     params.set('limit', String(pagination.limit))
     params.set('offset', String(pagination.offset))
+    params.set('showDetails', 'false')
   }
 
   const search = filters.searchTerm.trim()
