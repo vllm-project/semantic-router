@@ -68,9 +68,10 @@ func putSearchBuffers(buf *searchBuffers) {
 type HybridCache struct {
 	SimilarityTracker // embedded — provides LastSimilarity()
 	// In-memory components (search only)
-	hnswIndex  *HNSWIndex
-	embeddings [][]float32
-	idMap      map[int]string // Entry index → Milvus ID
+	hnswIndex        *HNSWIndex
+	embeddings       [][]float32
+	idMap            map[int]string // Entry index → Milvus ID
+	hnswNeedsRebuild bool           // true while the HNSW graph is stale after an eviction (rebuilt on next add)
 
 	// External storage (all documents)
 	milvusCache *MilvusCache
@@ -88,6 +89,15 @@ type HybridCache struct {
 
 	// Concurrency control
 	mu sync.RWMutex
+
+	// Background TTL reclamation: drops in-memory entries that Milvus has
+	// already expired so the index tracks the live working set rather than the
+	// all-time high-water mark. See issue #2288.
+	reclaimTicker *time.Ticker
+	stopReclaim   chan struct{}
+	reclaimDone   chan struct{} // closed by the reclaim goroutine on exit; lets stop block until it has returned
+	closeOnce     sync.Once
+	reclaimFn     func(context.Context) error // defaults to RebuildFromMilvus; overridable in tests
 }
 
 // HybridCacheOptions contains configuration for the hybrid cache
@@ -190,6 +200,11 @@ func NewHybridCache(options HybridCacheOptions) (*HybridCache, error) {
 			})
 			// Don't fail initialization, just log warning and continue with empty index
 		}
+
+		// Start periodic TTL reclamation (reuses the same rebuild path). Gated
+		// on the rebuild mechanism being enabled so the DisableRebuildOnStartup
+		// opt-out also suppresses the recurring Milvus re-query.
+		cache.startBackgroundReclaim()
 	} else {
 		logging.ComponentWarnEvent("cache", "hybrid_cache_rebuild_skipped", map[string]interface{}{
 			"source":      "startup",
@@ -280,11 +295,12 @@ func (h *HybridCache) RebuildFromMilvus(ctx context.Context) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Clear existing index
+	// Clear existing index (full rebuild from scratch satisfies any deferred rebuild).
 	loadLimit := min(len(embeddings), h.maxMemoryEntries)
 	h.embeddings = make([][]float32, 0, loadLimit)
 	h.idMap = make(map[int]string, loadLimit)
 	h.hnswIndex = newHNSWIndex(h.hnswIndex.M, h.hnswIndex.efConstruction)
+	h.hnswNeedsRebuild = false
 
 	// Rebuild HNSW index with progress logging
 	batchSize := 1000
@@ -386,7 +402,7 @@ func (h *HybridCache) AddPendingRequest(requestID string, model string, query st
 	entryIndex := len(h.embeddings)
 	h.embeddings = append(h.embeddings, embedding)
 	h.idMap[entryIndex] = requestID
-	h.addNodeHybrid(entryIndex, embedding)
+	h.addNodeHybridOrRebuild(entryIndex, embedding)
 
 	logging.Debugf("HybridCache.AddPendingRequest: added to HNSW index=%d, milvusID=%s, ttl=%d",
 		entryIndex, requestID, ttlSeconds)
@@ -459,7 +475,7 @@ func (h *HybridCache) AddEntry(requestID string, model string, query string, req
 	entryIndex := len(h.embeddings)
 	h.embeddings = append(h.embeddings, embedding)
 	h.idMap[entryIndex] = requestID
-	h.addNodeHybrid(entryIndex, embedding)
+	h.addNodeHybridOrRebuild(entryIndex, embedding)
 
 	logging.Debugf("HybridCache.AddEntry: added to HNSW index=%d, milvusID=%s, ttl=%d",
 		entryIndex, requestID, ttlSeconds)
@@ -521,7 +537,7 @@ func (h *HybridCache) AddEntriesBatch(entries []CacheEntry) error {
 		entryIndex := len(h.embeddings)
 		h.embeddings = append(h.embeddings, embeddings[i])
 		h.idMap[entryIndex] = entry.RequestID
-		h.addNodeHybrid(entryIndex, embeddings[i])
+		h.addNodeHybridOrRebuild(entryIndex, embeddings[i])
 	}
 
 	elapsed := time.Since(start)
@@ -553,6 +569,14 @@ func (h *HybridCache) Close() error {
 	if !h.enabled {
 		return nil
 	}
+
+	// Stop the background reclaim goroutine before taking the write lock. This
+	// is ordered (not locked) on purpose: stopBackgroundReclaim blocks until the
+	// goroutine has exited, and an in-flight reclaim pass needs h.mu to finish,
+	// so we must release the lock to it first. By the time we acquire the write
+	// lock below, no reclaim pass can still be running — which is what makes the
+	// subsequent nil-out of embeddings/idMap/hnswIndex safe (no use-after-close).
+	h.stopBackgroundReclaim()
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -623,7 +647,9 @@ func (h *HybridCache) evictOneUnsafe() {
 	}
 	h.idMap = newIDMap
 
-	// Mark HNSW index as stale (needs rebuild with new indices)
+	// Eviction shifts every entry index down, so the whole graph is stale. Mark
+	// for rebuild and defer it to the next add. Mirrors InMemoryCache.evictOne.
+	h.hnswNeedsRebuild = true
 	h.hnswIndex.markStale()
 
 	atomic.AddInt64(&h.evictCount, 1)
@@ -637,4 +663,35 @@ func (h *HybridCache) evictOneUnsafe() {
 		"new_size":    len(h.embeddings),
 		"max_entries": h.maxMemoryEntries,
 	})
+}
+
+// addNodeHybridOrRebuild indexes the new entry, or rebuilds the whole graph if a
+// prior eviction left it stale. Without the rebuild the graph keeps only the last
+// node after eviction, degrading the cache to ~100% misses at capacity.
+// Caller must hold a write lock. Mirrors InMemoryCache.addEntryToHNSWIndex.
+func (h *HybridCache) addNodeHybridOrRebuild(entryIndex int, embedding []float32) {
+	if h.hnswNeedsRebuild {
+		h.rebuildHNSWFromEmbeddings()
+		return
+	}
+	h.addNodeHybrid(entryIndex, embedding)
+}
+
+// rebuildHNSWFromEmbeddings rebuilds the graph from the embeddings slice, reusing
+// the existing index parameters. Caller must hold a write lock. Mirrors
+// InMemoryCache.rebuildHNSWIndex but sources vectors from embeddings, not entries.
+func (h *HybridCache) rebuildHNSWFromEmbeddings() {
+	h.hnswIndex.nodes = []*HNSWNode{}
+	h.hnswIndex.nodeIndex = make(map[int]*HNSWNode)
+	h.hnswIndex.entryPoint = -1
+	h.hnswIndex.maxLayer = -1
+
+	for i, embedding := range h.embeddings {
+		if len(embedding) > 0 {
+			h.addNodeHybrid(i, embedding)
+		}
+	}
+
+	h.hnswNeedsRebuild = false
+	logging.Debugf("HybridCache: HNSW index rebuilt with %d nodes", len(h.hnswIndex.nodes))
 }
