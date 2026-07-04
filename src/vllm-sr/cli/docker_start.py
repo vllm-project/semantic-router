@@ -142,6 +142,9 @@ def _build_common_runtime_env(
     common_env = dict(env_vars or {})
     if runtime_container_config:
         common_env.setdefault("VLLM_SR_RUNTIME_CONFIG_PATH", runtime_container_config)
+    stack_name_value = os.getenv("VLLM_SR_STACK_NAME", "").strip()
+    if stack_name_value:
+        common_env.setdefault("VLLM_SR_STACK_NAME", stack_name_value)
     common_env.setdefault(
         "VLLM_SR_ROUTER_CONTAINER_NAME", stack_layout.router_container_name
     )
