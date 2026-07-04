@@ -7,7 +7,6 @@ from cli.container_runtime import (
     get_container_runtime,
 )
 from cli.container_services import (
-    container_status,
     container_create_network,
     container_exec,
     container_logs,
@@ -23,13 +22,13 @@ from cli.container_services import (
     container_start_postgres,
     container_start_prometheus,
     container_start_redis,
+    container_status,
     container_stop_container,
     load_openclaw_registry,
 )
 from cli.container_start import container_start_vllm_sr
 
 __all__ = [
-    "container_status",
     "container_create_network",
     "container_exec",
     "container_image_exists",
@@ -48,9 +47,10 @@ __all__ = [
     "container_start_prometheus",
     "container_start_redis",
     "container_start_vllm_sr",
+    "container_status",
     "container_stop_container",
-    "get_container_runtime",
     "get_container_image",
+    "get_container_runtime",
     "get_fleet_sim_container_image",
     "load_openclaw_registry",
 ]

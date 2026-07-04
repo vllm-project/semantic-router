@@ -9,9 +9,9 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from cli import container_images  # noqa: E402
 from cli.consts import (  # noqa: E402
-    VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT,
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
     VLLM_SR_CONTAINER_IMAGE_ROCM,
+    VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT,
     VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT,
 )
 

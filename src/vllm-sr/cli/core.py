@@ -5,13 +5,13 @@ import subprocess
 
 from cli.consts import DEFAULT_API_PORT, DEFAULT_ENVOY_PORT, IMAGE_PULL_POLICY_NEVER
 from cli.container_cli import (
-    container_status,
     container_exec,
     container_logs,
     container_network_disconnect,
     container_remove_container,
     container_remove_network,
     container_start_vllm_sr,
+    container_status,
     container_stop_container,
     load_openclaw_registry,
 )
@@ -406,10 +406,10 @@ def _disconnect_openclaw_registry_containers(
 
 
 def _disconnect_openclaw_container(network_name: str, container_name: str) -> None:
-    container_status = container_status(container_name)
-    if container_status == "not found":
+    status = container_status(container_name)
+    if status == "not found":
         return
-    if container_status == "running":
+    if status == "running":
         log.info(f"Stopping OpenClaw container: {container_name}")
         container_stop_container(container_name)
     log.info(f"Disconnecting {container_name} from {network_name}")

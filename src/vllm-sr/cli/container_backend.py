@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from cli.core import show_logs, show_status, start_vllm_sr, stop_vllm_sr
 from cli.container_cli import container_status
+from cli.core import show_logs, show_status, start_vllm_sr, stop_vllm_sr
 from cli.runtime_stack import resolve_runtime_stack
 from cli.utils import get_logger
 

@@ -16,8 +16,8 @@ from cli.config_translator import (  # noqa: E402
     translate_config_to_helm_values,
     write_helm_values_file,
 )
-from cli.deployment_backend import DEFAULT_TARGET, resolve_target  # noqa: E402
 from cli.container_backend import ContainerBackend  # noqa: E402
+from cli.deployment_backend import DEFAULT_TARGET, resolve_target  # noqa: E402
 from cli.k8s_backend import K8sBackend  # noqa: E402
 
 # ---------------------------------------------------------------------------

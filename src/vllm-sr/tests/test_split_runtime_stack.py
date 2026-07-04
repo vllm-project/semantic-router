@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
-from cli import core, container_cli, container_start, runtime_lifecycle
+from cli import container_cli, container_start, core, runtime_lifecycle
 from cli.consts import (
     DEFAULT_API_PORT,
     DEFAULT_DASHBOARD_PORT,

@@ -18,8 +18,8 @@ from cli.chat_client import (
     resolve_chat_base_url,
 )
 from cli.commands.common import exit_with_logged_error
-from cli.deployment_backend import resolve_target
 from cli.container_backend import ContainerBackend
+from cli.deployment_backend import resolve_target
 from cli.utils import get_logger
 
 log = get_logger(__name__)

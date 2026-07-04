@@ -2,10 +2,10 @@ from types import SimpleNamespace
 
 import pytest
 from cli import (
-    core,
     container_cli,
     container_services,
     container_start,
+    core,
     runtime_lifecycle,
 )
 from cli.runtime_stack import resolve_runtime_stack

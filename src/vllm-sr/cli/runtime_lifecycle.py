@@ -13,7 +13,6 @@ from cli.consts import (
     HEALTH_CHECK_TIMEOUT,
 )
 from cli.container_cli import (
-    container_status,
     container_create_network,
     container_exec,
     container_logs,
@@ -25,6 +24,7 @@ from cli.container_cli import (
     container_start_grafana,
     container_start_jaeger,
     container_start_prometheus,
+    container_status,
     container_stop_container,
     load_openclaw_registry,
 )

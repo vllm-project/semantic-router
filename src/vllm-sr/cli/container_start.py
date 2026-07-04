@@ -27,8 +27,8 @@ from cli.container_run_command import (
 )
 from cli.container_runtime import get_container_runtime, resolve_container_cli_path
 from cli.container_services import (
-    container_status,
     container_remove_container,
+    container_status,
     container_stop_container,
 )
 from cli.parser import parse_user_config
