@@ -36,7 +36,7 @@ subsystems:
   - src/vllm-sr/cli/main.py
   - src/vllm-sr/cli/core.py
   - src/vllm-sr/cli/commands/runtime.py
-  - src/vllm-sr/cli/docker_cli.py
+  - src/vllm-sr/cli/container_cli.py
   - tools/make/docker.mk
 - name: fleet-sim
   paths:
