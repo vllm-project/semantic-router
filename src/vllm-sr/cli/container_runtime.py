@@ -45,7 +45,7 @@ def resolve_runtime_cli_path(runtime: str) -> str | None:
     return shutil.which(runtime)
 
 
-def resolve_docker_cli_path(preferred_path: str | None = None) -> str | None:
+def resolve_container_cli_path(preferred_path: str | None = None) -> str | None:
     """Resolve the docker-compatible CLI used for OpenClaw provisioning.
 
     When the active runtime is Podman, this still has to return a usable
@@ -233,7 +233,7 @@ def _exit_unavailable_runtime(runtime: str, details: str) -> None:
     sys.exit(1)
 
 
-def docker_image_exists(image_name):
+def container_image_exists(image_name):
     """Check if a container image exists locally."""
     runtime = get_container_runtime()
     try:
@@ -249,7 +249,7 @@ def docker_image_exists(image_name):
         return False
 
 
-def docker_pull_image(image_name):
+def container_pull_image(image_name):
     """
     Pull a container image.
 

@@ -110,7 +110,7 @@ def apply_container_runtime_override(runtime: str | None) -> None:
     """Apply ``--runtime`` to the process environment so detection picks it up.
 
     The ``CONTAINER_RUNTIME`` environment variable is the canonical input that
-    ``cli.docker_runtime._detect_container_runtime`` reads. This helper bridges
+    ``cli.container_runtime._detect_container_runtime`` reads. This helper bridges
     the CLI flag to that env var, normalizes the value, validates it, and
     invalidates the runtime detection cache so the next call re-resolves.
     """
@@ -128,7 +128,7 @@ def apply_container_runtime_override(runtime: str | None) -> None:
     # Reset the cached detection so subsequent get_container_runtime() calls
     # observe the new override instead of a stale answer from earlier in the
     # process.
-    from cli.docker_runtime import reset_container_runtime_cache  # noqa: PLC0415
+    from cli.container_runtime import reset_container_runtime_cache  # noqa: PLC0415
 
     reset_container_runtime_cache()
     log.info(f"Container runtime override: {normalized}")

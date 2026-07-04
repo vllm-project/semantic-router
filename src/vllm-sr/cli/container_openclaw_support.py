@@ -18,7 +18,7 @@ def configure_openclaw_support(
     runtime,
     stack_layout,
     *,
-    resolve_docker_cli,
+    resolve_container_cli,
 ):
     default_openclaw_data_dir = os.path.join(config_dir, ".vllm-sr", "openclaw-data")
     openclaw_data_dir = (
@@ -42,11 +42,11 @@ def configure_openclaw_support(
     )
 
     if runtime == "docker":
-        _attach_docker_socket(mount_specs, runtime)
-        _attach_docker_cli(
+        _attach_container_socket(mount_specs, runtime)
+        _attach_container_cli(
             mount_specs,
             env_vars,
-            resolve_docker_cli=resolve_docker_cli,
+            resolve_container_cli=resolve_container_cli,
         )
     elif runtime == "podman":
         # Podman exposes a Docker-Engine-API-compatible socket. The dashboard
@@ -54,7 +54,7 @@ def configure_openclaw_support(
         # canonical /var/run/docker.sock path lets the in-image docker CLI
         # drive container lifecycle (start/stop/inspect/logs) through podman
         # transparently — no Go-side changes needed.
-        _attach_docker_socket(mount_specs, runtime)
+        _attach_container_socket(mount_specs, runtime)
         env_vars["OPENCLAW_CONTAINER_RUNTIME"] = "docker"
         log.info(
             "Podman runtime: dashboard will use the in-image Docker CLI against "
@@ -62,7 +62,7 @@ def configure_openclaw_support(
         )
 
 
-def _attach_docker_socket(mount_specs, runtime: str = "docker"):
+def _attach_container_socket(mount_specs, runtime: str = "docker"):
     """Mount the active runtime's daemon socket at /var/run/docker.sock.
 
     Both Docker and Podman expose a Docker-Engine-API-compatible UNIX socket.
@@ -118,17 +118,17 @@ def _socket_candidates(runtime: str) -> list[str]:
     return candidates
 
 
-def _attach_docker_cli(mount_specs, env_vars, *, resolve_docker_cli):
-    mount_host_cli = _should_mount_host_docker_cli()
+def _attach_container_cli(mount_specs, env_vars, *, resolve_container_cli):
+    mount_host_cli = _should_mount_host_container_cli()
     if not mount_host_cli:
         env_vars["OPENCLAW_CONTAINER_RUNTIME"] = "docker"
         log.info("Using in-image Docker CLI for dashboard container management")
         return
 
-    docker_bin = resolve_docker_cli(os.getenv("VLLM_SR_DOCKER_BIN"))
+    docker_bin = resolve_container_cli(os.getenv("VLLM_SR_DOCKER_BIN"))
     if not docker_bin:
         for candidate in ["/usr/local/bin/docker", "/usr/bin/docker", "/bin/docker"]:
-            docker_bin = resolve_docker_cli(candidate)
+            docker_bin = resolve_container_cli(candidate)
             if docker_bin:
                 break
 
@@ -156,7 +156,7 @@ def _attach_docker_cli(mount_specs, env_vars, *, resolve_docker_cli):
     )
 
 
-def _should_mount_host_docker_cli() -> bool:
+def _should_mount_host_container_cli() -> bool:
     raw = (os.getenv("VLLM_SR_MOUNT_DOCKER_CLI") or "").strip().lower()
     if raw == "":
         return True

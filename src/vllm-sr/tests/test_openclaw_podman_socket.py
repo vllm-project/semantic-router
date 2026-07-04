@@ -1,7 +1,7 @@
 """Podman-specific dashboard socket mount tests.
 
 These tests cover the docker-or-podman runtime flag in
-`cli.docker_openclaw_support`: when runtime is podman the daemon socket
+`cli.container_openclaw_support`: when runtime is podman the daemon socket
 is mounted at the canonical `/var/run/docker.sock`, the host docker CLI
 is NOT mounted (the in-image CLI is sufficient), and a missing podman
 socket degrades to a warning rather than a fatal exit.
@@ -14,7 +14,7 @@ file-length limit.
 import os
 
 import pytest
-from cli import docker_cli, docker_start
+from cli import container_cli, container_start
 from tests.test_openclaw_shared_network import (
     _capture_run_commands,
     _find_container_run_cmd,
@@ -37,9 +37,9 @@ _CONFIG_BODY = (
 
 
 def _stub_runtime_images(monkeypatch):
-    monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "podman")
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "podman")
     monkeypatch.setattr(
-        docker_start,
+        container_start,
         "get_runtime_images",
         lambda **kwargs: {
             "router": "test-image",
@@ -50,7 +50,7 @@ def _stub_runtime_images(monkeypatch):
 
 
 def _start_vllm_sr(config_path):
-    return docker_cli.docker_start_vllm_sr(
+    return container_cli.container_start_vllm_sr(
         str(config_path),
         {},
         _LISTENERS,
@@ -60,7 +60,7 @@ def _start_vllm_sr(config_path):
     )
 
 
-def test_docker_start_vllm_sr_mounts_podman_socket_at_canonical_path(
+def test_container_start_vllm_sr_mounts_podman_socket_at_canonical_path(
     tmp_path, monkeypatch
 ):
     """Podman runtime should mount podman.sock at /var/run/docker.sock and skip docker-CLI mount."""
@@ -90,7 +90,7 @@ def test_docker_start_vllm_sr_mounts_podman_socket_at_canonical_path(
     ), f"unexpected host CLI mount in podman mode: {dashboard_cmd!r}"
 
 
-def test_docker_start_vllm_sr_resolves_default_podman_socket(tmp_path, monkeypatch):
+def test_container_start_vllm_sr_resolves_default_podman_socket(tmp_path, monkeypatch):
     """Without explicit override, podman mode should look up /run/podman/podman.sock."""
     config_path = tmp_path / "config.yaml"
     config_path.write_text(_CONFIG_BODY)
@@ -116,7 +116,7 @@ def test_docker_start_vllm_sr_resolves_default_podman_socket(tmp_path, monkeypat
     assert "/run/podman/podman.sock:/var/run/docker.sock" in dashboard_cmd
 
 
-def test_docker_start_vllm_sr_warns_when_podman_socket_missing(tmp_path, monkeypatch):
+def test_container_start_vllm_sr_warns_when_podman_socket_missing(tmp_path, monkeypatch):
     """Podman mode should not fail if no podman socket is found — just warn."""
     config_path = tmp_path / "config.yaml"
     config_path.write_text(_CONFIG_BODY)

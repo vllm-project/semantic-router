@@ -33,7 +33,7 @@ from cli.consts import (
     IMAGE_PULL_POLICY_IF_NOT_PRESENT,
     IMAGE_PULL_POLICY_NEVER,
     SUPPORTED_CONTAINER_RUNTIMES,
-    VLLM_SR_DOCKER_IMAGE_DEFAULT,
+    VLLM_SR_CONTAINER_IMAGE_DEFAULT,
 )
 from cli.deployment_backend import DEFAULT_TARGET, VALID_TARGETS, resolve_target
 from cli.utils import get_logger
@@ -65,7 +65,7 @@ def _build_backend(target: str | None, **k8s_kwargs):
 
         return K8sBackend(**{k: v for k, v in k8s_kwargs.items() if v is not None})
 
-    from cli.docker_backend import DockerBackend  # noqa: PLC0415
+    from cli.container_backend import DockerBackend  # noqa: PLC0415
 
     return DockerBackend()
 
@@ -150,7 +150,7 @@ def _execute_serve(
 @click.option(
     "--image",
     default=None,
-    help=f"Docker image to use (default: {VLLM_SR_DOCKER_IMAGE_DEFAULT})",
+    help=f"Docker image to use (default: {VLLM_SR_CONTAINER_IMAGE_DEFAULT})",
 )
 @click.option(
     "--router-image",

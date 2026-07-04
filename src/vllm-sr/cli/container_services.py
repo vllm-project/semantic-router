@@ -6,15 +6,15 @@ import socket
 import subprocess
 from pathlib import Path
 
-from cli.docker_images import get_fleet_sim_docker_image
-from cli.docker_runtime import get_container_runtime
+from cli.container_images import get_fleet_sim_container_image
+from cli.container_runtime import get_container_runtime
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.utils import get_logger
 
 log = get_logger(__name__)
 
 
-def docker_container_status(container_name):
+def container_status(container_name):
     """
     Get the status of a container.
 
@@ -54,7 +54,7 @@ def docker_container_status(container_name):
         return "error"
 
 
-def docker_stop_container(container_name):
+def container_stop_container(container_name):
     """Stop a container."""
     runtime = get_container_runtime()
     try:
@@ -69,7 +69,7 @@ def docker_stop_container(container_name):
         return False
 
 
-def docker_remove_container(container_name):
+def container_remove_container(container_name):
     """Remove a container."""
     runtime = get_container_runtime()
     try:
@@ -82,7 +82,7 @@ def docker_remove_container(container_name):
         return False
 
 
-def docker_logs(container_name, follow=False, tail=None):
+def container_logs(container_name, follow=False, tail=None):
     """Stream logs from a container."""
     runtime = get_container_runtime()
     cmd = [runtime, "logs"]
@@ -100,7 +100,7 @@ def docker_logs(container_name, follow=False, tail=None):
         log.info("Log streaming stopped")
 
 
-def docker_logs_since(container_name, since_timestamp):
+def container_logs_since(container_name, since_timestamp):
     """Get logs from a container since a specific timestamp."""
     runtime = get_container_runtime()
     cmd = [runtime, "logs", "--since", str(since_timestamp), container_name]
@@ -112,7 +112,7 @@ def docker_logs_since(container_name, since_timestamp):
         return (exc.returncode, exc.stdout, exc.stderr)
 
 
-def docker_exec(container_name, command):
+def container_exec(container_name, command):
     """Execute a command in a running container."""
     runtime = get_container_runtime()
     cmd = [runtime, "exec", container_name, *command]
@@ -124,7 +124,7 @@ def docker_exec(container_name, command):
         return (exc.returncode, exc.stdout, exc.stderr)
 
 
-def docker_create_network(network_name):
+def container_create_network(network_name):
     """Create a Docker network if it doesn't exist."""
     runtime = get_container_runtime()
     cmd = [
@@ -153,7 +153,7 @@ def docker_create_network(network_name):
         return (exc.returncode, exc.stdout, exc.stderr)
 
 
-def docker_remove_network(network_name):
+def container_remove_network(network_name):
     """Remove a Docker network."""
     runtime = get_container_runtime()
     cmd = [runtime, "network", "rm", network_name]
@@ -165,7 +165,7 @@ def docker_remove_network(network_name):
         return (exc.returncode, exc.stdout, exc.stderr)
 
 
-def docker_start_jaeger(
+def container_start_jaeger(
     network_name=None, stack_layout: RuntimeStackLayout | None = None
 ):
     """Start Jaeger container for distributed tracing."""
@@ -194,7 +194,7 @@ def docker_start_jaeger(
     return _run_service_start(cmd, "Jaeger")
 
 
-def docker_start_prometheus(
+def container_start_prometheus(
     network_name=None,
     config_dir=None,
     stack_layout: RuntimeStackLayout | None = None,
@@ -253,7 +253,7 @@ def docker_start_prometheus(
     return _run_service_start(cmd, "Prometheus")
 
 
-def docker_start_grafana(
+def container_start_grafana(
     network_name=None,
     config_dir=None,
     stack_layout: RuntimeStackLayout | None = None,
@@ -313,7 +313,7 @@ def docker_start_grafana(
     return _run_service_start(cmd, "Grafana")
 
 
-def docker_start_redis(
+def container_start_redis(
     network_name=None, stack_layout: RuntimeStackLayout | None = None
 ):
     """Start a Redis container for durable storage backends.
@@ -355,7 +355,7 @@ def docker_start_redis(
     return _run_service_start(cmd, "Redis")
 
 
-def docker_start_postgres(
+def container_start_postgres(
     network_name=None, stack_layout: RuntimeStackLayout | None = None
 ):
     """Start a Postgres container for durable storage backends.
@@ -403,7 +403,7 @@ def docker_start_postgres(
     return _run_service_start(cmd, "Postgres")
 
 
-def docker_start_milvus(
+def container_start_milvus(
     network_name=None,
     stack_layout: RuntimeStackLayout | None = None,
     *,
@@ -474,7 +474,7 @@ def docker_start_milvus(
     return _run_service_start(cmd, "Milvus")
 
 
-def docker_start_fleet_sim(
+def container_start_fleet_sim(
     *,
     image: str | None = None,
     pull_policy: str | None = None,
@@ -487,7 +487,7 @@ def docker_start_fleet_sim(
     stack_layout = stack_layout or resolve_runtime_stack()
     container_name = stack_layout.fleet_sim_container_name
     network_name = network_name or stack_layout.network_name
-    sim_image = get_fleet_sim_docker_image(image=image, pull_policy=pull_policy)
+    sim_image = get_fleet_sim_container_image(image=image, pull_policy=pull_policy)
     _replace_existing_container(container_name)
 
     sim_state_dir = os.path.join(
@@ -516,7 +516,7 @@ def docker_start_fleet_sim(
     return _run_service_start(cmd, "vllm-sr-sim")
 
 
-def docker_network_disconnect(network_name, container_name):
+def container_network_disconnect(network_name, container_name):
     """Disconnect a container from a Docker network."""
     runtime = get_container_runtime()
     cmd = [runtime, "network", "disconnect", network_name, container_name]
@@ -527,7 +527,7 @@ def docker_network_disconnect(network_name, container_name):
         return (exc.returncode, exc.stdout, exc.stderr)
 
 
-def docker_network_connect(network_name, container_name):
+def container_network_connect(network_name, container_name):
     """Connect a container to a Docker network (idempotent)."""
     runtime = get_container_runtime()
     cmd = [runtime, "network", "connect", network_name, container_name]
@@ -540,7 +540,7 @@ def docker_network_connect(network_name, container_name):
         return (exc.returncode, exc.stdout, exc.stderr)
 
 
-def docker_start_container(container_name):
+def container_start_container(container_name):
     """Start a stopped container."""
     runtime = get_container_runtime()
     try:
@@ -572,11 +572,11 @@ def _reuse_running_storage_container(
     container_name: str, label: str, network_name: str | None
 ) -> tuple[int, str, str] | None:
     """Return a success/failure tuple when a running storage container is reused."""
-    status = docker_container_status(container_name)
+    status = container_status(container_name)
     if status == "running":
         log.info(f"{label} container already running, reusing to preserve data")
         if network_name:
-            return_code, stdout, stderr = docker_network_connect(
+            return_code, stdout, stderr = container_network_connect(
                 network_name, container_name
             )
             if return_code != 0:
@@ -663,11 +663,11 @@ def _is_port_in_use(port: int) -> bool:
 
 
 def _replace_existing_container(container_name):
-    status = docker_container_status(container_name)
+    status = container_status(container_name)
     if status != "not found":
         log.info(f"{container_name} already exists (status: {status}), cleaning up...")
-        docker_stop_container(container_name)
-        docker_remove_container(container_name)
+        container_stop_container(container_name)
+        container_remove_container(container_name)
 
 
 def _ensure_hidden_config_dir(config_dir):

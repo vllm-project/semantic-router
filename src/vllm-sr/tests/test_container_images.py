@@ -7,12 +7,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from cli import docker_images  # noqa: E402
+from cli import container_images  # noqa: E402
 from cli.consts import (  # noqa: E402
-    VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT,
-    VLLM_SR_DOCKER_IMAGE_DEFAULT,
-    VLLM_SR_DOCKER_IMAGE_ROCM,
-    VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT,
+    VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT,
+    VLLM_SR_CONTAINER_IMAGE_DEFAULT,
+    VLLM_SR_CONTAINER_IMAGE_ROCM,
+    VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT,
 )
 
 
@@ -31,17 +31,17 @@ def clear_runtime_image_env(monkeypatch):
 def test_get_runtime_images_falls_back_to_base_image(monkeypatch):
     ensured = []
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_resolve_selected_image",
         lambda image, normalized_platform: "base:latest",
     )
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_ensure_image_available",
         lambda image, pull_policy: ensured.append((image, pull_policy)),
     )
 
-    images = docker_images.get_runtime_images(pull_policy="never")
+    images = container_images.get_runtime_images(pull_policy="never")
 
     assert images == {
         "router": "base:latest",
@@ -54,18 +54,18 @@ def test_get_runtime_images_falls_back_to_base_image(monkeypatch):
 def test_get_runtime_images_prefers_service_specific_env_overrides(monkeypatch):
     ensured = []
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_resolve_selected_image",
         lambda image, normalized_platform: "base:latest",
     )
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_ensure_image_available",
         lambda image, pull_policy: ensured.append((image, pull_policy)),
     )
     monkeypatch.setenv("VLLM_SR_ENVOY_IMAGE", "envoy:separate")
 
-    images = docker_images.get_runtime_images(pull_policy="ifnotpresent")
+    images = container_images.get_runtime_images(pull_policy="ifnotpresent")
 
     assert images == {
         "router": "base:latest",
@@ -83,54 +83,54 @@ def test_get_runtime_images_derives_official_envoy_image_from_official_base(
 ):
     ensured = []
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_resolve_selected_image",
-        lambda image, normalized_platform: VLLM_SR_DOCKER_IMAGE_DEFAULT,
+        lambda image, normalized_platform: VLLM_SR_CONTAINER_IMAGE_DEFAULT,
     )
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_ensure_image_available",
         lambda image, pull_policy: ensured.append((image, pull_policy)),
     )
 
-    images = docker_images.get_runtime_images(pull_policy="never")
+    images = container_images.get_runtime_images(pull_policy="never")
 
     assert images == {
-        "router": VLLM_SR_DOCKER_IMAGE_DEFAULT,
-        "envoy": VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT,
-        "dashboard": VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT,
+        "router": VLLM_SR_CONTAINER_IMAGE_DEFAULT,
+        "envoy": VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT,
+        "dashboard": VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT,
     }
     assert ensured == [
-        (VLLM_SR_DOCKER_IMAGE_DEFAULT, "never"),
-        (VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT, "never"),
-        (VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT, "never"),
+        (VLLM_SR_CONTAINER_IMAGE_DEFAULT, "never"),
+        (VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT, "never"),
+        (VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT, "never"),
     ]
 
 
 def test_get_runtime_images_derives_official_envoy_image_from_rocm_base(monkeypatch):
     ensured = []
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_resolve_selected_image",
-        lambda image, normalized_platform: VLLM_SR_DOCKER_IMAGE_ROCM,
+        lambda image, normalized_platform: VLLM_SR_CONTAINER_IMAGE_ROCM,
     )
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_ensure_image_available",
         lambda image, pull_policy: ensured.append((image, pull_policy)),
     )
 
-    images = docker_images.get_runtime_images(pull_policy="never", platform="amd")
+    images = container_images.get_runtime_images(pull_policy="never", platform="amd")
 
     assert images == {
-        "router": VLLM_SR_DOCKER_IMAGE_ROCM,
-        "envoy": VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT,
-        "dashboard": VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT,
+        "router": VLLM_SR_CONTAINER_IMAGE_ROCM,
+        "envoy": VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT,
+        "dashboard": VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT,
     }
     assert ensured == [
-        (VLLM_SR_DOCKER_IMAGE_ROCM, "never"),
-        (VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT, "never"),
-        (VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT, "never"),
+        (VLLM_SR_CONTAINER_IMAGE_ROCM, "never"),
+        (VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT, "never"),
+        (VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT, "never"),
     ]
 
 
@@ -139,22 +139,22 @@ def test_get_runtime_images_reuses_official_router_image_from_official_tag(
 ):
     ensured = []
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_resolve_selected_image",
         lambda image, normalized_platform: "ghcr.io/vllm-project/semantic-router/vllm-sr:v1.2.3",
     )
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_ensure_image_available",
         lambda image, pull_policy: ensured.append((image, pull_policy)),
     )
 
-    images = docker_images.get_runtime_images(pull_policy="never")
+    images = container_images.get_runtime_images(pull_policy="never")
 
     assert images["router"] == "ghcr.io/vllm-project/semantic-router/vllm-sr:v1.2.3"
     assert ensured == [
         ("ghcr.io/vllm-project/semantic-router/vllm-sr:v1.2.3", "never"),
-        (VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT, "never"),
+        (VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT, "never"),
         ("ghcr.io/vllm-project/semantic-router/dashboard:v1.2.3", "never"),
     ]
 
@@ -164,24 +164,24 @@ def test_get_runtime_images_derives_official_dashboard_image_from_official_tag(
 ):
     ensured = []
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_resolve_selected_image",
         lambda image, normalized_platform: "ghcr.io/vllm-project/semantic-router/vllm-sr:v1.2.3",
     )
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_ensure_image_available",
         lambda image, pull_policy: ensured.append((image, pull_policy)),
     )
 
-    images = docker_images.get_runtime_images(pull_policy="never")
+    images = container_images.get_runtime_images(pull_policy="never")
 
     assert (
         images["dashboard"] == "ghcr.io/vllm-project/semantic-router/dashboard:v1.2.3"
     )
     assert ensured == [
         ("ghcr.io/vllm-project/semantic-router/vllm-sr:v1.2.3", "never"),
-        (VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT, "never"),
+        (VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT, "never"),
         ("ghcr.io/vllm-project/semantic-router/dashboard:v1.2.3", "never"),
     ]
 
@@ -189,31 +189,31 @@ def test_get_runtime_images_derives_official_dashboard_image_from_official_tag(
 def test_get_runtime_images_prefers_explicit_base_image_only_for_router(monkeypatch):
     ensured = []
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_resolve_selected_image",
         lambda image, normalized_platform: image,
     )
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_ensure_image_available",
         lambda image, pull_policy: ensured.append((image, pull_policy)),
     )
     monkeypatch.setenv("VLLM_SR_ROUTER_IMAGE", "router:from-env")
 
-    images = docker_images.get_runtime_images(
+    images = container_images.get_runtime_images(
         image="base:explicit",
         pull_policy="never",
     )
 
     assert images == {
         "router": "base:explicit",
-        "envoy": VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT,
-        "dashboard": VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT,
+        "envoy": VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT,
+        "dashboard": VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT,
     }
     assert ensured == [
         ("base:explicit", "never"),
-        (VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT, "never"),
-        (VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT, "never"),
+        (VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT, "never"),
+        (VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT, "never"),
     ]
 
 
@@ -222,12 +222,12 @@ def test_get_runtime_images_prefers_service_env_over_explicit_base_for_nonrouter
 ):
     ensured = []
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_resolve_selected_image",
         lambda image, normalized_platform: image,
     )
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_ensure_image_available",
         lambda image, pull_policy: ensured.append((image, pull_policy)),
     )
@@ -235,7 +235,7 @@ def test_get_runtime_images_prefers_service_env_over_explicit_base_for_nonrouter
     monkeypatch.setenv("VLLM_SR_ENVOY_IMAGE", "envoy:from-env")
     monkeypatch.setenv("VLLM_SR_DASHBOARD_IMAGE", "dashboard:from-env")
 
-    images = docker_images.get_runtime_images(
+    images = container_images.get_runtime_images(
         image="base:explicit",
         pull_policy="never",
     )
@@ -258,29 +258,29 @@ def test_get_runtime_images_derives_official_service_images_from_explicit_base_i
     ensured = []
     explicit_base = "ghcr.io/vllm-project/semantic-router/vllm-sr:v9.9.9"
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_resolve_selected_image",
         lambda image, normalized_platform: image,
     )
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_ensure_image_available",
         lambda image, pull_policy: ensured.append((image, pull_policy)),
     )
 
-    images = docker_images.get_runtime_images(
+    images = container_images.get_runtime_images(
         image=explicit_base,
         pull_policy="never",
     )
 
     assert images == {
         "router": explicit_base,
-        "envoy": VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT,
+        "envoy": VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT,
         "dashboard": "ghcr.io/vllm-project/semantic-router/dashboard:v9.9.9",
     }
     assert ensured == [
         (explicit_base, "never"),
-        (VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT, "never"),
+        (VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT, "never"),
         ("ghcr.io/vllm-project/semantic-router/dashboard:v9.9.9", "never"),
     ]
 
@@ -290,17 +290,17 @@ def test_get_runtime_images_prefers_explicit_service_image_over_explicit_base_im
 ):
     ensured = []
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_resolve_selected_image",
         lambda image, normalized_platform: image,
     )
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_ensure_image_available",
         lambda image, pull_policy: ensured.append((image, pull_policy)),
     )
 
-    images = docker_images.get_runtime_images(
+    images = container_images.get_runtime_images(
         image="base:explicit",
         envoy_image="envoy:explicit",
         pull_policy="never",
@@ -309,29 +309,29 @@ def test_get_runtime_images_prefers_explicit_service_image_over_explicit_base_im
     assert images == {
         "router": "base:explicit",
         "envoy": "envoy:explicit",
-        "dashboard": VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT,
+        "dashboard": VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT,
     }
     assert ensured == [
         ("base:explicit", "never"),
         ("envoy:explicit", "never"),
-        (VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT, "never"),
+        (VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT, "never"),
     ]
 
 
 def test_get_runtime_images_can_skip_dashboard_for_minimal_runtime(monkeypatch):
     ensured = []
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_resolve_selected_image",
         lambda image, normalized_platform: image,
     )
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_ensure_image_available",
         lambda image, pull_policy: ensured.append((image, pull_policy)),
     )
 
-    images = docker_images.get_runtime_images(
+    images = container_images.get_runtime_images(
         image="base:explicit",
         dashboard_image="dashboard:missing",
         pull_policy="never",
@@ -340,28 +340,28 @@ def test_get_runtime_images_can_skip_dashboard_for_minimal_runtime(monkeypatch):
 
     assert images == {
         "router": "base:explicit",
-        "envoy": VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT,
+        "envoy": VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT,
     }
     assert ensured == [
         ("base:explicit", "never"),
-        (VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT, "never"),
+        (VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT, "never"),
     ]
 
 
 def test_get_runtime_images_upgrades_router_override_to_rocm_on_amd(monkeypatch):
     ensured = []
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_resolve_selected_image",
         lambda image, normalized_platform: "base:latest",
     )
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_ensure_image_available",
         lambda image, pull_policy: ensured.append((image, pull_policy)),
     )
 
-    images = docker_images.get_runtime_images(
+    images = container_images.get_runtime_images(
         router_image="ghcr.io/vllm-project/semantic-router/vllm-sr:custom",
         pull_policy="never",
         platform="amd",
@@ -383,17 +383,17 @@ def test_get_runtime_images_leaves_nonofficial_router_override_unchanged_on_amd(
 ):
     ensured = []
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_resolve_selected_image",
         lambda image, normalized_platform: "base:latest",
     )
     monkeypatch.setattr(
-        docker_images,
+        container_images,
         "_ensure_image_available",
         lambda image, pull_policy: ensured.append((image, pull_policy)),
     )
 
-    images = docker_images.get_runtime_images(
+    images = container_images.get_runtime_images(
         router_image="router:custom",
         pull_policy="never",
         platform="amd",

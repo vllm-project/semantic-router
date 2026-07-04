@@ -3,7 +3,7 @@
 import os
 
 from cli.consts import PLATFORM_AMD
-from cli.docker_images import _normalize_platform
+from cli.container_images import _normalize_platform
 from cli.utils import get_logger
 
 log = get_logger(__name__)

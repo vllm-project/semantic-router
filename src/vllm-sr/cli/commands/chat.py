@@ -19,7 +19,7 @@ from cli.chat_client import (
 )
 from cli.commands.common import exit_with_logged_error
 from cli.deployment_backend import resolve_target
-from cli.docker_backend import DockerBackend
+from cli.container_backend import DockerBackend
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -107,7 +107,7 @@ def chat(
         raise click.ClickException(str(exc)) from exc
 
     if resolve_target(target) == "docker":
-        logging.getLogger("cli.docker_runtime").setLevel(logging.WARNING)
+        logging.getLogger("cli.container_runtime").setLevel(logging.WARNING)
         backend = DockerBackend()
         if not backend.is_running():
             raise click.ClickException(

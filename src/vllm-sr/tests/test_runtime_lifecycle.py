@@ -10,7 +10,7 @@ def test_wait_for_router_health_fails_fast_when_router_exits(monkeypatch):
         runtime_lifecycle, "_emit_router_startup_logs", lambda *_args, **_kwargs: None
     )
     monkeypatch.setattr(
-        runtime_lifecycle, "docker_container_status", lambda _name: "exited"
+        runtime_lifecycle, "container_status", lambda _name: "exited"
     )
 
     def fake_exec(*_args, **_kwargs):
@@ -20,8 +20,8 @@ def test_wait_for_router_health_fails_fast_when_router_exits(monkeypatch):
     def fake_logs(*_args, **_kwargs):
         calls["logs"] += 1
 
-    monkeypatch.setattr(runtime_lifecycle, "docker_exec", fake_exec)
-    monkeypatch.setattr(runtime_lifecycle, "docker_logs", fake_logs)
+    monkeypatch.setattr(runtime_lifecycle, "container_exec", fake_exec)
+    monkeypatch.setattr(runtime_lifecycle, "container_logs", fake_logs)
 
     with pytest.raises(SystemExit):
         runtime_lifecycle.wait_for_router_health(resolve_runtime_stack())

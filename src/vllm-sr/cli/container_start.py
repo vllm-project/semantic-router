@@ -10,12 +10,12 @@ from cli.consts import (
     PLATFORM_AMD,
     PLATFORM_NVIDIA,
 )
-from cli.docker_images import (
+from cli.container_images import (
     _normalize_platform,
     get_runtime_images,
 )
-from cli.docker_openclaw_support import configure_openclaw_support
-from cli.docker_run_command import (
+from cli.container_openclaw_support import configure_openclaw_support
+from cli.container_run_command import (
     append_custom_dns,
     append_env_vars,
     append_host_gateway,
@@ -25,11 +25,11 @@ from cli.docker_run_command import (
     maybe_append_amd_gpu_passthrough,
     maybe_append_nvidia_gpu_passthrough,
 )
-from cli.docker_runtime import get_container_runtime, resolve_docker_cli_path
-from cli.docker_services import (
-    docker_container_status,
-    docker_remove_container,
-    docker_stop_container,
+from cli.container_runtime import get_container_runtime, resolve_container_cli_path
+from cli.container_services import (
+    container_status,
+    container_remove_container,
+    container_stop_container,
 )
 from cli.parser import parse_user_config
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
@@ -39,7 +39,7 @@ from cli.utils import get_logger
 log = get_logger(__name__)
 
 
-def docker_start_vllm_sr(
+def container_start_vllm_sr(
     config_file,
     env_vars,
     listeners,
@@ -368,7 +368,7 @@ def _build_dashboard_runtime_command(
         openclaw_network_name,
         runtime,
         stack_layout,
-        resolve_docker_cli=resolve_docker_cli_path,
+        resolve_container_cli=resolve_container_cli_path,
     )
     return _build_service_run_command(
         runtime=runtime,
@@ -583,6 +583,6 @@ def _build_service_run_command(
 
 def _cleanup_started_containers(container_names: list[str]) -> None:
     for container_name in reversed(container_names):
-        if docker_container_status(container_name) == "running":
-            docker_stop_container(container_name)
-        docker_remove_container(container_name)
+        if container_status(container_name) == "running":
+            container_stop_container(container_name)
+        container_remove_container(container_name)
