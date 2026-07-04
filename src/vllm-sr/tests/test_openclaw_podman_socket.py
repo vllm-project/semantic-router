@@ -69,7 +69,7 @@ def test_container_start_vllm_sr_mounts_podman_socket_at_canonical_path(
 
     podman_socket = tmp_path / "podman.sock"
     podman_socket.write_text("")
-    monkeypatch.setenv("VLLM_SR_DOCKER_SOCKET", str(podman_socket))
+    monkeypatch.setenv("VLLM_SR_CONTAINER_SOCKET", str(podman_socket))
 
     _stub_runtime_images(monkeypatch)
     captured = _capture_run_commands(monkeypatch)
@@ -95,7 +95,7 @@ def test_container_start_vllm_sr_resolves_default_podman_socket(tmp_path, monkey
     config_path = tmp_path / "config.yaml"
     config_path.write_text(_CONFIG_BODY)
 
-    monkeypatch.delenv("VLLM_SR_DOCKER_SOCKET", raising=False)
+    monkeypatch.delenv("VLLM_SR_CONTAINER_SOCKET", raising=False)
     real_exists = os.path.exists
 
     def fake_exists(path: str) -> bool:
@@ -121,7 +121,7 @@ def test_container_start_vllm_sr_warns_when_podman_socket_missing(tmp_path, monk
     config_path = tmp_path / "config.yaml"
     config_path.write_text(_CONFIG_BODY)
 
-    monkeypatch.delenv("VLLM_SR_DOCKER_SOCKET", raising=False)
+    monkeypatch.delenv("VLLM_SR_CONTAINER_SOCKET", raising=False)
     real_exists = os.path.exists
 
     def fake_exists(path: str) -> bool:

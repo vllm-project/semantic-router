@@ -12,7 +12,7 @@ from cli.utils import get_logger
 log = get_logger(__name__)
 
 
-class DockerBackend:
+class ContainerBackend:
     """DeploymentBackend implementation for local Docker workflows."""
 
     def deploy(

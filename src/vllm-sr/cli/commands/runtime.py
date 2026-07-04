@@ -65,9 +65,9 @@ def _build_backend(target: str | None, **k8s_kwargs):
 
         return K8sBackend(**{k: v for k, v in k8s_kwargs.items() if v is not None})
 
-    from cli.container_backend import DockerBackend  # noqa: PLC0415
+    from cli.container_backend import ContainerBackend  # noqa: PLC0415
 
-    return DockerBackend()
+    return ContainerBackend()
 
 
 def _execute_serve(

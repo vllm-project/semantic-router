@@ -95,7 +95,7 @@ def _attach_container_socket(mount_specs, runtime: str = "docker"):
 
 def _socket_candidates(runtime: str) -> list[str]:
     """Return ordered candidate paths for the runtime's API socket."""
-    override = os.getenv("VLLM_SR_DOCKER_SOCKET")
+    override = os.getenv("VLLM_SR_CONTAINER_SOCKET")
     if override:
         return [override]
 
@@ -125,7 +125,7 @@ def _attach_container_cli(mount_specs, env_vars, *, resolve_container_cli):
         log.info("Using in-image Docker CLI for dashboard container management")
         return
 
-    docker_bin = resolve_container_cli(os.getenv("VLLM_SR_DOCKER_BIN"))
+    docker_bin = resolve_container_cli(os.getenv("VLLM_SR_CONTAINER_BIN"))
     if not docker_bin:
         for candidate in ["/usr/local/bin/docker", "/usr/bin/docker", "/bin/docker"]:
             docker_bin = resolve_container_cli(candidate)
@@ -142,10 +142,10 @@ def _attach_container_cli(mount_specs, env_vars, *, resolve_container_cli):
         return
 
     env_vars["OPENCLAW_CONTAINER_RUNTIME"] = "docker"
-    requested_mount = os.getenv("VLLM_SR_MOUNT_DOCKER_CLI")
+    requested_mount = os.getenv("VLLM_SR_MOUNT_CONTAINER_CLI")
     if requested_mount:
         log.warning(
-            "VLLM_SR_MOUNT_DOCKER_CLI requested a host Docker CLI mount, "
+            "VLLM_SR_MOUNT_CONTAINER_CLI requested a host Docker CLI mount, "
             "but no supported Docker CLI was found; falling back to in-image Docker CLI"
         )
         return
@@ -157,7 +157,7 @@ def _attach_container_cli(mount_specs, env_vars, *, resolve_container_cli):
 
 
 def _should_mount_host_container_cli() -> bool:
-    raw = (os.getenv("VLLM_SR_MOUNT_DOCKER_CLI") or "").strip().lower()
+    raw = (os.getenv("VLLM_SR_MOUNT_CONTAINER_CLI") or "").strip().lower()
     if raw == "":
         return True
     return raw in {"1", "true", "yes", "on"}

@@ -87,7 +87,7 @@ def test_container_start_vllm_sr_sets_openclaw_shared_network_env(tmp_path, monk
         },
     )
     captured = _capture_run_commands(monkeypatch)
-    monkeypatch.setenv("VLLM_SR_DOCKER_SOCKET", str(socket_path))
+    monkeypatch.setenv("VLLM_SR_CONTAINER_SOCKET", str(socket_path))
 
     rc, _, _ = container_cli.container_start_vllm_sr(
         str(config_path),
@@ -118,7 +118,7 @@ def test_container_start_vllm_sr_places_dashboard_openclaw_runtime_flags_before_
 
     socket_path = tmp_path / "docker.sock"
     socket_path.write_text("")
-    monkeypatch.setenv("VLLM_SR_DOCKER_SOCKET", str(socket_path))
+    monkeypatch.setenv("VLLM_SR_CONTAINER_SOCKET", str(socket_path))
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
         container_start,
@@ -198,7 +198,7 @@ def test_container_start_vllm_sr_uses_in_image_docker_cli_when_opted_out(
     )
 
     docker_bin = _stub_valid_container_cli(monkeypatch, tmp_path)
-    monkeypatch.setenv("VLLM_SR_MOUNT_DOCKER_CLI", "0")
+    monkeypatch.setenv("VLLM_SR_MOUNT_CONTAINER_CLI", "0")
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
         container_start,
@@ -246,7 +246,7 @@ def test_container_start_vllm_sr_mounts_host_docker_cli_when_requested(
         },
     )
     captured = _capture_run_commands(monkeypatch)
-    monkeypatch.setenv("VLLM_SR_MOUNT_DOCKER_CLI", "1")
+    monkeypatch.setenv("VLLM_SR_MOUNT_CONTAINER_CLI", "1")
 
     rc, _, _ = container_cli.container_start_vllm_sr(
         str(config_path),
