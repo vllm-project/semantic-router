@@ -81,7 +81,7 @@ docker-build-vllm-sr-sim: ## Build vllm-sr-sim Docker image
 docker-build-vllm-sr-sim:
 	@$(LOG_TARGET)
 	@echo "Building vllm-sr-sim Docker image..."
-	@$(CONTAINER_RUNTIME) build -f src/fleet-sim/Dockerfile -t $(DOCKER_REGISTRY)/vllm-sr-sim:$(DOCKER_TAG) .
+	@$(CONTAINER_RUNTIME) build --build-arg IMAGE_REGISTRY=$(IMAGE_REGISTRY) -f src/fleet-sim/Dockerfile -t $(DOCKER_REGISTRY)/vllm-sr-sim:$(DOCKER_TAG) .
 
 # Build precommit Docker image
 docker-build-precommit: ## Build precommit Docker image
@@ -284,7 +284,8 @@ endif
 
 # Default 1 so vllm-sr build works behind corporate proxies; set GIT_SSL_NO_VERIFY=0 for strict SSL verification.
 GIT_SSL_NO_VERIFY ?= 1
-VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM)
+IMAGE_REGISTRY ?= docker.io/
+VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM) --build-arg IMAGE_REGISTRY=$(IMAGE_REGISTRY)
 ifeq ($(GIT_SSL_NO_VERIFY),1)
 VLLM_SR_BUILD_ARGS += --build-arg GIT_SSL_NO_VERIFY=1
 endif

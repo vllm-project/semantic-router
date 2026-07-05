@@ -4,16 +4,17 @@
 ARG TARGETARCH
 ARG BUILDPLATFORM
 ARG GIT_SSL_NO_VERIFY=0
-ARG RUST_RUNTIME_COMPAT_IMAGE=docker.io/rustlang/rust:nightly-bullseye
-ARG ONNX_RUST_RUNTIME_COMPAT_IMAGE=docker.io/library/rust:1.90-bullseye
-ARG GO_RUNTIME_COMPAT_IMAGE=docker.io/library/golang:1.24-bullseye
+ARG IMAGE_REGISTRY=docker.io/
+ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bullseye
+ARG ONNX_RUST_RUNTIME_COMPAT_IMAGE=library/rust:1.90-bullseye
+ARG GO_RUNTIME_COMPAT_IMAGE=library/golang:1.24-bullseye
 
 # Stage 1: Build Rust candle-binding (CPU-only, cross-compiled for TARGETARCH)
 #
 # ROCm runtime is pinned to Ubuntu 22.04 (glibc 2.35). Keep runtime-linked build
 # stages on an older libc baseline so the copied binaries and shared objects do
 # not fail to start with GLIBC_2.39+/2.41+ loader errors.
-FROM --platform=$BUILDPLATFORM ${RUST_RUNTIME_COMPAT_IMAGE} AS rust-builder
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${RUST_RUNTIME_COMPAT_IMAGE} AS rust-builder
 ARG TARGETARCH
 ARG GIT_SSL_NO_VERIFY
 WORKDIR /build
@@ -87,7 +88,7 @@ RUN mkdir -p /build/out && \
     nm -D /build/out/libcandle_semantic_router.so 2>/dev/null | grep -c " T " || true
 
 # Stage 1a: Build Rust ml-binding (Linfa ML algorithms, cross-compiled for TARGETARCH)
-FROM --platform=$BUILDPLATFORM ${RUST_RUNTIME_COMPAT_IMAGE} AS ml-builder
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${RUST_RUNTIME_COMPAT_IMAGE} AS ml-builder
 ARG TARGETARCH
 ARG GIT_SSL_NO_VERIFY
 WORKDIR /build
@@ -146,7 +147,7 @@ RUN mkdir -p /build/out && \
     file /build/out/libml_semantic_router.so
 
 # Stage 1b: Build Rust nlp-binding (BM25 + N-gram keyword classification, cross-compiled)
-FROM --platform=$BUILDPLATFORM ${RUST_RUNTIME_COMPAT_IMAGE} AS nlp-builder
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${RUST_RUNTIME_COMPAT_IMAGE} AS nlp-builder
 ARG TARGETARCH
 ARG GIT_SSL_NO_VERIFY
 WORKDIR /build
@@ -198,7 +199,7 @@ RUN mkdir -p /build/out && \
     ls -la /build/out/
 
 # Stage 1r: Build Rust onnx-binding (ROCm dynamic, amd64 only)
-FROM --platform=$BUILDPLATFORM ${ONNX_RUST_RUNTIME_COMPAT_IMAGE} AS onnx-builder
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${ONNX_RUST_RUNTIME_COMPAT_IMAGE} AS onnx-builder
 ARG TARGETARCH
 ARG GIT_SSL_NO_VERIFY
 WORKDIR /build
@@ -238,7 +239,7 @@ RUN mkdir -p /build/out && \
     file /build/out/libonnx_semantic_router.so
 
 # Stage 2: Build Go semantic router
-FROM --platform=$BUILDPLATFORM ${GO_RUNTIME_COMPAT_IMAGE} AS go-builder
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${GO_RUNTIME_COMPAT_IMAGE} AS go-builder
 ARG TARGETARCH
 WORKDIR /build
 
@@ -281,7 +282,7 @@ RUN if [ "$TARGETARCH" != "amd64" ]; then \
     printf 'go-builder-complete\n' > /build/.go-builder-complete
 
 # Stage 3: Final router runtime image (ROCm 7.0 + ONNX Runtime ROCm)
-FROM docker.io/rocm/dev-ubuntu-22.04:7.0
+FROM ${IMAGE_REGISTRY}rocm/dev-ubuntu-22.04:7.0
 ARG TARGETARCH
 
 ENV VIRTUAL_ENV=/opt/vllm-sr-venv

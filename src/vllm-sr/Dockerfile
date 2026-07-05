@@ -5,15 +5,16 @@
 ARG TARGETARCH
 ARG BUILDPLATFORM
 ARG GIT_SSL_NO_VERIFY=0
-ARG RUST_RUNTIME_COMPAT_IMAGE=docker.io/rustlang/rust:nightly-bullseye
-ARG GO_RUNTIME_COMPAT_IMAGE=docker.io/library/golang:1.24-bullseye
+ARG IMAGE_REGISTRY=docker.io/
+ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bullseye
+ARG GO_RUNTIME_COMPAT_IMAGE=library/golang:1.24-bullseye
 
 # Stage 1: Build Rust candle-binding (CPU-only, cross-compiled for TARGETARCH)
 #
 # The router runtime image is Debian bookworm-slim. Keep the Rust and Go build
 # stages on an older libc baseline so the copied router binary and shared
 # objects do not pick up GLIBC_2.39+ requirements that fail at runtime.
-FROM --platform=$BUILDPLATFORM ${RUST_RUNTIME_COMPAT_IMAGE} AS rust-builder
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${RUST_RUNTIME_COMPAT_IMAGE} AS rust-builder
 ARG TARGETARCH
 ARG GIT_SSL_NO_VERIFY
 WORKDIR /build
@@ -87,7 +88,7 @@ RUN mkdir -p /build/out && \
     nm -D /build/out/libcandle_semantic_router.so 2>/dev/null | grep -c " T " || true
 
 # Stage 1a: Build Rust ml-binding (Linfa ML algorithms, cross-compiled for TARGETARCH)
-FROM --platform=$BUILDPLATFORM ${RUST_RUNTIME_COMPAT_IMAGE} AS ml-builder
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${RUST_RUNTIME_COMPAT_IMAGE} AS ml-builder
 ARG TARGETARCH
 ARG GIT_SSL_NO_VERIFY
 WORKDIR /build
@@ -146,7 +147,7 @@ RUN mkdir -p /build/out && \
     file /build/out/libml_semantic_router.so
 
 # Stage 1b: Build Rust nlp-binding (BM25 + N-gram keyword classification, cross-compiled)
-FROM --platform=$BUILDPLATFORM ${RUST_RUNTIME_COMPAT_IMAGE} AS nlp-builder
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${RUST_RUNTIME_COMPAT_IMAGE} AS nlp-builder
 ARG TARGETARCH
 ARG GIT_SSL_NO_VERIFY
 WORKDIR /build
@@ -198,7 +199,7 @@ RUN mkdir -p /build/out && \
     ls -la /build/out/
 
 # Stage 2: Build Go semantic router
-FROM --platform=$BUILDPLATFORM ${GO_RUNTIME_COMPAT_IMAGE} AS go-builder
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${GO_RUNTIME_COMPAT_IMAGE} AS go-builder
 ARG TARGETARCH
 WORKDIR /build
 
@@ -248,7 +249,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     fi
 
 # Stage 3: Final router runtime image
-FROM docker.io/library/debian:bookworm-slim
+FROM ${IMAGE_REGISTRY}library/debian:bookworm-slim
 
 ENV VIRTUAL_ENV=/opt/vllm-sr-venv
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
