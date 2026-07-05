@@ -20,12 +20,14 @@ the topic isn't. `deploy/nvidia/` is intentionally left empty until a
 matching NVIDIA routing profile is authored.
 
 > **When this playbook is NOT for you:** upstream `onnx-binding/README.md`
-> documents CPU≈GPU latency parity for BERT-size embeddings at small
-> batches. If your only goal is "make the router faster", measure CPU
-> latency first — you may not need GPU at all. Use this playbook when
-> you specifically need GPU residency (very large batches, very high
-> classifier QPS, or co-location with other GPU tenants on the same
-> host).
+> documents CPU≈GPU latency parity for BERT-size **embeddings** at small
+> batches — the embedding path uses 2D-Matryoshka layer early-exit and
+> gains little from a GPU. The **classifiers** are a different story (see
+> [Performance (CPU vs GPU)](#performance-cpu-vs-gpu): ~65–240× latency,
+> ~400× throughput). Measure first: if your routing is embedding-dominated
+> at low QPS you may not need a GPU; reach for this playbook when you run
+> classifier-heavy signal extraction, high classifier QPS, or want GPU
+> co-location with other tenants.
 
 ---
 
