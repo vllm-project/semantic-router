@@ -300,9 +300,9 @@ docker run -d \
     --network vllm-sr-network \
     --gpus all \
     --add-host=host.docker.internal:host-gateway \
-    -p 0.0.0.0:50151:50051 \
-    -p 0.0.0.0:8180:8080 \
-    -p 0.0.0.0:9290:9190 \
+    -p 0.0.0.0:50051:50051 \
+    -p 0.0.0.0:8080:8080 \
+    -p 0.0.0.0:9190:9190 \
     --env-file /tmp/router-env.list \
     -v "$(pwd)/models:/app/models" \
     -v "$(pwd)/active-config.yaml:/app/config.yaml" \
@@ -397,7 +397,7 @@ the active config.
 Send any prompt through the router and confirm it routes successfully:
 
 ```bash
-curl -sS -X POST http://localhost:8999/v1/chat/completions \
+curl -sS -X POST http://localhost:8899/v1/chat/completions \
     -H "Content-Type: application/json" \
     -d '{
       "model": "auto",
@@ -586,7 +586,7 @@ ROUTER_PID=$(nvidia-smi --query-compute-apps=pid,process_name --format=csv,nohea
 nvidia-smi pmon -i 0 -c 10 -o T &
 sleep 3
 for i in $(seq 1 15); do
-  curl -s -o /dev/null -X POST http://localhost:8180/api/v1/classify/intent \
+  curl -s -o /dev/null -X POST http://localhost:8080/api/v1/classify/intent \
     -H "Content-Type: application/json" \
     -d '{"text":"Explain TCP vs UDP and when to use each"}'
 done
