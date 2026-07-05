@@ -1,4 +1,4 @@
-ARG IMAGE_REGISTRY=docker.io/
+ARG IMAGE_REGISTRY=""
 # Stage 0: Build DSL compiler WASM assets
 FROM ${IMAGE_REGISTRY}library/golang:1.24-alpine AS wasm-builder
 WORKDIR /app/src/semantic-router
