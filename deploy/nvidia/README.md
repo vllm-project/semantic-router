@@ -360,8 +360,10 @@ comparison is apples-to-apples.
 
 - **Hardware**: NVIDIA GeForce RTX 4090 (24 GB), consumer GPU — a baseline,
   not a datacenter number.
-- **Model**: mmBERT-32K domain/intent classifier.
-- 12 requests per size (+4 warmup), batch 1.
+- **Models**: mmBERT-32K classifiers (domain/intent, jailbreak, PII).
+- 12 requests per size (+4 warmup), batch 1 — run with
+  `REQUESTS_PER_SIZE=12 WARMUP_REQUESTS=4` (the `bench-cuda-long-context.sh`
+  default is 10 requests / +5 warmup).
 
 ### Signal extraction latency — all three classifiers (avg ms)
 
