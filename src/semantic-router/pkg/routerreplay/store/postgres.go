@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -25,7 +26,7 @@ const postgresInsertQueryTemplate = `
 		INSERT INTO %s (
 			id, timestamp, request_id, decision, decision_tier, decision_priority, category,
 			original_model, selected_model, reasoning_mode,
-			signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace, session_policy,
+			signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace, session_policy, route_diagnostics, learning, outcomes,
 			request_body, response_body, response_status,
 			from_cache, streaming, request_body_truncated, response_body_truncated,
 			guardrails_enabled, jailbreak_enabled, pii_enabled,
@@ -34,8 +35,104 @@ const postgresInsertQueryTemplate = `
 			hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans,
 			prompt_tokens, cached_prompt_tokens, completion_tokens, total_tokens,
 			actual_cost, baseline_cost, cost_savings, currency, baseline_model,
-			session_id, turn_index, previous_response_id, conversation_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53)
+			session_id, turn_index, previous_response_id, conversation_id,
+			cache_similarity, context_token_count
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58)
+	`
+
+const postgresCreateTableQueryTemplate = `
+		CREATE TABLE IF NOT EXISTS {{table}} (
+			id VARCHAR(255) PRIMARY KEY,
+			timestamp TIMESTAMP NOT NULL,
+			request_id VARCHAR(255),
+			decision VARCHAR(255),
+			decision_tier INTEGER DEFAULT 0,
+			decision_priority INTEGER DEFAULT 0,
+			category VARCHAR(255),
+			original_model VARCHAR(255),
+			selected_model VARCHAR(255),
+			reasoning_mode VARCHAR(255),
+			signals JSONB,
+			projections JSONB,
+			projection_scores JSONB,
+			signal_confidences JSONB,
+			signal_values JSONB,
+			tool_trace JSONB,
+			projection_trace JSONB,
+			session_policy JSONB,
+			route_diagnostics JSONB,
+			learning JSONB,
+			outcomes JSONB,
+			request_body TEXT,
+			response_body TEXT,
+			response_status INTEGER,
+			from_cache BOOLEAN DEFAULT FALSE,
+			streaming BOOLEAN DEFAULT FALSE,
+			request_body_truncated BOOLEAN DEFAULT FALSE,
+			response_body_truncated BOOLEAN DEFAULT FALSE,
+			guardrails_enabled BOOLEAN DEFAULT FALSE,
+			jailbreak_enabled BOOLEAN DEFAULT FALSE,
+			pii_enabled BOOLEAN DEFAULT FALSE,
+			prompt TEXT,
+			prompt_truncated BOOLEAN DEFAULT FALSE,
+			tool_definitions TEXT,
+			tool_definitions_truncated BOOLEAN DEFAULT FALSE,
+			rag_enabled BOOLEAN DEFAULT FALSE,
+			rag_backend VARCHAR(255),
+			rag_context_length INTEGER DEFAULT 0,
+			rag_similarity_score REAL DEFAULT 0,
+			hallucination_enabled BOOLEAN DEFAULT FALSE,
+			hallucination_detected BOOLEAN DEFAULT FALSE,
+			hallucination_confidence REAL DEFAULT 0,
+			hallucination_spans JSONB,
+			prompt_tokens INTEGER,
+			cached_prompt_tokens INTEGER,
+			completion_tokens INTEGER,
+			total_tokens INTEGER,
+			actual_cost DOUBLE PRECISION,
+			baseline_cost DOUBLE PRECISION,
+			cost_savings DOUBLE PRECISION,
+			currency VARCHAR(32),
+			baseline_model VARCHAR(255),
+			created_at TIMESTAMP DEFAULT NOW()
+		);
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS decision_tier INTEGER DEFAULT 0;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS decision_priority INTEGER DEFAULT 0;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS projections JSONB;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS projection_scores JSONB;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS signal_confidences JSONB;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS signal_values JSONB;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS tool_trace JSONB;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS projection_trace JSONB;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS session_policy JSONB;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS route_diagnostics JSONB;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS learning JSONB;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS outcomes JSONB;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS prompt TEXT;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS prompt_truncated BOOLEAN DEFAULT FALSE;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS tool_definitions TEXT;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS tool_definitions_truncated BOOLEAN DEFAULT FALSE;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS prompt_tokens INTEGER;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS cached_prompt_tokens INTEGER;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS completion_tokens INTEGER;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS total_tokens INTEGER;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS actual_cost DOUBLE PRECISION;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS baseline_cost DOUBLE PRECISION;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS cost_savings DOUBLE PRECISION;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS currency VARCHAR(32);
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS baseline_model VARCHAR(255);
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS session_id VARCHAR(255);
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS turn_index INTEGER;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS previous_response_id VARCHAR(255);
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS conversation_id VARCHAR(255);
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS cache_similarity REAL DEFAULT 0;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS context_token_count INTEGER DEFAULT 0;
+		CREATE INDEX IF NOT EXISTS idx_{{table}}_timestamp ON {{table}} (timestamp DESC);
+		CREATE INDEX IF NOT EXISTS idx_{{table}}_created_at ON {{table}} (created_at);
+		CREATE INDEX IF NOT EXISTS idx_{{table}}_request_id ON {{table}} (request_id);
+		CREATE INDEX IF NOT EXISTS idx_{{table}}_decision_timestamp ON {{table}} (decision, timestamp DESC);
+		CREATE INDEX IF NOT EXISTS idx_{{table}}_selected_model_timestamp ON {{table}} (selected_model, timestamp DESC);
+		CREATE INDEX IF NOT EXISTS idx_{{table}}_session_timestamp ON {{table}} (session_id, timestamp DESC);
 	`
 
 // PostgresStore implements Storage using PostgreSQL as the backend.
@@ -91,102 +188,13 @@ func startPostgresAsyncWriter(store *PostgresStore) {
 
 // createTable creates the records table if it doesn't exist.
 func (p *PostgresStore) createTable(ctx context.Context) error {
-	query := fmt.Sprintf(`
-		CREATE TABLE IF NOT EXISTS %s (
-			id VARCHAR(255) PRIMARY KEY,
-			timestamp TIMESTAMP NOT NULL,
-			request_id VARCHAR(255),
-			decision VARCHAR(255),
-			decision_tier INTEGER DEFAULT 0,
-			decision_priority INTEGER DEFAULT 0,
-			category VARCHAR(255),
-			original_model VARCHAR(255),
-			selected_model VARCHAR(255),
-			reasoning_mode VARCHAR(255),
-			signals JSONB,
-			projections JSONB,
-			projection_scores JSONB,
-			signal_confidences JSONB,
-			signal_values JSONB,
-			tool_trace JSONB,
-			projection_trace JSONB,
-			session_policy JSONB,
-			request_body TEXT,
-			response_body TEXT,
-			response_status INTEGER,
-			from_cache BOOLEAN DEFAULT FALSE,
-			streaming BOOLEAN DEFAULT FALSE,
-			request_body_truncated BOOLEAN DEFAULT FALSE,
-			response_body_truncated BOOLEAN DEFAULT FALSE,
-			guardrails_enabled BOOLEAN DEFAULT FALSE,
-			jailbreak_enabled BOOLEAN DEFAULT FALSE,
-			pii_enabled BOOLEAN DEFAULT FALSE,
-			prompt TEXT,
-			prompt_truncated BOOLEAN DEFAULT FALSE,
-			tool_definitions TEXT,
-			tool_definitions_truncated BOOLEAN DEFAULT FALSE,
-			rag_enabled BOOLEAN DEFAULT FALSE,
-			rag_backend VARCHAR(255),
-			rag_context_length INTEGER DEFAULT 0,
-			rag_similarity_score REAL DEFAULT 0,
-			hallucination_enabled BOOLEAN DEFAULT FALSE,
-			hallucination_detected BOOLEAN DEFAULT FALSE,
-			hallucination_confidence REAL DEFAULT 0,
-			hallucination_spans JSONB,
-			prompt_tokens INTEGER,
-			cached_prompt_tokens INTEGER,
-			completion_tokens INTEGER,
-			total_tokens INTEGER,
-			actual_cost DOUBLE PRECISION,
-			baseline_cost DOUBLE PRECISION,
-			cost_savings DOUBLE PRECISION,
-			currency VARCHAR(32),
-			baseline_model VARCHAR(255),
-			created_at TIMESTAMP DEFAULT NOW()
-		);
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS decision_tier INTEGER DEFAULT 0;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS decision_priority INTEGER DEFAULT 0;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS projections JSONB;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS projection_scores JSONB;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS signal_confidences JSONB;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS signal_values JSONB;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS tool_trace JSONB;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS projection_trace JSONB;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS session_policy JSONB;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS prompt TEXT;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS prompt_truncated BOOLEAN DEFAULT FALSE;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS tool_definitions TEXT;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS tool_definitions_truncated BOOLEAN DEFAULT FALSE;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS prompt_tokens INTEGER;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS cached_prompt_tokens INTEGER;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS completion_tokens INTEGER;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS total_tokens INTEGER;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS actual_cost DOUBLE PRECISION;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS baseline_cost DOUBLE PRECISION;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS cost_savings DOUBLE PRECISION;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS currency VARCHAR(32);
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS baseline_model VARCHAR(255);
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS session_id VARCHAR(255);
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS turn_index INTEGER;
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS previous_response_id VARCHAR(255);
-		ALTER TABLE %s ADD COLUMN IF NOT EXISTS conversation_id VARCHAR(255);
-		CREATE INDEX IF NOT EXISTS idx_%s_timestamp ON %s (timestamp DESC);
-		CREATE INDEX IF NOT EXISTS idx_%s_created_at ON %s (created_at);
-		CREATE INDEX IF NOT EXISTS idx_%s_request_id ON %s (request_id);
-		CREATE INDEX IF NOT EXISTS idx_%s_decision_timestamp ON %s (decision, timestamp DESC);
-		CREATE INDEX IF NOT EXISTS idx_%s_selected_model_timestamp ON %s (selected_model, timestamp DESC);
-		CREATE INDEX IF NOT EXISTS idx_%s_session_timestamp ON %s (session_id, timestamp DESC);
-	`, p.tableName,
-		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName,
-		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName,
-		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName,
-		p.tableName, p.tableName, p.tableName, p.tableName,
-		p.tableName, p.tableName,
-		p.tableName, p.tableName, p.tableName, p.tableName,
-		p.tableName, p.tableName, p.tableName, p.tableName)
-
+	query := postgresCreateTableQuery(p.tableName)
 	_, err := p.db.ExecContext(ctx, query)
 	return err
+}
+
+func postgresCreateTableQuery(tableName string) string {
+	return strings.ReplaceAll(postgresCreateTableQueryTemplate, "{{table}}", tableName)
 }
 
 // asyncWriter processes async write operations.
@@ -353,6 +361,45 @@ func (p *PostgresStore) AttachResponse(ctx context.Context, id string, body stri
 		result, err := p.db.ExecContext(ctx, query, id, body, truncated)
 		if err != nil {
 			return fmt.Errorf("failed to update response: %w", err)
+		}
+
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return fmt.Errorf("record with ID %s not found", id)
+		}
+
+		return nil
+	}
+
+	if p.asyncWrites {
+		p.asyncChan <- asyncOp{fn: fn}
+		return nil
+	}
+
+	return fn()
+}
+
+// AppendOutcome links post-route feedback to a replay record.
+func (p *PostgresStore) AppendOutcome(ctx context.Context, id string, outcome Outcome) error {
+	outcomeJSON, err := json.Marshal([]Outcome{cloneOutcome(outcome)})
+	if err != nil {
+		return fmt.Errorf("failed to marshal outcome: %w", err)
+	}
+
+	//nolint:gosec // tableName is validated during store creation
+	query := fmt.Sprintf(`
+		UPDATE %s
+		SET outcomes = COALESCE(outcomes, '[]'::jsonb) || $2::jsonb
+		WHERE id = $1
+	`, p.tableName)
+
+	fn := func() error {
+		result, err := p.db.ExecContext(ctx, query, id, outcomeJSON)
+		if err != nil {
+			return fmt.Errorf("failed to append outcome: %w", err)
 		}
 
 		rows, err := result.RowsAffected()

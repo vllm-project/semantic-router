@@ -70,6 +70,25 @@ func TestEmbeddingModelsConfig(t *testing.T) {
 			},
 			want: `{"qwen3_model_path":"models/qwen3-embedding","gemma_model_path":"models/gemma-embedding","mmbert_model_path":"models/mmbert-embedding","use_cpu":true}`,
 		},
+		{
+			name: "remote endpoint configuration",
+			config: EmbeddingModelsConfig{
+				EmbeddingConfig: &HNSWEmbeddingConfig{
+					Backend:         "openai_compatible",
+					ModelType:       "remote",
+					TargetDimension: 1024,
+				},
+				Endpoint: &EmbeddingEndpointConfig{
+					BaseURL:        "http://embedding-service:8000/v1",
+					Model:          "BAAI/bge-m3",
+					APIKeyEnv:      "EMBEDDING_API_KEY",
+					TimeoutSeconds: 5,
+					MaxRetries:     2,
+					Dimensions:     1024,
+				},
+			},
+			want: `{"embedding_config":{"backend":"openai_compatible","model_type":"remote","target_dimension":1024},"endpoint":{"base_url":"http://embedding-service:8000/v1","model":"BAAI/bge-m3","api_key_env":"EMBEDDING_API_KEY","timeout_seconds":5,"max_retries":2,"dimensions":1024}}`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -90,6 +109,72 @@ func TestEmbeddingModelsConfig(t *testing.T) {
 				t.Errorf("json.Unmarshal() error = %v", err)
 			}
 		})
+	}
+}
+
+func TestEmbeddingModelsConfigDeepCopyWithRemoteEndpoint(t *testing.T) {
+	original := &EmbeddingModelsConfig{
+		EmbeddingConfig: &HNSWEmbeddingConfig{
+			Backend:         "openai_compatible",
+			ModelType:       "remote",
+			TargetDimension: 1024,
+		},
+		Endpoint: &EmbeddingEndpointConfig{
+			BaseURL:        "http://embedding-service:8000/v1",
+			Model:          "BAAI/bge-m3",
+			APIKeyEnv:      "EMBEDDING_API_KEY",
+			TimeoutSeconds: 5,
+			MaxRetries:     2,
+			Dimensions:     1024,
+		},
+	}
+
+	copy := original.DeepCopy()
+	if copy == original {
+		t.Fatal("DeepCopy returned the original EmbeddingModelsConfig pointer")
+	}
+	if copy.EmbeddingConfig == original.EmbeddingConfig {
+		t.Fatal("DeepCopy reused the original EmbeddingConfig pointer")
+	}
+	if copy.Endpoint == original.Endpoint {
+		t.Fatal("DeepCopy reused the original Endpoint pointer")
+	}
+	if *copy.Endpoint != *original.Endpoint {
+		t.Fatalf("Endpoint copy = %+v, want %+v", *copy.Endpoint, *original.Endpoint)
+	}
+
+	copy.Endpoint.Model = "changed-model"
+	if original.Endpoint.Model != "BAAI/bge-m3" {
+		t.Fatalf("mutating copied Endpoint changed original model to %q", original.Endpoint.Model)
+	}
+
+	var nilModels *EmbeddingModelsConfig
+	if nilModels.DeepCopy() != nil {
+		t.Fatal("nil EmbeddingModelsConfig DeepCopy returned non-nil")
+	}
+}
+
+func TestEmbeddingEndpointConfigDeepCopy(t *testing.T) {
+	original := &EmbeddingEndpointConfig{
+		BaseURL:        "http://embedding-service:8000/v1",
+		Model:          "BAAI/bge-m3",
+		APIKeyEnv:      "EMBEDDING_API_KEY",
+		TimeoutSeconds: 5,
+		MaxRetries:     2,
+		Dimensions:     1024,
+	}
+
+	copy := original.DeepCopy()
+	if copy == original {
+		t.Fatal("DeepCopy returned the original EmbeddingEndpointConfig pointer")
+	}
+	if *copy != *original {
+		t.Fatalf("Endpoint copy = %+v, want %+v", *copy, *original)
+	}
+
+	var nilEndpoint *EmbeddingEndpointConfig
+	if nilEndpoint.DeepCopy() != nil {
+		t.Fatal("nil EmbeddingEndpointConfig DeepCopy returned non-nil")
 	}
 }
 
@@ -154,6 +239,15 @@ func TestHNSWEmbeddingConfig(t *testing.T) {
 			},
 			valid: true,
 		},
+		{
+			name: "remote OpenAI-compatible backend configuration",
+			config: HNSWEmbeddingConfig{
+				Backend:         "openai_compatible",
+				ModelType:       "remote",
+				TargetDimension: 1024,
+			},
+			valid: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -171,6 +265,9 @@ func TestHNSWEmbeddingConfig(t *testing.T) {
 			}
 
 			// Verify field values are preserved
+			if config.Backend != tt.config.Backend {
+				t.Errorf("Backend = %v, want %v", config.Backend, tt.config.Backend)
+			}
 			if config.ModelType != tt.config.ModelType {
 				t.Errorf("ModelType = %v, want %v", config.ModelType, tt.config.ModelType)
 			}
@@ -496,8 +593,8 @@ func TestConfigSpecPreservesCanonicalRoutingAndAlgorithmObjects(t *testing.T) {
 					},
 				},
 				Algorithm: &apiextensionsv1.JSON{Raw: []byte(`{
-					"type": "session_aware",
-					"session_aware": {"base_method": "hybrid"}
+					"type": "hybrid",
+					"hybrid": {"elo_weight": 0.4, "router_dc_weight": 0.4}
 				}`)},
 			},
 		},
@@ -510,7 +607,7 @@ func TestConfigSpecPreservesCanonicalRoutingAndAlgorithmObjects(t *testing.T) {
 	serialized := string(data)
 	if !strings.Contains(serialized, `"routing"`) ||
 		!strings.Contains(serialized, `"events"`) ||
-		!strings.Contains(serialized, `"session_aware"`) {
+		!strings.Contains(serialized, `"hybrid"`) {
 		t.Fatalf("expected canonical routing and algorithm objects to serialize as public fields, got %s", serialized)
 	}
 
@@ -523,7 +620,7 @@ func TestConfigSpecPreservesCanonicalRoutingAndAlgorithmObjects(t *testing.T) {
 	}
 	if len(decoded.Decisions) != 1 ||
 		decoded.Decisions[0].Algorithm == nil ||
-		!strings.Contains(string(decoded.Decisions[0].Algorithm.Raw), "session_aware") {
+		!strings.Contains(string(decoded.Decisions[0].Algorithm.Raw), "hybrid") {
 		t.Fatalf("expected decision algorithm raw object to round-trip, got %#v", decoded.Decisions)
 	}
 }

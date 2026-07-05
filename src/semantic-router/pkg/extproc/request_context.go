@@ -63,6 +63,13 @@ type RequestContext struct {
 	IsStreamingResponse     bool                   // set from response Content-Type
 	AnthropicStream         *anthropic.StreamState // Anthropic SSE → OpenAI translation state
 
+	// PendingSSEBytes holds a trailing partial SSE frame carried over from a
+	// prior streaming response chunk. Envoy STREAMED mode delivers the
+	// response body split at arbitrary byte offsets, so an SSE frame can
+	// straddle two chunks; the streaming handlers stash the incomplete tail
+	// here and prepend it to the next chunk before parsing (issue #2316).
+	PendingSSEBytes []byte
+
 	// AnthropicPassthrough carries Anthropic-only request fields captured from
 	// the raw inbound body and incoming headers, so the request-body writer
 	// and header builder can replay them on the outbound side.
@@ -115,17 +122,21 @@ type RequestContext struct {
 	PreviousResponseID string
 
 	// VSR decision tracking
-	VSRSelectedCategory           string                 // The category from domain classification (MMLU category)
-	VSRSelectedDecisionName       string                 // The decision name from DecisionEngine evaluation
-	VSRSelectedDecisionConfidence float64                // Confidence score from DecisionEngine evaluation
-	VSRReasoningMode              string                 // "on" or "off" - whether reasoning mode was determined to be used
-	VSRSelectedModel              string                 // The model selected by VSR
-	VSRSelectionMethod            string                 // Model selection algorithm used (e.g., "elo", "static", "router_dc")
-	VSRSessionPolicy              map[string]interface{} // Session-aware routing policy trace for replay/experiments
-	VSRCacheHit                   bool                   // Whether this request hit the cache
-	VSRCacheSimilarity            float32                // Similarity score from last cache lookup (0 = no lookup performed)
-	VSRInjectedSystemPrompt       bool                   // Whether a system prompt was injected into the request
-	VSRSelectedDecision           *config.Decision       // The decision object selected by DecisionEngine (for plugins)
+	VSRSelectedCategory            string                                      // The category from domain classification (MMLU category)
+	VSRSelectedDecisionName        string                                      // The decision name from DecisionEngine evaluation
+	VSRSelectedDecisionConfidence  float64                                     // Confidence score from DecisionEngine evaluation
+	VSRReasoningMode               string                                      // "on" or "off" - whether reasoning mode was determined to be used
+	VSRSelectedModel               string                                      // The model selected by VSR
+	VSRSelectionMethod             string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
+	VSRLearningPolicy              *routerLearningPolicy                       // Primary Router Learning trace
+	VSRLearningPolicies            routerLearningPolicies                      // Router Learning traces by component
+	VSRLearningProtectionPreflight *routerreplay.LearningProtectionDiagnostics // Protection preflight trace for replay
+	VSRLearningSessionID           string                                      // Router Learning memory key used for this request
+	VSRLearningConversationID      string                                      // Client-declared conversation identity used by Router Learning
+	VSRCacheHit                    bool                                        // Whether this request hit the cache
+	VSRCacheSimilarity             float32                                     // Similarity score from last cache lookup (0 = no lookup performed)
+	VSRInjectedSystemPrompt        bool                                        // Whether a system prompt was injected into the request
+	VSRSelectedDecision            *config.Decision                            // The decision object selected by DecisionEngine (for plugins)
 
 	// ResponsePath records how the final response was produced, surfaced as the
 	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*

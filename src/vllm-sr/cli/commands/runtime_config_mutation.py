@@ -14,35 +14,29 @@ log = get_logger(__name__)
 
 ALGORITHM_TYPES = [
     "static",
-    "elo",
     "router_dc",
     "automix",
     "hybrid",
-    "rl_driven",
-    "gmtrouter",
+    "workflows",
     "latency_aware",
     "knn",
     "kmeans",
     "svm",
     "mlp",
     "multi_factor",
-    "session_aware",
 ]
 
 ALGORITHM_HINTS = {
-    "elo": "  Tip: Submit feedback via POST /api/v1/feedback",
     "router_dc": "  Tip: Ensure models have 'description' fields",
     "automix": "  Tip: Configure model 'pricing' for cost optimization",
     "hybrid": "  Tip: Configure weights in decision.algorithm.hybrid",
-    "rl_driven": "  Tip: Configure persistence in decision.algorithm.rl_driven.storage_path",
+    "workflows": "  Tip: Configure decision.algorithm.workflows; dynamic mode requires planner.model",
     "latency_aware": "  Tip: Configure decision.algorithm.latency_aware with TPOT or TTFT percentiles",
     "knn": "  Tip: Configure global.router.model_selection.ml.knn for trained KNN routing",
     "kmeans": "  Tip: Configure global.router.model_selection.ml.kmeans for cluster routing",
     "svm": "  Tip: Configure global.router.model_selection.ml.svm for trained SVM routing",
     "mlp": "  Tip: Configure global.router.model_selection.ml.mlp for trained MLP routing",
     "multi_factor": "  Tip: Configure decision.algorithm.multi_factor for SLO-aware scoring",
-    "session_aware": "  Tip: Preserve agentic continuity with decision.algorithm.session_aware",
-    "gmtrouter": "  Tip: Learns user preferences via graph neural network",
 }
 
 ALGORITHM_CONFIG_BLOCKS = (
@@ -50,33 +44,39 @@ ALGORITHM_CONFIG_BLOCKS = (
     "ratings",
     "remom",
     "fusion",
-    "elo",
+    "workflows",
     "router_dc",
     "automix",
     "hybrid",
-    "rl_driven",
-    "gmtrouter",
     "latency_aware",
     "multi_factor",
+)
+
+RETIRED_ALGORITHM_CONFIG_BLOCKS = (
     "session_aware",
+    "elo",
+    "rl_driven",
+    "gmtrouter",
+    "bandit",
+    "personalization",
 )
 
 EXPECTED_CONFIG_BLOCK_BY_ALGORITHM = {
-    "elo": "elo",
     "router_dc": "router_dc",
     "automix": "automix",
     "hybrid": "hybrid",
-    "rl_driven": "rl_driven",
-    "gmtrouter": "gmtrouter",
+    "workflows": "workflows",
     "latency_aware": "latency_aware",
     "multi_factor": "multi_factor",
-    "session_aware": "session_aware",
 }
 
 DEFAULT_CONFIG_BLOCK_BY_ALGORITHM: dict[str, dict[str, object]] = {
     "latency_aware": {
         "tpot_percentile": 90,
         "ttft_percentile": 95,
+    },
+    "workflows": {
+        "template": "micro_agent",
     },
 }
 
@@ -288,9 +288,10 @@ def log_algorithm_hint(algorithm: str) -> None:
 def _replace_algorithm_config(
     algorithm_config: dict[str, object],
     normalized_algorithm: str,
+    decision_config: dict[str, object] | None = None,
 ) -> None:
     expected_block = EXPECTED_CONFIG_BLOCK_BY_ALGORITHM.get(normalized_algorithm)
-    for block in ALGORITHM_CONFIG_BLOCKS:
+    for block in (*ALGORITHM_CONFIG_BLOCKS, *RETIRED_ALGORITHM_CONFIG_BLOCKS):
         if block != expected_block:
             algorithm_config.pop(block, None)
     algorithm_config["type"] = normalized_algorithm
@@ -299,9 +300,37 @@ def _replace_algorithm_config(
         and expected_block not in algorithm_config
         and normalized_algorithm in DEFAULT_CONFIG_BLOCK_BY_ALGORITHM
     ):
-        algorithm_config[expected_block] = dict(
-            DEFAULT_CONFIG_BLOCK_BY_ALGORITHM[normalized_algorithm]
+        default_block = _default_algorithm_config_block(
+            normalized_algorithm, decision_config
         )
+        if default_block:
+            algorithm_config[expected_block] = default_block
+
+
+def _default_algorithm_config_block(
+    normalized_algorithm: str,
+    decision_config: dict[str, object] | None,
+) -> dict[str, object]:
+    block = dict(DEFAULT_CONFIG_BLOCK_BY_ALGORITHM[normalized_algorithm])
+    if normalized_algorithm != "workflows":
+        return block
+
+    models = []
+    if decision_config is not None:
+        model_refs = decision_config.get("modelRefs", [])
+        if isinstance(model_refs, list):
+            for model_ref in model_refs:
+                if isinstance(model_ref, dict) and isinstance(
+                    model_ref.get("model"), str
+                ):
+                    models.append(model_ref["model"])
+
+    if models:
+        block["mode"] = "static"
+        block["roles"] = [{"name": "worker", "models": [models[0]]}]
+    else:
+        block = {}
+    return block
 
 
 def _apply_algorithm_override(
@@ -318,7 +347,7 @@ def _apply_algorithm_override(
             decision["algorithm"] = {}
         if not isinstance(decision["algorithm"], dict):
             decision["algorithm"] = {}
-        _replace_algorithm_config(decision["algorithm"], normalized_algorithm)
+        _replace_algorithm_config(decision["algorithm"], normalized_algorithm, decision)
         log.info(
             "  Injected algorithm.type=%s into decision '%s'",
             normalized_algorithm,
@@ -338,7 +367,7 @@ def inject_algorithm_into_config(config_path: Path, algorithm: str) -> Path:
             decision["algorithm"] = {}
         if not isinstance(decision["algorithm"], dict):
             decision["algorithm"] = {}
-        _replace_algorithm_config(decision["algorithm"], normalized_algorithm)
+        _replace_algorithm_config(decision["algorithm"], normalized_algorithm, decision)
         log.info(
             f"  Injected algorithm.type={normalized_algorithm} into decision '{decision.get('name', 'unnamed')}'"
         )

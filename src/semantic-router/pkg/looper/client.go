@@ -34,12 +34,11 @@ import (
 
 // Client handles HTTP requests to OpenAI-compatible endpoints
 type Client struct {
-	httpClient        *http.Client
-	endpoint          string
-	headers           map[string]string
-	decisionName      string            // Decision name to pass in looper requests
-	fusionDepth       int               // Recursion guard for Fusion requests
-	endpointOverrides map[string]string // Per-model endpoint URL overrides
+	httpClient   *http.Client
+	endpoint     string
+	headers      map[string]string
+	decisionName string // Decision name to pass in looper requests
+	fusionDepth  int    // Recursion guard for Fusion requests
 }
 
 // NewClient creates a new looper HTTP client
@@ -50,12 +49,6 @@ func NewClient(cfg *config.LooperConfig) *Client {
 		},
 		endpoint: cfg.Endpoint,
 		headers:  cfg.Headers,
-	}
-	if len(cfg.ModelEndpoints) > 0 {
-		c.endpointOverrides = cfg.ModelEndpoints
-		logging.ComponentEvent("looper", "endpoint_overrides_loaded", map[string]interface{}{
-			"count": len(cfg.ModelEndpoints),
-		})
 	}
 	return c
 }
@@ -70,20 +63,8 @@ func (c *Client) SetFusionDepth(depth int) {
 	c.fusionDepth = depth
 }
 
-// SetEndpointOverrides sets per-model endpoint URL overrides.
-// When calling a model, the client checks this map first; if found,
-// the override URL is used instead of the default looper endpoint.
-func (c *Client) SetEndpointOverrides(overrides map[string]string) {
-	c.endpointOverrides = overrides
-}
-
-// resolveEndpoint returns the endpoint URL for the given model name.
-func (c *Client) resolveEndpoint(modelName string) string {
-	if c.endpointOverrides != nil {
-		if ep, ok := c.endpointOverrides[modelName]; ok {
-			return ep
-		}
-	}
+// resolveEndpoint returns the configured looper endpoint.
+func (c *Client) resolveEndpoint() string {
 	return c.endpoint
 }
 
@@ -189,7 +170,7 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	}
 
 	logprobsEnabled := logprobsCfg != nil && logprobsCfg.Enabled
-	endpoint := c.resolveEndpoint(modelName)
+	endpoint := c.resolveEndpoint()
 	logging.ComponentDebugEvent("looper", "model_call_started", map[string]interface{}{
 		"decision":  c.decisionName,
 		"model_ref": modelName,
@@ -275,7 +256,7 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 	// Extract content, tool_calls, and logprobs
 	if len(completion.Choices) > 0 {
 		result.Content = completion.Choices[0].Message.Content
-		if len(completion.Choices[0].Message.ToolCalls) > 0 {
+		if len(completion.Choices[0].Message.ToolCalls) > 0 || completion.Choices[0].Message.FunctionCall.Name != "" {
 			result.HasToolCalls = true
 		}
 

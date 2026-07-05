@@ -14,8 +14,11 @@ var algorithmSubConfigCompilers = map[string]algorithmSubConfigCompiler{
 	"remom": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
 		algo.ReMoM = c.compileReMoMAlgo(fields)
 	},
-	"elo": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
-		algo.Elo = c.compileEloAlgo(fields)
+	"fusion": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
+		algo.Fusion = c.compileFusionAlgo(fields)
+	},
+	"workflows": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
+		algo.Workflows = c.compileWorkflowsAlgo(fields)
 	},
 	"router_dc": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
 		algo.RouterDC = c.compileRouterDCAlgo(fields)
@@ -26,20 +29,11 @@ var algorithmSubConfigCompilers = map[string]algorithmSubConfigCompiler{
 	"hybrid": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
 		algo.Hybrid = c.compileHybridAlgo(fields)
 	},
-	"rl_driven": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
-		algo.RLDriven = c.compileRLDrivenAlgo(fields)
-	},
-	"gmtrouter": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
-		algo.GMTRouter = c.compileGMTRouterAlgo(fields)
-	},
 	"latency_aware": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
 		algo.LatencyAware = c.compileLatencyAwareAlgo(fields)
 	},
 	"multi_factor": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
 		algo.MultiFactor = c.compileMultiFactorAlgo(fields)
-	},
-	"session_aware": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
-		algo.SessionAware = c.compileSessionAwareAlgo(fields)
 	},
 	"static": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 	"knn":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
@@ -164,8 +158,17 @@ func fillReMoMRuntimeFields(cfg *config.ReMoMAlgorithmConfig, fields map[string]
 	if v, ok := getStringField(fields, "synthesis_template"); ok {
 		cfg.SynthesisTemplate = v
 	}
+	if v, ok := getStringField(fields, "synthesis_model"); ok {
+		cfg.SynthesisModel = v
+	}
 	if v, ok := getIntField(fields, "max_concurrent"); ok {
 		cfg.MaxConcurrent = v
+	}
+	if v, ok := getIntField(fields, "round_timeout_seconds"); ok {
+		cfg.RoundTimeoutSeconds = v
+	}
+	if v, ok := getIntField(fields, "min_successful_responses"); ok {
+		cfg.MinSuccessfulResponses = v
 	}
 	if v, ok := getStringField(fields, "on_error"); ok {
 		cfg.OnError = v
@@ -184,31 +187,163 @@ func fillReMoMResponseFields(cfg *config.ReMoMAlgorithmConfig, fields map[string
 	}
 }
 
-func (c *Compiler) compileEloAlgo(fields map[string]Value) *config.EloSelectionConfig {
-	cfg := &config.EloSelectionConfig{}
-	if v, ok := getFloat64Field(fields, "initial_rating"); ok {
-		cfg.InitialRating = v
+func (c *Compiler) compileFusionAlgo(fields map[string]Value) *config.FusionAlgorithmConfig {
+	cfg := &config.FusionAlgorithmConfig{}
+	fillFusionModelFields(cfg, fields)
+	fillFusionRuntimeFields(cfg, fields)
+	fillFusionResponseFields(cfg, fields)
+	fillFusionPromptFields(cfg, fields)
+	return cfg
+}
+
+func fillFusionModelFields(cfg *config.FusionAlgorithmConfig, fields map[string]Value) {
+	if v, ok := getStringField(fields, "model"); ok {
+		cfg.Model = v
 	}
-	if v, ok := getFloat64Field(fields, "k_factor"); ok {
-		cfg.KFactor = v
+	if v, ok := getStringArrayField(fields, "analysis_models"); ok {
+		cfg.AnalysisModels = v
 	}
-	if v, ok := getBoolField(fields, "category_weighted"); ok {
-		cfg.CategoryWeighted = v
+}
+
+func fillFusionRuntimeFields(cfg *config.FusionAlgorithmConfig, fields map[string]Value) {
+	if v, ok := getIntField(fields, "max_concurrent"); ok {
+		cfg.MaxConcurrent = v
 	}
-	if v, ok := getFloat64Field(fields, "decay_factor"); ok {
-		cfg.DecayFactor = v
+	if v, ok := getIntField(fields, "max_completion_tokens"); ok {
+		cfg.MaxCompletionTokens = v
 	}
-	if v, ok := getIntField(fields, "min_comparisons"); ok {
-		cfg.MinComparisons = v
+	if v, ok := getIntField(fields, "round_timeout_seconds"); ok {
+		cfg.RoundTimeoutSeconds = v
 	}
-	if v, ok := getFloat64Field(fields, "cost_scaling_factor"); ok {
-		cfg.CostScalingFactor = v
+	if v, ok := getIntField(fields, "min_successful_responses"); ok {
+		cfg.MinSuccessfulResponses = v
 	}
-	if v, ok := getStringField(fields, "storage_path"); ok {
-		cfg.StoragePath = v
+	if v, ok := getFloat64Field(fields, "temperature"); ok {
+		cfg.Temperature = &v
 	}
-	if v, ok := getStringField(fields, "auto_save_interval"); ok {
-		cfg.AutoSaveInterval = v
+	if v, ok := getStringField(fields, "on_error"); ok {
+		cfg.OnError = v
+	}
+}
+
+func fillFusionResponseFields(cfg *config.FusionAlgorithmConfig, fields map[string]Value) {
+	if v, ok := getBoolField(fields, "include_analysis"); ok {
+		cfg.IncludeAnalysis = &v
+	}
+	if v, ok := getBoolField(fields, "include_intermediate_responses"); ok {
+		cfg.IncludeIntermediateResponses = &v
+	}
+}
+
+func fillFusionPromptFields(cfg *config.FusionAlgorithmConfig, fields map[string]Value) {
+	if v, ok := getStringField(fields, "analysis_template"); ok {
+		cfg.AnalysisTemplate = v
+	}
+	if v, ok := getStringField(fields, "synthesis_template"); ok {
+		cfg.SynthesisTemplate = v
+	}
+	if v, ok := getStringField(fields, "judge_prompt_version"); ok {
+		cfg.JudgePromptVersion = v
+	}
+}
+
+func (c *Compiler) compileWorkflowsAlgo(fields map[string]Value) *config.WorkflowsAlgorithmConfig {
+	cfg := &config.WorkflowsAlgorithmConfig{}
+	compileWorkflowIdentity(fields, cfg)
+	cfg.Roles = compileWorkflowRoles(fields)
+	cfg.Final = compileWorkflowFinalField(fields)
+	compileWorkflowPlanner(fields, cfg)
+	compileWorkflowLimits(fields, cfg)
+	return cfg
+}
+
+func compileWorkflowIdentity(fields map[string]Value, cfg *config.WorkflowsAlgorithmConfig) {
+	if v, ok := getStringField(fields, "mode"); ok {
+		cfg.Mode = v
+	}
+	if v, ok := getStringField(fields, "template"); ok {
+		cfg.Template = v
+	}
+}
+
+func compileWorkflowFinalField(fields map[string]Value) config.WorkflowFinalConfig {
+	if final, ok := fields["final"].(ObjectValue); ok {
+		return compileWorkflowFinal(final)
+	}
+	return config.WorkflowFinalConfig{}
+}
+
+func compileWorkflowPlanner(fields map[string]Value, cfg *config.WorkflowsAlgorithmConfig) {
+	if planner, ok := fields["planner"].(ObjectValue); ok {
+		if v, ok := getStringField(planner.Fields, "model"); ok {
+			cfg.Planner.Model = v
+		}
+	}
+	if v, ok := getStringField(fields, "planner.model"); ok {
+		cfg.Planner.Model = v
+	}
+}
+
+func compileWorkflowLimits(fields map[string]Value, cfg *config.WorkflowsAlgorithmConfig) {
+	if v, ok := getIntField(fields, "max_steps"); ok {
+		cfg.MaxSteps = v
+	}
+	if v, ok := getIntField(fields, "max_parallel"); ok {
+		cfg.MaxParallel = v
+	}
+	if v, ok := getIntField(fields, "max_completion_tokens"); ok {
+		cfg.MaxCompletionTokens = v
+	}
+	if v, ok := getIntField(fields, "round_timeout_seconds"); ok {
+		cfg.RoundTimeoutSeconds = v
+	}
+	if v, ok := getIntField(fields, "min_successful_responses"); ok {
+		cfg.MinSuccessfulResponses = v
+	}
+	if v, ok := getFloat64Field(fields, "temperature"); ok {
+		cfg.Temperature = &v
+	}
+	if v, ok := getBoolField(fields, "include_intermediate_responses"); ok {
+		cfg.IncludeIntermediateResponses = &v
+	}
+	if v, ok := getStringField(fields, "on_error"); ok {
+		cfg.OnError = v
+	}
+}
+
+func compileWorkflowRoles(fields map[string]Value) []config.WorkflowRoleConfig {
+	raw, ok := fields["roles"].(ArrayValue)
+	if !ok {
+		return nil
+	}
+	roles := make([]config.WorkflowRoleConfig, 0, len(raw.Items))
+	for _, item := range raw.Items {
+		roleObj, ok := item.(ObjectValue)
+		if !ok {
+			continue
+		}
+		role := config.WorkflowRoleConfig{}
+		if v, ok := getStringField(roleObj.Fields, "name"); ok {
+			role.Name = v
+		}
+		if models, ok := getStringArrayField(roleObj.Fields, "models"); ok {
+			role.Models = models
+		}
+		if v, ok := getStringField(roleObj.Fields, "prompt"); ok {
+			role.Prompt = v
+		}
+		roles = append(roles, role)
+	}
+	return roles
+}
+
+func compileWorkflowFinal(final ObjectValue) config.WorkflowFinalConfig {
+	cfg := config.WorkflowFinalConfig{}
+	if v, ok := getStringField(final.Fields, "model"); ok {
+		cfg.Model = v
+	}
+	if v, ok := getStringField(final.Fields, "prompt"); ok {
+		cfg.Prompt = v
 	}
 	return cfg
 }
@@ -264,8 +399,8 @@ func (c *Compiler) compileAutoMixAlgo(fields map[string]Value) *config.AutoMixSe
 
 func (c *Compiler) compileHybridAlgo(fields map[string]Value) *config.HybridSelectionConfig {
 	cfg := &config.HybridSelectionConfig{}
-	if v, ok := getFloat64Field(fields, "elo_weight"); ok {
-		cfg.EloWeight = v
+	if v, ok := getFloat64Field(fields, "experience_weight"); ok {
+		cfg.ExperienceWeight = v
 	}
 	if v, ok := getFloat64Field(fields, "router_dc_weight"); ok {
 		cfg.RouterDCWeight = v
@@ -281,122 +416,6 @@ func (c *Compiler) compileHybridAlgo(fields map[string]Value) *config.HybridSele
 	}
 	if v, ok := getBoolField(fields, "normalize_scores"); ok {
 		cfg.NormalizeScores = v
-	}
-	return cfg
-}
-
-func (c *Compiler) compileRLDrivenAlgo(fields map[string]Value) *config.RLDrivenSelectionConfig {
-	cfg := &config.RLDrivenSelectionConfig{}
-	fillRLDrivenExplorationFields(cfg, fields)
-	fillRLDrivenPersonalizationFields(cfg, fields)
-	fillRLDrivenCostAndStorageFields(cfg, fields)
-	fillRLDrivenRouterR1Fields(cfg, fields)
-	return cfg
-}
-
-func fillRLDrivenExplorationFields(cfg *config.RLDrivenSelectionConfig, fields map[string]Value) {
-	if v, ok := getFloat64Field(fields, "exploration_rate"); ok {
-		cfg.ExplorationRate = v
-	}
-	if v, ok := getFloat64Field(fields, "exploration_decay"); ok {
-		cfg.ExplorationDecay = v
-	}
-	if v, ok := getFloat64Field(fields, "min_exploration"); ok {
-		cfg.MinExploration = v
-	}
-	if v, ok := getBoolField(fields, "use_thompson_sampling"); ok {
-		cfg.UseThompsonSampling = v
-	}
-}
-
-func fillRLDrivenPersonalizationFields(cfg *config.RLDrivenSelectionConfig, fields map[string]Value) {
-	if v, ok := getBoolField(fields, "enable_personalization"); ok {
-		cfg.EnablePersonalization = v
-	}
-	if v, ok := getFloat64Field(fields, "personalization_blend"); ok {
-		cfg.PersonalizationBlend = v
-	}
-	if v, ok := getFloat64Field(fields, "session_context_weight"); ok {
-		cfg.SessionContextWeight = v
-	}
-	if v, ok := getFloat64Field(fields, "implicit_feedback_weight"); ok {
-		cfg.ImplicitFeedbackWeight = v
-	}
-}
-
-func fillRLDrivenCostAndStorageFields(cfg *config.RLDrivenSelectionConfig, fields map[string]Value) {
-	if v, ok := getBoolField(fields, "cost_awareness"); ok {
-		cfg.CostAwareness = v
-	}
-	if v, ok := getFloat64Field(fields, "cost_weight"); ok {
-		cfg.CostWeight = v
-	}
-	if v, ok := getStringField(fields, "storage_path"); ok {
-		cfg.StoragePath = v
-	}
-	if v, ok := getStringField(fields, "auto_save_interval"); ok {
-		cfg.AutoSaveInterval = v
-	}
-}
-
-func fillRLDrivenRouterR1Fields(cfg *config.RLDrivenSelectionConfig, fields map[string]Value) {
-	if v, ok := getBoolField(fields, "use_router_r1_rewards"); ok {
-		cfg.UseRouterR1Rewards = v
-	}
-	if v, ok := getFloat64Field(fields, "cost_reward_alpha"); ok {
-		cfg.CostRewardAlpha = v
-	}
-	if v, ok := getFloat64Field(fields, "format_reward_penalty"); ok {
-		cfg.FormatRewardPenalty = v
-	}
-	if v, ok := getBoolField(fields, "enable_llm_routing"); ok {
-		cfg.EnableLLMRouting = v
-	}
-	if v, ok := getStringField(fields, "router_r1_server_url"); ok {
-		cfg.RouterR1ServerURL = v
-	}
-	if v, ok := getStringField(fields, "llm_routing_fallback"); ok {
-		cfg.LLMRoutingFallback = v
-	}
-	if v, ok := getBoolField(fields, "enable_multi_round_aggregation"); ok {
-		cfg.EnableMultiRoundAggregation = v
-	}
-	if v, ok := getIntField(fields, "max_aggregation_rounds"); ok {
-		cfg.MaxAggregationRounds = v
-	}
-}
-
-func (c *Compiler) compileGMTRouterAlgo(fields map[string]Value) *config.GMTRouterSelectionConfig {
-	cfg := &config.GMTRouterSelectionConfig{}
-	if v, ok := getBoolField(fields, "enable_personalization"); ok {
-		cfg.EnablePersonalization = v
-	}
-	if v, ok := getIntField(fields, "history_sample_size"); ok {
-		cfg.HistorySampleSize = v
-	}
-	if v, ok := getStringField(fields, "model_path"); ok {
-		cfg.ModelPath = v
-	}
-	if v, ok := getIntField(fields, "embedding_dimension"); ok {
-		cfg.EmbeddingDimension = v
-	}
-	if v, ok := getIntField(fields, "num_gnn_layers"); ok {
-		cfg.NumGNNLayers = v
-	}
-	if v, ok := getIntField(fields, "attention_heads"); ok {
-		cfg.AttentionHeads = v
-	}
-	if v, ok := getIntField(fields, "min_interactions_for_personalization"); ok {
-		cfg.MinInteractionsForPersonalization = v
-	}
-	if v, ok := getIntField(fields, "max_interactions_per_user"); ok {
-		cfg.MaxInteractionsPerUser = v
-	}
-	if v, ok := getStringArrayField(fields, "feedback_types"); ok {
-		cfg.FeedbackTypes = v
-	}
-	if v, ok := getStringField(fields, "storage_path"); ok {
-		cfg.StoragePath = v
 	}
 	return cfg
 }
@@ -468,79 +487,4 @@ func parseMultiFactorSLO(fields map[string]Value) *config.MultiFactorSLOConfig {
 		cfg.MaxInflight = v
 	}
 	return cfg
-}
-
-func (c *Compiler) compileSessionAwareAlgo(fields map[string]Value) *config.SessionAwareSelectionConfig {
-	cfg := &config.SessionAwareSelectionConfig{}
-	fillSessionAwareCoreFields(cfg, fields)
-	fillSessionAwareLockFields(cfg, fields)
-	fillSessionAwareCostFields(cfg, fields)
-	fillSessionAwareHistoryFields(cfg, fields)
-	return cfg
-}
-
-func fillSessionAwareCoreFields(cfg *config.SessionAwareSelectionConfig, fields map[string]Value) {
-	if v, ok := getStringField(fields, "base_method"); ok {
-		cfg.BaseMethod = v
-	}
-	if v, ok := getIntField(fields, "idle_timeout_seconds"); ok {
-		cfg.IdleTimeoutSeconds = &v
-	}
-	if v, ok := getIntField(fields, "min_turns_before_switch"); ok {
-		cfg.MinTurnsBeforeSwitch = &v
-	}
-	if v, ok := getFloat64Field(fields, "switch_margin"); ok {
-		cfg.SwitchMargin = &v
-	}
-	if v, ok := getFloat64Field(fields, "stay_bias"); ok {
-		cfg.StayBias = &v
-	}
-}
-
-func fillSessionAwareLockFields(cfg *config.SessionAwareSelectionConfig, fields map[string]Value) {
-	if v, ok := getBoolField(fields, "tool_loop_hard_lock"); ok {
-		cfg.ToolLoopHardLock = &v
-	}
-	if v, ok := getBoolField(fields, "context_portability_hard_lock"); ok {
-		cfg.ContextPortabilityHardLock = &v
-	}
-	if v, ok := getBoolField(fields, "decision_drift_reset"); ok {
-		cfg.DecisionDriftReset = &v
-	}
-}
-
-func fillSessionAwareCostFields(cfg *config.SessionAwareSelectionConfig, fields map[string]Value) {
-	if v, ok := getFloat64Field(fields, "tool_loop_stay_bias"); ok {
-		cfg.ToolLoopStayBias = &v
-	}
-	if v, ok := getFloat64Field(fields, "prefix_cache_weight"); ok {
-		cfg.PrefixCacheWeight = &v
-	}
-	if v, ok := getFloat64Field(fields, "handoff_penalty_weight"); ok {
-		cfg.HandoffPenaltyWeight = &v
-	}
-	if v, ok := getFloat64Field(fields, "default_handoff_penalty"); ok {
-		cfg.DefaultHandoffPenalty = &v
-	}
-	if v, ok := getFloat64Field(fields, "quality_gap_multiplier"); ok {
-		cfg.QualityGapMultiplier = &v
-	}
-	if v, ok := getFloat64Field(fields, "max_cache_cost_multiplier"); ok {
-		cfg.MaxCacheCostMultiplier = &v
-	}
-}
-
-func fillSessionAwareHistoryFields(cfg *config.SessionAwareSelectionConfig, fields map[string]Value) {
-	if v, ok := getFloat64Field(fields, "switch_history_weight"); ok {
-		cfg.SwitchHistoryWeight = &v
-	}
-	if v, ok := getFloat64Field(fields, "remaining_turn_prior_weight"); ok {
-		cfg.RemainingTurnPriorWeight = &v
-	}
-	if v, ok := getIntField(fields, "remaining_turn_prior_horizon"); ok {
-		cfg.RemainingTurnPriorHorizon = &v
-	}
-	if v, ok := getIntField(fields, "min_remaining_turn_prior_samples"); ok {
-		cfg.MinRemainingTurnPriorSamples = &v
-	}
 }

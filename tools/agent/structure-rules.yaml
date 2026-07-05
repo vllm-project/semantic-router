@@ -81,6 +81,15 @@ structure_exceptions:
     file_checks: relaxed
     function_checks: relaxed
   - paths:
+      - bench/router_flow/real_eval/collect_evalscope_results.py
+      - bench/router_flow/real_eval/run_evalscope_suite.py
+      - bench/router_flow/real_eval/test_run_evalscope_suite.py
+      - src/semantic-router/pkg/config/canonical_loader_test.go
+      - src/semantic-router/pkg/config/validator_test.go
+      - src/semantic-router/pkg/looper/workflows_test.go
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
       - deploy/operator/controllers/helpers_test.go
     file_checks: relaxed
     function_checks: relaxed

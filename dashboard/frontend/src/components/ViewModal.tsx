@@ -13,6 +13,11 @@ interface ViewModalProps {
   closeLabel?: string
 }
 
+export function transitionFromViewToEdit(onClose: () => void, onEdit?: () => void) {
+  onClose()
+  onEdit?.()
+}
+
 const ViewModal: React.FC<ViewModalProps> = ({
   isOpen,
   onClose,
@@ -24,6 +29,10 @@ const ViewModal: React.FC<ViewModalProps> = ({
 }) => {
   if (!isOpen) return null
 
+  const handleEdit = onEdit
+    ? () => transitionFromViewToEdit(onClose, onEdit)
+    : undefined
+
   return (
     <div className={styles.overlay} onClick={onClose}>
       <div onClick={(event) => event.stopPropagation()}>
@@ -31,7 +40,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
           title={title}
           sections={sections}
           onClose={onClose}
-          onEdit={onEdit}
+          onEdit={handleEdit}
           actions={actions}
           closeLabel={closeLabel}
         />

@@ -25,7 +25,7 @@ const retentionDropReason = "retention.drop"
 //   - `ttl_turns` is consumed separately as a per-entry TTL override
 //     (applyRetentionTTLOverride), not as a skip; `drop` and `ttl_turns` are
 //     mutually exclusive by validation.
-//   - `keep_current_model` is consumed by the model-switch gate;
+//   - `keep_current_model` is consumed by Router Learning protection;
 //     `prefer_prefix_retention` is emitted to the pool as a response header.
 //   - This gate does NOT affect cache reads; read-side gating lives in
 //     req_filter_cache.go.
@@ -68,14 +68,6 @@ func applyRetentionTTLOverride(base int, ctx *RequestContext) int {
 		return override
 	}
 	return base
-}
-
-// retentionWantsKeepCurrentModel reports whether the emitted retention directive
-// explicitly set keep_current_model: true. The model-switch gate consumes this
-// as a forced-stay directive (honored regardless of shadow/enforce mode).
-func retentionWantsKeepCurrentModel(ctx *RequestContext) bool {
-	return ctx != nil && ctx.EmittedRetention != nil &&
-		ctx.EmittedRetention.KeepCurrentModel != nil && *ctx.EmittedRetention.KeepCurrentModel
 }
 
 // observeRetentionDirective records every declared field of the emitted

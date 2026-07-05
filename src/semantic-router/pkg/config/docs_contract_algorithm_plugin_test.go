@@ -11,9 +11,7 @@ import (
 var algorithmTutorialBuckets = map[string]string{
 	"automix":       "selection",
 	"confidence":    "looper",
-	"elo":           "selection",
 	"fusion":        "looper",
-	"gmtrouter":     "selection",
 	"hybrid":        "selection",
 	"kmeans":        "selection",
 	"knn":           "selection",
@@ -22,11 +20,10 @@ var algorithmTutorialBuckets = map[string]string{
 	"multi-factor":  "selection",
 	"ratings":       "looper",
 	"remom":         "looper",
-	"rl-driven":     "selection",
 	"router-dc":     "selection",
-	"session-aware": "selection",
 	"static":        "selection",
 	"svm":           "selection",
+	"workflows":     "looper",
 }
 
 var retiredAlgorithmTutorialDocs = []string{

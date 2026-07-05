@@ -140,6 +140,10 @@ export interface InsightsRecord {
   rag_backend?: string
   rag_context_length?: number
   rag_similarity_score?: number
+  // v0.4 demoted-header replay fields (#2200, #2254): recoverable here even when
+  // x-vsr-cache-similarity / x-vsr-context-token-count are not emitted as headers.
+  cache_similarity?: number
+  context_token_count?: number
   hallucination_enabled?: boolean
   hallucination_detected?: boolean
   hallucination_confidence?: number
