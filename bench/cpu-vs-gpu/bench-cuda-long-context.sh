@@ -75,7 +75,8 @@ print(json.dumps({'model': 'auto', 'messages': [{'role': 'user', 'content': cont
 }
 
 generate_config() {
-    local mode=$1 out="$RESULTS_DIR/config-${mode}.yaml"
+    local mode=$1
+    local out="$RESULTS_DIR/config-${mode}.yaml"
     local use_cpu=false
     [ "$mode" = cpu ] && use_cpu=true
     sed "s/USE_CPU_PLACEHOLDER/${use_cpu}/g" "$SCRIPT_DIR/config-bench-cuda.yaml" > "$out"
@@ -118,7 +119,7 @@ PY
     sleep 1
     log "Stub upstream on :${STUB_PORT} (pid $STUB_PID)"
 }
-stop_stub() { [ -n "$STUB_PID" ] && kill "$STUB_PID" 2>/dev/null || true; }
+stop_stub() { [ -z "$STUB_PID" ] || kill "$STUB_PID" 2>/dev/null || true; }
 
 start_router() {
     local mode=$1 config_file=$2
@@ -247,7 +248,7 @@ generate_report() {
                 for mode in cpu gpu; do
                     local b="$RESULTS_DIR/m-${mode}-before-${sz}-${TIMESTAMP}.txt"
                     local a="$RESULTS_DIR/m-${mode}-after-${sz}-${TIMESTAMP}.txt"
-                    [ -f "$b" ] && [ -f "$a" ] || continue
+                    if [ ! -f "$b" ] || [ ! -f "$a" ]; then continue; fi
                     read -r n avg p50 p95 p99 <<< "$(histogram_stats "$b" "$a" "$signal")"
                     [ "$n" != 0 ] && echo "| ~${sz} | ${mode^^} | $n | $avg | $p50 | $p95 | $p99 |"
                 done

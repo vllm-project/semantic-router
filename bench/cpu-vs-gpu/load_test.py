@@ -14,13 +14,19 @@ Usage: load_test.py <url> <duration_s> <concurrency> <payload_file>
 Prints: "<concurrency> <completed> <qps> <p50> <p95> <p99>"  (latency in ms)
 """
 import sys
-import time
 import threading
-import urllib.request
+import time
 import urllib.error
+import urllib.request
 
-url, duration, concurrency, payload_file = sys.argv[1], float(sys.argv[2]), int(sys.argv[3]), sys.argv[4]
-payload = open(payload_file, "rb").read()
+url, duration, concurrency, payload_file = (
+    sys.argv[1],
+    float(sys.argv[2]),
+    int(sys.argv[3]),
+    sys.argv[4],
+)
+with open(payload_file, "rb") as f:
+    payload = f.read()
 
 lat = []
 lock = threading.Lock()
@@ -31,8 +37,9 @@ def worker():
     local = []
     while time.monotonic() < stop:
         t0 = time.monotonic()
-        req = urllib.request.Request(url, data=payload,
-                                     headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(
+            url, data=payload, headers={"Content-Type": "application/json"}
+        )
         try:
             urllib.request.urlopen(req, timeout=300).read()
             local.append((time.monotonic() - t0) * 1000.0)
@@ -58,6 +65,10 @@ if n == 0:
     sys.exit()
 lat.sort()
 qps = n / elapsed
+
+
 def p(q):
     return lat[min(n - 1, int(n * q))]
+
+
 print(f"{concurrency} {n} {qps:.1f} {p(.5):.0f} {p(.95):.0f} {p(.99):.0f}")

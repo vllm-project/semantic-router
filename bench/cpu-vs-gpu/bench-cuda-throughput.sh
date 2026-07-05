@@ -41,7 +41,9 @@ mkdir -p "$RESULTS_DIR"
 log() { echo "[$(date '+%H:%M:%S')] $*"; }
 
 generate_config() {
-    local mode=$1 out="$RESULTS_DIR/config-tp-${mode}.yaml" use_cpu=false
+    local mode=$1
+    local out="$RESULTS_DIR/config-tp-${mode}.yaml"
+    local use_cpu=false
     [ "$mode" = cpu ] && use_cpu=true
     sed "s/USE_CPU_PLACEHOLDER/${use_cpu}/g" "$SCRIPT_DIR/config-bench-cuda.yaml" > "$out"
     echo "$out"
@@ -90,7 +92,7 @@ PY
     STUB_PID=$!
     sleep 1
 }
-stop_stub() { [ -n "$STUB_PID" ] && kill "$STUB_PID" 2>/dev/null || true; }
+stop_stub() { [ -z "$STUB_PID" ] || kill "$STUB_PID" 2>/dev/null || true; }
 
 start_router() {
     local mode=$1 config_file=$2
