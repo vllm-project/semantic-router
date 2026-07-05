@@ -284,7 +284,21 @@ endif
 
 # Default 1 so vllm-sr build works behind corporate proxies; set GIT_SSL_NO_VERIFY=0 for strict SSL verification.
 GIT_SSL_NO_VERIFY ?= 1
-IMAGE_REGISTRY ?= docker.io/
+# Auto-detect: if Podman can resolve unqualified short names (search chain
+# configured in registries.conf), use unqualified FROM lines so the configured
+# registry priority is honoured.  Otherwise fall back to fully-qualified
+# docker.io/ names for out-of-the-box compatibility.
+IMAGE_REGISTRY ?= $(shell \
+  if [ "$(CONTAINER_RUNTIME)" = "podman" ]; then \
+    if podman pull --quiet library/alpine:latest >/dev/null 2>&1; then \
+      podman rmi --force library/alpine:latest >/dev/null 2>&1; \
+      printf ""; \
+    else \
+      printf "docker.io/"; \
+    fi; \
+  else \
+    printf "docker.io/"; \
+  fi)
 VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM) --build-arg IMAGE_REGISTRY=$(IMAGE_REGISTRY)
 ifeq ($(GIT_SSL_NO_VERIFY),1)
 VLLM_SR_BUILD_ARGS += --build-arg GIT_SSL_NO_VERIFY=1
