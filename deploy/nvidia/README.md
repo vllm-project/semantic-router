@@ -330,10 +330,13 @@ the active config.
 
 ## Step 5: Sanity-check a real query
 
-Send any prompt through the router and confirm it routes successfully:
+Send any prompt through the router and confirm it routes successfully. Chat
+completions enter through the **Envoy** front door of your existing `vllm-sr`
+deployment — not the router's own API port from Step 3c — so use that
+deployment's Envoy listener port, shown here as `${ENVOY_PORT}`:
 
 ```bash
-curl -sS -X POST http://localhost:8999/v1/chat/completions \
+curl -sS -X POST "http://localhost:${ENVOY_PORT}/v1/chat/completions" \
     -H "Content-Type: application/json" \
     -d '{
       "model": "auto",
