@@ -22,12 +22,110 @@ import (
 // as a single delta chunk. For text-only responses, content is split into
 // word-level chunks for smooth streaming.
 func BuildStreamingModalityBody(body []byte) []byte {
+	// First pass: detect whether content is multimodal (JSON array) by
+	// inspecting the raw JSON, since openai.ChatCompletionMessage.Content
+	// is typed as string and would lose the array structure.
+	if rawContent := extractRawContent(body); rawContent != nil && isMultimodalContent(rawContent) {
+		return buildMultimodalSSE(body)
+	}
+
+	// Text-only path: use the typed struct
 	var completion openai.ChatCompletion
 	if err := json.Unmarshal(body, &completion); err != nil {
 		logging.Errorf("Modality streaming: failed to parse response: %v", err)
 		return []byte("data: {\"error\": \"Failed to process modality response\"}\n\ndata: [DONE]\n\n")
 	}
 
+	return buildTextSSE(completion)
+}
+
+// extractRawContent extracts the raw content value from a ChatCompletion JSON
+// body without type coercion. Returns nil if the content cannot be extracted.
+func extractRawContent(body []byte) interface{} {
+	var raw struct {
+		Choices []struct {
+			Message struct {
+				Content json.RawMessage `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil
+	}
+	if len(raw.Choices) == 0 || len(raw.Choices[0].Message.Content) == 0 {
+		return nil
+	}
+	// Determine if it's an array
+	var arr []interface{}
+	if err := json.Unmarshal(raw.Choices[0].Message.Content, &arr); err == nil {
+		return arr
+	}
+	// It's a string
+	var s string
+	if err := json.Unmarshal(raw.Choices[0].Message.Content, &s); err == nil {
+		return s
+	}
+	return nil
+}
+
+// buildMultimodalSSE constructs SSE chunks for a multimodal response.
+// The entire content array is emitted as a single delta chunk.
+func buildMultimodalSSE(body []byte) []byte {
+	unixTimeStep := time.Now().Unix()
+	newID := fmt.Sprintf("chatcmpl-modality-%d", unixTimeStep)
+
+	// Extract model, role, and content from raw JSON
+	var raw struct {
+		Model   string `json:"model"`
+		Choices []struct {
+			Message struct {
+				Role    string          `json:"role"`
+				Content json.RawMessage `json:"content"`
+			} `json:"message"`
+			FinishReason string `json:"finish_reason"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return []byte("data: {\"error\": \"Failed to process multimodal response\"}\n\ndata: [DONE]\n\n")
+	}
+	if len(raw.Choices) == 0 {
+		return []byte("data: {\"error\": \"No choices in multimodal response\"}\n\ndata: [DONE]\n\n")
+	}
+
+	model := raw.Model
+	if model == "" {
+		model = "router"
+	}
+	ch := raw.Choices[0]
+
+	// Reconstruct the content as an interface value
+	var content interface{}
+	json.Unmarshal(ch.Message.Content, &content)
+
+	var sseChunks []string
+
+	delta := map[string]interface{}{
+		"role":    ch.Message.Role,
+		"content": content,
+	}
+	chunk := buildSSEModalityChunk(newID, model, unixTimeStep, delta, nil)
+	sseChunks = append(sseChunks, chunk)
+
+	// Final chunk
+	finalReason := ch.FinishReason
+	if finalReason == "" {
+		finalReason = "stop"
+	}
+	finalChunk := buildSSEModalityChunk(newID, model, unixTimeStep, map[string]interface{}{}, finalReason)
+	sseChunks = append(sseChunks, finalChunk)
+	sseChunks = append(sseChunks, "data: [DONE]\n\n")
+
+	return []byte(strings.Join(sseChunks, ""))
+}
+
+// buildTextSSE constructs SSE chunks for a text-only ChatCompletion response,
+// splitting the content into word-level chunks for smooth streaming.
+func buildTextSSE(completion openai.ChatCompletion) []byte {
 	unixTimeStep := time.Now().Unix()
 	newID := fmt.Sprintf("chatcmpl-modality-%d", unixTimeStep)
 	model := completion.Model
@@ -42,40 +140,25 @@ func BuildStreamingModalityBody(body []byte) []byte {
 		content := message.Content
 		finishReason := completion.Choices[0].FinishReason
 
-		// Determine whether content is multimodal (array of content parts)
-		if isMultimodalContent(content) {
-			// Emit entire multimodal content as a single delta chunk
-			delta := map[string]interface{}{
-				"role":    message.Role,
-				"content": content,
-			}
-			chunk := buildSSEModalityChunk(newID, model, unixTimeStep, delta, nil)
-			sseChunks = append(sseChunks, chunk)
-		} else {
-			// Text-only: split into word chunks
-			textContent := extractStringContent(content)
-			if textContent != "" {
-				chunks := splitContentIntoChunks(textContent)
-				for i, c := range chunks {
-					delta := map[string]interface{}{
-						"content": c,
-					}
-					if i == 0 {
-						delta["role"] = message.Role
-					}
-					chunk := buildSSEModalityChunk(newID, model, unixTimeStep, delta, nil)
-					sseChunks = append(sseChunks, chunk)
+		if content != "" {
+			chunks := splitContentIntoChunks(content)
+			for i, c := range chunks {
+				delta := map[string]interface{}{
+					"content": c,
 				}
+				if i == 0 {
+					delta["role"] = message.Role
+				}
+				chunk := buildSSEModalityChunk(newID, model, unixTimeStep, delta, nil)
+				sseChunks = append(sseChunks, chunk)
 			}
 		}
 
-		// Final chunk with finish_reason
-		finalDelta := map[string]interface{}{}
 		finalReason := finishReason
 		if finalReason == "" {
 			finalReason = "stop"
 		}
-		finalChunk := buildSSEModalityChunk(newID, model, unixTimeStep, finalDelta, finalReason)
+		finalChunk := buildSSEModalityChunk(newID, model, unixTimeStep, map[string]interface{}{}, finalReason)
 		sseChunks = append(sseChunks, finalChunk)
 	}
 
