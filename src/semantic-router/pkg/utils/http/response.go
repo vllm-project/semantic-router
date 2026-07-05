@@ -16,6 +16,108 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
+// BuildStreamingModalityBody converts a complete ChatCompletion JSON body into
+// SSE chunks compatible with OpenAI streaming protocol. For multimodal
+// responses (content array with non-text parts), the entire message is emitted
+// as a single delta chunk. For text-only responses, content is split into
+// word-level chunks for smooth streaming.
+func BuildStreamingModalityBody(body []byte) []byte {
+	var completion openai.ChatCompletion
+	if err := json.Unmarshal(body, &completion); err != nil {
+		logging.Errorf("Modality streaming: failed to parse response: %v", err)
+		return []byte("data: {\"error\": \"Failed to process modality response\"}\n\ndata: [DONE]\n\n")
+	}
+
+	unixTimeStep := time.Now().Unix()
+	newID := fmt.Sprintf("chatcmpl-modality-%d", unixTimeStep)
+	model := completion.Model
+	if model == "" {
+		model = "router"
+	}
+
+	var sseChunks []string
+
+	if len(completion.Choices) > 0 {
+		message := completion.Choices[0].Message
+		content := message.Content
+		finishReason := completion.Choices[0].FinishReason
+
+		// Determine whether content is multimodal (array of content parts)
+		if isMultimodalContent(content) {
+			// Emit entire multimodal content as a single delta chunk
+			delta := map[string]interface{}{
+				"role":    message.Role,
+				"content": content,
+			}
+			chunk := buildSSEModalityChunk(newID, model, unixTimeStep, delta, nil)
+			sseChunks = append(sseChunks, chunk)
+		} else {
+			// Text-only: split into word chunks
+			textContent := extractStringContent(content)
+			if textContent != "" {
+				chunks := splitContentIntoChunks(textContent)
+				for i, c := range chunks {
+					delta := map[string]interface{}{
+						"content": c,
+					}
+					if i == 0 {
+						delta["role"] = message.Role
+					}
+					chunk := buildSSEModalityChunk(newID, model, unixTimeStep, delta, nil)
+					sseChunks = append(sseChunks, chunk)
+				}
+			}
+		}
+
+		// Final chunk with finish_reason
+		finalDelta := map[string]interface{}{}
+		finalReason := finishReason
+		if finalReason == "" {
+			finalReason = "stop"
+		}
+		finalChunk := buildSSEModalityChunk(newID, model, unixTimeStep, finalDelta, finalReason)
+		sseChunks = append(sseChunks, finalChunk)
+	}
+
+	sseChunks = append(sseChunks, "data: [DONE]\n\n")
+	return []byte(strings.Join(sseChunks, ""))
+}
+
+// isMultimodalContent returns true if the content is an array (multimodal
+// content parts) rather than a plain string.
+func isMultimodalContent(content interface{}) bool {
+	_, isArray := content.([]interface{})
+	return isArray
+}
+
+// extractStringContent returns the content as a string, or an empty string if
+// the content is not a string.
+func extractStringContent(content interface{}) string {
+	s, _ := content.(string)
+	return s
+}
+
+// buildSSEModalityChunk constructs a single SSE data frame for a streaming
+// ChatCompletion chunk. When finishReason is empty, the chunk is a content
+// delta; otherwise it is the terminal chunk.
+func buildSSEModalityChunk(id, model string, created int64, delta map[string]interface{}, finishReason interface{}) string {
+	chunk := map[string]interface{}{
+		"id":      id,
+		"object":  "chat.completion.chunk",
+		"created": created,
+		"model":   model,
+		"choices": []map[string]interface{}{
+			{
+				"index":         0,
+				"delta":         delta,
+				"finish_reason": finishReason,
+			},
+		},
+	}
+	chunkJSON, _ := json.Marshal(chunk)
+	return fmt.Sprintf("data: %s\n\n", chunkJSON)
+}
+
 // isErrorResponse checks if a JSON response is an error response
 func isErrorResponse(responseBytes []byte) bool {
 	var responseMap map[string]interface{}
