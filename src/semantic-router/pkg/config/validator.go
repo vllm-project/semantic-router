@@ -91,6 +91,11 @@ var (
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
 		},
 		{
+			name:     "complexity",
+			validate: validateComplexityContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
 			name:     "model_selection",
 			validate: validateModelSelectionConfig,
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
