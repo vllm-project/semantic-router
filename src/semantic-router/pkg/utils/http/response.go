@@ -135,35 +135,44 @@ func buildTextSSE(completion openai.ChatCompletion) []byte {
 
 	var sseChunks []string
 
-	if len(completion.Choices) > 0 {
-		message := completion.Choices[0].Message
-		content := message.Content
-		finishReason := completion.Choices[0].FinishReason
-
-		if content != "" {
-			chunks := splitContentIntoChunks(content)
-			for i, c := range chunks {
-				delta := map[string]interface{}{
-					"content": c,
-				}
-				if i == 0 {
-					delta["role"] = message.Role
-				}
-				chunk := buildSSEModalityChunk(newID, model, unixTimeStep, delta, nil)
-				sseChunks = append(sseChunks, chunk)
-			}
-		}
-
-		finalReason := finishReason
-		if finalReason == "" {
-			finalReason = "stop"
-		}
-		finalChunk := buildSSEModalityChunk(newID, model, unixTimeStep, map[string]interface{}{}, finalReason)
-		sseChunks = append(sseChunks, finalChunk)
+	if len(completion.Choices) == 0 {
+		sseChunks = append(sseChunks, "data: [DONE]\n\n")
+		return []byte(strings.Join(sseChunks, ""))
 	}
+
+	message := completion.Choices[0].Message
+	content := message.Content
+	finishReason := completion.Choices[0].FinishReason
+
+	sseChunks = appendContentChunks(sseChunks, content, string(message.Role), newID, model, unixTimeStep)
+
+	finalReason := finishReason
+	if finalReason == "" {
+		finalReason = "stop"
+	}
+	finalChunk := buildSSEModalityChunk(newID, model, unixTimeStep, map[string]interface{}{}, finalReason)
+	sseChunks = append(sseChunks, finalChunk)
 
 	sseChunks = append(sseChunks, "data: [DONE]\n\n")
 	return []byte(strings.Join(sseChunks, ""))
+}
+
+// appendContentChunks splits text content into word-level SSE delta chunks and
+// appends them to sseChunks. The first chunk includes the assistant role.
+func appendContentChunks(sseChunks []string, content string, role string, id, model string, created int64) []string {
+	if content == "" {
+		return sseChunks
+	}
+	chunks := splitContentIntoChunks(content)
+	for i, c := range chunks {
+		delta := map[string]interface{}{"content": c}
+		if i == 0 {
+			delta["role"] = role
+		}
+		chunk := buildSSEModalityChunk(id, model, created, delta, nil)
+		sseChunks = append(sseChunks, chunk)
+	}
+	return sseChunks
 }
 
 // isMultimodalContent returns true if the content is an array (multimodal
