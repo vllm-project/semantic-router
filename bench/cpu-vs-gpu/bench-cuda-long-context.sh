@@ -151,7 +151,7 @@ start_router() {
         fi
         sleep 5; waited=$((waited + 5))
     done
-    log "WARNING: timeout waiting for SR"; return 0
+    log "ERROR: timeout waiting for SR"; docker logs "$SR_CONTAINER" 2>&1 | tail -30; return 1
 }
 
 start_envoy() {

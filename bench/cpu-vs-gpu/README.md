@@ -62,7 +62,8 @@ Prerequisites: NVIDIA driver + `nvidia-container-toolkit` (so `docker run
 
 Download the classifiers **and** the embedding model into `models/` using the
 directory names the bench mounts (note: no `-onnx` suffix, unlike the ROCm
-setup above):
+setup above). Run this from the repo root (the `local_dir` paths are
+repo-root-relative):
 
 ```bash
 python3 -c "
@@ -80,7 +81,7 @@ for repo in [
 "
 ```
 
-Run it:
+Run it (from `bench/cpu-vs-gpu/`):
 
 ```bash
 BENCH_IMAGE=vllm-sr-cuda:local REQUESTS_PER_SIZE=10 ./bench-cuda-long-context.sh
