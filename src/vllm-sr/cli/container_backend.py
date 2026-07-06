@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from cli.container_cli import container_status
 from cli.core import show_logs, show_status, start_vllm_sr, stop_vllm_sr
-from cli.docker_cli import docker_container_status
 from cli.runtime_stack import resolve_runtime_stack
 from cli.utils import get_logger
 
 log = get_logger(__name__)
 
 
-class DockerBackend:
+class ContainerBackend:
     """DeploymentBackend implementation for local Docker workflows."""
 
     def deploy(
@@ -62,13 +62,13 @@ class DockerBackend:
 
     def get_dashboard_url(self) -> str | None:
         stack_layout = resolve_runtime_stack()
-        if docker_container_status(stack_layout.dashboard_container_name) == "running":
+        if container_status(stack_layout.dashboard_container_name) == "running":
             return stack_layout.dashboard_url
         return None
 
     def is_running(self) -> bool:
         stack_layout = resolve_runtime_stack()
         return any(
-            docker_container_status(container_name) == "running"
+            container_status(container_name) == "running"
             for container_name in stack_layout.runtime_container_names
         )
