@@ -107,13 +107,13 @@ def _add_output_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--generate-plots",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
         help="Generate comparison plots",
     )
     parser.add_argument(
         "--generate-report",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
         help="Generate markdown report",
     )
