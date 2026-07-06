@@ -173,7 +173,7 @@ structure_exceptions:
       - src/semantic-router/pkg/extproc/processor_req_body.go
       - src/semantic-router/pkg/extproc/processor_res_body.go
       - src/semantic-router/pkg/promptcompression/compressor_nlp_test.go
-      - src/vllm-sr/cli/docker_cli.py
+      - src/vllm-sr/cli/container_cli.py
       - dashboard/frontend/src/pages/BuilderPage.tsx
       - dashboard/frontend/src/pages/ConfigPage.tsx
       - dashboard/frontend/src/pages/OpenClawPage.tsx
