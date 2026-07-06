@@ -12,7 +12,7 @@ use std::time::Instant;
 
 /// Classifier backend enum to avoid Box<dyn Trait>
 enum TokenClassifierBackend {
-    Bert(HighPerformanceBertTokenClassifier),
+    Bert(Box<HighPerformanceBertTokenClassifier>),
     ModernBert(TraditionalModernBertTokenClassifier),
 }
 
@@ -80,7 +80,7 @@ impl PIILoRAClassifier {
                         candle_core::Error::from(unified_err)
                     },
                 )?;
-            TokenClassifierBackend::Bert(classifier)
+            TokenClassifierBackend::Bert(Box::new(classifier))
         };
 
         Ok(Self {
