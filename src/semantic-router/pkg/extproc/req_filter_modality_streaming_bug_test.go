@@ -18,12 +18,24 @@ import (
 // and modality routing matches DIFFUSION, the fix ensures the response has
 // content-type text/event-stream with valid SSE chunks.
 func TestStreamingBug_DiffusionProducesValidSSE(t *testing.T) {
-	// Start a mock diffusion backend
+	// Start a mock diffusion backend that returns vLLM-Omni ChatCompletion
+	// format with content array containing image_url.
 	mockDiffusion := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"images": []map[string]string{
-				{"url": "data:image/png;base64,iVBORw==", "revised_prompt": "mock"},
+			"choices": []map[string]interface{}{
+				{
+					"message": map[string]interface{}{
+						"role": "assistant",
+						"content": []map[string]interface{}{
+							{
+								"type":      "image_url",
+								"image_url": map[string]string{"url": "data:image/png;base64,iVBORw=="},
+							},
+						},
+					},
+					"finish_reason": "stop",
+				},
 			},
 		})
 	}))
@@ -172,8 +184,19 @@ func TestStreamingBug_NonStreamingUnaffected(t *testing.T) {
 	mockDiffusion := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"images": []map[string]string{
-				{"url": "data:image/png;base64,iVBORw=="},
+			"choices": []map[string]interface{}{
+				{
+					"message": map[string]interface{}{
+						"role": "assistant",
+						"content": []map[string]interface{}{
+							{
+								"type":      "image_url",
+								"image_url": map[string]string{"url": "data:image/png;base64,iVBORw=="},
+							},
+						},
+					},
+					"finish_reason": "stop",
+				},
 			},
 		})
 	}))
