@@ -285,6 +285,7 @@ class EmbeddingClassifierConfig(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
+    backend: Optional[str] = None
     model_type: Optional[str] = None
     preload_embeddings: Optional[bool] = None
     target_dimension: Optional[int] = None
@@ -293,6 +294,17 @@ class EmbeddingClassifierConfig(BaseModel):
     top_k: Optional[int] = None
     min_score_threshold: Optional[float] = None
     prototype_scoring: Optional[PrototypeScoringConfig] = None
+
+
+class EmbeddingEndpointConfig(BaseModel):
+    """External embedding provider endpoint configuration."""
+
+    base_url: Optional[str] = None
+    model: Optional[str] = None
+    api_key_env: Optional[str] = None
+    timeout_seconds: Optional[int] = Field(default=None, ge=0)
+    max_retries: Optional[int] = Field(default=None, ge=0)
+    dimensions: Optional[int] = Field(default=None, ge=1)
 
 
 class ComplexityRule(BaseModel):
@@ -1164,6 +1176,10 @@ class EmbeddingModelsConfig(BaseModel):
     embedding_config: Optional[EmbeddingClassifierConfig] = Field(
         default=None,
         description="Embedding classifier tuning (model_type/target_dimension/top_k/prototype_scoring/etc.)",
+    )
+    endpoint: Optional[EmbeddingEndpointConfig] = Field(
+        default=None,
+        description="External OpenAI-compatible embedding provider endpoint",
     )
     use_cpu: bool = Field(True, description="Use CPU for inference")
 

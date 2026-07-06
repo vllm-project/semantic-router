@@ -14,7 +14,7 @@ from cli.consts import (
     DEFAULT_MILVUS_PORT,
     DEFAULT_ROUTER_PORT,
     DEFAULT_STACK_NAME,
-    VLLM_SR_SIM_DOCKER_NAME,
+    VLLM_SR_SIM_CONTAINER_NAME,
 )
 
 STACK_NAME_ENV = "VLLM_SR_STACK_NAME"
@@ -183,7 +183,7 @@ def resolve_runtime_stack(
         router_container_name = "vllm-sr-router-container"
         envoy_container_name = "vllm-sr-envoy-container"
         dashboard_container_name = "vllm-sr-dashboard-container"
-        fleet_sim_container_name = VLLM_SR_SIM_DOCKER_NAME
+        fleet_sim_container_name = VLLM_SR_SIM_CONTAINER_NAME
         network_name = f"{DEFAULT_STACK_NAME}-network"
         jaeger_container_name = f"{DEFAULT_STACK_NAME}-jaeger"
         prometheus_container_name = f"{DEFAULT_STACK_NAME}-prometheus"

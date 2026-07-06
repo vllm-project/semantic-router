@@ -205,6 +205,12 @@ func assertReferenceConfigEmbeddingCatalogCoverage(t testingT, embeddings map[st
 		reflect.TypeOf(PrototypeScoringConfig{}),
 		"global.model_catalog.embeddings.semantic.embedding_config.prototype_scoring",
 	)
+	assertMapCoversStructFields(
+		t,
+		mustMapAt(t, embeddings, "semantic", "endpoint"),
+		reflect.TypeOf(EmbeddingEndpointConfig{}),
+		"global.model_catalog.embeddings.semantic.endpoint",
+	)
 }
 
 func assertReferenceConfigExternalCatalogCoverage(t testingT, external []interface{}) {

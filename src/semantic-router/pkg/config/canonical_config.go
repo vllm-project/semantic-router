@@ -224,18 +224,53 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 		}
 	}
 
-	for _, decision := range canonical.Routing.Decisions {
-		for _, modelRef := range decision.ModelRefs {
-			if modelRef.Model == "" || modelRef.LoRAName == "" {
-				continue
+	return validateCanonicalDecisions(canonical.Routing.Decisions, modelsByName, modelCards)
+}
+
+func validateCanonicalDecisions(decisions []Decision, modelsByName map[string]RoutingModel, modelCards []RoutingModel) error {
+	decisionNames := make(map[string]bool, len(decisions))
+	for _, decision := range decisions {
+		if decision.Name != "" {
+			if decisionNames[decision.Name] {
+				return fmt.Errorf("routing.decisions[%s]: duplicate decision name", decision.Name)
 			}
-			card, ok := modelsByName[modelRef.Model]
-			if !ok {
-				return fmt.Errorf("routing.decisions[%s].modelRefs[%s] references unknown model %q", decision.Name, modelRef.Model, modelRef.Model)
-			}
-			if !routingModelHasLoRA(card, modelRef.LoRAName) {
-				return fmt.Errorf("routing.decisions[%s].modelRefs[%s].lora_name %q not found in routing.modelCards[%s].loras", decision.Name, modelRef.Model, modelRef.LoRAName, modelRef.Model)
-			}
+			decisionNames[decision.Name] = true
+		}
+
+		if err := validateCanonicalDecisionModelRefs(decision, modelsByName, modelCards); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateCanonicalDecisionModelRefs(decision Decision, modelsByName map[string]RoutingModel, modelCards []RoutingModel) error {
+	for _, modelRef := range decision.ModelRefs {
+		if modelRef.Model == "" {
+			continue
+		}
+		// Reject modelRefs that point at a model the config does not define.
+		// Previously this was only checked when a lora_name was also set, so a
+		// plain modelRef to an unknown model slipped through and only failed at
+		// request time with a misleading upstream "401 No api key".
+		//
+		// Only enforced when the config declares a model surface (modelCards).
+		// Partial DSL fragments without modelCards (e.g. config/decision/**
+		// examples) carry no model surface to validate against and are skipped,
+		// mirroring how default_model existence is only checked when set.
+		if len(modelCards) > 0 && !canonicalModelOrLoRAExists(modelsByName, modelCards, modelRef.Model) {
+			return fmt.Errorf("routing.decisions[%s].modelRefs[%s] references unknown model %q", decision.Name, modelRef.Model, modelRef.Model)
+		}
+		if modelRef.LoRAName == "" {
+			continue
+		}
+		card, ok := modelsByName[modelRef.Model]
+		if !ok {
+			continue
+		}
+		if !routingModelHasLoRA(card, modelRef.LoRAName) {
+			return fmt.Errorf("routing.decisions[%s].modelRefs[%s].lora_name %q not found in routing.modelCards[%s].loras", decision.Name, modelRef.Model, modelRef.LoRAName, modelRef.Model)
 		}
 	}
 
