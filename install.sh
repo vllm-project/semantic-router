@@ -675,6 +675,13 @@ install_cli() {
   else
     done_step "Installed vllm-sr"
   fi
+
+  step "Setting up shell completions"
+  if "$BIN_DIR/vllm-sr" completion install >/dev/null 2>&1; then
+    done_step "Shell completions installed"
+  else
+    info "Shell completion auto-install skipped (run 'vllm-sr completion install' manually)"
+  fi
 }
 
 docker_ready() {

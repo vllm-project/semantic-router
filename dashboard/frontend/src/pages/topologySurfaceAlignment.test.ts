@@ -32,8 +32,8 @@ describe('topology v0.3 surface alignment', () => {
               conditions: [{ type: 'conversation', name: 'deep_tool_loop' }],
             },
             algorithm: {
-              type: 'session_aware',
-              session_aware: { base_method: 'multi_factor' },
+              type: 'multi_factor',
+              multi_factor: { latency_percentile: 95 },
             },
             modelRefs: [{ model: 'fast' }],
             plugins: [{ type: 'tool_selection', enabled: true }],
@@ -50,8 +50,8 @@ describe('topology v0.3 surface alignment', () => {
     expect(topology.signals.map((signal) => signal.type)).toEqual(
       expect.arrayContaining(['conversation', 'event']),
     )
-    expect(topology.decisions[0].algorithm?.type).toBe('session_aware')
-    expect(topology.decisions[0].algorithm?.session_aware).toEqual({ base_method: 'multi_factor' })
+    expect(topology.decisions[0].algorithm?.type).toBe('multi_factor')
+    expect(topology.decisions[0].algorithm?.multi_factor).toEqual({ latency_percentile: 95 })
     expect(topology.decisions[0].plugins?.[0].type).toBe('tool_selection')
   })
 
@@ -59,9 +59,9 @@ describe('topology v0.3 surface alignment', () => {
     expect(SIGNAL_TYPES).toEqual(expect.arrayContaining(['conversation', 'event']))
     expect(ALGORITHM_ICONS).toMatchObject({
       fusion: 'FU',
+      workflows: 'FL',
       mlp: 'MLP',
       multi_factor: 'MF',
-      session_aware: 'SA',
     })
     expect(PLUGIN_ICONS).toMatchObject({
       tool_selection: 'TS',

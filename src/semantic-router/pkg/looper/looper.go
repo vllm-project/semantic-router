@@ -50,8 +50,22 @@ type Request struct {
 	// Used by extproc to lookup decision configuration and apply plugins
 	DecisionName string
 
+	// OutputContract is the decision-scoped final response contract. The looper
+	// merges it with any output format already present in the original request.
+	OutputContract string
+
+	// OutputContractSpec is the typed router-executable contract for output
+	// normalization and post-processing. OutputContract remains prompt text.
+	OutputContractSpec *config.OutputContractSpec
+
 	// Fusion carries request-level plugins[].id=fusion overrides.
 	Fusion *config.FusionRequestConfig
+
+	// CachedPanel, when non-nil, is used verbatim as the fusion panel instead of
+	// calling the analysis models. It exists for paired multi-arm evaluation where
+	// every arm must synthesize from a byte-identical panel (see
+	// bench/grounded_fusion). Nil in production; only the fusioneval driver sets it.
+	CachedPanel []*ModelResponse
 }
 
 // Response contains the output from looper execution
@@ -91,10 +105,6 @@ type Response struct {
 type Looper interface {
 	// Execute runs the looper algorithm and returns an aggregated response
 	Execute(ctx context.Context, req *Request) (*Response, error)
-
-	// SetEndpointOverrides sets per-model endpoint URL overrides so
-	// each model can be reached at its own backend address.
-	SetEndpointOverrides(overrides map[string]string)
 }
 
 // Factory creates a Looper instance based on the algorithm type
@@ -118,6 +128,8 @@ func FactoryWithSelectionRegistry(
 		return NewReMoMLooper(cfg)
 	case "fusion":
 		return NewFusionLooper(cfg)
+	case "workflows":
+		return NewWorkflowsLooper(cfg)
 	case "rl_driven":
 		return NewRLDrivenLooperWithSelectionRegistry(cfg, selectorRegistry)
 	default:

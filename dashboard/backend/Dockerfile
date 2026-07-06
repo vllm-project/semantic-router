@@ -1,5 +1,6 @@
+ARG IMAGE_REGISTRY=docker.io/
 # Stage 0: Build DSL compiler WASM assets
-FROM golang:1.24-alpine AS wasm-builder
+FROM ${IMAGE_REGISTRY}library/golang:1.24-alpine AS wasm-builder
 WORKDIR /app/src/semantic-router
 
 ENV GOPROXY=https://proxy.golang.org,direct
@@ -27,7 +28,7 @@ RUN CGO_ENABLED=0 GOOS=js GOARCH=wasm go build \
     fi
 
 # Stage 1: Build frontend with Node.js
-FROM node:20-alpine AS frontend-builder
+FROM ${IMAGE_REGISTRY}library/node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json dashboard/frontend/tsconfig.json dashboard/frontend/tsconfig.node.json dashboard/frontend/vite.config.ts ./
 COPY dashboard/frontend/src ./src
@@ -39,7 +40,7 @@ RUN npm config set registry https://registry.npmjs.org/ && \
     npm ci --include=dev  # Use npm ci for deterministic, lockfile-based installs in CI
 RUN npm run build
 
-FROM node:20-alpine AS wizmap-builder
+FROM ${IMAGE_REGISTRY}library/node:20-alpine AS wizmap-builder
 WORKDIR /app/wizmap
 COPY dashboard/wizmap/package.json dashboard/wizmap/package-lock.json ./
 RUN npm config set registry https://registry.npmjs.org/ && \
@@ -48,7 +49,7 @@ COPY dashboard/wizmap/ ./
 RUN npm run build -- --outDir /app/wizmap-dist
 
 # Stage 2: Build backend with Go
-FROM golang:1.24-bookworm AS backend-builder
+FROM ${IMAGE_REGISTRY}library/golang:1.24-bookworm AS backend-builder
 WORKDIR /app
 
 # Use Go proxy for reliable downloads
@@ -57,6 +58,7 @@ ENV GOPROXY=https://proxy.golang.org,direct
 # Accept build arguments for target architecture
 ARG TARGETARCH
 ARG TARGETOS=linux
+ARG DASHBOARD_VERSION
 
 RUN set -eux; \
     apt_get_install_with_retry() { \
@@ -76,6 +78,7 @@ RUN set -eux; \
 # Copy src/semantic-router first (required by dashboard/backend/go.mod replace directive)
 # Only copy the packages we actually need for dashboard backend builds - NOT pkg/cli which has extra deps
 COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
+COPY src/vllm-sr/pyproject.toml /app/src/vllm-sr/pyproject.toml
 COPY src/semantic-router/internal/nlgen/ /app/src/semantic-router/internal/nlgen/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/
@@ -91,10 +94,14 @@ RUN go mod download
 
 # Copy source code and build
 COPY dashboard/backend/ /app/dashboard/backend/
-RUN CGO_ENABLED=1 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-w -s" -o /app/dashboard-backend main.go
+RUN PROJECT_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' /app/src/vllm-sr/pyproject.toml | head -n1)" && \
+    RESOLVED_DASHBOARD_VERSION="${DASHBOARD_VERSION:-${PROJECT_VERSION}-dev.container}" && \
+    CGO_ENABLED=1 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
+      -ldflags="-w -s -X github.com/vllm-project/semantic-router/dashboard/backend/handlers.dashboardStatusVersion=${RESOLVED_DASHBOARD_VERSION}" \
+      -o /app/dashboard-backend main.go
 
 # Stage 3: Final runtime image
-FROM python:3.11-slim-bookworm
+FROM ${IMAGE_REGISTRY}library/python:3.11-slim-bookworm
 ARG TORCH_CPU_INDEX_URL=https://download.pytorch.org/whl/cpu
 ARG TORCH_CPU_VERSION=2.12.0
 ENV PYTHONPATH=/app

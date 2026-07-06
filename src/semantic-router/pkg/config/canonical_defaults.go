@@ -31,7 +31,7 @@ func defaultCanonicalRouterGlobal() CanonicalRouterGlobal {
 				UseCapabilities:     true,
 			},
 			Hybrid: HybridSelectionConfig{
-				EloWeight:           0.3,
+				ExperienceWeight:    0.3,
 				RouterDCWeight:      0.3,
 				AutoMixWeight:       0.2,
 				CostWeight:          0.2,
@@ -117,6 +117,12 @@ func defaultCanonicalIntegrationGlobal() CanonicalIntegrationGlobal {
 			Endpoint:       "http://localhost:8899/v1/chat/completions",
 			TimeoutSeconds: 1200,
 			Headers:        map[string]string{},
+			Flow: FlowRuntimeConfig{
+				State: WorkflowStateRuntimeConfig{
+					StoreBackend: WorkflowStateBackendFile,
+					TTLSeconds:   DefaultWorkflowStateTTLSeconds,
+				},
+			},
 		},
 	}
 }

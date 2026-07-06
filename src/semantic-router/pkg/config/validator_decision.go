@@ -53,10 +53,16 @@ func validateDecisionModelContracts(cfg *RouterConfig) error {
 		if err := validateDecisionModelRefs(cfg, decision); err != nil {
 			return err
 		}
-		if err := validateDecisionAlgorithmConfig(decision.Name, decision.Algorithm); err != nil {
+		if err := validateDecisionAlgorithmConfig(decision.Name, decision.ModelRefs, decision.Algorithm); err != nil {
+			return err
+		}
+		if err := validateDecisionWorkflowModelRefs(decision); err != nil {
 			return err
 		}
 		if err := validateDecisionCandidateIterations(decision); err != nil {
+			return err
+		}
+		if err := validateDecisionOutputContractSpec(decision); err != nil {
 			return err
 		}
 	}
@@ -79,6 +85,55 @@ func validateDecisionModelRefs(cfg *RouterConfig, decision Decision) error {
 		}
 	}
 	return nil
+}
+
+func validateDecisionWorkflowModelRefs(decision Decision) error {
+	if decision.Algorithm == nil || decision.Algorithm.Workflows == nil {
+		return nil
+	}
+	workflows := decision.Algorithm.Workflows
+	allowed := decisionModelRefSet(decision.ModelRefs)
+	if workflowMode(workflows.Mode) == WorkflowModeStatic {
+		for i, role := range workflows.Roles {
+			for j, model := range role.Models {
+				normalized := strings.TrimSpace(model)
+				if !allowed[normalized] {
+					return fmt.Errorf(
+						"decision '%s': algorithm.workflows.roles[%d].models[%d] references model %q outside decision modelRefs",
+						decision.Name,
+						i,
+						j,
+						model,
+					)
+				}
+			}
+		}
+	}
+	finalModel := strings.TrimSpace(workflows.Final.Model)
+	if finalModel != "" && !allowed[finalModel] {
+		return fmt.Errorf(
+			"decision '%s': algorithm.workflows.final.model references model %q outside decision modelRefs",
+			decision.Name,
+			workflows.Final.Model,
+		)
+	}
+	return nil
+}
+
+func workflowMode(mode string) string {
+	normalized := strings.TrimSpace(mode)
+	if normalized == "" {
+		return WorkflowModeStatic
+	}
+	return normalized
+}
+
+func decisionModelRefSet(refs []ModelRef) map[string]bool {
+	allowed := make(map[string]bool, len(refs))
+	for _, ref := range refs {
+		allowed[strings.TrimSpace(ref.Model)] = true
+	}
+	return allowed
 }
 
 func validateDecisionCandidateIterations(decision Decision) error {
@@ -214,7 +269,7 @@ func hasLegacyLatencyRoutingConfig(cfg *RouterConfig) bool {
 	return false
 }
 
-func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmConfig) error {
+func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, algorithm *AlgorithmConfig) error {
 	if algorithm == nil {
 		return nil
 	}
@@ -223,6 +278,15 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 	displayType := strings.TrimSpace(algorithm.Type)
 	if displayType == "" {
 		displayType = "<empty>"
+	}
+	if normalizedType == "session_aware" || algorithm.SessionAware != nil {
+		return fmt.Errorf(
+			"decision '%s': algorithm.type=session_aware is no longer supported; remove algorithm.type=session_aware and enable global.router.learning.protection. If this decision needs an explicit base selector, configure a normal algorithm.type; otherwise omit algorithm",
+			decisionName,
+		)
+	}
+	if err := validateMigratedLearningAlgorithm(decisionName, normalizedType, algorithm); err != nil {
+		return err
 	}
 
 	configuredBlocks := configuredAlgorithmBlocks(algorithm)
@@ -258,15 +322,43 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 		)
 	}
 
-	if err := validateSpecializedAlgorithmConfig(decisionName, normalizedType, algorithm); err != nil {
+	if err := validateSpecializedAlgorithmConfig(decisionName, modelRefs, normalizedType, algorithm); err != nil {
 		return err
 	}
 
 	return nil
 }
 
+func validateMigratedLearningAlgorithm(decisionName string, normalizedType string, algorithm *AlgorithmConfig) error {
+	migrations := map[string]string{
+		"elo":             "global.router.learning.adaptation",
+		"rl_driven":       "global.router.learning.adaptation",
+		"gmtrouter":       "global.router.learning.adaptation",
+		"bandit":          "global.router.learning.adaptation",
+		"personalization": "global.router.learning.adaptation",
+	}
+	if target, ok := migrations[normalizedType]; ok {
+		return fmt.Errorf(
+			"decision '%s': algorithm.type=%s has moved to %s; remove the learning algorithm type and choose a request-time base algorithm only when needed",
+			decisionName,
+			normalizedType,
+			target,
+		)
+	}
+	if algorithm.Elo != nil {
+		return fmt.Errorf("decision '%s': algorithm.elo is no longer supported; use global.router.learning.adaptation", decisionName)
+	}
+	if algorithm.RLDriven != nil {
+		return fmt.Errorf("decision '%s': algorithm.rl_driven is no longer supported; use global.router.learning.adaptation", decisionName)
+	}
+	if algorithm.GMTRouter != nil {
+		return fmt.Errorf("decision '%s': algorithm.gmtrouter is no longer supported; use global.router.learning.adaptation", decisionName)
+	}
+	return nil
+}
+
 func configuredAlgorithmBlocks(algorithm *AlgorithmConfig) []string {
-	configuredBlocks := make([]string, 0, 13)
+	configuredBlocks := make([]string, 0, 14)
 	addBlock := func(name string, configured bool) {
 		if configured {
 			configuredBlocks = append(configuredBlocks, name)
@@ -277,6 +369,7 @@ func configuredAlgorithmBlocks(algorithm *AlgorithmConfig) []string {
 	addBlock("ratings", algorithm.Ratings != nil)
 	addBlock("remom", algorithm.ReMoM != nil)
 	addBlock("fusion", algorithm.Fusion != nil)
+	addBlock("workflows", algorithm.Workflows != nil)
 	addBlock("elo", algorithm.Elo != nil)
 	addBlock("router_dc", algorithm.RouterDC != nil)
 	addBlock("automix", algorithm.AutoMix != nil)
@@ -295,21 +388,18 @@ func expectedAlgorithmBlock(normalizedType string) (string, bool) {
 		"ratings":       "ratings",
 		"remom":         "remom",
 		"fusion":        "fusion",
-		"elo":           "elo",
+		"workflows":     "workflows",
 		"router_dc":     "router_dc",
 		"automix":       "automix",
 		"hybrid":        "hybrid",
-		"rl_driven":     "rl_driven",
-		"gmtrouter":     "gmtrouter",
 		"latency_aware": "latency_aware",
 		"multi_factor":  "multi_factor",
-		"session_aware": "session_aware",
 	}
 	expectedBlock, ok := expectedBlockByType[normalizedType]
 	return expectedBlock, ok
 }
 
-func validateSpecializedAlgorithmConfig(decisionName string, normalizedType string, algorithm *AlgorithmConfig) error {
+func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRef, normalizedType string, algorithm *AlgorithmConfig) error {
 	switch normalizedType {
 	case "latency_aware":
 		if algorithm.LatencyAware == nil {
@@ -318,16 +408,20 @@ func validateSpecializedAlgorithmConfig(decisionName string, normalizedType stri
 		if err := validateLatencyAwareAlgorithmConfig(algorithm.LatencyAware); err != nil {
 			return fmt.Errorf("decision '%s', algorithm.latency_aware: %w", decisionName, err)
 		}
-	case "session_aware":
-		if algorithm.SessionAware == nil {
-			return nil
+	case "remom":
+		if err := ValidateReMoMAlgorithmConfig(algorithm.ReMoM); err != nil {
+			return fmt.Errorf("decision '%s', algorithm.remom: %w", decisionName, err)
 		}
-		if err := validateSessionAwareSelectionConfig(*algorithm.SessionAware); err != nil {
-			return fmt.Errorf("decision '%s', algorithm.session_aware: %w", decisionName, err)
+		if err := ValidateReMoMModelRefs(algorithm.ReMoM, modelRefs); err != nil {
+			return fmt.Errorf("decision '%s', algorithm.remom: %w", decisionName, err)
 		}
 	case "fusion":
 		if err := ValidateFusionAlgorithmConfig(algorithm.Fusion); err != nil {
 			return fmt.Errorf("decision '%s', algorithm.fusion: %w", decisionName, err)
+		}
+	case "workflows":
+		if err := ValidateWorkflowsAlgorithmConfig(algorithm.Workflows); err != nil {
+			return fmt.Errorf("decision '%s', algorithm.workflows: %w", decisionName, err)
 		}
 	}
 	return nil

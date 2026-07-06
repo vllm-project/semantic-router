@@ -27,7 +27,9 @@ Real routes care about more than one dimension at once: a faster cheaper model a
 ## Sibling Algorithms
 
 - `latency_aware` is a special case of this — latency-only scoring. Use it when the other dimensions truly do not matter.
-- `hybrid` composes *other selectors* (Elo + RouterDC + AutoMix) into one. `multi_factor` composes *raw signals* directly. Both are useful and complementary.
+- `hybrid` composes request-time selectors and read-only learning evidence into
+  one score. `multi_factor` composes raw runtime signals directly. Both are
+  useful and complementary.
 
 ## Algorithm Principle
 
