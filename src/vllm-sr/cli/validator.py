@@ -31,6 +31,10 @@ from cli.validator_projection_embedding import (
     validate_embedding_modality_compatibility,
     validate_projection_score_dependencies,
 )
+from cli.validator_workflows import (
+    validate_static_workflow_roles,
+    validate_workflow_final_model,
+)
 
 log = get_logger(__name__)
 
@@ -38,6 +42,8 @@ EXPECTED_ALGORITHM_BLOCK_BY_TYPE = {
     "confidence": "confidence",
     "ratings": "ratings",
     "remom": "remom",
+    "fusion": "fusion",
+    "workflows": "workflows",
     "router_dc": "router_dc",
     "automix": "automix",
     "hybrid": "hybrid",
@@ -49,6 +55,8 @@ ALGORITHM_CONFIG_BLOCKS = (
     "confidence",
     "ratings",
     "remom",
+    "fusion",
+    "workflows",
     "router_dc",
     "automix",
     "hybrid",
@@ -589,7 +597,8 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     """
     Validate algorithm configurations in decisions.
 
-    Validates both looper algorithms (confidence, ratings, remom, fusion)
+    Validates both looper algorithms (confidence, ratings, remom, fusion,
+    workflows)
     and selection algorithms (static, router_dc, automix, hybrid,
     knn, kmeans, svm, mlp, multi_factor, latency_aware).
 
@@ -602,7 +611,7 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     errors = []
 
     # Valid algorithm types
-    looper_types = {"confidence", "ratings", "remom", "fusion"}
+    looper_types = {"confidence", "ratings", "remom", "fusion", "workflows"}
     selection_types = {
         "static",
         "router_dc",
@@ -640,6 +649,31 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
         hybrid_err = _maybe_hybrid_weight_error(decision.name, algo_type, algo)
         if hybrid_err is not None:
             errors.append(hybrid_err)
+
+        workflows_cfg = getattr(algo, "workflows", None)
+        if algo_type == "workflows" and workflows_cfg is not None:
+            mode = workflows_cfg.mode or "static"
+            planner = workflows_cfg.planner
+            planner_model = (
+                getattr(planner, "model", None) if planner is not None else None
+            )
+            if mode == "dynamic" and not planner_model:
+                errors.append(
+                    ValidationError(
+                        f"Decision '{decision.name}' uses workflows mode=dynamic but does not set planner.model",
+                        field=f"decisions.{decision.name}.algorithm.workflows.planner.model",
+                    )
+                )
+            if mode == "dynamic" and workflows_cfg.roles:
+                errors.append(
+                    ValidationError(
+                        f"Decision '{decision.name}' uses workflows mode=dynamic but also sets static roles",
+                        field=f"decisions.{decision.name}.algorithm.workflows.roles",
+                    )
+                )
+            errors.extend(validate_workflow_final_model(decision, workflows_cfg))
+            if mode == "static":
+                errors.extend(validate_static_workflow_roles(decision, workflows_cfg))
 
     return errors
 

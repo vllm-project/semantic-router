@@ -117,6 +117,12 @@ func defaultCanonicalIntegrationGlobal() CanonicalIntegrationGlobal {
 			Endpoint:       "http://localhost:8899/v1/chat/completions",
 			TimeoutSeconds: 1200,
 			Headers:        map[string]string{},
+			Flow: FlowRuntimeConfig{
+				State: WorkflowStateRuntimeConfig{
+					StoreBackend: WorkflowStateBackendFile,
+					TTLSeconds:   DefaultWorkflowStateTTLSeconds,
+				},
+			},
 		},
 	}
 }

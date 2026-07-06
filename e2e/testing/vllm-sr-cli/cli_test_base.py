@@ -90,30 +90,32 @@ class CLITestBase(unittest.TestCase):
 
     @classmethod
     def _detect_container_runtime(cls) -> str:
-        """Detect the required Docker runtime for CLI tests."""
-        # Check for explicit environment variable
+        """Detect the container runtime used to drive CLI tests.
+
+        Both Docker and Podman are supported (matching the CLI). The selection
+        order is: explicit ``CONTAINER_RUNTIME`` env var → docker on PATH →
+        podman on PATH.
+        """
         env_runtime = os.getenv("CONTAINER_RUNTIME")
         normalized_runtime = (env_runtime or "").lower()
         if normalized_runtime:
-            if normalized_runtime != "docker":
+            if normalized_runtime not in ("docker", "podman"):
                 raise RuntimeError(
                     f"CONTAINER_RUNTIME={normalized_runtime} is unsupported; "
-                    "CLI tests require Docker"
+                    "CLI tests support docker or podman"
                 )
-            if shutil.which("docker"):
-                return "docker"
+            if shutil.which(normalized_runtime):
+                return normalized_runtime
             raise RuntimeError(
-                "CONTAINER_RUNTIME=docker was requested but docker is not in PATH"
+                f"CONTAINER_RUNTIME={normalized_runtime} was requested but "
+                f"{normalized_runtime} is not in PATH"
             )
 
-        # Auto-detect
         if shutil.which("docker"):
             return "docker"
         if shutil.which("podman"):
-            raise RuntimeError(
-                "Podman is installed but unsupported; CLI tests require Docker"
-            )
-        raise RuntimeError("Docker not found in PATH")
+            return "podman"
+        raise RuntimeError("Neither docker nor podman was found in PATH")
 
     @staticmethod
     def _run_subprocess(

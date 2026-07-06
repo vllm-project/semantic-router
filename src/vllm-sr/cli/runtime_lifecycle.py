@@ -12,20 +12,20 @@ from cli.consts import (
     HEALTH_CHECK_INTERVAL,
     HEALTH_CHECK_TIMEOUT,
 )
-from cli.docker_cli import (
-    docker_container_status,
-    docker_create_network,
-    docker_exec,
-    docker_logs,
-    docker_logs_since,
-    docker_network_connect,
-    docker_remove_container,
-    docker_start_container,
-    docker_start_fleet_sim,
-    docker_start_grafana,
-    docker_start_jaeger,
-    docker_start_prometheus,
-    docker_stop_container,
+from cli.container_cli import (
+    container_create_network,
+    container_exec,
+    container_logs,
+    container_logs_since,
+    container_network_connect,
+    container_remove_container,
+    container_start_container,
+    container_start_fleet_sim,
+    container_start_grafana,
+    container_start_jaeger,
+    container_start_prometheus,
+    container_status,
+    container_stop_container,
     load_openclaw_registry,
 )
 from cli.runtime_stack import RuntimeStackLayout
@@ -55,18 +55,18 @@ def log_startup_banner(
 
 def ensure_clean_runtime_container(container_name: str) -> None:
     """Stop and remove any existing runtime container before restarting."""
-    status = docker_container_status(container_name)
+    status = container_status(container_name)
     if status == "not found":
         return
     log.info(f"Existing container found (status: {status}), cleaning up...")
     if status in {"running", "paused"}:
-        docker_stop_container(container_name)
-    docker_remove_container(container_name)
+        container_stop_container(container_name)
+    container_remove_container(container_name)
 
 
 def ensure_shared_network(shared_network_name: str) -> None:
     """Create the shared OpenClaw bridge network used by local stacks."""
-    return_code, _stdout, stderr = docker_create_network(shared_network_name)
+    return_code, _stdout, stderr = container_create_network(shared_network_name)
     if return_code != 0:
         log.error(f"Failed to create shared OpenClaw network: {stderr}")
         raise SystemExit(1)
@@ -86,17 +86,17 @@ def start_observability_stack(
     log.info("Starting observability stack (Jaeger + Prometheus + Grafana)...")
     _start_named_service(
         "Jaeger",
-        lambda: docker_start_jaeger(shared_network_name, stack_layout=stack_layout),
+        lambda: container_start_jaeger(shared_network_name, stack_layout=stack_layout),
     )
     _start_named_service(
         "Prometheus",
-        lambda: docker_start_prometheus(
+        lambda: container_start_prometheus(
             shared_network_name, config_dir, stack_layout=stack_layout
         ),
     )
     _start_named_service(
         "Grafana",
-        lambda: docker_start_grafana(
+        lambda: container_start_grafana(
             shared_network_name, config_dir, stack_layout=stack_layout
         ),
     )
@@ -138,7 +138,7 @@ def start_fleet_sim_sidecar(
     log.info("Starting vllm-sr-sim sidecar...")
     _start_named_service(
         "vllm-sr-sim",
-        lambda: docker_start_fleet_sim(
+        lambda: container_start_fleet_sim(
             image=sim_image,
             network_name=stack_layout.network_name,
             config_dir=config_dir,
@@ -156,10 +156,10 @@ def connect_runtime_container(
     """Attach the runtime container to the shared OpenClaw bridge network."""
     connected = []
     for container_name in stack_layout.runtime_container_names:
-        if docker_container_status(container_name) == "not found":
+        if container_status(container_name) == "not found":
             continue
 
-        return_code, _stdout, stderr = docker_network_connect(
+        return_code, _stdout, stderr = container_network_connect(
             shared_network_name, container_name
         )
         if return_code != 0:
@@ -167,10 +167,10 @@ def connect_runtime_container(
                 f"Failed to connect {container_name} to {shared_network_name}: {stderr}"
             )
             for started_container in reversed(connected):
-                docker_stop_container(started_container)
-                docker_remove_container(started_container)
-            docker_stop_container(container_name)
-            docker_remove_container(container_name)
+                container_stop_container(started_container)
+                container_remove_container(started_container)
+            container_stop_container(container_name)
+            container_remove_container(container_name)
             raise SystemExit(1)
         connected.append(container_name)
         log.info(f"Connected {container_name} to {shared_network_name}")
@@ -223,16 +223,16 @@ def wait_for_router_health(stack_layout: RuntimeStackLayout) -> None:
         _emit_router_startup_logs(router_container, int(last_log_time))
         last_log_time = time.time()
 
-        status = docker_container_status(router_container)
+        status = container_status(router_container)
         if status != "running":
             log.error(
                 f"Router container is not running during readiness wait: {status}"
             )
             log.info("Showing Router container logs:")
-            docker_logs(router_container, follow=False, tail=120)
+            container_logs(router_container, follow=False, tail=120)
             raise SystemExit(1)
 
-        return_code, _stdout, _stderr = docker_exec(
+        return_code, _stdout, _stderr = container_exec(
             router_container,
             ["curl", "-f", "-s", f"http://localhost:{DEFAULT_API_PORT}/ready"],
         )
@@ -254,7 +254,7 @@ def wait_for_router_health(stack_layout: RuntimeStackLayout) -> None:
     log.info("-" * 60)
     log.error(f"Router failed to become healthy after {HEALTH_CHECK_TIMEOUT}s")
     log.info("Showing full container logs:")
-    docker_logs(router_container, follow=False, tail=100)
+    container_logs(router_container, follow=False, tail=100)
     raise SystemExit(1)
 
 
@@ -262,14 +262,14 @@ def ensure_runtime_container_not_exited(
     container_name: str, phase: str | None = None
 ) -> None:
     """Abort if the runtime container exited unexpectedly."""
-    status = docker_container_status(container_name)
+    status = container_status(container_name)
     if status != "exited":
         return
 
     suffix = f" {phase}" if phase else ""
     log.error(f"Container exited unexpectedly{suffix}")
     log.info("Showing container logs:")
-    docker_logs(container_name, follow=False)
+    container_logs(container_name, follow=False)
     raise SystemExit(1)
 
 
@@ -293,12 +293,12 @@ def recover_openclaw_containers(
         name = entry.get("name") or entry.get("containerName")
         if not name:
             continue
-        status = docker_container_status(name)
+        status = container_status(name)
         if status == "not found":
             log.warning(f"OpenClaw container {name} no longer exists, skipping")
             continue
 
-        return_code, _stdout, _stderr = docker_network_connect(
+        return_code, _stdout, _stderr = container_network_connect(
             shared_network_name, name
         )
         if return_code == 0:
@@ -308,7 +308,7 @@ def recover_openclaw_containers(
 
         if status != "running":
             log.info(f"Starting OpenClaw container: {name}")
-            docker_start_container(name)
+            container_start_container(name)
 
 
 def resolve_openclaw_data_dir(
@@ -380,7 +380,7 @@ def _start_named_service(service_name: str, starter: ServiceStarter) -> None:
 def _wait_for_setup_dashboard(container_name: str) -> None:
     start_time = time.time()
     while time.time() - start_time < HEALTH_CHECK_TIMEOUT:
-        return_code, _stdout, _stderr = docker_exec(
+        return_code, _stdout, _stderr = container_exec(
             container_name,
             ["curl", "-f", "-s", "http://localhost:8700/healthz"],
         )
@@ -389,12 +389,12 @@ def _wait_for_setup_dashboard(container_name: str) -> None:
         time.sleep(HEALTH_CHECK_INTERVAL)
 
     log.error("Dashboard failed to become healthy in setup mode")
-    docker_logs(container_name, follow=False, tail=100)
+    container_logs(container_name, follow=False, tail=100)
     raise SystemExit(1)
 
 
 def _emit_router_startup_logs(container_name: str, since_timestamp: int) -> None:
-    return_code, stdout, stderr = docker_logs_since(container_name, since_timestamp)
+    return_code, stdout, stderr = container_logs_since(container_name, since_timestamp)
     if return_code != 0:
         return
     _print_matching_lines(stdout)

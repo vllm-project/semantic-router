@@ -1,0 +1,128 @@
+# Manual smoke config for validating an OpenAI-compatible remote embedding
+# provider with embedding-signal routing.
+#
+# Defaults are safe for generic OpenAI-compatible providers:
+#   - put the secret in OPENAI_API_KEY
+#   - edit global.model_catalog.embeddings.semantic.endpoint.base_url when using
+#     Azure OpenAI-compatible endpoints, for example:
+#     https://<resource>.openai.azure.com/openai/v1
+#
+# This config is intentionally not referenced by the default local-dev flow.
+version: v0.3
+
+listeners:
+  - name: "remote-embedding-smoke-http"
+    address: "0.0.0.0"
+    port: 18888
+    timeout: "60s"
+
+providers:
+  defaults:
+    default_model: "default-model"
+  models:
+    - name: "billing-model"
+      provider_model_id: "billing-model"
+      backend_refs:
+        - name: "primary"
+          weight: 100
+          endpoint: "host.docker.internal:18000/v1"
+          protocol: "http"
+    - name: "default-model"
+      provider_model_id: "default-model"
+      backend_refs:
+        - name: "primary"
+          weight: 100
+          endpoint: "host.docker.internal:18001/v1"
+          protocol: "http"
+
+routing:
+  modelCards:
+    - name: "billing-model"
+      modality: "text"
+    - name: "default-model"
+      modality: "text"
+  signals:
+    embeddings:
+      - name: "billing_support"
+        threshold: 0.35
+        aggregation_method: max
+        candidates:
+          - billing invoice payment subscription charge refund account balance
+          - pricing plan renewal credit card receipt usage cost
+  decisions:
+    - name: "billing-route"
+      description: "Route billing and subscription prompts using remote embedding signal"
+      priority: 200
+      rules:
+        operator: "AND"
+        conditions:
+          - type: embedding
+            name: billing_support
+      modelRefs:
+        - model: "billing-model"
+          use_reasoning: false
+    - name: "default-route"
+      description: "Fallback route for remote embedding smoke validation"
+      priority: 10
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "default-model"
+          use_reasoning: false
+
+global:
+  services:
+    response_api:
+      enabled: false
+    router_replay:
+      enabled: false
+    startup_status:
+      store_backend: file
+  stores:
+    semantic_cache:
+      enabled: false
+  model_catalog:
+    embeddings:
+      semantic:
+        mmbert_model_path: ""
+        qwen3_model_path: ""
+        gemma_model_path: ""
+        bert_model_path: ""
+        multimodal_model_path: ""
+        use_cpu: true
+        embedding_config:
+          backend: openai_compatible
+          model_type: remote
+          preload_embeddings: false
+          target_dimension: 1536
+        endpoint:
+          base_url: https://api.openai.com/v1
+          model: text-embedding-3-small
+          api_key_env: OPENAI_API_KEY
+          timeout_seconds: 10
+          max_retries: 1
+          dimensions: 1536
+    modules:
+      prompt_guard:
+        enabled: false
+        model_ref: ""
+        model_id: ""
+        jailbreak_mapping_path: ""
+        use_mmbert_32k: false
+      classifier:
+        domain:
+          model_ref: ""
+          model_id: ""
+          category_mapping_path: ""
+          use_mmbert_32k: false
+        pii:
+          model_ref: ""
+          model_id: ""
+          pii_mapping_path: ""
+          use_mmbert_32k: false
+      feedback_detector:
+        enabled: false
+        model_ref: ""
+        model_id: ""
+        use_mmbert_32k: false

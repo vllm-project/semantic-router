@@ -148,6 +148,10 @@ var embeddingModelWeightFiles = []string{"model.safetensors", "tokenizer.json"}
 // its safetensors weights and tokenizer so a partial (ONNX-only) directory is detected as
 // incomplete and the full snapshot is re-downloaded.
 func addEmbeddingModelRequiredFiles(cfg *config.RouterConfig, requiredFilesByModel map[string][]string) {
+	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+		return
+	}
+
 	// MmBertModelPath holds the configured semantic embedding model directory.
 	path := cfg.MmBertModelPath
 	if path == "" || !strings.HasPrefix(path, "models/") {

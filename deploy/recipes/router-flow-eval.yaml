@@ -1,0 +1,208 @@
+version: v0.3
+
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    timeout: 1200s
+
+global:
+  integrations:
+    looper:
+      endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
+      timeout_seconds: 300
+      fusion:
+        model_names:
+          - vllm-sr/fusion
+      flow:
+        model_names:
+          - vllm-sr/flow
+
+providers:
+  defaults:
+    default_model: qwen-coordinator
+    default_reasoning_effort: medium
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+    - name: qwen-coordinator
+      provider_model_id: qwen-coordinator
+      api_format: openai
+      reasoning_family: qwen3
+      pricing:
+        currency: USD
+        prompt_per_1m: 0
+        cached_input_per_1m: 0
+        completion_per_1m: 0
+      backend_refs:
+        - name: local-qwen
+          endpoint: qwen-coordinator:8000
+          protocol: http
+          type: vllm
+          weight: 1
+    - name: opus48-worker
+      provider_model_id: anthropic/claude-opus-4.8
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 0
+        cached_input_per_1m: 0
+        completion_per_1m: 0
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: gemini31-worker
+      provider_model_id: google/gemini-3.1-pro-preview
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 0
+        cached_input_per_1m: 0
+        completion_per_1m: 0
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: gpt55-worker
+      provider_model_id: openai/gpt-5.5
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 0
+        cached_input_per_1m: 0
+        completion_per_1m: 0
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+
+routing:
+  modelCards:
+    - name: qwen-coordinator
+      context_window_size: 32768
+      description: Local planner and synthesis model for Router Flow dynamic plans.
+      capabilities: [chat, planning, synthesis, code]
+      quality_score: 0.88
+      modality: text
+      tags: [deployment:self_hosted, role:planner]
+    - name: opus48-worker
+      context_window_size: 1000000
+      description: OpenRouter worker for long-horizon agentic work.
+      capabilities: [chat, code, reasoning, long-context]
+      quality_score: 0.95
+      modality: text
+      tags: [deployment:openrouter, role:worker]
+    - name: gemini31-worker
+      context_window_size: 1000000
+      description: OpenRouter worker for broad reasoning and coding.
+      capabilities: [chat, code, reasoning, long-context]
+      quality_score: 0.93
+      modality: text
+      tags: [deployment:openrouter, role:worker]
+    - name: gpt55-worker
+      context_window_size: 1048576
+      description: OpenRouter worker for frontier synthesis.
+      capabilities: [chat, code, reasoning, long-context]
+      quality_score: 0.94
+      modality: text
+      tags: [deployment:openrouter, role:worker]
+
+  signals:
+    keywords:
+      - name: flow_eval_any
+        operator: OR
+        keywords:
+          - the
+          - and
+          - explain
+          - write
+          - design
+          - diagnose
+
+  decisions:
+    - name: flow_dynamic_eval
+      description: Router Flow dynamic micro-agent workflow for multi-agent API evaluation.
+      priority: 100
+      rules:
+        operator: OR
+        conditions:
+          - type: keyword
+            name: flow_eval_any
+      modelRefs:
+        - model: opus48-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: gemini31-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: gpt55-worker
+          use_reasoning: true
+          reasoning_effort: medium
+      algorithm:
+        type: workflows
+        workflows:
+          mode: dynamic
+          template: micro_agent
+          planner:
+            model: qwen-coordinator
+            max_completion_tokens: 2048
+          max_steps: 4
+          max_parallel: 3
+          max_completion_tokens: 32768
+          include_intermediate_responses: true
+          on_error: skip
+    - name: fusion_eval
+      description: Fusion baseline over the same OpenRouter worker pool.
+      priority: 90
+      rules:
+        operator: OR
+        conditions:
+          - type: keyword
+            name: flow_eval_any
+      modelRefs:
+        - model: opus48-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: gemini31-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: gpt55-worker
+          use_reasoning: true
+          reasoning_effort: medium
+      algorithm:
+        type: fusion
+        fusion:
+          model: qwen-coordinator
+          max_concurrent: 3
+          include_analysis: true
+          include_intermediate_responses: true
+          on_error: skip
+    - name: single_worker_eval
+      description: Single-worker baseline for non-direct model requests.
+      priority: 10
+      rules:
+        operator: OR
+        conditions:
+          - type: keyword
+            name: flow_eval_any
+      modelRefs:
+        - model: gpt55-worker
+          use_reasoning: true
+          reasoning_effort: medium
+      algorithm:
+        type: static
