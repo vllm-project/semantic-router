@@ -4,11 +4,12 @@ package apiserver
 
 import (
 	"fmt"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
 // Empty / whitespace-only input is a client error (400), not a server error
