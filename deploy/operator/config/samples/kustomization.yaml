@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- vllm.ai_v1alpha1_semanticrouter_simple.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples

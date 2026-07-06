@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -75,6 +76,12 @@ func (c *ExternalModelBasedEmbeddingInitializer) Init(qwen3ModelPath string, gem
 	}
 
 	switch backend {
+	case config.EmbeddingBackendOpenAICompatible:
+		logging.ComponentEvent("classifier", "keyword_embedding_backend_initialized", map[string]interface{}{
+			"backend":    config.EmbeddingBackendOpenAICompatible,
+			"model_type": modelType,
+		})
+		return nil
 	case "openvino":
 		if err := initOpenVINOModel(modelType, mmBertModelPath, qwen3ModelPath, useCPU); err != nil {
 			return err
@@ -170,6 +177,11 @@ func (c *EmbeddingClassifier) computeEmbedding(text string, modelType string, ph
 	var err error
 
 	switch backend {
+	case config.EmbeddingBackendOpenAICompatible:
+		if c.provider == nil {
+			return nil, fmt.Errorf("embedding provider is required for backend %q", backend)
+		}
+		embedding, err = c.provider.Embed(context.Background(), text)
 	case "openvino":
 		embedding, err = getOpenVINOEmbedding(modelType, text, c.optimizationConfig.TargetDimension)
 	case "candle":

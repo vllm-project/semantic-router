@@ -180,19 +180,6 @@ func (l *FusionLooper) runFusionSingleModel(ctx context.Context, req *Request, c
 	return l.formatFusionJSONResponse(resp, modelsUsed, 1, cfg, trace, usage)
 }
 
-// mergeFusionPromptConfig merges the prompt-template and judge-version overrides.
-func mergeFusionPromptConfig(dst *fusionExecutionConfig, src *config.FusionAlgorithmConfig) {
-	if src.AnalysisTemplate != "" {
-		dst.AnalysisTemplate = src.AnalysisTemplate
-	}
-	if src.SynthesisTemplate != "" {
-		dst.SynthesisTemplate = src.SynthesisTemplate
-	}
-	if src.JudgePromptVersion != "" {
-		dst.JudgePromptVersion = src.JudgePromptVersion
-	}
-}
-
 // mergeFusionEscalationConfig merges the adaptive-escalation overrides.
 func mergeFusionEscalationConfig(dst *fusionExecutionConfig, src *config.FusionEscalationConfig) {
 	if src == nil {

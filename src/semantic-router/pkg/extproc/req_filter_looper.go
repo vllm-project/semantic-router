@@ -29,7 +29,7 @@ import (
 
 func isLooperAlgorithmType(algorithmType string) bool {
 	switch algorithmType {
-	case "confidence", "ratings", "remom", "fusion":
+	case "confidence", "ratings", "remom", "fusion", "workflows":
 		return true
 	default:
 		return false
@@ -75,6 +75,8 @@ func hasLooperModelInputs(decision *config.Decision) bool {
 		return len(decision.ModelRefs) >= 1
 	case "fusion":
 		return len(decision.ModelRefs) >= 1 || hasFusionAnalysisModels(decision)
+	case "workflows":
+		return len(decision.ModelRefs) >= 1
 	default:
 		return len(decision.ModelRefs) > 1
 	}
@@ -113,13 +115,15 @@ func (r *OpenAIRouter) handleLooperExecution(
 		"response_api":     isResponseAPIRequest(reqCtx),
 	})
 	looperReq := &looper.Request{
-		OriginalRequest:   openAIRequest,
-		ModelRefs:         decision.ModelRefs,
-		ModelParams:       r.getModelParams(),
-		Algorithm:         decision.Algorithm,
-		IsStreaming:       streaming,
-		DecisionName:      decision.Name,
-		MatchedComplexity: reqCtx.VSRMatchedComplexity,
+		OriginalRequest:    openAIRequest,
+		ModelRefs:          decision.ModelRefs,
+		ModelParams:        r.getModelParams(),
+		Algorithm:          decision.Algorithm,
+		IsStreaming:        streaming,
+		DecisionName:       decision.Name,
+		MatchedComplexity:  reqCtx.VSRMatchedComplexity,
+		OutputContract:     decision.OutputContract,
+		OutputContractSpec: decision.OutputContractSpec,
 	}
 	if decision.Algorithm.Type == "fusion" {
 		fusionOverride, err := parseFusionRequestConfig(reqCtx.OriginalRequestBody)

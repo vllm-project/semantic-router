@@ -13,6 +13,11 @@ translation:
 
 对应 `config/algorithm/looper/remom.yaml`。
 
+运行时也支持通过 `global.integrations.looper.remom.model_names` 注册
+direct ReMoM 模型名。内置默认值是 `vllm-sr/remom`。Direct ReMoM
+请求只会匹配 `algorithm.type=remom` 的决策，和 Fusion、Flow 的 direct
+looper model 表面保持一致。
+
 ## 主要优势
 
 - 按调度广度模式协调多个候选模型。
@@ -31,13 +36,25 @@ translation:
 
 ## 配置
 
+注册 direct 模型名：
+
+```yaml
+global:
+  integrations:
+    looper:
+      endpoint: http://localhost:8899/v1/chat/completions
+      remom:
+        model_names:
+          - vllm-sr/remom
+```
+
 在 `routing.decisions[].algorithm` 中使用：
 
 ```yaml
 algorithm:
   type: remom
   remom:
-    breadth_schedule: [3, 2, 1]
+    breadth_schedule: [3, 2]
     model_distribution: round_robin
     temperature: 0.7
     max_concurrent: 3

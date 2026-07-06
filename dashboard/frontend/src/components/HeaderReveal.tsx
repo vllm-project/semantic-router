@@ -164,7 +164,7 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
   },
   'x-vsr-looper-algorithm': {
     label: 'Algorithm',
-    description: 'The multi-model algorithm used (confidence, ratings, remom, fusion)',
+    description: 'The multi-model algorithm used (confidence, ratings, remom, fusion, workflows)',
   },
   // Retention directive headers (issue #2009)
   'x-vsr-retention-drop': {

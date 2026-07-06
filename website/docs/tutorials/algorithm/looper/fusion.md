@@ -13,7 +13,8 @@ The same runtime also supports a direct Fusion model slug through `global.integr
 - Runs analysis models concurrently instead of choosing only one model.
 - Produces structured judge analysis before final synthesis.
 - Keeps Fusion policy inside vLLM-SR decisions: `vllm-sr/auto` can choose any route, while `vllm-sr/fusion` intelligently chooses among Fusion routes only.
-- Lets clients override the judge and analysis panel per request with `plugins[].id = fusion`.
+- Lets clients override the judge, analysis panel, templates, trace flags, and
+  grounding policy per request with `plugins[].id = fusion`.
 - Degrades on partial panel failures while preserving failed model metadata.
 
 ## Algorithm Principle
@@ -75,6 +76,34 @@ Some prompts benefit from multiple independent attempts and a judge pass rather 
 Decision-level Fusion:
 
 ```yaml
+routing:
+  decisions:
+    - name: deliberation
+      output_contract: Preserve any explicit output format exactly.
+      modelRefs:
+        - model: qwen3-32b
+        - model: deepseek-worker
+      algorithm:
+        type: fusion
+        fusion:
+          model: qwen3-32b
+          analysis_models:
+            - qwen3-32b
+            - deepseek-worker
+```
+
+`output_contract` is decision-scoped prompt text. Use it for benchmark or
+application format requirements that should apply across Fusion, Flow, and ReMoM
+instead of hard-coding task-specific prompts into an algorithm.
+Use `output_contract_spec` for typed router-executable normalization and
+post-processing such as choice extraction, terminal-action JSON normalization,
+or reference dereferencing. Extraction defaults to exact `content` matching;
+use `extract.sources` or `extract.mode: json_object` only when the decision
+explicitly permits a wider parser.
+
+Algorithm-only fragment:
+
+```yaml
 algorithm:
   type: fusion
   fusion:
@@ -84,6 +113,8 @@ algorithm:
       - qwen3-32b
     max_concurrent: 2
     max_completion_tokens: 512
+    round_timeout_seconds: 90
+    min_successful_responses: 1
     temperature: 0.2
     include_analysis: true
     include_intermediate_responses: true
@@ -141,7 +172,18 @@ Request-level override:
   "plugins": [{
     "id": "fusion",
     "model": "qwen3-32b",
-    "analysis_models": ["qwen3-8b", "qwen3-32b"]
+    "analysis_models": ["qwen3-8b", "qwen3-32b"],
+    "max_concurrent": 2,
+    "max_completion_tokens": 1024,
+    "round_timeout_seconds": 90,
+    "min_successful_responses": 1,
+    "include_analysis": true,
+    "include_intermediate_responses": true,
+    "grounding": {
+      "enabled": true,
+      "reference": "hybrid",
+      "policy": "weight"
+    }
   }]
 }
 ```
@@ -155,6 +197,8 @@ Request-level override:
 | `analysis_models` | list[string] | `modelRefs` | Panel models for parallel analysis |
 | `max_concurrent` | int | panel size | Maximum concurrent panel calls |
 | `max_completion_tokens` | int | request default | Max completion tokens applied to Fusion subrequests |
+| `round_timeout_seconds` | int | wait for all | Stop waiting for a panel round after this many seconds |
+| `min_successful_responses` | int | panel size | Continue once this many panel responses succeed |
 | `temperature` | float | request default | Temperature applied to Fusion subrequests |
 | `include_analysis` | bool | `true` | Include structured judge analysis in the response trace |
 | `include_intermediate_responses` | bool | `true` | Include raw panel responses in the response trace |

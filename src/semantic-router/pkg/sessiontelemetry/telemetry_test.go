@@ -157,6 +157,86 @@ func TestEviction(t *testing.T) {
 	assert.Len(t, store, 1)
 }
 
+// TestEvictionScanThrottled verifies the full-store TTL sweep in evictLocked is
+// throttled to at most once per evictInterval. A stale entry planted just after a
+// sweep must survive a sub-interval call (scan skipped) and be removed only once
+// evictInterval has elapsed (scan runs). This keeps the per-turn hot path O(1)
+// amortized instead of scanning every session on every RecordTurn.
+func TestEvictionScanThrottled(t *testing.T) {
+	ResetForTesting()
+	t.Cleanup(ResetForTesting)
+
+	base := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	// Prime the throttle with one sweep at base, then plant an already-stale entry.
+	mu.Lock()
+	evictLocked(base)
+	store["stale"] = &turnState{lastSeen: base.Add(-2 * ttl)}
+	mu.Unlock()
+
+	// Within evictInterval of the last sweep: scan is skipped, stale entry survives.
+	mu.Lock()
+	evictLocked(base.Add(evictInterval / 2))
+	_, present := store["stale"]
+	mu.Unlock()
+	require.True(t, present, "scan must be throttled within evictInterval; stale entry should survive")
+
+	// After evictInterval has elapsed: scan runs and removes the stale entry.
+	mu.Lock()
+	evictLocked(base.Add(evictInterval + time.Second))
+	_, present = store["stale"]
+	mu.Unlock()
+	require.False(t, present, "scan must run after evictInterval and evict the stale entry")
+}
+
+func TestExpiredKeyResetsBeforeThrottledSweep(t *testing.T) {
+	ResetForTesting()
+	t.Cleanup(ResetForTesting)
+
+	orig := nowFn
+	t.Cleanup(func() { nowFn = orig })
+
+	base := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	nowFn = func() time.Time { return base }
+
+	p := TurnParams{
+		RequestID:        "r1",
+		Model:            "m",
+		PromptTokens:     10,
+		CompletionTokens: 5,
+		Chat: &ChatInput{
+			UserID:   "u1",
+			Messages: []ChatMessage{{Role: "user", Content: "a"}},
+		},
+	}
+	RecordTurn(p)
+
+	var key string
+	mu.Lock()
+	for k := range store {
+		key = k
+	}
+	mu.Unlock()
+
+	// Same session returns after ttl but before the throttled sweep would run.
+	nowFn = func() time.Time { return base.Add(ttl + time.Second) }
+	mu.Lock()
+	lastEvict = base.Add(ttl) // keep evictLocked within evictInterval, so no full sweep
+	mu.Unlock()
+
+	p.RequestID = "r2"
+	p.PromptTokens = 3
+	p.CompletionTokens = 2
+	RecordTurn(p)
+
+	mu.Lock()
+	defer mu.Unlock()
+	st := store[key]
+	require.NotNil(t, st)
+	assert.Equal(t, int64(3), st.cumulativePrompt, "expired per-key state must reset, not accumulate")
+	assert.Equal(t, int64(2), st.cumulativeCompletion)
+}
+
 // =====================================================================
 // PR 2 — per-turn pricing metadata and cumulative_cost
 // =====================================================================
