@@ -13,7 +13,7 @@ use std::time::Instant;
 /// Classifier backend enum to avoid Box<dyn Trait>
 enum TokenClassifierBackend {
     Bert(Box<HighPerformanceBertTokenClassifier>),
-    ModernBert(TraditionalModernBertTokenClassifier),
+    ModernBert(Box<TraditionalModernBertTokenClassifier>),
 }
 
 /// PII detector with real token classification model inference (merged LoRA models)
@@ -66,7 +66,7 @@ impl PIILoRAClassifier {
                     );
                     candle_core::Error::from(unified_err)
                 })?;
-            TokenClassifierBackend::ModernBert(classifier)
+            TokenClassifierBackend::ModernBert(Box::new(classifier))
         } else {
             let classifier =
                 HighPerformanceBertTokenClassifier::new(model_path, num_classes, use_cpu).map_err(
