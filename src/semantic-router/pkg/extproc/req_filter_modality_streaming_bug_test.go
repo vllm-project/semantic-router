@@ -22,7 +22,7 @@ func TestStreamingBug_DiffusionProducesValidSSE(t *testing.T) {
 	// format with content array containing image_url.
 	mockDiffusion := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"choices": []map[string]interface{}{
 				{
 					"message": map[string]interface{}{
@@ -183,7 +183,7 @@ func TestStreamingBug_ARUnaffected(t *testing.T) {
 func TestStreamingBug_NonStreamingUnaffected(t *testing.T) {
 	mockDiffusion := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"choices": []map[string]interface{}{
 				{
 					"message": map[string]interface{}{

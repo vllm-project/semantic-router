@@ -100,7 +100,7 @@ func buildMultimodalSSE(body []byte) []byte {
 
 	// Reconstruct the content as an interface value
 	var content interface{}
-	json.Unmarshal(ch.Message.Content, &content)
+	_ = json.Unmarshal(ch.Message.Content, &content)
 
 	var sseChunks []string
 
