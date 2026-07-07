@@ -81,7 +81,10 @@ Tests that need the real `multi-modal-embed-small` model gate on the
 The `Test And Build` workflow (`test-and-build` job) exports
 `MULTIMODAL_MODEL_PATH` pointing at `models/mom-embedding-multimodal`, which
 `make download-models` fetches earlier in the same `make test` invocation, so
-the following suites execute on every PR, push to `main`, and nightly run:
+the following suites execute on every `test-and-build` run (PRs matching the
+job's path filters - core, make, ci, helm, e2e, docker - non-draft only,
+pushes to `main`, and the nightly schedule; docs-only changes do not fire the
+job):
 
 - `TestEmbeddingClassifier_Integration*` in
   `src/semantic-router/pkg/classification/` (hermetic synthetic-PNG

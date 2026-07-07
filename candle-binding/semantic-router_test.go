@@ -4432,6 +4432,27 @@ func TestMultiModalCrossModalRetrieval(t *testing.T) {
 
 // TestMultiModalInputValidation tests error handling for invalid inputs
 func TestMultiModalInputValidation(t *testing.T) {
+	// Run against a verified-working model (the TestMultiModalEmbeddingInit
+	// init-then-probe pattern) so the rejections below are attributable to
+	// the pure-Go validation layer rather than a missing or broken model:
+	// if a validation check regressed, the call falls through to a working
+	// encode instead of passing vacuously because the model is not loaded.
+	// Also removes the dependence on TestMultiModalEmbeddingInit running
+	// first in source order.
+	modelPath := getMultiModalModelPath()
+	if modelPath == "" {
+		t.Skip("MULTIMODAL_MODEL_PATH environment variable not set")
+	}
+	if err := InitMultiModalEmbeddingModel(modelPath, true); err != nil {
+		// Init may error if the model is already initialized; probe an
+		// encode to distinguish that from a genuinely broken model path,
+		// which must fail the test rather than let the negative subtests
+		// below pass vacuously.
+		if _, probeErr := MultiModalEncodeText("probe", 0); probeErr != nil {
+			t.Fatalf("multi-modal model not functional: %v", err)
+		}
+	}
+
 	t.Run("EmptyText", func(t *testing.T) {
 		_, err := MultiModalEncodeText("", 0)
 		if err == nil {
