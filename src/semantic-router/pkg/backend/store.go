@@ -51,6 +51,11 @@ func Upsert(telemetry BackendTelemetry) error {
 	return defaultStore.Upsert(telemetry)
 }
 
+// UpsertMany writes telemetry samples into the package-level store.
+func UpsertMany(samples []BackendTelemetry) error {
+	return defaultStore.UpsertMany(samples)
+}
+
 // Get returns raw telemetry from the package-level store.
 func Get(identity BackendIdentity) (BackendTelemetry, bool) {
 	return defaultStore.Get(identity)
@@ -86,6 +91,19 @@ func (s *Store) Upsert(telemetry BackendTelemetry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.items[telemetry.Identity.Key()] = telemetry
+	return nil
+}
+
+// UpsertMany writes telemetry samples into the store.
+func (s *Store) UpsertMany(samples []BackendTelemetry) error {
+	if s == nil {
+		return fmt.Errorf("backend telemetry store is nil")
+	}
+	for _, sample := range samples {
+		if err := s.Upsert(sample); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

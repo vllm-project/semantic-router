@@ -100,6 +100,16 @@ func TestGenerateConfigYAMLIncludesLoRACatalogFromVLLMEndpoints(t *testing.T) {
 	if lora.Description != "Adapter for advanced computer science prompts" {
 		t.Fatalf("unexpected LoRA description: %#v", lora)
 	}
+	if len(parsed.Providers.Models) != 1 || len(parsed.Providers.Models[0].BackendRefs) != 1 {
+		t.Fatalf("expected one generated backend ref, got %#v", parsed.Providers.Models)
+	}
+	ref := parsed.Providers.Models[0].BackendRefs[0]
+	if ref.BackendID != "qwen3-primary" {
+		t.Fatalf("BackendID = %q, want qwen3-primary", ref.BackendID)
+	}
+	if ref.EngineKind != "vllm" {
+		t.Fatalf("EngineKind = %q, want vllm", ref.EngineKind)
+	}
 }
 
 func TestReconcileSemanticRouter(t *testing.T) {

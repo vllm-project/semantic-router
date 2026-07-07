@@ -5,13 +5,22 @@ type APIConfig struct {
 }
 
 type ObservabilityConfig struct {
-	Tracing TracingConfig `yaml:"tracing"`
-	Metrics MetricsConfig `yaml:"metrics"`
+	Tracing          TracingConfig          `yaml:"tracing"`
+	Metrics          MetricsConfig          `yaml:"metrics"`
+	BackendTelemetry BackendTelemetryConfig `yaml:"backend_telemetry"`
 }
 
 type MetricsConfig struct {
 	Enabled         *bool                 `yaml:"enabled,omitempty"`
 	WindowedMetrics WindowedMetricsConfig `yaml:"windowed_metrics"`
+}
+
+type BackendTelemetryConfig struct {
+	Enabled        bool   `yaml:"enabled"`
+	PollInterval   string `yaml:"poll_interval,omitempty"`
+	TTL            string `yaml:"ttl,omitempty"`
+	RequestTimeout string `yaml:"request_timeout,omitempty"`
+	MetricsPath    string `yaml:"metrics_path,omitempty"`
 }
 
 type WindowedMetricsConfig struct {

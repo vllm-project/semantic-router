@@ -60,6 +60,13 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 			StoreBackend: "file",
 		},
 		Observability: ObservabilityConfig{
+			BackendTelemetry: BackendTelemetryConfig{
+				Enabled:        false,
+				PollInterval:   "2s",
+				TTL:            "5s",
+				RequestTimeout: "2s",
+				MetricsPath:    "/metrics",
+			},
 			Metrics: MetricsConfig{
 				Enabled: canonicalBoolPtr(true),
 			},

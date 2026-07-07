@@ -17,10 +17,12 @@ type AdapterTarget struct {
 
 // AdapterConfig carries engine-neutral adapter construction settings.
 type AdapterConfig struct {
-	Targets  []AdapterTarget
-	Store    *Store
-	Interval time.Duration
-	Labels   map[string]string
+	Targets        []AdapterTarget
+	Store          *Store
+	Interval       time.Duration
+	TTL            time.Duration
+	RequestTimeout time.Duration
+	Labels         map[string]string
 }
 
 // TelemetryAdapter normalizes engine-specific metrics into BackendTelemetry.

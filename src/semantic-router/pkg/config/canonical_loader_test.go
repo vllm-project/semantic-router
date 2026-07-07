@@ -656,6 +656,63 @@ routing:
 	}
 }
 
+func TestCanonicalBackendTelemetryConfigRoundTrips(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+providers:
+  defaults:
+    default_model: qwen-worker
+  models:
+    - name: qwen-worker
+      backend_refs:
+        - name: local-primary
+          backend_id: qwen-worker-primary
+          engine_kind: vllm
+          endpoint: 127.0.0.1:8000
+routing:
+  modelCards:
+    - name: qwen-worker
+  decisions:
+    - name: default
+      priority: 1
+      rules:
+        operator: OR
+        conditions: []
+      modelRefs:
+        - model: qwen-worker
+global:
+  services:
+    observability:
+      backend_telemetry:
+        enabled: true
+        poll_interval: 2s
+        ttl: 5s
+        request_timeout: 1s
+        metrics_path: /metrics
+`)
+
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+	got := cfg.Observability.BackendTelemetry
+	if !got.Enabled {
+		t.Fatalf("BackendTelemetry.Enabled = false, want true")
+	}
+	if got.PollInterval != "2s" || got.TTL != "5s" || got.RequestTimeout != "1s" || got.MetricsPath != "/metrics" {
+		t.Fatalf("BackendTelemetry = %#v", got)
+	}
+
+	exported := CanonicalConfigFromRouterConfig(cfg)
+	roundTrip := exported.Global.Services.Observability.BackendTelemetry
+	if !roundTrip.Enabled {
+		t.Fatalf("exported BackendTelemetry.Enabled = false, want true")
+	}
+	if roundTrip.PollInterval != "2s" || roundTrip.TTL != "5s" || roundTrip.RequestTimeout != "1s" || roundTrip.MetricsPath != "/metrics" {
+		t.Fatalf("exported BackendTelemetry = %#v", roundTrip)
+	}
+}
+
 func TestGetModelPricingTreatsExplicitZeroPricingAsConfigured(t *testing.T) {
 	cfg := &RouterConfig{
 		BackendModels: BackendModels{

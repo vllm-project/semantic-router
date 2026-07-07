@@ -43,6 +43,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `global.router.config_source` selects whether runtime config comes from the canonical YAML file (`file`) or from in-process Kubernetes CRD reconciliation (`kubernetes`)
   - `decision.algorithm.type=session_aware` enables agentic stay-vs-switch routing with router-owned session memory, tool-loop and provider-state hard locks, decision-drift and idle-time re-selection, input checkout prefix-cache cost, confidence-gated remaining-turn priors, and replayed policy traces. Cache-cost multipliers must be at least neutral (`max_cache_cost_multiplier >= 1`) and remaining-turn prior horizons must be positive.
   - `global.services` groups shared APIs and control-plane services such as `response_api`, `router_replay`, `observability`, `authz`, and `ratelimit`
+  - `global.services.observability.backend_telemetry` opt-in enables backend metrics collection for engine-aware adapters such as vLLM; it defaults to disabled and reads `backend_refs[].backend_id` / `engine_kind`
   - `global.services.router_replay.enabled` acts as the default replay switch for every decision; route-local `router_replay.enabled: false` is the explicit opt-out
   - `global.stores` groups shared storage-backed services such as `semantic_cache`, `memory`, and `vector_store`
 - `global.integrations` groups helper runtime integrations such as `tools` and `looper`
@@ -80,6 +81,8 @@ providers:
       backend_refs:
         - name: primary
           endpoint: host.docker.internal:8000
+          backend_id: qwen3-primary
+          engine_kind: vllm
           protocol: http
           weight: 100
           api_key_env: OPENAI_API_KEY
@@ -179,6 +182,12 @@ global:
     config_source: file
   services:
     observability:
+      backend_telemetry:
+        enabled: false
+        poll_interval: 2s
+        ttl: 5s
+        request_timeout: 2s
+        metrics_path: /metrics
       metrics:
         enabled: true
     router_replay:
