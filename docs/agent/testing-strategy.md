@@ -74,6 +74,43 @@ See [environments.md](environments.md) for the concrete commands.
   - `memory-integration` via `make memory-test-integration`
 - Manual-only Go profiles are valid durable suites, but they must be named in `manual_profile_rules` instead of existing as undocumented runner-only paths.
 
+## Model-Gated Multimodal Tests
+
+Tests that need the real `multi-modal-embed-small` model gate on the
+`MULTIMODAL_MODEL_PATH` environment variable and skip when it is unset.
+The `Test And Build` workflow (`test-and-build` job) exports
+`MULTIMODAL_MODEL_PATH` pointing at `models/mom-embedding-multimodal`, which
+`make download-models` fetches earlier in the same `make test` invocation, so
+the following suites execute on every PR, push to `main`, and nightly run:
+
+- `TestEmbeddingClassifier_Integration*` in
+  `src/semantic-router/pkg/classification/` (hermetic synthetic-PNG
+  image-encode path through the real candle-binding FFI), via
+  `test-semantic-router`.
+- The hermetic candle-binding multimodal Go tests
+  (`TestMultiModalEmbeddingInit`, `TestMultiModalEncodeText`,
+  `TestMultiModalInputValidation`), via `test-binding-minimal`.
+
+Still manual (run `make test-binding-multimodal` with a local model as the
+receipt for PRs touching the multimodal FFI):
+
+- The image-encode candle-binding Go tests
+  (`TestMultiModalEncodeImageFromBytes/Base64/URL`,
+  `TestMultiModalCrossModalRetrieval`) download fixture images from Wikimedia
+  at test time, so they stay out of the CI lane to avoid external-network
+  flakiness. The same image-encode FFI path is covered hermetically in CI by
+  the `pkg/classification` integration tests above.
+- The `#[ignore = "requires model files"]` Rust unit tests in
+  `candle-binding/src/model_architectures/embedding/multimodal_embedding.rs`.
+  No automated lane runs model-dependent `cargo test --lib`; several of these
+  also fetch Wikimedia fixtures. Known baseline as of 2026-07: 25 of 32 pass;
+  the audio-path tests fail because `WhisperEncoder::load` fails and the
+  loader's `.ok()` fallback silently disables the audio encoder,
+  `test_text_batch_encoding` hits a broadcast shape mismatch in the batched
+  text-encode path, and `test_text_semantic_similarity` asserts a semantic
+  ranking the model does not reliably produce (the Go equivalent only logs
+  it). These are pre-existing defects surfaced by actually running the suite.
+
 ## Acceptance Versus Reporting
 
 - Acceptance tests must encode a meaningful failure condition for the behavior they claim to protect.
