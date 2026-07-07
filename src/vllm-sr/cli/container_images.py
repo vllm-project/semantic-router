@@ -9,17 +9,17 @@ from cli.consts import (
     IMAGE_PULL_POLICY_IF_NOT_PRESENT,
     IMAGE_PULL_POLICY_NEVER,
     PLATFORM_AMD,
-    VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT,
-    VLLM_SR_DOCKER_IMAGE_DEFAULT,
-    VLLM_SR_DOCKER_IMAGE_ROCM,
-    VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT,
-    VLLM_SR_ROUTER_DOCKER_IMAGE_DEFAULT,
-    VLLM_SR_ROUTER_DOCKER_IMAGE_ROCM,
-    VLLM_SR_SIM_DOCKER_IMAGE_DEFAULT,
+    VLLM_SR_CONTAINER_IMAGE_DEFAULT,
+    VLLM_SR_CONTAINER_IMAGE_ROCM,
+    VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT,
+    VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT,
+    VLLM_SR_ROUTER_CONTAINER_IMAGE_DEFAULT,
+    VLLM_SR_ROUTER_CONTAINER_IMAGE_ROCM,
+    VLLM_SR_SIM_CONTAINER_IMAGE_DEFAULT,
 )
-from cli.docker_runtime import (
-    docker_image_exists,
-    docker_pull_image,
+from cli.container_runtime import (
+    container_image_exists,
+    container_pull_image,
     get_container_runtime,
 )
 from cli.utils import get_logger
@@ -54,8 +54,8 @@ def _derive_rocm_variant(image_name):
 
     image_name = image_name.strip()
     supported_pairs = (
-        (VLLM_SR_DOCKER_IMAGE_DEFAULT, VLLM_SR_DOCKER_IMAGE_ROCM),
-        (VLLM_SR_ROUTER_DOCKER_IMAGE_DEFAULT, VLLM_SR_ROUTER_DOCKER_IMAGE_ROCM),
+        (VLLM_SR_CONTAINER_IMAGE_DEFAULT, VLLM_SR_CONTAINER_IMAGE_ROCM),
+        (VLLM_SR_ROUTER_CONTAINER_IMAGE_DEFAULT, VLLM_SR_ROUTER_CONTAINER_IMAGE_ROCM),
     )
     for default_image, rocm_image in supported_pairs:
         default_repo = default_image.rsplit(":", 1)[0]
@@ -71,13 +71,15 @@ def _derive_rocm_variant(image_name):
 def _derive_envoy_variant(image_name):
     """Return the upstream Envoy image when the base image uses official vllm-sr tags."""
     if _is_official_vllm_sr_image(image_name):
-        return VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT
+        return VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT
     return ""
 
 
 def _derive_dashboard_variant(image_name):
     """Return a dashboard image variant when the base image uses official vllm-sr tags."""
-    return _derive_official_variant(image_name, VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT)
+    return _derive_official_variant(
+        image_name, VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT
+    )
 
 
 def _derive_official_variant(image_name, default_variant_image):
@@ -86,8 +88,8 @@ def _derive_official_variant(image_name, default_variant_image):
         return ""
 
     image_name = image_name.strip()
-    default_repo = VLLM_SR_DOCKER_IMAGE_DEFAULT.rsplit(":", 1)[0]
-    rocm_repo = VLLM_SR_DOCKER_IMAGE_ROCM.rsplit(":", 1)[0]
+    default_repo = VLLM_SR_CONTAINER_IMAGE_DEFAULT.rsplit(":", 1)[0]
+    rocm_repo = VLLM_SR_CONTAINER_IMAGE_ROCM.rsplit(":", 1)[0]
     variant_repo = default_variant_image.rsplit(":", 1)[0]
 
     for candidate_repo in (default_repo, rocm_repo):
@@ -106,7 +108,7 @@ def _is_official_vllm_sr_image(image_name):
         return False
 
     image_name = image_name.strip()
-    for candidate in (VLLM_SR_DOCKER_IMAGE_DEFAULT, VLLM_SR_DOCKER_IMAGE_ROCM):
+    for candidate in (VLLM_SR_CONTAINER_IMAGE_DEFAULT, VLLM_SR_CONTAINER_IMAGE_ROCM):
         candidate_repo = candidate.rsplit(":", 1)[0]
         if image_name == candidate_repo or image_name.startswith(f"{candidate_repo}:"):
             return True
@@ -128,15 +130,15 @@ def _select_image_source(image, normalized_platform):
         log.info(f"Using image from VLLM_SR_IMAGE: {env_image}")
         return env_image
     if normalized_platform == PLATFORM_AMD:
-        amd_image = os.getenv("VLLM_SR_IMAGE_AMD", VLLM_SR_DOCKER_IMAGE_ROCM).strip()
-        selected_image = amd_image or VLLM_SR_DOCKER_IMAGE_ROCM
+        amd_image = os.getenv("VLLM_SR_IMAGE_AMD", VLLM_SR_CONTAINER_IMAGE_ROCM).strip()
+        selected_image = amd_image or VLLM_SR_CONTAINER_IMAGE_ROCM
         log.info(
             f"Platform '{normalized_platform}' detected, using AMD ROCm default image: "
             f"{selected_image}"
         )
         return selected_image
-    log.info(f"Using default image: {VLLM_SR_DOCKER_IMAGE_DEFAULT}")
-    return VLLM_SR_DOCKER_IMAGE_DEFAULT
+    log.info(f"Using default image: {VLLM_SR_CONTAINER_IMAGE_DEFAULT}")
+    return VLLM_SR_CONTAINER_IMAGE_DEFAULT
 
 
 def _maybe_upgrade_to_rocm_image(selected_image, normalized_platform, source_name):
@@ -264,9 +266,9 @@ def _resolve_nonrouter_explicit_base_image(service_name, base_image):
         return selected_image, source_name
 
     if service_name == "envoy":
-        selected_image = VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT
+        selected_image = VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT
     else:
-        selected_image = VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT
+        selected_image = VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT
 
     log.info(
         f"Using default {service_name} image alongside explicit --image override: {selected_image}"
@@ -277,7 +279,7 @@ def _resolve_nonrouter_explicit_base_image(service_name, base_image):
 
 
 def _ensure_image_available(selected_image, pull_policy):
-    image_exists = docker_image_exists(selected_image)
+    image_exists = container_image_exists(selected_image)
     if pull_policy == IMAGE_PULL_POLICY_ALWAYS:
         _pull_or_exit(selected_image)
         return
@@ -298,7 +300,7 @@ def _ensure_image_available(selected_image, pull_policy):
 
 
 def _pull_or_exit(selected_image, show_not_found=False):
-    if docker_pull_image(selected_image):
+    if container_pull_image(selected_image):
         return
     log.error(f"Failed to pull image: {selected_image}")
     if show_not_found:
@@ -306,7 +308,7 @@ def _pull_or_exit(selected_image, show_not_found=False):
     sys.exit(1)
 
 
-def get_docker_image(image=None, pull_policy=None, platform=None):
+def get_container_image(image=None, pull_policy=None, platform=None):
     """
     Determine which Docker image to use and handle pulling if needed.
 
@@ -380,7 +382,7 @@ def get_runtime_images(
     return selected_images
 
 
-def get_fleet_sim_docker_image(image=None, pull_policy=None):
+def get_fleet_sim_container_image(image=None, pull_policy=None):
     """Resolve the simulator image and ensure it is available locally."""
     if pull_policy is None:
         pull_policy = DEFAULT_IMAGE_PULL_POLICY
@@ -390,7 +392,7 @@ def get_fleet_sim_docker_image(image=None, pull_policy=None):
         log.info(f"Using specified simulator image: {selected_image}")
     else:
         selected_image = os.getenv(
-            "VLLM_SR_SIM_IMAGE", VLLM_SR_SIM_DOCKER_IMAGE_DEFAULT
+            "VLLM_SR_SIM_IMAGE", VLLM_SR_SIM_CONTAINER_IMAGE_DEFAULT
         ).strip()
         log.info(f"Using simulator image: {selected_image}")
 
