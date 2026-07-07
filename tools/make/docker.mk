@@ -81,7 +81,7 @@ docker-build-vllm-sr-sim: ## Build vllm-sr-sim Docker image
 docker-build-vllm-sr-sim:
 	@$(LOG_TARGET)
 	@echo "Building vllm-sr-sim Docker image..."
-	@$(CONTAINER_RUNTIME) build -f src/fleet-sim/Dockerfile -t $(DOCKER_REGISTRY)/vllm-sr-sim:$(DOCKER_TAG) .
+	@$(CONTAINER_RUNTIME) build --build-arg IMAGE_REGISTRY=$(IMAGE_REGISTRY) -f src/fleet-sim/Dockerfile -t $(DOCKER_REGISTRY)/vllm-sr-sim:$(DOCKER_TAG) .
 
 # Build precommit Docker image
 docker-build-precommit: ## Build precommit Docker image
@@ -195,7 +195,7 @@ docker-push-vllm-sr-sim:
 docker-help:
 docker-help: ## Show help for Docker-related make targets and environment variables
 	@echo "Environment Variables:"
-	@echo "  CONTAINER_RUNTIME - Container runtime (default: docker; Podman is not supported)"
+	@echo "  CONTAINER_RUNTIME - Container runtime: docker (default) or podman"
 	@echo "  DOCKER_REGISTRY   - Docker registry (default: ghcr.io/vllm-project/semantic-router)"
 	@echo "  DOCKER_TAG        - Docker tag (default: latest)"
 	@echo "  SKIP_ROUTER_IMAGE - set to 1 only when the local router image is already up to date"
@@ -284,7 +284,22 @@ endif
 
 # Default 1 so vllm-sr build works behind corporate proxies; set GIT_SSL_NO_VERIFY=0 for strict SSL verification.
 GIT_SSL_NO_VERIFY ?= 1
-VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM)
+# Auto-detect: if Podman can resolve unqualified short names (search chain
+# configured in registries.conf), use unqualified FROM lines so the configured
+# registry priority is honoured.  Otherwise fall back to fully-qualified
+# docker.io/ names for out-of-the-box compatibility.
+IMAGE_REGISTRY ?= $(shell \
+  if [ "$(CONTAINER_RUNTIME)" = "podman" ]; then \
+    if podman pull --quiet library/alpine:latest >/dev/null 2>&1; then \
+      podman rmi --force library/alpine:latest >/dev/null 2>&1; \
+      printf ""; \
+    else \
+      printf "docker.io/"; \
+    fi; \
+  else \
+    printf "docker.io/"; \
+  fi)
+VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM) --build-arg IMAGE_REGISTRY=$(IMAGE_REGISTRY)
 ifeq ($(GIT_SSL_NO_VERIFY),1)
 VLLM_SR_BUILD_ARGS += --build-arg GIT_SSL_NO_VERIFY=1
 endif

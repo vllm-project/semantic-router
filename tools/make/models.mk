@@ -83,7 +83,7 @@ download-mmbert: ## Download all mmBERT merged models for Rust inference
 		if [ -d "$(MODELS_DIR)/$$model" ]; then \
 			echo "   Already exists, updating..."; \
 		fi; \
-		huggingface-cli download $(HF_ORG)/$$model --local-dir $(MODELS_DIR)/$$model --local-dir-use-symlinks False; \
+		hf download $(HF_ORG)/$$model --local-dir $(MODELS_DIR)/$$model; \
 	done
 	@echo ""
 	@echo "mmBERT models downloaded to $(MODELS_DIR)/"
@@ -98,7 +98,7 @@ download-mmbert-lora: ## Download mmBERT LoRA adapters for Python fine-tuning
 		if [ -d "$(MODELS_DIR)/$$adapter" ]; then \
 			echo "   Already exists, updating..."; \
 		fi; \
-		huggingface-cli download $(HF_ORG)/$$adapter --local-dir $(MODELS_DIR)/$$adapter --local-dir-use-symlinks False; \
+		hf download $(HF_ORG)/$$adapter --local-dir $(MODELS_DIR)/$$adapter; \
 	done
 	@echo ""
 	@echo "mmBERT LoRA adapters downloaded to $(MODELS_DIR)/"
@@ -115,7 +115,7 @@ download-mmbert-32k-lora: ## Download mmBERT-32K LoRA adapters (32K context mode
 		if [ -d "$(MODELS_DIR)/$$adapter" ]; then \
 			echo "   Already exists, updating..."; \
 		fi; \
-		huggingface-cli download $(HF_ORG)/$$adapter --local-dir $(MODELS_DIR)/$$adapter --local-dir-use-symlinks False; \
+		hf download $(HF_ORG)/$$adapter --local-dir $(MODELS_DIR)/$$adapter; \
 	done
 	@echo ""
 	@echo "mmBERT-32K LoRA adapters downloaded to $(MODELS_DIR)/"
@@ -137,7 +137,7 @@ download-mmbert-32k-merged: ## Download mmBERT-32K merged models (for Rust/Go in
 		if [ -d "$(MODELS_DIR)/$$model" ]; then \
 			echo "   Already exists, updating..."; \
 		fi; \
-		huggingface-cli download $(HF_ORG)/$$model --local-dir $(MODELS_DIR)/$$model --local-dir-use-symlinks False; \
+		hf download $(HF_ORG)/$$model --local-dir $(MODELS_DIR)/$$model; \
 	done
 	@echo ""
 	@echo "mmBERT-32K merged models downloaded to $(MODELS_DIR)/"
@@ -162,7 +162,7 @@ download-mmbert-32k: ## Download mmBERT 32K YaRN base model (extended context ML
 	@if [ -d "$(MODELS_DIR)/$(MMBERT_32K_BASE_MODEL)" ]; then \
 		echo "   Already exists, updating..."; \
 	fi
-	@huggingface-cli download $(HF_ORG)/$(MMBERT_32K_BASE_MODEL) --local-dir $(MODELS_DIR)/$(MMBERT_32K_BASE_MODEL) --local-dir-use-symlinks False
+	@hf download $(HF_ORG)/$(MMBERT_32K_BASE_MODEL) --local-dir $(MODELS_DIR)/$(MMBERT_32K_BASE_MODEL)
 	@echo ""
 	@echo "mmBERT 32K YaRN model downloaded to $(MODELS_DIR)/$(MMBERT_32K_BASE_MODEL)"
 	@echo ""
@@ -186,24 +186,24 @@ download-mmbert-32k-onnx: ## Download mmBERT-32K ONNX models (from onnx/ subdir 
 		fi; \
 		mkdir -p "$$onnx_dir"; \
 		echo "   Downloading model.onnx and config.json from onnx/ subdir..."; \
-		huggingface-cli download $(HF_ORG)/$$model onnx/model.onnx onnx/config.json --local-dir "$$onnx_dir" --local-dir-use-symlinks False; \
+		hf download $(HF_ORG)/$$model onnx/model.onnx onnx/config.json --local-dir "$$onnx_dir"; \
 		if [ -f "$$onnx_dir/onnx/model.onnx" ]; then \
 			mv "$$onnx_dir/onnx/"* "$$onnx_dir/"; \
 			rmdir "$$onnx_dir/onnx" 2>/dev/null || true; \
 		fi; \
 		echo "   Downloading tokenizer files from onnx/ subdir (fallback to repo root)..."; \
-		huggingface-cli download $(HF_ORG)/$$model onnx/tokenizer.json onnx/tokenizer_config.json onnx/special_tokens_map.json --local-dir "$$onnx_dir" --local-dir-use-symlinks False 2>/dev/null && { \
+		hf download $(HF_ORG)/$$model onnx/tokenizer.json onnx/tokenizer_config.json onnx/special_tokens_map.json --local-dir "$$onnx_dir" 2>/dev/null && { \
 			for f in tokenizer.json tokenizer_config.json special_tokens_map.json; do \
 				[ -f "$$onnx_dir/onnx/$$f" ] && mv "$$onnx_dir/onnx/$$f" "$$onnx_dir/$$f"; \
 			done; \
 			rmdir "$$onnx_dir/onnx" 2>/dev/null || true; \
 		} || { \
 			echo "   (onnx/ subdir tokenizer not found, downloading from repo root)"; \
-			huggingface-cli download $(HF_ORG)/$$model tokenizer.json tokenizer_config.json special_tokens_map.json --local-dir "$$onnx_dir" --local-dir-use-symlinks False 2>/dev/null || true; \
+			hf download $(HF_ORG)/$$model tokenizer.json tokenizer_config.json special_tokens_map.json --local-dir "$$onnx_dir" 2>/dev/null || true; \
 		}; \
 		echo "   Downloading label/fact_check mapping files (if any)..."; \
-		huggingface-cli download $(HF_ORG)/$$model label_mapping.json --local-dir "$$onnx_dir" --local-dir-use-symlinks False 2>/dev/null || true; \
-		huggingface-cli download $(HF_ORG)/$$model fact_check_mapping.json --local-dir "$$onnx_dir" --local-dir-use-symlinks False 2>/dev/null || true; \
+		hf download $(HF_ORG)/$$model label_mapping.json --local-dir "$$onnx_dir" 2>/dev/null || true; \
+		hf download $(HF_ORG)/$$model fact_check_mapping.json --local-dir "$$onnx_dir" 2>/dev/null || true; \
 	done
 	@echo ""
 	@echo "mmBERT-32K ONNX models downloaded to $(MODELS_DIR)/"
@@ -219,7 +219,7 @@ download-mmbert-32k-onnx: ## Download mmBERT-32K ONNX models (from onnx/ subdir 
 	@echo "  ONNX_MODEL_PATH=models/mmbert32k-intent-classifier-merged-onnx make run-router-onnx"
 
 # Fact-check and feedback: download merged models, export to ONNX, upload to HF
-# Requires: huggingface-cli login (or HF_TOKEN) for upload
+# Requires: hf login (or HF_TOKEN) for upload
 download-export-upload-onnx-factcheck-feedback: ## Download merged factcheck/feedback, export to ONNX, upload to Hugging Face
 	@chmod +x scripts/download_export_upload_onnx_factcheck_feedback.sh
 	@./scripts/download_export_upload_onnx_factcheck_feedback.sh

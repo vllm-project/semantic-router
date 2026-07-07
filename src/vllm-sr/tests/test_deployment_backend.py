@@ -16,8 +16,8 @@ from cli.config_translator import (  # noqa: E402
     translate_config_to_helm_values,
     write_helm_values_file,
 )
+from cli.container_backend import ContainerBackend  # noqa: E402
 from cli.deployment_backend import DEFAULT_TARGET, resolve_target  # noqa: E402
-from cli.docker_backend import DockerBackend  # noqa: E402
 from cli.k8s_backend import K8sBackend  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -45,19 +45,19 @@ class TestResolveTarget:
 
 
 # ---------------------------------------------------------------------------
-# DockerBackend
+# ContainerBackend
 # ---------------------------------------------------------------------------
 
 
-class TestDockerBackend:
+class TestContainerBackend:
     def test_deploy_delegates_to_start_vllm_sr(self, monkeypatch):
         captured = {}
         monkeypatch.setattr(
-            "cli.docker_backend.start_vllm_sr",
+            "cli.container_backend.start_vllm_sr",
             lambda *a, **kw: captured.update(kw),
         )
 
-        backend = DockerBackend()
+        backend = ContainerBackend()
         backend.deploy(
             config_file="/tmp/config.yaml",
             source_config_file="/tmp/source-config.yaml",
@@ -87,32 +87,32 @@ class TestDockerBackend:
     def test_teardown_delegates_to_stop_vllm_sr(self, monkeypatch):
         called = []
         monkeypatch.setattr(
-            "cli.docker_backend.stop_vllm_sr",
+            "cli.container_backend.stop_vllm_sr",
             lambda: called.append(True),
         )
-        DockerBackend().teardown()
+        ContainerBackend().teardown()
         assert called
 
     def test_is_running_false_when_not_found(self, monkeypatch):
         monkeypatch.setattr(
-            "cli.docker_backend.docker_container_status",
+            "cli.container_backend.container_status",
             lambda _: "not found",
         )
-        assert DockerBackend().is_running() is False
+        assert ContainerBackend().is_running() is False
 
     def test_is_running_true_when_split_dashboard_container_running(self, monkeypatch):
         monkeypatch.setattr(
-            "cli.docker_backend.docker_container_status",
+            "cli.container_backend.container_status",
             lambda name: "running" if "dashboard" in name else "not found",
         )
-        assert DockerBackend().is_running() is True
+        assert ContainerBackend().is_running() is True
 
     def test_get_dashboard_url_prefers_split_dashboard_container(self, monkeypatch):
         monkeypatch.setattr(
-            "cli.docker_backend.docker_container_status",
+            "cli.container_backend.container_status",
             lambda name: "running" if "dashboard" in name else "not found",
         )
-        assert DockerBackend().get_dashboard_url() == "http://localhost:8700"
+        assert ContainerBackend().get_dashboard_url() == "http://localhost:8700"
 
 
 # ---------------------------------------------------------------------------

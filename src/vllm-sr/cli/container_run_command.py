@@ -3,7 +3,7 @@
 import os
 
 from cli.consts import PLATFORM_AMD
-from cli.docker_images import _normalize_platform
+from cli.container_images import _normalize_platform
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -67,7 +67,13 @@ def append_amd_gpu_passthrough(cmd, normalized_platform):
 
 
 def append_host_gateway(cmd, runtime):
-    if runtime == "docker":
+    """Map host.docker.internal to the container host.
+
+    Docker has supported ``--add-host=...:host-gateway`` since 20.10. Podman
+    has supported the same magic value since 4.7. Both runtimes use the same
+    flag spelling, so we add it unconditionally for the supported runtimes.
+    """
+    if runtime in ("docker", "podman"):
         cmd.append("--add-host=host.docker.internal:host-gateway")
 
 
@@ -99,7 +105,7 @@ def maybe_append_amd_gpu_passthrough(cmd, enable_amd_gpu: bool):
         append_amd_gpu_passthrough(cmd, _normalize_platform(PLATFORM_AMD))
 
 
-def append_nvidia_gpu_passthrough(cmd):
+def append_nvidia_gpu_passthrough(cmd, runtime: str):
     passthrough_enabled = os.getenv("VLLM_SR_NVIDIA_GPU_PASSTHROUGH", "1").lower()
     if passthrough_enabled in ["0", "false", "no", "off"]:
         log.info(
@@ -107,11 +113,19 @@ def append_nvidia_gpu_passthrough(cmd):
         )
         return
 
+    if runtime == "podman":
+        # Podman uses CDI (`--device nvidia.com/gpu=all`); fall back to passing
+        # `--gpus all` only for Docker, which understands the nvidia container
+        # toolkit shim natively.
+        cmd.extend(["--device", "nvidia.com/gpu=all"])
+        log.info("NVIDIA GPU passthrough enabled via CDI (--device nvidia.com/gpu=all)")
+        return
+
     cmd.extend(["--gpus", "all"])
     cmd.extend(["--runtime", "nvidia"])
     log.info("NVIDIA GPU passthrough enabled (--gpus all --runtime nvidia)")
 
 
-def maybe_append_nvidia_gpu_passthrough(cmd, enable_nvidia_gpu: bool):
+def maybe_append_nvidia_gpu_passthrough(cmd, enable_nvidia_gpu: bool, runtime: str):
     if enable_nvidia_gpu:
-        append_nvidia_gpu_passthrough(cmd)
+        append_nvidia_gpu_passthrough(cmd, runtime)
