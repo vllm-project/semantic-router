@@ -7,7 +7,8 @@ set -euo pipefail
 # NVIDIA counterpart of bench-long-context.sh (which targets AMD ROCm). Same
 # methodology and metric: it drives jailbreak / domain / PII signal extraction
 # through Envoy ext_proc at ~500/2K/8K/16K token prompts and reports the
-# Prometheus `llm_signal_extraction_latency_seconds` histogram, CPU vs GPU.
+# Prometheus `llm_signal_extraction_latency_seconds` histogram, CPU vs GPU,
+# plus client-side end-to-end latency and a CPU/GPU speedup table.
 #
 # Differences from the ROCm script:
 #   - GPU is attached with `--gpus all` (ROCm used --device=/dev/kfd/dri).
@@ -172,13 +173,25 @@ stop_containers() {
 
 scrape_metrics() { curl -s "$METRICS_URL" > "$1" 2>/dev/null; }
 
+# mode sz count label -> sends `count` requests; when label != "warmup" also
+# records client wall-clock latency + HTTP code to an e2e CSV for that size.
 send_requests() {
-    local sz=$1 count=$2 payload
+    local mode=$1 sz=$2 count=$3 label=$4 payload
     payload=$(generate_prompt "$sz")
-    for _ in $(seq 1 "$count"); do
-        curl -s -o /dev/null --max-time 300 \
+    local csv=""
+    if [ "$label" != warmup ]; then
+        csv="$RESULTS_DIR/e2e-${mode}-${sz}-${TIMESTAMP}.csv"
+        echo "idx,latency_ms,http_code" > "$csv"
+    fi
+    local i start_ns end_ns http_code latency_ms
+    for i in $(seq 1 "$count"); do
+        start_ns=$(date +%s%N)
+        http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 300 \
             -X POST "http://localhost:${ENVOY_PORT}/v1/chat/completions" \
-            -H "Content-Type: application/json" -d "$payload" 2>/dev/null || true
+            -H "Content-Type: application/json" -d "$payload" 2>/dev/null || echo "000")
+        end_ns=$(date +%s%N)
+        latency_ms=$(( (end_ns - start_ns) / 1000000 ))
+        [ -n "$csv" ] && echo "${i},${latency_ms},${http_code}" >> "$csv"
     done
 }
 
@@ -210,6 +223,28 @@ print(f'{dc:.0f} {(as_-bs)/dc*1000:.1f} {pct(.5):.1f} {pct(.95):.1f} {pct(.99):.
 "
 }
 
+# e2e-csv -> "n avg p50 p95 min max" (ms); python for portability (host awk may
+# lack asort). Reads the latency_ms column, ignoring the header.
+compute_e2e_stats() {
+    python3 -c "
+import sys
+vals = []
+with open('$1') as f:
+    next(f, None)
+    for line in f:
+        parts = line.strip().split(',')
+        if len(parts) >= 2:
+            try: vals.append(float(parts[1]))
+            except ValueError: pass
+if not vals:
+    print('0 0 0 0 0 0'); sys.exit()
+vals.sort()
+n = len(vals)
+def pct(p): return vals[min(n - 1, int(n * p))]
+print(f'{n} {sum(vals)/n:.0f} {pct(.5):.0f} {pct(.95):.0f} {vals[0]:.0f} {vals[-1]:.0f}')
+"
+}
+
 run_phase() {
     local mode=$1 config_file envoy_cfg
     config_file=$(generate_config "$mode")
@@ -217,10 +252,10 @@ run_phase() {
     log "=== PHASE ${mode^^} ==="
     start_router "$mode" "$config_file" || return 1
     start_envoy "$envoy_cfg"
-    for sz in "${SIZES[@]}"; do send_requests "$sz" "$WARMUP_REQUESTS"; done
+    for sz in "${SIZES[@]}"; do send_requests "$mode" "$sz" "$WARMUP_REQUESTS" warmup; done
     for sz in "${SIZES[@]}"; do
         scrape_metrics "$RESULTS_DIR/m-${mode}-before-${sz}-${TIMESTAMP}.txt"
-        send_requests "$sz" "$REQUESTS_PER_SIZE"
+        send_requests "$mode" "$sz" "$REQUESTS_PER_SIZE" bench
         scrape_metrics "$RESULTS_DIR/m-${mode}-after-${sz}-${TIMESTAMP}.txt"
         log "  ${mode} ${sz}tok done"
     done
@@ -239,6 +274,19 @@ generate_report() {
         echo "**Metric**: Prometheus \`llm_signal_extraction_latency_seconds\`"
         echo "**Model**: mmBERT-32K (32K context)"
         echo ""
+        echo "## End-to-End Latency by Prompt Size (client wall-clock)"
+        echo ""
+        echo "| Tokens | Mode | N | Avg (ms) | P50 | P95 | Min | Max |"
+        echo "|--------|------|---|----------|-----|-----|-----|-----|"
+        for sz in "${SIZES[@]}"; do
+            for mode in cpu gpu; do
+                local ef="$RESULTS_DIR/e2e-${mode}-${sz}-${TIMESTAMP}.csv"
+                [ -f "$ef" ] || continue
+                read -r n avg p50 p95 mn mx <<< "$(compute_e2e_stats "$ef")"
+                [ "$n" != 0 ] && echo "| ~${sz} | ${mode^^} | $n | $avg | $p50 | $p95 | $mn | $mx |"
+            done
+        done
+        echo ""
         for signal in domain jailbreak pii; do
             echo "## ${signal}"
             echo ""
@@ -255,6 +303,26 @@ generate_report() {
             done
             echo ""
         done
+        echo "## GPU Speedup by Prompt Size (CPU avg ÷ GPU avg, signal extraction)"
+        echo ""
+        echo "| Tokens | Signal | CPU Avg (ms) | GPU Avg (ms) | Speedup |"
+        echo "|--------|--------|--------------|--------------|---------|"
+        for sz in "${SIZES[@]}"; do
+            for signal in domain jailbreak pii; do
+                local cb="$RESULTS_DIR/m-cpu-before-${sz}-${TIMESTAMP}.txt"
+                local ca="$RESULTS_DIR/m-cpu-after-${sz}-${TIMESTAMP}.txt"
+                local gb="$RESULTS_DIR/m-gpu-before-${sz}-${TIMESTAMP}.txt"
+                local ga="$RESULTS_DIR/m-gpu-after-${sz}-${TIMESTAMP}.txt"
+                [ -f "$cb" ] && [ -f "$ca" ] && [ -f "$gb" ] && [ -f "$ga" ] || continue
+                read -r cn cavg _ _ _ <<< "$(histogram_stats "$cb" "$ca" "$signal")"
+                read -r gn gavg _ _ _ <<< "$(histogram_stats "$gb" "$ga" "$signal")"
+                [ "$cn" != 0 ] && [ "$gn" != 0 ] || continue
+                local speedup
+                speedup=$(python3 -c "ca, ga = $cavg, $gavg; print(f'{ca/ga:.2f}x' if ga > 0 else 'N/A')" 2>/dev/null || echo "N/A")
+                echo "| ~${sz} | ${signal} | $cavg | $gavg | $speedup |"
+            done
+        done
+        echo ""
     } > "$report"
     log "Report: $report"
     echo ""

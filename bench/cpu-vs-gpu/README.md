@@ -92,6 +92,10 @@ All ports are env-overridable (`EXTPROC_PORT`, `API_PORT`, `METRICS_PORT`,
 8091) are already bound. A built-in stub upstream answers on `STUB_PORT` so
 requests return 200; the signal-extraction metric is recorded regardless.
 
+The report (`results/report-cuda-*.md`) tables, per prompt size: client-side
+end-to-end latency (avg/P50/P95/min/max), the per-signal histogram latency
+(avg/P50/P95/P99) CPU vs GPU, and a CPU-vs-GPU speedup ratio per signal.
+
 Reference numbers (RTX 4090, `vllm-sr-cuda`): GPU signal extraction stays in the
 single-digit-to-low-tens of ms across 500–16K tokens for all three classifiers,
 versus ~1–3 s on CPU — a ~1–2 order-of-magnitude speedup. See
