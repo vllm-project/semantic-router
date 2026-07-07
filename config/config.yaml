@@ -33,6 +33,8 @@ providers:
         analytics: qwen3-routing
       backend_refs:
         - name: local-primary
+          backend_id: qwen3-8b-local-primary
+          engine_kind: vllm
           endpoint: 127.0.0.1:8000
           protocol: http
           weight: 80

@@ -282,6 +282,8 @@ type ClassifierVLLMEndpoint struct {
 
 type VLLMEndpoint struct {
 	Name                string `yaml:"name"`
+	BackendID           string `yaml:"backend_id,omitempty"`
+	EngineKind          string `yaml:"engine_kind,omitempty"`
 	Address             string `yaml:"address"`
 	Port                int    `yaml:"port"`
 	Weight              int    `yaml:"weight,omitempty"`

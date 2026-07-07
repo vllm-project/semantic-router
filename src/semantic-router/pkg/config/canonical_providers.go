@@ -29,6 +29,8 @@ type CanonicalProviderModel struct {
 // CanonicalBackendRef defines one physical backend target for a provider model.
 type CanonicalBackendRef struct {
 	Name         string            `yaml:"name,omitempty"`
+	BackendID    string            `yaml:"backend_id,omitempty"`
+	EngineKind   string            `yaml:"engine_kind,omitempty"`
 	Endpoint     string            `yaml:"endpoint,omitempty"`
 	Protocol     string            `yaml:"protocol,omitempty"`
 	Weight       int               `yaml:"weight,omitempty"`

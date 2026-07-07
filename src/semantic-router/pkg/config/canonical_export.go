@@ -376,6 +376,8 @@ func canonicalProviderBackendRefs(
 func canonicalBackendRefFromRuntime(endpoint VLLMEndpoint, fallbackAPIKey string, profile ProviderProfile) CanonicalBackendRef {
 	ref := CanonicalBackendRef{
 		Name:       endpoint.Name,
+		BackendID:  endpoint.BackendID,
+		EngineKind: endpoint.EngineKind,
 		Protocol:   endpoint.Protocol,
 		Weight:     endpoint.Weight,
 		Type:       endpoint.Type,

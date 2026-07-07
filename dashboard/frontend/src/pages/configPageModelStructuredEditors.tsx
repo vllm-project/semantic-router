@@ -15,6 +15,8 @@ interface StructuredModelFieldProps {
 
 const backendRefFields: ObjectEditorField<BackendRefEntry>[] = [
   { key: 'name', label: 'Reference name', placeholder: 'local-primary' },
+  { key: 'backend_id', label: 'Backend ID', placeholder: 'pod-a-0' },
+  { key: 'engine_kind', label: 'Engine kind', placeholder: 'vllm' },
   { key: 'type', label: 'Backend type', placeholder: 'chat' },
   { key: 'endpoint', label: 'Endpoint', placeholder: '127.0.0.1:8000', fullWidth: true },
   {

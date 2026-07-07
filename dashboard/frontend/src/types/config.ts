@@ -14,6 +14,8 @@
 
 export interface ProviderEndpoint {
   name: string
+  backend_id?: string
+  engine_kind?: string
   weight: number
   endpoint: string  // e.g., "host.docker.internal:8000" or "api.openai.com"
   protocol: 'http' | 'https'
@@ -298,6 +300,8 @@ export interface PythonCLIConfig {
 
 export interface LegacyVLLMEndpoint {
   name: string
+  backend_id?: string
+  engine_kind?: string
   address: string
   port: number
   weight: number
