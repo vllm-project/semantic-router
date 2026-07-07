@@ -257,6 +257,11 @@ func (r *Recorder) UpdateToolTrace(id string, trace ToolTrace) error {
 	return r.storage.UpdateToolTrace(ctx, id, trace)
 }
 
+func (r *Recorder) UpdateRouteDiagnostics(id string, diagnostics RouteDiagnostics) error {
+	ctx := context.Background()
+	return r.storage.UpdateRouteDiagnostics(ctx, id, diagnostics)
+}
+
 // Reader returns the underlying store.Reader so that read-only consumers (e.g.
 // lookup table builders) can query historical records without needing write access.
 func (r *Recorder) Reader() store.Reader {

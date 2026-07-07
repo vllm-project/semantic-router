@@ -33,6 +33,7 @@ func buildReplayRouteDiagnostics(
 		SelectedModel:    finalModel,
 		SessionAction:    replaySessionActionNone,
 	}
+	applyBackendRouteDiagnostics(ctx, diagnostics)
 
 	if policy, ok := protectionLearningPolicyForContext(ctx); ok {
 		diagnostics.SessionPolicyApplied = true
@@ -48,6 +49,26 @@ func buildReplayRouteDiagnostics(
 	}
 
 	return diagnostics
+}
+
+func applyBackendRouteDiagnostics(ctx *RequestContext, diagnostics *routerreplay.RouteDiagnostics) {
+	if ctx == nil || diagnostics == nil {
+		return
+	}
+	diagnostics.RequestedBackendID = ctx.RequestedBackendID
+	diagnostics.RequestedReplicaID = ctx.RequestedReplicaID
+	diagnostics.ActualBackendID = ctx.ActualBackendID
+	diagnostics.ActualReplicaID = ctx.ActualReplicaID
+	diagnostics.ActualUpstream = ctx.ActualUpstream
+	diagnostics.BackendPolicyReason = ctx.BackendPolicyReason
+	diagnostics.BackendFallbackReason = ctx.BackendFallbackReason
+	if ctx.RequestedBackendID != "" {
+		diagnostics.BackendSelectionMode = backendSelectionModeRequested
+		return
+	}
+	if ctx.BackendFallbackReason != "" {
+		diagnostics.BackendSelectionMode = backendSelectionModeFailOpen
+	}
 }
 
 func buildReplayLearningDiagnostics(ctx *RequestContext) *routerreplay.LearningDiagnostics {

@@ -556,6 +556,45 @@ func (p *PostgresStore) UpdateToolTrace(ctx context.Context, id string, trace To
 	return fn()
 }
 
+// UpdateRouteDiagnostics updates route diagnostics for a record.
+func (p *PostgresStore) UpdateRouteDiagnostics(ctx context.Context, id string, diagnostics RouteDiagnostics) error {
+	diagnosticsJSON, err := marshalReplayOptionalJSON(&diagnostics)
+	if err != nil {
+		return fmt.Errorf("failed to marshal route diagnostics: %w", err)
+	}
+
+	//nolint:gosec // tableName is validated during store creation
+	query := fmt.Sprintf(`
+		UPDATE %s
+		SET route_diagnostics = $2
+		WHERE id = $1
+	`, p.tableName)
+
+	fn := func() error {
+		result, err := p.db.ExecContext(ctx, query, id, diagnosticsJSON)
+		if err != nil {
+			return fmt.Errorf("failed to update route diagnostics: %w", err)
+		}
+
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return fmt.Errorf("record with ID %s not found", id)
+		}
+
+		return nil
+	}
+
+	if p.asyncWrites {
+		p.asyncChan <- asyncOp{fn: fn}
+		return nil
+	}
+
+	return fn()
+}
+
 // cleanupOldRecords removes records older than the TTL.
 func (p *PostgresStore) cleanupOldRecords(ctx context.Context) error {
 	if p.ttl == 0 {

@@ -479,6 +479,39 @@ func (r *RedisStore) UpdateToolTrace(ctx context.Context, id string, trace ToolT
 	return fn()
 }
 
+// UpdateRouteDiagnostics updates route diagnostics for a record.
+func (r *RedisStore) UpdateRouteDiagnostics(ctx context.Context, id string, diagnostics RouteDiagnostics) error {
+	record, found, err := r.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	record.RouteDiagnostics = cloneRouteDiagnostics(&diagnostics)
+
+	data, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("failed to marshal record: %w", err)
+	}
+
+	key := r.keyPrefix + id
+	fn := func() error {
+		if r.ttl > 0 {
+			return r.client.Set(ctx, key, data, r.ttl).Err()
+		}
+		return r.client.Set(ctx, key, data, 0).Err()
+	}
+
+	if r.asyncWrites {
+		r.asyncChan <- asyncOp{fn: fn}
+		return nil
+	}
+
+	return fn()
+}
+
 // Close closes the Redis client and stops async writer.
 func (r *RedisStore) Close() error {
 	if r.asyncWrites {

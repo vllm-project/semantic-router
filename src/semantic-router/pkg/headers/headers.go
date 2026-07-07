@@ -41,6 +41,27 @@ const (
 	// This header is set during the routing decision phase.
 	SelectedModel = "x-selected-model"
 
+	// VSRSelectedBackend is an internal Envoy contract header. The router sets
+	// it only after backend telemetry policy selects a concrete backend; Envoy
+	// consumes it for subset load balancing and strips it before forwarding.
+	VSRSelectedBackend = "x-vsr-selected-backend"
+
+	// VSRSelectedReplica optionally narrows backend selection to an engine
+	// replica when telemetry provides replica identity.
+	VSRSelectedReplica = "x-vsr-selected-replica"
+
+	// VSRActualBackend is written by Envoy from selected upstream metadata and
+	// consumed by extproc for replay diagnostics. It is removed before the
+	// response reaches clients.
+	VSRActualBackend = "x-vsr-actual-backend"
+
+	// VSRActualReplica carries the actual upstream replica when Envoy endpoint
+	// metadata provides one.
+	VSRActualReplica = "x-vsr-actual-replica"
+
+	// VSRActualUpstream carries Envoy's upstream host for replay diagnostics.
+	VSRActualUpstream = "x-vsr-actual-upstream"
+
 	// VSRSkipProcessing opts the request out of all router processing when
 	// global.router.skip_processing.enabled is true. Value: "true" (case-insensitive).
 	// See https://github.com/vllm-project/semantic-router/issues/1808.

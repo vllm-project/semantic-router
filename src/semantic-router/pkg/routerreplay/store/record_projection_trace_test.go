@@ -27,11 +27,16 @@ func TestRecordJSONRoundTripProjectionTrace(t *testing.T) {
 	rec := Record{
 		ID: "rid",
 		RouteDiagnostics: &RouteDiagnostics{
-			Decision:             "agentic_session_route",
-			PreviousModel:        "qwen/qwen3.6-rocm",
-			SelectedModel:        "google/gemini-2.5-flash-lite",
-			SessionPolicyApplied: true,
-			SessionAction:        "switch",
+			Decision:              "agentic_session_route",
+			PreviousModel:         "qwen/qwen3.6-rocm",
+			SelectedModel:         "google/gemini-2.5-flash-lite",
+			SessionPolicyApplied:  true,
+			SessionAction:         "switch",
+			RequestedBackendID:    "qwen-primary",
+			ActualBackendID:       "qwen-secondary",
+			ActualReplicaID:       "engine-0",
+			ActualUpstream:        "10.0.0.2:8000",
+			BackendFallbackReason: "envoy_subset_fallback",
 		},
 		Signals:         Signal{},
 		ProjectionTrace: tr,
@@ -86,6 +91,13 @@ func assertRouteDiagnosticsRoundTrip(t *testing.T, got *RouteDiagnostics) {
 
 	if got == nil || got.SessionAction != "switch" {
 		t.Fatalf("route diagnostics = %+v", got)
+	}
+	if got.RequestedBackendID != "qwen-primary" ||
+		got.ActualBackendID != "qwen-secondary" ||
+		got.ActualReplicaID != "engine-0" ||
+		got.ActualUpstream != "10.0.0.2:8000" ||
+		got.BackendFallbackReason != "envoy_subset_fallback" {
+		t.Fatalf("backend route diagnostics = %+v", got)
 	}
 }
 

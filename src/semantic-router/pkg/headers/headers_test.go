@@ -16,6 +16,11 @@ func TestHeaderConstants(t *testing.T) {
 		// Request headers
 		{"RequestID", RequestID, "x-request-id"},
 		{"SelectedModel", SelectedModel, "x-selected-model"},
+		{"VSRSelectedBackend", VSRSelectedBackend, "x-vsr-selected-backend"},
+		{"VSRSelectedReplica", VSRSelectedReplica, "x-vsr-selected-replica"},
+		{"VSRActualBackend", VSRActualBackend, "x-vsr-actual-backend"},
+		{"VSRActualReplica", VSRActualReplica, "x-vsr-actual-replica"},
+		{"VSRActualUpstream", VSRActualUpstream, "x-vsr-actual-upstream"},
 		{"VSRSkipProcessing", VSRSkipProcessing, "x-vsr-skip-processing"},
 		// VSR headers
 		{"VSRSelectedCategory", VSRSelectedCategory, "x-vsr-selected-category"},

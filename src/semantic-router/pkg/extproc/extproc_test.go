@@ -2313,7 +2313,9 @@ func TestVSRHeadersNotAddedOnCacheHit(t *testing.T) {
 
 	// Verify VSR headers were NOT added due to cache hit
 	headerMutation := response.GetResponseHeaders().GetResponse().GetHeaderMutation()
-	assert.Nil(t, headerMutation, "HeaderMutation should be nil for cache hit")
+	require.NotNil(t, headerMutation)
+	assert.Empty(t, headerMutation.SetHeaders, "cache hit must not emit VSR response headers")
+	assert.ElementsMatch(t, internalBackendHeaders(), headerMutation.RemoveHeaders)
 }
 
 func TestVSRHeadersNotAddedOnErrorResponse(t *testing.T) {

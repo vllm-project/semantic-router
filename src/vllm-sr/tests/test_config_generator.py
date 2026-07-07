@@ -101,6 +101,12 @@ def _model_route(rendered_config, model_name):
     raise AssertionError(f"route for model {model_name!r} not found")
 
 
+def _http_filters(rendered_config):
+    listener = rendered_config["static_resources"]["listeners"][0]
+    hcm = listener["filter_chains"][0]["filters"][0]["typed_config"]
+    return hcm["http_filters"]
+
+
 def test_backend_ref_ip_port_path_produces_correct_envoy_cluster_and_route(
     tmp_path, monkeypatch
 ):
@@ -156,6 +162,102 @@ routing:
     assert route_action["host_rewrite_literal"] == "10.0.0.1:8000"
     assert route_action["regex_rewrite"]["pattern"]["regex"] == "^/v1(.*)$"
     assert route_action["regex_rewrite"]["substitution"] == "/v1\\1"
+
+
+def test_backend_refs_generate_subset_lb_contract(tmp_path, monkeypatch):
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.3
+listeners:
+  - name: "http-8899"
+    address: "0.0.0.0"
+    port: 8899
+providers:
+  defaults:
+    default_model: "test-model"
+  models:
+    - name: "test-model"
+      backend_refs:
+        - name: "primary"
+          backend_id: "test-primary"
+          engine_kind: "vllm"
+          endpoint: "10.0.0.1:8000"
+          weight: 100
+        - name: "secondary"
+          backend_id: "test-secondary"
+          engine_kind: "vllm"
+          endpoint: "10.0.0.2:8000"
+          weight: 1
+routing:
+  modelCards:
+    - name: "test-model"
+  decisions:
+    - name: "default-route"
+      description: "default route"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "test-model"
+          use_reasoning: false
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+
+    filters = _http_filters(rendered)
+    names = [f["name"] for f in filters]
+    assert (
+        names.index("envoy.filters.http.ext_proc")
+        < names.index("envoy.filters.http.header_to_metadata")
+        < names.index("envoy.filters.http.router")
+    )
+
+    header_to_metadata = filters[names.index("envoy.filters.http.header_to_metadata")]
+    rule = header_to_metadata["typed_config"]["request_rules"][0]
+    assert rule["header"] == "x-vsr-selected-backend"
+    assert rule["on_header_present"]["metadata_namespace"] == "envoy.lb"
+    assert rule["on_header_present"]["key"] == "backend_id"
+    assert rule["remove"] is True
+
+    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    assert cluster["lb_subset_config"]["fallback_policy"] == "ANY_ENDPOINT"
+    assert cluster["lb_subset_config"]["subset_selectors"] == [{"keys": ["backend_id"]}]
+    endpoints = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"]
+    assert endpoints[0]["metadata"]["filter_metadata"]["envoy.lb"] == {
+        "backend_id": "test-primary",
+        "backend_name": "primary",
+        "replica_id": "primary",
+        "engine_kind": "vllm",
+    }
+    assert endpoints[1]["metadata"]["filter_metadata"]["envoy.lb"] == {
+        "backend_id": "test-secondary",
+        "backend_name": "secondary",
+        "replica_id": "secondary",
+        "engine_kind": "vllm",
+    }
+
+    route = _model_route(rendered, "test-model")
+    response_headers = {
+        item["header"]["key"]: item["header"]["value"]
+        for item in route["response_headers_to_add"]
+    }
+    assert response_headers["x-vsr-actual-backend"] == (
+        "%UPSTREAM_METADATA(envoy.lb:backend_id):Z%"
+    )
+    assert response_headers["x-vsr-actual-replica"] == (
+        "%UPSTREAM_METADATA(envoy.lb:replica_id):Z%"
+    )
+    assert response_headers["x-vsr-actual-upstream"] == "%UPSTREAM_HOST%"
+
+    listener = rendered["static_resources"]["listeners"][0]
+    vhost = listener["filter_chains"][0]["filters"][0]["typed_config"]["route_config"][
+        "virtual_hosts"
+    ][0]
+    assert "x-vsr-selected-backend" in vhost["request_headers_to_remove"]
 
 
 def test_backend_ref_domain_with_path_produces_correct_envoy_cluster_and_route(

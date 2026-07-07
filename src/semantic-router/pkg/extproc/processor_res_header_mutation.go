@@ -27,8 +27,9 @@ const lossinessHeaderSizeLimit = 4096
 const protocolDefault = "openai"
 
 type responseHeaderMutationBuilder struct {
-	setHeaders []*core.HeaderValueOption
-	seen       map[string]struct{}
+	setHeaders    []*core.HeaderValueOption
+	removeHeaders []string
+	seen          map[string]struct{}
 }
 
 func newResponseHeaderMutationBuilder() *responseHeaderMutationBuilder {
@@ -52,6 +53,10 @@ func (builder *responseHeaderMutationBuilder) addString(key string, value string
 			RawValue: []byte(value),
 		},
 	})
+}
+
+func (builder *responseHeaderMutationBuilder) remove(names ...string) {
+	builder.removeHeaders = append(builder.removeHeaders, names...)
 }
 
 func (builder *responseHeaderMutationBuilder) addBool(key string, value bool) {
@@ -242,10 +247,13 @@ func normalizeProtocol(value string) string {
 }
 
 func (builder *responseHeaderMutationBuilder) mutation() *ext_proc.HeaderMutation {
-	if len(builder.setHeaders) == 0 {
+	if len(builder.setHeaders) == 0 && len(builder.removeHeaders) == 0 {
 		return nil
 	}
-	return &ext_proc.HeaderMutation{SetHeaders: builder.setHeaders}
+	return &ext_proc.HeaderMutation{
+		SetHeaders:    builder.setHeaders,
+		RemoveHeaders: builder.removeHeaders,
+	}
 }
 
 func buildResponseHeaderMutation(
@@ -257,6 +265,7 @@ func buildResponseHeaderMutation(
 	}
 
 	builder := newResponseHeaderMutationBuilder()
+	builder.remove(internalBackendHeaders()...)
 
 	// The keystone headers, protocol markers, and protocol warnings ride on
 	// every non-cache-hit response (success or 4xx/5xx). Cache-hit responses

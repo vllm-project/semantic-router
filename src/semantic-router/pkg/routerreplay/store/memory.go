@@ -211,6 +211,20 @@ func (m *MemoryStore) UpdateToolTrace(ctx context.Context, id string, trace Tool
 	return nil
 }
 
+// UpdateRouteDiagnostics updates route diagnostics for a record.
+func (m *MemoryStore) UpdateRouteDiagnostics(ctx context.Context, id string, diagnostics RouteDiagnostics) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rec, ok := m.byID[id]
+	if !ok {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	rec.RouteDiagnostics = cloneRouteDiagnostics(&diagnostics)
+	return nil
+}
+
 // Close is a no-op for memory storage.
 func (m *MemoryStore) Close() error {
 	return nil
