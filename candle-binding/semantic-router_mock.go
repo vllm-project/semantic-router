@@ -11,8 +11,9 @@ import (
 
 // Mock implementation variables
 var (
-	initOnce         sync.Once
-	modelInitialized bool
+	initOnce             sync.Once
+	modelInitialized     bool
+	embeddingModelsReady bool
 )
 
 // TokenizeResult represents the result of tokenization
@@ -198,6 +199,7 @@ func GetEmbeddingBatched(text string, modelType string, targetDim int) (*Embeddi
 // InitEmbeddingModels initializes Qwen3 and/or Gemma embedding models
 func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, mmBertModelPath string, useCPU bool) error {
 	log.Printf("[MOCK] Initializing Embedding Models")
+	embeddingModelsReady = true
 	return nil
 }
 
@@ -392,6 +394,11 @@ func GetEmbeddingModelsInfo() (*ModelsInfoOutput, error) {
 			{ModelName: "mock-model", IsLoaded: true, MaxSequenceLength: 512, DefaultDimension: 384, ModelPath: "/mock/path"},
 		},
 	}, nil
+}
+
+// IsEmbeddingReady returns whether the embedding models have been initialized.
+func IsEmbeddingReady() bool {
+	return embeddingModelsReady
 }
 
 // FindMostSimilar finds the most similar text

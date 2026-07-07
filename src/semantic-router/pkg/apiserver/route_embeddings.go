@@ -22,6 +22,12 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 		return
 	}
 
+	if !candle_binding.IsEmbeddingReady() {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+			"Embedding models are not initialized — configure an embedding model in your router config")
+		return
+	}
+
 	results, totalProcessingTime, err := buildEmbeddingResults(req)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "EMBEDDING_GENERATION_FAILED",
@@ -158,6 +164,12 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		return
 	}
 
+	if !candle_binding.IsEmbeddingReady() {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+			"Embedding models are not initialized — configure an embedding model in your router config")
+		return
+	}
+
 	// Calculate similarity
 	result, err := candle_binding.CalculateEmbeddingSimilarity(
 		req.Text1,
@@ -187,6 +199,12 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r *http.Request) {
 	req, ok := s.parseBatchSimilarityRequest(w, r)
 	if !ok {
+		return
+	}
+
+	if !candle_binding.IsEmbeddingReady() {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+			"Embedding models are not initialized — configure an embedding model in your router config")
 		return
 	}
 

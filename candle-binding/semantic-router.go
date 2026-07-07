@@ -455,6 +455,7 @@ var (
 	initOnce                              sync.Once
 	initErr                               error
 	modelInitialized                      bool
+	embeddingModelsReady                  bool
 	classifierInitOnce                    sync.Once
 	classifierInitErr                     error
 	piiClassifierInitOnce                 sync.Once
@@ -906,6 +907,7 @@ func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, mmBertModelPath string,
 		return fmt.Errorf("failed to initialize embedding models")
 	}
 
+	embeddingModelsReady = true
 	log.Printf("INFO: Embedding models initialized successfully")
 
 	return nil
@@ -1309,6 +1311,7 @@ func InitEmbeddingModelsWithMmBert(qwen3ModelPath, gemmaModelPath, mmBertModelPa
 		return fmt.Errorf("failed to initialize embedding models with mmBERT")
 	}
 
+	embeddingModelsReady = true
 	log.Printf("INFO: Embedding models initialized (with mmBERT 2D Matryoshka support)")
 	return nil
 }
@@ -1912,6 +1915,12 @@ func IsModelInitialized() (rustState bool, goState bool) {
 		modelInitialized = true
 	}
 	return rustInitialized, modelInitialized
+}
+
+// IsEmbeddingReady returns whether the embedding models (Qwen3/Gemma/mmBERT) have been
+// successfully initialized and are ready to serve embedding requests.
+func IsEmbeddingReady() bool {
+	return embeddingModelsReady
 }
 
 // InitClassifier initializes the BERT classifier with the specified model path and number of classes
