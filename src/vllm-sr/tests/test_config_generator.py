@@ -246,10 +246,10 @@ routing:
         for item in route["response_headers_to_add"]
     }
     assert response_headers["x-vsr-actual-backend"] == (
-        "%UPSTREAM_METADATA(envoy.lb:backend_id):Z%"
+        "%UPSTREAM_METADATA(envoy.lb:backend_id)%"
     )
     assert response_headers["x-vsr-actual-replica"] == (
-        "%UPSTREAM_METADATA(envoy.lb:replica_id):Z%"
+        "%UPSTREAM_METADATA(envoy.lb:replica_id)%"
     )
     assert response_headers["x-vsr-actual-upstream"] == "%UPSTREAM_HOST%"
 

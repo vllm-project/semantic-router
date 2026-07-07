@@ -61,11 +61,11 @@ static_resources:
                 response_headers_to_add:
                 - header:
                     key: "x-vsr-actual-backend"
-                    value: "%UPSTREAM_METADATA(envoy.lb:backend_id):Z%"
+                    value: "%UPSTREAM_METADATA(envoy.lb:backend_id)%"
                   append_action: OVERWRITE_IF_EXISTS_OR_ADD
                 - header:
                     key: "x-vsr-actual-replica"
-                    value: "%UPSTREAM_METADATA(envoy.lb:replica_id):Z%"
+                    value: "%UPSTREAM_METADATA(envoy.lb:replica_id)%"
                   append_action: OVERWRITE_IF_EXISTS_OR_ADD
                 - header:
                     key: "x-vsr-actual-upstream"
@@ -116,11 +116,11 @@ static_resources:
                 response_headers_to_add:
                 - header:
                     key: "x-vsr-actual-backend"
-                    value: "%UPSTREAM_METADATA(envoy.lb:backend_id):Z%"
+                    value: "%UPSTREAM_METADATA(envoy.lb:backend_id)%"
                   append_action: OVERWRITE_IF_EXISTS_OR_ADD
                 - header:
                     key: "x-vsr-actual-replica"
-                    value: "%UPSTREAM_METADATA(envoy.lb:replica_id):Z%"
+                    value: "%UPSTREAM_METADATA(envoy.lb:replica_id)%"
                   append_action: OVERWRITE_IF_EXISTS_OR_ADD
                 - header:
                     key: "x-vsr-actual-upstream"
