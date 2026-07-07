@@ -102,6 +102,13 @@ versus ~1–3 s on CPU — a ~1–2 order-of-magnitude speedup. See
 [`deploy/nvidia/README.md`](../../deploy/nvidia/README.md) for the full table
 and caveats.
 
+Note on the "long-context" sweep: the classifier hard-caps input at 512 tokens
+(`MAX_CLASSIFICATION_SEQ_LEN` in `onnx-binding/src/model_architectures/classification/mmbert_classifier.rs`), so classifier latency
+is roughly flat across the 500→16K prompt sizes — the larger prompts exercise
+tokenization and the ext_proc path, not deeper inference. This is intended
+behavior, not a benchmark artifact; the sweep confirms latency stays bounded as
+prompts grow.
+
 ### Throughput / concurrency (NVIDIA CUDA)
 
 ext_proc classifies one request at a time (no batch knob), so throughput is
@@ -177,7 +184,11 @@ Reports are written to `results/`.
 | File | Description |
 |------|-------------|
 | `bench-3way.sh` | ONNX GPU vs ONNX CPU vs Candle CPU latency comparison |
-| `bench-long-context.sh` | CPU vs GPU, multi token-size, Prometheus metrics |
+| `bench-long-context.sh` | CPU vs GPU (AMD ROCm), multi token-size, Prometheus metrics |
+| `bench-cuda-long-context.sh` | CPU vs GPU (NVIDIA CUDA), multi token-size, Prometheus + e2e latency + speedup table |
+| `bench-cuda-throughput.sh` | CPU vs GPU (NVIDIA CUDA) throughput via concurrency sweep |
+| `load_test.py` | Concurrent request driver for `bench-cuda-throughput.sh` (stdlib only) |
+| `config-bench-cuda.yaml` | v0.3 router config for the CUDA benchmarks (all three signals) |
 | `bench-sdpa-vs-fa.sh` | SDPA vs FA on GPU, Prometheus metrics |
 | `bench-buffered-vs-streamed.sh` | BUFFERED vs STREAMED body mode, builds patched binary inside container |
 | `config-bench.yaml` | Canonical v0.3 router config template for ONNX benchmarks |

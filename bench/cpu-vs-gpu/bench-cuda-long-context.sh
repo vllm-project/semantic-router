@@ -86,14 +86,18 @@ generate_config() {
 
 generate_envoy() {
     # Reuse the shared envoy-bench.yaml, moving ext_proc/listener to our ports.
+    # The backend cluster is STATIC, so point it at the stub (STUB_PORT); the
+    # config's x-vsr-destination-endpoint header cannot redirect a STATIC cluster.
     sed -e "s/port_value: 50051/port_value: ${EXTPROC_PORT}/" \
         -e "s/port_value: 8801/port_value: ${ENVOY_PORT}/" \
+        -e "s/port_value: 8000/port_value: ${STUB_PORT}/" \
         "$SCRIPT_DIR/envoy-bench.yaml" > "$RESULTS_DIR/envoy.yaml"
     echo "$RESULTS_DIR/envoy.yaml"
 }
 
 # ---------------------------------------------------------------------------
-# Minimal OpenAI stub upstream so ext_proc's ORIGINAL_DST target answers 200.
+# Minimal OpenAI stub upstream so the STATIC backend cluster answers 200
+# (Envoy is rewritten to forward to STUB_PORT) instead of 503-ing on a dead port.
 # ---------------------------------------------------------------------------
 start_stub() {
     cat > "$RESULTS_DIR/stub_upstream.py" <<'PY'

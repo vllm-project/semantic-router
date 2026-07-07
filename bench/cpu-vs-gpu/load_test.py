@@ -13,6 +13,7 @@ measures here. Only connection errors / timeouts are dropped.
 Usage: load_test.py <url> <duration_s> <concurrency> <payload_file>
 Prints: "<concurrency> <completed> <qps> <p50> <p95> <p99>"  (latency in ms)
 """
+
 import sys
 import threading
 import time

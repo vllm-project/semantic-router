@@ -50,8 +50,11 @@ generate_config() {
 }
 
 generate_envoy() {
+    # Backend cluster is STATIC; point it at the stub (STUB_PORT) so requests
+    # get 200, not 503 — the destination header can't redirect a STATIC cluster.
     sed -e "s/port_value: 50051/port_value: ${EXTPROC_PORT}/" \
         -e "s/port_value: 8801/port_value: ${ENVOY_PORT}/" \
+        -e "s/port_value: 8000/port_value: ${STUB_PORT}/" \
         "$SCRIPT_DIR/envoy-bench.yaml" > "$RESULTS_DIR/envoy-tp.yaml"
     echo "$RESULTS_DIR/envoy-tp.yaml"
 }
