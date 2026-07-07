@@ -3948,7 +3948,9 @@ func TestMmBert32KModelConstants(t *testing.T) {
 //   - 1Cute-doggy.jpg      : CC0 1.0 Universal (author: X posid)
 //   - 1908_Ford_Model_T.jpg: Public Domain (published 1908, pre-1930)
 const (
-	wikiCatURL = "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Tuxedo_kitten.jpg/512px-Tuxedo_kitten.jpg"
+	// Direct (non-thumbnail) URL: the 512px thumbnail rendition of this file
+	// started returning HTTP 400 from Wikimedia's thumbor service.
+	wikiCatURL = "https://upload.wikimedia.org/wikipedia/commons/6/6f/Tuxedo_kitten.jpg"
 	wikiDogURL = "https://upload.wikimedia.org/wikipedia/commons/a/a7/1Cute-doggy.jpg"
 	wikiCarURL = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/1908_Ford_Model_T.jpg/960px-1908_Ford_Model_T.jpg"
 )
@@ -3957,10 +3959,20 @@ func getMultiModalModelPath() string {
 	return os.Getenv("MULTIMODAL_MODEL_PATH")
 }
 
+// wikimediaUserAgent identifies these tests per Wikimedia's User-Agent policy
+// (https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy).
+// Wikimedia returns HTTP 403 for default library User-Agent strings.
+const wikimediaUserAgent = "semantic-router-tests/1.0 (https://github.com/vllm-project/semantic-router)"
+
 func downloadImageBytes(t *testing.T, url string) []byte {
 	t.Helper()
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("Failed to build request for %s: %v", url, err)
+	}
+	req.Header.Set("User-Agent", wikimediaUserAgent)
+	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("Failed to download %s: %v", url, err)
 	}
