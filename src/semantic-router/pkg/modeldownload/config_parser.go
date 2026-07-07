@@ -213,11 +213,12 @@ var gemmaEmbeddingRequiredFiles = []string{
 // paths whose loaders hard-code these files are covered. A new embedding path
 // field needs a matching entry here to gain partial-download protection.
 func collectCandleEmbeddingRequiredFiles(cfg *config.RouterConfig, requiredFilesByModel map[string][]string) {
-	// Mirror the backend resolution in classification's
-	// ExternalModelBasedEmbeddingInitializer: empty backend defaults to
-	// candle, case- and space-insensitively. Keep the two in sync.
-	backend := strings.ToLower(strings.TrimSpace(cfg.EmbeddingModels.EmbeddingConfig.Backend))
-	if backend == "" || backend == "candle" {
+	// Use the canonical backend resolution (EmbeddingModels.EmbeddingBackend):
+	// only the candle backend hard-loads these local files at startup. The
+	// remote backend (openai_compatible, including model_type=remote with no
+	// backend set) and openvino load nothing from these paths, so requiring
+	// the files there would force downloads of models that never load.
+	if cfg.EmbeddingModels.EmbeddingBackend() == config.EmbeddingBackendCandle {
 		appendRequiredFiles(requiredFilesByModel, cfg.EmbeddingModels.Qwen3ModelPath, candleEmbeddingRequiredFiles)
 		appendRequiredFiles(requiredFilesByModel, cfg.EmbeddingModels.GemmaModelPath, gemmaEmbeddingRequiredFiles)
 		appendRequiredFiles(requiredFilesByModel, cfg.EmbeddingModels.MmBertModelPath, candleEmbeddingRequiredFiles)

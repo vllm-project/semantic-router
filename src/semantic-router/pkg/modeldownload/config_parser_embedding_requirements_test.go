@@ -15,14 +15,17 @@ import (
 
 func TestExtractRequiredFilesByModelIncludesCandleEmbeddingRuntimeFiles(t *testing.T) {
 	tests := []struct {
-		name    string
-		backend string
-		want    bool
+		name      string
+		backend   string
+		modelType string
+		want      bool
 	}{
 		{name: "empty backend defaults to candle", backend: "", want: true},
 		{name: "explicit candle backend", backend: "candle", want: true},
 		{name: "candle backend is case and space insensitive", backend: "  Candle ", want: true},
 		{name: "openvino backend adds no candle requirements", backend: "openvino", want: false},
+		{name: "openai_compatible backend adds no candle requirements", backend: "openai_compatible", want: false},
+		{name: "remote model_type with empty backend resolves remote, no candle requirements", backend: "", modelType: "remote", want: false},
 	}
 
 	for _, tt := range tests {
@@ -32,7 +35,7 @@ func TestExtractRequiredFilesByModelIncludesCandleEmbeddingRuntimeFiles(t *testi
 					EmbeddingModels: config.EmbeddingModels{
 						Qwen3ModelPath:  "models/mom-embedding-pro",
 						MmBertModelPath: "models/mmbert-embed-32k-2d-matryoshka",
-						EmbeddingConfig: config.HNSWConfig{Backend: tt.backend},
+						EmbeddingConfig: config.HNSWConfig{Backend: tt.backend, ModelType: tt.modelType},
 					},
 				},
 			}
