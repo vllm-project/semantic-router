@@ -1,12 +1,14 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -36,12 +38,17 @@ type ContrastiveJailbreakClassifier struct {
 	benignEmbeddings    map[string][]float32 // pattern text → embedding
 
 	modelType string
+	provider  embedding.Provider
 }
 
 // NewContrastiveJailbreakClassifier creates and initialises a classifier for a
 // single contrastive JailbreakRule. KB embeddings are computed eagerly using a
 // worker pool (same approach as ComplexityClassifier).
 func NewContrastiveJailbreakClassifier(rule config.JailbreakRule, defaultModelType string) (*ContrastiveJailbreakClassifier, error) {
+	return NewContrastiveJailbreakClassifierWithProvider(rule, defaultModelType, nil)
+}
+
+func NewContrastiveJailbreakClassifierWithProvider(rule config.JailbreakRule, defaultModelType string, provider embedding.Provider) (*ContrastiveJailbreakClassifier, error) {
 	modelType := defaultModelType
 	if modelType == "" {
 		modelType = "qwen3"
@@ -52,6 +59,7 @@ func NewContrastiveJailbreakClassifier(rule config.JailbreakRule, defaultModelTy
 		jailbreakEmbeddings: make(map[string][]float32),
 		benignEmbeddings:    make(map[string][]float32),
 		modelType:           modelType,
+		provider:            provider,
 	}
 
 	if err := c.preloadKBEmbeddings(); err != nil {
@@ -75,12 +83,11 @@ func (c *ContrastiveJailbreakClassifier) AnalyzeMessages(messages []string) Cont
 		if msg == "" {
 			continue
 		}
-		output, err := getEmbeddingWithModelType(msg, c.modelType, 0)
+		msgEmb, err := c.embedText(msg)
 		if err != nil {
 			logging.Warnf("[Contrastive Jailbreak] Failed to embed message %d: %v", i, err)
 			continue
 		}
-		msgEmb := output.Embedding
 
 		// max similarity to jailbreak KB
 		maxJailSim := float32(-1)
@@ -110,6 +117,17 @@ func (c *ContrastiveJailbreakClassifier) AnalyzeMessages(messages []string) Cont
 
 	result.ProcessingTime = time.Since(start)
 	return result
+}
+
+func (c *ContrastiveJailbreakClassifier) embedText(text string) ([]float32, error) {
+	if c.provider != nil {
+		return c.provider.Embed(context.Background(), text)
+	}
+	output, err := getEmbeddingWithModelType(text, c.modelType, 0)
+	if err != nil {
+		return nil, err
+	}
+	return output.Embedding, nil
 }
 
 // preloadKBEmbeddings concurrently computes embeddings for jailbreak and benign
@@ -165,11 +183,11 @@ func (c *ContrastiveJailbreakClassifier) preloadKBEmbeddings() error {
 		go func() {
 			defer wg.Done()
 			for t := range taskCh {
-				output, err := getEmbeddingWithModelType(t.text, c.modelType, 0)
+				embedding, err := c.embedText(t.text)
 				if err != nil {
 					resCh <- res{text: t.text, isJailbreak: t.isJailbreak, err: err}
 				} else {
-					resCh <- res{text: t.text, embedding: output.Embedding, isJailbreak: t.isJailbreak}
+					resCh <- res{text: t.text, embedding: embedding, isJailbreak: t.isJailbreak}
 				}
 			}
 		}()

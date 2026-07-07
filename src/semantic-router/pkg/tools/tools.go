@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/openai/openai-go"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -37,6 +39,7 @@ type ToolsDatabase struct {
 	enabled             bool
 	modelType           string // Model type to use for embeddings (e.g., "mmbert", "qwen3", "gemma")
 	targetDim           int    // Target dimension for embeddings
+	provider            embedding.Provider
 }
 
 // ToolsDatabaseOptions holds options for creating a new tools database
@@ -45,6 +48,7 @@ type ToolsDatabaseOptions struct {
 	Enabled             bool
 	ModelType           string // Model type to use for embeddings
 	TargetDimension     int    // Target dimension for embeddings
+	Provider            embedding.Provider
 }
 
 // NewToolsDatabase creates a new tools database with the given options
@@ -55,6 +59,7 @@ func NewToolsDatabase(options ToolsDatabaseOptions) *ToolsDatabase {
 		enabled:             options.Enabled,
 		modelType:           options.ModelType,
 		targetDim:           options.TargetDimension,
+		provider:            options.Provider,
 	}
 }
 
@@ -115,12 +120,11 @@ func (db *ToolsDatabase) LoadToolsFromFile(filePath string) error {
 		go func(workerID int) {
 			defer wg.Done()
 			for entry := range entryChan {
-				// Generate embedding using GetEmbeddingWithModelType (aligned with Embedding Signal)
-				output, err := candle_binding.GetEmbeddingWithModelType(entry.Description, db.modelType, db.targetDim)
+				embedding, err := db.embedText(entry.Description)
 				if err != nil {
 					resultChan <- result{entry: entry, err: err}
 				} else {
-					entry.Embedding = output.Embedding
+					entry.Embedding = embedding
 					resultChan <- result{entry: entry, err: nil}
 				}
 			}
@@ -178,13 +182,12 @@ func (db *ToolsDatabase) AddTool(tool openai.ChatCompletionToolParam, descriptio
 		return nil
 	}
 
-	// Generate embedding using GetEmbeddingWithModelType (aligned with Embedding Signal)
-	output, err := candle_binding.GetEmbeddingWithModelType(description, db.modelType, db.targetDim)
+	embedding, err := db.embedText(description)
 	if err != nil {
 		return fmt.Errorf("failed to generate embedding for tool %s: %w", tool.Function.Name, err)
 	}
 
-	entry := ToolEntry{Tool: tool, Description: description, Embedding: output.Embedding, Category: category, Tags: tags}
+	entry := ToolEntry{Tool: tool, Description: description, Embedding: embedding, Category: category, Tags: tags}
 
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -235,12 +238,10 @@ func (db *ToolsDatabase) FindSimilarToolsWithScoresMinSimilarity(query string, t
 		return []ToolSimilarity{}, nil
 	}
 
-	// Generate embedding using GetEmbeddingWithModelType (aligned with Embedding Signal)
-	output, err := candle_binding.GetEmbeddingWithModelType(query, db.modelType, db.targetDim)
+	queryEmbedding, err := db.embedText(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate embedding for query: %w", err)
 	}
-	queryEmbedding := output.Embedding
 
 	db.mu.RLock()
 	defer db.mu.RUnlock()
@@ -289,6 +290,17 @@ func (db *ToolsDatabase) FindSimilarToolsWithScoresMinSimilarity(query string, t
 
 	logging.Infof("Found %d similar tools for query: %s", len(selected), query)
 	return selected, nil
+}
+
+func (db *ToolsDatabase) embedText(text string) ([]float32, error) {
+	if db.provider != nil {
+		return db.provider.Embed(context.Background(), text)
+	}
+	output, err := candle_binding.GetEmbeddingWithModelType(text, db.modelType, db.targetDim)
+	if err != nil {
+		return nil, err
+	}
+	return output.Embedding, nil
 }
 
 // GetAllTools returns all tools in the database
