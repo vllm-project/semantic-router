@@ -16,6 +16,7 @@ func TestOpenAIModelsEndpoint(t *testing.T) {
 	tests := []struct {
 		name                      string
 		includeConfiguredModels   bool
+		config                    *config.RouterConfig
 		expectedModels            []string
 		expectedModelResultLength int
 	}{
@@ -31,13 +32,26 @@ func TestOpenAIModelsEndpoint(t *testing.T) {
 			expectedModels:            []string{"vllm-sr/auto", "auto", "MoM", "gpt-4o-mini", "llama-3.1-8b-instruct"},
 			expectedModelResultLength: 5,
 		},
+		{
+			name:   "direct looper models are exposed when decisions are configured",
+			config: openAIModelsLooperTestConfig(),
+			expectedModels: []string{
+				"vllm-sr/auto",
+				"auto",
+				"MoM",
+				"vllm-sr/remom",
+				"vllm-sr/fusion",
+				"vllm-sr/flow",
+			},
+			expectedModelResultLength: 6,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			apiServer := &ClassificationAPIServer{
 				classificationSvc: services.NewPlaceholderClassificationService(),
-				config:            openAIModelsTestConfig(tt.includeConfiguredModels),
+				config:            openAIModelsTestConfigForCase(tt.config, tt.includeConfiguredModels),
 			}
 
 			req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
@@ -56,6 +70,13 @@ func TestOpenAIModelsEndpoint(t *testing.T) {
 			assertOpenAIModelList(t, resp, tt.expectedModels, tt.expectedModelResultLength)
 		})
 	}
+}
+
+func openAIModelsTestConfigForCase(cfg *config.RouterConfig, includeConfiguredModels bool) *config.RouterConfig {
+	if cfg != nil {
+		return cfg
+	}
+	return openAIModelsTestConfig(includeConfiguredModels)
 }
 
 func openAIModelsTestConfig(includeConfiguredModels bool) *config.RouterConfig {
@@ -80,6 +101,38 @@ func openAIModelsTestConfig(includeConfiguredModels bool) *config.RouterConfig {
 		},
 		RouterOptions: config.RouterOptions{
 			IncludeConfigModelsInList: includeConfiguredModels,
+		},
+	}
+}
+
+func openAIModelsLooperTestConfig() *config.RouterConfig {
+	return &config.RouterConfig{
+		Looper: config.LooperConfig{Endpoint: "http://looper"},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{
+				{
+					Name:      "remom-route",
+					ModelRefs: []config.ModelRef{{Model: "worker-a"}},
+					Algorithm: &config.AlgorithmConfig{
+						Type:  "remom",
+						ReMoM: &config.ReMoMAlgorithmConfig{BreadthSchedule: []int{1}},
+					},
+				},
+				{
+					Name:      "fusion-route",
+					ModelRefs: []config.ModelRef{{Model: "worker-a"}},
+					Algorithm: &config.AlgorithmConfig{
+						Type: "fusion",
+					},
+				},
+				{
+					Name:      "flow-route",
+					ModelRefs: []config.ModelRef{{Model: "worker-a"}},
+					Algorithm: &config.AlgorithmConfig{
+						Type: "workflows",
+					},
+				},
+			},
 		},
 	}
 }

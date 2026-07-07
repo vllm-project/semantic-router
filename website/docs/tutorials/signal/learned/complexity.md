@@ -108,3 +108,23 @@ Notes:
 - Model mode is **text-only**; image/multimodal fusion remains an embedding-mode capability.
 - You can mix modes: some complexity rules can use `method: model` while others stay on the default embedding path.
 - If a rule sets `method: model` but no classifier is configured under `modules.complexity.classifier`, the rule is inert (a startup warning is logged).
+## Routing on a complexity rule
+
+A complexity rule classifies each request into one of three difficulty levels — `hard`, `easy`, or `medium` — and emits the match as `<rule>:<level>`. Decision conditions must therefore reference the rule **with the difficulty suffix**, not by the bare rule name:
+
+```yaml
+routing:
+  decisions:
+    - name: escalate_hard_prompts
+      priority: 160
+      rules:
+        operator: OR
+        conditions:
+          - type: complexity
+            name: needs_reasoning:hard # required form: <rule>:<hard|easy|medium>
+      modelRefs:
+        - model: qwen3-30b
+          use_reasoning: true
+```
+
+A bare `name: needs_reasoning` never matches at runtime — the classifier only ever emits `needs_reasoning:hard|easy|medium` — so config validation rejects the suffix-less form with a clear error.

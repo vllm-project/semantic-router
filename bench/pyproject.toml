@@ -66,6 +66,10 @@ plotting = [
     "matplotlib>=3.5.0",
     "seaborn>=0.11.0",
 ]
+real_eval = [
+    "PyYAML>=6.0",
+    "evalscope[sandbox]>=1.8.1",
+]
 
 [project.urls]
 Homepage = "https://github.com/vllm-project/semantic-router"

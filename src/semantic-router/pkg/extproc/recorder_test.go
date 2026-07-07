@@ -320,6 +320,23 @@ func assertReplayMatchedSignals(t *testing.T, record routerreplay.RoutingRecord)
 	}
 }
 
+func TestBuildReplayRoutingRecord_CacheSimilarityAndContextTokenCount(t *testing.T) {
+	ctx := &RequestContext{
+		RequestID:            "req-cache-ctx",
+		VSRCacheSimilarity:   0.87,
+		VSRContextTokenCount: 1234,
+	}
+
+	record := buildReplayRoutingRecord(ctx, "model-a", "model-b", "balance")
+
+	if record.CacheSimilarity != 0.87 {
+		t.Fatalf("expected cache_similarity 0.87 copied to record, got %v", record.CacheSimilarity)
+	}
+	if record.ContextTokenCount != 1234 {
+		t.Fatalf("expected context_token_count 1234 copied to record, got %d", record.ContextTokenCount)
+	}
+}
+
 func TestBuildReplayRoutingRecord_ResponseAPIChainFields(t *testing.T) {
 	ctx := &RequestContext{
 		RequestID: "req-resp-1",

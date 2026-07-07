@@ -1548,7 +1548,11 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 
 			response, err := router.HandleRequestBody(bodyRequest, ctx)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(response.GetRequestBody().Response.Status).To(Equal(ext_proc.CommonResponse_CONTINUE))
+			// A model that is not configured is rejected with a clear 400 rather
+			// than being silently forwarded to a backend with no resolvable
+			// credential (which surfaced as a misleading upstream "401 No api key").
+			Expect(response.GetImmediateResponse()).NotTo(BeNil())
+			Expect(int(response.GetImmediateResponse().GetStatus().GetCode())).To(Equal(400))
 		})
 
 		It("should handle requests with extremely long message chains", func() {
@@ -2172,11 +2176,13 @@ func TestVSRHeadersAddedOnSuccessfulNonCachedResponse(t *testing.T) {
 
 	// Create request context with VSR decision information
 	ctx := &RequestContext{
-		VSRSelectedCategory:     "math",
-		VSRReasoningMode:        "on",
-		VSRSelectedModel:        "deepseek-v31",
-		VSRCacheHit:             false, // Not a cache hit
-		VSRInjectedSystemPrompt: true,  // System prompt was injected
+		VSRSelectedDecisionName:       "math_decision",
+		VSRSelectedDecisionConfidence: 0.91,
+		VSRSelectedCategory:           "math",
+		VSRReasoningMode:              "on",
+		VSRSelectedModel:              "deepseek-v31",
+		VSRCacheHit:                   false, // Not a cache hit
+		VSRInjectedSystemPrompt:       true,  // System prompt was injected
 	}
 
 	// Create response headers with successful status (200)
@@ -2206,26 +2212,72 @@ func TestVSRHeadersAddedOnSuccessfulNonCachedResponse(t *testing.T) {
 	headerMutation := response.GetResponseHeaders().GetResponse().GetHeaderMutation()
 	assert.NotNil(t, headerMutation, "HeaderMutation should not be nil for successful non-cached response")
 
-	setHeaders := headerMutation.GetSetHeaders()
-	// 2 keystone headers (x-vsr-schema-version + x-vsr-response-path, #2203) +
-	// 4 standard decision headers. The client/upstream protocol markers are
-	// omitted because this is a same-protocol response (#2206).
-	assert.Len(t, setHeaders, 6, "Should have 6 VSR headers (2 keystone + 4 decision)")
-
-	// Verify each header
 	headerMap := make(map[string]string)
-	for _, header := range setHeaders {
+	for _, header := range headerMutation.GetSetHeaders() {
 		headerMap[header.Header.Key] = string(header.Header.RawValue)
 	}
 
+	// Default surface (no x-vsr-debug): keystone + final routing facts only.
 	assert.Equal(t, "2", headerMap["x-vsr-schema-version"])
 	assert.Equal(t, "upstream", headerMap["x-vsr-response-path"])
+	assert.Equal(t, "math_decision", headerMap["x-vsr-selected-decision"])
+	assert.Equal(t, "0.9100", headerMap["x-vsr-selected-confidence"])
+	assert.Equal(t, "deepseek-v31", headerMap["x-vsr-selected-model"])
+
+	// Intermediate details and matched signals are demoted to the debug
+	// surface (#2205); same-protocol omits the protocol markers (#2206).
+	assert.NotContains(t, headerMap, "x-vsr-selected-category", "category demoted to debug")
+	assert.NotContains(t, headerMap, "x-vsr-selected-reasoning", "reasoning demoted to debug")
+	assert.NotContains(t, headerMap, "x-vsr-injected-system-prompt", "injected demoted to debug")
+	assert.NotContains(t, headerMap, "x-vsr-matched-keywords", "matched signals demoted to debug")
+	assert.NotContains(t, headerMap, "x-vsr-client-protocol")
+}
+
+func TestVSRDebugHeadersOnSuccessfulResponse(t *testing.T) {
+	router := &OpenAIRouter{}
+
+	// With x-vsr-debug, the demoted intermediate details and matched signals
+	// re-appear inline alongside the final facts (#2205 / #2216).
+	ctx := &RequestContext{
+		Headers:                 map[string]string{"x-vsr-debug": "true"},
+		VSRSelectedDecisionName: "math_decision",
+		VSRSelectedCategory:     "math",
+		VSRReasoningMode:        "on",
+		VSRSelectedModel:        "deepseek-v31",
+		VSRInjectedSystemPrompt: true,
+		VSRMatchedKeywords:      []string{"prove", "theorem"},
+	}
+
+	responseHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
+		ResponseHeaders: &ext_proc.HttpHeaders{
+			Headers: &core.HeaderMap{
+				Headers: []*core.HeaderValue{
+					{Key: ":status", Value: "200"},
+					{Key: "content-type", Value: "application/json"},
+				},
+			},
+		},
+	}
+
+	response, err := router.handleResponseHeaders(responseHeaders, ctx)
+	assert.NoError(t, err)
+	require.NotNil(t, response)
+
+	headerMutation := response.GetResponseHeaders().GetResponse().GetHeaderMutation()
+	require.NotNil(t, headerMutation)
+	headerMap := make(map[string]string)
+	for _, header := range headerMutation.GetSetHeaders() {
+		headerMap[header.Header.Key] = string(header.Header.RawValue)
+	}
+
+	// Final facts still present.
+	assert.Equal(t, "math_decision", headerMap["x-vsr-selected-decision"])
+	assert.Equal(t, "deepseek-v31", headerMap["x-vsr-selected-model"])
+	// Demoted details + matched signals re-appear under debug.
 	assert.Equal(t, "math", headerMap["x-vsr-selected-category"])
 	assert.Equal(t, "on", headerMap["x-vsr-selected-reasoning"])
-	assert.Equal(t, "deepseek-v31", headerMap["x-vsr-selected-model"])
 	assert.Equal(t, "true", headerMap["x-vsr-injected-system-prompt"])
-	assert.NotContains(t, headerMap, "x-vsr-client-protocol", "same-protocol response omits protocol markers")
-	assert.NotContains(t, headerMap, "x-vsr-upstream-protocol")
+	assert.Equal(t, "prove,theorem", headerMap["x-vsr-matched-keywords"])
 }
 
 func TestVSRHeadersNotAddedOnCacheHit(t *testing.T) {
@@ -2322,8 +2374,11 @@ func TestVSRHeadersPartialInformation(t *testing.T) {
 	// Create a mock router
 	router := &OpenAIRouter{}
 
-	// Create request context with partial VSR information
+	// Create request context with partial VSR information. The intermediate
+	// detail headers are demoted to x-vsr-debug (#2205), so request debug to
+	// exercise them and verify empty fields (here: reasoning mode) are omitted.
 	ctx := &RequestContext{
+		Headers:                 map[string]string{"x-vsr-debug": "true"},
 		VSRSelectedCategory:     "math",
 		VSRReasoningMode:        "", // Empty reasoning mode
 		VSRSelectedModel:        "deepseek-v31",
@@ -2354,33 +2409,33 @@ func TestVSRHeadersPartialInformation(t *testing.T) {
 	headerMutation := response.GetResponseHeaders().GetResponse().GetHeaderMutation()
 	assert.NotNil(t, headerMutation)
 
-	setHeaders := headerMutation.GetSetHeaders()
-	// 2 keystone headers (x-vsr-schema-version + x-vsr-response-path, #2203) +
-	// 3 standard decision headers (excluding empty reasoning mode, but
-	// including injected-system-prompt). Protocol markers are omitted because
-	// this is a same-protocol response (#2206).
-	assert.Len(t, setHeaders, 5, "Should have 5 VSR headers (2 keystone + 3 decision)")
-
-	// Verify each header
 	headerMap := make(map[string]string)
-	for _, header := range setHeaders {
+	for _, header := range headerMutation.GetSetHeaders() {
 		headerMap[header.Header.Key] = string(header.Header.RawValue)
 	}
 
+	// Keystone + final routing facts ride on the default surface.
 	assert.Equal(t, "2", headerMap["x-vsr-schema-version"])
 	assert.Equal(t, "upstream", headerMap["x-vsr-response-path"])
-	assert.Equal(t, "math", headerMap["x-vsr-selected-category"])
 	assert.Equal(t, "deepseek-v31", headerMap["x-vsr-selected-model"])
+	// Demoted decision details are present because the request asked for debug
+	// headers (#2205)...
+	assert.Equal(t, "math", headerMap["x-vsr-selected-category"])
 	assert.Equal(t, "false", headerMap["x-vsr-injected-system-prompt"])
+	// ...but empty fields stay omitted even under debug.
 	assert.NotContains(t, headerMap, "x-vsr-selected-reasoning", "Empty reasoning mode should not be added")
 }
 
 func TestVSRInjectedSystemPromptHeader(t *testing.T) {
 	router := &OpenAIRouter{}
 
+	// x-vsr-injected-system-prompt is demoted to the debug surface (#2205), so
+	// both cases request debug headers to exercise the emitted true/false value.
+
 	// Test case 1: System prompt was injected
 	t.Run("SystemPromptInjected", func(t *testing.T) {
 		ctx := &RequestContext{
+			Headers:                 map[string]string{"x-vsr-debug": "true"},
 			VSRSelectedCategory:     "coding",
 			VSRReasoningMode:        "on",
 			VSRSelectedModel:        "gpt-4",
@@ -2416,6 +2471,7 @@ func TestVSRInjectedSystemPromptHeader(t *testing.T) {
 	// Test case 2: System prompt was not injected
 	t.Run("SystemPromptNotInjected", func(t *testing.T) {
 		ctx := &RequestContext{
+			Headers:                 map[string]string{"x-vsr-debug": "true"},
 			VSRSelectedCategory:     "coding",
 			VSRReasoningMode:        "on",
 			VSRSelectedModel:        "gpt-4",
@@ -3115,9 +3171,22 @@ func TestHandleModelsRequest(t *testing.T) {
 		},
 	}
 
+	cfgWithLooperOnly := &config.RouterConfig{
+		Looper: config.LooperConfig{
+			Endpoint: "http://looper",
+		},
+	}
+
 	cfgWithFusion := &config.RouterConfig{
 		Looper: config.LooperConfig{
 			Endpoint: "http://looper",
+		},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{
+				Name:      "fusion-route",
+				ModelRefs: []config.ModelRef{{Model: "panel-a"}},
+				Algorithm: &config.AlgorithmConfig{Type: "fusion"},
+			}},
 		},
 	}
 
@@ -3127,6 +3196,42 @@ func TestHandleModelsRequest(t *testing.T) {
 			Fusion: config.FusionRuntimeConfig{
 				ModelNames: []string{"vllm-sr/fusion", "custom/fusion"},
 			},
+		},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{
+				Name:      "fusion-route",
+				ModelRefs: []config.ModelRef{{Model: "panel-a"}},
+				Algorithm: &config.AlgorithmConfig{Type: "fusion"},
+			}},
+		},
+	}
+
+	cfgWithReMoM := &config.RouterConfig{
+		Looper: config.LooperConfig{
+			Endpoint: "http://looper",
+		},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{
+				Name:      "remom-route",
+				ModelRefs: []config.ModelRef{{Model: "worker-a"}},
+				Algorithm: &config.AlgorithmConfig{
+					Type:  "remom",
+					ReMoM: &config.ReMoMAlgorithmConfig{BreadthSchedule: []int{1}},
+				},
+			}},
+		},
+	}
+
+	cfgWithFlow := &config.RouterConfig{
+		Looper: config.LooperConfig{
+			Endpoint: "http://looper",
+		},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{
+				Name:      "flow-route",
+				ModelRefs: []config.ModelRef{{Model: "worker-a"}},
+				Algorithm: &config.AlgorithmConfig{Type: "workflows"},
+			}},
 		},
 	}
 
@@ -3152,18 +3257,39 @@ func TestHandleModelsRequest(t *testing.T) {
 			expectedCount:  5,
 		},
 		{
-			name:           "GET /v1/models - includes fusion model when looper is enabled",
+			name:           "GET /v1/models - does not expose loop models when only looper endpoint is enabled",
+			config:         cfgWithLooperOnly,
+			path:           "/v1/models",
+			expectedModels: []string{"vllm-sr/auto", "auto", "MoM"},
+			expectedCount:  3,
+		},
+		{
+			name:           "GET /v1/models - includes remom model when remom decision is configured",
+			config:         cfgWithReMoM,
+			path:           "/v1/models",
+			expectedModels: []string{"vllm-sr/auto", "auto", "MoM", "vllm-sr/remom"},
+			expectedCount:  4,
+		},
+		{
+			name:           "GET /v1/models - includes fusion model when fusion decision is configured",
 			config:         cfgWithFusion,
 			path:           "/v1/models",
 			expectedModels: []string{"vllm-sr/auto", "auto", "MoM", "vllm-sr/fusion"},
 			expectedCount:  4,
 		},
 		{
-			name:           "GET /v1/models - includes configured fusion aliases when looper is enabled",
+			name:           "GET /v1/models - includes configured fusion aliases when fusion decision is configured",
 			config:         cfgWithFusionAliases,
 			path:           "/v1/models",
 			expectedModels: []string{"vllm-sr/auto", "auto", "MoM", "vllm-sr/fusion", "custom/fusion"},
 			expectedCount:  5,
+		},
+		{
+			name:           "GET /v1/models - includes flow model when workflows decision is configured",
+			config:         cfgWithFlow,
+			path:           "/v1/models",
+			expectedModels: []string{"vllm-sr/auto", "auto", "MoM", "vllm-sr/flow"},
+			expectedCount:  4,
 		},
 		{
 			name:           "GET /v1/models?model=auto - only auto model (default)",

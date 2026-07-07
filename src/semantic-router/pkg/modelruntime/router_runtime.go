@@ -8,6 +8,7 @@ import (
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -53,8 +54,8 @@ func PrepareRouterRuntime(
 	}
 
 	paths := resolveEmbeddingPaths(cfg)
-	state, embeddingTasks := embeddingRuntimeTasks(cfg, component, paths)
-	if !paths.hasConfiguredModels() {
+	state, embeddingTasks, tracker := embeddingRuntimeTasks(cfg, component, paths)
+	if !embeddingRuntimeConfigured(cfg, paths) {
 		logMissingEmbeddingModelsConfig(component)
 	}
 
@@ -71,7 +72,10 @@ func PrepareRouterRuntime(
 		MaxParallelism: options.MaxParallelism,
 		OnEvent:        options.OnEvent,
 	})
-	if paths.hasConfiguredModels() {
+	if tracker != nil {
+		state = tracker.snapshot()
+	}
+	if embeddingRuntimeConfigured(cfg, paths) {
 		logging.ComponentEvent(component, "embedding_models_init_completed", map[string]interface{}{
 			"embedding_ready": state.AnyReady,
 			"tools_ready":     state.ToolsReady,
@@ -128,15 +132,20 @@ func embeddingRuntimeTasks(
 	cfg *config.RouterConfig,
 	component string,
 	paths embeddingPaths,
-) (EmbeddingRuntimeState, []Task) {
+) (EmbeddingRuntimeState, []Task, *embeddingStateTracker) {
+	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+		tracker := &embeddingStateTracker{}
+		logEmbeddingRuntimeStart(component, cfg, paths)
+		return tracker.snapshot(), remoteEmbeddingRuntimeTask(cfg, component, tracker), tracker
+	}
 	if !paths.hasConfiguredModels() {
-		return EmbeddingRuntimeState{}, nil
+		return EmbeddingRuntimeState{}, nil, nil
 	}
 
 	logEmbeddingRuntimeStart(component, cfg, paths)
 	requiresMultimodalTools := toolsUseMultiModalEmbeddings(cfg)
 	tracker := &embeddingStateTracker{}
-	return tracker.snapshot(), buildEmbeddingRuntimeTasks(cfg, component, paths, requiresMultimodalTools, tracker)
+	return tracker.snapshot(), buildEmbeddingRuntimeTasks(cfg, component, paths, requiresMultimodalTools, tracker), tracker
 }
 
 func semanticCacheBERTTask(cfg *config.RouterConfig, component string) []Task {
@@ -408,14 +417,23 @@ func toolsUseMultiModalEmbeddings(cfg *config.RouterConfig) bool {
 }
 
 func semanticCacheNeedsBERT(cfg *config.RouterConfig) bool {
+	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+		return false
+	}
 	return cfg.Enabled && resolveSemanticCacheEmbeddingModel(cfg) == "bert"
 }
 
 func vectorStoreNeedsBERT(cfg *config.RouterConfig) bool {
+	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+		return false
+	}
 	return cfg.VectorStore != nil && cfg.VectorStore.Enabled && cfg.VectorStore.EmbeddingModel == "bert" && !cfg.Enabled
 }
 
 func memoryNeedsBERT(cfg *config.RouterConfig) bool {
+	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+		return false
+	}
 	if !memoryConfigured(cfg) {
 		return false
 	}
@@ -503,12 +521,17 @@ func (t *embeddingStateTracker) snapshot() EmbeddingRuntimeState {
 func logEmbeddingRuntimeStart(component string, cfg *config.RouterConfig, paths embeddingPaths) {
 	logging.ComponentEvent(component, "embedding_models_init_started", map[string]interface{}{
 		"use_cpu":               cfg.UseCPU,
+		"backend":               cfg.EmbeddingModels.EmbeddingBackend(),
 		"qwen3_configured":      paths.qwen3 != "",
 		"gemma_configured":      paths.gemma != "",
 		"mmbert_configured":     paths.mmBert != "",
 		"multimodal_configured": paths.multiModal != "",
 		"bert_configured":       paths.bert != "",
 	})
+}
+
+func embeddingRuntimeConfigured(cfg *config.RouterConfig, paths embeddingPaths) bool {
+	return cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() || paths.hasConfiguredModels()
 }
 
 func buildEmbeddingRuntimeTasks(
@@ -523,6 +546,44 @@ func buildEmbeddingRuntimeTasks(
 	tasks = append(tasks, bertEmbeddingRuntimeTask(cfg, component, paths, tracker)...)
 	tasks = append(tasks, multiModalEmbeddingRuntimeTask(cfg, component, paths, requiresMultimodalTools, tracker)...)
 	return tasks
+}
+
+func remoteEmbeddingRuntimeTask(
+	cfg *config.RouterConfig,
+	component string,
+	tracker *embeddingStateTracker,
+) []Task {
+	return []Task{{
+		Name:       "router.embedding.remote_provider",
+		BestEffort: true,
+		Run: func(ctx context.Context) error {
+			logging.ComponentEvent(component, "remote_embedding_init_started", map[string]interface{}{
+				"backend": cfg.EmbeddingModels.EmbeddingBackend(),
+				"model":   cfg.EmbeddingModels.Endpoint.Model,
+			})
+			provider, err := embedding.NewProvider(cfg.EmbeddingModels, embedding.ProviderOptions{})
+			if err != nil {
+				logging.ComponentErrorEvent(component, "remote_embedding_init_failed", map[string]interface{}{
+					"error": err.Error(),
+				})
+				return fmt.Errorf("failed to initialize remote embedding provider: %w", err)
+			}
+			embeddingVector, err := provider.Embed(ctx, "semantic router embedding probe")
+			if err != nil {
+				logging.ComponentErrorEvent(component, "remote_embedding_init_failed", map[string]interface{}{
+					"backend": provider.Backend(),
+					"error":   err.Error(),
+				})
+				return fmt.Errorf("failed to probe remote embedding provider: %w", err)
+			}
+			logging.ComponentEvent(component, "remote_embedding_initialized", map[string]interface{}{
+				"backend":   provider.Backend(),
+				"dimension": len(embeddingVector),
+			})
+			tracker.markToolsReady()
+			return nil
+		},
+	}}
 }
 
 func unifiedEmbeddingRuntimeTask(

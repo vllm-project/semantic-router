@@ -4,6 +4,10 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 DASHBOARD_DOCKERFILE = REPO_ROOT / "dashboard" / "backend" / "Dockerfile"
 VLLM_SR_DOCKERFILE = REPO_ROOT / "src" / "vllm-sr" / "Dockerfile"
 VLLM_SR_ROCM_DOCKERFILE = REPO_ROOT / "src" / "vllm-sr" / "Dockerfile.rocm"
+VLLM_SR_CUDA_DOCKERFILE = REPO_ROOT / "src" / "vllm-sr" / "Dockerfile.cuda"
+VLLM_SR_CUDA_DOCKERIGNORE = (
+    REPO_ROOT / "src" / "vllm-sr" / "Dockerfile.cuda.dockerignore"
+)
 EXTPROC_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc"
 EXTPROC_ROCM_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc-rocm"
 
@@ -11,14 +15,14 @@ EXTPROC_ROCM_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc-r
 def test_dashboard_dockerfile_uses_glibc_builder_for_cgo_backend() -> None:
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert "FROM golang:1.24-bookworm AS backend-builder" in content
+    assert "FROM docker.io/library/golang:1.24-bookworm AS backend-builder" in content
     assert "apt_get_install_with_retry build-essential" in content
 
 
 def test_dashboard_dockerfile_retries_runtime_apk_installs() -> None:
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert "FROM python:3.11-slim-bookworm" in content
+    assert "FROM docker.io/library/python:3.11-slim-bookworm" in content
     assert (
         "apt_get_install_with_retry ca-certificates curl docker.io gosu wget" in content
     )
@@ -62,8 +66,13 @@ def test_dashboard_dockerfile_copies_model_eval_scripts_and_requirements() -> No
 def test_vllm_sr_dockerfile_stays_router_only() -> None:
     content = VLLM_SR_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert "ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bullseye" in content
-    assert "ARG GO_RUNTIME_COMPAT_IMAGE=golang:1.24-bullseye" in content
+    assert (
+        "ARG RUST_RUNTIME_COMPAT_IMAGE=docker.io/rustlang/rust:nightly-bullseye"
+        in content
+    )
+    assert (
+        "ARG GO_RUNTIME_COMPAT_IMAGE=docker.io/library/golang:1.24-bullseye" in content
+    )
     assert "GLIBC_2.39+" in content
     assert 'ENTRYPOINT ["/app/start-router.sh"]' in content
     assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
@@ -96,6 +105,64 @@ def test_vllm_sr_rocm_dockerfile_stays_router_only() -> None:
     assert "COPY src/vllm-sr/start-dashboard.sh" not in content
     assert "COPY dashboard/backend/config/openclaw-skills.json" not in content
     assert "COPY src/training/model_eval/" not in content
+
+
+def test_vllm_sr_rocm_dockerfile_uses_fully_qualified_base_images() -> None:
+    """Podman with default short-name policy rejects unqualified base images;
+    keep every FROM directive fully qualified so `make vllm-sr-dev
+    VLLM_SR_PLATFORM=amd CONTAINER_RUNTIME=podman` works.
+    """
+    content = VLLM_SR_ROCM_DOCKERFILE.read_text(encoding="utf-8")
+
+    assert (
+        "ARG RUST_RUNTIME_COMPAT_IMAGE=docker.io/rustlang/rust:nightly-bullseye"
+        in content
+    )
+    assert (
+        "ARG ONNX_RUST_RUNTIME_COMPAT_IMAGE=docker.io/library/rust:1.90-bullseye"
+        in content
+    )
+    assert (
+        "ARG GO_RUNTIME_COMPAT_IMAGE=docker.io/library/golang:1.24-bullseye" in content
+    )
+    assert "FROM docker.io/rocm/dev-ubuntu-22.04:7.0" in content
+
+
+def test_vllm_sr_cuda_dockerfile_stays_router_only() -> None:
+    content = VLLM_SR_CUDA_DOCKERFILE.read_text(encoding="utf-8")
+
+    assert "FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04" in content
+    assert "onnxruntime-gpu==1.22.0" in content
+    assert "ENV AI_BINDING=onnx" in content
+    assert 'ENTRYPOINT ["/app/start-router.sh"]' in content
+    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
+    assert (
+        "COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go /build/../nlp-binding/"
+        in content
+    )
+    assert (
+        "COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go ./"
+        not in content
+    )
+    assert "COPY --from=dashboard-builder" not in content
+    assert "COPY --from=frontend-builder" not in content
+    assert "COPY --from=wizmap-builder" not in content
+    assert "COPY src/vllm-sr/start-dashboard.sh" not in content
+    assert "COPY dashboard/backend/config/openclaw-skills.json" not in content
+    assert "COPY src/training/model_eval/" not in content
+
+
+def test_vllm_sr_cuda_dockerignore_excludes_runtime_state_and_large_unused_inputs() -> (
+    None
+):
+    content = VLLM_SR_CUDA_DOCKERIGNORE.read_text(encoding="utf-8")
+
+    assert "**/.vllm-sr/" in content
+    assert "**/milvus-data/" in content
+    assert "**/etcd/" in content
+    assert "**/postgres-data/" in content
+    assert "bench/" in content
+    assert "slides/" in content
 
 
 def test_extproc_dockerfile_copies_built_in_knowledge_bases() -> None:
