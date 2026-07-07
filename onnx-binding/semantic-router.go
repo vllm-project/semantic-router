@@ -267,6 +267,11 @@ func IsMmBertModelInitialized() bool {
 	return bool(C.is_mmbert_model_initialized())
 }
 
+// IsEmbeddingReady returns whether the embedding models have been successfully initialized.
+func IsEmbeddingReady() bool {
+	return IsMmBertModelInitialized()
+}
+
 // InitEmbeddingModels initializes embedding models (candle_binding compatible API)
 // For onnx_binding, only mmBERT is supported. qwen3 and gemma paths are ignored.
 func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, mmBertModelPath string, useCPU bool) error {
