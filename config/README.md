@@ -11,7 +11,7 @@
 Inside canonical `config.yaml`:
 
 - `providers.defaults` holds provider-wide defaults such as `default_model` and reasoning families
-- `providers.models[]` holds concrete backend access details directly
+- `providers.models[]` holds concrete backend access details directly, including optional `backend_id` and `engine_kind` identity hints on each `backend_refs[]` entry
 - `routing.modelCards[]` holds semantic model metadata, including optional `loras[]` catalogs for decision-level `lora_name` references
 - `routing.projections` carries cross-signal coordination and derived routing outputs
 - `routing.projections.partitions` is the canonical runtime home for exclusive domain or embedding partitions; DSL authoring uses `PROJECTION partition`

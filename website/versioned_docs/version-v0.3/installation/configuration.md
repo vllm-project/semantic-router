@@ -37,7 +37,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `defaults`
   - `models`
   - `providers.defaults` holds `default_model`, `reasoning_families`, and `default_reasoning_effort`
-  - `providers.models[*]` holds `provider_model_id`, `backend_refs`, `pricing`, `api_format`, and `external_model_ids`
+  - `providers.models[*]` holds `provider_model_id`, `backend_refs`, `pricing`, `api_format`, and `external_model_ids`; each backend ref can include optional `backend_id` and `engine_kind` identity hints for backend telemetry adapters
 - `global` owns router-wide runtime overrides.
   - `global.router` groups router-engine control knobs such as config-source selection, route-cache, and model-selection defaults
   - `global.router.config_source` selects whether runtime config comes from the canonical YAML file (`file`) or from in-process Kubernetes CRD reconciliation (`kubernetes`)
