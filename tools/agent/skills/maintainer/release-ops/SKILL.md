@@ -47,6 +47,7 @@ description: Maintainer release and milestone operating workflow. Use when a mai
 - `python3 tools/agent/scripts/maintainer_board.py brief`
 - `python3 tools/agent/scripts/maintainer_board.py release-report --release-plan docs/agent/plans/pl-0033-v0-3-themis-release-closure.md --write`
 - `python3 tools/agent/scripts/maintainer_board.py create-issues --release-plan docs/agent/plans/pl-0033-v0-3-themis-release-closure.md --dry-run`
+- `bash tools/agent/scripts/run_maintainer_board_ci.sh` (CI wrapper used by `.github/workflows/maintainer-board.yml`)
 
 ## Gotchas
 
