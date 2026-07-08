@@ -4,18 +4,18 @@ import os
 import subprocess
 
 from cli.consts import DEFAULT_API_PORT, DEFAULT_ENVOY_PORT, IMAGE_PULL_POLICY_NEVER
-from cli.docker_cli import (
-    docker_container_status,
-    docker_exec,
-    docker_logs,
-    docker_network_disconnect,
-    docker_remove_container,
-    docker_remove_network,
-    docker_start_vllm_sr,
-    docker_stop_container,
+from cli.container_cli import (
+    container_exec,
+    container_logs,
+    container_network_disconnect,
+    container_remove_container,
+    container_remove_network,
+    container_start_vllm_sr,
+    container_status,
+    container_stop_container,
     load_openclaw_registry,
 )
-from cli.docker_images import get_fleet_sim_docker_image, get_runtime_images
+from cli.container_images import get_fleet_sim_container_image, get_runtime_images
 from cli.logo import print_vllm_logo
 from cli.runtime_lifecycle import (
     connect_runtime_container,
@@ -119,7 +119,7 @@ def ensure_runtime_images_for_pull_policy(
         include_dashboard=not dashboard_disabled,
     )
     if _fleet_sim_required(env_vars):
-        get_fleet_sim_docker_image(image=sim_image, pull_policy=pull_policy)
+        get_fleet_sim_container_image(image=sim_image, pull_policy=pull_policy)
 
 
 def _fleet_sim_required(env_vars):
@@ -277,7 +277,7 @@ def _start_runtime_containers(
     dashboard_image,
     pull_policy,
 ):
-    return docker_start_vllm_sr(
+    return container_start_vllm_sr(
         config_file=source_config_file,
         env_vars=env_vars,
         listeners=listeners,
@@ -365,7 +365,7 @@ def _managed_container_statuses(stack_layout: RuntimeStackLayout) -> dict[str, s
         *_storage_container_names(stack_layout),
     ]
     return {
-        container_name: docker_container_status(container_name)
+        container_name: container_status(container_name)
         for container_name in container_names
     }
 
@@ -387,7 +387,7 @@ def _runtime_service_container_name(
 def _runtime_stack_status(stack_layout: RuntimeStackLayout) -> str:
     fallback_status = "not found"
     for container_name in _runtime_container_names(stack_layout):
-        status = docker_container_status(container_name)
+        status = container_status(container_name)
         if status == "running":
             return status
         if status != "not found" and fallback_status == "not found":
@@ -406,14 +406,14 @@ def _disconnect_openclaw_registry_containers(
 
 
 def _disconnect_openclaw_container(network_name: str, container_name: str) -> None:
-    container_status = docker_container_status(container_name)
-    if container_status == "not found":
+    status = container_status(container_name)
+    if status == "not found":
         return
-    if container_status == "running":
+    if status == "running":
         log.info(f"Stopping OpenClaw container: {container_name}")
-        docker_stop_container(container_name)
+        container_stop_container(container_name)
     log.info(f"Disconnecting {container_name} from {network_name}")
-    docker_network_disconnect(network_name, container_name)
+    container_network_disconnect(network_name, container_name)
 
 
 def _stop_managed_container(
@@ -428,8 +428,8 @@ def _stop_managed_container(
     if stop_message and container_status == "running":
         log.info(stop_message)
     if container_status == "running":
-        docker_stop_container(container_name)
-    docker_remove_container(container_name)
+        container_stop_container(container_name)
+    container_remove_container(container_name)
     if stopped_message:
         log.info(stopped_message)
 
@@ -447,7 +447,7 @@ def _storage_container_names(stack_layout: RuntimeStackLayout) -> tuple[str, ...
 
 
 def _remove_runtime_network(network_name: str) -> None:
-    return_code, _stdout, _stderr = docker_remove_network(network_name)
+    return_code, _stdout, _stderr = container_remove_network(network_name)
     if return_code == 0:
         log.info(f"Network {network_name} removed")
 
@@ -458,7 +458,7 @@ def show_logs(service: str, follow: bool = False):
     stack_layout = resolve_runtime_stack()
     if service == "simulator":
         _ensure_runtime_container_available(stack_layout.fleet_sim_container_name)
-        docker_logs(stack_layout.fleet_sim_container_name, follow=follow, tail=200)
+        container_logs(stack_layout.fleet_sim_container_name, follow=follow, tail=200)
         return
 
     container_name = _runtime_service_container_name(service, stack_layout)
@@ -534,7 +534,7 @@ def _resolve_runtime_status_snapshot(
     try:
         return (
             _runtime_stack_status(stack_layout),
-            docker_container_status(stack_layout.fleet_sim_container_name),
+            container_status(stack_layout.fleet_sim_container_name),
         )
     except SystemExit:
         log.info("Status: Not running")
@@ -561,7 +561,7 @@ def _requested_services(service: str) -> list[str]:
 
 
 def _ensure_runtime_container_available(container_name: str) -> None:
-    if docker_container_status(container_name) != "not found":
+    if container_status(container_name) != "not found":
         return
     log.error("Container not found. Is vLLM Semantic Router running?")
     log.info("Start it with: vllm-sr serve")
@@ -610,7 +610,7 @@ def _report_service_status(service: str, stack_layout) -> None:
 
 
 def _check_router_status(container_name: str) -> bool:
-    return_code, _stdout, _stderr = docker_exec(
+    return_code, _stdout, _stderr = container_exec(
         container_name,
         ["curl", "-f", "-s", f"http://localhost:{DEFAULT_API_PORT}/health"],
     )
@@ -618,7 +618,7 @@ def _check_router_status(container_name: str) -> bool:
 
 
 def _check_envoy_status(container_name: str, stack_layout: RuntimeStackLayout) -> bool:
-    return_code, stdout, _stderr = docker_exec(
+    return_code, stdout, _stderr = container_exec(
         container_name,
         [
             "curl",
@@ -642,10 +642,10 @@ def _fallback_check_envoy_status(
 ) -> bool:
     if container_name != stack_layout.envoy_container_name:
         return False
-    if docker_container_status(container_name) != "running":
+    if container_status(container_name) != "running":
         return False
 
-    return_code, _stdout, _stderr = docker_exec(
+    return_code, _stdout, _stderr = container_exec(
         container_name,
         [
             "/usr/local/bin/envoy",
@@ -659,7 +659,7 @@ def _fallback_check_envoy_status(
 
 
 def _check_dashboard_status(container_name: str) -> bool:
-    return_code, stdout, _stderr = docker_exec(
+    return_code, stdout, _stderr = container_exec(
         container_name,
         [
             "curl",
@@ -676,7 +676,7 @@ def _check_dashboard_status(container_name: str) -> bool:
 
 
 def _check_fleet_sim_status(container_name: str) -> bool:
-    return_code, stdout, _stderr = docker_exec(
+    return_code, stdout, _stderr = container_exec(
         container_name,
         [
             "python",

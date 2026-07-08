@@ -111,7 +111,7 @@ def test_cli_chat_invokes_post(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 
     _patch_stack_layout(monkeypatch, 0)
 
-    monkeypatch.setattr(chat_command.DockerBackend, "is_running", lambda self: True)
+    monkeypatch.setattr(chat_command.ContainerBackend, "is_running", lambda self: True)
 
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -152,7 +152,7 @@ def test_cli_chat_json_mode(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     )
 
     _patch_stack_layout(monkeypatch, 0)
-    monkeypatch.setattr(chat_command.DockerBackend, "is_running", lambda self: True)
+    monkeypatch.setattr(chat_command.ContainerBackend, "is_running", lambda self: True)
 
     body = {"choices": [{"message": {"content": "x"}}]}
     mock_resp = MagicMock()
@@ -187,7 +187,7 @@ def test_cli_chat_not_running(
     )
 
     _patch_stack_layout(monkeypatch, 0)
-    monkeypatch.setattr(chat_command.DockerBackend, "is_running", lambda self: False)
+    monkeypatch.setattr(chat_command.ContainerBackend, "is_running", lambda self: False)
 
     with caplog.at_level("ERROR", logger="cli.commands.chat"):
         runner = CliRunner()
@@ -215,7 +215,7 @@ def test_cli_chat_connection_error(
     )
 
     _patch_stack_layout(monkeypatch, 0)
-    monkeypatch.setattr(chat_command.DockerBackend, "is_running", lambda self: True)
+    monkeypatch.setattr(chat_command.ContainerBackend, "is_running", lambda self: True)
 
     monkeypatch.setattr(
         chat_command.requests,

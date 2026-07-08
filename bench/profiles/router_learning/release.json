@@ -1,0 +1,13 @@
+{
+  "profile": "release",
+  "description": "Release sign-off gate for Router Learning architecture evals. Correctness/explainability at ceiling on the deterministic fixtures; tighter switch-rate, positive cost savings, and stricter latency than the PR gate.",
+  "thresholds": {
+    "route_correctness_pct":            {"min": 100.0},
+    "replay_explainability_coverage_pct": {"min": 100.0},
+    "bypass_correctness_pct":           {"min": 100.0},
+    "unnecessary_switch_rate_pct":      {"max": 15.0},
+    "cost_savings_pct":                 {"min": 5.0},
+    "cache_token_delta":                {"max": 50000},
+    "p95_overhead_ms":                  {"max": 25.0}
+  }
+}
