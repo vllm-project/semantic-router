@@ -33,11 +33,14 @@ CPU/CUDA/OpenVINO: model.onnx -> classifier.onnx -> model_optimized.onnx -> mode
 `model.onnx` remains the CPU baseline artifact. AMD paths prefer
 `model_sdpa_fp16.onnx` when it is present because MIGraphX 2.14 with AMD's ORT
 MIGraphX 1.23.x wheel compiles and runs that artifact for the mmBERT32k intent
-classifier across seq=1/32/512. The raw intent `model.onnx` compiles for seq=1
-but fails at seq=32/512 with a MIGraphX `MULTIBROADCAST` shape error in the
-final masked mean-pooling pattern. If an AMD deployment only has raw
-`model.onnx`, operators should validate the artifact explicitly and expect CPU
-fallback or a model-specific follow-up.
+classifier across seq=1/32/512. Raw sequence-classifier baseline artifacts such
+as intent, factcheck, and feedback `model.onnx` compile for seq=1 but fail at
+seq=32/512 with a MIGraphX `MULTIBROADCAST` shape error in the final masked
+mean-pooling pattern. To avoid runtime failures, sequence classifiers force CPU
+for baseline artifacts on AMD paths when no `model_sdpa_fp16.onnx` or compatible
+optimized artifact is present. Token classifiers keep raw baseline artifacts
+eligible for MIGraphX because the PII token classifier does not use the same
+sequence pooling graph and has been validated under MIGraphX.
 
 ## CK FlashAttention Exception
 
@@ -86,13 +89,15 @@ cd onnx-binding
   --layers 6,11,16,22 \
   --seq-lens 1,32,128,512 \
   --batch-sizes 1,4 \
+  --concurrency 2,4 \
   --jsonl /tmp/mmbert-provider-bench.jsonl \
   --summary-md /tmp/mmbert-provider-bench.md
 ```
 
 The JSONL emits `provider`, `selected_provider`, `fallback_reason`,
 session-create time, first inference time, warm P50/P95/P99, throughput,
-VRAM percentage samples from `rocm-smi`, output shape, and CPU parity drift.
+concurrency throughput, VRAM percentage samples from `rocm-smi`, output shape,
+and CPU parity drift.
 
 Additional router-owned classifier artifacts can be included with repeated
 `--model name=/path/to/model.onnx` flags, for example:
@@ -126,9 +131,12 @@ skipped.
 
 - MIGraphX cold compile can be much slower than warm inference; benchmark both
   session creation and warm latency.
-- The raw mmBERT32k intent classifier `model.onnx` hits a MIGraphX
-  `MULTIBROADCAST` shape error for seq=32/512 in the final masked mean-pooling
-  graph. Use `model_sdpa_fp16.onnx` for AMD/MIGraphX validation when available.
+- Raw mmBERT32k sequence classifiers that use final masked mean pooling
+  currently hit a MIGraphX `MULTIBROADCAST` shape error for seq=32/512. This
+  has been reproduced for intent, factcheck, and feedback `model.onnx`
+  artifacts. Use `model_sdpa_fp16.onnx` for AMD/MIGraphX acceleration when
+  available; otherwise sequence classifiers fall back to CPU for baseline
+  artifacts.
 - CK FlashAttention custom-op artifacts are ROCm-owned until MIGraphX can load
   the same custom-op path.
 - AMD's `onnxruntime_migraphx` 1.23.x wheel exposes MIGraphX and CPU providers,

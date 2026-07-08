@@ -25,6 +25,8 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Arc, Barrier};
+use std::thread;
 use std::time::Instant;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -66,6 +68,7 @@ struct Config {
     extra_models: Vec<ModelSpec>,
     warmup: usize,
     iters: usize,
+    concurrency: Vec<usize>,
     token_id: i64,
     jsonl: Option<PathBuf>,
     summary_md: Option<PathBuf>,
@@ -117,6 +120,19 @@ struct SummaryRow {
     parity_mean_abs: Option<f64>,
 }
 
+struct ConcurrencySummaryRow {
+    model: String,
+    provider: String,
+    selected_provider: String,
+    batch_size: usize,
+    seq_len: usize,
+    concurrency: usize,
+    iters_per_worker: usize,
+    create_ms_total: f64,
+    wall_ms: f64,
+    throughput_items_per_s: f64,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::parse()?;
     let mut jsonl = if let Some(path) = &config.jsonl {
@@ -131,6 +147,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut had_error = false;
     let mut summary_rows = Vec::new();
+    let mut concurrency_rows = Vec::new();
 
     for &layer in &config.layers {
         let Some(model_path) = resolve_model_path(&config.model_dir, layer) else {
@@ -164,6 +181,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &config,
             jsonl.as_mut(),
             &mut summary_rows,
+            &mut concurrency_rows,
         )?;
     }
 
@@ -189,11 +207,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
             continue;
         }
-        had_error |= run_model(model, &config, jsonl.as_mut(), &mut summary_rows)?;
+        had_error |= run_model(
+            model,
+            &config,
+            jsonl.as_mut(),
+            &mut summary_rows,
+            &mut concurrency_rows,
+        )?;
     }
 
     if let Some(path) = &config.summary_md {
-        write_summary_markdown(path, &summary_rows)?;
+        write_summary_markdown(path, &summary_rows, &concurrency_rows)?;
     }
 
     if had_error && config.fail_on_error {
@@ -215,6 +239,7 @@ impl Config {
         let mut extra_models = Vec::new();
         let mut warmup = 3;
         let mut iters = 20;
+        let mut concurrency = parse_csv("1", parse_usize)?;
         let mut token_id = 1_i64;
         let mut jsonl = None;
         let mut summary_md = None;
@@ -257,6 +282,10 @@ impl Config {
                     idx += 1;
                     iters = require_value(&args, idx, arg)?.parse()?;
                 }
+                "--concurrency" => {
+                    idx += 1;
+                    concurrency = parse_csv(require_value(&args, idx, arg)?, parse_usize)?;
+                }
                 "--token-id" => {
                     idx += 1;
                     token_id = require_value(&args, idx, arg)?.parse()?;
@@ -295,6 +324,7 @@ impl Config {
             extra_models,
             warmup,
             iters,
+            concurrency,
             token_id,
             jsonl,
             summary_md,
@@ -308,6 +338,7 @@ fn run_model(
     config: &Config,
     mut jsonl: Option<&mut BufWriter<File>>,
     summary_rows: &mut Vec<SummaryRow>,
+    concurrency_rows: &mut Vec<ConcurrencySummaryRow>,
 ) -> Result<bool, Box<dyn std::error::Error>> {
     let mut had_error = false;
     let mut baselines: HashMap<(usize, usize), OutputData> = HashMap::new();
@@ -400,6 +431,48 @@ fn run_model(
                                 "error": error,
                             }),
                         )?;
+                    }
+                }
+            }
+        }
+
+        for &concurrency in &config.concurrency {
+            if concurrency <= 1 {
+                continue;
+            }
+            for &batch_size in &config.batch_sizes {
+                for &seq_len in &config.seq_lens {
+                    match benchmark_concurrency(
+                        provider,
+                        model,
+                        batch_size,
+                        seq_len,
+                        concurrency,
+                        config,
+                        jsonl.as_mut().map(|writer| &mut **writer),
+                        concurrency_rows,
+                    ) {
+                        Ok(()) => {}
+                        Err(error) => {
+                            had_error = true;
+                            println!(
+                                "    batch={batch_size:<3} seq={seq_len:<5} concurrency={concurrency:<3} status=error error={error}"
+                            );
+                            emit_event(
+                                jsonl.as_mut().map(|writer| &mut **writer),
+                                json!({
+                                    "event": "concurrency",
+                                    "provider": provider.as_str(),
+                                    "model_name": model.name,
+                                    "layer": model.layer,
+                                    "batch_size": batch_size,
+                                    "seq_len": seq_len,
+                                    "concurrency": concurrency,
+                                    "status": "error",
+                                    "error": error,
+                                }),
+                            )?;
+                        }
                     }
                 }
             }
@@ -597,6 +670,131 @@ fn benchmark_shape(
     Ok(Some(output))
 }
 
+#[allow(clippy::too_many_arguments)]
+fn benchmark_concurrency(
+    provider: Provider,
+    model: &ModelSpec,
+    batch_size: usize,
+    seq_len: usize,
+    concurrency: usize,
+    config: &Config,
+    jsonl: Option<&mut BufWriter<File>>,
+    summary_rows: &mut Vec<ConcurrencySummaryRow>,
+) -> Result<(), String> {
+    let vram_before_pct = read_rocm_vram_used_pct();
+    let mut sessions = Vec::with_capacity(concurrency);
+    let mut create_ms_total = 0.0_f64;
+    let mut selected_providers = Vec::with_capacity(concurrency);
+
+    for _ in 0..concurrency {
+        let session_start = Instant::now();
+        let session_info = create_session(provider, &model.path)?;
+        create_ms_total += session_start.elapsed().as_secs_f64() * 1000.0;
+        selected_providers.push(session_info.selected_provider.clone());
+        sessions.push(session_info.session);
+    }
+
+    for session in &mut sessions {
+        for _ in 0..config.warmup {
+            timed_run(session, batch_size, seq_len, config.token_id, false)?;
+        }
+    }
+
+    let selected_provider = selected_providers
+        .first()
+        .cloned()
+        .unwrap_or_else(|| provider.as_str().to_string());
+    let selected_provider_mixed = selected_providers
+        .iter()
+        .any(|value| value != &selected_provider);
+    let barrier = Arc::new(Barrier::new(concurrency));
+    let mut handles = Vec::with_capacity(concurrency);
+
+    for mut session in sessions {
+        let barrier = Arc::clone(&barrier);
+        let token_id = config.token_id;
+        let iters = config.iters;
+        handles.push(thread::spawn(move || -> Result<f64, String> {
+            barrier.wait();
+            let start = Instant::now();
+            for _ in 0..iters {
+                timed_run(&mut session, batch_size, seq_len, token_id, false)?;
+            }
+            Ok(start.elapsed().as_secs_f64() * 1000.0)
+        }));
+    }
+
+    let mut worker_elapsed_ms = Vec::with_capacity(concurrency);
+    for handle in handles {
+        let elapsed_ms = handle
+            .join()
+            .map_err(|_| "concurrency worker panicked".to_string())??;
+        worker_elapsed_ms.push(elapsed_ms);
+    }
+
+    let wall_ms = worker_elapsed_ms.iter().copied().fold(0.0_f64, f64::max);
+    let total_items = concurrency * config.iters * batch_size;
+    let throughput_items_per_s = if wall_ms > 0.0 {
+        total_items as f64 * 1000.0 / wall_ms
+    } else {
+        0.0
+    };
+    let vram_after_pct = read_rocm_vram_used_pct();
+    let vram_peak_observed_pct = match (vram_before_pct, vram_after_pct) {
+        (Some(before), Some(after)) => Some(before.max(after)),
+        (Some(before), None) => Some(before),
+        (None, Some(after)) => Some(after),
+        (None, None) => None,
+    };
+
+    println!(
+        "    batch={batch_size:<3} seq={seq_len:<5} concurrency={concurrency:<3} wall={wall_ms:>8.2}ms tput={throughput_items_per_s:>8.1}/s selected={selected_provider}{}",
+        if selected_provider_mixed { " mixed" } else { "" }
+    );
+
+    emit_event(
+        jsonl,
+        json!({
+            "event": "concurrency",
+            "provider": provider.as_str(),
+            "selected_provider": selected_provider,
+            "selected_provider_mixed": selected_provider_mixed,
+            "selected_providers": selected_providers,
+            "model_name": model.name,
+            "model": model.path.display().to_string(),
+            "layer": model.layer,
+            "batch_size": batch_size,
+            "seq_len": seq_len,
+            "concurrency": concurrency,
+            "iters_per_worker": config.iters,
+            "status": "ok",
+            "create_ms_total": create_ms_total,
+            "wall_ms": wall_ms,
+            "worker_elapsed_ms": worker_elapsed_ms,
+            "throughput_items_per_s": throughput_items_per_s,
+            "vram_before_pct": vram_before_pct,
+            "vram_after_pct": vram_after_pct,
+            "vram_peak_observed_pct": vram_peak_observed_pct,
+        }),
+    )
+    .map_err(|error| error.to_string())?;
+
+    summary_rows.push(ConcurrencySummaryRow {
+        model: model.name.clone(),
+        provider: provider.as_str().to_string(),
+        selected_provider,
+        batch_size,
+        seq_len,
+        concurrency,
+        iters_per_worker: config.iters,
+        create_ms_total,
+        wall_ms,
+        throughput_items_per_s,
+    });
+
+    Ok(())
+}
+
 fn timed_run(
     session: &mut Session,
     batch_size: usize,
@@ -751,6 +949,7 @@ fn emit_inventory(
     println!("  seq_lens={:?}", config.seq_lens);
     println!("  batch_sizes={:?}", config.batch_sizes);
     println!("  warmup={} iters={}", config.warmup, config.iters);
+    println!("  concurrency={:?}", config.concurrency);
     println!(
         "  features: rocm={} migraphx={} cuda={}",
         cfg!(feature = "rocm"),
@@ -784,6 +983,7 @@ fn emit_inventory(
             "batch_sizes": config.batch_sizes,
             "warmup": config.warmup,
             "iters": config.iters,
+            "concurrency": config.concurrency,
             "feature_rocm": cfg!(feature = "rocm"),
             "feature_migraphx": cfg!(feature = "migraphx"),
             "feature_cuda": cfg!(feature = "cuda"),
@@ -904,9 +1104,15 @@ fn parse_first_float(value: &str) -> Option<f64> {
     number.parse().ok()
 }
 
-fn write_summary_markdown(path: &Path, rows: &[SummaryRow]) -> std::io::Result<()> {
+fn write_summary_markdown(
+    path: &Path,
+    rows: &[SummaryRow],
+    concurrency_rows: &[ConcurrencySummaryRow],
+) -> std::io::Result<()> {
     let mut writer = BufWriter::new(File::create(path)?);
     writeln!(writer, "# mmBERT ORT Provider Benchmark Summary")?;
+    writeln!(writer)?;
+    writeln!(writer, "## Latency")?;
     writeln!(writer)?;
     writeln!(
         writer,
@@ -938,6 +1144,36 @@ fn write_summary_markdown(path: &Path, rows: &[SummaryRow]) -> std::io::Result<(
                 .unwrap_or_else(|| "n/a".to_string()),
         )?;
     }
+
+    if !concurrency_rows.is_empty() {
+        writeln!(writer)?;
+        writeln!(writer, "## Concurrency Throughput")?;
+        writeln!(writer)?;
+        writeln!(
+            writer,
+            "| Model | Provider | Selected | Batch | Seq | Concurrency | Iters/worker | Create ms total | Wall ms | Throughput items/s |"
+        )?;
+        writeln!(
+            writer,
+            "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
+        )?;
+        for row in concurrency_rows {
+            writeln!(
+                writer,
+                "| {} | {} | {} | {} | {} | {} | {} | {:.2} | {:.2} | {:.1} |",
+                row.model,
+                row.provider,
+                row.selected_provider,
+                row.batch_size,
+                row.seq_len,
+                row.concurrency,
+                row.iters_per_worker,
+                row.create_ms_total,
+                row.wall_ms,
+                row.throughput_items_per_s,
+            )?;
+        }
+    }
     writer.flush()
 }
 
@@ -960,6 +1196,7 @@ Options:\n\
   --model NAME=PATH      Additional ONNX model file to benchmark; repeatable\n\
   --warmup N             Warmup iterations per shape\n\
   --iters N              Timed iterations per shape\n\
+  --concurrency LIST     Concurrent worker counts for throughput, for example 2,4\n\
   --token-id ID          Legal token id to feed; default 1\n\
   --jsonl PATH           Write machine-readable JSONL results\n\
   --summary-md PATH      Write a Markdown summary table\n\

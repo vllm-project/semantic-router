@@ -101,7 +101,8 @@ cargo build --release --example benchmark_cpu_vs_gpu
 
 Classifier artifact selection is provider-aware: AMD `Auto`/`Rocm` paths prefer
 `model_sdpa_fp16.onnx` when present, while CPU paths keep `model.onnx` as the
-baseline artifact. See
+baseline artifact. AMD sequence classifiers fall back to CPU for raw baseline
+artifacts when no MIGraphX-safe optimized artifact is present. See
 [MIGRAPHX_PROVIDER_STRATEGY.md](MIGRAPHX_PROVIDER_STRATEGY.md) for the full
 provider and artifact policy.
 
@@ -113,6 +114,7 @@ cargo build --release --features migraphx-dynamic --example benchmark_mmbert_ort
 ./scripts/run_mmbert_migraphx_bench.sh \
   --providers cpu,auto,migraphx,rocm \
   --layers 6,11,16,22 \
+  --concurrency 2,4 \
   --jsonl /tmp/mmbert-provider-bench.jsonl \
   --summary-md /tmp/mmbert-provider-bench.md
 ```

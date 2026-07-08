@@ -179,6 +179,12 @@ pub enum ClassifierExecutionProvider {
     OpenVino,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BaselineAmdPolicy {
+    Allow,
+    CpuOnly,
+}
+
 // ============================================================================
 // Sequence Classification Model
 // ============================================================================
@@ -234,8 +240,12 @@ impl MmBertSequenceClassifier {
 
         // Find ONNX model candidates and initialize with fallback.
         let onnx_candidates = Self::find_onnx_models(&model_path, provider)?;
-        let (session, onnx_path) =
-            Self::create_session_with_fallback(onnx_candidates, provider, &model_path_str)?;
+        let (session, onnx_path) = Self::create_session_with_fallback(
+            onnx_candidates,
+            provider,
+            &model_path_str,
+            BaselineAmdPolicy::CpuOnly,
+        )?;
         println!(
             "INFO: Selected classifier ONNX file: {}",
             onnx_path.display()
@@ -344,15 +354,51 @@ impl MmBertSequenceClassifier {
         }
     }
 
+    fn is_baseline_onnx_artifact(onnx_path: &Path) -> bool {
+        matches!(
+            onnx_path.file_name().and_then(|name| name.to_str()),
+            Some("model.onnx" | "classifier.onnx" | "model_optimized.onnx")
+        )
+    }
+
+    fn session_provider_for_candidate(
+        onnx_path: &Path,
+        provider: ClassifierExecutionProvider,
+        baseline_amd_policy: BaselineAmdPolicy,
+    ) -> ClassifierExecutionProvider {
+        if Self::prefers_amd_onnx_artifacts(provider)
+            && baseline_amd_policy == BaselineAmdPolicy::CpuOnly
+            && Self::is_baseline_onnx_artifact(onnx_path)
+        {
+            ClassifierExecutionProvider::Cpu
+        } else {
+            provider
+        }
+    }
+
     /// Create session from candidates with fallback across files.
     fn create_session_with_fallback(
         onnx_candidates: Vec<std::path::PathBuf>,
         provider: ClassifierExecutionProvider,
         model_path: &str,
+        baseline_amd_policy: BaselineAmdPolicy,
     ) -> UnifiedResult<(Session, std::path::PathBuf)> {
         let mut last_error: Option<String> = None;
         for onnx_path in onnx_candidates {
-            match Self::create_session(&onnx_path, provider) {
+            let session_provider =
+                Self::session_provider_for_candidate(&onnx_path, provider, baseline_amd_policy);
+            if session_provider == ClassifierExecutionProvider::Cpu
+                && provider != ClassifierExecutionProvider::Cpu
+                && baseline_amd_policy == BaselineAmdPolicy::CpuOnly
+                && Self::is_baseline_onnx_artifact(&onnx_path)
+            {
+                println!(
+                    "WARNING: Using CPU for baseline sequence-classifier artifact {} because raw mmBERT classifier pooling is not MIGraphX-safe; provide model_sdpa_fp16.onnx for AMD acceleration",
+                    onnx_path.display()
+                );
+            }
+
+            match Self::create_session(&onnx_path, session_provider) {
                 Ok(session) => return Ok((session, onnx_path)),
                 Err(e) => {
                     let reason = format!("{:?}", e);
@@ -885,6 +931,7 @@ impl MmBertTokenClassifier {
             onnx_candidates,
             provider,
             &model_path_str,
+            BaselineAmdPolicy::Allow,
         )?;
         println!(
             "INFO: Selected token-classifier ONNX file: {}",
@@ -1216,6 +1263,39 @@ mod tests {
                 "model_optimized.onnx",
             ]
         );
+    }
+
+    #[test]
+    fn test_sequence_baseline_artifact_uses_cpu_on_amd() {
+        let provider = MmBertSequenceClassifier::session_provider_for_candidate(
+            Path::new("/models/intent/onnx/model.onnx"),
+            ClassifierExecutionProvider::Rocm,
+            BaselineAmdPolicy::CpuOnly,
+        );
+
+        assert!(matches!(provider, ClassifierExecutionProvider::Cpu));
+    }
+
+    #[test]
+    fn test_sequence_sdpa_artifact_uses_amd_on_amd() {
+        let provider = MmBertSequenceClassifier::session_provider_for_candidate(
+            Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
+            ClassifierExecutionProvider::Rocm,
+            BaselineAmdPolicy::CpuOnly,
+        );
+
+        assert!(matches!(provider, ClassifierExecutionProvider::Rocm));
+    }
+
+    #[test]
+    fn test_token_classifier_baseline_artifact_can_use_amd() {
+        let provider = MmBertSequenceClassifier::session_provider_for_candidate(
+            Path::new("/models/pii/onnx/model.onnx"),
+            ClassifierExecutionProvider::Rocm,
+            BaselineAmdPolicy::Allow,
+        );
+
+        assert!(matches!(provider, ClassifierExecutionProvider::Rocm));
     }
 
     #[test]
