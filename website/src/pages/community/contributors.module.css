@@ -426,6 +426,12 @@
   line-height: 1.6;
 }
 
+.sectionControls {
+  display: flex;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
 .rangeSelectLabel {
   display: grid;
   gap: 0.38rem;
@@ -468,7 +474,7 @@
 
 .rankListHeader {
   display: grid;
-  grid-template-columns: 5rem minmax(16rem, 1fr) minmax(6rem, 0.38fr) minmax(12rem, 0.62fr) minmax(8rem, 0.42fr);
+  grid-template-columns: 5rem minmax(16rem, 1fr) minmax(5.5rem, 0.34fr) minmax(5.5rem, 0.34fr) minmax(11rem, 0.55fr) minmax(8rem, 0.42fr);
   gap: 1rem;
   align-items: center;
   padding: 0.62rem 1rem;
@@ -493,7 +499,7 @@
 .rankItem {
   position: relative;
   display: grid;
-  grid-template-columns: 4rem minmax(16rem, 1fr) minmax(6rem, 0.38fr) minmax(12rem, 0.62fr) minmax(8rem, 0.42fr);
+  grid-template-columns: 4rem minmax(16rem, 1fr) minmax(5.5rem, 0.34fr) minmax(5.5rem, 0.34fr) minmax(11rem, 0.55fr) minmax(8rem, 0.42fr);
   gap: 1rem;
   align-items: center;
   min-width: 0;
@@ -754,7 +760,7 @@
 
 @media (max-width: 1120px) {
   .rankListHeader {
-    grid-template-columns: 3.5rem minmax(13rem, 1fr) minmax(5rem, 0.35fr) minmax(10rem, 0.62fr);
+    grid-template-columns: 3.5rem minmax(13rem, 1fr) minmax(5rem, 0.34fr) minmax(5rem, 0.34fr) minmax(10rem, 0.55fr);
   }
 
   .rankListHeader span:last-child {
@@ -762,7 +768,7 @@
   }
 
   .rankItem {
-    grid-template-columns: 3.5rem minmax(13rem, 1fr) minmax(5rem, 0.35fr) minmax(10rem, 0.62fr);
+    grid-template-columns: 3.5rem minmax(13rem, 1fr) minmax(5rem, 0.34fr) minmax(5rem, 0.34fr) minmax(10rem, 0.55fr);
   }
 
   .rankItem .statBlock:last-child {
@@ -829,6 +835,10 @@
   .rangeSelectLabel {
     width: 100%;
     min-width: 0;
+  }
+
+  .sectionControls {
+    width: 100%;
   }
 
   .rankListHeader {
