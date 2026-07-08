@@ -157,6 +157,128 @@ func TestSelectBackendCandidateFailOpenReasons(t *testing.T) {
 	})
 }
 
+func TestSelectBackendCandidateCountsUnhealthyByCandidate(t *testing.T) {
+	base := time.Unix(600, 0)
+
+	t.Run("mixed unhealthy replicas and missing telemetry reports missing", func(t *testing.T) {
+		store := newStoreWithClock(5*time.Second, func() time.Time { return base })
+		for _, telemetry := range []BackendTelemetry{
+			{
+				Identity:    BackendIdentity{BackendID: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-0"},
+				Health:      HealthStateUnhealthy,
+				CollectedAt: base,
+			},
+			{
+				Identity:    BackendIdentity{BackendID: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-1"},
+				Health:      HealthStateUnhealthy,
+				CollectedAt: base,
+			},
+		} {
+			if err := store.Upsert(telemetry); err != nil {
+				t.Fatalf("Upsert returned error: %v", err)
+			}
+		}
+
+		result := SelectBackendCandidate("qwen3-8b", []BackendCandidate{
+			{BackendID: "backend-a"},
+			{BackendID: "backend-b"},
+		}, store)
+		assertFailOpenReason(t, result, FallbackReasonMissingTelemetry)
+		if result.Diagnostics.UnhealthyCount != 1 {
+			t.Fatalf("UnhealthyCount = %d, want 1 unhealthy candidate", result.Diagnostics.UnhealthyCount)
+		}
+		if result.Diagnostics.FreshCandidateCount != 1 {
+			t.Fatalf("FreshCandidateCount = %d, want 1", result.Diagnostics.FreshCandidateCount)
+		}
+	})
+
+	t.Run("all unhealthy counts candidates not replicas", func(t *testing.T) {
+		store := newStoreWithClock(5*time.Second, func() time.Time { return base })
+		for _, telemetry := range []BackendTelemetry{
+			{
+				Identity:    BackendIdentity{BackendID: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-0"},
+				Health:      HealthStateUnhealthy,
+				CollectedAt: base,
+			},
+			{
+				Identity:    BackendIdentity{BackendID: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-1"},
+				Health:      HealthStateUnhealthy,
+				CollectedAt: base,
+			},
+			{
+				Identity:    BackendIdentity{BackendID: "backend-b", ModelName: "qwen3-8b", ReplicaID: "b-0"},
+				Health:      HealthStateUnhealthy,
+				CollectedAt: base,
+			},
+		} {
+			if err := store.Upsert(telemetry); err != nil {
+				t.Fatalf("Upsert returned error: %v", err)
+			}
+		}
+
+		result := SelectBackendCandidate("qwen3-8b", []BackendCandidate{
+			{BackendID: "backend-a"},
+			{BackendID: "backend-b"},
+		}, store)
+		assertFailOpenReason(t, result, FallbackReasonAllUnhealthy)
+		if result.Diagnostics.UnhealthyCount != 2 {
+			t.Fatalf("UnhealthyCount = %d, want 2 unhealthy candidates", result.Diagnostics.UnhealthyCount)
+		}
+		if result.Diagnostics.FreshCandidateCount != 2 {
+			t.Fatalf("FreshCandidateCount = %d, want 2", result.Diagnostics.FreshCandidateCount)
+		}
+	})
+}
+
+func TestSelectBackendCandidateSelectsBackendWithAnyHealthyReplica(t *testing.T) {
+	base := time.Unix(700, 0)
+	store := newStoreWithClock(5*time.Second, func() time.Time { return base })
+	queueUnhealthy := 0
+	queueHealthy := 5
+	queueOther := 1
+	for _, telemetry := range []BackendTelemetry{
+		{
+			Identity:    BackendIdentity{BackendID: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-0"},
+			QueueDepth:  &queueUnhealthy,
+			Health:      HealthStateUnhealthy,
+			CollectedAt: base,
+		},
+		{
+			Identity:    BackendIdentity{BackendID: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-1"},
+			QueueDepth:  &queueHealthy,
+			Health:      HealthStateHealthy,
+			CollectedAt: base,
+		},
+		{
+			Identity:    BackendIdentity{BackendID: "backend-b", ModelName: "qwen3-8b", ReplicaID: "b-0"},
+			QueueDepth:  &queueOther,
+			Health:      HealthStateUnhealthy,
+			CollectedAt: base,
+		},
+	} {
+		if err := store.Upsert(telemetry); err != nil {
+			t.Fatalf("Upsert returned error: %v", err)
+		}
+	}
+
+	result := SelectBackendCandidate("qwen3-8b", []BackendCandidate{
+		{BackendID: "backend-a"},
+		{BackendID: "backend-b"},
+	}, store)
+	if result.FailOpen {
+		t.Fatalf("expected selectable healthy replica, got fail-open result %#v", result)
+	}
+	if result.SelectedBackendID != "backend-a" || result.SelectedReplicaID != "a-1" {
+		t.Fatalf("expected backend-a/a-1, got %#v", result)
+	}
+	if result.Diagnostics.UnhealthyCount != 1 {
+		t.Fatalf("UnhealthyCount = %d, want 1 unhealthy candidate", result.Diagnostics.UnhealthyCount)
+	}
+	if result.Diagnostics.FreshCandidateCount != 2 {
+		t.Fatalf("FreshCandidateCount = %d, want 2", result.Diagnostics.FreshCandidateCount)
+	}
+}
+
 func assertFailOpenReason(t *testing.T, result BackendPolicyResult, reason string) {
 	t.Helper()
 	if !result.FailOpen {

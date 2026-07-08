@@ -129,5 +129,6 @@ type BackendPolicyDiagnostics struct {
 	FallbackReason      string `json:"fallback_reason,omitempty"`
 	CandidateCount      int    `json:"candidate_count"`
 	FreshCandidateCount int    `json:"fresh_candidate_count"`
-	UnhealthyCount      int    `json:"unhealthy_count"`
+	// UnhealthyCount counts candidates with fresh telemetry but no selectable replica.
+	UnhealthyCount int `json:"unhealthy_count"`
 }
