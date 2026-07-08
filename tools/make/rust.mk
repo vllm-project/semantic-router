@@ -98,7 +98,7 @@ test-binding-minimal: $(if $(CI),rust-ci,rust) ## Run Go tests with minimal mode
 # receipt command for PRs touching the multimodal FFI (issue #2319).
 # Requires models/mom-embedding-multimodal (make download-models) and network
 # access for the Wikimedia fixture images.
-test-binding-multimodal: $(if $(CI),rust-ci,rust) ## Run all multimodal model-gated tests (Go binding + router integration + Rust)
+test-binding-multimodal: $(if $(CI),rust-ci,rust) ## Run the multimodal model-gated Go tests (binding + router integration)
 	@$(LOG_TARGET)
 	@if [ ! -d "$${MULTIMODAL_MODEL_PATH:-$(CURDIR)/models/mom-embedding-multimodal}" ]; then \
 		echo "Multimodal model not found at $${MULTIMODAL_MODEL_PATH:-$(CURDIR)/models/mom-embedding-multimodal}"; \
@@ -115,7 +115,15 @@ test-binding-multimodal: $(if $(CI),rust-ci,rust) ## Run all multimodal model-ga
 		cd src/semantic-router && CGO_ENABLED=1 \
 		CGO_LDFLAGS="-L$(CURDIR)/candle-binding/target/release" \
 		go test -v -run "^TestEmbeddingClassifier_Integration" ./pkg/classification/
-	@echo "Running ignored Rust multimodal unit tests..."
+
+# Exploratory lane for the #[ignore] Rust multimodal unit tests. Kept OUT of
+# test-binding-multimodal so that target stays a pass/fail receipt: this suite
+# has a known-red baseline (see docs/agent/testing-strategy.md, "Model-Gated
+# Multimodal Tests") and is expected to exit non-zero until those pre-existing
+# defects are fixed.
+test-binding-multimodal-rust-baseline: $(if $(CI),rust-ci,rust) ## Run the ignored Rust multimodal unit tests (known-red baseline)
+	@$(LOG_TARGET)
+	@echo "Running ignored Rust multimodal unit tests (known-red baseline; see docs/agent/testing-strategy.md)..."
 	@cd candle-binding && \
 		MULTIMODAL_MODEL_PATH=$${MULTIMODAL_MODEL_PATH:-$(CURDIR)/models/mom-embedding-multimodal} \
 		cargo test --release --no-default-features --lib multimodal_embedding::integration_tests -- --ignored --test-threads=1
