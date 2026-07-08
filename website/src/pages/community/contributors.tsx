@@ -12,6 +12,14 @@ import type {
   ContributorRankEntry,
   ContributorRankRange,
 } from '../../data/contributorRank.generated'
+import {
+  committerStatsData,
+  committerStatsGeneratedAt,
+} from '../../data/committerReviewStats.generated'
+import type {
+  CommitterStatsEntry,
+  CommitterStatsRange,
+} from '../../data/committerReviewStats.generated'
 import styles from './contributors.module.css'
 
 type RangeOption = {
@@ -86,6 +94,7 @@ const ContributorsPage: React.FC = () => {
 
   const [selectedRange, setSelectedRange] = useState<ContributorRankRange>('v03ToNow')
   const snapshot = contributorRankData[selectedRange]
+  const committerSnapshot = committerStatsData[selectedRange as CommitterStatsRange]
   const topContributors = snapshot.entries.slice(0, 5)
   const selectedRangeLabel = rangeOptions.find(option => option.id === selectedRange)?.label ?? snapshot.label
 
@@ -197,6 +206,79 @@ const ContributorsPage: React.FC = () => {
           <div className={styles.rankList}>
             {snapshot.entries.map(entry => (
               <ContributorRow key={`${snapshot.id}-${entry.rank}-${entry.name}`} entry={entry} dateLocale={dateLocale} numberLocale={numberLocale} />
+            ))}
+          </div>
+        </section>
+
+        <section
+          className={styles.leaderboardSection}
+          aria-label={translate({
+            id: 'community.contributors.committers.aria',
+            message: '{rangeLabel} committer activity',
+          }, { rangeLabel: selectedRangeLabel })}
+        >
+          <div className={styles.sectionHeader}>
+            <div>
+              <h2>
+                <Translate id="community.contributors.committers.h2">Committer Activity</Translate>
+              </h2>
+              <p>
+                {formatRange(committerSnapshot.startDate, committerSnapshot.endDate, dateLocale)}
+                {' '}
+                ·
+                {' '}
+                {translate({ id: 'community.contributors.updated', message: 'Updated' })}
+                {' '}
+                {formatDate(committerStatsGeneratedAt, dateLocale)}
+              </p>
+            </div>
+          </div>
+
+          <section
+            className={styles.metrics}
+            aria-label={translate({
+              id: 'community.contributors.committers.metrics.aria',
+              message: 'Committer activity summary',
+            })}
+          >
+            <Metric
+              label={translate({
+                id: 'community.contributors.committers.metrics.committers',
+                message: 'Active Committers',
+              })}
+              value={committerSnapshot.activeCommitters.toLocaleString(numberLocale)}
+            />
+            <Metric
+              label={translate({
+                id: 'community.contributors.committers.metrics.reviews',
+                message: 'PR Reviews',
+              })}
+              value={committerSnapshot.totalReviews.toLocaleString(numberLocale)}
+            />
+            <Metric
+              label={translate({
+                id: 'community.contributors.committers.metrics.merges',
+                message: 'PR Merges',
+              })}
+              value={committerSnapshot.totalMerges.toLocaleString(numberLocale)}
+            />
+          </section>
+
+          <div className={styles.rankListHeader} aria-hidden="true">
+            <span><Translate id="community.contributors.table.rank">Rank</Translate></span>
+            <span><Translate id="community.contributors.table.contributor">Contributor</Translate></span>
+            <span><Translate id="community.contributors.committers.table.reviews">Reviews</Translate></span>
+            <span><Translate id="community.contributors.committers.table.merges">Merges</Translate></span>
+            <span><Translate id="community.contributors.committers.table.total">Total</Translate></span>
+          </div>
+
+          <div className={styles.rankList}>
+            {committerSnapshot.entries.map(entry => (
+              <CommitterRow
+                key={`committer-${committerSnapshot.id}-${entry.rank}-${entry.login ?? entry.name}`}
+                entry={entry}
+                numberLocale={numberLocale}
+              />
             ))}
           </div>
         </section>
@@ -316,6 +398,77 @@ const ContributorAvatar: React.FC<{
   return (
     <img
       className={`${styles.avatar} ${size === 'large' ? styles.avatarLarge : ''}`}
+      src={avatarUrl}
+      alt={translate({
+        id: 'community.contributors.avatarAlt',
+        message: '{name} avatar',
+      }, { name: entry.name })}
+      loading="lazy"
+      onError={() => setDidFail(true)}
+    />
+  )
+}
+
+const CommitterRow: React.FC<{
+  entry: CommitterStatsEntry
+  numberLocale: string
+}> = ({ entry, numberLocale }) => {
+  const profileUrl = entry.login ? `https://github.com/${entry.login}` : undefined
+
+  return (
+    <article className={styles.rankItem}>
+      <span className={styles.rankBadge}>
+        {formatRankNumber(entry.rank)}
+      </span>
+
+      <div className={styles.contributor}>
+        <CommitterAvatar entry={entry} />
+        <div className={styles.identity}>
+          <span className={styles.nameLine}>
+            <span className={styles.name}>{entry.name}</span>
+          </span>
+          {profileUrl && entry.login
+            ? (
+                <a href={profileUrl} target="_blank" rel="noopener noreferrer" className={styles.githubLink}>
+                  <FaGithub aria-hidden="true" />
+                  {entry.login}
+                </a>
+              )
+            : (
+                <span className={styles.handle}>
+                  <Translate id="community.contributors.gitAuthor">Git author</Translate>
+                </span>
+              )}
+        </div>
+      </div>
+
+      <div className={styles.statBlock}>
+        <span><Translate id="community.contributors.committers.table.reviews">Reviews</Translate></span>
+        <strong>{entry.reviews.toLocaleString(numberLocale)}</strong>
+      </div>
+
+      <div className={styles.statBlock}>
+        <span><Translate id="community.contributors.committers.table.merges">Merges</Translate></span>
+        <strong>{entry.merges.toLocaleString(numberLocale)}</strong>
+      </div>
+
+      <div className={styles.statBlock}>
+        <span><Translate id="community.contributors.committers.table.total">Total</Translate></span>
+        <strong>{entry.total.toLocaleString(numberLocale)}</strong>
+      </div>
+    </article>
+  )
+}
+
+const CommitterAvatar: React.FC<{ entry: CommitterStatsEntry }> = ({ entry }) => {
+  const [didFail, setDidFail] = useState(false)
+  const fallbackUrl = createFallbackAvatar(entry.avatarSeed || entry.name)
+  const githubAvatarUrl = entry.avatarUrl ?? (entry.avatarLogin ? `https://github.com/${entry.avatarLogin}.png?size=160` : undefined)
+  const avatarUrl = githubAvatarUrl && !didFail ? githubAvatarUrl : fallbackUrl
+
+  return (
+    <img
+      className={styles.avatar}
       src={avatarUrl}
       alt={translate({
         id: 'community.contributors.avatarAlt',

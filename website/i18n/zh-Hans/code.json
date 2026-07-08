@@ -2573,6 +2573,33 @@
   "community.contributors.avatarAlt": {
     "message": "{name} 头像"
   },
+  "community.contributors.committers.aria": {
+    "message": "{rangeLabel} 提交者活动"
+  },
+  "community.contributors.committers.h2": {
+    "message": "提交者活动"
+  },
+  "community.contributors.committers.metrics.aria": {
+    "message": "提交者活动摘要"
+  },
+  "community.contributors.committers.metrics.committers": {
+    "message": "活跃提交者"
+  },
+  "community.contributors.committers.metrics.reviews": {
+    "message": "PR 审查"
+  },
+  "community.contributors.committers.metrics.merges": {
+    "message": "PR 合并"
+  },
+  "community.contributors.committers.table.reviews": {
+    "message": "审查"
+  },
+  "community.contributors.committers.table.merges": {
+    "message": "合并"
+  },
+  "community.contributors.committers.table.total": {
+    "message": "合计"
+  },
   "community.contributors.range.v03ToNow.label": {
     "message": "v0.3 -> 当前"
   },
