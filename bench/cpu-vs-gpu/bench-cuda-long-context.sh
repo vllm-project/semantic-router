@@ -317,10 +317,14 @@ generate_report() {
                 local ca="$RESULTS_DIR/m-cpu-after-${sz}-${TIMESTAMP}.txt"
                 local gb="$RESULTS_DIR/m-gpu-before-${sz}-${TIMESTAMP}.txt"
                 local ga="$RESULTS_DIR/m-gpu-after-${sz}-${TIMESTAMP}.txt"
-                [ -f "$cb" ] && [ -f "$ca" ] && [ -f "$gb" ] && [ -f "$ga" ] || continue
+                if [ ! -f "$cb" ] || [ ! -f "$ca" ] || [ ! -f "$gb" ] || [ ! -f "$ga" ]; then
+                    continue
+                fi
                 read -r cn cavg _ _ _ <<< "$(histogram_stats "$cb" "$ca" "$signal")"
                 read -r gn gavg _ _ _ <<< "$(histogram_stats "$gb" "$ga" "$signal")"
-                [ "$cn" != 0 ] && [ "$gn" != 0 ] || continue
+                if [ "$cn" = 0 ] || [ "$gn" = 0 ]; then
+                    continue
+                fi
                 local speedup
                 speedup=$(python3 -c "ca, ga = $cavg, $gavg; print(f'{ca/ga:.2f}x' if ga > 0 else 'N/A')" 2>/dev/null || echo "N/A")
                 echo "| ~${sz} | ${signal} | $cavg | $gavg | $speedup |"
