@@ -1,0 +1,57 @@
+# Dockerfile for validating mmBERT ONNX Runtime inference with AMD MIGraphX.
+#
+# This image is intentionally a benchmark/validation image. It does not change
+# the production router image or default provider policy.
+
+FROM rocm/dev-ubuntu-24.04:7.1
+
+ARG ORT_MIGRAPHX_VERSION=1.23.1
+ARG ORT_WHEEL_URL=https://repo.radeon.com/rocm/manylinux/rocm-rel-7.1/onnxruntime_migraphx-1.23.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        git \
+        hipblas \
+        hipfft \
+        migraphx \
+        miopen-hip \
+        pkg-config \
+        python3 \
+        python3-pip \
+        rccl \
+        build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m pip install --no-cache-dir --break-system-packages \
+        numpy==1.26.4 \
+        "${ORT_WHEEL_URL}" && \
+    ORT_DIR="$(python3 -c 'import pathlib, onnxruntime; print(pathlib.Path(onnxruntime.__file__).parent / "capi")')" && \
+    ln -sf "${ORT_DIR}/libonnxruntime.so.${ORT_MIGRAPHX_VERSION}" "${ORT_DIR}/libonnxruntime.so.1" && \
+    ln -sf "${ORT_DIR}/libonnxruntime.so.${ORT_MIGRAPHX_VERSION}" "${ORT_DIR}/libonnxruntime.so"
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+        sh -s -- -y --profile minimal
+
+ENV PATH=/root/.cargo/bin:${PATH}
+ENV ORT_DYLIB_PATH=/usr/local/lib/python3.12/dist-packages/onnxruntime/capi/libonnxruntime.so.1.23.1
+ENV LD_LIBRARY_PATH=/opt/rocm/lib:/usr/local/lib/python3.12/dist-packages/onnxruntime/capi:${LD_LIBRARY_PATH}
+ENV FEATURES=migraphx-dynamic
+
+WORKDIR /workspace
+
+COPY Cargo.toml Cargo.lock* ./
+RUN mkdir -p src && \
+    printf '' > src/lib.rs && \
+    printf 'fn main() {}' > src/main.rs && \
+    cargo fetch || true && \
+    rm -rf src
+
+COPY . .
+
+RUN cargo build --release --features migraphx-dynamic --example benchmark_mmbert_ort_providers
+
+ENTRYPOINT ["./scripts/run_mmbert_migraphx_bench.sh"]

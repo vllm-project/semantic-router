@@ -67,3 +67,7 @@ path = "examples/test_classifier.rs"
 [[example]]
 name = "benchmark_mmbert_latency"
 path = "examples/benchmark_mmbert_latency.rs"
+
+[[example]]
+name = "benchmark_mmbert_ort_providers"
+path = "examples/benchmark_mmbert_ort_providers.rs"

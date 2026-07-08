@@ -362,9 +362,7 @@ impl MmBertSequenceClassifier {
                 #[cfg(feature = "rocm")]
                 {
                     use crate::core::gpu_memory;
-                    use ort::execution_providers::{
-                        ArenaExtendStrategy, MIGraphXExecutionProvider, ROCmExecutionProvider,
-                    };
+                    use ort::execution_providers::{ArenaExtendStrategy, ROCmExecutionProvider};
 
                     let ck_fa_lib = std::env::var("ORT_CK_FLASH_ATTN_LIB")
                         .ok()
@@ -381,14 +379,17 @@ impl MmBertSequenceClassifier {
                         }
                     };
 
-                    match Session::builder()
-                        .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                        .with_execution_providers([MIGraphXExecutionProvider::default()
-                            .build()
-                            .error_on_failure()])
-                        .and_then(|b| maybe_register_custom_ops(b))
-                        .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
-                    {
+                    let migraphx_session = (|| -> Result<Session, ort::Error> {
+                        let mut builder = Session::builder()?;
+                        crate::core::ort_migraphx::append_migraphx_execution_provider(
+                            &mut builder,
+                            0,
+                        )?;
+                        let builder = maybe_register_custom_ops(builder)?;
+                        builder.commit_from_file(onnx_path.as_ref())
+                    })();
+
+                    match migraphx_session {
                         Ok(session) => {
                             println!(
                                 "INFO: Using MIGraphX execution provider (AMD GPU) — verified"
@@ -422,7 +423,6 @@ impl MmBertSequenceClassifier {
 
                     println!("WARNING: All GPU execution providers failed, falling back to CPU");
                 }
-
                 #[cfg(not(feature = "rocm"))]
                 {
                     if matches!(provider, ClassifierExecutionProvider::Rocm) {
@@ -433,23 +433,16 @@ impl MmBertSequenceClassifier {
                 }
 
                 // Auto selection priority is ROCm > CUDA > CPU. OpenVINO is not
-                // part of the Auto chain; it is only used for an explicit
+                // included in Auto because OpenVINO deployments require an explicit
                 // `OpenVino` request. On a CUDA build the ROCm block above is
-                // compiled out, so Auto must also try CUDA here before falling
-                // back to CPU. Without this,
-                // Auto silently ran every classifier (PII, jailbreak, intent,
-                // factcheck) on CPU even on NVIDIA GPUs, because the dedicated
-                // CUDA arm below is only reached for an explicit `Cuda` request.
-                // Gated to `Auto` so an explicit `Rocm` request on a CUDA build
-                // still falls through to CPU rather than silently using NVIDIA.
+                // compiled out, so CUDA is tried next.
                 #[cfg(feature = "cuda")]
                 {
                     if matches!(provider, ClassifierExecutionProvider::Auto) {
-                        use crate::core::gpu_memory;
                         use ort::execution_providers::{
                             ArenaExtendStrategy as CudaArenaStrategy, CUDAExecutionProvider,
                         };
-                        let mem_limit = gpu_memory::get_gpu_mem_limit();
+                        let mem_limit = crate::core::gpu_memory::get_gpu_mem_limit();
                         match Session::builder()
                             .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
                             .with_execution_providers([CUDAExecutionProvider::default()
@@ -466,10 +459,7 @@ impl MmBertSequenceClassifier {
                                 return Ok(session);
                             }
                             Err(e) => {
-                                println!(
-                                    "WARNING: CUDA EP failed: {}, falling back to CPU",
-                                    e
-                                );
+                                println!("WARNING: CUDA EP failed: {}, falling back to CPU", e);
                             }
                         }
                     }
@@ -484,11 +474,10 @@ impl MmBertSequenceClassifier {
             ClassifierExecutionProvider::Cuda => {
                 #[cfg(feature = "cuda")]
                 {
-                    use crate::core::gpu_memory;
                     use ort::execution_providers::{
                         ArenaExtendStrategy as CudaArenaStrategy, CUDAExecutionProvider,
                     };
-                    let mem_limit = gpu_memory::get_gpu_mem_limit();
+                    let mem_limit = crate::core::gpu_memory::get_gpu_mem_limit();
                     match Session::builder()
                         .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
                         .with_execution_providers([CUDAExecutionProvider::default()
@@ -507,9 +496,10 @@ impl MmBertSequenceClassifier {
                         }
                     }
                 }
-
                 #[cfg(not(feature = "cuda"))]
-                println!("WARNING: CUDA requested but 'cuda' feature not enabled, using CPU");
+                {
+                    println!("WARNING: CUDA requested but 'cuda' feature not enabled, using CPU");
+                }
 
                 println!("INFO: Using CPU execution provider");
                 Session::builder()
@@ -537,11 +527,12 @@ impl MmBertSequenceClassifier {
                         }
                     }
                 }
-
                 #[cfg(not(feature = "openvino"))]
-                println!(
-                    "WARNING: OpenVINO requested but 'openvino' feature not enabled, using CPU"
-                );
+                {
+                    println!(
+                        "WARNING: OpenVINO requested but 'openvino' feature not enabled, using CPU"
+                    );
+                }
 
                 println!("INFO: Using CPU execution provider");
                 Session::builder()

@@ -475,11 +475,28 @@ impl MmBertEmbeddingModel {
                 .commit_from_file(onnx_path.as_ref())
                 .map_err(|e: ort::Error| errors::model_load(&onnx_path_str, &e.to_string()))?
         } else {
-            #[cfg(any(feature = "rocm", feature = "migraphx"))]
+            #[cfg(feature = "migraphx")]
+            {
+                println!("INFO: Attempting MIGraphX execution provider...");
+                let migraphx_session = (|| -> Result<Session, ort::Error> {
+                    let mut builder = Session::builder()?;
+                    crate::core::ort_migraphx::append_migraphx_execution_provider(&mut builder, 0)?;
+                    builder.commit_from_file(onnx_path.as_ref())
+                })();
+
+                match migraphx_session {
+                    Ok(session) => {
+                        println!("INFO: Using MIGraphX execution provider (AMD GPU) — verified");
+                        return Ok(session);
+                    }
+                    Err(e) => println!("WARN: MIGraphX EP failed: {}", e),
+                }
+            }
+
+            #[cfg(feature = "rocm")]
             {
                 use crate::core::gpu_memory;
                 use ort::execution_providers::{ArenaExtendStrategy, ROCmExecutionProvider};
-                let mem_limit = gpu_memory::get_gpu_mem_limit();
                 let ck_fa_lib = std::env::var("ORT_CK_FLASH_ATTN_LIB")
                     .ok()
                     .filter(|s| !s.is_empty());
@@ -496,6 +513,7 @@ impl MmBertEmbeddingModel {
                         Ok(builder)
                     }
                 };
+                let mem_limit = gpu_memory::get_gpu_mem_limit();
                 println!("INFO: Attempting ROCm execution provider...");
                 match Session::builder()
                     .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
@@ -512,26 +530,6 @@ impl MmBertEmbeddingModel {
                         return Ok(session);
                     }
                     Err(e) => println!("WARN: ROCm EP failed: {}", e),
-                }
-            }
-
-            #[cfg(feature = "migraphx")]
-            {
-                use ort::execution_providers::MIGraphXExecutionProvider;
-                println!("INFO: Attempting MIGraphX execution provider...");
-                match Session::builder()
-                    .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                    .with_execution_providers([MIGraphXExecutionProvider::default()
-                        .with_fp16(true)
-                        .build()
-                        .error_on_failure()])
-                    .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
-                {
-                    Ok(session) => {
-                        println!("INFO: Using MIGraphX execution provider (AMD GPU) — verified");
-                        return Ok(session);
-                    }
-                    Err(e) => println!("WARN: MIGraphX EP failed: {}", e),
                 }
             }
 

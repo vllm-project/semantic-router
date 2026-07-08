@@ -177,20 +177,19 @@ impl MultiModalEmbeddingModel {
 
         #[cfg(feature = "migraphx")]
         {
-            use ort::execution_providers::MIGraphXExecutionProvider;
-            match Session::builder()
+            let migraphx_session = Session::builder()
                 .map_err(|e| errors::ort_error(&e.to_string()))
-                .and_then(|b| {
-                    b.with_execution_providers([MIGraphXExecutionProvider::default()
-                        .with_fp16(true)
-                        .build()
-                        .error_on_failure()])
-                        .map_err(|e| errors::ort_error(&e.to_string()))
+                .and_then(|mut builder| {
+                    crate::core::ort_migraphx::append_migraphx_execution_provider(&mut builder, 0)
+                        .map_err(|e| errors::ort_error(&e.to_string()))?;
+                    Ok(builder)
                 })
                 .and_then(|b| {
                     b.commit_from_file(onnx_path.as_ref())
                         .map_err(|e| errors::model_load(&path_str, &e.to_string()))
-                }) {
+                });
+
+            match migraphx_session {
                 Ok(s) => return Ok(s),
                 Err(e) => println!("WARN: MIGraphX EP failed: {}", e),
             }
