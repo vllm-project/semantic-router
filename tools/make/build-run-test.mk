@@ -189,6 +189,19 @@ test-e2e-vllm:
 	@echo "Note: Make sure LLM Katan servers are running with 'make start-llm-katan'"
 	@python3 e2e/testing/run_all_tests.py
 
+# Run the deterministic Router Learning architecture eval and gate it against a
+# named threshold profile (pr/release). Pure stdlib Python — no router/vLLM needed.
+# Exits non-zero on a threshold breach so CI/release pipelines can gate.
+# Usage: make bench-router-learning            (defaults to the pr profile)
+#        make bench-router-learning PROFILE=release
+bench-router-learning: ## Run + gate the Router Learning architecture eval (PROFILE=pr|release)
+bench-router-learning: PROFILE ?= pr
+bench-router-learning:
+	@echo "Running Router Learning architecture eval (profile: $(PROFILE))..."
+	@python3 bench/agentic_routing_experiment.py \
+		--learning-architecture --profile $(PROFILE) \
+		--output-dir .agent-harness/router-learning-eval
+
 # Run hallucination detection benchmark
 # Requires: router running with hallucination config, vLLM endpoint, envoy proxy
 bench-hallucination: ## Run hallucination detection benchmark (requires router + vLLM + envoy running)
