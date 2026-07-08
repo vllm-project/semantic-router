@@ -3,7 +3,7 @@
 Status: implementation
 Issue: [#2377](https://github.com/vllm-project/semantic-router/issues/2377)
 Parent: [#2332](https://github.com/vllm-project/semantic-router/issues/2332) inference-aware backend routing ·
-Contract: [#2349](https://github.com/vllm-project/semantic-router/issues/2349) / [#2391]
+Contract: [#2349](https://github.com/vllm-project/semantic-router/issues/2349) / [PR #2391](https://github.com/vllm-project/semantic-router/pull/2391)
 
 ## Overview
 
@@ -23,7 +23,7 @@ hosting the TensorRT-LLM backend, and maps them into normalized telemetry.
 
 NVIDIA Dynamo is a **serving/orchestration layer above engines** (it can front TensorRT-LLM, vLLM, or
 SGLang and do its own KV-aware routing). Dynamo integration is tracked separately in
-[NVIDIA Dynamo Integration](./nvidia-dynamo-integration.md) and is intentionally out of scope here. If
+[NVIDIA Dynamo Integration](https://vllm-semantic-router.com/docs/proposals/nvidia-dynamo-integration/) and is intentionally out of scope here. If
 you run TensorRT-LLM under Dynamo, use the Dynamo integration path; this adapter is for direct
 TensorRT-LLM / Triton TensorRT-LLM deployments.
 
