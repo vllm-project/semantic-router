@@ -1,21 +1,21 @@
 #!/bin/bash
-# Build and run ort-binding with ROCm GPU support in Docker
-# This script handles the ORT version compatibility automatically
+# Build onnx-binding with AMD MIGraphX-first provider support in Docker.
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Docker image with matching ROCm + ORT versions
-IMAGE="rocm/onnxruntime:rocm7.0_ub22.04_ort1.22_torch2.8.0"
+# Docker image with matching ROCm + MIGraphX package versions.
+IMAGE="rocm/dev-ubuntu-24.04:7.1"
+ORT_WHEEL_URL="https://repo.radeon.com/rocm/manylinux/rocm-rel-7.1/onnxruntime_migraphx-1.23.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl"
 
 # ORT library path inside container
-ORT_LIB="/opt/venv/lib/python3.10/site-packages/onnxruntime/capi/libonnxruntime.so.1.22.1"
-ORT_LIB_DIR="/opt/venv/lib/python3.10/site-packages/onnxruntime/capi"
+ORT_LIB="/usr/local/lib/python3.12/dist-packages/onnxruntime/capi/libonnxruntime.so.1.23.1"
+ORT_LIB_DIR="/usr/local/lib/python3.12/dist-packages/onnxruntime/capi"
 
 echo "============================================"
-echo "Building ort-binding with ROCm GPU support"
+echo "Building onnx-binding with AMD MIGraphX-first support"
 echo "============================================"
 echo "Image: $IMAGE"
 echo ""
@@ -32,10 +32,20 @@ docker run --rm \
     -v "$HOME/.cargo/git":/root/.cargo/git \
     -v /data:/data \
     -w /workspace \
+    -e ORT_WHEEL_URL="$ORT_WHEEL_URL" \
     -e ORT_DYLIB_PATH="$ORT_LIB" \
     -e LD_LIBRARY_PATH="$ORT_LIB_DIR:/opt/rocm/lib" \
     "$IMAGE" \
     bash -c '
+        apt-get update
+        apt-get install -y --no-install-recommends \
+            ca-certificates curl hipblas hipfft migraphx miopen-hip python3-pip rccl
+        python3 -m pip install --no-cache-dir --break-system-packages "$ORT_WHEEL_URL"
+        ln -sf "$ORT_LIB" "$ORT_LIB_DIR/libonnxruntime.so"
+
+        migraphx-driver --version || true
+        python3 -c "import onnxruntime as ort; print(ort.__version__, ort.get_available_providers())"
+
         # Install Rust if not available
         if ! command -v rustc &> /dev/null; then
             echo "Installing Rust..."
@@ -47,41 +57,13 @@ docker run --rm \
         echo "Rust version: $(rustc --version)"
         echo "ORT library: $ORT_DYLIB_PATH"
         echo ""
-        
-        # The ort crate 2.0 expects API v23, but ORT 1.22 provides API v22
-        # We need to patch ort-sys to accept API v22
-        # This is done in-container to avoid polluting host cargo cache
-        
-        # First, ensure dependencies are downloaded
+
         cargo fetch 2>/dev/null || true
-        
-        # Find and patch ort-sys version.rs
-        ORT_SYS_DIR=$(find $HOME/.cargo/registry/src -name "ort-sys-2.0*" -type d 2>/dev/null | head -1)
-        if [ -n "$ORT_SYS_DIR" ]; then
-            VERSION_FILE="$ORT_SYS_DIR/src/version.rs"
-            if [ -f "$VERSION_FILE" ]; then
-                echo "Patching ort-sys API version for ORT 1.22 compatibility..."
-                sed -i "s/ORT_API_VERSION: u32 = 23/ORT_API_VERSION: u32 = 22/" "$VERSION_FILE"
-            fi
-        fi
-        
-        # Also patch ort to not reject ORT 1.22
-        ORT_DIR=$(find $HOME/.cargo/registry/src -name "ort-2.0*" -type d 2>/dev/null | head -1)
-        if [ -n "$ORT_DIR" ]; then
-            LIB_FILE="$ORT_DIR/src/lib.rs"
-            if [ -f "$LIB_FILE" ] && grep -q "Ordering::Less =>" "$LIB_FILE"; then
-                echo "Patching ort version check for ORT 1.22..."
-                # Change: reject < 23 -> reject < 22
-                sed -i "s/Ordering::Less => {/Ordering::Less if lib_minor_version < 22 => {/" "$LIB_FILE"
-                # Add fallthrough case for Less when >= 22
-                sed -i "/Ordering::Equal => {}/i\\            Ordering::Less => crate::info!(\"Using ORT 1.22 with ort 2.0 compatibility mode\")," "$LIB_FILE"
-            fi
-        fi
-        
+
         # Build
         echo ""
-        echo "Building with rocm-dynamic feature..."
-        cargo build --release --features rocm-dynamic --examples
+        echo "Building with migraphx-dynamic feature..."
+        cargo build --release --features migraphx-dynamic --examples
         
         echo ""
         echo "Build complete!"

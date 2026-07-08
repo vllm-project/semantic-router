@@ -15,6 +15,7 @@ DEFAULT_SEQ_LENS="${SEQ_LENS:-1,32,128}"
 DEFAULT_BATCH_SIZES="${BATCH_SIZES:-1}"
 DEFAULT_WARMUP="${WARMUP:-3}"
 DEFAULT_ITERS="${ITERS:-20}"
+DEFAULT_SUMMARY_MD="${SUMMARY_MD:-}"
 
 find_ort_lib() {
     if [[ -n "${ORT_DYLIB_PATH:-}" && -f "${ORT_DYLIB_PATH}" ]]; then
@@ -114,6 +115,9 @@ if ! has_flag "--warmup" "${args[@]}"; then
 fi
 if ! has_flag "--iters" "${args[@]}"; then
     args+=("--iters" "$DEFAULT_ITERS")
+fi
+if [[ -n "$DEFAULT_SUMMARY_MD" ]] && ! has_flag "--summary-md" "${args[@]}"; then
+    args+=("--summary-md" "$DEFAULT_SUMMARY_MD")
 fi
 
 cd "$PROJECT_DIR"

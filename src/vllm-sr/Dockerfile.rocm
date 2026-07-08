@@ -198,7 +198,7 @@ RUN mkdir -p /build/out && \
     echo "=== Built nlp-binding library ===" && \
     ls -la /build/out/
 
-# Stage 1r: Build Rust onnx-binding (ROCm dynamic, amd64 only)
+# Stage 1r: Build Rust onnx-binding (MIGraphX-first AMD dynamic, amd64 only)
 FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${ONNX_RUST_RUNTIME_COMPAT_IMAGE} AS onnx-builder
 ARG TARGETARCH
 ARG GIT_SSL_NO_VERIFY
@@ -220,7 +220,7 @@ COPY onnx-binding/Cargo.toml onnx-binding/Cargo.loc[k] ./
 RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
     mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
     OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
-    cargo build --release --features rocm-dynamic --target x86_64-unknown-linux-gnu && \
+    cargo build --release --features migraphx-dynamic --target x86_64-unknown-linux-gnu && \
     rm -rf src
 
 COPY onnx-binding/src/ ./src/
@@ -229,7 +229,7 @@ COPY onnx-binding/go.mod onnx-binding/semantic-router.go ./
 RUN find target -name "libonnx_semantic_router.so" -delete 2>/dev/null; \
     find target -name "libonnx_semantic_router.a" -delete 2>/dev/null; \
     OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
-    cargo build --release --features rocm-dynamic --target x86_64-unknown-linux-gnu
+    cargo build --release --features migraphx-dynamic --target x86_64-unknown-linux-gnu
 
 RUN mkdir -p /build/out && \
     cp target/x86_64-unknown-linux-gnu/release/libonnx_semantic_router.so /build/out/ && \
@@ -281,8 +281,8 @@ RUN if [ "$TARGETARCH" != "amd64" ]; then \
     go build -buildvcs=false -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o router ./cmd && \
     printf 'go-builder-complete\n' > /build/.go-builder-complete
 
-# Stage 3: Final router runtime image (ROCm 7.0 + ONNX Runtime ROCm)
-FROM ${IMAGE_REGISTRY}rocm/dev-ubuntu-22.04:7.0
+# Stage 3: Final router runtime image (ROCm 7.1 + ONNX Runtime MIGraphX)
+FROM ${IMAGE_REGISTRY}rocm/dev-ubuntu-24.04:7.1
 ARG TARGETARCH
 
 ENV VIRTUAL_ENV=/opt/vllm-sr-venv
@@ -315,15 +315,16 @@ RUN set -eux; \
         hipblas \
         miopen-hip \
         hipfft \
+        migraphx \
         rccl; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*
 
-# Install ROCm-enabled ONNX Runtime shared library
+# Install MIGraphX-enabled ONNX Runtime shared library.
 RUN python3 -m venv "${VIRTUAL_ENV}" && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir \
-      https://repo.radeon.com/rocm/manylinux/rocm-rel-7.0/onnxruntime_rocm-1.22.1-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl \
+      https://repo.radeon.com/rocm/manylinux/rocm-rel-7.1/onnxruntime_migraphx-1.23.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl \
       'huggingface_hub[cli]==1.5.0' \
       'click>=8.1.7' && \
     ORT_DIR="$("${VIRTUAL_ENV}/bin/python" -c 'import pathlib, onnxruntime; print(pathlib.Path(onnxruntime.__file__).resolve().parent / "capi")')" && \

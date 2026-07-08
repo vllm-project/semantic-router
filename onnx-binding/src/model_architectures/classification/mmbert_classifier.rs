@@ -359,75 +359,26 @@ impl MmBertSequenceClassifier {
                     .map_err(|e: ort::Error| errors::model_load(&onnx_path_str, &e.to_string()))
             }
             ClassifierExecutionProvider::Rocm | ClassifierExecutionProvider::Auto => {
-                #[cfg(feature = "rocm")]
+                #[cfg(any(feature = "migraphx", feature = "rocm"))]
                 {
-                    use crate::core::gpu_memory;
-                    use ort::execution_providers::{ArenaExtendStrategy, ROCmExecutionProvider};
-
-                    let ck_fa_lib = std::env::var("ORT_CK_FLASH_ATTN_LIB")
-                        .ok()
-                        .filter(|s| !s.is_empty());
-                    if let Some(ref lib) = ck_fa_lib {
-                        println!("INFO: CK Flash Attention custom op library: {}", lib);
-                    }
-
-                    let maybe_register_custom_ops = |builder: ort::session::builder::SessionBuilder| -> Result<ort::session::builder::SessionBuilder, ort::Error> {
-                        if let Some(ref lib) = ck_fa_lib {
-                            builder.with_operator_library(lib)
-                        } else {
-                            Ok(builder)
-                        }
-                    };
-
-                    let migraphx_session = (|| -> Result<Session, ort::Error> {
-                        let mut builder = Session::builder()?;
-                        crate::core::ort_migraphx::append_migraphx_execution_provider(
-                            &mut builder,
-                            0,
-                        )?;
-                        let builder = maybe_register_custom_ops(builder)?;
-                        builder.commit_from_file(onnx_path.as_ref())
-                    })();
-
-                    match migraphx_session {
-                        Ok(session) => {
-                            println!(
-                                "INFO: Using MIGraphX execution provider (AMD GPU) — verified"
-                            );
-                            return Ok(session);
-                        }
-                        Err(e) => {
-                            println!("INFO: MIGraphX EP failed to register: {}", e);
-                        }
-                    }
-
-                    let mem_limit = gpu_memory::get_gpu_mem_limit();
-                    match Session::builder()
-                        .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                        .with_execution_providers([ROCmExecutionProvider::default()
-                            .with_mem_limit(mem_limit)
-                            .with_arena_extend_strategy(ArenaExtendStrategy::SameAsRequested)
-                            .build()
-                            .error_on_failure()])
-                        .and_then(|b| maybe_register_custom_ops(b))
-                        .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
-                    {
-                        Ok(session) => {
-                            println!("INFO: Using ROCm execution provider (AMD GPU) — verified");
-                            return Ok(session);
-                        }
-                        Err(e) => {
-                            println!("INFO: ROCm EP failed to register: {}", e);
-                        }
+                    let ck_fa_lib = crate::core::ort_migraphx::ck_flash_attention_library_for_model(
+                        onnx_path.as_ref(),
+                    );
+                    match crate::core::ort_migraphx::create_amd_session(
+                        onnx_path.as_ref(),
+                        ck_fa_lib.as_deref(),
+                    ) {
+                        Ok(amd_session) => return Ok(amd_session.session),
+                        Err(e) => println!("WARNING: AMD execution providers failed: {e}"),
                     }
 
                     println!("WARNING: All GPU execution providers failed, falling back to CPU");
                 }
-                #[cfg(not(feature = "rocm"))]
+                #[cfg(not(any(feature = "migraphx", feature = "rocm")))]
                 {
                     if matches!(provider, ClassifierExecutionProvider::Rocm) {
                         println!(
-                            "WARNING: ROCm requested but 'rocm' feature not enabled, using CPU"
+                            "WARNING: AMD GPU requested but no AMD ORT feature enabled, using CPU"
                         );
                     }
                 }

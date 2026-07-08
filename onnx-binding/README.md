@@ -1,12 +1,16 @@
 # ONNX Binding for Semantic Router
 
-This module provides ONNX Runtime-based embedding generation with 2D Matryoshka support. **CPU inference is highly optimized** and matches GPU performance for this model size, making it ideal for deployment without GPU dependencies.
+This module provides ONNX Runtime-based signal models, including mmBERT
+embedding generation with 2D Matryoshka support and mmBERT classifier paths.
+CPU inference remains supported everywhere. AMD deployments use a
+MIGraphX-first ONNX Runtime provider policy with ROCm and CPU fallback; see
+[MIGRAPHX_PROVIDER_STRATEGY.md](MIGRAPHX_PROVIDER_STRATEGY.md).
 
 ## Features
 
 - **Optimized CPU Inference**: ONNX Runtime's CPU backend (with AVX512/AVX2) matches GPU performance
 - **No GPU Required**: Deploy anywhere without CUDA/ROCm dependencies
-- **Optional GPU Support**: AMD ROCm and NVIDIA CUDA available when needed
+- **Optional GPU Support**: AMD MIGraphX/ROCm and NVIDIA CUDA available when needed
 - **Cross-platform**: Works on Linux, Windows, macOS
 - **2D Matryoshka**: Layer early exit + dimension truncation for 3-4x speedup
 - **32K Context**: Support for long sequences (32,768 tokens)
@@ -93,20 +97,18 @@ cargo build --release --example benchmark_cpu_vs_gpu
 ./target/release/examples/benchmark_cpu_vs_gpu ./mmbert-onnx/onnx
 ```
 
-### Quick Start: GPU (Optional)
+### Quick Start: AMD GPU (MIGraphX-first)
 
 ```bash
-# Build with ROCm support
-cargo build --release --features rocm --example test_gpu
+# Build with MIGraphX-first AMD support and dynamic ORT loading
+cargo build --release --features migraphx-dynamic --example benchmark_mmbert_ort_providers
 
-# Run in ROCm-capable container (AMD GPU required)
-docker run --rm \
-  --device=/dev/kfd \
-  --device=/dev/dri \
-  --group-add video \
-  -v $(pwd):/workspace \
-  rocm/pytorch:latest \
-  /workspace/target/release/examples/test_gpu
+# Run provider inventory, parity, and latency validation
+./scripts/run_mmbert_migraphx_bench.sh \
+  --providers cpu,auto,migraphx,rocm \
+  --layers 6,11,16,22 \
+  --jsonl /tmp/mmbert-provider-bench.jsonl \
+  --summary-md /tmp/mmbert-provider-bench.md
 ```
 
 ## Installation
@@ -128,8 +130,8 @@ This is the recommended configuration. CPU performance equals GPU for this model
 ### Building with GPU Support (Optional)
 
 ```bash
-# AMD GPU (ROCm)
-cargo build --release --features rocm
+# AMD GPU (MIGraphX-first with ROCm fallback)
+cargo build --release --features migraphx-dynamic
 
 # NVIDIA GPU (CUDA)
 cargo build --release --features cuda

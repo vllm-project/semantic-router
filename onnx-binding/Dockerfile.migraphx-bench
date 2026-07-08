@@ -1,7 +1,7 @@
 # Dockerfile for validating mmBERT ONNX Runtime inference with AMD MIGraphX.
 #
-# This image is intentionally a benchmark/validation image. It does not change
-# the production router image or default provider policy.
+# This image is intentionally a benchmark/validation image for the production
+# MIGraphX-first AMD provider policy.
 
 FROM rocm/dev-ubuntu-24.04:7.1
 

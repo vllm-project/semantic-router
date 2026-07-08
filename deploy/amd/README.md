@@ -35,6 +35,25 @@ The active AMD profile contains 13 routing decisions:
 
 ## Installation
 
+### Router-owned ONNX signals
+
+The AMD router image uses ONNX Runtime MIGraphX for router-owned ONNX signal
+models when available. Portable mmBERT ONNX artifacts use
+`MIGraphXExecutionProvider -> ROCmExecutionProvider -> CPUExecutionProvider`.
+CK FlashAttention optimized artifacts are an explicit ROCm-only exception
+because their custom op library is registered through the ROCm EP path.
+
+Inside the router image, verify the provider inventory with:
+
+```bash
+migraphx-driver --version
+python -c 'import onnxruntime as ort; print(ort.__version__, ort.get_available_providers())'
+echo "$ORT_DYLIB_PATH"
+```
+
+See `onnx-binding/MIGRAPHX_PROVIDER_STRATEGY.md` for the full provider order,
+fallback diagnostics, and benchmark harness.
+
 ### Step 1: Start the AMD vLLM backend
 
 Create the shared Docker network first, then start the single ROCm backend container:
