@@ -2549,6 +2549,18 @@
   "community.contributors.updated": {
     "message": "更新于"
   },
+  "community.contributors.sort.label": {
+    "message": "排序"
+  },
+  "community.contributors.sort.aria": {
+    "message": "贡献者排行榜排序方式"
+  },
+  "community.contributors.sort.commits": {
+    "message": "提交"
+  },
+  "community.contributors.sort.reviews": {
+    "message": "审查"
+  },
   "community.contributors.table.rank": {
     "message": "排名"
   },
@@ -2557,6 +2569,9 @@
   },
   "community.contributors.table.commits": {
     "message": "提交"
+  },
+  "community.contributors.table.reviews": {
+    "message": "审查"
   },
   "community.contributors.table.share": {
     "message": "占比"
