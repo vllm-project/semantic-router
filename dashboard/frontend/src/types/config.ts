@@ -18,6 +18,8 @@ export interface ProviderEndpoint {
   engine_kind?: string
   weight: number
   endpoint: string  // e.g., "host.docker.internal:8000" or "api.openai.com"
+  metrics_port?: number
+  metrics_path?: string
   protocol: 'http' | 'https'
   base_url?: string
   provider?: 'openai' | 'anthropic'

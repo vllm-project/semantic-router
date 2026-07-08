@@ -39,6 +39,15 @@ providers:
           weight: 80
           type: chat
           api_key_env: VLLM_SR_PRIMARY_API_KEY
+        - name: local-trtllm
+          backend_id: qwen3-8b-trtllm
+          engine_kind: tensorrt-llm
+          endpoint: 127.0.0.1:8000
+          protocol: http
+          metrics_port: 8002
+          metrics_path: /metrics
+          weight: 20
+          type: chat
         - name: remote-secondary
           base_url: https://api.example.com/v1
           provider: openai
@@ -1505,6 +1514,11 @@ global:
           model_metrics: true
           queue_depth_estimation: true
           max_models: 50
+      backend_telemetry:
+        enabled: false
+        poll_interval: 2s
+        ttl: 5s
+        request_timeout: 2s
     authz:
       fail_open: false
       identity:

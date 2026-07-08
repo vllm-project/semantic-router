@@ -32,6 +32,8 @@ type CanonicalBackendRef struct {
 	BackendID    string            `yaml:"backend_id,omitempty"`
 	EngineKind   string            `yaml:"engine_kind,omitempty"`
 	Endpoint     string            `yaml:"endpoint,omitempty"`
+	MetricsPort  int               `yaml:"metrics_port,omitempty"`
+	MetricsPath  string            `yaml:"metrics_path,omitempty"`
 	Protocol     string            `yaml:"protocol,omitempty"`
 	Weight       int               `yaml:"weight,omitempty"`
 	Type         string            `yaml:"type,omitempty"`

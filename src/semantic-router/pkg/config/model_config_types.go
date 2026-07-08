@@ -286,6 +286,8 @@ type VLLMEndpoint struct {
 	EngineKind          string `yaml:"engine_kind,omitempty"`
 	Address             string `yaml:"address"`
 	Port                int    `yaml:"port"`
+	MetricsPort         int    `yaml:"metrics_port,omitempty"`
+	MetricsPath         string `yaml:"metrics_path,omitempty"`
 	Weight              int    `yaml:"weight,omitempty"`
 	Type                string `yaml:"type,omitempty"`
 	APIKey              string `yaml:"api_key,omitempty" json:"-"`
