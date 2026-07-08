@@ -17,6 +17,7 @@ RUN apt-get update && \
         git \
         hipblas \
         hipfft \
+        libssl-dev \
         migraphx \
         miopen-hip \
         pkg-config \
@@ -36,9 +37,9 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
         sh -s -- -y --profile minimal
 
-ENV PATH=/root/.cargo/bin:${PATH}
+ENV PATH=/opt/rocm/bin:/root/.cargo/bin:${PATH}
 ENV ORT_DYLIB_PATH=/usr/local/lib/python3.12/dist-packages/onnxruntime/capi/libonnxruntime.so.1.23.1
-ENV LD_LIBRARY_PATH=/opt/rocm/lib:/usr/local/lib/python3.12/dist-packages/onnxruntime/capi:${LD_LIBRARY_PATH}
+ENV LD_LIBRARY_PATH=/opt/rocm/lib:/usr/local/lib/python3.12/dist-packages/onnxruntime/capi
 ENV FEATURES=migraphx-dynamic
 
 WORKDIR /workspace
