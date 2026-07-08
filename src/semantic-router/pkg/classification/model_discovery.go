@@ -78,7 +78,7 @@ func detectArchitectureFromPath(dirName string) string {
 		return "bert"
 	case strings.Contains(dirName, "roberta-base"):
 		return "roberta"
-	case strings.Contains(dirName, "modernbert-base"):
+	case strings.Contains(dirName, "modernbert-base") || strings.Contains(dirName, "mmbert32k"):
 		return "modernbert"
 	default:
 		// Default fallback

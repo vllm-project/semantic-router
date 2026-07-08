@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -45,15 +46,21 @@ type KnowledgeBaseClassifier struct {
 	preloadOnce sync.Once
 	preloadErr  error
 	preloaded   bool
+	provider    embedding.Provider
 }
 
 func NewKnowledgeBaseClassifier(rule config.KnowledgeBaseConfig, modelType string, baseDir string) (*KnowledgeBaseClassifier, error) {
+	return NewKnowledgeBaseClassifierWithProvider(rule, modelType, baseDir, nil)
+}
+
+func NewKnowledgeBaseClassifierWithProvider(rule config.KnowledgeBaseConfig, modelType string, baseDir string, provider embedding.Provider) (*KnowledgeBaseClassifier, error) {
 	rule = rule.WithDefaults()
 	c := &KnowledgeBaseClassifier{
 		rule:      rule,
 		labels:    make(map[string]*kbLabelData),
 		modelType: modelType,
 		baseDir:   baseDir,
+		provider:  provider,
 	}
 
 	if err := c.loadDefinition(); err != nil {
@@ -72,12 +79,15 @@ func NewKnowledgeBaseClassifier(rule config.KnowledgeBaseConfig, modelType strin
 }
 
 func (c *KnowledgeBaseClassifier) currentBackend() string {
+	if c.provider != nil {
+		return c.provider.Backend()
+	}
 	return embeddingBackendOverride()
 }
 
 func (c *KnowledgeBaseClassifier) shouldDeferPreload() bool {
 	backend := c.currentBackend()
-	return backend == "" || backend == "candle"
+	return backend == "" || backend == "candle" || c.provider != nil
 }
 
 func (c *KnowledgeBaseClassifier) ensureEmbeddingsPreloaded() error {
@@ -129,12 +139,12 @@ func (c *KnowledgeBaseClassifier) Classify(text string) (*KBClassifyResult, erro
 	if err := c.ensureEmbeddingsPreloaded(); err != nil {
 		return nil, fmt.Errorf("failed to ensure KB embeddings are loaded: %w", err)
 	}
-	queryOutput, err := getEmbeddingWithModelType(text, c.modelType, 0)
+	queryEmbedding, err := c.embedText(text)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute query embedding: %w", err)
 	}
 
-	result := c.buildResultFromLabelScores(c.computeLabelScores(queryOutput.Embedding))
+	result := c.buildResultFromLabelScores(c.computeLabelScores(queryEmbedding))
 
 	elapsed := time.Since(startTime)
 	logging.ComponentDebugEvent("classifier", "knowledge_base_classification_completed", map[string]interface{}{
