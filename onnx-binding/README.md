@@ -99,6 +99,12 @@ cargo build --release --example benchmark_cpu_vs_gpu
 
 ### Quick Start: AMD GPU (MIGraphX-first)
 
+Classifier artifact selection is provider-aware: AMD `Auto`/`Rocm` paths prefer
+`model_sdpa_fp16.onnx` when present, while CPU paths keep `model.onnx` as the
+baseline artifact. See
+[MIGRAPHX_PROVIDER_STRATEGY.md](MIGRAPHX_PROVIDER_STRATEGY.md) for the full
+provider and artifact policy.
+
 ```bash
 # Build with MIGraphX-first AMD support and dynamic ORT loading
 cargo build --release --features migraphx-dynamic --example benchmark_mmbert_ort_providers

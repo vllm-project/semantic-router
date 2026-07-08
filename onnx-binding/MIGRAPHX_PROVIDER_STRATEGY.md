@@ -6,7 +6,7 @@ and multimodal ONNX paths owned by `onnx-binding`.
 
 ## Provider Order
 
-Portable ONNX artifacts use this order:
+AMD ONNX sessions use this provider order:
 
 ```text
 MIGraphXExecutionProvider -> ROCmExecutionProvider -> CPUExecutionProvider
@@ -20,6 +20,25 @@ AMD ORT builds.
 The `Auto`/GPU paths for embedding, classifier, token-classifier, and multimodal
 sessions all use the shared AMD helper in `src/core/ort_migraphx.rs`.
 
+## Classifier Artifact Order
+
+mmBERT sequence and token classifiers choose ONNX artifacts in provider-aware
+order:
+
+```text
+AMD Auto/ROCm: model_sdpa_fp16.onnx -> model.onnx -> classifier.onnx -> model_optimized.onnx
+CPU/CUDA/OpenVINO: model.onnx -> classifier.onnx -> model_optimized.onnx -> model_sdpa_fp16.onnx
+```
+
+`model.onnx` remains the CPU baseline artifact. AMD paths prefer
+`model_sdpa_fp16.onnx` when it is present because MIGraphX 2.14 with AMD's ORT
+MIGraphX 1.23.x wheel compiles and runs that artifact for the mmBERT32k intent
+classifier across seq=1/32/512. The raw intent `model.onnx` compiles for seq=1
+but fails at seq=32/512 with a MIGraphX `MULTIBROADCAST` shape error in the
+final masked mean-pooling pattern. If an AMD deployment only has raw
+`model.onnx`, operators should validate the artifact explicitly and expect CPU
+fallback or a model-specific follow-up.
+
 ## CK FlashAttention Exception
 
 CK FlashAttention optimized ONNX artifacts are ROCm-only today because the
@@ -32,8 +51,8 @@ ROCmExecutionProvider -> CPUExecutionProvider
 ```
 
 This is intentional provider ownership, not an accidental fallback. Portable
-`model.onnx` artifacts remain MIGraphX-first even when
-`ORT_CK_FLASH_ATTN_LIB` is set.
+`model.onnx` artifacts remain below `model_sdpa_fp16.onnx` on AMD paths even
+when `ORT_CK_FLASH_ATTN_LIB` is set.
 
 ## Runtime Build
 
@@ -107,6 +126,9 @@ skipped.
 
 - MIGraphX cold compile can be much slower than warm inference; benchmark both
   session creation and warm latency.
+- The raw mmBERT32k intent classifier `model.onnx` hits a MIGraphX
+  `MULTIBROADCAST` shape error for seq=32/512 in the final masked mean-pooling
+  graph. Use `model_sdpa_fp16.onnx` for AMD/MIGraphX validation when available.
 - CK FlashAttention custom-op artifacts are ROCm-owned until MIGraphX can load
   the same custom-op path.
 - AMD's `onnxruntime_migraphx` 1.23.x wheel exposes MIGraphX and CPU providers,

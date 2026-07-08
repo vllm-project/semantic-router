@@ -233,7 +233,7 @@ impl MmBertSequenceClassifier {
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
         // Find ONNX model candidates and initialize with fallback.
-        let onnx_candidates = Self::find_onnx_models(&model_path)?;
+        let onnx_candidates = Self::find_onnx_models(&model_path, provider)?;
         let (session, onnx_path) =
             Self::create_session_with_fallback(onnx_candidates, provider, &model_path_str)?;
         println!(
@@ -250,33 +250,19 @@ impl MmBertSequenceClassifier {
     }
 
     /// Find ONNX model candidates in priority order.
-    fn find_onnx_models<P: AsRef<Path>>(model_path: P) -> UnifiedResult<Vec<std::path::PathBuf>> {
+    fn find_onnx_models<P: AsRef<Path>>(
+        model_path: P,
+        provider: ClassifierExecutionProvider,
+    ) -> UnifiedResult<Vec<std::path::PathBuf>> {
         let dir = model_path.as_ref();
         let onnx_subdir = dir.join("onnx");
         let search_dirs = [dir, onnx_subdir.as_path()];
 
-        // Prefer FA-optimized variant when CK Flash Attention is available.
-        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB")
+        let has_ck_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB")
             .ok()
             .filter(|s| !s.is_empty())
             .is_some();
-        let candidates: &[&str] = if has_fa {
-            &[
-                "model_fa_fp16.onnx",
-                "model_fa.onnx",
-                "model_sdpa_fp16.onnx",
-                "model.onnx",
-                "classifier.onnx",
-                "model_optimized.onnx",
-            ]
-        } else {
-            &[
-                "model_sdpa_fp16.onnx",
-                "model.onnx",
-                "classifier.onnx",
-                "model_optimized.onnx",
-            ]
-        };
+        let candidates = Self::onnx_candidate_filenames(provider, has_ck_fa);
 
         let mut results: Vec<std::path::PathBuf> = Vec::new();
         // Try known ONNX filenames first in both model root and `onnx/` subdirectory.
@@ -284,7 +270,7 @@ impl MmBertSequenceClassifier {
             if !base_dir.exists() || !base_dir.is_dir() {
                 continue;
             }
-            for candidate in candidates {
+            for candidate in &candidates {
                 let path = base_dir.join(candidate);
                 if path.exists() && !results.iter().any(|p| p == &path) {
                     results.push(path);
@@ -316,6 +302,46 @@ impl MmBertSequenceClassifier {
             )));
         }
         Ok(results)
+    }
+
+    fn onnx_candidate_filenames(
+        provider: ClassifierExecutionProvider,
+        has_ck_fa: bool,
+    ) -> Vec<&'static str> {
+        let mut candidates = Vec::new();
+        let mut push_candidate = |name: &'static str| {
+            if !candidates.contains(&name) {
+                candidates.push(name);
+            }
+        };
+
+        if Self::prefers_amd_onnx_artifacts(provider) {
+            if has_ck_fa {
+                push_candidate("model_fa_fp16.onnx");
+                push_candidate("model_fa.onnx");
+            }
+            push_candidate("model_sdpa_fp16.onnx");
+            push_candidate("model.onnx");
+        } else {
+            push_candidate("model.onnx");
+            push_candidate("classifier.onnx");
+            push_candidate("model_optimized.onnx");
+            push_candidate("model_sdpa_fp16.onnx");
+        }
+
+        push_candidate("classifier.onnx");
+        push_candidate("model_optimized.onnx");
+        candidates
+    }
+
+    fn prefers_amd_onnx_artifacts(provider: ClassifierExecutionProvider) -> bool {
+        match provider {
+            ClassifierExecutionProvider::Rocm => true,
+            ClassifierExecutionProvider::Auto => cfg!(any(feature = "migraphx", feature = "rocm")),
+            ClassifierExecutionProvider::Cpu
+            | ClassifierExecutionProvider::Cuda
+            | ClassifierExecutionProvider::OpenVino => false,
+        }
     }
 
     /// Create session from candidates with fallback across files.
@@ -854,7 +880,7 @@ impl MmBertTokenClassifier {
             }))
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
-        let onnx_candidates = MmBertSequenceClassifier::find_onnx_models(&model_path)?;
+        let onnx_candidates = MmBertSequenceClassifier::find_onnx_models(&model_path, provider)?;
         let (session, onnx_path) = MmBertSequenceClassifier::create_session_with_fallback(
             onnx_candidates,
             provider,
@@ -1134,6 +1160,62 @@ mod tests {
     fn test_classifier_execution_provider_auto() {
         let provider = ClassifierExecutionProvider::Auto;
         assert!(matches!(provider, ClassifierExecutionProvider::Auto));
+    }
+
+    #[test]
+    fn test_classifier_cpu_prefers_baseline_onnx_artifact() {
+        let candidates = MmBertSequenceClassifier::onnx_candidate_filenames(
+            ClassifierExecutionProvider::Cpu,
+            true,
+        );
+
+        assert_eq!(
+            candidates,
+            vec![
+                "model.onnx",
+                "classifier.onnx",
+                "model_optimized.onnx",
+                "model_sdpa_fp16.onnx",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_classifier_rocm_prefers_sdpa_artifact() {
+        let candidates = MmBertSequenceClassifier::onnx_candidate_filenames(
+            ClassifierExecutionProvider::Rocm,
+            false,
+        );
+
+        assert_eq!(
+            candidates,
+            vec![
+                "model_sdpa_fp16.onnx",
+                "model.onnx",
+                "classifier.onnx",
+                "model_optimized.onnx",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_classifier_rocm_prefers_ck_fa_artifact_when_enabled() {
+        let candidates = MmBertSequenceClassifier::onnx_candidate_filenames(
+            ClassifierExecutionProvider::Rocm,
+            true,
+        );
+
+        assert_eq!(
+            candidates,
+            vec![
+                "model_fa_fp16.onnx",
+                "model_fa.onnx",
+                "model_sdpa_fp16.onnx",
+                "model.onnx",
+                "classifier.onnx",
+                "model_optimized.onnx",
+            ]
+        );
     }
 
     #[test]
