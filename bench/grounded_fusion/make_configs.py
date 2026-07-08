@@ -3,7 +3,7 @@
 Both configs are identical except ``algorithm.fusion.grounding.enabled``. They:
   - add a deterministic ``deliberate_sentinel`` regex keyword rule + a top-priority
     fusion decision keyed to it (the harness prepends the sentinel to every prompt),
-  - point the fusion panel/judge at local Ollama models via looper.model_endpoints,
+  - bind the fusion panel/judge to a local Ollama proxy via provider backend_refs,
   - wire the NLI model (models/mom-halugate-explainer) so PANEL-mode grounding
     actually fires instead of silently falling back to plain fusion.
 
@@ -22,9 +22,9 @@ import yaml
 SENTINEL = "deliberate-eval"
 PANEL = ["qwen3:8b", "llama3.1:8b", "gemma3:12b"]
 JUDGE = "qwen3:14b"
-OLLAMA = "http://localhost:11435/v1/chat/completions"
 OLLAMA_BACKEND = {
-    "base_url": "http://127.0.0.1:11434/v1",
+    "base_url": "http://localhost:11435/v1",
+    "provider": "openai",
     "chat_path": "/chat/completions",
 }
 
@@ -68,7 +68,7 @@ def _sentinel_rule() -> dict:
     }
 
 
-def _fusion_decision(grounding_on: bool) -> dict:
+def _fusion_decision(grounding_on: bool, policy: str = "weight") -> dict:
     return {
         "name": "grounded-fusion-bench",
         "description": "Deterministic fusion route for the grounded-fusion DRACO benchmark.",
@@ -98,6 +98,12 @@ def _fusion_decision(grounding_on: bool) -> dict:
                 "grounding": {
                     "enabled": grounding_on,
                     "reference": "panel",  # DRACO ships no context -> cross-model NLI
+                    # policy controls how the score is used. weight (default, no
+                    # drop) is the production default; filter (hard-drop below
+                    # min_score) is known to hurt on contested factual items and is
+                    # kept only so later CRs can A/B annotate vs weight vs filter.
+                    # min_score/min_keep apply to the filter policy only.
+                    "policy": policy,
                     "min_score": 0.34,
                     "min_keep": 1,
                     "nli_contradiction_penalty": 1.0,
@@ -108,7 +114,7 @@ def _fusion_decision(grounding_on: bool) -> dict:
     }
 
 
-def build(base: dict, grounding_on: bool) -> dict:
+def build(base: dict, grounding_on: bool, policy: str = "weight") -> dict:
     c = copy.deepcopy(base)
 
     # provider models + matching modelCards for the local Ollama panel/judge
@@ -128,17 +134,13 @@ def build(base: dict, grounding_on: bool) -> dict:
     # purely on the sentinel the harness prepends to every prompt.
     c["routing"]["signals"] = {"keywords": [_sentinel_rule()]}
     c["routing"].pop("projections", None)
-    c["routing"]["decisions"] = [_fusion_decision(grounding_on)]
+    c["routing"]["decisions"] = [_fusion_decision(grounding_on, policy)]
 
     # disable external-dependency stores (milvus/redis/llama_stack) for a
     # self-contained local run -- otherwise startup fatals on missing services.
     for store in ("semantic_cache", "memory", "vector_store"):
         if store in c["global"].get("stores", {}):
             c["global"]["stores"][store]["enabled"] = False
-
-    # looper -> Ollama for every panel/judge model
-    looper = c["global"]["integrations"]["looper"]
-    looper["model_endpoints"] = dict.fromkeys([*PANEL, JUDGE], OLLAMA)
 
     # Ensure hallucination_mitigation is enabled so the detector + NLI model init
     # (initializeHallucinationDetector -> wireFusionGroundingBackends). The NLI
@@ -153,11 +155,19 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="config/config.yaml")
     ap.add_argument("--out-dir", default="bench/grounded_fusion")
+    ap.add_argument(
+        "--policy",
+        default="weight",
+        choices=["weight", "annotate", "filter"],
+        help="grounding policy for the 'on' arm: weight/annotate keep all panel "
+        "responses; filter hard-drops below min_score (known to hurt). Use this to "
+        "A/B the policies in follow-up experiments.",
+    )
     args = ap.parse_args()
     with open(args.base) as f:
         base = yaml.safe_load(f)
     for on in (True, False):
-        cfg = build(base, on)
+        cfg = build(base, on, args.policy)
         path = f"{args.out_dir}/config-fusion-{'on' if on else 'off'}.yaml"
         with open(path, "w") as f:
             yaml.safe_dump(cfg, f, sort_keys=False, width=120)

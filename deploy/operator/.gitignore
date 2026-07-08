@@ -31,7 +31,11 @@ config/crd/bases/*.yaml
 .DS_Store
 
 # Operator SDK
-# Note: bundle/ is committed because it contains the OLM bundle manifests
+# Note: bundle/ is committed because it contains the OLM bundle manifests.
+# 'make bundle' regenerates a scratch-based bundle.Dockerfile here, but we ship
+# the hand-maintained bundle/Dockerfile (RHEL UBI + certification labels), so the
+# generated one is ignored.
+bundle.Dockerfile
 dist/
 
 # Go

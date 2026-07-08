@@ -6,9 +6,12 @@ type Decision struct {
 	Description         string                     `yaml:"description,omitempty"`
 	Priority            int                        `yaml:"priority,omitempty"`
 	Tier                int                        `yaml:"tier,omitempty"`
+	OutputContract      string                     `yaml:"output_contract,omitempty" json:"output_contract,omitempty"`
+	OutputContractSpec  *OutputContractSpec        `yaml:"output_contract_spec,omitempty" json:"output_contract_spec,omitempty"`
 	Rules               RuleCombination            `yaml:"rules"`
 	ModelRefs           []ModelRef                 `yaml:"modelRefs,omitempty"`
 	Algorithm           *AlgorithmConfig           `yaml:"algorithm,omitempty"`
+	Adaptations         DecisionAdaptationsConfig  `yaml:"adaptations,omitempty"`
 	Plugins             []DecisionPlugin           `yaml:"plugins,omitempty"`
 	CandidateIterations []CandidateIterationConfig `yaml:"candidateIterations,omitempty"`
 	// Emits carries declarative side-effect directives produced by EMIT blocks
@@ -65,15 +68,16 @@ type AlgorithmConfig struct {
 	Ratings      *RatingsAlgorithmConfig      `yaml:"ratings,omitempty"`
 	ReMoM        *ReMoMAlgorithmConfig        `yaml:"remom,omitempty"`
 	Fusion       *FusionAlgorithmConfig       `yaml:"fusion,omitempty"`
-	Elo          *EloSelectionConfig          `yaml:"elo,omitempty"`
+	Workflows    *WorkflowsAlgorithmConfig    `yaml:"workflows,omitempty"`
+	Elo          *EloSelectionConfig          `yaml:"-"`
 	RouterDC     *RouterDCSelectionConfig     `yaml:"router_dc,omitempty"`
 	AutoMix      *AutoMixSelectionConfig      `yaml:"automix,omitempty"`
 	Hybrid       *HybridSelectionConfig       `yaml:"hybrid,omitempty"`
-	RLDriven     *RLDrivenSelectionConfig     `yaml:"rl_driven,omitempty"`
-	GMTRouter    *GMTRouterSelectionConfig    `yaml:"gmtrouter,omitempty"`
+	RLDriven     *RLDrivenSelectionConfig     `yaml:"-"`
+	GMTRouter    *GMTRouterSelectionConfig    `yaml:"-"`
 	LatencyAware *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
 	MultiFactor  *MultiFactorSelectionConfig  `yaml:"multi_factor,omitempty"`
-	SessionAware *SessionAwareSelectionConfig `yaml:"session_aware,omitempty"`
+	SessionAware *SessionAwareSelectionConfig `yaml:"-"`
 	OnError      string                       `yaml:"on_error,omitempty"`
 }
 
@@ -118,7 +122,10 @@ type ReMoMAlgorithmConfig struct {
 	CompactionStrategy           string  `yaml:"compaction_strategy,omitempty"`
 	CompactionTokens             int     `yaml:"compaction_tokens,omitempty"`
 	SynthesisTemplate            string  `yaml:"synthesis_template,omitempty"`
+	SynthesisModel               string  `yaml:"synthesis_model,omitempty"`
 	MaxConcurrent                int     `yaml:"max_concurrent,omitempty"`
+	RoundTimeoutSeconds          int     `yaml:"round_timeout_seconds,omitempty"`
+	MinSuccessfulResponses       int     `yaml:"min_successful_responses,omitempty"`
 	OnError                      string  `yaml:"on_error,omitempty"`
 	ShuffleSeed                  int     `yaml:"shuffle_seed,omitempty"`
 	IncludeIntermediateResponses bool    `yaml:"include_intermediate_responses,omitempty"`

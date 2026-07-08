@@ -70,8 +70,10 @@ class ReMoMAlgorithmConfig(BaseModel):
     # e.g., [32, 4] means 32 calls in round 1, 4 in round 2, then 1 final
     breadth_schedule: list[int]
 
-    # Model distribution strategy: "weighted", "equal", or "first_only"
-    model_distribution: str | None = "weighted"
+    # Model distribution strategy: "weighted", "equal", "round_robin", or "first_only"
+    model_distribution: (
+        Literal["weighted", "equal", "round_robin", "first_only"] | None
+    ) = "weighted"
 
     # Temperature for model calls (default: 1.0 for diverse exploration)
     temperature: float | None = 1.0
@@ -88,8 +90,18 @@ class ReMoMAlgorithmConfig(BaseModel):
     # Custom synthesis template (uses default if not provided)
     synthesis_template: str | None = None
 
+    # Explicit final synthesis model. Must be one of the decision modelRefs.
+    synthesis_model: str | None = None
+
     # Maximum concurrent model calls per round
     max_concurrent: int | None = None
+
+    # Maximum wall-clock time to wait for a ReMoM round before using partial
+    # responses when on_error="skip".
+    round_timeout_seconds: int | None = Field(default=None, ge=1)
+
+    # Return from a parallel round as soon as this many responses succeed.
+    min_successful_responses: int | None = Field(default=None, ge=1)
 
     # Behavior on model call failure: "skip" or "fail"
     on_error: str | None = "skip"
@@ -117,6 +129,11 @@ class FusionGroundingConfig(BaseModel):
 
     enabled: bool | None = False
     reference: Literal["hybrid", "context", "panel"] | None = "hybrid"
+    # How the groundedness scores are used. weight/annotate keep every response and
+    # let the judge soft-weight; filter hard-drops below min_score. Default weight:
+    # hard-dropping the least consistent response regresses quality on contested
+    # factual items (see bench/grounded_fusion/FINDINGS.md).
+    policy: Literal["weight", "annotate", "filter"] | None = "weight"
     min_score: float | None = Field(default=0.0, ge=0, le=1)
     min_keep: int | None = Field(default=1, ge=0)
     nli_contradiction_penalty: float | None = Field(default=1.0, ge=0)
@@ -136,6 +153,8 @@ class FusionAlgorithmConfig(BaseModel):
     analysis_models: list[str] | None = None
     max_concurrent: int | None = Field(default=None, ge=1)
     max_completion_tokens: int | None = Field(default=None, ge=1)
+    round_timeout_seconds: int | None = Field(default=None, ge=1)
+    min_successful_responses: int | None = Field(default=None, ge=1)
     temperature: float | None = Field(default=None, ge=0)
     include_analysis: bool | None = True
     include_intermediate_responses: bool | None = True
@@ -144,6 +163,59 @@ class FusionAlgorithmConfig(BaseModel):
     synthesis_template: str | None = None
     judge_prompt_version: str | None = "fusion-v1"
     grounding: FusionGroundingConfig | None = None
+
+
+class WorkflowPlannerConfig(BaseModel):
+    """Control-plane model used by dynamic Router Flow planning."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model: str | None = None
+    max_completion_tokens: int | None = Field(default=None, ge=1)
+
+
+class WorkflowRoleConfig(BaseModel):
+    """Static Router Flow role mapped to decision modelRefs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    models: list[str] = Field(min_length=1)
+    prompt: str | None = None
+    access_list: list[str] | None = None
+
+
+class WorkflowFinalConfig(BaseModel):
+    """Static Router Flow final synthesis override."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model: str | None = None
+    prompt: str | None = None
+
+
+class WorkflowsAlgorithmConfig(BaseModel):
+    """Configuration for Router Flow workflow orchestration.
+
+    decision.modelRefs is the worker boundary. ``planner.model`` is the
+    control-plane model that generates dynamic workflow plans.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["static", "dynamic"] | None = "static"
+    template: str | None = "micro_agent"
+    roles: list[WorkflowRoleConfig] | None = None
+    final: WorkflowFinalConfig | None = None
+    planner: WorkflowPlannerConfig | None = None
+    max_steps: int | None = Field(default=3, ge=1)
+    max_parallel: int | None = Field(default=2, ge=1)
+    max_completion_tokens: int | None = Field(default=None, ge=1)
+    round_timeout_seconds: int | None = Field(default=None, ge=1)
+    min_successful_responses: int | None = Field(default=None, ge=1)
+    temperature: float | None = Field(default=None, ge=0)
+    include_intermediate_responses: bool | None = True
+    on_error: Literal["skip", "fail"] | None = "fail"
 
 
 class LatencyAwareAlgorithmConfig(BaseModel):
@@ -157,42 +229,10 @@ class LatencyAwareAlgorithmConfig(BaseModel):
 # =============================================================================
 # Model Selection Algorithm Configs
 # Reference papers:
-#   - Elo: RouteLLM (arXiv:2406.18665) - Bradley-Terry model
 #   - RouterDC: Query-Based Router by Dual Contrastive Learning (arXiv:2409.19886)
 #   - AutoMix: Automatically Mixing Language Models (arXiv:2310.12963)
 #   - Hybrid: Cost-Efficient Quality-Aware Query Routing (arXiv:2404.14618)
 # =============================================================================
-
-
-class EloSelectionConfig(BaseModel):
-    """Configuration for Elo rating-based model selection.
-
-    Uses Bradley-Terry model for pairwise comparisons, learning from user feedback.
-    """
-
-    # Starting Elo rating for new models (default: 1500)
-    initial_rating: float | None = Field(default=1500.0, ge=0)
-
-    # Controls rating volatility - higher = faster adaptation (default: 32)
-    k_factor: float | None = Field(default=32.0, ge=1, le=100)
-
-    # Enable per-category Elo ratings (default: true)
-    category_weighted: bool | None = True
-
-    # Time decay for old comparisons (0-1, 0 = no decay)
-    decay_factor: float | None = Field(default=0.0, ge=0, le=1)
-
-    # Minimum comparisons before rating is stable
-    min_comparisons: int | None = Field(default=5, ge=0)
-
-    # Cost consideration factor (0 = ignore cost)
-    cost_scaling_factor: float | None = Field(default=0.0, ge=0)
-
-    # File path for persisting Elo ratings (optional)
-    storage_path: str | None = None
-
-    # Auto-save interval (e.g., "5m", "30s")
-    auto_save_interval: str | None = "1m"
 
 
 class RouterDCSelectionConfig(BaseModel):
@@ -254,8 +294,8 @@ class HybridSelectionConfig(BaseModel):
     Combines multiple selection methods with configurable weights.
     """
 
-    # Weight for Elo rating contribution (0-1)
-    elo_weight: float | None = Field(default=0.3, ge=0, le=1)
+    # Weight for feedback-derived experience evidence (0-1).
+    experience_weight: float | None = Field(default=0.3, ge=0, le=1)
 
     # Weight for RouterDC embedding similarity (0-1)
     router_dc_weight: float | None = Field(default=0.3, ge=0, le=1)
@@ -271,31 +311,6 @@ class HybridSelectionConfig(BaseModel):
 
     # Normalize scores before combination
     normalize_scores: bool | None = True
-
-
-class SessionAwareSelectionConfig(BaseModel):
-    """Configuration for session-aware agentic model selection."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    base_method: str | None = "hybrid"
-    idle_timeout_seconds: int | None = Field(default=300, ge=0)
-    min_turns_before_switch: int | None = Field(default=1, ge=0)
-    switch_margin: float | None = Field(default=0.05, ge=0)
-    stay_bias: float | None = Field(default=0.10, ge=0)
-    tool_loop_hard_lock: bool | None = True
-    context_portability_hard_lock: bool | None = True
-    decision_drift_reset: bool | None = True
-    tool_loop_stay_bias: float | None = Field(default=0.35, ge=0)
-    prefix_cache_weight: float | None = Field(default=0.20, ge=0)
-    handoff_penalty_weight: float | None = Field(default=1.0, ge=0)
-    default_handoff_penalty: float | None = Field(default=0.05, ge=0)
-    quality_gap_multiplier: float | None = Field(default=1.0, ge=0)
-    max_cache_cost_multiplier: float | None = Field(default=2.5, ge=1)
-    switch_history_weight: float | None = Field(default=0.04, ge=0)
-    remaining_turn_prior_weight: float | None = Field(default=1.0, ge=0)
-    remaining_turn_prior_horizon: int | None = Field(default=8, ge=1)
-    min_remaining_turn_prior_samples: int | None = Field(default=3, ge=0)
 
 
 class MultiFactorWeightsConfig(BaseModel):
@@ -331,77 +346,6 @@ class MultiFactorSelectionConfig(BaseModel):
     on_no_candidates: str | None = "cheapest"
 
 
-# =============================================================================
-# RL-Driven Model Selection Algorithm Configs (from PR #1196 / Issue #994)
-# Reference papers:
-#   - Thompson Sampling: Exploration/exploitation via posterior sampling
-#   - GMTRouter: Heterogeneous GNN for personalized routing (arXiv:2511.08590)
-#   - Router-R1: LLM-as-router with think/route actions (arXiv:2506.09033)
-# =============================================================================
-
-
-class RLDrivenSelectionConfig(BaseModel):
-    """Configuration for the canonical rl_driven selection algorithm.
-
-    Matches decision.algorithm.rl_driven in the router config contract.
-    """
-
-    exploration_rate: float | None = Field(default=0.3, ge=0, le=1)
-    exploration_decay: float | None = Field(default=0.99, ge=0, le=1)
-    min_exploration: float | None = Field(default=0.05, ge=0, le=1)
-    use_thompson_sampling: bool | None = True
-    enable_personalization: bool | None = True
-    personalization_blend: float | None = Field(default=0.7, ge=0, le=1)
-    session_context_weight: float | None = Field(default=0.3, ge=0, le=1)
-    implicit_feedback_weight: float | None = Field(default=0.5, ge=0, le=1)
-    cost_awareness: bool | None = True
-    cost_weight: float | None = Field(default=0.2, ge=0)
-    storage_path: str | None = None
-    auto_save_interval: str | None = "30s"
-    use_router_r1_rewards: bool | None = True
-    cost_reward_alpha: float | None = Field(default=0.3, ge=0, le=1)
-    format_reward_penalty: float | None = -1.0
-    enable_llm_routing: bool | None = False
-    router_r1_server_url: str | None = None
-    llm_routing_fallback: str | None = "thompson"
-    enable_multi_round_aggregation: bool | None = False
-    max_aggregation_rounds: int | None = Field(default=None, ge=1)
-
-
-class GMTRouterConfig(BaseModel):
-    """Configuration for GMTRouter (Graph-based) model selection.
-
-    Uses heterogeneous GNN for personalized routing decisions.
-    """
-
-    # Canonical router config fields.
-    enable_personalization: bool | None = True
-    history_sample_size: int | None = Field(default=5, gt=0)
-    embedding_dimension: int | None = Field(default=768, gt=0)
-    num_gnn_layers: int | None = Field(default=2, ge=1, le=5)
-    attention_heads: int | None = Field(default=8, ge=1)
-    min_interactions_for_personalization: int | None = Field(default=3, ge=0)
-    max_interactions_per_user: int | None = Field(default=100, gt=0)
-    feedback_types: list[str] | None = Field(
-        default_factory=lambda: ["rating", "ranking"]
-    )
-    model_path: str | None = None
-    storage_path: str | None = None
-
-    # Legacy CLI aliases retained for compatibility with older local scripts.
-    # Number of GNN layers (default: 2)
-    num_layers: int | None = Field(default=2, ge=1, le=5)
-
-    # Hidden dimension size (default: 64)
-    hidden_dim: int | None = Field(default=64, gt=0)
-
-    # Attention heads (default: 4)
-    num_heads: int | None = Field(default=4, ge=1)
-
-    # Enable user preference learning
-    learn_preferences: bool | None = True
-
-
 class AlgorithmConfig(BaseModel):
     """Algorithm configuration for multi-model decisions.
 
@@ -414,48 +358,56 @@ class AlgorithmConfig(BaseModel):
        - "ratings": Coordinate bounded candidate execution
        - "remom": Multi-round parallel reasoning with intelligent synthesis
        - "fusion": Parallel panel deliberation with judge analysis and final synthesis
+       - "workflows": Router Flow dynamic/static micro-agent workflows
 
     2. Selection algorithms (single model selection from candidates):
        - "static": Use first model (default)
-       - "elo": Use Elo rating system with Bradley-Terry model
        - "router_dc": Use embedding similarity for query-model matching
        - "automix": Use POMDP-based cost-quality optimization
        - "hybrid": Combine multiple selection methods
        - "knn", "kmeans", "svm", "mlp": Shared ML model-selection selectors
        - "multi_factor": Combine quality, latency, cost, and load
-       - "session_aware": Agentic long-horizon routing with router-owned session memory
 
-    3. RL-driven selection algorithms:
-       - "rl_driven": Canonical online learning with optional Thompson / Router-R1 modes
-       - "gmtrouter": Graph neural network for personalized routing
+    Cross-request learning systems live under global.router.learning.adaptation
+    and global.router.learning.protection.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    # Algorithm type: looper ("confidence", "ratings", "remom", "fusion") or
-    # selection ("static", "elo", "router_dc", "automix", "hybrid",
-    #            "knn", "kmeans", "svm", "mlp", "multi_factor",
-    #            "rl_driven", "gmtrouter", "latency_aware", "session_aware")
-    type: str
+    # Algorithm type: looper ("confidence", "ratings", "remom", "fusion",
+    # "workflows") or
+    # selection ("static", "router_dc", "automix", "hybrid", "knn",
+    #            "kmeans", "svm", "mlp", "multi_factor", "latency_aware")
+    type: Literal[
+        "confidence",
+        "ratings",
+        "remom",
+        "fusion",
+        "workflows",
+        "static",
+        "router_dc",
+        "automix",
+        "hybrid",
+        "knn",
+        "kmeans",
+        "svm",
+        "mlp",
+        "multi_factor",
+        "latency_aware",
+    ]
 
     # Looper algorithm configurations
     confidence: ConfidenceAlgorithmConfig | None = None
     ratings: RatingsAlgorithmConfig | None = None
     remom: ReMoMAlgorithmConfig | None = None
     fusion: FusionAlgorithmConfig | None = None
+    workflows: WorkflowsAlgorithmConfig | None = None
     latency_aware: LatencyAwareAlgorithmConfig | None = None
 
-    # Selection algorithm configurations (from PR #1089, #1104)
-    elo: EloSelectionConfig | None = None
+    # Selection algorithm configurations
     router_dc: RouterDCSelectionConfig | None = None
     automix: AutoMixSelectionConfig | None = None
     hybrid: HybridSelectionConfig | None = None
     multi_factor: MultiFactorSelectionConfig | None = None
-    session_aware: SessionAwareSelectionConfig | None = None
-
-    # RL-driven and personalized selection algorithms
-    rl_driven: RLDrivenSelectionConfig | None = None
-    gmtrouter: GMTRouterConfig | None = None
-
     # Behavior on algorithm failure: "skip" or "fail"
     on_error: str | None = "skip"

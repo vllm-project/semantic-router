@@ -19,13 +19,18 @@ pip install -e .
 
 ### Usage
 
-Local `vllm-sr serve` requires Docker on Linux, macOS, or WSL2 on Windows.
-Native Windows Python environments can install the CLI for configuration and
-validation tasks, but the local Docker runtime is not supported there.
+Local `vllm-sr serve` requires Docker or Podman on Linux, macOS, or WSL2 on
+Windows. Native Windows Python environments can install the CLI for
+configuration and validation tasks, but the local container runtime is not
+supported there.
 
 ```bash
 # Start the router (includes dashboard, simulator sidecar, and first-run setup)
 HF_TOKEN=hf_xxx vllm-sr serve
+
+# Use Podman instead of Docker (set on the command, in env, or both)
+HF_TOKEN=hf_xxx vllm-sr serve --runtime podman
+HF_TOKEN=hf_xxx CONTAINER_RUNTIME=podman vllm-sr serve
 
 # Start an isolated second local stack on offset host ports
 VLLM_SR_STACK_NAME=lane-b VLLM_SR_PORT_OFFSET=200 HF_TOKEN=hf_xxx vllm-sr serve

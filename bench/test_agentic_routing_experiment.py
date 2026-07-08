@@ -2,6 +2,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+FULL_PERCENT = 100.0
+
 
 def load_experiment_module():
     path = Path(__file__).with_name("agentic_routing_experiment.py")
@@ -132,3 +134,108 @@ def test_initial_policy_models_merged_1974_capability_boundary():
     assert initial_provider_state is None
     assert full_topic_drift == (stronger, "decision_drift_select")
     assert initial_topic_drift is None
+
+
+def test_learning_architecture_eval_reports_required_metrics(tmp_path):
+    exp = load_experiment_module()
+
+    summary = exp.write_learning_architecture_outputs(tmp_path)
+
+    assert summary["route_correctness_pct"] == FULL_PERCENT
+    assert summary["replay_explainability_coverage_pct"] == FULL_PERCENT
+    assert summary["bypass_correctness_pct"] == FULL_PERCENT
+    assert summary["p50_overhead_ms"] is not None
+    assert summary["p95_overhead_ms"] is not None
+    assert summary["method_counts"]["session_aware"] >= 1
+    assert summary["method_counts"]["bandit"] >= 1
+    assert summary["method_counts"]["elo"] >= 1
+    assert summary["method_counts"]["personalization"] >= 1
+    assert (tmp_path / "learning_architecture_cases.csv").exists()
+    assert (tmp_path / "learning_architecture_summary.json").exists()
+    report = (tmp_path / "learning_architecture_report.md").read_text()
+    assert "Router Learning Architecture Eval" in report
+    assert "conversation-cache-stay" in report
+    assert "privacy-bypass-local" in report
+
+
+def test_pr_and_release_profiles_pass_on_deterministic_fixtures(tmp_path):
+    exp = load_experiment_module()
+    summary = exp.write_learning_architecture_outputs(tmp_path)
+    for profile_name in ("pr", "release"):
+        profile = exp.load_profile(profile_name)
+        verdict = exp.evaluate_against_profile(summary, profile)
+        assert verdict[
+            "passed"
+        ], f"{profile_name} profile should pass: {verdict['failed_metrics']}"
+        assert verdict["n_failed"] == 0
+        assert verdict["profile"] == profile_name
+
+
+def test_profile_gate_catches_regression():
+    exp = load_experiment_module()
+    profile = exp.load_profile("pr")
+    degraded = {
+        "route_correctness_pct": 82.0,
+        "replay_explainability_coverage_pct": 100.0,
+        "bypass_correctness_pct": 100.0,
+        "unnecessary_switch_rate_pct": 31.0,
+        "cost_savings_pct": -3.0,
+        "cache_token_delta": 5000,
+        "p95_overhead_ms": 120.0,
+    }
+    verdict = exp.evaluate_against_profile(degraded, profile)
+    assert verdict["passed"] is False
+    assert set(verdict["failed_metrics"]) == {
+        "route_correctness_pct",
+        "unnecessary_switch_rate_pct",
+        "cost_savings_pct",
+        "p95_overhead_ms",
+    }
+
+
+def test_profile_gate_fails_on_missing_metric():
+    exp = load_experiment_module()
+    profile = exp.load_profile("pr")
+    # Absent metrics must fail, never silently satisfy the gate: with only one
+    # metric supplied, every other thresholded metric should be reported failed.
+    n_thresholds = len(profile["thresholds"])
+    verdict = exp.evaluate_against_profile({"route_correctness_pct": 100.0}, profile)
+    assert verdict["passed"] is False
+    assert verdict["n_failed"] == n_thresholds - 1
+    # A present-but-None metric (e.g. bypass_correctness_pct with no bypass cases)
+    # must also fail closed even when every other metric is within bounds.
+    none_check = exp.evaluate_against_profile(
+        {
+            "route_correctness_pct": 100.0,
+            "replay_explainability_coverage_pct": 100.0,
+            "bypass_correctness_pct": None,
+            "unnecessary_switch_rate_pct": 0.0,
+            "cost_savings_pct": 10.0,
+            "cache_token_delta": 0,
+            "p95_overhead_ms": 1.0,
+        },
+        profile,
+    )
+    assert none_check["passed"] is False
+    assert "bypass_correctness_pct" in none_check["failed_metrics"]
+
+
+def test_load_profile_unknown_name_raises():
+    exp = load_experiment_module()
+    try:
+        exp.load_profile("does-not-exist")
+    except FileNotFoundError as e:
+        assert "available" in str(e)
+    else:
+        raise AssertionError("expected FileNotFoundError for unknown profile")
+
+
+def test_unknown_profile_via_explicit_path(tmp_path):
+    exp = load_experiment_module()
+    p = tmp_path / "custom.json"
+    p.write_text(
+        '{"profile":"custom","thresholds":{"route_correctness_pct":{"min":50.0}}}'
+    )
+    profile = exp.load_profile(str(p))
+    verdict = exp.evaluate_against_profile({"route_correctness_pct": 75.0}, profile)
+    assert verdict["passed"] is True

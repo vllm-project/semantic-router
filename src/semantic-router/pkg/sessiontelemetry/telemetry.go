@@ -9,7 +9,26 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-const ttl = 1 * time.Hour
+const (
+	// ttl is how long an idle session's cumulative state is retained before it
+	// becomes eligible for eviction.
+	ttl = 1 * time.Hour
+
+	// evictInterval bounds how often the full-store TTL sweep runs. TTL eviction is
+	// a soft memory reclaim (an expired entry only costs memory until it is removed),
+	// so the sweep is throttled to at most once per interval. This keeps the per-turn
+	// hot path (recordTurnState holds mu for every completed LLM round-trip) O(1)
+	// amortized instead of O(active sessions) on every call. Worst-case retention
+	// becomes ttl + evictInterval, which is negligible relative to ttl.
+	evictInterval = 1 * time.Minute
+)
+
+// maxTelemetrySessions caps the number of sessions tracked by the cumulative
+// turn store so memory stays bounded under high session cardinality even within
+// the TTL window. Mirrors last_model.go's maxLastModelSessions. It is a var (not
+// a const) so tests can exercise the eviction path without inserting tens of
+// thousands of entries.
+var maxTelemetrySessions = 50_000
 
 type turnState struct {
 	cumulativePrompt                int64
@@ -23,9 +42,10 @@ type turnState struct {
 }
 
 var (
-	mu    sync.Mutex
-	store = make(map[string]*turnState)
-	nowFn = time.Now // overridden in tests
+	mu        sync.Mutex
+	store     = make(map[string]*turnState)
+	lastEvict time.Time  // last time the full-store TTL sweep ran; throttles evictLocked
+	nowFn     = time.Now // overridden in tests
 )
 
 // ResetForTesting clears in-memory session state (tests only).
@@ -33,15 +53,53 @@ func ResetForTesting() {
 	mu.Lock()
 	defer mu.Unlock()
 	store = make(map[string]*turnState)
+	lastEvict = time.Time{}
 	ResetRouterSessionMemoryForTesting()
 }
 
+// evictLocked removes sessions whose lastSeen is older than ttl. The full-store
+// scan is throttled to at most once per evictInterval so the per-turn hot path
+// (recordTurnState, called under mu for every completed LLM round-trip) stays
+// O(1) amortized rather than O(active sessions) on every call. Callers must hold mu.
 func evictLocked(t time.Time) {
+	if !lastEvict.IsZero() && t.Sub(lastEvict) < evictInterval {
+		return
+	}
+	lastEvict = t
 	for k, v := range store {
 		if t.Sub(v.lastSeen) > ttl {
 			delete(store, k)
 		}
 	}
+}
+
+// evictOldestLocked evicts the oldest session among a bounded random sample
+// (approximate LRU — see evictionSampleSize). It is a best-effort safety valve
+// for the size cap when the throttled TTL sweep has not freed room. Callers must
+// hold mu.
+func evictOldestLocked() {
+	var oldestKey string
+	var oldestSeen time.Time
+	sampled := 0
+	for k, v := range store {
+		if sampled == 0 || v.lastSeen.Before(oldestSeen) {
+			oldestKey, oldestSeen = k, v.lastSeen
+		}
+		sampled++
+		if sampled >= evictionSampleSize {
+			break
+		}
+	}
+	if sampled > 0 {
+		delete(store, oldestKey)
+	}
+}
+
+// telemetrySessionCount returns the number of tracked sessions (tests only).
+func telemetrySessionCount() int {
+	mu.Lock()
+	defer mu.Unlock()
+	return len(store)
 }
 
 // ResponseAPIInput identifies a Response API (/v1/responses) conversation.
@@ -164,7 +222,13 @@ func recordTurnState(key string, p TurnParams, costThisTurn float64, t time.Time
 
 	evictLocked(t)
 	st := store[key]
+	if st != nil && t.Sub(st.lastSeen) > ttl {
+		st = nil
+	}
 	if st == nil {
+		if len(store) >= maxTelemetrySessions {
+			evictOldestLocked()
+		}
 		st = &turnState{}
 		store[key] = st
 	}

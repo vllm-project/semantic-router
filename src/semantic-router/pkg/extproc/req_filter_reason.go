@@ -248,9 +248,15 @@ func usesTopLevelReasoningEffort(profile *config.ProviderProfile) bool {
 	if err != nil {
 		return false
 	}
-	// The official OpenAI API accepts reasoning_effort as a top-level field;
-	// OpenAI-compatible local servers keep the vLLM chat_template_kwargs form.
-	return strings.EqualFold(u.Hostname(), "api.openai.com")
+	// The official OpenAI API and OpenRouter accept reasoning_effort as a
+	// top-level OpenAI-compatible field. Local vLLM-compatible servers keep the
+	// value under chat_template_kwargs.
+	return supportsTopLevelReasoningEffortHost(u.Hostname())
+}
+
+func supportsTopLevelReasoningEffortHost(host string) bool {
+	return strings.EqualFold(host, "api.openai.com") ||
+		strings.EqualFold(host, "openrouter.ai")
 }
 
 // getReasoningEffort returns the reasoning effort level for a given decision and model

@@ -2,12 +2,11 @@ package extproc
 
 import (
 	"context"
-	"os"
-	"strings"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -49,49 +48,70 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Re
 }
 
 func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) func(string) ([]float32, error) {
-	backend := strings.TrimSpace(strings.ToLower(os.Getenv("EMBEDDING_BACKEND_OVERRIDE")))
-	if backend == "" {
-		backend = strings.TrimSpace(strings.ToLower(cfg.EmbeddingConfig.Backend))
+	provider, err := resolveSelectionEmbeddingProvider(cfg)
+	if err != nil {
+		return func(string) ([]float32, error) {
+			return nil, err
+		}
 	}
+	return func(text string) ([]float32, error) {
+		return provider.Embed(context.Background(), text)
+	}
+}
+
+func resolveSelectionEmbeddingProvider(cfg *config.RouterConfig) (embedding.Provider, error) {
+	backend := embedding.BackendOverrideFromEnv()
 	if backend == "" {
-		backend = "candle"
+		backend = cfg.EmbeddingModels.EmbeddingBackend()
+	}
+	if backend == config.EmbeddingBackendOpenAICompatible {
+		return embedding.NewProvider(cfg.EmbeddingModels, embedding.ProviderOptions{})
 	}
 
-	modelType := strings.TrimSpace(strings.ToLower(cfg.EmbeddingConfig.ModelType))
-	if modelType == "" {
-		modelType = "qwen3"
-	}
-
+	modelType := selectionEmbeddingModelType(cfg, backend)
 	switch backend {
-	case "openvino":
-		return openvinoEmbeddingFunc(modelType)
+	case config.EmbeddingBackendOpenVINO:
+		openvinoEmbed := openvinoEmbeddingFunc(modelType)
+		return embedding.NewFuncProvider(backend, 0, func(_ context.Context, text string) ([]float32, error) {
+			return openvinoEmbed(text)
+		})
 	default:
-		// Batched FFI only supports qwen3 (1024-dim). Other types (default
-		// mmbert, gemma, ...) use the single-text FFI with target_dim 0 so
-		// each model returns its native dimension.
-		if candleEmbeddingSupportsBatched(modelType) {
-			return func(text string) ([]float32, error) {
-				output, err := candle_binding.GetEmbeddingBatched(text, modelType, 1024)
+		return embedding.NewFuncProvider(config.EmbeddingBackendCandle, selectionEmbeddingDimension(cfg, modelType), func(_ context.Context, text string) ([]float32, error) {
+			if modelType == config.EmbeddingModelTypeQwen3 {
+				output, err := candle_binding.GetEmbeddingBatched(text, modelType, selectionEmbeddingDimension(cfg, modelType))
 				if err != nil {
 					return nil, err
 				}
 				return output.Embedding, nil
 			}
-		}
-		return func(text string) ([]float32, error) {
 			output, err := candle_binding.GetEmbeddingWithModelType(text, modelType, 0)
 			if err != nil {
 				return nil, err
 			}
 			return output.Embedding, nil
-		}
+		})
 	}
 }
 
-// candleEmbeddingSupportsBatched reports whether the batched embedding FFI
-// supports the model type. Only qwen3 does; others use the single-text FFI.
-func candleEmbeddingSupportsBatched(modelType string) bool {
-	return modelType == "qwen3"
+func selectionEmbeddingModelType(cfg *config.RouterConfig, backend string) string {
+	modelType := cfg.EmbeddingConfig.ModelType
+	if modelType != "" {
+		return modelType
+	}
+	if backend == config.EmbeddingBackendOpenAICompatible {
+		return config.EmbeddingModelTypeRemote
+	}
+	return config.EmbeddingModelTypeQwen3
+}
+
+func selectionEmbeddingDimension(cfg *config.RouterConfig, modelType string) int {
+	if cfg.EmbeddingConfig.TargetDimension > 0 {
+		return cfg.EmbeddingConfig.TargetDimension
+	}
+	if modelType == config.EmbeddingModelTypeQwen3 {
+		return 1024
+	}
+	return 0
 }
 
 func collectConfiguredAlgorithmMethods(cfg *config.RouterConfig) []selection.SelectionMethod {
@@ -121,7 +141,6 @@ func buildModelSelectionConfig(cfg *config.RouterConfig) *selection.ModelSelecti
 	modelSelectionCfg.RouterDC = buildRouterDCSelectionConfig(cfg, decisionCfgs.routerDC)
 	modelSelectionCfg.AutoMix = buildAutoMixSelectionConfig(cfg)
 	modelSelectionCfg.Hybrid = buildHybridSelectionConfig(cfg, nil)
-	modelSelectionCfg.SessionAware = buildSessionAwareSelectionConfig(cfg, decisionCfgs.sessionAware)
 	modelSelectionCfg.ML = buildMLSelectionConfig(cfg)
 	modelSelectionCfg.MultiFactor = buildMultiFactorSelectionConfig(decisionCfgs.multiFactor)
 	modelSelectionCfg.RLDriven = buildRLDrivenSelectionConfig(decisionCfgs.rlDriven)
@@ -130,12 +149,11 @@ func buildModelSelectionConfig(cfg *config.RouterConfig) *selection.ModelSelecti
 }
 
 type decisionScopedSelectionConfigs struct {
-	elo          *config.EloSelectionConfig
-	routerDC     *config.RouterDCSelectionConfig
-	rlDriven     *config.RLDrivenSelectionConfig
-	gmtRouter    *config.GMTRouterSelectionConfig
-	multiFactor  *config.MultiFactorSelectionConfig
-	sessionAware *config.SessionAwareSelectionConfig
+	elo         *config.EloSelectionConfig
+	routerDC    *config.RouterDCSelectionConfig
+	rlDriven    *config.RLDrivenSelectionConfig
+	gmtRouter   *config.GMTRouterSelectionConfig
+	multiFactor *config.MultiFactorSelectionConfig
 }
 
 func findDecisionScopedSelectionConfigs(cfg *config.RouterConfig) decisionScopedSelectionConfigs {
@@ -170,11 +188,6 @@ func findDecisionScopedSelectionConfigs(cfg *config.RouterConfig) decisionScoped
 			decision.Algorithm.MultiFactor != nil &&
 			result.multiFactor == nil {
 			result.multiFactor = decision.Algorithm.MultiFactor
-		}
-		if decision.Algorithm.Type == "session_aware" &&
-			decision.Algorithm.SessionAware != nil &&
-			result.sessionAware == nil {
-			result.sessionAware = decision.Algorithm.SessionAware
 		}
 	}
 
@@ -266,7 +279,7 @@ func buildHybridSelectionConfig(
 	intelligentRouting := cfg.IntelligentRouting
 	hybridCfg := intelligentRouting.ModelSelection.Hybrid
 	result := &selection.HybridConfig{
-		EloWeight:           hybridCfg.EloWeight,
+		ExperienceWeight:    hybridCfg.ExperienceWeight,
 		RouterDCWeight:      hybridCfg.RouterDCWeight,
 		AutoMixWeight:       hybridCfg.AutoMixWeight,
 		CostWeight:          hybridCfg.CostWeight,
@@ -277,8 +290,8 @@ func buildHybridSelectionConfig(
 	if decisionCfg == nil {
 		return result
 	}
-	if decisionCfg.EloWeight != 0 {
-		result.EloWeight = decisionCfg.EloWeight
+	if decisionCfg.ExperienceWeight != 0 {
+		result.ExperienceWeight = decisionCfg.ExperienceWeight
 	}
 	if decisionCfg.RouterDCWeight != 0 {
 		result.RouterDCWeight = decisionCfg.RouterDCWeight
@@ -296,76 +309,6 @@ func buildHybridSelectionConfig(
 		result.NormalizeScores = true
 	}
 	return result
-}
-
-func buildSessionAwareSelectionConfig(
-	cfg *config.RouterConfig,
-	decisionCfg *config.SessionAwareSelectionConfig,
-) *selection.SessionAwareConfig {
-	global := cfg.IntelligentRouting.ModelSelection.SessionAware
-	result := selection.DefaultSessionAwareConfig()
-	applySessionAwareSelectionConfig(result, global)
-	if decisionCfg != nil {
-		applySessionAwareSelectionConfig(result, *decisionCfg)
-	}
-	return result
-}
-
-func applySessionAwareSelectionConfig(result *selection.SessionAwareConfig, cfg config.SessionAwareSelectionConfig) {
-	if cfg.BaseMethod != "" {
-		result.BaseMethod = selection.SelectionMethod(cfg.BaseMethod)
-	}
-	if cfg.IdleTimeoutSeconds != nil {
-		result.IdleTimeoutSeconds = *cfg.IdleTimeoutSeconds
-	}
-	if cfg.MinTurnsBeforeSwitch != nil {
-		result.MinTurnsBeforeSwitch = *cfg.MinTurnsBeforeSwitch
-	}
-	if cfg.SwitchMargin != nil {
-		result.SwitchMargin = *cfg.SwitchMargin
-	}
-	if cfg.StayBias != nil {
-		result.StayBias = *cfg.StayBias
-	}
-	if cfg.ToolLoopHardLock != nil {
-		result.ToolLoopHardLock = *cfg.ToolLoopHardLock
-	}
-	if cfg.ContextPortabilityHardLock != nil {
-		result.ContextPortabilityHardLock = *cfg.ContextPortabilityHardLock
-	}
-	if cfg.DecisionDriftReset != nil {
-		result.DecisionDriftReset = *cfg.DecisionDriftReset
-	}
-	if cfg.ToolLoopStayBias != nil {
-		result.ToolLoopStayBias = *cfg.ToolLoopStayBias
-	}
-	if cfg.PrefixCacheWeight != nil {
-		result.PrefixCacheWeight = *cfg.PrefixCacheWeight
-	}
-	if cfg.HandoffPenaltyWeight != nil {
-		result.HandoffPenaltyWeight = *cfg.HandoffPenaltyWeight
-	}
-	if cfg.DefaultHandoffPenalty != nil {
-		result.DefaultHandoffPenalty = *cfg.DefaultHandoffPenalty
-	}
-	if cfg.QualityGapMultiplier != nil {
-		result.QualityGapMultiplier = *cfg.QualityGapMultiplier
-	}
-	if cfg.MaxCacheCostMultiplier != nil {
-		result.MaxCacheCostMultiplier = *cfg.MaxCacheCostMultiplier
-	}
-	if cfg.SwitchHistoryWeight != nil {
-		result.SwitchHistoryWeight = *cfg.SwitchHistoryWeight
-	}
-	if cfg.RemainingTurnPriorWeight != nil {
-		result.RemainingTurnPriorWeight = *cfg.RemainingTurnPriorWeight
-	}
-	if cfg.RemainingTurnPriorHorizon != nil {
-		result.RemainingTurnPriorHorizon = *cfg.RemainingTurnPriorHorizon
-	}
-	if cfg.MinRemainingTurnPriorSamples != nil {
-		result.MinRemainingTurnPriorSamples = *cfg.MinRemainingTurnPriorSamples
-	}
 }
 
 func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfig {

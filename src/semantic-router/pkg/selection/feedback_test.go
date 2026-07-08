@@ -25,13 +25,14 @@ import (
 
 func TestNormalizeFeedbackCanonicalizesStateKeys(t *testing.T) {
 	feedback := &Feedback{
-		WinnerModel:  " model-a ",
-		LoserModel:   " model-b ",
-		DecisionName: " coding ",
-		UserID:       " user-1 ",
-		SessionID:    " session-1 ",
-		FeedbackType: " satisfied ",
-		Confidence:   0.75,
+		WinnerModel:    " model-a ",
+		LoserModel:     " model-b ",
+		DecisionName:   " coding ",
+		UserID:         " user-1 ",
+		SessionID:      " session-1 ",
+		ConversationID: " conversation-1 ",
+		FeedbackType:   " satisfied ",
+		Confidence:     0.75,
 	}
 
 	if err := NormalizeFeedback(feedback); err != nil {
@@ -42,7 +43,8 @@ func TestNormalizeFeedbackCanonicalizesStateKeys(t *testing.T) {
 		t.Fatalf("expected model names to be trimmed, got winner=%q loser=%q", feedback.WinnerModel, feedback.LoserModel)
 	}
 	if feedback.DecisionName != "coding" || feedback.UserID != "user-1" ||
-		feedback.SessionID != "session-1" || feedback.FeedbackType != "satisfied" {
+		feedback.SessionID != "session-1" || feedback.ConversationID != "conversation-1" ||
+		feedback.FeedbackType != "satisfied" {
 		t.Fatalf("expected metadata keys to be trimmed, got %#v", feedback)
 	}
 }

@@ -40,6 +40,10 @@ extproc-server
 .vscode/
 *.swp
 *.swo
+tmp/
+output/
+artifacts/
+bench/router_flow/scorecards/
 
 # Dependency directories
 vendor/
@@ -200,6 +204,7 @@ FactCHD_dataset/
 
 .vllm-sr/
 .codex-go-cache/
+.copilot-tmp/
 
 # AWS deployment files (contain instance IPs and IDs)
 src/training/cache_embeddings/aws/vllm-instance-*.txt

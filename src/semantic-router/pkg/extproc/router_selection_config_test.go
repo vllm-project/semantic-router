@@ -136,14 +136,14 @@ func TestBuildHybridSelectionConfigMergesDecisionOverrides(t *testing.T) {
 	cfg := config.DefaultGlobalConfig()
 
 	got := buildHybridSelectionConfig(&cfg, &config.HybridSelectionConfig{
-		EloWeight:      0.6,
-		RouterDCWeight: 0.4,
+		ExperienceWeight: 0.6,
+		RouterDCWeight:   0.4,
 	})
 
 	if got == nil {
 		t.Fatal("expected Hybrid config to be built")
 	}
-	if got.EloWeight != 0.6 || got.RouterDCWeight != 0.4 {
+	if got.ExperienceWeight != 0.6 || got.RouterDCWeight != 0.4 {
 		t.Fatalf("expected decision-scoped hybrid weights, got %+v", got)
 	}
 	if got.AutoMixWeight != selection.DefaultHybridConfig().AutoMixWeight || !got.NormalizeScores {

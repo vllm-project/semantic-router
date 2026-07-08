@@ -5,8 +5,11 @@ package apiserver
 import (
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -51,7 +54,12 @@ func (s *ClassificationAPIServer) parseEmbeddingRequest(w http.ResponseWriter, r
 	}
 
 	applyEmbeddingDefaults(&req)
-	if code, message, ok := validateEmbeddingRequest(req); !ok {
+	mmbertPath := ""
+	if s.config != nil {
+		mmbertPath = s.config.EmbeddingModels.MmBertModelPath
+	}
+	availableLayers := config.MmBertAvailableLayers(mmbertPath)
+	if code, message, ok := validateEmbeddingRequest(req, availableLayers); !ok {
 		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
 		return EmbeddingRequest{}, false
 	}
@@ -72,7 +80,7 @@ func applyEmbeddingDefaults(req *EmbeddingRequest) {
 	}
 }
 
-func validateEmbeddingRequest(req EmbeddingRequest) (string, string, bool) {
+func validateEmbeddingRequest(req EmbeddingRequest, mmbertLayers []int) (string, string, bool) {
 	if len(req.Texts) == 0 {
 		return "INVALID_INPUT", "texts array cannot be empty", false
 	}
@@ -82,8 +90,8 @@ func validateEmbeddingRequest(req EmbeddingRequest) (string, string, bool) {
 	if req.TargetLayer != 0 && req.Model != "mmbert" {
 		return "INVALID_PARAMETER", "target_layer is only supported for model='mmbert'", false
 	}
-	if req.Model == "mmbert" && req.TargetLayer != 0 && !isValidMmBertLayer(req.TargetLayer) {
-		return "INVALID_LAYER", fmt.Sprintf("target_layer must be one of: 3, 6, 11, 22 (got %d)", req.TargetLayer), false
+	if req.Model == "mmbert" && req.TargetLayer != 0 && !config.IsValidMmBertLayer(req.TargetLayer, mmbertLayers) {
+		return "INVALID_LAYER", fmt.Sprintf("target_layer must be one of: %s (got %d)", formatLayerList(mmbertLayers), req.TargetLayer), false
 	}
 	return "", "", true
 }
@@ -303,8 +311,12 @@ func isValidDimension(dim int) bool {
 	return validDimensions[dim]
 }
 
-// isValidMmBertLayer checks if the provided layer is valid for mmBERT early exit
-func isValidMmBertLayer(layer int) bool {
-	validLayers := map[int]bool{3: true, 6: true, 11: true, 22: true}
-	return validLayers[layer]
+// formatLayerList renders a layer set as a comma-separated string for error
+// messages, e.g. [6 11 16 22] -> "6, 11, 16, 22".
+func formatLayerList(layers []int) string {
+	parts := make([]string, len(layers))
+	for i, l := range layers {
+		parts[i] = strconv.Itoa(l)
+	}
+	return strings.Join(parts, ", ")
 }

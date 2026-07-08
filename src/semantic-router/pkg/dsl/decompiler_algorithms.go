@@ -14,8 +14,11 @@ var algorithmFieldExporters = map[string]algorithmFieldExporter{
 	"remom": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		remomAlgorithmToFields(algo.ReMoM, fields)
 	},
-	"elo": func(algo *config.AlgorithmConfig, fields map[string]Value) {
-		eloAlgorithmToFields(algo.Elo, fields)
+	"fusion": func(algo *config.AlgorithmConfig, fields map[string]Value) {
+		fusionAlgorithmToFields(algo.Fusion, fields)
+	},
+	"workflows": func(algo *config.AlgorithmConfig, fields map[string]Value) {
+		workflowsAlgorithmToFields(algo.Workflows, fields)
 	},
 	"router_dc": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		routerDCAlgorithmToFields(algo.RouterDC, fields)
@@ -26,20 +29,11 @@ var algorithmFieldExporters = map[string]algorithmFieldExporter{
 	"hybrid": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		hybridAlgorithmToFields(algo.Hybrid, fields)
 	},
-	"rl_driven": func(algo *config.AlgorithmConfig, fields map[string]Value) {
-		rlDrivenAlgorithmToFields(algo.RLDriven, fields)
-	},
-	"gmtrouter": func(algo *config.AlgorithmConfig, fields map[string]Value) {
-		gmtRouterAlgorithmToFields(algo.GMTRouter, fields)
-	},
 	"latency_aware": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		latencyAwareAlgorithmToFields(algo.LatencyAware, fields)
 	},
 	"multi_factor": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		multiFactorAlgorithmToFields(algo.MultiFactor, fields)
-	},
-	"session_aware": func(algo *config.AlgorithmConfig, fields map[string]Value) {
-		sessionAwareAlgorithmToFields(algo.SessionAware, fields)
 	},
 }
 
@@ -105,25 +99,93 @@ func remomAlgorithmToFields(r *config.ReMoMAlgorithmConfig, fields map[string]Va
 	setStringValue(fields, "compaction_strategy", r.CompactionStrategy)
 	setIntValue(fields, "compaction_tokens", r.CompactionTokens)
 	setStringValue(fields, "synthesis_template", r.SynthesisTemplate)
+	setStringValue(fields, "synthesis_model", r.SynthesisModel)
 	setIntValue(fields, "max_concurrent", r.MaxConcurrent)
+	setIntValue(fields, "round_timeout_seconds", r.RoundTimeoutSeconds)
+	setIntValue(fields, "min_successful_responses", r.MinSuccessfulResponses)
 	setStringValue(fields, "on_error", r.OnError)
 	setIntValue(fields, "shuffle_seed", r.ShuffleSeed)
 	setBoolTrueValue(fields, "include_intermediate_responses", r.IncludeIntermediateResponses)
 	setIntValue(fields, "max_responses_per_round", r.MaxResponsesPerRound)
 }
 
-func eloAlgorithmToFields(e *config.EloSelectionConfig, fields map[string]Value) {
-	if e == nil {
+func fusionAlgorithmToFields(f *config.FusionAlgorithmConfig, fields map[string]Value) {
+	if f == nil {
 		return
 	}
-	setFloatValue(fields, "initial_rating", e.InitialRating)
-	setFloatValue(fields, "k_factor", e.KFactor)
-	setBoolTrueValue(fields, "category_weighted", e.CategoryWeighted)
-	setFloatValue(fields, "decay_factor", e.DecayFactor)
-	setIntValue(fields, "min_comparisons", e.MinComparisons)
-	setFloatValue(fields, "cost_scaling_factor", e.CostScalingFactor)
-	setStringValue(fields, "storage_path", e.StoragePath)
-	setStringValue(fields, "auto_save_interval", e.AutoSaveInterval)
+	setStringValue(fields, "model", f.Model)
+	if len(f.AnalysisModels) > 0 {
+		fields["analysis_models"] = stringsToArray(f.AnalysisModels)
+	}
+	setIntValue(fields, "max_concurrent", f.MaxConcurrent)
+	setIntValue(fields, "max_completion_tokens", f.MaxCompletionTokens)
+	setIntValue(fields, "round_timeout_seconds", f.RoundTimeoutSeconds)
+	setIntValue(fields, "min_successful_responses", f.MinSuccessfulResponses)
+	if f.Temperature != nil {
+		fields["temperature"] = FloatValue{V: *f.Temperature}
+	}
+	if f.IncludeAnalysis != nil {
+		fields["include_analysis"] = BoolValue{V: *f.IncludeAnalysis}
+	}
+	setStringValue(fields, "on_error", f.OnError)
+	setStringValue(fields, "analysis_template", f.AnalysisTemplate)
+	setStringValue(fields, "synthesis_template", f.SynthesisTemplate)
+	setStringValue(fields, "judge_prompt_version", f.JudgePromptVersion)
+	if f.IncludeIntermediateResponses != nil {
+		fields["include_intermediate_responses"] = BoolValue{V: *f.IncludeIntermediateResponses}
+	}
+}
+
+func workflowsAlgorithmToFields(w *config.WorkflowsAlgorithmConfig, fields map[string]Value) {
+	if w == nil {
+		return
+	}
+	setStringValue(fields, "mode", w.Mode)
+	setStringValue(fields, "template", w.Template)
+	if len(w.Roles) > 0 {
+		fields["roles"] = workflowRolesValue(w.Roles)
+	}
+	if !w.Final.IsZero() {
+		fields["final"] = workflowFinalValue(w.Final)
+	}
+	if w.Planner.Model != "" {
+		fields["planner"] = ObjectValue{Fields: map[string]Value{
+			"model": StringValue{V: w.Planner.Model},
+		}}
+	}
+	setIntValue(fields, "max_steps", w.MaxSteps)
+	setIntValue(fields, "max_parallel", w.MaxParallel)
+	setIntValue(fields, "max_completion_tokens", w.MaxCompletionTokens)
+	setIntValue(fields, "round_timeout_seconds", w.RoundTimeoutSeconds)
+	setIntValue(fields, "min_successful_responses", w.MinSuccessfulResponses)
+	if w.Temperature != nil {
+		fields["temperature"] = FloatValue{V: *w.Temperature}
+	}
+	if w.IncludeIntermediateResponses != nil {
+		fields["include_intermediate_responses"] = BoolValue{V: *w.IncludeIntermediateResponses}
+	}
+	setStringValue(fields, "on_error", w.OnError)
+}
+
+func workflowRolesValue(roles []config.WorkflowRoleConfig) ArrayValue {
+	items := make([]Value, 0, len(roles))
+	for _, role := range roles {
+		fields := map[string]Value{}
+		setStringValue(fields, "name", role.Name)
+		if len(role.Models) > 0 {
+			fields["models"] = stringsToArray(role.Models)
+		}
+		setStringValue(fields, "prompt", role.Prompt)
+		items = append(items, ObjectValue{Fields: fields})
+	}
+	return ArrayValue{Items: items}
+}
+
+func workflowFinalValue(final config.WorkflowFinalConfig) ObjectValue {
+	fields := map[string]Value{}
+	setStringValue(fields, "model", final.Model)
+	setStringValue(fields, "prompt", final.Prompt)
+	return ObjectValue{Fields: fields}
 }
 
 func routerDCAlgorithmToFields(r *config.RouterDCSelectionConfig, fields map[string]Value) {
@@ -155,54 +217,12 @@ func hybridAlgorithmToFields(h *config.HybridSelectionConfig, fields map[string]
 	if h == nil {
 		return
 	}
-	setFloatValue(fields, "elo_weight", h.EloWeight)
+	setFloatValue(fields, "experience_weight", h.ExperienceWeight)
 	setFloatValue(fields, "router_dc_weight", h.RouterDCWeight)
 	setFloatValue(fields, "automix_weight", h.AutoMixWeight)
 	setFloatValue(fields, "cost_weight", h.CostWeight)
 	setFloatValue(fields, "quality_gap_threshold", h.QualityGapThreshold)
 	setBoolTrueValue(fields, "normalize_scores", h.NormalizeScores)
-}
-
-func rlDrivenAlgorithmToFields(r *config.RLDrivenSelectionConfig, fields map[string]Value) {
-	if r == nil {
-		return
-	}
-	setFloatValue(fields, "exploration_rate", r.ExplorationRate)
-	setFloatValue(fields, "exploration_decay", r.ExplorationDecay)
-	setFloatValue(fields, "min_exploration", r.MinExploration)
-	setBoolTrueValue(fields, "use_thompson_sampling", r.UseThompsonSampling)
-	setBoolTrueValue(fields, "enable_personalization", r.EnablePersonalization)
-	setFloatValue(fields, "personalization_blend", r.PersonalizationBlend)
-	setFloatValue(fields, "session_context_weight", r.SessionContextWeight)
-	setFloatValue(fields, "implicit_feedback_weight", r.ImplicitFeedbackWeight)
-	setBoolTrueValue(fields, "cost_awareness", r.CostAwareness)
-	setFloatValue(fields, "cost_weight", r.CostWeight)
-	setStringValue(fields, "storage_path", r.StoragePath)
-	setStringValue(fields, "auto_save_interval", r.AutoSaveInterval)
-	setBoolTrueValue(fields, "use_router_r1_rewards", r.UseRouterR1Rewards)
-	setFloatValue(fields, "cost_reward_alpha", r.CostRewardAlpha)
-	setFloatValue(fields, "format_reward_penalty", r.FormatRewardPenalty)
-	setBoolTrueValue(fields, "enable_llm_routing", r.EnableLLMRouting)
-	setStringValue(fields, "router_r1_server_url", r.RouterR1ServerURL)
-	setStringValue(fields, "llm_routing_fallback", r.LLMRoutingFallback)
-	setBoolTrueValue(fields, "enable_multi_round_aggregation", r.EnableMultiRoundAggregation)
-	setIntValue(fields, "max_aggregation_rounds", r.MaxAggregationRounds)
-}
-
-func gmtRouterAlgorithmToFields(g *config.GMTRouterSelectionConfig, fields map[string]Value) {
-	if g == nil {
-		return
-	}
-	setBoolTrueValue(fields, "enable_personalization", g.EnablePersonalization)
-	setIntValue(fields, "history_sample_size", g.HistorySampleSize)
-	setIntValue(fields, "embedding_dimension", g.EmbeddingDimension)
-	setIntValue(fields, "num_gnn_layers", g.NumGNNLayers)
-	setIntValue(fields, "attention_heads", g.AttentionHeads)
-	setIntValue(fields, "min_interactions_for_personalization", g.MinInteractionsForPersonalization)
-	setIntValue(fields, "max_interactions_per_user", g.MaxInteractionsPerUser)
-	setStringArrayValue(fields, "feedback_types", g.FeedbackTypes)
-	setStringValue(fields, "model_path", g.ModelPath)
-	setStringValue(fields, "storage_path", g.StoragePath)
 }
 
 func latencyAwareAlgorithmToFields(l *config.LatencyAwareAlgorithmConfig, fields map[string]Value) {
@@ -228,30 +248,6 @@ func multiFactorAlgorithmToFields(m *config.MultiFactorSelectionConfig, fields m
 	setStringValue(fields, "on_no_candidates", m.OnNoCandidates)
 }
 
-func sessionAwareAlgorithmToFields(s *config.SessionAwareSelectionConfig, fields map[string]Value) {
-	if s == nil {
-		return
-	}
-	setStringValue(fields, "base_method", s.BaseMethod)
-	setIntPointerValue(fields, "idle_timeout_seconds", s.IdleTimeoutSeconds)
-	setIntPointerValue(fields, "min_turns_before_switch", s.MinTurnsBeforeSwitch)
-	setFloatPointerValue(fields, "switch_margin", s.SwitchMargin)
-	setFloatPointerValue(fields, "stay_bias", s.StayBias)
-	setBoolPointerValue(fields, "tool_loop_hard_lock", s.ToolLoopHardLock)
-	setBoolPointerValue(fields, "context_portability_hard_lock", s.ContextPortabilityHardLock)
-	setBoolPointerValue(fields, "decision_drift_reset", s.DecisionDriftReset)
-	setFloatPointerValue(fields, "tool_loop_stay_bias", s.ToolLoopStayBias)
-	setFloatPointerValue(fields, "prefix_cache_weight", s.PrefixCacheWeight)
-	setFloatPointerValue(fields, "handoff_penalty_weight", s.HandoffPenaltyWeight)
-	setFloatPointerValue(fields, "default_handoff_penalty", s.DefaultHandoffPenalty)
-	setFloatPointerValue(fields, "quality_gap_multiplier", s.QualityGapMultiplier)
-	setFloatPointerValue(fields, "max_cache_cost_multiplier", s.MaxCacheCostMultiplier)
-	setFloatPointerValue(fields, "switch_history_weight", s.SwitchHistoryWeight)
-	setFloatPointerValue(fields, "remaining_turn_prior_weight", s.RemainingTurnPriorWeight)
-	setIntPointerValue(fields, "remaining_turn_prior_horizon", s.RemainingTurnPriorHorizon)
-	setIntPointerValue(fields, "min_remaining_turn_prior_samples", s.MinRemainingTurnPriorSamples)
-}
-
 func setStringValue(fields map[string]Value, key string, value string) {
 	if value != "" {
 		fields[key] = StringValue{V: value}
@@ -273,30 +269,6 @@ func setFloatValue(fields map[string]Value, key string, value float64) {
 func setBoolTrueValue(fields map[string]Value, key string, value bool) {
 	if value {
 		fields[key] = BoolValue{V: true}
-	}
-}
-
-func setBoolPointerValue(fields map[string]Value, key string, value *bool) {
-	if value != nil {
-		fields[key] = BoolValue{V: *value}
-	}
-}
-
-func setIntPointerValue(fields map[string]Value, key string, value *int) {
-	if value != nil {
-		fields[key] = IntValue{V: *value}
-	}
-}
-
-func setFloatPointerValue(fields map[string]Value, key string, value *float64) {
-	if value != nil {
-		fields[key] = FloatValue{V: *value}
-	}
-}
-
-func setStringArrayValue(fields map[string]Value, key string, values []string) {
-	if len(values) > 0 {
-		fields[key] = stringsToArray(values)
 	}
 }
 

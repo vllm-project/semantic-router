@@ -6,6 +6,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
@@ -114,11 +115,19 @@ func detectSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
 	}
 }
 
-func createToolsDatabase(cfg *config.RouterConfig) *tools.ToolsDatabase {
+func createToolsDatabase(cfg *config.RouterConfig) (*tools.ToolsDatabase, error) {
 	embeddingModels := cfg.EmbeddingModels
 	toolsThreshold := embeddingModels.MinSimilarityThreshold()
 	if cfg.Tools.SimilarityThreshold != nil {
 		toolsThreshold = *cfg.Tools.SimilarityThreshold
+	}
+	var provider embedding.Provider
+	if cfg.Tools.Enabled {
+		var err error
+		provider, err = toolsEmbeddingProvider(cfg)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	toolsDatabase := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
@@ -126,6 +135,7 @@ func createToolsDatabase(cfg *config.RouterConfig) *tools.ToolsDatabase {
 		Enabled:             cfg.Tools.Enabled,
 		ModelType:           embeddingModels.EmbeddingConfig.ModelType,
 		TargetDimension:     embeddingModels.EmbeddingConfig.TargetDimension,
+		Provider:            provider,
 	})
 
 	if toolsDatabase.IsEnabled() {
@@ -137,7 +147,18 @@ func createToolsDatabase(cfg *config.RouterConfig) *tools.ToolsDatabase {
 		logging.ComponentEvent("extproc", "tools_database_disabled", map[string]interface{}{})
 	}
 
-	return toolsDatabase
+	return toolsDatabase, nil
+}
+
+func toolsEmbeddingProvider(cfg *config.RouterConfig) (embedding.Provider, error) {
+	if cfg == nil || !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+		return nil, nil
+	}
+	provider, err := embedding.NewProvider(cfg.EmbeddingModels, embedding.ProviderOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create tools embedding provider: %w", err)
+	}
+	return provider, nil
 }
 
 func createRouterClassifier(
