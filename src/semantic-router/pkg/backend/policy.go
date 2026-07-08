@@ -35,6 +35,13 @@ type candidateEvaluation struct {
 	telemetryAgeMS int64
 }
 
+type policyCandidateSummary struct {
+	options                 []policyOption
+	missingCount            int
+	staleCount              int
+	unhealthyCandidateCount int
+}
+
 // SelectBackendCandidate applies a minimal second-stage backend policy. It only
 // selects when at least one candidate has fresh, selectable telemetry; otherwise
 // it fails open so existing model/backend routing can continue unchanged.
@@ -51,43 +58,23 @@ func SelectBackendCandidate(modelName string, candidates []BackendCandidate, sto
 		return failOpenResult(diag, FallbackReasonNoBackendCandidates)
 	}
 
-	options := []policyOption{}
-	missingCount := 0
-	staleCount := 0
-	unhealthyCandidateCount := 0
+	summary := collectPolicyCandidates(modelName, candidates, store, &diag)
 
-	for _, candidate := range candidates {
-		evaluation := evaluateCandidate(modelName, candidate, store)
-		switch evaluation.status {
-		case candidateMissing:
-			missingCount++
-			continue
-		case candidateStale:
-			staleCount++
-			diag.TelemetryAgeMS = maxInt64(diag.TelemetryAgeMS, evaluation.telemetryAgeMS)
-			continue
-		case candidateUnhealthy:
-			diag.FreshCandidateCount++
-			diag.TelemetryAgeMS = maxInt64(diag.TelemetryAgeMS, evaluation.telemetryAgeMS)
-			unhealthyCandidateCount++
-			continue
-		case candidateSelectable:
-			diag.FreshCandidateCount++
-			diag.TelemetryAgeMS = maxInt64(diag.TelemetryAgeMS, evaluation.telemetryAgeMS)
-			options = append(options, evaluation.option)
-		}
-	}
-
-	diag.UnhealthyCount = unhealthyCandidateCount
+	diag.UnhealthyCount = summary.unhealthyCandidateCount
 	diag.TelemetryFresh = diag.FreshCandidateCount > 0
-	if len(options) == 0 {
-		return failOpenResult(diag, fallbackReasonForEmptyPolicy(len(candidates), missingCount, staleCount, unhealthyCandidateCount))
+	if len(summary.options) == 0 {
+		return failOpenResult(diag, fallbackReasonForEmptyPolicy(
+			len(candidates),
+			summary.missingCount,
+			summary.staleCount,
+			summary.unhealthyCandidateCount,
+		))
 	}
 
-	sort.Slice(options, func(i, j int) bool {
-		return policyOptionLess(options[i], options[j])
+	sort.Slice(summary.options, func(i, j int) bool {
+		return policyOptionLess(summary.options[i], summary.options[j])
 	})
-	selected := options[0]
+	selected := summary.options[0]
 	age := store.Age(selected.telemetry)
 	diag.SelectedBackendID = selected.candidate.BackendID
 	diag.SelectedReplicaID = selected.telemetry.Identity.ReplicaID
@@ -102,6 +89,35 @@ func SelectBackendCandidate(modelName string, candidates []BackendCandidate, sto
 		Reason:            PolicyReasonSelectedFreshTelemetry,
 		Diagnostics:       diag,
 	}
+}
+
+func collectPolicyCandidates(modelName string, candidates []BackendCandidate, store *Store, diag *BackendPolicyDiagnostics) policyCandidateSummary {
+	summary := policyCandidateSummary{
+		options: make([]policyOption, 0, len(candidates)),
+	}
+	for _, candidate := range candidates {
+		evaluation := evaluateCandidate(modelName, candidate, store)
+		switch evaluation.status {
+		case candidateMissing:
+			summary.missingCount++
+			continue
+		case candidateStale:
+			summary.staleCount++
+			diag.TelemetryAgeMS = maxInt64(diag.TelemetryAgeMS, evaluation.telemetryAgeMS)
+			continue
+		case candidateUnhealthy:
+			diag.FreshCandidateCount++
+			diag.TelemetryAgeMS = maxInt64(diag.TelemetryAgeMS, evaluation.telemetryAgeMS)
+			summary.unhealthyCandidateCount++
+			continue
+		case candidateSelectable:
+			diag.FreshCandidateCount++
+			diag.TelemetryAgeMS = maxInt64(diag.TelemetryAgeMS, evaluation.telemetryAgeMS)
+			summary.options = append(summary.options, evaluation.option)
+		}
+	}
+
+	return summary
 }
 
 func evaluateCandidate(modelName string, candidate BackendCandidate, store *Store) candidateEvaluation {
