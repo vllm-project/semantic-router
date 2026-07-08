@@ -2549,6 +2549,18 @@
   "community.contributors.updated": {
     "message": "更新于"
   },
+  "community.contributors.sort.label": {
+    "message": "排序"
+  },
+  "community.contributors.sort.aria": {
+    "message": "贡献者排行榜排序方式"
+  },
+  "community.contributors.sort.commits": {
+    "message": "提交"
+  },
+  "community.contributors.sort.reviews": {
+    "message": "审查"
+  },
   "community.contributors.table.rank": {
     "message": "排名"
   },
@@ -2557,6 +2569,9 @@
   },
   "community.contributors.table.commits": {
     "message": "提交"
+  },
+  "community.contributors.table.reviews": {
+    "message": "审查"
   },
   "community.contributors.table.share": {
     "message": "占比"
@@ -2572,6 +2587,33 @@
   },
   "community.contributors.avatarAlt": {
     "message": "{name} 头像"
+  },
+  "community.contributors.committers.aria": {
+    "message": "{rangeLabel} 提交者活动"
+  },
+  "community.contributors.committers.h2": {
+    "message": "提交者活动"
+  },
+  "community.contributors.committers.metrics.aria": {
+    "message": "提交者活动摘要"
+  },
+  "community.contributors.committers.metrics.committers": {
+    "message": "活跃提交者"
+  },
+  "community.contributors.committers.metrics.reviews": {
+    "message": "PR 审查"
+  },
+  "community.contributors.committers.metrics.merges": {
+    "message": "PR 合并"
+  },
+  "community.contributors.committers.table.reviews": {
+    "message": "审查"
+  },
+  "community.contributors.committers.table.merges": {
+    "message": "合并"
+  },
+  "community.contributors.committers.table.total": {
+    "message": "合计"
   },
   "community.contributors.range.v03ToNow.label": {
     "message": "v0.3 -> 当前"
