@@ -126,7 +126,7 @@ wheel plus the system `migraphx` package so MIGraphX, ROCm, and CPU are all
 available. Sequence classifiers still prefer portable SDPA artifacts first;
 embedding and other CK-FA-only artifacts use ROCm.
 
-AMD SDPA sequence classifiers use `128,512` input buckets on MIGraphX by
+AMD SDPA sequence classifiers use `64,128,512` input buckets on MIGraphX by
 default. This keeps MIGraphX from compiling a separate shape for every observed
 request length without forcing short requests through the 512-token path. Use
 `VSR_AMD_MIGRAPHX_SEQUENCE_BUCKETS=512` for a single fixed shape, or

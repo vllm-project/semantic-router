@@ -122,6 +122,7 @@ the most common source of repeated compile cost by bucketing AMD
 `model_sdpa_fp16.onnx` inputs. The default buckets are:
 
 ```text
+[batch, 64]
 [batch, 128]
 [batch, 512]
 ```
@@ -303,7 +304,7 @@ Current remote quality evidence from the ROCm/MIGraphX validation host:
 
 - MIGraphX cold compile can be much slower than warm inference; benchmark both
   session creation and warm latency. AMD SDPA sequence classifiers now use
-  `128,512` input buckets by default to avoid one compile per observed request
+  `64,128,512` input buckets by default to avoid one compile per observed request
   length while keeping short-request latency lower than an always-512 shape. Set
   `VSR_AMD_MIGRAPHX_WARMUP=1` to pay first-run warmup before serving real
   requests for the configured buckets.

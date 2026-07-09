@@ -461,7 +461,7 @@ impl MmBertSequenceClassifier {
     ) -> Vec<usize> {
         let max_len = MAX_CLASSIFICATION_SEQ_LEN.min(config.max_position_embeddings);
         let Some(value) = value else {
-            return vec![128.min(max_len), max_len]
+            return vec![64.min(max_len), 128.min(max_len), max_len]
                 .into_iter()
                 .filter(|bucket| *bucket > 0)
                 .collect();
@@ -1574,7 +1574,7 @@ mod tests {
             None,
         );
 
-        assert_eq!(buckets, vec![128, MAX_CLASSIFICATION_SEQ_LEN]);
+        assert_eq!(buckets, vec![64, 128, MAX_CLASSIFICATION_SEQ_LEN]);
     }
 
     #[test]
