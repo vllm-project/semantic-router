@@ -410,6 +410,36 @@ vllm-sr config import --from openclaw --source openclaw.json --target config.yam
 
 When `--source` is omitted, the importer checks `OPENCLAW_CONFIG_PATH`, `./openclaw.json`, and `~/.openclaw/openclaw.json` in that order.
 
+## Environment variable substitution
+
+During config load, string values anywhere in the canonical YAML tree can reference environment variables. This is the supported way to keep passwords, API keys, and other secrets out of ConfigMaps while still using a checked-in config skeleton.
+
+Supported forms:
+
+- `${VAR}` and `$VAR`
+- `${VAR:-default}` when `VAR` is unset or empty
+- `${VAR-default}` when `VAR` is unset
+- `$$` for a literal `$`
+
+Example for Router Replay on Kubernetes:
+
+```yaml
+global:
+  services:
+    router_replay:
+      enabled: true
+      store_backend: postgres
+      postgres:
+        host: 10.0.0.1
+        database: vsr
+        user: default
+        password: "${POSTGRES_PASSWORD}"
+        ssl_mode: disable
+        table_name: router_replay
+```
+
+Wire `POSTGRES_PASSWORD` from a Secret into the router Deployment environment, then mount or generate the config that references it. The same pattern works for Milvus, Redis, Valkey, Qdrant, and provider `backend_refs[].api_key` values.
+
 ## Quick guides by environment
 
 ### Python CLI
