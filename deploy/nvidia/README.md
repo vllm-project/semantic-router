@@ -25,7 +25,10 @@ intent:
 
 ## Overview
 
-- Runtime image: `vllm-sr-cuda:local` (built locally; no `ghcr.io` mirror)
+- Runtime image: `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest`
+  (published to `ghcr.io` via `docker-publish.yml` on `main` / nightly and
+  `docker-release.yml` on tag releases; local build still supported —
+  see Step 1)
 - Dockerfile: [`src/vllm-sr/Dockerfile.cuda`](../../src/vllm-sr/Dockerfile.cuda)
 - Inference backend: **ONNX Runtime + CUDA Execution Provider**
   (mirrors how ROCm path uses ORT + ROCm EP — `candle-binding` import is
@@ -90,13 +93,51 @@ On the host:
 
 ---
 
-## Step 1: Build the CUDA image
+## Step 1: Pull or build the CUDA image
 
-The image is multi-stage: it cross-builds `candle-binding`,
-`ml-binding`, `nlp-binding` (CPU-only by design), then builds
-`onnx-binding` with `--features "cuda,ort/load-dynamic"`, then assembles
-a runtime stage on top of `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04`
-with `onnxruntime-gpu==1.22.0`.
+### 1a. Pull the published image (recommended)
+
+`vllm-sr-cuda` is published to `ghcr.io` on every merge to `main`,
+nightly, and each tag release (via
+[`docker-publish.yml`](../../.github/workflows/docker-publish.yml) and
+[`docker-release.yml`](../../.github/workflows/docker-release.yml)):
+
+```bash
+docker pull ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest
+```
+
+Substitute the immutable tag (e.g. `v0.3.0`) for `latest` in production.
+
+Available tags on `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda`:
+
+- `latest` — most recent `main`
+- `nightly-<YYYYMMDD>` — nightly build from a specific date
+- `v<X>.<Y>.<Z>` — immutable release tag
+
+### 1b. Build locally (advanced / dev)
+
+Local build is only needed to iterate on `Dockerfile.cuda` itself or to
+build a tree that predates the published image. The image is
+multi-stage: it cross-builds `candle-binding`, `ml-binding`,
+`nlp-binding` (CPU-only by design), then builds `onnx-binding` with
+`--features "cuda,ort/load-dynamic"`, then assembles a runtime stage on
+top of `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04` with
+`onnxruntime-gpu==1.22.0`.
+
+Recommended path — the Make target (wires `Dockerfile.cuda` +
+`linux/amd64` + `vllm-sr-cuda` image name automatically):
+
+```bash
+cd /path/to/semantic-router
+VLLM_SR_PLATFORM=nvidia make vllm-sr-build
+```
+
+The `VLLM_SR_PLATFORM=nvidia` block in
+[`tools/make/docker.mk`](../../tools/make/docker.mk) resolves the router
+image to `vllm-sr-cuda`, dockerfile to `src/vllm-sr/Dockerfile.cuda`,
+and arch to `amd64`.
+
+Equivalent raw `docker build` (if you cannot use `make`):
 
 ```bash
 cd /path/to/semantic-router
@@ -121,10 +162,22 @@ EACCES on root-owned subdirectories.
 
 ### Verify the image before swapping containers
 
+The remaining steps in this playbook use the shell variable
+`$VLLM_SR_CUDA_IMAGE` to refer to whichever image you picked in 1a or
+1b — set it once here:
+
+```bash
+# Pulled path (1a):
+export VLLM_SR_CUDA_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest
+
+# Locally built path (1b):
+# export VLLM_SR_CUDA_IMAGE=vllm-sr-cuda:local
+```
+
 ```bash
 # ORT inside the image must list CUDAExecutionProvider:
 docker run --rm --gpus all --entrypoint /opt/vllm-sr-venv/bin/python \
-    vllm-sr-cuda:local -c '
+    "$VLLM_SR_CUDA_IMAGE" -c '
 import onnxruntime as ort
 print("ORT version:", ort.__version__)
 print("Providers:", ort.get_available_providers())
@@ -247,7 +300,7 @@ docker run -d \
     -v "$(pwd)/active-config.yaml:/app/config.yaml" \
     -v "$(pwd)/.vllm-sr:/app/.vllm-sr" \
     -w /app \
-    vllm-sr-cuda:local \
+    "$VLLM_SR_CUDA_IMAGE" \
     /app/.vllm-sr/runtime-config.yaml /app/.vllm-sr
 ```
 
@@ -267,7 +320,10 @@ docker ps --filter "name=vllm-sr-router-container" --format \
     "table {{.Names}}\t{{.Status}}\t{{.Image}}"
 ```
 
-Expected: `Up <N> seconds`, image `vllm-sr-cuda:local`.
+Expected: `Up <N> seconds`, image matches `$VLLM_SR_CUDA_IMAGE` from
+Step 1 (either
+`ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest` or
+`vllm-sr-cuda:local`).
 
 ### 4b. Router actually selected the CUDA EP
 
@@ -481,7 +537,7 @@ Fixes, in order of preference:
 
    ```bash
    # via the container env
-   docker run ... -e ORT_GPU_MEM_LIMIT=512MB vllm-sr-cuda:local ...
+   docker run ... -e ORT_GPU_MEM_LIMIT=512MB "$VLLM_SR_CUDA_IMAGE" ...
    ```
 
    The embedding and classifier CUDA branches both honor
@@ -540,7 +596,7 @@ small BERT models on a fast GPU — that is expected, not a problem.)
 | Aspect | `deploy/amd/` (ROCm) | `deploy/nvidia/` (this) |
 |---|---|---|
 | Primary purpose | Run the **backend LLM** on AMD MI-series, router rides along | Run only the **router** on NVIDIA GPU |
-| Image | `vllm-sr-rocm:latest` (published to `ghcr.io`) | `vllm-sr-cuda:local` (build locally; no public mirror yet) |
+| Image | `vllm-sr-rocm:latest` (published to `ghcr.io`) | `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest` (published; local build still supported) |
 | Base image | `rocm/dev-ubuntu-22.04:7.0` | `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04` |
 | ORT wheel | `onnxruntime_rocm-1.22.1` (radeon repo) | `onnxruntime-gpu==1.22.0` (PyPI) |
 | onnx-binding feature | `--features rocm-dynamic` | `--features "cuda,ort/load-dynamic"` |
@@ -567,3 +623,11 @@ The two playbooks are independent; do not mix `--gpus all` with
   concept) actually steer the ONNX Runtime EP selection
 - [`src/semantic-router/pkg/config/canonical_defaults.go`](../../src/semantic-router/pkg/config/canonical_defaults.go) —
   source of truth for `use_cpu: true` defaults
+- [`tools/make/docker.mk`](../../tools/make/docker.mk) — the
+  `VLLM_SR_PLATFORM=nvidia` block wiring `Dockerfile.cuda` +
+  `vllm-sr-cuda` image name + `linux/amd64` into the Make path
+- [`.github/workflows/docker-publish.yml`](../../.github/workflows/docker-publish.yml) —
+  publishes `vllm-sr-cuda` to `ghcr.io` on merge to `main` and nightly
+  (amd64-only, matching ROCm)
+- [`.github/workflows/docker-release.yml`](../../.github/workflows/docker-release.yml) —
+  publishes tagged `vllm-sr-cuda` releases on `v*` tags
