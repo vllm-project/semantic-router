@@ -1,6 +1,7 @@
-# ROCm 7.1 + ONNX Runtime MIGraphX Dockerfile for AMD GPU inference.
+# ROCm 7.0 + ONNX Runtime ROCm/MIGraphX Dockerfile for AMD GPU inference.
 # x86_64 only (ROCm does not support arm64).
-# Defaults to AI_BINDING=onnx so ONNX Runtime uses MIGraphX first with ROCm fallback.
+# Defaults to AI_BINDING=onnx so ONNX Runtime uses MIGraphX first, with ROCm
+# fallback only when the loaded ORT exposes ROCm EP.
 #
 # Build:
 #   docker build -f tools/docker/Dockerfile.extproc-rocm -t semantic-router:rocm .
@@ -198,9 +199,9 @@ RUN mkdir -p /app/lib && \
     echo "=== Staged libraries ===" && ls -la /app/lib/
 
 # ============================================================================
-# Final stage: ROCm 7.1 runtime image with ONNX Runtime MIGraphX
+# Final stage: ROCm 7.0 runtime image with ONNX Runtime ROCm + MIGraphX
 # ============================================================================
-FROM rocm/dev-ubuntu-24.04:7.1
+FROM rocm/dev-ubuntu-22.04:7.0
 
 # Install ROCm runtime libraries needed by ORT and MIGraphX.
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -208,12 +209,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     hipblas miopen-hip hipfft migraphx rccl && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install official AMD ORT wheel for ROCm 7.1 with MIGraphX EP.
-RUN pip3 install --no-cache-dir --break-system-packages \
-    https://repo.radeon.com/rocm/manylinux/rocm-rel-7.1/onnxruntime_migraphx-1.23.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl \
+# Install official AMD ORT ROCm wheel. With the migraphx package installed,
+# this wheel exposes MIGraphXExecutionProvider, ROCMExecutionProvider, and CPU.
+RUN pip3 install --no-cache-dir \
+    https://repo.radeon.com/rocm/manylinux/rocm-rel-7.0/onnxruntime_rocm-1.22.1-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl \
     'huggingface_hub[cli]==1.5.0' && \
-    ORT_DIR=/usr/local/lib/python3.12/dist-packages/onnxruntime/capi && \
-    ln -sf "$ORT_DIR"/libonnxruntime.so.* "$ORT_DIR/libonnxruntime.so"
+    ORT_DIR="$(python3 -c 'import pathlib, onnxruntime; print(pathlib.Path(onnxruntime.__file__).resolve().parent / "capi")')" && \
+    mkdir -p /opt/onnxruntime && \
+    ln -sfn "$ORT_DIR" /opt/onnxruntime/capi && \
+    ln -sf /opt/onnxruntime/capi/libonnxruntime.so.* /opt/onnxruntime/capi/libonnxruntime.so
 
 WORKDIR /app
 
@@ -233,10 +237,11 @@ COPY config/knowledge_bases/ /app/config/knowledge_bases/
 COPY scripts/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-# Point ort to the MIGraphX-enabled ORT library and set library paths.
-ENV ORT_DYLIB_PATH=/usr/local/lib/python3.12/dist-packages/onnxruntime/capi/libonnxruntime.so \
-    LD_LIBRARY_PATH=/app/lib:/opt/rocm/lib:/usr/local/lib/python3.12/dist-packages/onnxruntime/capi \
+# Point ort to the AMD ORT library and set library paths.
+ENV ORT_DYLIB_PATH=/opt/onnxruntime/capi/libonnxruntime.so \
     ORT_CK_FLASH_ATTN_LIB=/app/lib/libort_ck_flash_attn.so \
+    LD_LIBRARY_PATH=/app/lib:/opt/rocm/lib:/opt/onnxruntime/capi \
+    PATH=/opt/rocm/bin:${PATH} \
     AI_BINDING=onnx
 
 EXPOSE 50051

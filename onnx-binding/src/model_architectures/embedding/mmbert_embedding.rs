@@ -389,10 +389,7 @@ impl MmBertEmbeddingModel {
         let dir = model_path.as_ref();
         let onnx_subdir = dir.join("onnx");
 
-        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .is_some();
+        let has_fa = crate::core::ort_migraphx::ck_flash_attention_available();
         let candidates: &[&str] = if has_fa {
             &[
                 "model_fa_fp16.onnx",
@@ -549,10 +546,7 @@ impl MmBertEmbeddingModel {
         let model_dir = model_path.as_ref();
         let onnx_dir = model_dir.join("onnx");
 
-        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .is_some();
+        let has_fa = crate::core::ort_migraphx::ck_flash_attention_available();
 
         for layer in layers {
             let layer_filename = format!("model_layer_{}.onnx", layer);

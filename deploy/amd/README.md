@@ -37,11 +37,14 @@ The active AMD profile contains 13 routing decisions:
 
 ### Router-owned ONNX signals
 
-The AMD router image uses ONNX Runtime MIGraphX for router-owned ONNX signal
-models when available. Portable mmBERT ONNX artifacts use
-`MIGraphXExecutionProvider -> ROCmExecutionProvider -> CPUExecutionProvider`.
+The AMD router image uses ONNX Runtime for router-owned ONNX signal models with
+MIGraphX, ROCm, and CPU providers available in one runtime. Portable mmBERT
+SDPA artifacts use `MIGraphXExecutionProvider -> CPUExecutionProvider`.
 CK FlashAttention optimized artifacts are an explicit ROCm-only exception
-because their custom op library is registered through the ROCm EP path.
+because their custom op library is registered through the ROCm EP path; those
+sessions use `ROCMExecutionProvider -> CPUExecutionProvider`. The image gets
+this inventory from AMD's `onnxruntime_rocm` 1.22.x wheel plus the system
+`migraphx` package.
 
 Inside the router image, verify the provider inventory with:
 
@@ -50,6 +53,13 @@ migraphx-driver --version
 python -c 'import onnxruntime as ort; print(ort.__version__, ort.get_available_providers())'
 echo "$ORT_DYLIB_PATH"
 ```
+
+PII token-optimized artifacts are still experimental. When validating them on
+MIGraphX, set both `VSR_ENABLE_EXPERIMENTAL_MIGRAPHX_TOKEN_ARTIFACTS=1` and
+`MIGRAPHX_MLIR_USE_SPECIFIC_OPS=~attention`; the latter avoids a MIGraphX 2.14
+MLIR fused-attention NaN seen in token-classifier graphs. The AMD image does
+not set this globally because the workaround has only been validated for the PII
+token path, not for every router-owned ONNX artifact.
 
 See `onnx-binding/MIGRAPHX_PROVIDER_STRATEGY.md` for the full provider order,
 fallback diagnostics, and benchmark harness.

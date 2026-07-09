@@ -3,7 +3,8 @@
 This module provides ONNX Runtime-based signal models, including mmBERT
 embedding generation with 2D Matryoshka support and mmBERT classifier paths.
 CPU inference remains supported everywhere. AMD deployments use a
-MIGraphX-first ONNX Runtime provider policy with ROCm and CPU fallback; see
+MIGraphX-first ONNX Runtime provider policy with CPU fallback, plus ROCm
+fallback when the loaded ORT exposes ROCm EP; see
 [MIGRAPHX_PROVIDER_STRATEGY.md](MIGRAPHX_PROVIDER_STRATEGY.md).
 
 ## Features
@@ -99,12 +100,37 @@ cargo build --release --example benchmark_cpu_vs_gpu
 
 ### Quick Start: AMD GPU (MIGraphX-first)
 
-Classifier artifact selection is provider-aware: AMD `Auto`/`Rocm` paths prefer
+Classifier artifact selection is provider-aware: AMD sequence classifiers prefer
 `model_sdpa_fp16.onnx` when present, while CPU paths keep `model.onnx` as the
-baseline artifact. AMD sequence classifiers fall back to CPU for raw baseline
-artifacts when no MIGraphX-safe optimized artifact is present. See
+baseline artifact. PII token classifiers do not reuse sequence SDPA artifacts,
+and raw token baseline artifacts remain CPU-owned on AMD paths unless a
+token-specific optimized artifact passes quality gates. Token optimized
+artifacts (`model_token_sdpa.onnx` or `model_token_eager.onnx`) can be tested on
+MIGraphX with
+`VSR_ENABLE_EXPERIMENTAL_MIGRAPHX_TOKEN_ARTIFACTS=1` plus
+`MIGRAPHX_MLIR_USE_SPECIFIC_OPS=~attention`; this is not the default until
+larger entity-level parity and performance validation pass. The default
+token-safe export is
+`model_token_sdpa.onnx` because PII BIO boundaries are sensitive to FP16 logit
+drift; `--token-optimized-attn eager` can generate `model_token_eager.onnx` for
+graph-workaround experiments, and FP16 token exports remain explicit
+performance experiments. AMD sequence classifiers fall back to CPU for raw
+baseline artifacts when no MIGraphX-safe optimized artifact is present. See
 [MIGRAPHX_PROVIDER_STRATEGY.md](MIGRAPHX_PROVIDER_STRATEGY.md) for the full
 provider and artifact policy.
+
+CK FlashAttention artifacts (`model_fa*.onnx`) are ROCm-owned and are only used
+when `ORT_CK_FLASH_ATTN_LIB` is set and the loaded ONNX Runtime exposes
+`ROCMExecutionProvider`. The AMD runtime image uses AMD's `onnxruntime_rocm`
+wheel plus the system `migraphx` package so MIGraphX, ROCm, and CPU are all
+available. Sequence classifiers still prefer portable SDPA artifacts first;
+embedding and other CK-FA-only artifacts use ROCm.
+
+Before promoting an optimized ONNX artifact, run
+`scripts/eval_router_signal_artifacts.py` against the old artifact, new
+artifact, and selected provider path. The harness includes task-native smoke
+datasets such as `factcheck-nisq`, `jailbreak-mixed`, and AI4Privacy-compatible
+PII rows so quality regressions are caught before provider defaults change.
 
 ```bash
 # Build with MIGraphX-first AMD support and dynamic ORT loading
@@ -138,7 +164,7 @@ This is the recommended configuration. CPU performance equals GPU for this model
 ### Building with GPU Support (Optional)
 
 ```bash
-# AMD GPU (MIGraphX-first with ROCm fallback)
+# AMD GPU (MIGraphX-first with ROCm fallback when the loaded ORT exposes ROCm EP)
 cargo build --release --features migraphx-dynamic
 
 # NVIDIA GPU (CUDA)

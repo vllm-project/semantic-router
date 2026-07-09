@@ -281,8 +281,8 @@ RUN if [ "$TARGETARCH" != "amd64" ]; then \
     go build -buildvcs=false -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o router ./cmd && \
     printf 'go-builder-complete\n' > /build/.go-builder-complete
 
-# Stage 3: Final router runtime image (ROCm 7.1 + ONNX Runtime MIGraphX)
-FROM ${IMAGE_REGISTRY}rocm/dev-ubuntu-24.04:7.1
+# Stage 3: Final router runtime image (ROCm 7.0 + ONNX Runtime ROCm + MIGraphX)
+FROM ${IMAGE_REGISTRY}rocm/dev-ubuntu-22.04:7.0
 ARG TARGETARCH
 
 ENV VIRTUAL_ENV=/opt/vllm-sr-venv
@@ -320,11 +320,14 @@ RUN set -eux; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*
 
-# Install MIGraphX-enabled ONNX Runtime shared library.
+# Install AMD's ROCm ONNX Runtime wheel. The ROCm wheel also ships the
+# MIGraphX provider library; installing the system migraphx package above
+# satisfies its libmigraphx runtime dependency so the final image exposes
+# MIGraphXExecutionProvider, ROCMExecutionProvider, and CPUExecutionProvider.
 RUN python3 -m venv "${VIRTUAL_ENV}" && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir \
-      https://repo.radeon.com/rocm/manylinux/rocm-rel-7.1/onnxruntime_migraphx-1.23.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl \
+      https://repo.radeon.com/rocm/manylinux/rocm-rel-7.0/onnxruntime_rocm-1.22.1-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl \
       'huggingface_hub[cli]==1.5.0' \
       'click>=8.1.7' && \
     ORT_DIR="$("${VIRTUAL_ENV}/bin/python" -c 'import pathlib, onnxruntime; print(pathlib.Path(onnxruntime.__file__).resolve().parent / "capi")')" && \
@@ -340,8 +343,9 @@ COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/
 COPY onnx-binding/ort-ck-flash-attn/prebuilt/libort_ck_flash_attn.so* /usr/local/lib/
 
 ENV ORT_DYLIB_PATH=/opt/onnxruntime/capi/libonnxruntime.so \
+    ORT_CK_FLASH_ATTN_LIB=/usr/local/lib/libort_ck_flash_attn.so \
     LD_LIBRARY_PATH=/usr/local/lib:/opt/rocm/lib:/opt/onnxruntime/capi \
-    ORT_CK_FLASH_ATTN_LIB=/usr/local/lib/libort_ck_flash_attn.so
+    PATH=/opt/rocm/bin:${PATH}
 
 WORKDIR /app
 RUN mkdir -p /app /app/.vllm-sr /app/config /app/models

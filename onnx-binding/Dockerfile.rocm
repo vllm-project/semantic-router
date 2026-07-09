@@ -1,27 +1,29 @@
-# Dockerfile for building and running onnx-binding with AMD MIGraphX support.
+# Dockerfile for building and running onnx-binding with AMD ROCm + MIGraphX support.
 
-FROM rocm/dev-ubuntu-24.04:7.1
+FROM rocm/dev-ubuntu-22.04:7.0
 
-ARG ORT_MIGRAPHX_VERSION=1.23.1
-ARG ORT_WHEEL_URL=https://repo.radeon.com/rocm/manylinux/rocm-rel-7.1/onnxruntime_migraphx-1.23.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+ARG ORT_ROCM_VERSION=1.22.1
+ARG ORT_WHEEL_URL=https://repo.radeon.com/rocm/manylinux/rocm-rel-7.0/onnxruntime_rocm-1.22.1-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates curl hipblas hipfft migraphx miopen-hip python3-pip rccl && \
     rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages "${ORT_WHEEL_URL}" && \
+RUN python3 -m pip install --no-cache-dir "${ORT_WHEEL_URL}" && \
     ORT_DIR="$(python3 -c 'import pathlib, onnxruntime; print(pathlib.Path(onnxruntime.__file__).parent / "capi")')" && \
-    ln -sf "${ORT_DIR}/libonnxruntime.so.${ORT_MIGRAPHX_VERSION}" "${ORT_DIR}/libonnxruntime.so.1" && \
-    ln -sf "${ORT_DIR}/libonnxruntime.so.${ORT_MIGRAPHX_VERSION}" "${ORT_DIR}/libonnxruntime.so"
+    mkdir -p /opt/onnxruntime && \
+    ln -sfn "${ORT_DIR}" /opt/onnxruntime/capi && \
+    ln -sf "/opt/onnxruntime/capi/libonnxruntime.so.${ORT_ROCM_VERSION}" /opt/onnxruntime/capi/libonnxruntime.so.1 && \
+    ln -sf "/opt/onnxruntime/capi/libonnxruntime.so.${ORT_ROCM_VERSION}" /opt/onnxruntime/capi/libonnxruntime.so
 
 # Install Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="/root/.cargo/bin:${PATH}"
+ENV PATH="/root/.cargo/bin:/opt/rocm/bin:${PATH}"
 
 # Set ORT library paths for dynamic loading
-ENV ORT_DYLIB_PATH=/usr/local/lib/python3.12/dist-packages/onnxruntime/capi/libonnxruntime.so.1.23.1
-ENV LD_LIBRARY_PATH=/usr/local/lib/python3.12/dist-packages/onnxruntime/capi:/opt/rocm/lib:${LD_LIBRARY_PATH}
+ENV ORT_DYLIB_PATH=/opt/onnxruntime/capi/libonnxruntime.so.1
+ENV LD_LIBRARY_PATH=/opt/onnxruntime/capi:/opt/rocm/lib:${LD_LIBRARY_PATH}
 
 WORKDIR /workspace
 

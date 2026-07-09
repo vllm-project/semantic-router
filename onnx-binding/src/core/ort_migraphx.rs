@@ -48,9 +48,35 @@ pub fn ck_flash_attention_library() -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+/// Return whether the loaded ONNX Runtime can execute ROCm-owned CK-FA artifacts.
+pub fn rocm_execution_provider_available() -> bool {
+    #[cfg(feature = "rocm")]
+    {
+        use ort::execution_providers::{ExecutionProvider, ROCmExecutionProvider};
+
+        ROCmExecutionProvider::default()
+            .is_available()
+            .unwrap_or(false)
+    }
+
+    #[cfg(not(feature = "rocm"))]
+    {
+        false
+    }
+}
+
+/// Return whether CK FlashAttention artifacts should be considered.
+///
+/// The CK custom op advertises `ROCMExecutionProvider`. AMD's MIGraphX ORT
+/// wheels can expose MIGraphX and CPU without ROCm EP, so an env var alone is
+/// not enough to make `model_fa*.onnx` loadable.
+pub fn ck_flash_attention_available() -> bool {
+    ck_flash_attention_library().is_some() && rocm_execution_provider_available()
+}
+
 /// Return the CK FlashAttention library only for FA-optimized ONNX artifacts.
 pub fn ck_flash_attention_library_for_model(onnx_path: &Path) -> Option<String> {
-    if is_ck_flash_attention_model(onnx_path) {
+    if is_ck_flash_attention_model(onnx_path) && ck_flash_attention_available() {
         ck_flash_attention_library()
     } else {
         None
@@ -148,8 +174,53 @@ pub fn create_amd_session(onnx_path: &Path, ck_fa_lib: Option<&str>) -> Result<A
 #[cfg(feature = "migraphx")]
 fn create_migraphx_session(onnx_path: &Path) -> Result<Session, ort::Error> {
     let mut builder = Session::builder()?;
-    append_migraphx_execution_provider(&mut builder, 0)?;
-    builder.commit_from_file(onnx_path)
+    match append_migraphx_execution_provider(&mut builder, 0)
+        .and_then(|_| builder.commit_from_file(onnx_path))
+    {
+        Ok(session) => Ok(session),
+        Err(generic_error) => {
+            println!(
+                "WARN: MIGraphX generic provider registration failed: {generic_error}; retrying legacy MIGraphX provider API"
+            );
+            let mut legacy_builder = Session::builder()?;
+            match append_legacy_migraphx_execution_provider(&mut legacy_builder, 0)? {
+                true => legacy_builder.commit_from_file(onnx_path),
+                false => Err(generic_error),
+            }
+        }
+    }
+}
+
+#[cfg(feature = "migraphx")]
+fn append_legacy_migraphx_execution_provider(
+    builder: &mut SessionBuilder,
+    device_id: i32,
+) -> Result<bool, ort::Error> {
+    type LegacyMigraphxAppend = unsafe extern "system" fn(
+        *mut ort::sys::OrtSessionOptions,
+        libc::c_int,
+    ) -> ort::sys::OrtStatusPtr;
+
+    let symbol =
+        CString::new("OrtSessionOptionsAppendExecutionProvider_MIGraphX").expect("static symbol");
+    let handle = std::env::var("ORT_DYLIB_PATH")
+        .ok()
+        .and_then(|path| CString::new(path).ok())
+        .map(|path| unsafe { libc::dlopen(path.as_ptr(), libc::RTLD_NOW | libc::RTLD_GLOBAL) })
+        .filter(|handle| !handle.is_null())
+        .unwrap_or(libc::RTLD_DEFAULT);
+    let append = unsafe { libc::dlsym(handle, symbol.as_ptr()) };
+
+    if append.is_null() {
+        println!("WARN: Legacy MIGraphX provider API symbol was not found in loaded ORT library");
+        return Ok(false);
+    }
+
+    let append: LegacyMigraphxAppend = unsafe { std::mem::transmute(append) };
+    unsafe {
+        ort::error::status_to_result(append(builder.ptr_mut(), device_id as libc::c_int))?;
+    }
+    Ok(true)
 }
 
 #[cfg(feature = "rocm")]

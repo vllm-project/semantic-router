@@ -181,7 +181,6 @@ pub enum ClassifierExecutionProvider {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BaselineAmdPolicy {
-    Allow,
     CpuOnly,
 }
 
@@ -264,15 +263,28 @@ impl MmBertSequenceClassifier {
         model_path: P,
         provider: ClassifierExecutionProvider,
     ) -> UnifiedResult<Vec<std::path::PathBuf>> {
+        let has_ck_fa = crate::core::ort_migraphx::ck_flash_attention_available();
+        let candidates = Self::onnx_candidate_filenames(provider, has_ck_fa);
+        Self::find_onnx_models_from_candidates(model_path, &candidates, false)
+    }
+
+    fn find_token_onnx_models<P: AsRef<Path>>(
+        model_path: P,
+        provider: ClassifierExecutionProvider,
+    ) -> UnifiedResult<Vec<std::path::PathBuf>> {
+        let has_ck_fa = crate::core::ort_migraphx::ck_flash_attention_available();
+        let candidates = Self::token_onnx_candidate_filenames(provider, has_ck_fa);
+        Self::find_onnx_models_from_candidates(model_path, &candidates, true)
+    }
+
+    fn find_onnx_models_from_candidates<P: AsRef<Path>>(
+        model_path: P,
+        candidates: &[&str],
+        skip_sequence_optimized_fallbacks: bool,
+    ) -> UnifiedResult<Vec<std::path::PathBuf>> {
         let dir = model_path.as_ref();
         let onnx_subdir = dir.join("onnx");
         let search_dirs = [dir, onnx_subdir.as_path()];
-
-        let has_ck_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .is_some();
-        let candidates = Self::onnx_candidate_filenames(provider, has_ck_fa);
 
         let mut results: Vec<std::path::PathBuf> = Vec::new();
         // Try known ONNX filenames first in both model root and `onnx/` subdirectory.
@@ -280,7 +292,7 @@ impl MmBertSequenceClassifier {
             if !base_dir.exists() || !base_dir.is_dir() {
                 continue;
             }
-            for candidate in &candidates {
+            for &candidate in candidates {
                 let path = base_dir.join(candidate);
                 if path.exists() && !results.iter().any(|p| p == &path) {
                     results.push(path);
@@ -296,6 +308,11 @@ impl MmBertSequenceClassifier {
             if let Ok(entries) = std::fs::read_dir(base_dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();
+                    if skip_sequence_optimized_fallbacks
+                        && Self::is_sequence_optimized_onnx_artifact(&path)
+                    {
+                        continue;
+                    }
                     if path.extension().is_some_and(|ext| ext == "onnx")
                         && !results.iter().any(|p| p == &path)
                     {
@@ -326,11 +343,11 @@ impl MmBertSequenceClassifier {
         };
 
         if Self::prefers_amd_onnx_artifacts(provider) {
+            push_candidate("model_sdpa_fp16.onnx");
             if has_ck_fa {
                 push_candidate("model_fa_fp16.onnx");
                 push_candidate("model_fa.onnx");
             }
-            push_candidate("model_sdpa_fp16.onnx");
             push_candidate("model.onnx");
         } else {
             push_candidate("model.onnx");
@@ -341,6 +358,48 @@ impl MmBertSequenceClassifier {
 
         push_candidate("classifier.onnx");
         push_candidate("model_optimized.onnx");
+        candidates
+    }
+
+    fn token_onnx_candidate_filenames(
+        provider: ClassifierExecutionProvider,
+        has_ck_fa: bool,
+    ) -> Vec<&'static str> {
+        let mut candidates = Vec::new();
+        let mut push_candidate = |name: &'static str| {
+            if !candidates.contains(&name) {
+                candidates.push(name);
+            }
+        };
+
+        if Self::prefers_amd_onnx_artifacts(provider) && Self::migraphx_token_artifacts_enabled() {
+            push_candidate("model_token_sdpa.onnx");
+            push_candidate("token_classifier_sdpa.onnx");
+            push_candidate("model_token_sdpa_fp16.onnx");
+            push_candidate("token_classifier_sdpa_fp16.onnx");
+            push_candidate("model_token_eager.onnx");
+            push_candidate("token_classifier_eager.onnx");
+            push_candidate("model_token_eager_fp16.onnx");
+            push_candidate("token_classifier_eager_fp16.onnx");
+        } else {
+            if Self::prefers_amd_onnx_artifacts(provider) && has_ck_fa {
+                push_candidate("model_fa_fp16.onnx");
+                push_candidate("model_fa.onnx");
+            }
+        }
+
+        push_candidate("model.onnx");
+        push_candidate("token_classifier.onnx");
+        push_candidate("classifier.onnx");
+        push_candidate("model_optimized.onnx");
+        push_candidate("model_token_sdpa.onnx");
+        push_candidate("token_classifier_sdpa.onnx");
+        push_candidate("model_token_sdpa_fp16.onnx");
+        push_candidate("token_classifier_sdpa_fp16.onnx");
+        push_candidate("model_token_eager.onnx");
+        push_candidate("token_classifier_eager.onnx");
+        push_candidate("model_token_eager_fp16.onnx");
+        push_candidate("token_classifier_eager_fp16.onnx");
         candidates
     }
 
@@ -361,6 +420,72 @@ impl MmBertSequenceClassifier {
         )
     }
 
+    fn is_sequence_optimized_onnx_artifact(onnx_path: &Path) -> bool {
+        matches!(
+            onnx_path.file_name().and_then(|name| name.to_str()),
+            Some("model_sdpa_fp16.onnx" | "model_fa_fp16.onnx" | "model_fa.onnx")
+        )
+    }
+
+    fn is_token_optimized_onnx_artifact(onnx_path: &Path) -> bool {
+        matches!(
+            onnx_path.file_name().and_then(|name| name.to_str()),
+            Some(
+                "model_token_sdpa.onnx"
+                    | "token_classifier_sdpa.onnx"
+                    | "model_token_sdpa_fp16.onnx"
+                    | "token_classifier_sdpa_fp16.onnx"
+                    | "model_token_eager.onnx"
+                    | "token_classifier_eager.onnx"
+                    | "model_token_eager_fp16.onnx"
+                    | "token_classifier_eager_fp16.onnx"
+            )
+        )
+    }
+
+    fn experimental_migraphx_token_artifacts_enabled() -> bool {
+        std::env::var("VSR_ENABLE_EXPERIMENTAL_MIGRAPHX_TOKEN_ARTIFACTS")
+            .ok()
+            .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+    }
+
+    fn migraphx_token_artifacts_enabled() -> bool {
+        Self::token_artifacts_migraphx_enabled(
+            Self::experimental_migraphx_token_artifacts_enabled(),
+            std::env::var("MIGRAPHX_MLIR_USE_SPECIFIC_OPS")
+                .ok()
+                .as_deref(),
+            std::env::var("MIGRAPHX_DISABLE_MLIR").ok().as_deref(),
+        )
+    }
+
+    fn token_artifacts_migraphx_enabled(
+        experimental_enabled: bool,
+        mlir_specific_ops: Option<&str>,
+        disable_mlir: Option<&str>,
+    ) -> bool {
+        experimental_enabled
+            && (Self::migraphx_attention_mlir_disabled(mlir_specific_ops)
+                || Self::migraphx_mlir_disabled(disable_mlir))
+    }
+
+    fn migraphx_attention_mlir_disabled(value: Option<&str>) -> bool {
+        value
+            .map(|value| {
+                value
+                    .split(',')
+                    .map(str::trim)
+                    .any(|op| op.eq_ignore_ascii_case("~attention"))
+            })
+            .unwrap_or(false)
+    }
+
+    fn migraphx_mlir_disabled(value: Option<&str>) -> bool {
+        value
+            .map(|value| matches!(value, "1" | "true" | "TRUE" | "yes" | "YES"))
+            .unwrap_or(false)
+    }
+
     fn session_provider_for_candidate(
         onnx_path: &Path,
         provider: ClassifierExecutionProvider,
@@ -369,6 +494,11 @@ impl MmBertSequenceClassifier {
         if Self::prefers_amd_onnx_artifacts(provider)
             && baseline_amd_policy == BaselineAmdPolicy::CpuOnly
             && Self::is_baseline_onnx_artifact(onnx_path)
+        {
+            ClassifierExecutionProvider::Cpu
+        } else if Self::prefers_amd_onnx_artifacts(provider)
+            && Self::is_token_optimized_onnx_artifact(onnx_path)
+            && !Self::migraphx_token_artifacts_enabled()
         {
             ClassifierExecutionProvider::Cpu
         } else {
@@ -393,7 +523,7 @@ impl MmBertSequenceClassifier {
                 && Self::is_baseline_onnx_artifact(&onnx_path)
             {
                 println!(
-                    "WARNING: Using CPU for baseline sequence-classifier artifact {} because raw mmBERT classifier pooling is not MIGraphX-safe; provide model_sdpa_fp16.onnx for AMD acceleration",
+                    "WARNING: Using CPU for baseline classifier artifact {} because this raw artifact is not MIGraphX-safe on AMD paths; provide a validated optimized artifact for AMD acceleration",
                     onnx_path.display()
                 );
             }
@@ -895,6 +1025,7 @@ pub struct MmBertTokenClassifier {
     tokenizer: Arc<Tokenizer>,
     config: MmBertClassifierConfig,
     model_path: String,
+    pad_to_max_length: bool,
 }
 
 impl MmBertTokenClassifier {
@@ -926,23 +1057,27 @@ impl MmBertTokenClassifier {
             }))
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
-        let onnx_candidates = MmBertSequenceClassifier::find_onnx_models(&model_path, provider)?;
+        let onnx_candidates =
+            MmBertSequenceClassifier::find_token_onnx_models(&model_path, provider)?;
         let (session, onnx_path) = MmBertSequenceClassifier::create_session_with_fallback(
             onnx_candidates,
             provider,
             &model_path_str,
-            BaselineAmdPolicy::Allow,
+            BaselineAmdPolicy::CpuOnly,
         )?;
         println!(
             "INFO: Selected token-classifier ONNX file: {}",
             onnx_path.display()
         );
+        let pad_to_max_length =
+            MmBertSequenceClassifier::is_token_optimized_onnx_artifact(&onnx_path);
 
         Ok(Self {
             session,
             tokenizer: Arc::new(tokenizer),
             config,
             model_path: model_path_str,
+            pad_to_max_length,
         })
     }
 
@@ -959,9 +1094,18 @@ impl MmBertTokenClassifier {
             .min(self.config.max_position_embeddings)
             .min(MAX_CLASSIFICATION_SEQ_LEN);
 
-        // Prepare inputs
-        let mut input_ids = vec![self.config.pad_token_id as i64; seq_len];
-        let mut attention_mask = vec![0i64; seq_len];
+        let input_len = if self.pad_to_max_length {
+            MAX_CLASSIFICATION_SEQ_LEN
+                .min(self.config.max_position_embeddings)
+                .max(seq_len)
+        } else {
+            seq_len
+        };
+
+        // Prepare inputs. Token-specific optimized artifacts are exported with a
+        // fixed 512-token contract for MIGraphX, so they receive padded inputs.
+        let mut input_ids = vec![self.config.pad_token_id as i64; input_len];
+        let mut attention_mask = vec![0i64; input_len];
         let enc_attention_mask = encoding.get_attention_mask();
 
         for i in 0..seq_len {
@@ -971,11 +1115,11 @@ impl MmBertTokenClassifier {
         }
 
         // Create tensors (batch size 1)
-        let input_ids_tensor = Tensor::from_array(([1, seq_len], input_ids))
+        let input_ids_tensor = Tensor::from_array(([1, input_len], input_ids))
             .map_err(|e: ort::Error| errors::inference_error("create_input_ids", &e.to_string()))?;
 
         let attention_mask_tensor =
-            Tensor::from_array(([1, seq_len], attention_mask)).map_err(|e: ort::Error| {
+            Tensor::from_array(([1, input_len], attention_mask)).map_err(|e: ort::Error| {
                 errors::inference_error("create_attention_mask", &e.to_string())
             })?;
 
@@ -990,6 +1134,16 @@ impl MmBertTokenClassifier {
 
         // Extract token logits [1, seq_len, num_labels]
         let token_logits = extract_token_logits_from_outputs(&outputs)?;
+        if token_logits.nrows() < seq_len {
+            return Err(errors::inference_error(
+                "extract_token_logits",
+                &format!(
+                    "token logits length {} is shorter than tokenizer sequence length {}; selected artifact is not compatible with token classification",
+                    token_logits.nrows(),
+                    seq_len
+                ),
+            ));
+        }
 
         // Convert to entities using BIO scheme
         let entities = bio_decode_entities(text, &encoding, &token_logits, &self.config)?;
@@ -1255,9 +1409,9 @@ mod tests {
         assert_eq!(
             candidates,
             vec![
+                "model_sdpa_fp16.onnx",
                 "model_fa_fp16.onnx",
                 "model_fa.onnx",
-                "model_sdpa_fp16.onnx",
                 "model.onnx",
                 "classifier.onnx",
                 "model_optimized.onnx",
@@ -1288,14 +1442,153 @@ mod tests {
     }
 
     #[test]
-    fn test_token_classifier_baseline_artifact_can_use_amd() {
+    fn test_token_classifier_token_specific_artifact_uses_cpu_without_experimental_opt_in() {
+        let provider = MmBertSequenceClassifier::session_provider_for_candidate(
+            Path::new("/models/pii/onnx/model_token_sdpa.onnx"),
+            ClassifierExecutionProvider::Rocm,
+            BaselineAmdPolicy::CpuOnly,
+        );
+
+        assert!(matches!(provider, ClassifierExecutionProvider::Cpu));
+    }
+
+    #[test]
+    fn test_token_artifacts_require_attention_mlir_workaround_for_migraphx() {
+        assert!(!MmBertSequenceClassifier::token_artifacts_migraphx_enabled(
+            true, None, None
+        ));
+        assert!(!MmBertSequenceClassifier::token_artifacts_migraphx_enabled(
+            true,
+            Some("attention,pointwise"),
+            None
+        ));
+        assert!(MmBertSequenceClassifier::token_artifacts_migraphx_enabled(
+            true,
+            Some("dot, ~attention"),
+            None
+        ));
+        assert!(MmBertSequenceClassifier::token_artifacts_migraphx_enabled(
+            true,
+            None,
+            Some("1")
+        ));
+    }
+
+    #[test]
+    fn test_token_artifacts_still_require_experimental_opt_in() {
+        assert!(!MmBertSequenceClassifier::token_artifacts_migraphx_enabled(
+            false,
+            Some("~attention"),
+            None
+        ));
+        assert!(!MmBertSequenceClassifier::token_artifacts_migraphx_enabled(
+            false,
+            None,
+            Some("1")
+        ));
+    }
+
+    #[test]
+    fn test_token_classifier_candidates_do_not_reuse_sequence_sdpa_artifact() {
+        let candidates = MmBertSequenceClassifier::token_onnx_candidate_filenames(
+            ClassifierExecutionProvider::Cpu,
+            false,
+        );
+
+        assert_eq!(candidates[0], "model.onnx");
+        assert!(!candidates.contains(&"model_sdpa_fp16.onnx"));
+        assert!(!candidates.contains(&"model_fa_fp16.onnx"));
+    }
+
+    #[test]
+    fn test_token_classifier_amd_keeps_baseline_before_experimental_artifact_by_default() {
+        let candidates = MmBertSequenceClassifier::token_onnx_candidate_filenames(
+            ClassifierExecutionProvider::Rocm,
+            false,
+        );
+
+        assert_eq!(candidates[0], "model.onnx");
+        assert!(
+            candidates
+                .iter()
+                .position(|candidate| *candidate == "model_token_sdpa.onnx")
+                > candidates
+                    .iter()
+                    .position(|candidate| *candidate == "model.onnx")
+        );
+        assert!(
+            candidates
+                .iter()
+                .position(|candidate| *candidate == "model_token_eager.onnx")
+                > candidates
+                    .iter()
+                    .position(|candidate| *candidate == "model.onnx")
+        );
+        assert!(!candidates.contains(&"model_sdpa_fp16.onnx"));
+    }
+
+    #[test]
+    fn test_token_classifier_amd_prefers_ck_fa_artifact_when_available() {
+        let candidates = MmBertSequenceClassifier::token_onnx_candidate_filenames(
+            ClassifierExecutionProvider::Rocm,
+            true,
+        );
+
+        assert_eq!(candidates[0], "model_fa_fp16.onnx");
+        assert_eq!(candidates[1], "model_fa.onnx");
+        assert!(!candidates.contains(&"model_sdpa_fp16.onnx"));
+    }
+
+    #[test]
+    fn test_token_classifier_baseline_artifact_uses_cpu_on_amd() {
         let provider = MmBertSequenceClassifier::session_provider_for_candidate(
             Path::new("/models/pii/onnx/model.onnx"),
             ClassifierExecutionProvider::Rocm,
-            BaselineAmdPolicy::Allow,
+            BaselineAmdPolicy::CpuOnly,
         );
 
-        assert!(matches!(provider, ClassifierExecutionProvider::Rocm));
+        assert!(matches!(provider, ClassifierExecutionProvider::Cpu));
+    }
+
+    #[test]
+    fn test_token_optimized_artifact_requires_fixed_padding() {
+        assert!(MmBertSequenceClassifier::is_token_optimized_onnx_artifact(
+            Path::new("/models/pii/onnx/model_token_sdpa.onnx")
+        ));
+        assert!(MmBertSequenceClassifier::is_token_optimized_onnx_artifact(
+            Path::new("/models/pii/onnx/token_classifier_sdpa.onnx")
+        ));
+        assert!(MmBertSequenceClassifier::is_token_optimized_onnx_artifact(
+            Path::new("/models/pii/onnx/token_classifier_sdpa_fp16.onnx")
+        ));
+        assert!(MmBertSequenceClassifier::is_token_optimized_onnx_artifact(
+            Path::new("/models/pii/onnx/model_token_eager.onnx")
+        ));
+        assert!(MmBertSequenceClassifier::is_token_optimized_onnx_artifact(
+            Path::new("/models/pii/onnx/token_classifier_eager_fp16.onnx")
+        ));
+        assert!(!MmBertSequenceClassifier::is_token_optimized_onnx_artifact(
+            Path::new("/models/pii/onnx/model.onnx")
+        ));
+    }
+
+    #[test]
+    fn test_sequence_optimized_artifact_is_skipped_for_token_fallback() {
+        assert!(
+            MmBertSequenceClassifier::is_sequence_optimized_onnx_artifact(Path::new(
+                "/models/pii/onnx/model_sdpa_fp16.onnx"
+            ))
+        );
+        assert!(
+            MmBertSequenceClassifier::is_sequence_optimized_onnx_artifact(Path::new(
+                "/models/pii/onnx/model_fa_fp16.onnx"
+            ))
+        );
+        assert!(
+            !MmBertSequenceClassifier::is_sequence_optimized_onnx_artifact(Path::new(
+                "/models/pii/onnx/model.onnx"
+            ))
+        );
     }
 
     #[test]
