@@ -285,6 +285,7 @@ class EmbeddingClassifierConfig(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
+    backend: Optional[str] = None
     model_type: Optional[str] = None
     preload_embeddings: Optional[bool] = None
     target_dimension: Optional[int] = None
@@ -293,6 +294,17 @@ class EmbeddingClassifierConfig(BaseModel):
     top_k: Optional[int] = None
     min_score_threshold: Optional[float] = None
     prototype_scoring: Optional[PrototypeScoringConfig] = None
+
+
+class EmbeddingEndpointConfig(BaseModel):
+    """External embedding provider endpoint configuration."""
+
+    base_url: Optional[str] = None
+    model: Optional[str] = None
+    api_key_env: Optional[str] = None
+    timeout_seconds: Optional[int] = Field(default=None, ge=0)
+    max_retries: Optional[int] = Field(default=None, ge=0)
+    dimensions: Optional[int] = Field(default=None, ge=1)
 
 
 class ComplexityRule(BaseModel):
@@ -919,6 +931,93 @@ class RouterLearningConfig(BaseModel):
     protection: Optional[RouterLearningProtectionConfig] = None
 
 
+class OutputContractChoiceSetSpec(BaseModel):
+    """Allowed values for choice-style output contracts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    values: List[str]
+
+
+class OutputContractJSONSchemaSpec(BaseModel):
+    """Structured JSON schema selector for router-enforced output contracts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_ref: Literal["terminal_action_v1"]
+
+
+class OutputContractReferenceSpec(BaseModel):
+    """Reference selection source metadata."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: Optional[Literal["candidate_responses"]] = None
+    id_format: Optional[Literal["index", "reference_number"]] = None
+
+
+class OutputContractRenderSpec(BaseModel):
+    """How the router renders a normalized output value."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[Literal["value", "template"]] = None
+    template: Optional[str] = None
+
+
+class OutputContractExtractSpec(BaseModel):
+    """Preferred response fields for extraction."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[Literal["exact", "json_object"]] = None
+    sources: Optional[
+        List[Literal["content", "reasoning_content", "candidate_responses"]]
+    ] = None
+
+
+class OutputContractNormalizeSpec(BaseModel):
+    """Normalization policy for structured output contracts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    field_order: Optional[List[str]] = None
+    defaults: Optional[Dict[str, str]] = None
+
+
+class OutputContractViolationPolicy(BaseModel):
+    """Repair and fallback policy when output contract enforcement fails."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    repair: Optional[StrictBool] = None
+    fallback: Optional[str] = None
+
+
+class OutputContractPostprocess(BaseModel):
+    """Post-processing operation for output contract enforcement."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["dereference_selected_reference"]
+
+
+class OutputContractSpec(BaseModel):
+    """Router-executable typed output contract."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Optional[Literal["choice", "structured_json", "reference_selection"]] = None
+    choice_set: Optional[OutputContractChoiceSetSpec] = None
+    json_schema: Optional[OutputContractJSONSchemaSpec] = None
+    reference: Optional[OutputContractReferenceSpec] = None
+    render: Optional[OutputContractRenderSpec] = None
+    extract: Optional[OutputContractExtractSpec] = None
+    normalize: Optional[OutputContractNormalizeSpec] = None
+    on_violation: Optional[OutputContractViolationPolicy] = None
+    postprocess: Optional[List[OutputContractPostprocess]] = None
+
+
 class Decision(BaseModel):
     """Routing decision configuration."""
 
@@ -928,6 +1027,8 @@ class Decision(BaseModel):
     description: str
     priority: int
     rules: Rules
+    output_contract: Optional[str] = None
+    output_contract_spec: Optional[OutputContractSpec] = None
     modelRefs: List[ModelRef] = Field(alias="modelRefs")
     algorithm: Optional[AlgorithmConfig] = None  # Multi-model orchestration algorithm
     adaptations: Optional[DecisionAdaptationsConfig] = None
@@ -1079,6 +1180,10 @@ class EmbeddingModelsConfig(BaseModel):
     embedding_config: Optional[EmbeddingClassifierConfig] = Field(
         default=None,
         description="Embedding classifier tuning (model_type/target_dimension/top_k/prototype_scoring/etc.)",
+    )
+    endpoint: Optional[EmbeddingEndpointConfig] = Field(
+        default=None,
+        description="External OpenAI-compatible embedding provider endpoint",
     )
     use_cpu: bool = Field(True, description="Use CPU for inference")
 

@@ -31,6 +31,7 @@ const sidebars: SidebarsConfig = {
       label: 'Installation',
       items: [
         'installation/installation',
+        'installation/ollama',
         'installation/k8s/operator',
         'installation/configuration',
         'installation/native-backends',
@@ -159,6 +160,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/looper/fusion',
                 'tutorials/algorithm/looper/ratings',
                 'tutorials/algorithm/looper/remom',
+                'tutorials/algorithm/looper/workflows',
               ],
             },
           ],
@@ -248,6 +250,7 @@ const sidebars: SidebarsConfig = {
       label: 'Proposals',
       items: [
         'proposals/unified-config-contract-v0-3',
+        'proposals/router-flow-workflows',
         'proposals/hallucination-mitigation-milestone',
         'proposals/prompt-classification-routing',
         'proposals/nvidia-dynamo-integration',

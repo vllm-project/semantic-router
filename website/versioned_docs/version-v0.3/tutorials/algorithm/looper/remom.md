@@ -82,8 +82,8 @@ Some tasks benefit from parallel exploration and later synthesis rather than one
 algorithm:
   type: remom
   remom:
-    breadth_schedule: [3, 2, 1]         # Parallel calls per round
-    model_distribution: weighted         # weighted, equal, or first_only
+    breadth_schedule: [3, 2]            # Parallel calls before final synthesis
+    model_distribution: weighted         # weighted, equal, round_robin, or first_only
     temperature: 0.7                     # Temperature for model calls
     include_reasoning: false             # Include reasoning in synthesis
     compaction_strategy: full            # full or last_n_tokens
@@ -100,8 +100,8 @@ algorithm:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `breadth_schedule` | list[int] | **required** | Parallel calls per round (e.g., `[3, 2, 1]`) |
-| `model_distribution` | string | `weighted` | Strategy: `weighted`, `equal`, `first_only` |
+| `breadth_schedule` | list[int] | **required** | Parallel calls before the final synthesis call (e.g., `[3, 2]`) |
+| `model_distribution` | string | `weighted` | Strategy: `weighted`, `equal`, `round_robin`, `first_only` |
 | `temperature` | float | `1.0` | Temperature for model calls |
 | `include_reasoning` | bool | `false` | Include reasoning content in synthesis prompts |
 | `compaction_strategy` | string | `full` | Strategy: `full` or `last_n_tokens` |

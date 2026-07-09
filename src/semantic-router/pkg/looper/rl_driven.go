@@ -85,11 +85,6 @@ func resolveRLDrivenSelector(selectorRegistry *selection.Registry) *selection.RL
 	return nil
 }
 
-// SetEndpointOverrides sets per-model endpoint URL overrides on the underlying client.
-func (l *RLDrivenLooper) SetEndpointOverrides(overrides map[string]string) {
-	l.client.SetEndpointOverrides(overrides)
-}
-
 // Execute implements the RL-driven multi-round routing algorithm.
 // It uses Thompson Sampling to select models and aggregates their responses.
 func (l *RLDrivenLooper) Execute(ctx context.Context, req *Request) (*Response, error) {

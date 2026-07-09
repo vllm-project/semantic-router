@@ -10,10 +10,12 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 config_translator = importlib.import_module("cli.config_translator")
+models = importlib.import_module("cli.models")
 parser = importlib.import_module("cli.parser")
 utils = importlib.import_module("cli.utils")
 
 load_profile_values = config_translator.load_profile_values
+EmbeddingModelsConfig = models.EmbeddingModelsConfig
 ConfigParseError = parser.ConfigParseError
 load_config_file = parser.load_config_file
 parse_user_config = parser.parse_user_config
@@ -97,6 +99,30 @@ def test_parse_user_config_preserves_cached_input_pricing(tmp_path: Path) -> Non
     assert pricing is not None
     assert pricing.cached_input_per_1m == 0.25
     assert pricing.model_dump()["cached_input_per_1m"] == 0.25
+
+
+def test_embedding_models_config_accepts_remote_endpoint() -> None:
+    config = EmbeddingModelsConfig(
+        embedding_config={
+            "backend": "openai_compatible",
+            "model_type": "remote",
+            "target_dimension": 1024,
+        },
+        endpoint={
+            "base_url": "http://embedding-service:8000/v1",
+            "model": "BAAI/bge-m3",
+            "api_key_env": "EMBEDDING_API_KEY",
+            "timeout_seconds": 5,
+            "max_retries": 2,
+            "dimensions": 1024,
+        },
+    )
+
+    dumped = config.model_dump(exclude_none=True)
+    assert dumped["embedding_config"]["backend"] == "openai_compatible"
+    assert dumped["embedding_config"]["model_type"] == "remote"
+    assert dumped["endpoint"]["base_url"] == "http://embedding-service:8000/v1"
+    assert dumped["endpoint"]["api_key_env"] == "EMBEDDING_API_KEY"
 
 
 def test_parse_user_config_accepts_decision_learning_controls(

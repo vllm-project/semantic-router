@@ -553,6 +553,7 @@ routing:
       description: Static fallback for standard business traffic.
       priority: 200
       tier: 2
+      output_contract: Preserve any explicit user-requested output format exactly.
       rules:
         operator: AND
         conditions:
@@ -715,6 +716,16 @@ routing:
     - name: computer-science-remom-route
       description: ReMoM route for complex computer science prompts.
       priority: 170
+      output_contract_spec:
+        type: reference_selection
+        reference:
+          source: candidate_responses
+          id_format: index
+        extract:
+          mode: exact
+          sources: [content]
+        postprocess:
+          - type: dereference_selected_reference
       rules:
         operator: AND
         conditions:
@@ -723,16 +734,16 @@ routing:
           - type: complexity
             name: needs_reasoning:hard
       modelRefs:
-        - model: qwen3-8b
-          use_reasoning: true
-          reasoning_effort: medium
-          weight: 0.2
         - model: qwen3-32b
           use_reasoning: true
           reasoning_description: Use the strongest text model for synthesis.
           reasoning_effort: high
           lora_name: computer-science-expert
           weight: 0.5
+        - model: qwen3-8b
+          use_reasoning: true
+          reasoning_effort: medium
+          weight: 0.2
         - model: llava-omni
           use_reasoning: true
           reasoning_effort: high
@@ -740,14 +751,17 @@ routing:
       algorithm:
         type: remom
         remom:
-          breadth_schedule: [3, 2, 1]
+          breadth_schedule: [3, 2]
           model_distribution: round_robin
           temperature: 0.7
           include_reasoning: true
-          compaction_strategy: summarize
+          compaction_strategy: last_n_tokens
           compaction_tokens: 512
           synthesis_template: Fuse the strongest technical findings into a final answer.
+          synthesis_model: qwen3-32b
           max_concurrent: 3
+          round_timeout_seconds: 120
+          min_successful_responses: 2
           on_error: skip
           shuffle_seed: 7
           include_intermediate_responses: true
@@ -799,6 +813,8 @@ routing:
             - qwen3-32b
           max_concurrent: 2
           max_completion_tokens: 512
+          round_timeout_seconds: 90
+          min_successful_responses: 1
           temperature: 0.2
           include_analysis: true
           include_intermediate_responses: true
@@ -824,6 +840,41 @@ routing:
             #   filter   hard-drop responses below min_score (keep min_keep).
             # filter regresses quality on contested factual questions because it
             # deletes the correct dissenter; see bench/grounded_fusion/FINDINGS.md.
+
+    - name: router-flow-workflow-route
+      description: Router Flow route for bounded static or dynamic micro-agent workflows.
+      priority: 164
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: business
+          - type: complexity
+            name: needs_reasoning:hard
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: true
+          reasoning_effort: medium
+          weight: 0.5
+        - model: qwen3-32b
+          use_reasoning: true
+          reasoning_effort: high
+          weight: 0.5
+      algorithm:
+        type: workflows
+        workflows:
+          mode: dynamic
+          template: micro_agent
+          planner:
+            model: qwen3-32b
+          max_steps: 6
+          max_parallel: 2
+          max_completion_tokens: 1024
+          round_timeout_seconds: 90
+          min_successful_responses: 1
+          temperature: 0.2
+          include_intermediate_responses: true
+          on_error: fail
 
     - name: terse_feedback_route
       description: Terse-answer route that allows Router Learning adaptation to adjust feedback-driven routing.
@@ -1862,17 +1913,34 @@ global:
           repetition_penalty_strength: 0
     looper:
       endpoint: http://localhost:8899/v1/chat/completions
-      model_endpoints:
-        qwen3-8b: http://localhost:8000/v1/chat/completions
-        qwen3-32b: http://localhost:8001/v1/chat/completions
       grpc_max_msg_size_mb: 16
       timeout_seconds: 120
       retry_count: 2
       headers:
         X-Trace-Source: looper
+      remom:
+        model_names:
+          - vllm-sr/remom
       fusion:
         model_names:
           - vllm-sr/fusion
+      flow:
+        model_names:
+          - vllm-sr/flow
+        state:
+          store_backend: file
+          ttl_seconds: 1800
+          file:
+            directory: .vllm-sr/flow-state
+          redis:
+            address: localhost:6379
+            db: 0
+            password: ""
+            use_tls: false
+            tls_skip_verify: false
+            max_retries: 3
+            pool_size: 10
+            key_prefix: "vllm-sr:flow:state:"
 
   model_catalog:
     embeddings:
@@ -1899,6 +1967,13 @@ global:
             best_weight: 0.75
             top_m: 2
             margin_threshold: 0.0
+        endpoint:
+          base_url: http://embedding-service:8000/v1
+          model: BAAI/bge-m3
+          api_key_env: EMBEDDING_API_KEY
+          timeout_seconds: 5
+          max_retries: 2
+          dimensions: 1024
     system:
       prompt_guard: models/mmbert32k-jailbreak-detector-merged
       domain_classifier: models/mmbert32k-intent-classifier-merged
