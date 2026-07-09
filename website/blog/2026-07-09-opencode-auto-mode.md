@@ -1,25 +1,29 @@
 ---
 slug: opencode-auto-mode
 title: "Adding Cursor-Style Auto Model Selection to OpenCode with vLLM Semantic Router"
-description: Cursor picks the right model for you automatically. OpenCode doesn't - yet. A complete guide to adding intelligent auto model selection to OpenCode (or any OpenAI-compatible agent) using vLLM Semantic Router and AgentGateway.
+description: A practical guide to adding intelligent auto model selection to OpenCode or any OpenAI-compatible agent using vLLM Semantic Router and AgentGateway — one endpoint, one virtual model, and semantic routing across a mixed local-and-cloud fleet.
 authors: [anupsharma,aayushsaini101,shivjikumarjha]
 tags: [opencode, routing, agentgateway, mixture-of-models, tutorial, community, vllm, semantic-router]
-image: /img/blog/opencode-auto-mode-architecture.png
+image: /img/blog/opencode-auto-mode-hero.png
 ---
+
+<div align="center">
+
+![OpenCode with vLLM Semantic Router: open provider interface, AgentGateway integration layer, and semantic routing hub](/img/blog/opencode-auto-mode-hero.png)
+
+</div>
 
 ## The Feature Everyone Wants and Almost Nobody Has
 
-If you've used Cursor, you know its **Auto** mode: you don't pick a model, you just type, and the IDE quietly decides whether your request deserves a frontier model or something faster and cheaper. It's one of those features you stop noticing until it's gone — and the moment you move to an open tool, it's gone.
+Cursor's **Auto** mode is deceptively simple: the developer types, and the IDE chooses whether a prompt deserves a frontier model or something faster and cheaper. It is easy to stop noticing — until moving to an open tool where every request starts with a model dropdown.
 
 <!-- truncate -->
 
-This matters more than it sounds. Companies everywhere are standing up **local and internal model serving** — a fine-tuned coder on their own GPUs, a frontier API for the hard stuff, a fast cheap model for everything else. The models exist. The serving works. What's missing is the *decision layer*: something that reads each request and sends it to the right model, automatically, without every developer hand-picking from a dropdown all day.
+That gap matters more than it sounds. Teams everywhere are standing up **local and internal model serving** — a fine-tuned coder on owned GPUs, a frontier API for hard problems, a fast cheap model for everything else. The models exist. The serving works. What is often missing is the *decision layer*: something that reads each request and sends it to the right backend automatically.
 
-[OpenCode](https://opencode.ai) — the open-source AI coding agent — has no Auto mode. But it has something better: an open provider interface. And that's all we need.
+[OpenCode](https://opencode.ai) ships without a built-in Auto mode, but it does expose an open provider interface — enough to bolt intelligent routing on behind a single OpenAI-compatible endpoint.
 
-This post is a **one-stop guide** to building Auto mode for OpenCode — or honestly, for *any* OpenAI-compatible client — using [vLLM Semantic Router](https://github.com/vllm-project/semantic-router) and [AgentGateway](https://github.com/agentgateway/agentgateway). One endpoint, one model name, and an ML router behind it choosing among your model fleet per request. Everything below runs today; every config is complete; every failure mode I hit is documented so you don't have to hit it.
-
-The spark for this came from a presentation by [Johnu George](https://www.linkedin.com/in/johnu-george/) recently on using OpenCode with custom AI providers. I've been working in the vLLM Semantic Router codebase for a while — contributing a CLI shell completion command ([#2232](https://github.com/vllm-project/semantic-router/pull/2232)), performance benchmark and Hugging Face CLI fixes ([#2300](https://github.com/vllm-project/semantic-router/pull/2300)), auto-discovery for mmbert32k merged models ([#2302](https://github.com/vllm-project/semantic-router/pull/2302)), and SSE streaming for modality responses ([#2381](https://github.com/vllm-project/semantic-router/pull/2381)) — so connecting the two felt inevitable.
+This guide walks through building Auto mode for OpenCode (or any OpenAI-compatible client) with [vLLM Semantic Router](https://github.com/vllm-project/semantic-router) and [AgentGateway](https://github.com/agentgateway/agentgateway): one endpoint, one model name, and an ML router choosing among the fleet per request. The configs below are complete; the failure modes are the ones that typically surface first in production setups.
 
 <iframe
   width="100%"
@@ -30,35 +34,35 @@ The spark for this came from a presentation by [Johnu George](https://www.linked
   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
   allowfullscreen>
 </iframe>
-*[📹 Demo video: three prompts from one OpenCode session, routed live to three different models]*
+*[Demo video: three prompts from one OpenCode session, routed live to three different models]*
 
 ---
 
 ## First, Know Your Options: The Routing Algorithms in vLLM Semantic Router
 
-Before building anything, it's worth understanding what the Semantic Router actually offers — because "auto mode" means different things to different teams, and the project ships **more than a dozen selection algorithms**, each answering a different business question. This is the map I wish I'd had on day one:
+"Auto mode" means different things to different teams. vLLM Semantic Router ships **more than a dozen selection algorithms**, each answering a different operational question:
 
 | Algorithm | What it optimizes | Reach for it when... |
 |---|---|---|
-| `router_dc` | Prompt ↔ model-description similarity (dual-contrastive embeddings) | Your models are **specialists** — a coder, a reasoner, a generalist — and the prompt's *intent* should decide. The closest thing to Cursor's Auto. |
-| `multi_factor` | Weighted quality / latency / cost / load score with SLO filters | Your models are **interchangeable** (same capability, different deployments) and you're balancing budget and latency guardrails across a fleet. |
-| `latency_aware` | Live TTFT/TPOT percentiles | You have hard latency SLAs — user-facing chat where p95 time-to-first-token is the metric that gets you paged. |
-| `automix` | Cost, via cascade + self-verification (POMDP, from the AutoMix paper) | You want maximum savings and can tolerate escalation: try the cheap model, verify its own answer, escalate only on low confidence. Great for batch/offline work. |
-| `elo` | Feedback-driven ranking | You collect user feedback (thumbs, regenerations) and want rankings that improve continuously in production. |
-| `knn` / `svm` / `mlp` / `kmeans` | Learned routing from labeled examples | You have historical data of "this prompt type → this model worked" and want a trained policy instead of a hand-written one. |
-| `rl_driven` | Long-run reward | You can define a reward signal and want the router to optimize it over time. |
-| `hybrid` | Intent + operational signals combined | Big fleets: specialists *and* replicas, where both "what is this prompt" and "which deployment is healthy" matter. |
-| `static` | Determinism | Compliance and predictability: category X always goes to model Y, auditable, no surprises. |
+| `router_dc` | Prompt ↔ model-description similarity (dual-contrastive embeddings) | Models are **specialists** — a coder, a reasoner, a generalist — and the prompt's *intent* should decide. The closest analogue to Cursor's Auto. |
+| `multi_factor` | Weighted quality / latency / cost / load score with SLO filters | Models are **interchangeable** (same capability, different deployments) and the goal is balancing budget and latency guardrails across a fleet. |
+| `latency_aware` | Live TTFT/TPOT percentiles | Hard latency SLAs apply — user-facing chat where p95 time-to-first-token is the metric that pages on-call. |
+| `automix` | Cost, via cascade + self-verification (POMDP, from the AutoMix paper) | Maximum savings with tolerated escalation: try the cheap model, verify its answer, escalate only on low confidence. Strong fit for batch/offline work. |
+| `elo` | Feedback-driven ranking | User feedback (thumbs, regenerations) should continuously improve rankings in production. |
+| `knn` / `svm` / `mlp` / `kmeans` | Learned routing from labeled examples | Historical data exists for "this prompt type → this model worked" and a trained policy is preferred over hand-written rules. |
+| `rl_driven` | Long-run reward | A reward signal is defined and the router should optimize it over time. |
+| `hybrid` | Intent + operational signals combined | Large fleets with both specialists *and* replicas, where "what is this prompt" and "which deployment is healthy" both matter. |
+| `static` | Determinism | Compliance and predictability: category X always routes to model Y, auditable, no surprises. |
 
-And one thing that isn't an algorithm but matters to enterprises: decisions can also be gated by **signal rules** — the router ships classifier models for intent, PII, and jailbreak detection. "Anything containing PII stays on the on-prem model, no exceptions" is a routing rule here, not a policy document. If your business need is *governance* rather than *optimization*, that's the feature to explore.
+Decisions can also be gated by **signal rules** — classifiers for intent, PII, and jailbreak detection. "Anything containing PII stays on the on-prem model" is enforceable as routing policy, not just documentation. When the primary need is *governance* rather than *optimization*, signal rules are the right layer.
 
-**The honest takeaway:** if your models are clones of each other, you want the signal-based family (`multi_factor`, `latency_aware`). If your models have *different jobs* — which is exactly the local-coder-plus-frontier-API setup most teams are building — you want prompt-aware routing. That's `router_dc`, and that's what we'll use.
+**Practical rule of thumb:** interchangeable replicas → `multi_factor` or `latency_aware`. Specialist pools (local coder + frontier API) → prompt-aware routing with `router_dc`. The rest of this guide uses `router_dc`.
 
 ---
 
 ## The Design: One Virtual Model Called MoM
 
-The Semantic Router's core abstraction is a **decision**: a named bundle of candidate models, a selection algorithm, and a *virtual model name* clients call. Mine is `MoM` — Mixture of Models:
+The Semantic Router's core abstraction is a **decision**: a named bundle of candidate models, a selection algorithm, and a *virtual model name* the client calls. A typical Auto-mode setup exposes `MoM` — Mixture of Models:
 
 ```yaml
 decisions:
@@ -75,7 +79,7 @@ decisions:
       type: router_dc
 ```
 
-With `router_dc`, you don't write rules about prompts at all. You write **descriptions of what each model is good at, in plain English**:
+With `router_dc`, routing rules about prompt keywords are unnecessary. Instead, configure **plain-English descriptions of what each model is good at**:
 
 ```yaml
 modelCards:
@@ -95,7 +99,7 @@ modelCards:
       quick lookups, summarization, casual conversation, ...
 ```
 
-At request time, an embedded **mmBERT** model (CPU, ~130MB) embeds the incoming prompt and compares it to those descriptions by cosine similarity. Real logs from my setup:
+At request time, an embedded **mmBERT** model (CPU, ~130MB) embeds the incoming prompt and compares it to those descriptions by cosine similarity. Example routing logs:
 
 ```plaintext
 [RouterDC]   qwen-coder:   similarity=0.9998   ← "Write me a Python function..."
@@ -103,13 +107,13 @@ At request time, an embedded **mmBERT** model (CPU, ~130MB) embeds the incoming 
 [RouterDC]   gemini-flash: similarity=0.9939   ← "What is the capital of Japan?"
 ```
 
-Routing decision cost: **1–18ms, on CPU**. The descriptions *are* the routing policy — adding a fourth model (a SQL specialist, a legal model) is a new model card, not new code.
+Routing decision cost is typically **1–18ms on CPU**. The descriptions *are* the routing policy — adding a fourth model (a SQL specialist, a legal model) is a new model card, not new application code.
 
-Why this design earns the name "auto mode" rather than "clever hack":
+Why this pattern qualifies as true Auto mode:
 
-1. **The client stays dumb.** OpenCode holds no routing logic and no upstream API keys. Swap models, retune descriptions, add candidates — the client config never changes.
-2. **Cost control is structural.** In a coding agent, the bulk of traffic is code-shaped and lands on your $0 local model. Only prompts that genuinely need frontier reasoning pay frontier prices.
-3. **It fails soft.** The gateway policy is `failureMode: failOpen` — if the router process dies, traffic falls through to a default route. Users see answers, not incidents.
+1. **The client stays simple.** OpenCode holds no routing logic and no upstream API keys. Swap models, retune descriptions, add candidates — the client config stays fixed.
+2. **Cost control is structural.** In a coding agent, code-shaped traffic lands on the $0 local model; only prompts that genuinely need frontier reasoning incur frontier pricing.
+3. **It fails soft.** With gateway policy `failureMode: failOpen`, a dead router process lets traffic fall through to a default route. Users see answers, not hard outages.
 
 ---
 
@@ -121,7 +125,7 @@ Why this design earns the name "auto mode" rather than "clever hack":
 
 </div>
 
-The Semantic Router runs as an **Envoy ExtProc sidecar** to AgentGateway — no extra proxy hop. The gateway pauses each request, streams the body to the router over gRPC, gets back a header mutation, and resumes. Routes then match on that header:
+The Semantic Router runs as an **Envoy ExtProc sidecar** to AgentGateway — no extra proxy hop. The gateway pauses each request, streams the body to the router over gRPC, receives a header mutation, and resumes. Routes match on that header:
 
 ```yaml
 binds:
@@ -144,7 +148,7 @@ binds:
     #     plus a failOpen fallback route
 ```
 
-One design choice worth stealing even if you steal nothing else: **the router never touches API keys.** It classifies and sets a header; AgentGateway owns `backendAuth` and injects credentials per upstream. The component making ML decisions on untrusted input holds zero secrets. If this endpoint ever serves a whole team instead of one laptop, that separation is the difference between a routing bug and a credentials incident.
+A critical security split: **the router never holds API keys.** It classifies and sets a header; AgentGateway owns `backendAuth` and injects credentials per upstream. The component making ML decisions on untrusted input should hold zero secrets — especially when the endpoint serves a team rather than a single laptop.
 
 ---
 
@@ -172,15 +176,13 @@ OpenCode accepts any OpenAI-compatible endpoint as a custom provider. In `~/.con
 }
 ```
 
-A satisfying detail: the Semantic Router intercepts `/v1/models` and **advertises the virtual model**, so OpenCode's discovery finds `MoM` as if it were a real model. To the client, it is one.
-
-Select the provider, pick `MoM`, and you have Auto mode: every prompt is classified server-side and lands on the best model in your pool.
+The Semantic Router intercepts `/v1/models` and **advertises the virtual model**, so OpenCode's discovery finds `MoM` as if it were a real backend. Select the provider, pick `MoM`, and every prompt is classified server-side before it reaches an upstream LLM.
 
 <!-- Add screenshot at website/static/img/blog/opencode_gateway.png before publish:
 ![AgentGateway UI — one OpenCode session fanning out across qwen2.5-coder, gpt-4o, and gemini-2.5-flash, with per-request tokens and cost](/img/blog/opencode_gateway.png)
 -->
 
-For visibility, AgentGateway ships a built-in UI (build with `--features ui`, served at `:15000/ui`) and can persist every request to SQLite with cost attribution:
+For observability, AgentGateway ships a built-in UI (build with `--features ui`, served at `:15000/ui`) and can persist every request to SQLite with cost attribution:
 
 ```yaml
 config:
@@ -190,17 +192,17 @@ config:
     url: sqlite://agentgateway.db
 ```
 
-Keep that database enabled. It's about to earn its place.
+Enable request persistence early — it pays off the first time routing behavior needs debugging.
 
 ---
 
-## The Gotchas (So You Don't Spend My Week)
+## Common Pitfalls
 
-Four things broke on the way. Each one is general — if you build this, you *will* meet some of them.
+Four issues show up repeatedly when wiring this stack. Each applies broadly beyond OpenCode.
 
-### Gotcha 1: The catch-all rule that caught nothing
+### Pitfall 1: The catch-all rule that matches nothing
 
-Older examples show `rules: {}` as "match everything." On current `main`, an empty rules block evaluates as an OR over zero conditions — which matches **nothing**. Every request silently fell back to the default model. No errors, plausible answers, zero actual routing. The only tell was `"decision":""` in the routing logs.
+Older examples use `rules: {}` as "match everything." On current `main`, an empty rules block evaluates as an OR over zero conditions — which matches **nothing**. Requests silently fall back to the default model: no errors, plausible answers, zero actual routing. The tell in logs is `"decision":""`.
 
 The documented catch-all is an empty **AND**:
 
@@ -209,34 +211,34 @@ rules:
   operator: AND
 ```
 
-*If your router "works" but never routes, check that your decision matches at all before blaming the algorithm.*
+If the router "works" but never routes, verify the decision matches at all before tuning the algorithm.
 
-### Gotcha 2: Picking an algorithm that reads the prompt
+### Pitfall 2: Choosing an algorithm that ignores the prompt
 
-My first attempt used `multi_factor` and everything went to one model — no matter how I rebalanced the weights. Reading the selector source explained it: `multi_factor` scores configured quality/pricing plus live latency signals. It's a fleet-balancing algorithm; **the prompt never enters the equation.** With no quality/pricing data configured, every factor is neutral and you get the first candidate forever.
+`multi_factor` scores configured quality, pricing, and live latency signals. It is a fleet-balancing algorithm; **the prompt never enters the equation.** Without quality or pricing data configured, every factor is neutral and traffic sticks on the first candidate indefinitely.
 
-The algorithm-to-business-need table earlier in this post exists because of this mistake. For specialist pools, use `router_dc`.
+For specialist pools (coder + reasoner + generalist), use `router_dc`. Reserve `multi_factor` for interchangeable replicas where cost, latency, and load are the primary tradeoffs.
 
-### Gotcha 3: A virtual model inherits its *weakest* backend's limits
+### Pitfall 3: A virtual model inherits its weakest backend's limits
 
-First cloud-routed prompt from OpenCode:
+A typical first failure after routing to a cloud model:
 
 ```plaintext
 max_tokens is too large: 32000. This model supports at most 16384
 completion tokens, whereas you provided 32000.
 ```
-r
-OpenCode can't know what's behind `MoM`, so it asked for a generous budget; GPT-4o caps completions at 16,384. The virtual model's advertised limits must be the **intersection** across all candidates — smallest context window, safest output ceiling:
+
+OpenCode cannot see individual backends behind `MoM`, so it may request a generous token budget. The virtual model's advertised limits must be the **intersection** across all candidates — smallest context window, safest output ceiling:
 
 ```jsonc
 "limit": { "context": 32768, "output": 8192 }
 ```
 
-The same intersection rule applies to every capability: context, output, tool calling, vision. Configure for your least capable model, not your average one.
+The same intersection rule applies to tool calling, vision, and every other capability flag. Configure for the least capable backend, not the average one.
 
-### Gotcha 4: Agentic clients + small local models = JSON soup
+### Pitfall 4: Agentic clients + small local models = malformed tool JSON
 
-OpenCode is an *agent*: every request carries a ~10KB system prompt ("use the tools available to you") and a catalog of tools (`write`, `edit`, `webfetch`...). Frontier models return structured tool calls. Small local models often return a broken *imitation* of a tool call, as plain text:
+OpenCode is an *agent*: every request carries a large system prompt and a tool catalog (`write`, `edit`, `webfetch`, ...). Frontier models return structured tool calls. Smaller local models often emit a broken *imitation* as plain text:
 
 ```plaintext
 > what is python language
@@ -245,9 +247,9 @@ OpenCode is an *agent*: every request carries a ~10KB system prompt ("use the to
 interpreted programming language...","filePath":"python_language.md"}}
 ```
 
-And it compounds: OpenCode replays history with every request, so the model's malformed JSON becomes part of its own context, and it concludes JSON is the house style. The session poisons itself. (Your local model size is your call — mine is small purely due to hardware constraints — but every team running compact local models next to an agentic client will eventually see some version of this.)
+OpenCode replays history on every request, so malformed JSON from earlier turns becomes part of the context and the session self-reinforces the wrong format. Teams running compact local models alongside agentic clients should expect some variant of this behavior.
 
-How I diagnosed it instead of guessing: **payload logging at the gateway**. AgentGateway can capture the full messages array:
+**Diagnosis requires payload capture.** AgentGateway can log the full messages array:
 
 ```yaml
 frontendPolicies:
@@ -259,9 +261,9 @@ frontendPolicies:
           gen_ai.completion: 'llm.completion.map(c, {"role":"assistant", "content": c})'
 ```
 
-One SQL query showed me the exact prompt the model received — the giant agent preamble, and its own previous JSON replies staring back from the history. Debugging LLM pipelines without payload capture is astrology.
+A single SQL query against the access log reveals the exact prompt the model received — agent preamble, poisoned history, and all. Debugging LLM pipelines without payload capture is guesswork.
 
-The fix that keeps Auto mode clean for *any* model pool — a custom OpenCode agent whose prompt **replaces** the built-in agentic one:
+**Mitigation:** define a custom OpenCode agent whose prompt **replaces** the built-in agentic system prompt:
 
 ```jsonc
 "agent": {
@@ -275,11 +277,11 @@ The fix that keeps Auto mode clean for *any* model pool — a custom OpenCode ag
 }
 ```
 
-Plus `"tool_call": false` on the model entry. Press **Tab** in the OpenCode TUI to switch to the `chat` agent, start a fresh session (poisoned history stays poisoned), and every model in the pool answers in clean markdown. Keep the default `build` agent for full agentic work with your strongest tool-calling models.
+Also set `"tool_call": false` on the model entry. Switch to the `chat` agent in the OpenCode TUI (**Tab**), start a fresh session (poisoned history does not self-heal), and models in the pool respond in clean markdown. Keep the default `build` agent for full agentic work with backends that handle tool calls reliably.
 
 ---
 
-## The Payoff
+## Expected Results
 
 Three prompts, one OpenCode session, one provider, one model name:
 
@@ -289,23 +291,21 @@ Three prompts, one OpenCode session, one provider, one model name:
 | "Compare utilitarian and deontological ethics for AI decision making..." | `gpt-4o` | OpenAI | ~$0.03 |
 | "What is the capital of Japan?" | `gemini-2.5-flash` | Google | ~$0.001 |
 
-Routing overhead: 1–18ms per request, on CPU. The gateway UI shows every hop with tokens and cost; the SQLite log holds the payload trail for the day something looks off.
+Routing overhead stays in the **1–18ms** range on CPU. The gateway UI surfaces per-hop tokens and cost; the SQLite log retains the payload trail for post-incident review.
 
-What I like most is what's *absent*. No model dropdown. No "oops, I burned frontier tokens on a trivial question." No routing code in any client. Just English descriptions of what each model is good at — and an embedding model that takes them seriously.
+The outcome that matters: no model dropdown, no accidental frontier spend on trivial prompts, and no routing logic in the client — only English model descriptions and an embedding model that routes on semantic fit.
 
 ---
 
 ## Takeaways
 
-- **Auto mode is a gateway feature, not a client feature.** Build it once behind an OpenAI-compatible endpoint and *every* tool you use inherits it — OpenCode today, whatever you adopt next year.
-- **Match the algorithm to the business need.** Specialist models → `router_dc`. Interchangeable replicas → `multi_factor` / `latency_aware`. Maximum savings with escalation → `automix`. Governance → signal rules (PII, jailbreak). The table above is the decision I wish someone had written down for me.
+- **Auto mode is a gateway feature, not a client feature.** Build it once behind an OpenAI-compatible endpoint and every compatible tool inherits it.
+- **Match the algorithm to the business need.** Specialist models → `router_dc`. Interchangeable replicas → `multi_factor` / `latency_aware`. Maximum savings with escalation → `automix`. Governance → signal rules (PII, jailbreak).
 - **A virtual model inherits the weakest backend's limits.** Context, output, tool calling — intersection, not average.
-- **Payload logging is non-negotiable.** My two hardest bugs (a rule that never matched, a session that poisoned itself) were invisible until I could read the actual bytes on the wire.
+- **Payload logging is non-negotiable.** Silent misroutes and poisoned agent sessions are invisible without the actual bytes on the wire.
 - **Keep keys out of the router.** The component reading untrusted prompts should hold zero secrets; let the gateway own auth.
 
-If your team is standing up internal model serving and wishing your tools had a Cursor-style Auto mode — this is that, in two YAML files and a JSON block, with [AgentGateway](https://github.com/agentgateway/agentgateway) and [vLLM Semantic Router](https://github.com/vllm-project/semantic-router).
-
-And yes — mine runs in my living room. 🏠
+Teams standing up internal model serving and wanting Cursor-style Auto mode can get there with two YAML files and a JSON block, using [AgentGateway](https://github.com/agentgateway/agentgateway) and [vLLM Semantic Router](https://github.com/vllm-project/semantic-router).
 
 ## Get Started
 
