@@ -135,6 +135,18 @@ sequence SDPA, set `VSR_AMD_SEQUENCE_PROVIDER_ORDER=migraphx-first`; then use
 per-shape cold compile, and `VSR_AMD_MIGRAPHX_WARMUP=1` to move first-run cost
 into startup.
 
+On ROCm 7.2 / MIGraphX 2.15 / `onnxruntime_migraphx` 1.23.2, sequence SDPA can
+be MIGraphX-owned after rewriting the exported `com.microsoft::SkipLayerNormalization`
+node with an empty beta input:
+
+```bash
+python onnx-binding/scripts/rewrite_migraphx_safe_onnx.py \
+  --input model_sdpa_fp16.onnx \
+  --output model_sdpa_migraphx.onnx \
+  --rewrite-skip-layer-normalization \
+  --fail-if-unchanged
+```
+
 Before promoting an optimized ONNX artifact, run
 `scripts/eval_router_signal_artifacts.py` against the old artifact, new
 artifact, and selected provider path. The harness includes task-native smoke

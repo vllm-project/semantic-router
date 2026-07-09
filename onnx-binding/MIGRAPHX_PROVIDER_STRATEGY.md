@@ -35,6 +35,7 @@ mmBERT sequence classifiers choose ONNX artifacts in provider-aware order:
 
 ```text
 AMD Auto/ROCm: model_sdpa_fp16.onnx -> model_fa_fp16.onnx -> model_fa.onnx -> model.onnx -> classifier.onnx -> model_optimized.onnx
+AMD Auto/ROCm with VSR_AMD_SEQUENCE_PROVIDER_ORDER=migraphx-first: model_sdpa_migraphx.onnx -> model_sdpa_fp16.onnx -> model_fa_fp16.onnx -> model_fa.onnx -> model.onnx -> classifier.onnx -> model_optimized.onnx
 CPU/CUDA/OpenVINO: model.onnx -> classifier.onnx -> model_optimized.onnx -> model_sdpa_fp16.onnx
 ```
 
@@ -52,6 +53,26 @@ with a MIGraphX `MULTIBROADCAST` shape error in the final masked mean-pooling
 pattern. To avoid runtime failures, sequence classifiers force CPU for baseline
 artifacts on AMD paths when no `model_sdpa_fp16.onnx` or compatible optimized
 artifact is present.
+
+ROCm 7.2 / MIGraphX 2.15 / `onnxruntime_migraphx` 1.23.2 improves ownership for
+the same mmBERT SDPA graph: ORT profiling shows a single MIGraphX-owned fused
+kernel instead of CPU node ownership. However, the public SDPA artifact still
+fails until its `com.microsoft::SkipLayerNormalization` node with an empty beta
+input is rewritten. Use the artifact preparation tool:
+
+```bash
+python onnx-binding/scripts/rewrite_migraphx_safe_onnx.py \
+  --input /models/mmbert32k-intent-classifier-merged/onnx/model_sdpa_fp16.onnx \
+  --output /models/mmbert32k-intent-classifier-merged/onnx/model_sdpa_migraphx.onnx \
+  --rewrite-skip-layer-normalization \
+  --fail-if-unchanged
+```
+
+Remote validation of this rewrite found CPU original vs CPU rewritten logits
+were identical on the sampled inputs, while rewritten MIGraphX matched
+`e2e-domain` labels at `1.0` against the CPU SDPA baseline. Warm synthetic
+latency on MIGraphX 2.15 was about 2-3 ms for seq64/128/256/512 after an
+initial 28-36 second compile per new shape.
 
 PII token classifiers use a separate token-safe artifact order:
 
@@ -311,6 +332,10 @@ Current remote quality evidence from the ROCm/MIGraphX validation host:
   `MIGraphXExecutionProvider, CPUExecutionProvider` while ORT profiling shows
   the graph's nodes are owned by `CPUExecutionProvider`. Treat MIGraphX as
   promoted only after ownership, parity, and latency all pass.
+- MIGraphX 2.15 owns the rewritten sequence SDPA graph but rejects the public
+  artifact's `com.microsoft::SkipLayerNormalization` node with an empty beta
+  input. Generate a rewritten artifact before treating sequence SDPA as
+  MIGraphX-ready on ORT 1.23.x.
 - MIGraphX cold compile can be much slower than warm inference; benchmark both
   session creation and warm latency. Sequence SDPA buckets are only enabled for
   explicit `VSR_AMD_SEQUENCE_PROVIDER_ORDER=migraphx-first` experiments. Set

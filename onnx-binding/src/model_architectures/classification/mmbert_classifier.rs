@@ -356,6 +356,20 @@ impl MmBertSequenceClassifier {
         provider: ClassifierExecutionProvider,
         has_ck_fa: bool,
     ) -> Vec<&'static str> {
+        Self::onnx_candidate_filenames_with_order(
+            provider,
+            has_ck_fa,
+            std::env::var("VSR_AMD_SEQUENCE_PROVIDER_ORDER")
+                .ok()
+                .as_deref(),
+        )
+    }
+
+    fn onnx_candidate_filenames_with_order(
+        provider: ClassifierExecutionProvider,
+        has_ck_fa: bool,
+        provider_order_env: Option<&str>,
+    ) -> Vec<&'static str> {
         let mut candidates = Vec::new();
         let mut push_candidate = |name: &'static str| {
             if !candidates.contains(&name) {
@@ -364,6 +378,9 @@ impl MmBertSequenceClassifier {
         };
 
         if Self::prefers_amd_onnx_artifacts(provider) {
+            if Self::sequence_sdpa_migraphx_first_enabled(provider_order_env) {
+                push_candidate("model_sdpa_migraphx.onnx");
+            }
             push_candidate("model_sdpa_fp16.onnx");
             if has_ck_fa {
                 push_candidate("model_fa_fp16.onnx");
@@ -444,14 +461,19 @@ impl MmBertSequenceClassifier {
     fn is_sequence_optimized_onnx_artifact(onnx_path: &Path) -> bool {
         matches!(
             onnx_path.file_name().and_then(|name| name.to_str()),
-            Some("model_sdpa_fp16.onnx" | "model_fa_fp16.onnx" | "model_fa.onnx")
+            Some(
+                "model_sdpa_migraphx.onnx"
+                    | "model_sdpa_fp16.onnx"
+                    | "model_fa_fp16.onnx"
+                    | "model_fa.onnx"
+            )
         )
     }
 
     fn is_sequence_sdpa_onnx_artifact(onnx_path: &Path) -> bool {
         matches!(
             onnx_path.file_name().and_then(|name| name.to_str()),
-            Some("model_sdpa_fp16.onnx")
+            Some("model_sdpa_migraphx.onnx" | "model_sdpa_fp16.onnx")
         )
     }
 
@@ -1591,6 +1613,26 @@ mod tests {
                 "model_sdpa_fp16.onnx",
                 "model_fa_fp16.onnx",
                 "model_fa.onnx",
+                "model.onnx",
+                "classifier.onnx",
+                "model_optimized.onnx",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_classifier_migraphx_first_prefers_migraphx_rewritten_sdpa_artifact() {
+        let candidates = MmBertSequenceClassifier::onnx_candidate_filenames_with_order(
+            ClassifierExecutionProvider::Rocm,
+            false,
+            Some("migraphx-first"),
+        );
+
+        assert_eq!(
+            candidates,
+            vec![
+                "model_sdpa_migraphx.onnx",
+                "model_sdpa_fp16.onnx",
                 "model.onnx",
                 "classifier.onnx",
                 "model_optimized.onnx",
