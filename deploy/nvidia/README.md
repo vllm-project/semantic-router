@@ -1,17 +1,25 @@
 # vLLM Semantic Router on NVIDIA CUDA
 
 This playbook documents how to run the **router itself** (BERT
-classifiers + embedding-driven KB lookup) on an NVIDIA GPU. It is the
-parallel of [`deploy/amd/README.md`](../amd/README.md), but inverted in
-intent:
+classifiers + embedding-driven KB lookup) on an NVIDIA GPU. Scope is
+router-side ML inference — BERT-based intent classification, PII
+detection, jailbreak guard, mmBERT embedding for Knowledge-Base
+signals, hallucination mitigation, feedback detection. The backend
+LLM is reached over the network and is **not** served from this host.
 
-- **`deploy/amd/`** assumes the host already runs an AMD vLLM backend on
-  MI-series GPUs and the router rides along the existing ROCm runtime.
-- **`deploy/nvidia/`** (this file) targets a host whose only GPU role is
-  **router-side ML inference** — BERT-based intent classification, PII
-  detection, jailbreak guard, mmBERT embedding for Knowledge-Base
-  signals, hallucination mitigation, feedback detection. The backend
-  LLM is reached over the network and is **not** served from this host.
+**How this relates to `deploy/amd/README.md`:** the two documents,
+despite their filename symmetry, are not parallel.
+[`deploy/amd/README.md`](../amd/README.md) is a *routing profile*
+guide (the `balance.yaml` recipe running against a single ROCm vLLM
+backend), which is a different concern. The AMD equivalent of *this*
+file — how to build the router image on ROCm and serve it with
+`vllm-sr serve --platform amd` — lives in
+[`docs/agent/amd-local.md`](../../docs/agent/amd-local.md), together
+with the `amd-local` entry in
+[`docs/agent/environments.md`](../../docs/agent/environments.md).
+A future refactor may move this playbook to a matching
+`docs/agent/nvidia-local.md` for structural symmetry; that reshuffle
+is intentionally out of scope for this PR.
 
 > **When this playbook is NOT for you:** upstream `onnx-binding/README.md`
 > documents CPU≈GPU latency parity for BERT-size embeddings at small
@@ -591,18 +599,22 @@ small BERT models on a fast GPU — that is expected, not a problem.)
 
 ---
 
-## Differences vs `deploy/amd/`
+## Router image differences: NVIDIA CUDA vs AMD ROCm
 
-| Aspect | `deploy/amd/` (ROCm) | `deploy/nvidia/` (this) |
+Apples-to-apples comparison of the two GPU-enabled router images,
+sourced from `src/vllm-sr/Dockerfile.cuda` and
+`src/vllm-sr/Dockerfile.rocm`:
+
+| Aspect | AMD ROCm router (`vllm-sr-rocm`) | NVIDIA CUDA router (`vllm-sr-cuda`) |
 |---|---|---|
-| Primary purpose | Run the **backend LLM** on AMD MI-series, router rides along | Run only the **router** on NVIDIA GPU |
-| Image | `vllm-sr-rocm:latest` (published to `ghcr.io`) | `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest` (published; local build still supported) |
+| Published tag | `ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest` | `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest` |
 | Base image | `rocm/dev-ubuntu-22.04:7.0` | `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04` |
 | ORT wheel | `onnxruntime_rocm-1.22.1` (radeon repo) | `onnxruntime-gpu==1.22.0` (PyPI) |
-| onnx-binding feature | `--features rocm-dynamic` | `--features "cuda,ort/load-dynamic"` |
-| Backend LLM | `vllm/vllm-openai-rocm:v0.17.0` running locally on `--device=/dev/kfd /dev/dri` | External, reached over the network |
+| `onnx-binding` feature | `--features rocm-dynamic` | `--features "cuda,ort/load-dynamic"` |
+| GPU passthrough | `--device=/dev/kfd --device=/dev/dri` | `--gpus all` (Docker) or CDI `nvidia.com/gpu=all` (Podman) |
+| CLI entrypoint (once #2421 lands) | `vllm-sr serve --platform amd` | `vllm-sr serve --platform nvidia` (currently only wires GPU passthrough — see #2421) |
 
-The two playbooks are independent; do not mix `--gpus all` with
+The two images are independent; do not mix `--gpus all` with
 `--device=/dev/kfd` on the same router container.
 
 ---
