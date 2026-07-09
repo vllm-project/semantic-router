@@ -40,17 +40,16 @@ translation:
 
 ### Auditing Translation Drift
 
-Run the local audit before updating or reviewing translated docs. The script can be run from the repository root or from `website/`:
+Run the local audit before updating or reviewing translated docs:
 
 ```bash
-cd website
-./scripts/check-translation-sync.sh --locale zh-Hans
+make docs-check-translations
 ```
 
-From the repository root, the equivalent command is:
+The default locale is `zh-Hans`. Override it when adding another locale:
 
 ```bash
-website/scripts/check-translation-sync.sh --locale zh-Hans
+make docs-check-translations DOCS_TRANSLATION_LOCALE=zh-Hans
 ```
 
 The audit checks the English `website/docs/` tree against `i18n/{locale}/docusaurus-plugin-content-docs/current/` and reports:
@@ -62,17 +61,17 @@ The audit checks the English `website/docs/` tree against `i18n/{locale}/docusau
 | `Outdated translations` | English source files with commits after the recorded `source_commit` |
 | `Status metadata mismatches` | `outdated` frontmatter does not match the computed source status |
 
-The audit is read-only. It does not generate translations or update frontmatter. It exits with status `1` when drift or metadata issues are found, so a nonzero exit can mean the check worked and found stale translations.
+The audit is read-only. It does not generate translations or update frontmatter. It returns nonzero when drift or metadata issues are found, so a failing `make docs-check-translations` can mean the check worked and found stale translations.
 
 To update only the `translation.outdated` status flags, run:
 
 ```bash
-website/scripts/check-translation-sync.sh --locale zh-Hans --fix-status || true
+make docs-fix-translation-status
 ```
 
-This mode does not change translated prose or advance `source_commit`. It only makes the banner state honest while translators update the content.
+This mode does not change translated prose or advance `source_commit`. It only makes the banner state honest while translators update the content. The make target succeeds when only translation drift remains and fails only for setup or usage errors.
 
-Exit status guide:
+Underlying script exit status guide:
 
 | Exit | Meaning |
 | ---- | ------- |
@@ -83,7 +82,7 @@ Exit status guide:
 To inspect a report without failing a local shell session, append `|| true`:
 
 ```bash
-website/scripts/check-translation-sync.sh --locale zh-Hans || true
+make docs-check-translations || true
 ```
 
 To verify a reported outdated file manually, compare the listed `source_commit` with the current English source history. For example:

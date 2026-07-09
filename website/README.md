@@ -135,8 +135,8 @@ Modify `docusaurus.config.ts` for:
 | `make docs-build` | Build for production |
 | `make docs-serve` | Preview production build |
 | `make docs-clean` | Clear build cache |
-| `website/scripts/check-translation-sync.sh --locale zh-Hans` | Audit Chinese translation coverage, metadata, and source drift |
-| `website/scripts/check-translation-sync.sh --locale zh-Hans --fix-status` | Update only Chinese translation `outdated` flags after an audit |
+| `make docs-check-translations` | Audit Chinese translation coverage, metadata, and source drift |
+| `make docs-fix-translation-status` | Update only Chinese translation `outdated` flags after an audit |
 
 ## Links
 
