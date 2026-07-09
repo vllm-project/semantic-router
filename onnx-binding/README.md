@@ -137,7 +137,10 @@ into startup.
 
 On ROCm 7.2 / MIGraphX 2.15 / `onnxruntime_migraphx` 1.23.2, sequence SDPA can
 be MIGraphX-owned after rewriting the exported `com.microsoft::SkipLayerNormalization`
-node with an empty beta input:
+node with an empty beta input. Intent and jailbreak require this rewritten
+artifact for the validated MIGraphX path; feedback SDPA passed without the
+rewrite in validation, while factcheck had one low-confidence NISQ200 label
+flip and should remain off the MIGraphX default path:
 
 ```bash
 python onnx-binding/scripts/rewrite_migraphx_safe_onnx.py \
