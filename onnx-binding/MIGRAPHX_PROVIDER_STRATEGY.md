@@ -323,6 +323,8 @@ Current remote quality evidence from the ROCm/MIGraphX validation host:
 | feedback `model_sdpa_fp16.onnx` | feedback validation 300 rows | MIGraphX 2.15 -> CPU | label match `1.0`, max logit drift `0.177723` | `2.817/2.854 ms` | raw SDPA artifact passed without rewrite |
 | factcheck `model_sdpa_fp16.onnx` | `factcheck-nisq` 200 rows | MIGraphX 2.15 -> CPU | label match `0.995`, one boundary mismatch | `2.788/2.812 ms` | not promoted to MIGraphX default |
 | PII `model_token_sdpa.onnx` FP32 | AI4Privacy validation 500 rows | MIGraphX 2.15 -> CPU with `MIGRAPHX_MLIR_USE_SPECIFIC_OPS=~attention` | entity match `1.0` against old CPU ONNX | `3.717/3.807 ms` | experimental until the attention workaround is part of an accepted runtime strategy |
+| embedding 2D Matryoshka `layer-6` / `layer-22` | synthetic seq512 smoke | MIGraphX 2.15 -> CPU | load/run OK, output `[1,512,768]` | first run `13.502 s` / `27.628 s` | smoke only; no embedding-quality eval in this matrix |
+| multimodal ONNX path | not run | not run | no remote multimodal ONNX artifact found | n/a | track as follow-up rather than silently claiming coverage |
 
 Steady shared-session concurrency microbench evidence for the MIGraphX-passing
 artifacts at batch=1/seq=512:
