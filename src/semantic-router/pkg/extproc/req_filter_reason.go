@@ -255,7 +255,15 @@ func applyDeepSeekOfficialReasoningMutation(mutation *reasoningRequestMutation, 
 		mutation.requestMap["thinking"] = map[string]interface{}{"type": "disabled"}
 		delete(mutation.requestMap, "reasoning_effort")
 	}
-	mutation.reasoningApplied = true
+	// The official OpenAI API and OpenRouter accept reasoning_effort as a
+	// top-level OpenAI-compatible field. Local vLLM-compatible servers keep the
+	// value under chat_template_kwargs.
+	return supportsTopLevelReasoningEffortHost(u.Hostname())
+}
+
+func supportsTopLevelReasoningEffortHost(host string) bool {
+	return strings.EqualFold(host, "api.openai.com") ||
+		strings.EqualFold(host, "openrouter.ai")
 }
 
 // getReasoningEffort returns the reasoning effort level for a given decision and model

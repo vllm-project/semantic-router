@@ -104,6 +104,10 @@ For first-run setup:
 
 After activation, `config.yaml` is written to the current directory and the router exits setup mode.
 
+:::tip[Local models with Ollama]
+If you want to run a local LLM without vLLM or a GPU stack, follow [Configure models with Ollama](ollama) for install, dashboard, and YAML steps with screenshots.
+:::
+
 ### 5. Test the Router
 
 ```bash
@@ -180,6 +184,7 @@ vllm-sr serve --image-pull-policy always
 
 ## Next Steps
 
+- **[Configure models with Ollama](ollama)** - Run a local LLM with Ollama and connect it through the setup dashboard
 - **[Install with Operator](k8s/operator)** - Deploy on Kubernetes or OpenShift with the operator
 - **[Configuration Guide](configuration)** - Advanced routing and signal configuration
 - **[API Documentation](../api/router)** - Complete API reference

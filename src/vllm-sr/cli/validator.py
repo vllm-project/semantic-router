@@ -1,6 +1,6 @@
 """Configuration validator for vLLM Semantic Router."""
 
-from typing import Dict, Any, List
+from typing import Any, List
 from cli.config_contract import (
     build_projection_reference_index,
     build_signal_reference_index,
@@ -26,14 +26,51 @@ from cli.models import (
 )
 from pydantic import ValidationError as PydanticValidationError
 from cli.utils import get_logger
-from cli.consts import EXTERNAL_API_MODEL_FORMATS
 from cli.validation_error import ValidationError
 from cli.validator_projection_embedding import (
     validate_embedding_modality_compatibility,
     validate_projection_score_dependencies,
 )
+from cli.validator_workflows import (
+    validate_static_workflow_roles,
+    validate_workflow_final_model,
+)
 
 log = get_logger(__name__)
+
+EXPECTED_ALGORITHM_BLOCK_BY_TYPE = {
+    "confidence": "confidence",
+    "ratings": "ratings",
+    "remom": "remom",
+    "fusion": "fusion",
+    "workflows": "workflows",
+    "router_dc": "router_dc",
+    "automix": "automix",
+    "hybrid": "hybrid",
+    "latency_aware": "latency_aware",
+    "multi_factor": "multi_factor",
+}
+
+ALGORITHM_CONFIG_BLOCKS = (
+    "confidence",
+    "ratings",
+    "remom",
+    "fusion",
+    "workflows",
+    "router_dc",
+    "automix",
+    "hybrid",
+    "latency_aware",
+    "multi_factor",
+)
+
+MIGRATED_LEARNING_ALGORITHM_TARGETS = {
+    "elo": "global.router.learning.adaptation",
+    "rl_driven": "global.router.learning.adaptation",
+    "gmtrouter": "global.router.learning.adaptation",
+    "bandit": "global.router.learning.adaptation",
+    "personalization": "global.router.learning.adaptation",
+}
 
 
 def _is_latency_condition(condition_type: str) -> bool:
@@ -136,57 +173,75 @@ def validate_latency_aware_algorithm_config(
     return errors
 
 
+def configured_algorithm_blocks(algorithm: Any) -> List[str]:
+    return [
+        block_name
+        for block_name in ALGORITHM_CONFIG_BLOCKS
+        if getattr(algorithm, block_name) is not None
+    ]
+
+
+def validate_migrated_learning_algorithm(decision, normalized_type: str):
+    algorithm = decision.algorithm
+    if (
+        normalized_type == "session_aware"
+        or getattr(algorithm, "session_aware", None) is not None
+    ):
+        return ValidationError(
+            f"decision '{decision.name}' algorithm.type=session_aware is no longer supported; "
+            "remove "
+            "algorithm.type=session_aware and configure a normal base algorithm only "
+            "when this decision needs one. Enable global.router.learning.protection "
+            "for session or conversation protection.",
+            field=f"decisions.{decision.name}.algorithm",
+        )
+    if normalized_type in MIGRATED_LEARNING_ALGORITHM_TARGETS:
+        return ValidationError(
+            f"decision '{decision.name}' algorithm.type={normalized_type} has moved to "
+            f"{MIGRATED_LEARNING_ALGORITHM_TARGETS[normalized_type]}; remove the learning "
+            "algorithm type and choose a request-time base algorithm only when needed",
+            field=f"decisions.{decision.name}.algorithm",
+        )
+    return None
+
+
+def validate_migrated_learning_blocks(decision) -> List[ValidationError]:
+    errors = []
+    algorithm = decision.algorithm
+    for block_name, target in MIGRATED_LEARNING_ALGORITHM_TARGETS.items():
+        if getattr(algorithm, block_name, None) is not None:
+            errors.append(
+                ValidationError(
+                    f"decision '{decision.name}' algorithm.{block_name} has moved to "
+                    f"{target}",
+                    field=f"decisions.{decision.name}.algorithm.{block_name}",
+                )
+            )
+    return errors
+
+
 def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
     errors = []
-
-    expected_block_by_type = {
-        "confidence": "confidence",
-        "ratings": "ratings",
-        "remom": "remom",
-        "elo": "elo",
-        "router_dc": "router_dc",
-        "automix": "automix",
-        "hybrid": "hybrid",
-        "rl_driven": "rl_driven",
-        "gmtrouter": "gmtrouter",
-        "latency_aware": "latency_aware",
-        "multi_factor": "multi_factor",
-        "session_aware": "session_aware",
-    }
 
     for decision in config.decisions:
         if decision.algorithm is None:
             continue
 
         algorithm = decision.algorithm
-        configured_blocks = []
-        if algorithm.confidence is not None:
-            configured_blocks.append("confidence")
-        if algorithm.ratings is not None:
-            configured_blocks.append("ratings")
-        if algorithm.remom is not None:
-            configured_blocks.append("remom")
-        if algorithm.elo is not None:
-            configured_blocks.append("elo")
-        if algorithm.router_dc is not None:
-            configured_blocks.append("router_dc")
-        if algorithm.automix is not None:
-            configured_blocks.append("automix")
-        if algorithm.hybrid is not None:
-            configured_blocks.append("hybrid")
-        if algorithm.rl_driven is not None:
-            configured_blocks.append("rl_driven")
-        if algorithm.gmtrouter is not None:
-            configured_blocks.append("gmtrouter")
-        if algorithm.latency_aware is not None:
-            configured_blocks.append("latency_aware")
-        if algorithm.multi_factor is not None:
-            configured_blocks.append("multi_factor")
-        if algorithm.session_aware is not None:
-            configured_blocks.append("session_aware")
+        configured_blocks = configured_algorithm_blocks(algorithm)
 
         display_type = (algorithm.type or "").strip() or "<empty>"
         normalized_type = (algorithm.type or "").strip().lower()
+
+        migrated_error = validate_migrated_learning_algorithm(decision, normalized_type)
+        if migrated_error is not None:
+            errors.append(migrated_error)
+            continue
+
+        migrated_block_errors = validate_migrated_learning_blocks(decision)
+        if migrated_block_errors:
+            errors.extend(migrated_block_errors)
+            continue
 
         if len(configured_blocks) > 1:
             errors.append(
@@ -198,7 +253,7 @@ def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
             )
             continue
 
-        expected_block = expected_block_by_type.get(normalized_type)
+        expected_block = EXPECTED_ALGORITHM_BLOCK_BY_TYPE.get(normalized_type)
         if expected_block is None:
             if configured_blocks:
                 errors.append(
@@ -524,7 +579,7 @@ def _maybe_hybrid_weight_error(
     # Weights are normalized at runtime, so they need not sum to 1.0 — but an
     # all-zero set leaves the selector with nothing to normalize, so reject it.
     total = (
-        (0.3 if h.elo_weight is None else h.elo_weight)
+        (0.3 if h.experience_weight is None else h.experience_weight)
         + (0.3 if h.router_dc_weight is None else h.router_dc_weight)
         + (0.2 if h.automix_weight is None else h.automix_weight)
         + (0.2 if h.cost_weight is None else h.cost_weight)
@@ -542,10 +597,10 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     """
     Validate algorithm configurations in decisions.
 
-    Validates both looper algorithms (confidence, ratings, remom, fusion)
-    and selection algorithms (static, elo, router_dc, automix, hybrid,
-    knn, kmeans, svm, mlp, multi_factor, latency_aware, session_aware,
-    rl_driven, gmtrouter).
+    Validates both looper algorithms (confidence, ratings, remom, fusion,
+    workflows)
+    and selection algorithms (static, router_dc, automix, hybrid,
+    knn, kmeans, svm, mlp, multi_factor, latency_aware).
 
     Args:
         config: User configuration
@@ -556,10 +611,9 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     errors = []
 
     # Valid algorithm types
-    looper_types = {"confidence", "ratings", "remom", "fusion"}
+    looper_types = {"confidence", "ratings", "remom", "fusion", "workflows"}
     selection_types = {
         "static",
-        "elo",
         "router_dc",
         "automix",
         "hybrid",
@@ -568,10 +622,7 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
         "svm",
         "mlp",
         "multi_factor",
-        "session_aware",
         "latency_aware",
-        "rl_driven",
-        "gmtrouter",
     }
     all_types = looper_types | selection_types
 
@@ -593,12 +644,36 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
             )
             continue
 
-        # elo config is optional (uses defaults)
         errors.extend(_router_dc_missing_description_errors(decision, algo, config))
 
         hybrid_err = _maybe_hybrid_weight_error(decision.name, algo_type, algo)
         if hybrid_err is not None:
             errors.append(hybrid_err)
+
+        workflows_cfg = getattr(algo, "workflows", None)
+        if algo_type == "workflows" and workflows_cfg is not None:
+            mode = workflows_cfg.mode or "static"
+            planner = workflows_cfg.planner
+            planner_model = (
+                getattr(planner, "model", None) if planner is not None else None
+            )
+            if mode == "dynamic" and not planner_model:
+                errors.append(
+                    ValidationError(
+                        f"Decision '{decision.name}' uses workflows mode=dynamic but does not set planner.model",
+                        field=f"decisions.{decision.name}.algorithm.workflows.planner.model",
+                    )
+                )
+            if mode == "dynamic" and workflows_cfg.roles:
+                errors.append(
+                    ValidationError(
+                        f"Decision '{decision.name}' uses workflows mode=dynamic but also sets static roles",
+                        field=f"decisions.{decision.name}.algorithm.workflows.roles",
+                    )
+                )
+            errors.extend(validate_workflow_final_model(decision, workflows_cfg))
+            if mode == "static":
+                errors.extend(validate_static_workflow_roles(decision, workflows_cfg))
 
     return errors
 

@@ -587,7 +587,7 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
       )}
 
       {/* Algorithms */}
-      {matchesSearch('algorithm confidence ratings remom fusion static elo') && (
+      {matchesSearch('algorithm confidence ratings remom fusion workflows static router_dc automix hybrid') && (
         <Section title={`Algorithms (${ALGORITHM_TYPES.length} types)`} icon="🧮">
           <p className={styles.hint}>
             Algorithms determine how to select among multiple models. Syntax:{' '}

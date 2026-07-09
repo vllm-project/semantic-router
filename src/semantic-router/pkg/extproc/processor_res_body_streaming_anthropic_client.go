@@ -51,6 +51,19 @@ func (r *OpenAIRouter) handleAnthropicClientStreamingResponseBody(
 		ctx.AnthropicStream = anthropic.NewStreamState()
 	}
 
+	// Envoy STREAMED mode delivers the response body split at arbitrary
+	// byte offsets, so an upstream SSE frame may straddle two chunks.
+	// Reassemble complete frames before translation and hold any trailing
+	// partial frame for the next chunk. Without this, a split frame fails
+	// to parse, the translated output is empty, and — because this handler
+	// suppresses the raw upstream bytes to keep ownership of the wire (see
+	// emptyAnthropicBodyMutation) — the frame vanishes entirely, hanging
+	// the client (issue #2316). The keepalive ping still flows below even
+	// when only a partial frame arrived, so a long split does not stall the
+	// connection.
+	frames, remainder := reassembleSSEFrames(ctx.PendingSSEBytes, responseBody)
+	ctx.PendingSSEBytes = remainder
+
 	// Inject a keepalive ping if the gap since the last chunk crossed
 	// the cadence threshold. Anthropic clients (including the SDK
 	// MessageStream accumulator) treat pings as no-ops; the value is
@@ -59,7 +72,7 @@ func (r *OpenAIRouter) handleAnthropicClientStreamingResponseBody(
 	// reaches the client before this chunk's content events.
 	pingBytes := maybeEmitPing(ctx.AnthropicStream)
 
-	openAIBytes, err := r.translateUpstreamToOpenAI(responseBody, ctx)
+	openAIBytes, err := r.translateUpstreamToOpenAI(frames, ctx)
 	if err != nil {
 		logging.Errorf("Failed to translate upstream streaming chunk to OpenAI: %v", err)
 		return emptyAnthropicBodyMutation()

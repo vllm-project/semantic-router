@@ -591,6 +591,7 @@ var latestTutorialAllowedDirectories = map[string]bool{
 	"signal":     true,
 	"decision":   true,
 	"algorithm":  true,
+	"learning":   true,
 	"plugin":     true,
 	"global":     true,
 	"projection": true,

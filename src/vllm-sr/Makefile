@@ -15,6 +15,15 @@ OUTPUT_DIR ?= .vllm-sr
 RUNTIME_CONTAINER ?= vllm-sr-router-container
 PLATFORMS ?= linux/amd64,linux/arm64
 BUILDX_BUILDER ?= vllm-sr-builder
+PROJECT_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -n1)
+GIT_REVISION := $(shell git -C ../.. rev-parse --short=7 HEAD 2>/dev/null || echo local)
+DASHBOARD_VERSION_SOURCE := $(origin DASHBOARD_VERSION)
+DASHBOARD_VERSION ?= $(PROJECT_VERSION)-dev.$(GIT_REVISION)
+ifeq ($(DASHBOARD_VERSION_SOURCE),undefined)
+ifneq ($(shell git -C ../.. status --porcelain -- dashboard/backend dashboard/frontend src/vllm-sr/pyproject.toml 2>/dev/null),)
+DASHBOARD_VERSION := $(DASHBOARD_VERSION).dirty
+endif
+endif
 
 help:
 	@echo "vLLM Semantic Router CLI - Development Commands"
@@ -149,7 +158,7 @@ docker-build-dashboard:
 	@echo "Image: $(FULL_DASHBOARD_IMAGE)"
 	@echo "This may take a few minutes..."
 	@echo ""
-	cd ../.. && docker build -t $(FULL_DASHBOARD_IMAGE) -f dashboard/backend/Dockerfile .
+	cd ../.. && docker build --build-arg DASHBOARD_VERSION=$(DASHBOARD_VERSION) -t $(FULL_DASHBOARD_IMAGE) -f dashboard/backend/Dockerfile .
 	@echo ""
 	@echo "Docker image built: $(FULL_DASHBOARD_IMAGE)"
 	@echo ""

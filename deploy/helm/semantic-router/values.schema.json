@@ -52,9 +52,9 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "rejectMultiReplicaLocalSelectorState": {
+        "rejectMultiReplicaLocalLearningState": {
           "type": "boolean",
-          "description": "Reject multi-replica router renders when active config uses local learning selector state."
+          "description": "Reject multi-replica router renders when active config enables Router Learning request-time local state."
         }
       }
     },

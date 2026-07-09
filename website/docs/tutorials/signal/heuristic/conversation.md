@@ -2,7 +2,7 @@
 
 ## Overview
 
-`conversation` detects structural facts about the shape of the incoming chat-completion request: how many user messages, whether a developer message is present, how many tools are defined, assistant tool-call counts, and completed tool cycles. It maps to `config/signal/conversation/` and is declared under `routing.signals.conversation`.
+`conversation` detects structural facts about the shape of the incoming chat-completion request: how many user messages, whether a developer message is present, how many tools are defined, assistant tool-call counts, completed tool cycles, and whether the current request is still inside an active tool loop. It maps to `config/signal/conversation/` and is declared under `routing.signals.conversation`.
 
 This family is heuristic: it inspects the request's `messages[]` and `tools[]` arrays without any model inference.
 
@@ -75,6 +75,7 @@ routing:
 | `tool_definition` | — | Counts entries in the request-level `tools[]` array. |
 | `assistant_tool_call` | — | Counts `tool_calls` across all assistant messages. |
 | `assistant_tool_cycle` | — | Counts `tool` role messages (completed tool results). |
+| `active_tool_loop` | — | Returns 1 when the latest request is actively continuing a tool loop: the last message is a tool result, the latest user turn directly follows a tool result, or assistant tool calls exceed returned tool results. Historical completed tool calls alone do not match. |
 
 ## Decision Usage
 

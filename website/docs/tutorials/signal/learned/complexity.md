@@ -63,3 +63,24 @@ routing:
 ```
 
 Use `complexity` with representative hard and easy examples so the learned boundary matches your real routing cost profile. `prototype_scoring` is a family-level config under `global.model_catalog.modules.complexity`, so every complexity rule shares the same prototype-bank construction and label-scoring policy. Each rule still builds separate hard and easy prototype banks before computing the hard-vs-easy margin.
+
+## Routing on a complexity rule
+
+A complexity rule classifies each request into one of three difficulty levels — `hard`, `easy`, or `medium` — and emits the match as `<rule>:<level>`. Decision conditions must therefore reference the rule **with the difficulty suffix**, not by the bare rule name:
+
+```yaml
+routing:
+  decisions:
+    - name: escalate_hard_prompts
+      priority: 160
+      rules:
+        operator: OR
+        conditions:
+          - type: complexity
+            name: needs_reasoning:hard # required form: <rule>:<hard|easy|medium>
+      modelRefs:
+        - model: qwen3-30b
+          use_reasoning: true
+```
+
+A bare `name: needs_reasoning` never matches at runtime — the classifier only ever emits `needs_reasoning:hard|easy|medium` — so config validation rejects the suffix-less form with a clear error.

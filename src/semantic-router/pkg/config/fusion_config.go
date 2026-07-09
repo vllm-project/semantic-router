@@ -16,6 +16,19 @@ const (
 	FusionGroundingReferenceHybrid  = "hybrid"  // detector against context if present, else cross-model NLI
 	FusionGroundingReferenceContext = "context" // detector against provided RAG/tool context only
 	FusionGroundingReferencePanel   = "panel"   // cross-model NLI only (panel as its own reference)
+
+	// Grounding policy modes select how the groundedness scores are used.
+	//   - weight:   keep every response, tell the judge to weight each panel
+	//               answer by its groundedness score (soft down-weighting).
+	//   - annotate: keep every response, surface groundedness notes to the judge
+	//               without a weighting instruction.
+	//   - filter:   hard-drop responses below min_score (keep min_keep).
+	// The default is weight. Hard-dropping the least mutually-consistent response
+	// regresses quality on contested factual items (it deletes the correct
+	// dissenter); see bench/grounded_fusion/FINDINGS.md.
+	FusionGroundingPolicyWeight   = "weight"
+	FusionGroundingPolicyAnnotate = "annotate"
+	FusionGroundingPolicyFilter   = "filter"
 )
 
 // FusionAlgorithmConfig configures Fusion-style panel execution for
@@ -26,6 +39,8 @@ type FusionAlgorithmConfig struct {
 	AnalysisModels               []string               `yaml:"analysis_models,omitempty" json:"analysis_models,omitempty"`
 	MaxConcurrent                int                    `yaml:"max_concurrent,omitempty" json:"max_concurrent,omitempty"`
 	MaxCompletionTokens          int                    `yaml:"max_completion_tokens,omitempty" json:"max_completion_tokens,omitempty"`
+	RoundTimeoutSeconds          int                    `yaml:"round_timeout_seconds,omitempty" json:"round_timeout_seconds,omitempty"`
+	MinSuccessfulResponses       int                    `yaml:"min_successful_responses,omitempty" json:"min_successful_responses,omitempty"`
 	Temperature                  *float64               `yaml:"temperature,omitempty" json:"temperature,omitempty"`
 	IncludeAnalysis              *bool                  `yaml:"include_analysis,omitempty" json:"include_analysis,omitempty"`
 	OnError                      string                 `yaml:"on_error,omitempty" json:"on_error,omitempty"`
@@ -43,6 +58,7 @@ type FusionAlgorithmConfig struct {
 type FusionGroundingConfig struct {
 	Enabled                 bool    `yaml:"enabled,omitempty" json:"enabled,omitempty"`
 	Reference               string  `yaml:"reference,omitempty" json:"reference,omitempty"`
+	Policy                  string  `yaml:"policy,omitempty" json:"policy,omitempty"`
 	MinScore                float64 `yaml:"min_score,omitempty" json:"min_score,omitempty"`
 	MinKeep                 int     `yaml:"min_keep,omitempty" json:"min_keep,omitempty"`
 	NLIContradictionPenalty float64 `yaml:"nli_contradiction_penalty,omitempty" json:"nli_contradiction_penalty,omitempty"`
@@ -59,14 +75,22 @@ type FusionRuntimeConfig struct {
 // from plugins[].id=fusion. It intentionally uses JSON tags first because it is
 // not a decision plugin config surface.
 type FusionRequestConfig struct {
-	ID                  string   `json:"id" yaml:"id"`
-	Enabled             *bool    `json:"enabled,omitempty" yaml:"enabled,omitempty"`
-	Model               string   `json:"model,omitempty" yaml:"model,omitempty"`
-	AnalysisModels      []string `json:"analysis_models,omitempty" yaml:"analysis_models,omitempty"`
-	MaxConcurrent       int      `json:"max_concurrent,omitempty" yaml:"max_concurrent,omitempty"`
-	MaxCompletionTokens int      `json:"max_completion_tokens,omitempty" yaml:"max_completion_tokens,omitempty"`
-	Temperature         *float64 `json:"temperature,omitempty" yaml:"temperature,omitempty"`
-	OnError             string   `json:"on_error,omitempty" yaml:"on_error,omitempty"`
+	ID                           string                 `json:"id" yaml:"id"`
+	Enabled                      *bool                  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Model                        string                 `json:"model,omitempty" yaml:"model,omitempty"`
+	AnalysisModels               []string               `json:"analysis_models,omitempty" yaml:"analysis_models,omitempty"`
+	MaxConcurrent                int                    `json:"max_concurrent,omitempty" yaml:"max_concurrent,omitempty"`
+	MaxCompletionTokens          int                    `json:"max_completion_tokens,omitempty" yaml:"max_completion_tokens,omitempty"`
+	RoundTimeoutSeconds          int                    `json:"round_timeout_seconds,omitempty" yaml:"round_timeout_seconds,omitempty"`
+	MinSuccessfulResponses       int                    `json:"min_successful_responses,omitempty" yaml:"min_successful_responses,omitempty"`
+	Temperature                  *float64               `json:"temperature,omitempty" yaml:"temperature,omitempty"`
+	IncludeAnalysis              *bool                  `json:"include_analysis,omitempty" yaml:"include_analysis,omitempty"`
+	IncludeIntermediateResponses *bool                  `json:"include_intermediate_responses,omitempty" yaml:"include_intermediate_responses,omitempty"`
+	OnError                      string                 `json:"on_error,omitempty" yaml:"on_error,omitempty"`
+	AnalysisTemplate             string                 `json:"analysis_template,omitempty" yaml:"analysis_template,omitempty"`
+	SynthesisTemplate            string                 `json:"synthesis_template,omitempty" yaml:"synthesis_template,omitempty"`
+	JudgePromptVersion           string                 `json:"judge_prompt_version,omitempty" yaml:"judge_prompt_version,omitempty"`
+	Grounding                    *FusionGroundingConfig `json:"grounding,omitempty" yaml:"grounding,omitempty"`
 }
 
 func DefaultFusionModelNames() []string {
@@ -78,6 +102,16 @@ func (c FusionRuntimeConfig) EffectiveModelNames() []string {
 		return normalizeFusionModelNames(c.ModelNames)
 	}
 	return DefaultFusionModelNames()
+}
+
+func (c *RouterConfig) ExposedFusionModelNames() []string {
+	if c == nil || !c.Looper.IsEnabled() {
+		return nil
+	}
+	if len(c.Looper.Fusion.ModelNames) == 0 && !c.HasFusionDecision() {
+		return nil
+	}
+	return c.Looper.Fusion.EffectiveModelNames()
 }
 
 func normalizeFusionModelNames(names []string) []string {
@@ -110,6 +144,18 @@ func (c *RouterConfig) IsFusionModelName(modelName string) bool {
 	return false
 }
 
+func (c *RouterConfig) HasFusionDecision() bool {
+	if c == nil {
+		return false
+	}
+	for _, decision := range c.Decisions {
+		if decision.Algorithm != nil && decision.Algorithm.Type == "fusion" {
+			return true
+		}
+	}
+	return false
+}
+
 func ValidateFusionAlgorithmConfig(cfg *FusionAlgorithmConfig) error {
 	if cfg == nil {
 		return nil
@@ -122,6 +168,12 @@ func ValidateFusionAlgorithmConfig(cfg *FusionAlgorithmConfig) error {
 	}
 	if cfg.MaxCompletionTokens < 0 {
 		return fmt.Errorf("max_completion_tokens must be >= 1 when set")
+	}
+	if cfg.RoundTimeoutSeconds < 0 {
+		return fmt.Errorf("round_timeout_seconds must be >= 1 when set")
+	}
+	if cfg.MinSuccessfulResponses < 0 {
+		return fmt.Errorf("min_successful_responses must be >= 1 when set")
 	}
 	if cfg.Temperature != nil && *cfg.Temperature < 0 {
 		return fmt.Errorf("temperature must be >= 0 when set")
@@ -143,6 +195,12 @@ func ValidateFusionGroundingConfig(cfg *FusionGroundingConfig) error {
 	default:
 		return fmt.Errorf("grounding.reference must be one of %q, %q or %q, got %q",
 			FusionGroundingReferenceHybrid, FusionGroundingReferenceContext, FusionGroundingReferencePanel, cfg.Reference)
+	}
+	switch strings.TrimSpace(cfg.Policy) {
+	case "", FusionGroundingPolicyWeight, FusionGroundingPolicyAnnotate, FusionGroundingPolicyFilter:
+	default:
+		return fmt.Errorf("grounding.policy must be one of %q, %q or %q, got %q",
+			FusionGroundingPolicyWeight, FusionGroundingPolicyAnnotate, FusionGroundingPolicyFilter, cfg.Policy)
 	}
 	if cfg.MinScore < 0 || cfg.MinScore > 1 {
 		return fmt.Errorf("grounding.min_score must be between 0 and 1")
@@ -178,8 +236,17 @@ func (c *FusionRequestConfig) Validate() error {
 	if c.MaxCompletionTokens < 0 {
 		return fmt.Errorf("max_completion_tokens must be >= 1 when set")
 	}
+	if c.RoundTimeoutSeconds < 0 {
+		return fmt.Errorf("round_timeout_seconds must be >= 1 when set")
+	}
+	if c.MinSuccessfulResponses < 0 {
+		return fmt.Errorf("min_successful_responses must be >= 1 when set")
+	}
 	if c.Temperature != nil && *c.Temperature < 0 {
 		return fmt.Errorf("temperature must be >= 0 when set")
+	}
+	if err := ValidateFusionGroundingConfig(c.Grounding); err != nil {
+		return err
 	}
 	return nil
 }

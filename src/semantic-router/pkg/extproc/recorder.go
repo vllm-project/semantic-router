@@ -201,7 +201,9 @@ func buildReplayRoutingRecord(
 		ReasoningMode:     replayReasoningMode(ctx),
 		ConfidenceScore:   ctx.VSRSelectedDecisionConfidence,
 		SelectionMethod:   ctx.VSRSelectionMethod,
-		SessionPolicy:     cloneReplayInterfaceMap(ctx.VSRSessionPolicy),
+		RouteDiagnostics:  buildReplayRouteDiagnostics(ctx, originalModel, selectedModel, decisionName, decisionTier, decisionPriority),
+		Learning:          buildReplayLearningDiagnostics(ctx),
+		SessionPolicy:     sessionPolicyMapForReplay(ctx),
 		Signals:           replaySignalState(ctx),
 		Projections:       replayProjectionState(ctx),
 		ProjectionScores:  cloneReplayFloat64Map(ctx.VSRProjectionScores),
@@ -232,6 +234,8 @@ func buildReplayRoutingRecord(
 		RAGBackend:           ctx.RAGBackend,
 		RAGContextLength:     len(ctx.RAGRetrievedContext),
 		RAGSimilarityScore:   ctx.RAGSimilarityScore,
+		CacheSimilarity:      ctx.VSRCacheSimilarity,
+		ContextTokenCount:    ctx.VSRContextTokenCount,
 		HallucinationEnabled: hallucinationEnabled,
 	}
 	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {

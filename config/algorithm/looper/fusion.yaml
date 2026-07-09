@@ -7,6 +7,8 @@ algorithm:
       - qwen3-32b
     max_concurrent: 2
     max_completion_tokens: 512
+    round_timeout_seconds: 90
+    min_successful_responses: 1
     temperature: 0.2
     include_analysis: true
     include_intermediate_responses: true

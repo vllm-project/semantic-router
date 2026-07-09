@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -29,12 +30,17 @@ type EmbeddingClassifier struct {
 	preloadMu          sync.Mutex
 	modelType          string
 	backend            string
+	provider           embedding.Provider
 }
 
 // NewEmbeddingClassifier creates a new EmbeddingClassifier.
 // Construction is side-effect free: model-backed candidate embedding warmup is
 // owned by InitializeRuntime or by the first classification request.
 func NewEmbeddingClassifier(cfgRules []config.EmbeddingRule, optConfig config.HNSWConfig) (*EmbeddingClassifier, error) {
+	return NewEmbeddingClassifierWithProvider(cfgRules, optConfig, nil)
+}
+
+func NewEmbeddingClassifierWithProvider(cfgRules []config.EmbeddingRule, optConfig config.HNSWConfig, provider embedding.Provider) (*EmbeddingClassifier, error) {
 	optConfig = optConfig.WithDefaults()
 
 	c := &EmbeddingClassifier{
@@ -46,6 +52,7 @@ func NewEmbeddingClassifier(cfgRules []config.EmbeddingRule, optConfig config.HN
 		preloadRequested:    optConfig.PreloadEmbeddings,
 		modelType:           optConfig.ModelType,
 		backend:             strings.ToLower(strings.TrimSpace(optConfig.Backend)),
+		provider:            provider,
 	}
 
 	logging.ComponentEvent("classifier", "embedding_classifier_initialized", map[string]interface{}{

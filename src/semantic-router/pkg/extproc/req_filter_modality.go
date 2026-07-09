@@ -23,6 +23,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/imagegen"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 // defaultImageResponseText is the canned text returned alongside generated images.
@@ -251,7 +252,7 @@ func (r *OpenAIRouter) executeDiffusion(ctx *RequestContext, cfg *config.RouterC
 		return nil, fmt.Errorf("failed to build image response: %w", err)
 	}
 
-	return r.buildImmediateResponseWithModality(200, responseBody, result), nil
+	return r.buildImmediateResponseWithModality(ctx, 200, responseBody, result), nil
 }
 
 // executeBoth calls the AR model for text and the diffusion model for image
@@ -313,7 +314,7 @@ func (r *OpenAIRouter) executeBoth(ctx *RequestContext, cfg *config.RouterConfig
 		return nil, fmt.Errorf("failed to build BOTH response: %w", err)
 	}
 
-	return r.buildImmediateResponseWithModality(200, responseBody, result), nil
+	return r.buildImmediateResponseWithModality(ctx, 200, responseBody, result), nil
 }
 
 func buildOmniRequestBody(openAIRequest *openai.ChatCompletionNewParams, ctx *RequestContext, omniModel string) ([]byte, error) {
@@ -431,11 +432,11 @@ func (r *OpenAIRouter) executeOmni(ctx *RequestContext, cfg *config.RouterConfig
 		if err != nil {
 			return nil, fmt.Errorf("failed to build omni Responses API response: %w", err)
 		}
-		return r.buildImmediateResponseWithModality(200, responseBody, result), nil
+		return r.buildImmediateResponseWithModality(ctx, 200, responseBody, result), nil
 	}
 
 	// For Chat Completions API, return the raw omni model response
-	return r.buildImmediateResponseWithModality(200, body, result), nil
+	return r.buildImmediateResponseWithModality(ctx, 200, body, result), nil
 }
 
 // buildOmniResponsesAPIResponse builds a Responses API format response from an omni model's
@@ -658,11 +659,23 @@ func (r *OpenAIRouter) buildBothResponse(textResp map[string]interface{}, imgRes
 	return json.Marshal(response)
 }
 
-// buildImmediateResponseWithModality creates a JSON immediate response and adds
-// the x-vsr-selected-modality header.
-func (r *OpenAIRouter) buildImmediateResponseWithModality(statusCode int, body []byte, result ModalityClassificationResult) *ext_proc.ProcessingResponse {
+// buildImmediateResponseWithModality creates an immediate response for the
+// modality routing paths (DIFFUSION, BOTH, omni). When the original client
+// request included stream: true, the response is converted to SSE
+// (text/event-stream) format so clients receive valid streaming responses.
+func (r *OpenAIRouter) buildImmediateResponseWithModality(ctx *RequestContext, statusCode int, body []byte, result ModalityClassificationResult) *ext_proc.ProcessingResponse {
 	// All callers are the diffusion/image-generation modality path (#2203).
-	procResp := r.createJSONResponseWithBody(statusCode, body, headers.ResponsePathImageGeneration)
+	var procResp *ext_proc.ProcessingResponse
+
+	if ctx.ExpectStreamingResponse {
+		// Convert the complete ChatCompletion JSON into SSE chunks so the
+		// client receives a valid streaming response instead of a JSON body
+		// with the wrong content-type.
+		sseBody := httputil.BuildStreamingModalityBody(body)
+		procResp = r.createSSEResponseWithBody(statusCode, sseBody, headers.ResponsePathImageGeneration)
+	} else {
+		procResp = r.createJSONResponseWithBody(statusCode, body, headers.ResponsePathImageGeneration)
+	}
 
 	modalityValue := result.Modality
 	if result.Method != "" {
