@@ -1,11 +1,8 @@
 import json
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DASHBOARD_PATH = (
-    REPO_ROOT / "src/vllm-sr/cli/templates/llm-router-dashboard.serve.json"
-)
+DASHBOARD_PATH = REPO_ROOT / "src/vllm-sr/cli/templates/llm-router-dashboard.serve.json"
 
 
 def test_grafana_dashboard_contains_router_observability_panels():
