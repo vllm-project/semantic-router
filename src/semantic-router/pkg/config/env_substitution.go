@@ -56,41 +56,47 @@ func expandEnvString(value string) string {
 			i++
 			continue
 		}
-		if i+1 >= len(escaped) {
-			builder.WriteByte('$')
-			break
-		}
-
-		switch escaped[i+1] {
-		case '{':
-			closeIdx := strings.IndexByte(escaped[i+2:], '}')
-			if closeIdx < 0 {
-				builder.WriteByte('$')
-				i++
-				continue
-			}
-			closeIdx += i + 2
-			builder.WriteString(resolveBracedEnvReference(escaped[i+2 : closeIdx]))
-			i = closeIdx + 1
-		case '$':
-			builder.WriteByte('$')
-			i += 2
-		default:
-			j := i + 1
-			for j < len(escaped) && isEnvNameByte(escaped[j]) {
-				j++
-			}
-			if j == i+1 {
-				builder.WriteByte('$')
-				i++
-				continue
-			}
-			builder.WriteString(os.Getenv(escaped[i+1 : j]))
-			i = j
-		}
+		expanded, next := expandEnvDollarToken(escaped, i)
+		builder.WriteString(expanded)
+		i = next
 	}
 
 	return strings.ReplaceAll(builder.String(), dollarPlaceholder, "$")
+}
+
+func expandEnvDollarToken(escaped string, start int) (string, int) {
+	if start+1 >= len(escaped) {
+		return "$", start + 1
+	}
+
+	switch escaped[start+1] {
+	case '{':
+		return expandBracedEnvToken(escaped, start)
+	case '$':
+		return "$", start + 2
+	default:
+		return expandUnbracedEnvToken(escaped, start)
+	}
+}
+
+func expandBracedEnvToken(escaped string, start int) (string, int) {
+	closeIdx := strings.IndexByte(escaped[start+2:], '}')
+	if closeIdx < 0 {
+		return "$", start + 1
+	}
+	closeIdx += start + 2
+	return resolveBracedEnvReference(escaped[start+2 : closeIdx]), closeIdx + 1
+}
+
+func expandUnbracedEnvToken(escaped string, start int) (string, int) {
+	end := start + 1
+	for end < len(escaped) && isEnvNameByte(escaped[end]) {
+		end++
+	}
+	if end == start+1 {
+		return "$", start + 1
+	}
+	return os.Getenv(escaped[start+1 : end]), end
 }
 
 func resolveBracedEnvReference(inner string) string {
