@@ -261,7 +261,7 @@ impl MmBertSequenceClassifier {
         );
         if !input_len_buckets.is_empty() {
             println!(
-                "INFO: Using sequence-classifier input buckets {:?} for AMD MIGraphX SDPA artifact {}",
+                "INFO: Using sequence-classifier input buckets {:?} for AMD MIGraphX sequence experiment {}",
                 input_len_buckets,
                 onnx_path.display(),
             );
@@ -490,8 +490,27 @@ impl MmBertSequenceClassifier {
         config: &MmBertClassifierConfig,
         buckets_env: Option<&str>,
     ) -> Vec<usize> {
+        Self::sequence_input_len_buckets_for_artifact_with_order(
+            onnx_path,
+            provider,
+            config,
+            buckets_env,
+            std::env::var("VSR_AMD_SEQUENCE_PROVIDER_ORDER")
+                .ok()
+                .as_deref(),
+        )
+    }
+
+    fn sequence_input_len_buckets_for_artifact_with_order(
+        onnx_path: &Path,
+        provider: ClassifierExecutionProvider,
+        config: &MmBertClassifierConfig,
+        buckets_env: Option<&str>,
+        provider_order_env: Option<&str>,
+    ) -> Vec<usize> {
         if Self::prefers_amd_onnx_artifacts(provider)
             && Self::is_sequence_sdpa_onnx_artifact(onnx_path)
+            && Self::sequence_sdpa_migraphx_first_enabled(provider_order_env)
         {
             Self::sequence_input_len_buckets_from_env(config, buckets_env)
         } else {
@@ -562,6 +581,41 @@ impl MmBertSequenceClassifier {
         value
             .map(|value| matches!(value, "1" | "true" | "TRUE" | "yes" | "YES"))
             .unwrap_or(false)
+    }
+
+    fn sequence_sdpa_migraphx_first_enabled(value: Option<&str>) -> bool {
+        value
+            .map(|value| {
+                matches!(
+                    value.trim().to_ascii_lowercase().as_str(),
+                    "migraphx" | "migraphx-first" | "mgx" | "mgx-first"
+                )
+            })
+            .unwrap_or(false)
+    }
+
+    fn amd_provider_preference_for_artifact(
+        onnx_path: &Path,
+    ) -> crate::core::ort_migraphx::AmdProviderPreference {
+        Self::amd_provider_preference_for_artifact_with_order(
+            onnx_path,
+            std::env::var("VSR_AMD_SEQUENCE_PROVIDER_ORDER")
+                .ok()
+                .as_deref(),
+        )
+    }
+
+    fn amd_provider_preference_for_artifact_with_order(
+        onnx_path: &Path,
+        provider_order_env: Option<&str>,
+    ) -> crate::core::ort_migraphx::AmdProviderPreference {
+        if Self::is_sequence_sdpa_onnx_artifact(onnx_path)
+            && !Self::sequence_sdpa_migraphx_first_enabled(provider_order_env)
+        {
+            crate::core::ort_migraphx::AmdProviderPreference::RocmFirst
+        } else {
+            crate::core::ort_migraphx::AmdProviderPreference::MigraphxFirst
+        }
     }
 
     fn session_provider_for_candidate(
@@ -644,9 +698,11 @@ impl MmBertSequenceClassifier {
                     let ck_fa_lib = crate::core::ort_migraphx::ck_flash_attention_library_for_model(
                         onnx_path.as_ref(),
                     );
-                    match crate::core::ort_migraphx::create_amd_session(
+                    let preference = Self::amd_provider_preference_for_artifact(onnx_path.as_ref());
+                    match crate::core::ort_migraphx::create_amd_session_with_preference(
                         onnx_path.as_ref(),
                         ck_fa_lib.as_deref(),
+                        preference,
                     ) {
                         Ok(amd_session) => return Ok(amd_session.session),
                         Err(e) => println!("WARNING: AMD execution providers failed: {e}"),
@@ -1565,13 +1621,28 @@ mod tests {
     }
 
     #[test]
-    fn test_sequence_sdpa_artifact_uses_default_buckets_on_amd() {
+    fn test_sequence_sdpa_artifact_does_not_bucket_by_default_on_amd() {
         let config = MmBertClassifierConfig::default();
-        let buckets = MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact(
+        let buckets = MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact_with_order(
             Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
             ClassifierExecutionProvider::Rocm,
             &config,
             None,
+            None,
+        );
+
+        assert!(buckets.is_empty());
+    }
+
+    #[test]
+    fn test_sequence_sdpa_artifact_uses_buckets_for_migraphx_first_experiment() {
+        let config = MmBertClassifierConfig::default();
+        let buckets = MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact_with_order(
+            Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
+            ClassifierExecutionProvider::Rocm,
+            &config,
+            None,
+            Some("migraphx-first"),
         );
 
         assert_eq!(buckets, vec![64, 128, MAX_CLASSIFICATION_SEQ_LEN]);
@@ -1580,11 +1651,12 @@ mod tests {
     #[test]
     fn test_sequence_buckets_can_be_disabled() {
         let config = MmBertClassifierConfig::default();
-        let buckets = MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact(
+        let buckets = MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact_with_order(
             Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
             ClassifierExecutionProvider::Rocm,
             &config,
             Some("dynamic"),
+            Some("migraphx-first"),
         );
 
         assert!(buckets.is_empty());
@@ -1593,11 +1665,12 @@ mod tests {
     #[test]
     fn test_sequence_buckets_accept_operator_override() {
         let config = MmBertClassifierConfig::default();
-        let buckets = MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact(
+        let buckets = MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact_with_order(
             Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
             ClassifierExecutionProvider::Rocm,
             &config,
             Some("64, 512, 512, 9999"),
+            Some("migraphx-first"),
         );
 
         assert_eq!(buckets, vec![64, MAX_CLASSIFICATION_SEQ_LEN]);
@@ -1608,22 +1681,50 @@ mod tests {
         let config = MmBertClassifierConfig::default();
 
         assert_eq!(
-            MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact(
+            MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact_with_order(
                 Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
                 ClassifierExecutionProvider::Cpu,
                 &config,
                 None,
+                Some("migraphx-first"),
             ),
             Vec::<usize>::new()
         );
         assert_eq!(
-            MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact(
+            MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact_with_order(
                 Path::new("/models/intent/onnx/model_fa_fp16.onnx"),
                 ClassifierExecutionProvider::Rocm,
                 &config,
                 None,
+                Some("migraphx-first"),
             ),
             Vec::<usize>::new()
+        );
+    }
+
+    #[test]
+    fn test_sequence_sdpa_artifact_prefers_rocm_by_default() {
+        let preference = MmBertSequenceClassifier::amd_provider_preference_for_artifact_with_order(
+            Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
+            None,
+        );
+
+        assert_eq!(
+            preference,
+            crate::core::ort_migraphx::AmdProviderPreference::RocmFirst
+        );
+    }
+
+    #[test]
+    fn test_sequence_sdpa_artifact_can_opt_into_migraphx_first() {
+        let preference = MmBertSequenceClassifier::amd_provider_preference_for_artifact_with_order(
+            Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
+            Some("migraphx-first"),
+        );
+
+        assert_eq!(
+            preference,
+            crate::core::ort_migraphx::AmdProviderPreference::MigraphxFirst
         );
     }
 

@@ -39,7 +39,10 @@ The active AMD profile contains 13 routing decisions:
 
 The AMD router image uses ONNX Runtime for router-owned ONNX signal models with
 MIGraphX, ROCm, and CPU providers available in one runtime. Portable mmBERT
-SDPA artifacts use `MIGraphXExecutionProvider -> CPUExecutionProvider`.
+SDPA sequence-classifier artifacts use
+`ROCMExecutionProvider -> MIGraphXExecutionProvider -> CPUExecutionProvider` by
+default because ROCm EP currently owns and runs that graph far faster than ORT
+MIGraphX on the validation image.
 CK FlashAttention optimized artifacts are an explicit ROCm-only exception
 because their custom op library is registered through the ROCm EP path; those
 sessions use `ROCMExecutionProvider -> CPUExecutionProvider`. The image gets
@@ -61,12 +64,12 @@ MLIR fused-attention NaN seen in token-classifier graphs. The AMD image does
 not set this globally because the workaround has only been validated for the PII
 token path, not for every router-owned ONNX artifact.
 
-MIGraphX cold compile is expected on first use of a new compiled shape. The AMD
-sequence-classifier path therefore buckets portable SDPA artifacts to `64,128,512`
-tokens by default. Operators can use `VSR_AMD_MIGRAPHX_SEQUENCE_BUCKETS=512`
-for a single fixed shape, set `VSR_AMD_MIGRAPHX_SEQUENCE_BUCKETS=dynamic` while
-debugging dynamic shapes, or enable startup warmup with
-`VSR_AMD_MIGRAPHX_WARMUP=1` to pay first-run compile before real traffic.
+MIGraphX cold compile is expected on first use of a new compiled shape. Sequence
+SDPA classifiers do not bucket by default because they are ROCm-first. Operators
+who explicitly test MIGraphX sequence ownership can set
+`VSR_AMD_SEQUENCE_PROVIDER_ORDER=migraphx-first`, choose buckets with
+`VSR_AMD_MIGRAPHX_SEQUENCE_BUCKETS=64,128,512` or `512`, and enable startup
+warmup with `VSR_AMD_MIGRAPHX_WARMUP=1`.
 
 See `onnx-binding/MIGRAPHX_PROVIDER_STRATEGY.md` for the full provider order,
 fallback diagnostics, and benchmark harness.

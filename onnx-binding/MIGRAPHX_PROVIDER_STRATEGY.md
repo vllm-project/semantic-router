@@ -1,4 +1,4 @@
-# AMD MIGraphX ONNX Runtime Provider Strategy
+# AMD ONNX Runtime Provider Strategy
 
 This note defines the AMD provider policy for router-owned ONNX signal models.
 It covers mmBERT embedding, mmBERT sequence classifiers, PII token classifiers,
@@ -6,11 +6,13 @@ and multimodal ONNX paths owned by `onnx-binding`.
 
 ## Provider Order
 
-AMD ONNX sessions use this provider order when the loaded ONNX Runtime exposes
-all AMD providers:
+AMD ONNX sessions use artifact-specific provider order when the loaded ONNX
+Runtime exposes all AMD providers:
 
 ```text
-MIGraphXExecutionProvider -> ROCmExecutionProvider -> CPUExecutionProvider
+portable sequence SDPA classifiers: ROCmExecutionProvider -> MIGraphXExecutionProvider -> CPUExecutionProvider
+CK FlashAttention artifacts:        ROCmExecutionProvider -> CPUExecutionProvider
+MIGraphX experiments/fallbacks:      MIGraphXExecutionProvider -> ROCmExecutionProvider -> CPUExecutionProvider
 ```
 
 The AMD router image installs AMD's `onnxruntime_rocm` 1.22.x wheel together
@@ -37,11 +39,14 @@ CPU/CUDA/OpenVINO: model.onnx -> classifier.onnx -> model_optimized.onnx -> mode
 ```
 
 `model.onnx` remains the CPU baseline artifact. AMD paths prefer
-`model_sdpa_fp16.onnx` when it is present so portable classifiers use MIGraphX
-before considering ROCm-owned CK FlashAttention artifacts. Remote validation
-with ROCm 7.0, ONNX Runtime ROCm 1.22.x, and MIGraphX 2.13 loaded and ran the
-intent, jailbreak, factcheck, and feedback SDPA artifacts at seq=32/512 with
-finite logits. Raw sequence-classifier baseline artifacts such as intent,
+`model_sdpa_fp16.onnx` when it is present, but the default provider order for
+that artifact is ROCm-first. Remote validation with ROCm 7.0, ONNX Runtime ROCm
+1.22.x, and MIGraphX 2.13 found ROCm EP owns and runs this SDPA graph at
+single-digit millisecond warm latency, while an ORT MIGraphX session can create
+successfully yet leave the graph owned by `CPUExecutionProvider` in ORT
+profiling. MIGraphX-first sequence SDPA execution is therefore an explicit
+experiment enabled with `VSR_AMD_SEQUENCE_PROVIDER_ORDER=migraphx-first`, not
+the default. Raw sequence-classifier baseline artifacts such as intent,
 factcheck, and feedback `model.onnx` compile for seq=1 but fail at seq=32/512
 with a MIGraphX `MULTIBROADCAST` shape error in the final masked mean-pooling
 pattern. To avoid runtime failures, sequence classifiers force CPU for baseline
@@ -117,20 +122,21 @@ and other CK-FA-only artifacts use the ROCm-owned path.
 ## Cold Compile Mitigation
 
 MIGraphX is a graph compiler, so cold session creation or first use can be much
-slower than warm inference. The router-owned sequence classifier path mitigates
-the most common source of repeated compile cost by bucketing AMD
-`model_sdpa_fp16.onnx` inputs. The default buckets are:
+slower than warm inference. Sequence SDPA classifiers do not bucket by default
+because the default provider order is ROCm-first and ROCm EP handles dynamic
+request lengths efficiently. When explicitly testing MIGraphX-first sequence
+ownership, enable it and then choose buckets:
 
-```text
-[batch, 64]
-[batch, 128]
-[batch, 512]
+```bash
+VSR_AMD_SEQUENCE_PROVIDER_ORDER=migraphx-first
+VSR_AMD_MIGRAPHX_SEQUENCE_BUCKETS=64,128,512
 ```
 
-This applies only to AMD portable SDPA sequence-classifier artifacts. CPU paths,
-CK FlashAttention artifacts, and PII token classifiers keep their existing input
-contracts. Operators can override the buckets, use a single 512-token bucket, or
-opt out for dynamic-shape debugging with:
+This applies only to AMD portable SDPA sequence-classifier artifacts in the
+MIGraphX-first experiment. CPU paths, ROCm-first SDPA, CK FlashAttention
+artifacts, and PII token classifiers keep their existing input contracts.
+Operators can override the buckets, use a single 512-token bucket, or opt out
+for dynamic-shape debugging with:
 
 ```bash
 VSR_AMD_MIGRAPHX_SEQUENCE_BUCKETS=64,128,512
@@ -277,7 +283,7 @@ Issue-level validation should cover:
 - factcheck classifier.
 - feedback classifier.
 - multimodal ONNX smoke path.
-- portable ONNX with MIGraphX-first ownership.
+- portable sequence SDPA with ROCm ownership and MIGraphX fallback/opt-in.
 - CK FlashAttention optimized ONNX with ROCm ownership.
 - CPU fallback when AMD providers are unavailable.
 - long-context and higher-batch/high-concurrency mixes.
@@ -289,29 +295,31 @@ Current remote quality evidence from the ROCm/MIGraphX validation host:
 
 - factcheck NISQ20 fixed-shape matrix:
   `/tmp/sr-quality-factcheck-nisq20-fixed-20260708-171406`. `model.onnx` CPU,
-  `model_sdpa_fp16.onnx` CPU, and `model_sdpa_fp16.onnx` auto/MIGraphX all
-  matched the baseline labels at `1.0`; auto selected
-  `MIGraphXExecutionProvider, CPUExecutionProvider`; max absolute logit drift
-  was `0.02563619613647461`.
+  `model_sdpa_fp16.onnx` CPU, and `model_sdpa_fp16.onnx` auto all matched the
+  baseline labels at `1.0`; max absolute logit drift was
+  `0.02563619613647461`. Later ORT profiling showed selected provider lists are
+  not sufficient proof of MIGraphX node ownership, so provider ownership must be
+  checked with ORT profiling or the bench harness.
 - jailbreak mixed20 fixed-shape matrix:
   `/tmp/sr-quality-jailbreak-mixed20-fixed-20260708-171644`. `model.onnx` CPU,
-  `model_sdpa_fp16.onnx` CPU, and `model_sdpa_fp16.onnx` auto/MIGraphX all
-  matched the baseline labels at `1.0`; auto selected
-  `MIGraphXExecutionProvider, CPUExecutionProvider`; max absolute logit drift
-  was `0.1847209930419922`.
+  `model_sdpa_fp16.onnx` CPU, and `model_sdpa_fp16.onnx` auto all matched the
+  baseline labels at `1.0`; max absolute logit drift was `0.1847209930419922`.
 
 ## Known Limits
 
+- ORT provider lists are not provider ownership proof. An ORT session can report
+  `MIGraphXExecutionProvider, CPUExecutionProvider` while ORT profiling shows
+  the graph's nodes are owned by `CPUExecutionProvider`. Treat MIGraphX as
+  promoted only after ownership, parity, and latency all pass.
 - MIGraphX cold compile can be much slower than warm inference; benchmark both
-  session creation and warm latency. AMD SDPA sequence classifiers now use
-  `64,128,512` input buckets by default to avoid one compile per observed request
-  length while keeping short-request latency lower than an always-512 shape. Set
+  session creation and warm latency. Sequence SDPA buckets are only enabled for
+  explicit `VSR_AMD_SEQUENCE_PROVIDER_ORDER=migraphx-first` experiments. Set
   `VSR_AMD_MIGRAPHX_WARMUP=1` to pay first-run warmup before serving real
   requests for the configured buckets.
 - Raw mmBERT32k sequence classifiers that use final masked mean pooling
   currently hit a MIGraphX `MULTIBROADCAST` shape error for seq=32/512. This
   has been reproduced for intent, factcheck, and feedback `model.onnx`
-  artifacts. Use `model_sdpa_fp16.onnx` for AMD/MIGraphX acceleration when
+  artifacts. Use `model_sdpa_fp16.onnx` for AMD ROCm acceleration when
   available; otherwise sequence classifiers fall back to CPU for baseline
   artifacts.
 - Public PII `model_sdpa_fp16.onnx` is not token-classification compatible: it

@@ -2,9 +2,9 @@
 
 This module provides ONNX Runtime-based signal models, including mmBERT
 embedding generation with 2D Matryoshka support and mmBERT classifier paths.
-CPU inference remains supported everywhere. AMD deployments use a
-MIGraphX-first ONNX Runtime provider policy with CPU fallback, plus ROCm
-fallback when the loaded ORT exposes ROCm EP; see
+CPU inference remains supported everywhere. AMD deployments use an
+artifact-aware ONNX Runtime provider policy with ROCm, MIGraphX, and CPU
+fallbacks; see
 [MIGRAPHX_PROVIDER_STRATEGY.md](MIGRAPHX_PROVIDER_STRATEGY.md).
 
 ## Features
@@ -98,7 +98,7 @@ cargo build --release --example benchmark_cpu_vs_gpu
 ./target/release/examples/benchmark_cpu_vs_gpu ./mmbert-onnx/onnx
 ```
 
-### Quick Start: AMD GPU (MIGraphX-first)
+### Quick Start: AMD GPU
 
 Classifier artifact selection is provider-aware: AMD sequence classifiers prefer
 `model_sdpa_fp16.onnx` when present, while CPU paths keep `model.onnx` as the
@@ -123,16 +123,17 @@ CK FlashAttention artifacts (`model_fa*.onnx`) are ROCm-owned and are only used
 when `ORT_CK_FLASH_ATTN_LIB` is set and the loaded ONNX Runtime exposes
 `ROCMExecutionProvider`. The AMD runtime image uses AMD's `onnxruntime_rocm`
 wheel plus the system `migraphx` package so MIGraphX, ROCm, and CPU are all
-available. Sequence classifiers still prefer portable SDPA artifacts first;
-embedding and other CK-FA-only artifacts use ROCm.
+available. Sequence classifiers still prefer portable SDPA artifacts first and
+run them with ROCm-first provider order by default; embedding and other
+CK-FA-only artifacts use ROCm.
 
-AMD SDPA sequence classifiers use `64,128,512` input buckets on MIGraphX by
-default. This keeps MIGraphX from compiling a separate shape for every observed
-request length without forcing short requests through the 512-token path. Use
-`VSR_AMD_MIGRAPHX_SEQUENCE_BUCKETS=512` for a single fixed shape, or
-`VSR_AMD_MIGRAPHX_SEQUENCE_BUCKETS=dynamic` when debugging dynamic shape
-behavior. To move first-run MIGraphX compile/warmup cost into startup, set
-`VSR_AMD_MIGRAPHX_WARMUP=1`.
+MIGraphX sequence SDPA ownership is an explicit experiment because ORT
+profiling can show `MIGraphXExecutionProvider` in the selected provider list
+while nodes are still owned by `CPUExecutionProvider`. To test MIGraphX-first
+sequence SDPA, set `VSR_AMD_SEQUENCE_PROVIDER_ORDER=migraphx-first`; then use
+`VSR_AMD_MIGRAPHX_SEQUENCE_BUCKETS=64,128,512` or another bucket list to reduce
+per-shape cold compile, and `VSR_AMD_MIGRAPHX_WARMUP=1` to move first-run cost
+into startup.
 
 Before promoting an optimized ONNX artifact, run
 `scripts/eval_router_signal_artifacts.py` against the old artifact, new
@@ -141,7 +142,7 @@ datasets such as `factcheck-nisq`, `jailbreak-mixed`, and AI4Privacy-compatible
 PII rows so quality regressions are caught before provider defaults change.
 
 ```bash
-# Build with MIGraphX-first AMD support and dynamic ORT loading
+# Build with AMD dynamic ORT loading
 cargo build --release --features migraphx-dynamic --example benchmark_mmbert_ort_providers
 
 # Run provider inventory, parity, and latency validation
@@ -172,7 +173,7 @@ This is the recommended configuration. CPU performance equals GPU for this model
 ### Building with GPU Support (Optional)
 
 ```bash
-# AMD GPU (MIGraphX-first with ROCm fallback when the loaded ORT exposes ROCm EP)
+# AMD GPU (artifact-aware ROCm/MIGraphX/CPU policy)
 cargo build --release --features migraphx-dynamic
 
 # NVIDIA GPU (CUDA)

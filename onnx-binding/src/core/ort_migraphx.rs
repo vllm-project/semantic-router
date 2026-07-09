@@ -14,6 +14,21 @@ pub struct AmdSession {
     pub fallback_reason: Option<String>,
 }
 
+/// Preferred AMD provider order for a specific ONNX artifact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AmdProviderPreference {
+    /// Prefer MIGraphX, then fall back to ROCm.
+    MigraphxFirst,
+    /// Prefer ROCm, then fall back to MIGraphX.
+    RocmFirst,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum AmdProvider {
+    Migraphx,
+    Rocm,
+}
+
 /// Register MIGraphX through ONNX Runtime's generic provider-options API.
 ///
 /// The typed `OrtMIGraphXProviderOptions` layout changed across ORT releases.
@@ -95,70 +110,57 @@ pub fn is_ck_flash_attention_model(onnx_path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// Create an AMD session using the Semantic Router AMD provider policy.
+/// Create an AMD session using the default Semantic Router AMD provider policy.
 ///
 /// Portable ONNX artifacts use MIGraphX first, then ROCm. CK FlashAttention
 /// artifacts are an explicit exception: the custom op is registered only on
 /// the ROCm path, so those sessions skip MIGraphX and go straight to ROCm.
 pub fn create_amd_session(onnx_path: &Path, ck_fa_lib: Option<&str>) -> Result<AmdSession, String> {
+    create_amd_session_with_preference(onnx_path, ck_fa_lib, AmdProviderPreference::MigraphxFirst)
+}
+
+/// Create an AMD session using an artifact-specific provider order.
+///
+/// MIGraphX is the forward-compatible provider for ORT 1.23+ AMD builds, but
+/// some router-owned artifacts are still faster or only valid on ROCm EP. The
+/// caller chooses the order based on artifact ownership and validation data.
+pub fn create_amd_session_with_preference(
+    onnx_path: &Path,
+    ck_fa_lib: Option<&str>,
+    preference: AmdProviderPreference,
+) -> Result<AmdSession, String> {
     let mut fallback_reasons = Vec::new();
 
-    if ck_fa_lib.is_none() {
-        #[cfg(feature = "migraphx")]
-        {
-            println!("INFO: Attempting MIGraphX execution provider...");
-            match create_migraphx_session(onnx_path) {
-                Ok(session) => {
-                    println!("INFO: Using MIGraphX execution provider (AMD GPU) - verified");
-                    return Ok(AmdSession {
-                        session,
-                        provider: "migraphx",
-                        fallback_reason: None,
-                    });
-                }
-                Err(error) => {
-                    let reason = format!("MIGraphX EP failed: {error}");
-                    println!("WARN: {reason}");
-                    fallback_reasons.push(reason);
-                }
-            }
-        }
-        #[cfg(not(feature = "migraphx"))]
-        {
-            fallback_reasons.push("MIGraphX feature is not enabled".to_string());
-        }
-    } else {
+    if ck_fa_lib.is_some() {
         let reason = "CK FlashAttention custom op requires ROCm EP; skipping MIGraphX".to_string();
         println!("INFO: {reason}");
         fallback_reasons.push(reason);
     }
 
-    #[cfg(feature = "rocm")]
-    {
-        println!("INFO: Attempting ROCm execution provider...");
-        match create_rocm_session(onnx_path, ck_fa_lib) {
-            Ok(session) => {
-                println!("INFO: Using ROCm execution provider (AMD GPU) - verified");
-                return Ok(AmdSession {
-                    session,
-                    provider: "rocm",
-                    fallback_reason: if fallback_reasons.is_empty() {
-                        None
-                    } else {
-                        Some(fallback_reasons.join("; "))
-                    },
-                });
+    let order: &[AmdProvider] = match preference {
+        AmdProviderPreference::MigraphxFirst => &[AmdProvider::Migraphx, AmdProvider::Rocm],
+        AmdProviderPreference::RocmFirst => &[AmdProvider::Rocm, AmdProvider::Migraphx],
+    };
+
+    for provider in order {
+        match provider {
+            AmdProvider::Migraphx if ck_fa_lib.is_some() => {}
+            AmdProvider::Migraphx => {
+                match try_create_migraphx_amd_session(onnx_path, fallback_reason(&fallback_reasons))
+                {
+                    Ok(session) => return Ok(session),
+                    Err(reason) => fallback_reasons.push(reason),
+                }
             }
-            Err(error) => {
-                let reason = format!("ROCm EP failed: {error}");
-                println!("WARN: {reason}");
-                fallback_reasons.push(reason);
-            }
+            AmdProvider::Rocm => match try_create_rocm_amd_session(
+                onnx_path,
+                ck_fa_lib,
+                fallback_reason(&fallback_reasons),
+            ) {
+                Ok(session) => return Ok(session),
+                Err(reason) => fallback_reasons.push(reason),
+            },
         }
-    }
-    #[cfg(not(feature = "rocm"))]
-    {
-        fallback_reasons.push("ROCm feature is not enabled".to_string());
     }
 
     if fallback_reasons.is_empty() {
@@ -168,6 +170,75 @@ pub fn create_amd_session(onnx_path: &Path, ck_fa_lib: Option<&str>) -> Result<A
         ))
     } else {
         Err(fallback_reasons.join("; "))
+    }
+}
+
+fn fallback_reason(fallback_reasons: &[String]) -> Option<String> {
+    if fallback_reasons.is_empty() {
+        None
+    } else {
+        Some(fallback_reasons.join("; "))
+    }
+}
+
+fn try_create_migraphx_amd_session(
+    onnx_path: &Path,
+    fallback_reason: Option<String>,
+) -> Result<AmdSession, String> {
+    #[cfg(feature = "migraphx")]
+    {
+        println!("INFO: Attempting MIGraphX execution provider...");
+        match create_migraphx_session(onnx_path) {
+            Ok(session) => {
+                println!("INFO: Using MIGraphX execution provider (AMD GPU) - verified");
+                return Ok(AmdSession {
+                    session,
+                    provider: "migraphx",
+                    fallback_reason,
+                });
+            }
+            Err(error) => {
+                let reason = format!("MIGraphX EP failed: {error}");
+                println!("WARN: {reason}");
+                return Err(reason);
+            }
+        }
+    }
+
+    #[cfg(not(feature = "migraphx"))]
+    {
+        Err("MIGraphX feature is not enabled".to_string())
+    }
+}
+
+fn try_create_rocm_amd_session(
+    onnx_path: &Path,
+    ck_fa_lib: Option<&str>,
+    fallback_reason: Option<String>,
+) -> Result<AmdSession, String> {
+    #[cfg(feature = "rocm")]
+    {
+        println!("INFO: Attempting ROCm execution provider...");
+        match create_rocm_session(onnx_path, ck_fa_lib) {
+            Ok(session) => {
+                println!("INFO: Using ROCm execution provider (AMD GPU) - verified");
+                Ok(AmdSession {
+                    session,
+                    provider: "rocm",
+                    fallback_reason,
+                })
+            }
+            Err(error) => {
+                let reason = format!("ROCm EP failed: {error}");
+                println!("WARN: {reason}");
+                Err(reason)
+            }
+        }
+    }
+
+    #[cfg(not(feature = "rocm"))]
+    {
+        Err("ROCm feature is not enabled".to_string())
     }
 }
 
