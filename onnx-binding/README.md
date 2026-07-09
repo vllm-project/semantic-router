@@ -126,6 +126,14 @@ wheel plus the system `migraphx` package so MIGraphX, ROCm, and CPU are all
 available. Sequence classifiers still prefer portable SDPA artifacts first;
 embedding and other CK-FA-only artifacts use ROCm.
 
+AMD SDPA sequence classifiers use `128,512` input buckets on MIGraphX by
+default. This keeps MIGraphX from compiling a separate shape for every observed
+request length without forcing short requests through the 512-token path. Use
+`VSR_AMD_MIGRAPHX_SEQUENCE_BUCKETS=512` for a single fixed shape, or
+`VSR_AMD_MIGRAPHX_SEQUENCE_BUCKETS=dynamic` when debugging dynamic shape
+behavior. To move first-run MIGraphX compile/warmup cost into startup, set
+`VSR_AMD_MIGRAPHX_WARMUP=1`.
+
 Before promoting an optimized ONNX artifact, run
 `scripts/eval_router_signal_artifacts.py` against the old artifact, new
 artifact, and selected provider path. The harness includes task-native smoke

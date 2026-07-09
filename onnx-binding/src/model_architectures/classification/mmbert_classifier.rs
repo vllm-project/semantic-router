@@ -200,6 +200,7 @@ pub struct MmBertSequenceClassifier {
     tokenizer: Arc<Tokenizer>,
     config: MmBertClassifierConfig,
     model_path: String,
+    input_len_buckets: Vec<usize>,
 }
 
 impl MmBertSequenceClassifier {
@@ -250,12 +251,32 @@ impl MmBertSequenceClassifier {
             onnx_path.display()
         );
 
-        Ok(Self {
+        let input_len_buckets = Self::sequence_input_len_buckets_for_artifact(
+            &onnx_path,
+            provider,
+            &config,
+            std::env::var("VSR_AMD_MIGRAPHX_SEQUENCE_BUCKETS")
+                .ok()
+                .as_deref(),
+        );
+        if !input_len_buckets.is_empty() {
+            println!(
+                "INFO: Using sequence-classifier input buckets {:?} for AMD MIGraphX SDPA artifact {}",
+                input_len_buckets,
+                onnx_path.display(),
+            );
+        }
+
+        let mut classifier = Self {
             session,
             tokenizer: Arc::new(tokenizer),
             config,
             model_path: model_path_str,
-        })
+            input_len_buckets,
+        };
+        classifier.warmup_if_requested(&onnx_path);
+
+        Ok(classifier)
     }
 
     /// Find ONNX model candidates in priority order.
@@ -425,6 +446,63 @@ impl MmBertSequenceClassifier {
             onnx_path.file_name().and_then(|name| name.to_str()),
             Some("model_sdpa_fp16.onnx" | "model_fa_fp16.onnx" | "model_fa.onnx")
         )
+    }
+
+    fn is_sequence_sdpa_onnx_artifact(onnx_path: &Path) -> bool {
+        matches!(
+            onnx_path.file_name().and_then(|name| name.to_str()),
+            Some("model_sdpa_fp16.onnx")
+        )
+    }
+
+    fn sequence_input_len_buckets_from_env(
+        config: &MmBertClassifierConfig,
+        value: Option<&str>,
+    ) -> Vec<usize> {
+        let max_len = MAX_CLASSIFICATION_SEQ_LEN.min(config.max_position_embeddings);
+        let Some(value) = value else {
+            return vec![128.min(max_len), max_len]
+                .into_iter()
+                .filter(|bucket| *bucket > 0)
+                .collect();
+        };
+        if matches!(
+            value,
+            "0" | "dynamic" | "none" | "false" | "FALSE" | "no" | "NO"
+        ) {
+            return Vec::new();
+        }
+
+        let mut buckets: Vec<usize> = value
+            .split(',')
+            .filter_map(|part| part.trim().parse::<usize>().ok())
+            .filter(|bucket| *bucket > 0)
+            .map(|bucket| bucket.min(max_len))
+            .collect();
+        buckets.sort_unstable();
+        buckets.dedup();
+        buckets
+    }
+
+    fn sequence_input_len_buckets_for_artifact(
+        onnx_path: &Path,
+        provider: ClassifierExecutionProvider,
+        config: &MmBertClassifierConfig,
+        buckets_env: Option<&str>,
+    ) -> Vec<usize> {
+        if Self::prefers_amd_onnx_artifacts(provider)
+            && Self::is_sequence_sdpa_onnx_artifact(onnx_path)
+        {
+            Self::sequence_input_len_buckets_from_env(config, buckets_env)
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn sequence_warmup_enabled() -> bool {
+        std::env::var("VSR_AMD_MIGRAPHX_WARMUP")
+            .ok()
+            .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
     }
 
     fn is_token_optimized_onnx_artifact(onnx_path: &Path) -> bool {
@@ -718,8 +796,17 @@ impl MmBertSequenceClassifier {
         // the classification safety cap. The tokenizer already enforces
         // MAX_CLASSIFICATION_SEQ_LEN via truncation, but this second guard ensures
         // correctness even if the tokenizer is replaced or called without truncation.
-        let max_len = encodings.iter().map(|e| e.len()).max().unwrap_or(0);
-        let max_len = max_len
+        let dynamic_max_len = encodings.iter().map(|e| e.len()).max().unwrap_or(0);
+        let dynamic_max_len = dynamic_max_len
+            .min(self.config.max_position_embeddings)
+            .min(MAX_CLASSIFICATION_SEQ_LEN);
+        let max_len = self
+            .input_len_buckets
+            .iter()
+            .copied()
+            .find(|bucket| *bucket >= dynamic_max_len)
+            .unwrap_or(dynamic_max_len)
+            .max(dynamic_max_len)
             .min(self.config.max_position_embeddings)
             .min(MAX_CLASSIFICATION_SEQ_LEN);
 
@@ -764,6 +851,42 @@ impl MmBertSequenceClassifier {
         let results = logits_to_classification_results(&logits, &self.config);
 
         Ok(results)
+    }
+
+    fn warmup_if_requested(&mut self, onnx_path: &Path) {
+        if self.input_len_buckets.is_empty() || !Self::sequence_warmup_enabled() {
+            return;
+        }
+
+        let started = std::time::Instant::now();
+        println!(
+            "INFO: Warming AMD MIGraphX sequence-classifier artifact {}",
+            onnx_path.display()
+        );
+        for bucket in self.input_len_buckets.clone() {
+            let warmup_text = Self::warmup_text_for_bucket(bucket);
+            if let Err(error) = self.classify_batch(&[warmup_text.as_str()]) {
+                println!(
+                    "WARNING: AMD MIGraphX sequence-classifier warmup failed for {} at bucket {}: {}",
+                    onnx_path.display(),
+                    bucket,
+                    error
+                );
+                return;
+            }
+        }
+        println!(
+            "INFO: AMD MIGraphX sequence-classifier warmup completed for buckets {:?} in {:.3} ms",
+            self.input_len_buckets,
+            started.elapsed().as_secs_f64() * 1000.0
+        );
+    }
+
+    fn warmup_text_for_bucket(bucket: usize) -> String {
+        let repeated_terms = if bucket <= 128 { 16 } else { 180 };
+        std::iter::repeat_n("semantic-router-migraphx-warmup", repeated_terms)
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     /// Get model configuration
@@ -1439,6 +1562,69 @@ mod tests {
         );
 
         assert!(matches!(provider, ClassifierExecutionProvider::Rocm));
+    }
+
+    #[test]
+    fn test_sequence_sdpa_artifact_uses_default_buckets_on_amd() {
+        let config = MmBertClassifierConfig::default();
+        let buckets = MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact(
+            Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
+            ClassifierExecutionProvider::Rocm,
+            &config,
+            None,
+        );
+
+        assert_eq!(buckets, vec![128, MAX_CLASSIFICATION_SEQ_LEN]);
+    }
+
+    #[test]
+    fn test_sequence_buckets_can_be_disabled() {
+        let config = MmBertClassifierConfig::default();
+        let buckets = MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact(
+            Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
+            ClassifierExecutionProvider::Rocm,
+            &config,
+            Some("dynamic"),
+        );
+
+        assert!(buckets.is_empty());
+    }
+
+    #[test]
+    fn test_sequence_buckets_accept_operator_override() {
+        let config = MmBertClassifierConfig::default();
+        let buckets = MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact(
+            Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
+            ClassifierExecutionProvider::Rocm,
+            &config,
+            Some("64, 512, 512, 9999"),
+        );
+
+        assert_eq!(buckets, vec![64, MAX_CLASSIFICATION_SEQ_LEN]);
+    }
+
+    #[test]
+    fn test_sequence_buckets_do_not_apply_to_cpu_or_ck_fa() {
+        let config = MmBertClassifierConfig::default();
+
+        assert_eq!(
+            MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact(
+                Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
+                ClassifierExecutionProvider::Cpu,
+                &config,
+                None,
+            ),
+            Vec::<usize>::new()
+        );
+        assert_eq!(
+            MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact(
+                Path::new("/models/intent/onnx/model_fa_fp16.onnx"),
+                ClassifierExecutionProvider::Rocm,
+                &config,
+                None,
+            ),
+            Vec::<usize>::new()
+        );
     }
 
     #[test]

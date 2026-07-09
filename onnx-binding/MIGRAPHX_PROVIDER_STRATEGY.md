@@ -114,6 +114,45 @@ The default AMD runtime image sets `ORT_CK_FLASH_ATTN_LIB` because ROCm EP is
 present. Sequence classifiers still try portable SDPA artifacts first; embedding
 and other CK-FA-only artifacts use the ROCm-owned path.
 
+## Cold Compile Mitigation
+
+MIGraphX is a graph compiler, so cold session creation or first use can be much
+slower than warm inference. The router-owned sequence classifier path mitigates
+the most common source of repeated compile cost by bucketing AMD
+`model_sdpa_fp16.onnx` inputs. The default buckets are:
+
+```text
+[batch, 128]
+[batch, 512]
+```
+
+This applies only to AMD portable SDPA sequence-classifier artifacts. CPU paths,
+CK FlashAttention artifacts, and PII token classifiers keep their existing input
+contracts. Operators can override the buckets, use a single 512-token bucket, or
+opt out for dynamic-shape debugging with:
+
+```bash
+VSR_AMD_MIGRAPHX_SEQUENCE_BUCKETS=64,128,512
+VSR_AMD_MIGRAPHX_SEQUENCE_BUCKETS=512
+VSR_AMD_MIGRAPHX_SEQUENCE_BUCKETS=dynamic
+```
+
+To move the remaining compile or first-run cost from the first user request into
+startup, enable explicit warmup:
+
+```bash
+VSR_AMD_MIGRAPHX_WARMUP=1
+```
+
+Warmup runs one dummy sequence-classifier inference per configured bucket after
+the ONNX session is created. It intentionally increases startup time when
+enabled, but makes the first real request for warmed buckets more predictable.
+
+The MIGraphX EP also exposes cache-related environment variables such as
+`ORT_MIGRAPHX_CACHE_PATH` and `ORT_MIGRAPHX_MODEL_CACHE_PATH`. Keep those as
+operator experiments until cache invalidation has been validated across model
+hashes, GPU architecture, ROCm, ORT, and MIGraphX versions.
+
 Do not set `MIGRAPHX_MLIR_USE_SPECIFIC_OPS=~attention` globally in the AMD
 runtime image yet. That setting is currently a token-classifier workaround, not
 a validated global runtime default for every router-owned ONNX artifact. Operators
@@ -263,7 +302,11 @@ Current remote quality evidence from the ROCm/MIGraphX validation host:
 ## Known Limits
 
 - MIGraphX cold compile can be much slower than warm inference; benchmark both
-  session creation and warm latency.
+  session creation and warm latency. AMD SDPA sequence classifiers now use
+  `128,512` input buckets by default to avoid one compile per observed request
+  length while keeping short-request latency lower than an always-512 shape. Set
+  `VSR_AMD_MIGRAPHX_WARMUP=1` to pay first-run warmup before serving real
+  requests for the configured buckets.
 - Raw mmBERT32k sequence classifiers that use final masked mean pooling
   currently hit a MIGraphX `MULTIBROADCAST` shape error for seq=32/512. This
   has been reproduced for intent, factcheck, and feedback `model.onnx`

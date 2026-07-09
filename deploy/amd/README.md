@@ -61,6 +61,13 @@ MLIR fused-attention NaN seen in token-classifier graphs. The AMD image does
 not set this globally because the workaround has only been validated for the PII
 token path, not for every router-owned ONNX artifact.
 
+MIGraphX cold compile is expected on first use of a new compiled shape. The AMD
+sequence-classifier path therefore buckets portable SDPA artifacts to `128,512`
+tokens by default. Operators can use `VSR_AMD_MIGRAPHX_SEQUENCE_BUCKETS=512`
+for a single fixed shape, set `VSR_AMD_MIGRAPHX_SEQUENCE_BUCKETS=dynamic` while
+debugging dynamic shapes, or enable startup warmup with
+`VSR_AMD_MIGRAPHX_WARMUP=1` to pay first-run compile before real traffic.
+
 See `onnx-binding/MIGRAPHX_PROVIDER_STRATEGY.md` for the full provider order,
 fallback diagnostics, and benchmark harness.
 
