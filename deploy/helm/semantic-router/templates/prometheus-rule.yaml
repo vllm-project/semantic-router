@@ -21,7 +21,7 @@ spec:
             (
               sum(rate(llm_request_errors_total[5m]))
               /
-              clamp_min(sum(rate(llm_model_requests_total[5m])) + sum(rate(llm_request_errors_total[5m])), 1)
+              clamp_min(sum(rate(llm_model_requests_total[5m])), 1)
             ) > {{ get $thresholds "requestErrorRate" | default 0.05 }}
           for: 10m
           labels:

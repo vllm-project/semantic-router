@@ -230,7 +230,7 @@ observability:
 
 | Alert | Query | Common causes | First check | Dashboard panel |
 |-------|-------|---------------|-------------|-----------------|
-| `HighRequestErrorRate` | `sum(rate(llm_request_errors_total[5m])) / clamp_min(sum(rate(llm_model_requests_total[5m])) + sum(rate(llm_request_errors_total[5m])), 1)` | Upstream outage, timeout, policy rejection, malformed request | `kubectl logs deploy/semantic-router -n vllm-semantic-router-system --tail=200` | Request Errors by Reason |
+| `HighRequestErrorRate` | `sum(rate(llm_request_errors_total[5m])) / clamp_min(sum(rate(llm_model_requests_total[5m])), 1)` | Upstream outage, timeout, policy rejection, malformed request | `kubectl logs deploy/semantic-router -n vllm-semantic-router-system --tail=200` | Request Errors by Reason |
 | `HighCompletionLatencyP95` | `histogram_quantile(0.95, sum(rate(llm_model_completion_latency_seconds_bucket[5m])) by (le))` | Slow backend, overload, long prompts, network latency | `kubectl get pods,endpoints -n vllm-semantic-router-system` | Request Latency (P50/P95/P99) |
 | `HighTTFTP95` | `histogram_quantile(0.95, sum(rate(llm_model_ttft_seconds_bucket[5m])) by (le))` | Backend queueing, cold model, streaming startup delay | `kubectl logs deploy/semantic-router -n vllm-semantic-router-system --tail=200` | TTFT (Time to First Token) by Model - P95 |
 | `HighTPOTP95` | `histogram_quantile(0.95, sum(rate(llm_model_tpot_seconds_bucket[5m])) by (le))` | Slow generation, GPU saturation, long output pressure | `kubectl top pods -n vllm-semantic-router-system` | TPOT (Time per Output Token) by Model - P95 |
