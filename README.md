@@ -18,22 +18,18 @@
 
 ## About
 
-There is no universally best model. "Best" depends on preference: what each user and product values across quality, cost, latency, safety, privacy, modality, and hallucination tolerance.
+**Mixture-of-Models** is a next-generation model architecture shaped by preference.
 
-We call this next-generation, preference-driven model-system architecture **Mixture-of-Models**. At inference time, it composes the model path each request needs from closed frontier models, open general models, domain experts, and compact edge models. A request may use one model, escalate through a confidence cascade, deliberate with Fusion, or coordinate bounded micro-agent workflows.
+**vLLM Semantic Router** is its open-source runtime.
 
-**vLLM Semantic Router** is the open-source runtime for Mixture-of-Models. Its live request path turns request, response, user, and runtime signals into observable, configurable model-path and policy decisions across configured local, private, and cloud backends.
+| Dimension | Fragmented today | With vLLM SR |
+| --- | --- | --- |
+| **Models** | Closed frontier, open, domain-specialized, and edge models excel at different work. | Route one—or coordinate many. |
+| **Compute** | New and legacy GPUs, accelerators, edge devices, and cloud capacity coexist. | Route across configured model endpoints on heterogeneous compute. |
+| **Location** | Inference spans edge, private data centers, and cloud. | Route across locations within privacy and data boundaries. |
+| **Preference** | "Best" varies by user, product, and workload. | Let preference shape every model path. |
 
-![system](website/static/img/system.png)
-
-Models, compute, and locations define the available supply; preference defines the objective. Together, they shape every mixture:
-
-- **Models — Compose, don't just choose**: select one model, escalate through a confidence cascade, deliberate with Fusion, or coordinate bounded micro-agent workflows.
-- **Compute — Make every token count**: route routine work to efficient paths, reserve cascades and multi-model reasoning for requests that need them, and reuse similar answers with semantic caching.
-- **Location — Run intelligence where it belongs**: route across configured local, private, and cloud backends, keeping privacy-sensitive work on policy-approved paths and reaching cloud models when policy allows.
-- **Preference — Let preference define "best"**: encode priorities for quality, cost, latency, safety, privacy, modality, and hallucination tolerance as explicit signals and policies that shape each route.
-
-Across all four dimensions, configurable request and response controls, response headers, and Router Replay provide safety, governance, and observability.
+[Explore how it works →](https://vllm-semantic-router.com/docs/)
 
 ## Getting Started
 
@@ -45,33 +41,33 @@ curl -fsSL https://vllm-semantic-router.com/install.sh | bash
 
 For platform notes, detailed setup options, and troubleshooting, see the **[Installation Guide](https://vllm-semantic-router.com/docs/installation/)**.
 
-> [!IMPORTANT]
-> Online [playground](https://play.vllm-semantic-router.com) default credentials:
->
-> <!-- markdownlint-disable MD004 MD032 -->
-> + username: `love@vllm-sr.ai`
-> + password: `vllm-sr`
-> <!-- markdownlint-enable MD004 MD032 -->
+<details>
+<summary>Online playground credentials</summary>
+
+- Username: `love@vllm-sr.ai`
+- Password: `vllm-sr`
+
+</details>
 
 ## Latest News
 
 - [2026/06/29] New Blog: [Micro-Agent: Beat Frontier Models with Collaboration inside Model API](https://vllm.ai/blog/2026-06-29-micro-agent-frontier-models)
 - [2026/06/16] New Blog: [Beyond One Model: Fusion in vLLM Semantic Router](https://vllm.ai/blog/2026-06-16-vllm-sr-fusion-api)
 - [2026/06/05] v0.3 Released: [vLLM Semantic Router v0.3 Themis: From Signals to Stateful Production Routing](https://vllm.ai/blog/2026-06-05-v0.3-vllm-sr-themis-release)
+
+<details>
+<summary>Earlier announcements</summary>
+
 - [2026/03/24] Vision Paper Released: [The Workload-Router-Pool Architecture for LLM Inference Optimization](https://vllm-semantic-router.com/vision-paper)
 - [2026/03/10] v0.2 Released: [vLLM Semantic Router v0.2 Athena Release](https://vllm.ai/blog/v0.2-vllm-sr-athena-release)
 - [2026/02/27] White Paper Released: [Signal Driven Decision Routing for Mixture-of-Modality Models](https://vllm-semantic-router.com/white-paper/)
 - [2026/01/05] Iris v0.1 Released: [vLLM Semantic Router v0.1 Iris: The First Major Release](https://blog.vllm.ai/2026/01/05/vllm-sr-iris.html)
 - [2025/12/16] Collaboration: [AMD × vLLM Semantic Router: Building the System Intelligence Together](https://blog.vllm.ai/2025/12/16/vllm-sr-amd.html)
+- [2025/12/15] New Blog: [Token-Level Truth: Real-Time Hallucination Detection for Production LLMs](https://blog.vllm.ai/2025/12/14/halugate.html)
 - [2025/11/19] New Blog: [Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale](https://blog.vllm.ai/2025/11/19/signal-decision.html)
 - [2025/11/03] Paper Published: [Category-Aware Semantic Caching for Heterogeneous LLM Workloads](https://arxiv.org/abs/2510.26835)
-- [2025/10/12] Paper Accepted: [When to Reason: Semantic Router for vLLM](https://arxiv.org/abs/2510.08731)
-
-<details>
-<summary>Earlier announcements</summary>
-
-- [2025/12/15] New Blog: [Token-Level Truth: Real-Time Hallucination Detection for Production LLMs](https://blog.vllm.ai/2025/12/14/halugate.html)
 - [2025/10/27] New Blog: [Scaling Semantic Routing with Extensible LoRA](https://blog.vllm.ai/2025/10/27/semantic-router-modular.html)
+- [2025/10/12] Paper Accepted: [When to Reason: Semantic Router for vLLM](https://arxiv.org/abs/2510.08731)
 - [2025/10/08] Collaboration: vLLM Semantic Router with [vLLM Production Stack](https://github.com/vllm-project/production-stack) Team.
 - [2025/09/01] Released the project: [vLLM Semantic Router: Next Phase in LLM inference](https://blog.vllm.ai/2025/09/11/semantic-router.html).
 

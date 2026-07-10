@@ -8,7 +8,7 @@ import rehypeKatex from 'rehype-katex'
 const lightCodeTheme = themes.github
 const darkCodeTheme = themes.vsDark
 const siteUrl = 'https://vllm-semantic-router.com'
-const siteDefaultDescription = 'Open-source runtime for Mixture-of-Models, a preference-driven model-system architecture that selects, cascades, and coordinates models for each request.'
+const siteDefaultDescription = 'Mixture-of-Models is a next-generation model architecture shaped by preference. vLLM Semantic Router is its open-source runtime.'
 const siteSocialTitle = 'vLLM Semantic Router | Runtime for Mixture-of-Models'
 const siteSocialPreviewImageUrl = `${siteUrl}/${SITE_SOCIAL_PREVIEW_IMAGE}`
 
