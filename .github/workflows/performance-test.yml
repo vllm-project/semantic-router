@@ -76,8 +76,12 @@ jobs:
         run: |
           pip install -U "huggingface_hub[cli]" hf_transfer
 
-      # Models are now automatically downloaded by the router at startup
-      # No need to pre-download models - the router will download them on first run
+      # The router downloads models at startup, but the component benchmarks
+      # initialize classifiers and embedding models directly, so the minimal
+      # benchmark model set must be pre-downloaded. Populates the "Cache Models"
+      # cache above; the cache key rotates when tools/make/models.mk changes.
+      - name: Download benchmark models
+        run: make download-models-perf
 
       - name: Run component benchmarks
         id: bench
