@@ -200,10 +200,11 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 	@echo "  DOCKER_TAG        - Docker tag (default: latest)"
 	@echo "  SKIP_ROUTER_IMAGE - set to 1 only when the local router image is already up to date"
 	@echo "  SERVED_NAME       - Served model name for custom runs"
-	@echo "  VLLM_SR_PLATFORM  - vllm-sr platform hint (set to amd to use ROCm defaults)"
+	@echo "  VLLM_SR_PLATFORM  - vllm-sr platform hint (set to amd for ROCm defaults, nvidia for CUDA defaults)"
 	@echo "  VLLM_SR_TARGETARCH - target image architecture (default: host-native, amd64 for ROCm)"
 	@echo "  VLLM_SR_BUILDPLATFORM - Docker build platform (default: host-native, linux/amd64 for ROCm)"
 	@echo "  VLLM_SR_DOCKERFILE_AMD - Dockerfile used when VLLM_SR_PLATFORM=amd"
+	@echo "  VLLM_SR_DOCKERFILE_NVIDIA - Dockerfile used when VLLM_SR_PLATFORM=nvidia"
 	@echo "  VLLM_SR_ROUTER_IMAGE - router runtime image override (defaults to VLLM_SR_ROUTER_IMAGE_DEFAULT)"
 	@echo "  VLLM_SR_ENVOY_IMAGE - envoy runtime image override (defaults to VLLM_SR_ENVOY_IMAGE_DEFAULT)"
 	@echo "  VLLM_SR_DASHBOARD_IMAGE - dashboard runtime image override (defaults to VLLM_SR_DASHBOARD_IMAGE_DEFAULT)"
@@ -215,8 +216,10 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 # single `DOCKER_TAG=v0.3.0` on the command line pins every image at once.
 VLLM_SR_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr:$(DOCKER_TAG)
 VLLM_SR_IMAGE_ROCM ?= ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:$(DOCKER_TAG)
+VLLM_SR_IMAGE_CUDA ?= ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:$(DOCKER_TAG)
 VLLM_SR_ROUTER_IMAGE_DEFAULT ?= $(VLLM_SR_IMAGE)
 VLLM_SR_ROUTER_IMAGE_ROCM ?= $(VLLM_SR_IMAGE_ROCM)
+VLLM_SR_ROUTER_IMAGE_CUDA ?= $(VLLM_SR_IMAGE_CUDA)
 VLLM_SR_ENVOY_IMAGE_DEFAULT ?= envoyproxy/envoy:v1.34-latest
 VLLM_SR_DASHBOARD_IMAGE_DEFAULT ?= ghcr.io/vllm-project/semantic-router/dashboard:$(DOCKER_TAG)
 VLLM_SR_ROUTER_IMAGE ?= $(VLLM_SR_ROUTER_IMAGE_DEFAULT)
@@ -233,6 +236,7 @@ VLLM_SR_TOPOLOGY ?= split
 VLLM_SR_TOPOLOGY_NORMALIZED := $(shell echo "$(VLLM_SR_TOPOLOGY)" | tr '[:upper:]' '[:lower:]')
 VLLM_SR_DOCKERFILE ?= src/vllm-sr/Dockerfile
 VLLM_SR_DOCKERFILE_AMD ?= src/vllm-sr/Dockerfile.rocm
+VLLM_SR_DOCKERFILE_NVIDIA ?= src/vllm-sr/Dockerfile.cuda
 VLLM_SR_DASHBOARD_DOCKERFILE ?= dashboard/backend/Dockerfile
 VLLM_SR_SIM_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr-sim:latest
 VLLM_SR_SIM_CONTAINER ?= vllm-sr-sim-container
@@ -273,6 +277,25 @@ VLLM_SR_ROUTER_IMAGE := $(VLLM_SR_ROUTER_IMAGE_ROCM)
 endif
 ifeq ($(origin VLLM_SR_DOCKERFILE),file)
 VLLM_SR_DOCKERFILE := $(VLLM_SR_DOCKERFILE_AMD)
+endif
+ifeq ($(origin VLLM_SR_TARGETARCH),file)
+VLLM_SR_TARGETARCH := amd64
+endif
+ifeq ($(origin VLLM_SR_BUILDPLATFORM),file)
+VLLM_SR_BUILDPLATFORM := linux/amd64
+endif
+endif
+
+# NVIDIA platform defaults (can still be overridden via env/CLI variables)
+ifeq ($(VLLM_SR_PLATFORM_NORMALIZED),nvidia)
+ifeq ($(origin VLLM_SR_IMAGE),file)
+VLLM_SR_IMAGE := $(VLLM_SR_IMAGE_CUDA)
+endif
+ifeq ($(origin VLLM_SR_ROUTER_IMAGE),file)
+VLLM_SR_ROUTER_IMAGE := $(VLLM_SR_ROUTER_IMAGE_CUDA)
+endif
+ifeq ($(origin VLLM_SR_DOCKERFILE),file)
+VLLM_SR_DOCKERFILE := $(VLLM_SR_DOCKERFILE_NVIDIA)
 endif
 ifeq ($(origin VLLM_SR_TARGETARCH),file)
 VLLM_SR_TARGETARCH := amd64
