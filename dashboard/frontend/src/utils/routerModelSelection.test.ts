@@ -30,6 +30,12 @@ describe('router model selection', () => {
     })).toBe('router/production')
   })
 
+  it('accepts a case-insensitive bare auto alias advertised by the router', () => {
+    expect(selectRouterAutoModel({
+      data: [{ id: 'AUTO', owned_by: 'vllm-semantic-router' }],
+    })).toBe('AUTO')
+  })
+
   it('does not mistake a backend model for the automatic router', () => {
     expect(selectRouterAutoModel({ data: [{ id: 'qwen/qwen3.5-rocm', owned_by: 'vllm' }] }))
       .toBeNull()

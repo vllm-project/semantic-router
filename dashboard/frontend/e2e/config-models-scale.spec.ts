@@ -267,6 +267,30 @@ test.describe('Models inventory at 300+ scale', () => {
     await expect(page.getByText('physical/Qwen-Scale-299', { exact: true })).toBeVisible()
   })
 
+  test('keeps body lock and focus intact across the shared view-to-edit transition', async ({ page }) => {
+    await mockLargeModelInventory(page)
+    await page.goto('/config/models')
+
+    const viewButton = page.getByRole('button', { name: `View ${DEFAULT_MODEL}` })
+    await viewButton.focus()
+    await viewButton.click()
+
+    const viewDialog = page.getByRole('dialog', { name: `Model: ${DEFAULT_MODEL}` })
+    await expect(viewDialog).toBeVisible()
+    await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden')
+    await viewDialog.getByRole('button', { name: 'Edit', exact: true }).click()
+
+    const editDialog = page.getByRole('dialog', { name: `Edit Model: ${DEFAULT_MODEL}` })
+    await expect(editDialog).toBeVisible()
+    await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden')
+    expect(await editDialog.evaluate((element) => element.contains(document.activeElement))).toBe(true)
+
+    await page.keyboard.press('Escape')
+    await expect(editDialog).toBeHidden()
+    await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('')
+    await expect(viewButton).toBeFocused()
+  })
+
   test('keeps selection across pages, blocks protected models, and saves a bulk delete once', async ({ page }) => {
     const { writes } = await mockLargeModelInventory(page)
     await page.goto('/config/models')

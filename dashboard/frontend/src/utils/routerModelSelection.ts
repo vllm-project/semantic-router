@@ -48,7 +48,7 @@ function isAutomaticRouterModel(entry: RouterModelRecord): boolean {
 
   const description = typeof entry.description === 'string' ? entry.description.toLowerCase() : ''
 
-  return id === 'auto'
+  return normalizedId === 'auto'
     || normalizedId.endsWith('/auto')
     || description.includes('automatic model routing')
     || description.includes('intelligent router for mixture-of-models')

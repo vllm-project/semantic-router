@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { canWriteConfig } from './accessControl'
+import {
+  canAccessMLSetup,
+  canAccessReplayFlowDetails,
+  canWriteConfig,
+} from './accessControl'
 
 describe('config write access', () => {
   it('allows explicit config writers and write-capable roles', () => {
@@ -14,5 +18,22 @@ describe('config write access', () => {
     expect(canWriteConfig({ role: 'write', permissions: ['config.read'] })).toBe(false)
     expect(canWriteConfig({ role: 'admin', permissions: [] })).toBe(false)
     expect(canWriteConfig(null)).toBe(false)
+  })
+
+  it('treats an explicit permissions list as authoritative on every protected surface', () => {
+    const explicitReader = { role: 'admin', permissions: ['config.read'] }
+    const emptyAdmin = { role: 'admin', permissions: [] }
+
+    expect(canAccessReplayFlowDetails(explicitReader)).toBe(false)
+    expect(canAccessMLSetup(explicitReader)).toBe(false)
+    expect(canAccessReplayFlowDetails(emptyAdmin)).toBe(false)
+    expect(canAccessMLSetup(emptyAdmin)).toBe(false)
+  })
+
+  it('uses legacy role fallback only when permissions are absent', () => {
+    expect(canAccessReplayFlowDetails({ role: 'write' })).toBe(true)
+    expect(canAccessMLSetup({ role: 'admin' })).toBe(true)
+    expect(canAccessReplayFlowDetails({ role: 'read', permissions: ['config.write'] })).toBe(true)
+    expect(canAccessMLSetup({ role: 'read', permissions: ['mlpipeline.manage'] })).toBe(true)
   })
 })

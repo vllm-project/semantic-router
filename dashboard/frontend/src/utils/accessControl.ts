@@ -8,15 +8,7 @@ const CONFIG_WRITE_PERMISSION = 'config.write'
 const ML_PIPELINE_MANAGE_PERMISSION = 'mlpipeline.manage'
 
 function hasPermission(user: PermissionUser | null | undefined, permission: string): boolean {
-  if (!user) {
-    return false
-  }
-
-  if (Array.isArray(user.permissions) && user.permissions.length > 0) {
-    return user.permissions.includes(permission)
-  }
-
-  return false
+  return Array.isArray(user?.permissions) && user.permissions.includes(permission)
 }
 
 function hasWriteCapableRole(user: PermissionUser | null | undefined): boolean {
@@ -28,26 +20,25 @@ function hasWriteCapableRole(user: PermissionUser | null | undefined): boolean {
   return WRITE_CAPABLE_ROLES.has(normalizedRole)
 }
 
-export function canAccessReplayFlowDetails(user?: PermissionUser | null): boolean {
-  if (hasPermission(user, CONFIG_WRITE_PERMISSION)) {
-    return true
+function canAccessWithPermission(
+  user: PermissionUser | null | undefined,
+  permission: string,
+): boolean {
+  if (Array.isArray(user?.permissions)) {
+    return hasPermission(user, permission)
   }
 
   return hasWriteCapableRole(user)
+}
+
+export function canAccessReplayFlowDetails(user?: PermissionUser | null): boolean {
+  return canAccessWithPermission(user, CONFIG_WRITE_PERMISSION)
 }
 
 export function canWriteConfig(user?: PermissionUser | null): boolean {
-  if (Array.isArray(user?.permissions)) {
-    return user.permissions.includes(CONFIG_WRITE_PERMISSION)
-  }
-
-  return hasWriteCapableRole(user)
+  return canAccessWithPermission(user, CONFIG_WRITE_PERMISSION)
 }
 
 export function canAccessMLSetup(user?: PermissionUser | null): boolean {
-  if (hasPermission(user, ML_PIPELINE_MANAGE_PERMISSION)) {
-    return true
-  }
-
-  return hasWriteCapableRole(user)
+  return canAccessWithPermission(user, ML_PIPELINE_MANAGE_PERMISSION)
 }
