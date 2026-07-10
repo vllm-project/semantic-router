@@ -8,12 +8,13 @@ import rehypeKatex from 'rehype-katex'
 const lightCodeTheme = themes.github
 const darkCodeTheme = themes.vsDark
 const siteUrl = 'https://vllm-semantic-router.com'
-const siteDefaultDescription = 'Open-source LLM router for Mixture-of-Models. Route requests by cost, latency, privacy, safety, and modality across local, private, and frontier models.'
+const siteDefaultDescription = 'Open-source runtime for Mixture-of-Models, a preference-driven model-system architecture that selects, cascades, and coordinates models for each request.'
+const siteSocialTitle = 'vLLM Semantic Router | Runtime for Mixture-of-Models'
 const siteSocialPreviewImageUrl = `${siteUrl}/${SITE_SOCIAL_PREVIEW_IMAGE}`
 
 const config: Config = {
   title: 'vLLM Semantic Router',
-  tagline: 'Open-source LLM router for Mixture-of-Models',
+  tagline: 'The Open-Source Runtime for Mixture-of-Models',
   favicon: 'img/vllm.png',
 
   // Set the production url of your site here
@@ -156,17 +157,17 @@ const config: Config = {
     image: SITE_SOCIAL_PREVIEW_IMAGE,
     metadata: [
       { name: 'description', content: siteDefaultDescription },
-      { name: 'keywords', content: 'open-source LLM router, multi-model routing, semantic router, model selection, AI gateway, vLLM, Envoy, inference routing, policy-aware routing, privacy-aware routing, safety routing' },
+      { name: 'keywords', content: 'Mixture-of-Models runtime, preference-driven AI, open-source LLM router, multi-model routing, model orchestration, model selection, model cascade, Fusion API, micro-agent workflows, semantic router, policy-aware routing, vLLM' },
       { name: 'author', content: 'vLLM Semantic Router Team' },
       { name: 'application-name', content: 'vLLM Semantic Router' },
-      { property: 'og:title', content: 'vLLM Semantic Router | Open-Source LLM Router' },
+      { property: 'og:title', content: siteSocialTitle },
       { property: 'og:description', content: siteDefaultDescription },
       { property: 'og:type', content: 'website' },
       { property: 'og:site_name', content: 'vLLM Semantic Router' },
       { property: 'og:image', content: siteSocialPreviewImageUrl },
       { property: 'og:image:alt', content: 'vLLM Semantic Router social preview' },
       { name: 'twitter:card', content: 'summary_large_image' },
-      { name: 'twitter:title', content: 'vLLM Semantic Router | Open-Source LLM Router' },
+      { name: 'twitter:title', content: siteSocialTitle },
       { name: 'twitter:description', content: siteDefaultDescription },
       { name: 'twitter:image', content: siteSocialPreviewImageUrl },
       { name: 'twitter:image:alt', content: 'vLLM Semantic Router social preview' },
@@ -377,7 +378,7 @@ const config: Config = {
         'name': 'vLLM Semantic Router',
         'applicationCategory': 'AIInfrastructure',
         'operatingSystem': 'Cross-platform',
-        'description': 'Open-source LLM router for Mixture-of-Models',
+        'description': siteDefaultDescription,
         'url': 'https://vllm-semantic-router.com',
         'publisher': {
           '@type': 'Organization',

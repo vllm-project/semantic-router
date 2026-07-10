@@ -2,7 +2,7 @@
 
 <img src="website/static/img/artworks/vllm-sr-logo.dark.png" alt="vLLM Semantic Router" width="50%"/>
 
-<p><strong>System Level Intelligent Router for Mixture-of-Models at Cloud, Data Center and Edge</strong></p>
+<p><strong>The Open-Source Runtime for Mixture-of-Models</strong></p>
 
 <p>
   <a href="https://vllm-semantic-router.com">Documentation</a> |
@@ -18,17 +18,22 @@
 
 ## About
 
-In the LLM era, the number of models is exploding. Different models vary across capability, scale, cost, and privacy boundaries. Choosing and connecting the right models to build semantic AI infrastructure is a system problem.
+There is no universally best model. "Best" depends on preference: what each user and product values across quality, cost, latency, safety, privacy, modality, and hallucination tolerance.
 
-**vLLM Semantic Router** is a **signal-driven** intelligent router for that problem. It helps teams build model systems that are more **efficient**, **safer**, and more **adaptive** across cloud, data center, and edge environments.
+We call this next-generation, preference-driven model-system architecture **Mixture-of-Models**. At inference time, it composes the model path each request needs from closed frontier models, open general models, domain experts, and compact edge models. A request may use one model, escalate through a confidence cascade, deliberate with Fusion, or coordinate bounded micro-agent workflows.
+
+**vLLM Semantic Router** is the open-source runtime for Mixture-of-Models. Its live request path turns request, response, user, and runtime signals into observable, configurable model-path and policy decisions across configured local, private, and cloud backends.
 
 ![system](website/static/img/system.png)
 
-It delivers three core values:
+Models, compute, and locations define the available supply; preference defines the objective. Together, they shape every mixture:
 
-- **Token economics**: reduce wasted tokens, increase effective output, and maximize the value of every token.
-- **LLM safety**: detect jailbreaks, sensitive leakage, and hallucinations so agents remain controllable, trustworthy, and auditable.
-- **Fullmesh intelligence**: build personal AI at the edge and intelligent MaaS in the cloud by coordinating local, private, and frontier models across cost, privacy, and capability boundaries.
+- **Models — Compose, don't just choose**: select one model, escalate through a confidence cascade, deliberate with Fusion, or coordinate bounded micro-agent workflows.
+- **Compute — Make every token count**: route routine work to efficient paths, reserve cascades and multi-model reasoning for requests that need them, and reuse similar answers with semantic caching.
+- **Location — Run intelligence where it belongs**: route across configured local, private, and cloud backends, keeping privacy-sensitive work on policy-approved paths and reaching cloud models when policy allows.
+- **Preference — Let preference define "best"**: encode priorities for quality, cost, latency, safety, privacy, modality, and hallucination tolerance as explicit signals and policies that shape each route.
+
+Across all four dimensions, configurable request and response controls, response headers, and Router Replay provide safety, governance, and observability.
 
 ## Getting Started
 
@@ -50,6 +55,9 @@ For platform notes, detailed setup options, and troubleshooting, see the **[Inst
 
 ## Latest News
 
+- [2026/06/29] New Blog: [Micro-Agent: Beat Frontier Models with Collaboration inside Model API](https://vllm.ai/blog/2026-06-29-micro-agent-frontier-models)
+- [2026/06/16] New Blog: [Beyond One Model: Fusion in vLLM Semantic Router](https://vllm.ai/blog/2026-06-16-vllm-sr-fusion-api)
+- [2026/06/05] v0.3 Released: [vLLM Semantic Router v0.3 Themis: From Signals to Stateful Production Routing](https://vllm.ai/blog/2026-06-05-v0.3-vllm-sr-themis-release)
 - [2026/03/24] Vision Paper Released: [The Workload-Router-Pool Architecture for LLM Inference Optimization](https://vllm-semantic-router.com/vision-paper)
 - [2026/03/10] v0.2 Released: [vLLM Semantic Router v0.2 Athena Release](https://vllm.ai/blog/v0.2-vllm-sr-athena-release)
 - [2026/02/27] White Paper Released: [Signal Driven Decision Routing for Mixture-of-Modality Models](https://vllm-semantic-router.com/white-paper/)
