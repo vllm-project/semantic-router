@@ -104,6 +104,8 @@ export interface ReasoningFamily {
 export interface ModelPricing {
   currency?: string
   prompt_per_1m?: number
+  cached_input_per_1m?: number
+  cache_write_per_1m?: number
   completion_per_1m?: number
 }
 
@@ -246,6 +248,8 @@ export interface NormalizedModel {
   pricing?: {
     currency?: string
     prompt_per_1m?: number
+    cached_input_per_1m?: number
+    cache_write_per_1m?: number
     completion_per_1m?: number
   }
 }

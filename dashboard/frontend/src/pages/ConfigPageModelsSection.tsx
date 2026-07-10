@@ -117,6 +117,8 @@ export default function ConfigPageModelsSection({
     const normalized: ModelPricing = {}
     if (typeof pricing.currency === 'string' && pricing.currency.trim()) normalized.currency = pricing.currency.trim()
     if (typeof pricing.prompt_per_1m === 'number' && Number.isFinite(pricing.prompt_per_1m)) normalized.prompt_per_1m = pricing.prompt_per_1m
+    if (typeof pricing.cached_input_per_1m === 'number' && Number.isFinite(pricing.cached_input_per_1m)) normalized.cached_input_per_1m = pricing.cached_input_per_1m
+    if (typeof pricing.cache_write_per_1m === 'number' && Number.isFinite(pricing.cache_write_per_1m)) normalized.cache_write_per_1m = pricing.cache_write_per_1m
     if (typeof pricing.completion_per_1m === 'number' && Number.isFinite(pricing.completion_per_1m)) normalized.completion_per_1m = pricing.completion_per_1m
     return Object.keys(normalized).length > 0 ? normalized : undefined
   }
@@ -383,6 +385,8 @@ export default function ConfigPageModelsSection({
         fields: [
           { label: 'Currency', value: model.pricing.currency || 'USD' },
           { label: 'Prompt (per 1M tokens)', value: model.pricing.prompt_per_1m?.toFixed(2) || '0.00' },
+          { label: 'Cached input (per 1M tokens)', value: model.pricing.cached_input_per_1m?.toFixed(2) || '0.00' },
+          { label: 'Cache write (per 1M tokens)', value: model.pricing.cache_write_per_1m?.toFixed(2) || 'Prompt rate' },
           { label: 'Completion (per 1M tokens)', value: model.pricing.completion_per_1m?.toFixed(2) || '0.00' }
         ]
       })
@@ -419,6 +423,7 @@ export default function ConfigPageModelsSection({
         pricing: {
           currency: 'USD',
           prompt_per_1m: 0,
+          cached_input_per_1m: 0,
           completion_per_1m: 0,
         },
       },
@@ -521,7 +526,7 @@ export default function ConfigPageModelsSection({
           name: 'pricing',
           label: 'Pricing (JSON)',
           type: 'json',
-          placeholder: '{"currency":"USD","prompt_per_1m":0.5,"completion_per_1m":1.5}',
+          placeholder: '{"currency":"USD","prompt_per_1m":0.5,"cached_input_per_1m":0.05,"cache_write_per_1m":0.625,"completion_per_1m":1.5}',
           description: 'Structured pricing block stored under providers.models[].pricing'
         }
       ],
@@ -679,7 +684,7 @@ export default function ConfigPageModelsSection({
           name: 'pricing',
           label: 'Pricing (JSON)',
           type: 'json',
-          placeholder: '{"currency":"USD","prompt_per_1m":0.5,"completion_per_1m":1.5}',
+          placeholder: '{"currency":"USD","prompt_per_1m":0.5,"cached_input_per_1m":0.05,"cache_write_per_1m":0.625,"completion_per_1m":1.5}',
           description: 'Structured pricing block stored under providers.models[].pricing'
         }
       ],

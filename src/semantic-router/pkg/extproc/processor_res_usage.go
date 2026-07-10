@@ -6,7 +6,6 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/tidwall/gjson"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -20,6 +19,8 @@ type responseUsageMetrics struct {
 	promptTokens               int
 	cachedPromptTokens         int
 	cachedPromptTokensReported bool
+	cacheWriteTokens           int
+	cacheWriteTokensReported   bool
 	completionTokens           int
 }
 
@@ -34,27 +35,41 @@ func parseResponseUsage(responseBody []byte, model string) responseUsageMetrics 
 		return responseUsageMetrics{}
 	}
 
-	promptTokens := gjson.GetBytes(responseBody, "usage.prompt_tokens")
-	completionTokens := gjson.GetBytes(responseBody, "usage.completion_tokens")
+	promptTokens := firstExistingGJSON(
+		gjson.GetBytes(responseBody, "usage.prompt_tokens"),
+		gjson.GetBytes(responseBody, "usage.input_tokens"),
+	)
+	completionTokens := firstExistingGJSON(
+		gjson.GetBytes(responseBody, "usage.completion_tokens"),
+		gjson.GetBytes(responseBody, "usage.output_tokens"),
+	)
 	cachedPromptTokens := firstExistingGJSON(
 		gjson.GetBytes(responseBody, "usage.prompt_tokens_details.cached_tokens"),
 		gjson.GetBytes(responseBody, "usage.input_tokens_details.cached_tokens"),
 	)
+	cacheWriteTokens := firstExistingGJSON(
+		gjson.GetBytes(responseBody, "usage.prompt_tokens_details.cache_write_tokens"),
+		gjson.GetBytes(responseBody, "usage.input_tokens_details.cache_write_tokens"),
+	)
 	cachedPromptTokensReported := cachedPromptTokens.Exists()
+	cacheWriteTokensReported := cacheWriteTokens.Exists()
 	if (promptTokens.Exists() && promptTokens.Type != gjson.Number) ||
 		(completionTokens.Exists() && completionTokens.Type != gjson.Number) ||
-		(cachedPromptTokensReported && cachedPromptTokens.Type != gjson.Number) {
+		(cachedPromptTokensReported && cachedPromptTokens.Type != gjson.Number) ||
+		(cacheWriteTokensReported && cacheWriteTokens.Type != gjson.Number) {
 		logging.Errorf("Error parsing tokens from response: usage fields must be numbers")
 		metrics.RecordRequestError(model, "parse_error")
 		return responseUsageMetrics{}
 	}
 
-	return responseUsageMetrics{
+	return normalizeResponseUsage(responseUsageMetrics{
 		promptTokens:               int(promptTokens.Int()),
-		cachedPromptTokens:         clampCachedPromptTokensInt(int(promptTokens.Int()), int(cachedPromptTokens.Int())),
+		cachedPromptTokens:         int(cachedPromptTokens.Int()),
 		cachedPromptTokensReported: cachedPromptTokensReported,
+		cacheWriteTokens:           int(cacheWriteTokens.Int()),
+		cacheWriteTokensReported:   cacheWriteTokensReported,
 		completionTokens:           int(completionTokens.Int()),
-	}
+	})
 }
 
 func firstExistingGJSON(values ...gjson.Result) gjson.Result {
@@ -168,6 +183,7 @@ func (r *OpenAIRouter) recordResponseCost(
 		"model":                 ctx.RequestModel,
 		"prompt_tokens":         usage.promptTokens,
 		"cached_prompt_tokens":  usage.cachedPromptTokens,
+		"cache_write_tokens":    usage.cacheWriteTokens,
 		"completion_tokens":     usage.completionTokens,
 		"total_tokens":          totalTokens,
 		"completion_latency_ms": completionLatency.Milliseconds(),
@@ -183,6 +199,7 @@ func (r *OpenAIRouter) recordResponseCost(
 			eventFields["currency"] = currency
 			eventFields["pricing_prompt_per_1m"] = pricing.PromptPer1M
 			eventFields["pricing_cached_input_per_1m"] = pricing.CachedInputPer1M
+			eventFields["pricing_cache_write_per_1m"] = effectiveCacheWriteRate(pricing)
 			eventFields["pricing_completion_per_1m"] = pricing.CompletionPer1M
 			logging.LogEvent("llm_usage", eventFields)
 			return replayUsage
@@ -223,24 +240,38 @@ func extractStreamingUsage(ctx *RequestContext) openai.CompletionUsage {
 	return usage
 }
 
-func streamingCachedPromptTokens(ctx *RequestContext, promptTokens int) (int, bool) {
+func streamingPromptTokenDetails(ctx *RequestContext, promptTokens int) (cached int, cachedReported bool, cacheWrite int, cacheWriteReported bool) {
 	if ctx == nil || ctx.StreamingMetadata == nil {
-		return 0, false
+		return 0, false, 0, false
 	}
 	usageMap, ok := ctx.StreamingMetadata["usage"].(map[string]interface{})
 	if !ok {
-		return 0, false
+		return 0, false, 0, false
 	}
 	for _, key := range []string{"prompt_tokens_details", "input_tokens_details"} {
 		details, ok := usageMap[key].(map[string]interface{})
 		if !ok {
 			continue
 		}
-		if cached, ok := details["cached_tokens"].(float64); ok {
-			return clampCachedPromptTokensInt(promptTokens, int(cached)), true
+		if !cachedReported {
+			if value, ok := details["cached_tokens"].(float64); ok {
+				cached = int(value)
+				cachedReported = true
+			}
+		}
+		if !cacheWriteReported {
+			if value, ok := details["cache_write_tokens"].(float64); ok {
+				cacheWrite = int(value)
+				cacheWriteReported = true
+			}
 		}
 	}
-	return 0, false
+	normalized := normalizeResponseUsage(responseUsageMetrics{
+		promptTokens:       promptTokens,
+		cachedPromptTokens: cached,
+		cacheWriteTokens:   cacheWrite,
+	})
+	return normalized.cachedPromptTokens, cachedReported, normalized.cacheWriteTokens, cacheWriteReported
 }
 
 func recordSessionTurnFromStreamingUsage(
@@ -248,6 +279,8 @@ func recordSessionTurnFromStreamingUsage(
 	usage openai.CompletionUsage,
 	cachedPromptTokens int,
 	cachedPromptTokensReported bool,
+	cacheWriteTokens int,
+	cacheWriteTokensReported bool,
 	pricing sessiontelemetry.TurnPricing,
 ) {
 	if usage.PromptTokens <= 0 && usage.CompletionTokens <= 0 {
@@ -257,6 +290,8 @@ func recordSessionTurnFromStreamingUsage(
 		promptTokens:               int(usage.PromptTokens),
 		cachedPromptTokens:         cachedPromptTokens,
 		cachedPromptTokensReported: cachedPromptTokensReported,
+		cacheWriteTokens:           cacheWriteTokens,
+		cacheWriteTokensReported:   cacheWriteTokensReported,
 		completionTokens:           int(usage.CompletionTokens),
 	}, pricing)
 }
@@ -273,8 +308,24 @@ func (r *OpenAIRouter) reportStreamingUsageMetrics(
 		})
 	}
 
-	cachedPromptTokens, cachedPromptTokensReported := streamingCachedPromptTokens(ctx, int(usage.PromptTokens))
-	recordSessionTurnFromStreamingUsage(ctx, usage, cachedPromptTokens, cachedPromptTokensReported, r.sessionTurnPricing(ctx.RequestModel))
+	cachedPromptTokens, cachedPromptTokensReported, cacheWriteTokens, cacheWriteTokensReported := streamingPromptTokenDetails(ctx, int(usage.PromptTokens))
+	responseUsage := responseUsageMetrics{
+		promptTokens:               int(usage.PromptTokens),
+		cachedPromptTokens:         cachedPromptTokens,
+		cachedPromptTokensReported: cachedPromptTokensReported,
+		cacheWriteTokens:           cacheWriteTokens,
+		cacheWriteTokensReported:   cacheWriteTokensReported,
+		completionTokens:           int(usage.CompletionTokens),
+	}
+	recordSessionTurnFromStreamingUsage(
+		ctx,
+		usage,
+		cachedPromptTokens,
+		cachedPromptTokensReported,
+		cacheWriteTokens,
+		cacheWriteTokensReported,
+		r.sessionTurnPricing(ctx.RequestModel),
+	)
 
 	if ctx.RequestModel == "" || (usage.PromptTokens == 0 && usage.CompletionTokens == 0) {
 		return
@@ -306,27 +357,9 @@ func (r *OpenAIRouter) reportStreamingUsageMetrics(
 	if !ctx.StartTime.IsZero() {
 		completionLatency = time.Since(ctx.StartTime)
 	}
-	replayUsage := r.recordResponseCost(ctx, completionLatency, responseUsageMetrics{
-		promptTokens:               int(usage.PromptTokens),
-		cachedPromptTokens:         cachedPromptTokens,
-		cachedPromptTokensReported: cachedPromptTokensReported,
-		completionTokens:           int(usage.CompletionTokens),
-	})
+	replayUsage := r.recordResponseCost(ctx, completionLatency, responseUsage)
 	r.updateRouterReplayUsageCost(ctx, replayUsage)
-	r.observeRouterLearningUsageTelemetry(ctx, completionLatency, responseUsageMetrics{
-		promptTokens:               int(usage.PromptTokens),
-		cachedPromptTokens:         cachedPromptTokens,
-		cachedPromptTokensReported: cachedPromptTokensReported,
-		completionTokens:           int(usage.CompletionTokens),
-	}, replayUsage)
-}
-
-func costForResponseUsage(usage responseUsageMetrics, pricing config.ModelPricing) float64 {
-	cached := clampCachedPromptTokensInt(usage.promptTokens, usage.cachedPromptTokens)
-	uncachedPrompt := usage.promptTokens - cached
-	return (float64(uncachedPrompt)*pricing.PromptPer1M +
-		float64(cached)*pricing.CachedInputPer1M +
-		float64(usage.completionTokens)*pricing.CompletionPer1M) / 1_000_000.0
+	r.observeRouterLearningUsageTelemetry(ctx, completionLatency, responseUsage, replayUsage)
 }
 
 func clampCachedPromptTokensInt(promptTokens, cachedPromptTokens int) int {
