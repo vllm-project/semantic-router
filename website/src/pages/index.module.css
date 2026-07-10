@@ -255,16 +255,6 @@
   text-transform: uppercase;
 }
 
-.heroModelBandCopy {
-  max-width: 30rem;
-  margin: 0;
-  color: var(--site-text-strong);
-  font-size: clamp(1.08rem, 1.35vw, 1.24rem);
-  font-weight: 550;
-  line-height: 1.42;
-  letter-spacing: -0.02em;
-}
-
 .heroModelBandViewport {
   --hero-model-gap: 1.55rem;
   position: relative;
@@ -470,371 +460,100 @@
   gap: 1.15rem;
 }
 
-.problemPanel {
-  display: grid;
-  grid-template-columns: minmax(0, 0.64fr) minmax(280px, 0.36fr);
-  align-items: stretch;
-  gap: 1rem;
-}
-
-.problemIntro,
-.problemChecklist,
-.valueCard {
-  border: 1px solid var(--site-border);
-  background: var(--site-surface);
-}
-
-.problemIntro {
-  padding: 1.8rem;
-  border-radius: 1.45rem;
-  border-color: rgba(15, 23, 42, 0.14);
-  background:
-    radial-gradient(circle at 0% 0%, rgba(15, 23, 42, 0.055), transparent 36%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.024), transparent 44%),
-    var(--site-surface);
-}
-
-.problemIntro h2 {
-  max-width: 10ch;
-  margin: 0.8rem 0 0;
-  font-size: clamp(2.6rem, 5vw, 4.5rem);
-  line-height: 0.92;
-}
-
-.problemIntro p {
-  max-width: 42rem;
-  margin: 1rem 0 0;
-  font-size: 1.03rem;
-  line-height: 1.7;
-  color: var(--site-muted-bright);
-}
-
-.problemAxes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.68rem;
-  margin-top: 1.4rem;
-}
-
-.problemAxis {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.46rem 0.8rem;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.04);
-  color: var(--site-muted-bright);
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.problemAxis:last-child {
-  border-color: rgba(48, 162, 255, 0.28);
-  background: rgba(48, 162, 255, 0.08);
-  color: #167fce;
-}
-
-.problemChecklist {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  height: 100%;
-  padding: 1.6rem;
-  border-radius: 1.45rem;
-  border-color: rgba(15, 23, 42, 0.14);
-  background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.03), rgba(15, 23, 42, 0.012)),
-    var(--site-surface-alt);
-}
-
-.problemChecklistHeader {
-  display: grid;
-  gap: 0.7rem;
-}
-
-.problemChecklistHeader p {
-  margin: 0;
-  color: var(--site-muted-bright);
-  font-size: 0.92rem;
-  line-height: 1.6;
-}
-
-.problemChecklistList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.72rem;
-  counter-reset: system-job;
-}
-
-.problemChecklistItem {
-  position: relative;
-  min-height: 4.15rem;
-  display: flex;
-  align-items: center;
-  padding: 0.9rem 0.95rem 0.9rem 3.05rem;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  border-radius: 1rem;
-  background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.018), transparent 100%),
-    rgba(255, 255, 255, 0.82);
-  color: var(--site-muted-bright);
-  font-size: 0.95rem;
-  line-height: 1.55;
-}
-
-.problemChecklistItem::before {
-  counter-increment: system-job;
-  content: '0' counter(system-job);
-  position: absolute;
-  left: 0.95rem;
-  top: 0.9rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: rgba(15, 23, 42, 0.05);
-  color: var(--site-muted-bright);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-}
-
-.problemChecklistFooter {
-  display: grid;
-  gap: 0.85rem;
-  margin-top: auto;
-  padding-top: 1rem;
-  border-top: 1px solid rgba(15, 23, 42, 0.1);
-}
-
-.problemChecklistFooter p {
-  max-width: 18rem;
-  margin: 0;
-  color: var(--site-muted);
-  font-size: 0.82rem;
-  line-height: 1.55;
-}
-
-.problemChecklistMeta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-}
-
-.problemChecklistMetaItem {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.42rem 0.72rem;
-  border: 1px solid rgba(15, 23, 42, 0.11);
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.04);
-  color: var(--site-muted-bright);
-  font-size: 0.74rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.valueIntro {
+.comparisonHeading {
   display: grid;
   grid-template-columns: minmax(220px, 0.32fr) minmax(0, 0.68fr);
-  gap: 2rem;
   align-items: end;
-  margin-top: 0.2rem;
+  gap: 2rem;
+  margin-bottom: 0.35rem;
 }
 
-.valueIntro p {
-  max-width: 34rem;
+.comparisonHeading h2 {
+  max-width: 17ch;
   margin: 0;
+  font-size: clamp(2.4rem, 5vw, 4.35rem);
+  line-height: 0.96;
+}
+
+.comparisonTableWrap {
+  overflow-x: auto;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 1.45rem;
+  background: var(--site-surface);
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.055);
+}
+
+.comparisonTable {
+  display: table;
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.comparisonTable th,
+.comparisonTable td {
+  padding: 1.35rem 1.45rem;
+  border: 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.1);
+  text-align: left;
+  vertical-align: top;
+}
+
+.comparisonTable thead th {
+  background: rgba(15, 23, 42, 0.035);
   color: var(--site-muted-bright);
-}
-
-.valueGrid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1.1rem;
-}
-
-.valueCard {
-  position: relative;
-  overflow: hidden;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: 1rem;
-  min-height: 18rem;
-  padding: 1.45rem;
-  border-radius: 1.3rem;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.04), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 36%),
-    var(--site-surface);
-  transition:
-    border-color 180ms ease,
-    transform 180ms ease,
-    background 180ms ease;
-}
-
-.valueCardHeader {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.valueCardIndex {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--site-muted);
   font-family: var(--ifm-font-family-monospace);
-  font-size: 0.74rem;
-  letter-spacing: 0.08em;
-}
-
-.valueGlyphShell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 6.8rem;
-  min-height: 4.4rem;
-  padding: 0.72rem 0.85rem;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 1rem;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.04), transparent 58%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.008)),
-    rgba(255, 255, 255, 0.02);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-
-.valueGlyph {
-  width: 5.2rem;
-  height: auto;
-  color: rgba(17, 17, 17, 0.46);
-  opacity: 0.96;
-  transition:
-    transform 180ms ease,
-    color 180ms ease,
-    opacity 180ms ease;
-}
-
-.valueCardCopy {
-  display: grid;
-  gap: 0.8rem;
-}
-
-.valueCardAxis {
-  color: var(--site-muted);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.72rem;
-  font-weight: 650;
-  letter-spacing: 0.1em;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
 }
 
-.valueCardCopy h3 {
-  margin: 0;
-  font-size: 1.35rem;
-  line-height: 1.05;
+.comparisonTable thead th:first-child {
+  width: 18%;
 }
 
-.valueCardCopy p {
-  margin: 0;
+.comparisonTable thead th:nth-child(2),
+.comparisonTable thead th:nth-child(3) {
+  width: 41%;
+}
+
+.comparisonTable tbody th {
+  color: var(--site-text-strong);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.comparisonTable tbody td {
   color: var(--site-muted-bright);
-  font-size: 0.98rem;
-  line-height: 1.68;
+  font-size: 1rem;
+  line-height: 1.58;
 }
 
-.valueCardDetail {
-  margin: 0;
-  padding-top: 0.9rem;
-  border-top: 1px solid rgba(17, 17, 17, 0.08);
-  color: var(--site-muted);
-  font-size: 0.77rem;
+.comparisonTable tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.comparisonTable tbody tr:last-child {
+  background: linear-gradient(90deg, rgba(48, 162, 255, 0.025), rgba(48, 162, 255, 0.08));
+}
+
+.comparisonTable tbody tr:last-child .comparisonDimension {
+  color: #167fce;
+}
+
+.comparisonTable tbody .comparisonValue {
+  background: rgba(48, 162, 255, 0.035);
+  color: var(--site-text-strong);
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
-.valueCard:hover {
-  transform: translateY(-3px);
-  border-color: var(--site-border-strong);
-  background:
-    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.05), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 36%),
-    var(--site-surface-alt);
-}
-
-.valueCard:hover .valueGlyphShell {
-  border-color: rgba(17, 17, 17, 0.12);
-  background:
-    radial-gradient(circle at 50% 50%, rgba(17, 17, 17, 0.05), transparent 58%),
-    linear-gradient(135deg, rgba(17, 17, 17, 0.026), rgba(17, 17, 17, 0.01)),
-    rgba(17, 17, 17, 0.028);
-}
-
-.valueCard:hover .valueGlyph {
-  transform: translateY(-2px) scale(1.02);
-  color: rgba(17, 17, 17, 0.72);
-}
-
-.valueCardPreference {
-  border-color: rgba(48, 162, 255, 0.34);
-  background:
-    radial-gradient(circle at 100% 0%, rgba(48, 162, 255, 0.12), transparent 38%),
-    linear-gradient(180deg, rgba(48, 162, 255, 0.045), transparent 42%),
-    var(--site-surface);
-}
-
-.valueCardPreference::before {
-  position: absolute;
-  inset: 0 0 auto;
-  height: 3px;
-  background: linear-gradient(90deg, #30A2FF, rgba(48, 162, 255, 0.18));
-  content: '';
-}
-
-.valueCardPreference .valueCardIndex {
-  border-color: rgba(48, 162, 255, 0.25);
-  background: rgba(48, 162, 255, 0.09);
-  color: #167fce;
-}
-
-.valueCardPreference .valueCardAxis {
-  color: #167fce;
-}
-
-.valueCardPreference .valueGlyphShell {
-  border-color: rgba(48, 162, 255, 0.2);
-  background:
-    radial-gradient(circle at 50% 50%, rgba(48, 162, 255, 0.1), transparent 60%),
-    rgba(48, 162, 255, 0.035);
-}
-
-.valueCardPreference .valueGlyph {
-  color: rgba(22, 127, 206, 0.7);
-}
-
-.valueCardPreference:hover {
-  border-color: rgba(48, 162, 255, 0.52);
-  background:
-    radial-gradient(circle at 100% 0%, rgba(48, 162, 255, 0.16), transparent 40%),
-    linear-gradient(180deg, rgba(48, 162, 255, 0.06), transparent 44%),
-    var(--site-surface-alt);
-}
-
-.valueCardPreference:hover .valueGlyph {
-  color: rgba(22, 127, 206, 0.9);
+.comparisonCta {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
 }
 
 .encoderShowcase {
@@ -1037,19 +756,12 @@
   margin: 0;
 }
 
-@media (max-width: 1180px) {
-  .valueGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 996px) {
   .heroGrid,
   .sectionHeading,
   .encoderShowcase,
   .bandGrid,
-  .problemPanel,
-  .valueIntro {
+  .comparisonHeading {
     grid-template-columns: 1fr;
   }
 
@@ -1062,12 +774,8 @@
     padding: 3rem 0 2rem;
   }
 
-  .problemIntro h2 {
-    max-width: 12ch;
-  }
-
-  .valueGlyph {
-    width: 5rem;
+  .comparisonHeading h2 {
+    max-width: 18ch;
   }
 
   .encoderLeadStack {
@@ -1135,14 +843,8 @@
   }
 
   .heroModelBandHeader {
-    margin-bottom: 0.38rem;
+    margin-bottom: 0.1rem;
     padding: 0 1rem;
-  }
-
-  .heroModelBandCopy {
-    max-width: 20rem;
-    font-size: 0.94rem;
-    line-height: 1.5;
   }
 
   .heroModelBandViewport {
@@ -1181,6 +883,27 @@
     padding: 3.5rem 0;
   }
 
+  .comparisonTable th,
+  .comparisonTable td {
+    padding: 0.88rem 0.72rem;
+    overflow-wrap: anywhere;
+  }
+
+  .comparisonTable thead th:first-child {
+    width: 22%;
+  }
+
+  .comparisonTable thead th:nth-child(2),
+  .comparisonTable thead th:nth-child(3) {
+    width: 39%;
+  }
+
+  .comparisonTable tbody th,
+  .comparisonTable tbody td {
+    font-size: 0.86rem;
+    line-height: 1.48;
+  }
+
   .encoderCardGrid {
     grid-template-columns: 1fr;
   }
@@ -1191,19 +914,7 @@
     grid-template-columns: 1fr;
   }
 
-  .problemChecklistItem {
-    min-height: auto;
-    padding-left: 3rem;
-  }
-
-  .valueCard {
-    min-height: auto;
-  }
-
   .band,
-  .problemIntro,
-  .problemChecklist,
-  .valueCard,
   .encoderLead,
   .encoderPipelineFrame,
   .encoderCard {
@@ -1212,7 +923,27 @@
 }
 
 @media (max-width: 640px) {
-  .valueGrid {
-    grid-template-columns: 1fr;
+  .comparisonHeading h2 {
+    font-size: clamp(2.05rem, 10vw, 2.65rem);
+  }
+
+  .comparisonTable th,
+  .comparisonTable td {
+    padding: 0.72rem 0.5rem;
+  }
+
+  .comparisonTable thead th {
+    font-size: 0.6rem;
+    letter-spacing: 0.06em;
+  }
+
+  .comparisonTable tbody th,
+  .comparisonTable tbody td {
+    font-size: 0.78rem;
+  }
+
+  .comparisonCta,
+  .comparisonCta :global(a) {
+    width: 100%;
   }
 }
