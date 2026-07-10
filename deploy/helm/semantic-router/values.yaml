@@ -138,6 +138,22 @@ safetyGuards:
   # request-time local state. Disable only when accepting replica-local learning
   # divergence or when routing traffic with sticky sessions.
   rejectMultiReplicaLocalLearningState: true
+
+observability:
+  alerts:
+    # -- Render a PrometheusRule for Semantic Router alerts. Requires
+    # Prometheus Operator or another controller that watches PrometheusRule.
+    enabled: false
+    # -- Additional labels added to the PrometheusRule.
+    labels: {}
+    thresholds:
+      requestErrorRate: 0.05
+      completionLatencyP95Seconds: 30
+      ttftP95Seconds: 5
+      tpotP95Seconds: 0.25
+      routingLatencyP95Seconds: 0.1
+      inflightRequests: 50
+      cacheHitRate: 0.2
 # Node selector
 nodeSelector: {}
 # Tolerations
@@ -308,8 +324,8 @@ config:
             endpoint: "jaeger:4317"
             insecure: true
           sampling:
-            type: "always_on"
-            rate: 1.0
+            type: "probabilistic"
+            rate: 0.1
           resource:
             service_name: "vllm-semantic-router"
             service_version: ""

@@ -2,6 +2,11 @@
 
 from dataclasses import dataclass, field
 
+from grafana_observability_sections import (
+    append_routing_selection_section,
+    append_session_cache_warmth_section,
+    append_windowed_model_health_section,
+)
 from grafana_panel_factories import (
     create_bar_chart_panel,
     create_row_panel,
@@ -643,6 +648,9 @@ def generate_all_dashboard_panels():
     append_decision_matching_section(ctx)
     append_model_distribution_section(ctx)
     append_model_latency_section(ctx)
+    append_routing_selection_section(ctx)
+    append_windowed_model_health_section(ctx)
+    append_session_cache_warmth_section(ctx)
     append_cache_plugin_section_part1(ctx)
     append_cache_plugin_section_part2(ctx)
     return ctx.panels
