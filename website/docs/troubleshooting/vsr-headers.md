@@ -26,6 +26,20 @@ Cache-hit responses can emit cache headers, but they do not re-run routing and t
 | `x-vsr-skip-processing` | request | Opts a request out of router processing when `global.router.skip_processing.enabled` is enabled. Use value `true`. |
 | `x-vsr-debug` | request | Opts the request into verbose/debug response headers — headers the contract otherwise omits or demotes to replay are emitted inline for that request. Use value `true`. |
 
+## Internal Backend Selection Headers
+
+The router and generated Envoy config use internal backend-selection headers to carry endpoint-selection metadata between `ext_proc`, Envoy subset load balancing, and router replay diagnostics. Clients should not set or depend on these headers:
+
+| Header | Internal use |
+| ------ | ------------ |
+| `x-vsr-selected-backend` | Router-requested `backend_refs[].backend_id` when fresh backend telemetry selects a concrete backend. |
+| `x-vsr-selected-replica` | Router-requested replica identifier when the telemetry source provides one. |
+| `x-vsr-actual-backend` | Envoy-selected backend metadata echoed back to the router for replay diagnostics. |
+| `x-vsr-actual-replica` | Envoy-selected replica metadata echoed back to the router for replay diagnostics. |
+| `x-vsr-actual-upstream` | Envoy-selected upstream host echoed back to the router for replay diagnostics. |
+
+Generated Envoy config strips inbound client values for these headers, converts `x-vsr-selected-backend` into `envoy.lb.backend_id` subset metadata, and removes the internal feedback headers from downstream responses. Missing, stale, or unhealthy backend telemetry is fail-open and falls back to normal Envoy load balancing.
+
 ## Protocol And Replay Headers
 
 | Header | Description |

@@ -191,6 +191,10 @@ def generate_envoy_config_from_user_config(
             endpoints.append(
                 {
                     "name": backend.name or f"backend-{index + 1}",
+                    "backend_id": backend.backend_id
+                    or backend.name
+                    or f"backend-{index + 1}",
+                    "engine_kind": backend.engine_kind or "",
                     "address": host,
                     "port": int(port),
                     "host_authority": (

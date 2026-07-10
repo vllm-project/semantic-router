@@ -35,6 +35,11 @@ static_resources:
               - "x-vsr-looper-iteration"
               - "x-authz-user-id"
               - "x-authz-user-groups"
+              - "x-vsr-selected-backend"
+              - "x-vsr-selected-replica"
+              - "x-vsr-actual-backend"
+              - "x-vsr-actual-replica"
+              - "x-vsr-actual-upstream"
               routes:
               {% for model in models %}
               # Route for model: {{ model.name }}
@@ -53,6 +58,19 @@ static_resources:
                   append_action: OVERWRITE_IF_EXISTS_OR_ADD
                 {% endfor %}
                 {% endif %}
+                response_headers_to_add:
+                - header:
+                    key: "x-vsr-actual-backend"
+                    value: "%UPSTREAM_METADATA(envoy.lb:backend_id)%"
+                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                - header:
+                    key: "x-vsr-actual-replica"
+                    value: "%UPSTREAM_METADATA(envoy.lb:replica_id)%"
+                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                - header:
+                    key: "x-vsr-actual-upstream"
+                    value: "%UPSTREAM_HOST%"
+                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
                 route:
                   cluster: {{ model.cluster_name }}_cluster
                   timeout: {{ listener.timeout | default('1200s') }}
@@ -93,6 +111,21 @@ static_resources:
                     value: {{ header.value | tojson }}
                   append_action: OVERWRITE_IF_EXISTS_OR_ADD
                 {% endfor %}
+                {% endif %}
+                {% if models %}
+                response_headers_to_add:
+                - header:
+                    key: "x-vsr-actual-backend"
+                    value: "%UPSTREAM_METADATA(envoy.lb:backend_id)%"
+                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                - header:
+                    key: "x-vsr-actual-replica"
+                    value: "%UPSTREAM_METADATA(envoy.lb:replica_id)%"
+                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                - header:
+                    key: "x-vsr-actual-upstream"
+                    value: "%UPSTREAM_HOST%"
+                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
                 {% endif %}
                 route:
                   {% if models %}
@@ -157,6 +190,16 @@ static_resources:
                 request_body_mode: "BUFFERED"
                 response_body_mode: "BUFFERED"
               message_timeout: {{ listener.timeout | default('1200s') }}
+          - name: envoy.filters.http.header_to_metadata
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.header_to_metadata.v3.Config
+              request_rules:
+              - header: x-vsr-selected-backend
+                on_header_present:
+                  metadata_namespace: envoy.lb
+                  key: backend_id
+                  type: STRING
+                remove: true
           - name: envoy.filters.http.router
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
@@ -224,12 +267,26 @@ static_resources:
     dns_lookup_family: V4_ONLY
     {% endif %}
     lb_policy: ROUND_ROBIN
+    lb_subset_config:
+      fallback_policy: ANY_ENDPOINT
+      subset_selectors:
+      - keys:
+        - backend_id
     load_assignment:
       cluster_name: {{ model.cluster_name }}_cluster
       endpoints:
       - lb_endpoints:
         {% for endpoint in model.endpoints %}
-        - endpoint:
+        - metadata:
+            filter_metadata:
+              envoy.lb:
+                backend_id: "{{ endpoint.backend_id }}"
+                backend_name: "{{ endpoint.name }}"
+                replica_id: "{{ endpoint.name }}"
+                {% if endpoint.engine_kind %}
+                engine_kind: "{{ endpoint.engine_kind }}"
+                {% endif %}
+          endpoint:
             address:
               socket_address:
                 address: {{ endpoint.address }}

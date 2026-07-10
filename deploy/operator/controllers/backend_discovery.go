@@ -243,10 +243,12 @@ func discoverVLLMBackends(ctx context.Context, c client.Client, vllmEndpoints []
 				modelConfig.ReasoningFamily = vllmEndpoint.ReasoningFamily
 			}
 			modelConfig.BackendRefs = append(modelConfig.BackendRefs, routerconfig.CanonicalBackendRef{
-				Name:     endpoint.Name,
-				Endpoint: fmt.Sprintf("%s:%d", endpoint.Address, endpoint.Port),
-				Protocol: endpoint.Protocol,
-				Weight:   endpoint.Weight,
+				Name:       endpoint.Name,
+				BackendID:  endpoint.Name,
+				EngineKind: "vllm",
+				Endpoint:   fmt.Sprintf("%s:%d", endpoint.Address, endpoint.Port),
+				Protocol:   endpoint.Protocol,
+				Weight:     endpoint.Weight,
 			})
 			modelConfig.LoRAs = mergeDiscoveredLoRAs(modelConfig.LoRAs, vllmEndpoint.LoRAs)
 			models[vllmEndpoint.Model] = modelConfig

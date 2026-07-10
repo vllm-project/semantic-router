@@ -323,6 +323,8 @@ def _legacy_model_catalog_config() -> dict:
                 "name": "local-primary",
                 "address": "127.0.0.1",
                 "port": 8000,
+                "backend_id": "qwen3-local-primary",
+                "engine_kind": "vllm",
                 "protocol": "http",
                 "weight": 80,
             },
@@ -410,6 +412,8 @@ def test_migrate_config_data_promotes_legacy_lora_catalog_and_backend_refs():
             "backend_refs": [
                 {
                     "name": "local-primary",
+                    "backend_id": "qwen3-local-primary",
+                    "engine_kind": "vllm",
                     "endpoint": "127.0.0.1:8000",
                     "protocol": "http",
                     "weight": 80,

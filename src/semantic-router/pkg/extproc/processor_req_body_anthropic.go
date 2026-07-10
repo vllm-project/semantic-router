@@ -153,6 +153,7 @@ func (r *OpenAIRouter) buildAnthropicRoutingResponse(
 	appendProfileHeaders(&setHeaders, profile)
 	appendRoutingHeaders(&setHeaders, targetModel)
 	setHeaders = append(setHeaders, r.startUpstreamSpanAndInjectHeaders(targetModel, backendAddress, ctx)...)
+	r.appendBackendSelectionHeaders(&setHeaders, targetModel, ctx)
 	r.recordRoutingLatency(ctx)
 
 	return &ext_proc.ProcessingResponse{
@@ -163,7 +164,7 @@ func (r *OpenAIRouter) buildAnthropicRoutingResponse(
 					ClearRouteCache: true,
 					HeaderMutation: &ext_proc.HeaderMutation{
 						SetHeaders:    setHeaders,
-						RemoveHeaders: append(anthropic.HeadersToRemove(), r.CredentialResolver.HeadersToStrip()...),
+						RemoveHeaders: append(append(anthropic.HeadersToRemove(), r.CredentialResolver.HeadersToStrip()...), internalBackendHeaders()...),
 					},
 					BodyMutation: &ext_proc.BodyMutation{
 						Mutation: &ext_proc.BodyMutation_Body{

@@ -10,6 +10,8 @@ export interface ListenerConfig {
 
 export interface VLLMEndpoint {
   name: string
+  backend_id?: string
+  engine_kind?: string
   address: string
   port: number
   weight: number
@@ -132,6 +134,8 @@ export interface ModelConfigEntry {
 
 export interface BackendRefEntry {
   name?: string
+  backend_id?: string
+  engine_kind?: string
   endpoint?: string
   protocol?: 'http' | 'https'
   weight?: number

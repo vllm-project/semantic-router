@@ -11,7 +11,7 @@
 Inside canonical `config.yaml`:
 
 - `providers.defaults` holds provider-wide defaults such as `default_model` and reasoning families
-- `providers.models[]` holds concrete backend access details directly
+- `providers.models[]` holds concrete backend access details directly, including optional `backend_id` and `engine_kind` identity hints on each `backend_refs[]` entry
 - `routing.modelCards[]` holds semantic model metadata, including optional `loras[]` catalogs for decision-level `lora_name` references
 - `routing.projections` carries cross-signal coordination and derived routing outputs
 - `routing.projections.partitions` is the canonical runtime home for exclusive domain or embedding partitions; DSL authoring uses `PROJECTION partition`
@@ -25,6 +25,8 @@ Inside canonical `config.yaml`:
 - `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog` expose router-wide overrides explicitly
 - `global.router.learning.adaptation` adds online model-choice learning after the base decision algorithm. `global.router.learning.protection` protects agentic continuity, cache, tool loops, and handoff cost. Decisions can opt out with `routing.decisions[].adaptations.mode: bypass`, use component-level `adaptations.adaptation.mode` / `adaptations.protection.mode`, or override the adaptation search space with `adaptations.adaptation.candidate_set`. `decision.algorithm.type=session_aware|elo|rl_driven|gmtrouter|bandit|personalization` is no longer a supported public algorithm.
 - `global.services.router_replay.enabled` is the router-wide replay default; when it is on, decisions inherit replay capture unless a route-local `router_replay` plugin sets `enabled: false`
+- `global.services.observability.backend_telemetry` explicitly enables backend metrics collection; it defaults to disabled and uses `backend_refs[].engine_kind` to build adapter targets
+- When backend telemetry is fresh, the router can request a concrete `backend_refs[].backend_id` as a second-stage Envoy endpoint-selection hint. Generated local Envoy config maps that internal hint into `envoy.lb.backend_id` subset metadata with `ANY_ENDPOINT` fallback, so stale or missing telemetry preserves normal Envoy load balancing. Standalone operator dynamic-forward-proxy configs do not support deterministic endpoint pinning yet and only strip the internal backend headers.
 - embedding fallback tuning such as `global.model_catalog.embeddings.semantic.embedding_config.top_k` lives under the router-owned model catalog, not under individual signal rules
 - prototype-aware exemplar compression and label scoring live alongside their owning signal families: `global.model_catalog.embeddings.semantic.embedding_config.prototype_scoring`, `global.model_catalog.modules.classifier.preference.prototype_scoring`, `global.model_catalog.kbs[].prototype_scoring`, and `global.model_catalog.modules.complexity.prototype_scoring`
 - reusable startup-loaded knowledge bases live under `global.model_catalog.kbs[]`, while `routing.signals.kb[]` binds label/group matches into normal routing signals

@@ -52,6 +52,12 @@ const standaloneEnvoyConfigYAML = `static_resources:
             virtual_hosts:
             - name: local_service
               domains: ["*"]
+              request_headers_to_remove:
+              - "x-vsr-selected-backend"
+              - "x-vsr-selected-replica"
+              - "x-vsr-actual-backend"
+              - "x-vsr-actual-replica"
+              - "x-vsr-actual-upstream"
               routes:
               # Route /v1/models to semantic router HTTP API
               - match:

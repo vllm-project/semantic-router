@@ -191,6 +191,12 @@ const buildLegacyBackendCatalog = (cfg: ConfigData): Record<string, BackendRefEn
     if (endpoint.protocol) {
       backendRef.protocol = endpoint.protocol
     }
+    if (endpoint.backend_id) {
+      backendRef.backend_id = endpoint.backend_id
+    }
+    if (endpoint.engine_kind) {
+      backendRef.engine_kind = endpoint.engine_kind
+    }
     if (typeof endpoint.weight === 'number') {
       backendRef.weight = endpoint.weight
     }

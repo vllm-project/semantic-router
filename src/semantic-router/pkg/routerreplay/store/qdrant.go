@@ -278,6 +278,12 @@ func (q *QdrantStore) UpdateToolTrace(ctx context.Context, id string, trace Tool
 	})
 }
 
+func (q *QdrantStore) UpdateRouteDiagnostics(ctx context.Context, id string, diagnostics RouteDiagnostics) error {
+	return q.updateRecord(ctx, id, func(r *Record) {
+		r.RouteDiagnostics = cloneRouteDiagnostics(&diagnostics)
+	})
+}
+
 func (q *QdrantStore) Close() (err error) {
 	q.closeOnce.Do(func() {
 		if q.asyncWrites {

@@ -137,6 +137,13 @@ type RequestContext struct {
 	VSRCacheSimilarity             float32                                     // Similarity score from last cache lookup (0 = no lookup performed)
 	VSRInjectedSystemPrompt        bool                                        // Whether a system prompt was injected into the request
 	VSRSelectedDecision            *config.Decision                            // The decision object selected by DecisionEngine (for plugins)
+	BackendPolicyReason            string                                      // Backend policy selected/fail-open reason
+	BackendFallbackReason          string                                      // Backend policy fallback reason when no backend was selected
+	RequestedBackendID             string                                      // Backend ID requested from Envoy subset LB
+	RequestedReplicaID             string                                      // Replica ID requested from Envoy subset LB, when available
+	ActualBackendID                string                                      // Backend ID reported by Envoy from upstream endpoint metadata
+	ActualReplicaID                string                                      // Replica ID reported by Envoy from upstream endpoint metadata
+	ActualUpstream                 string                                      // Upstream host reported by Envoy
 
 	// ResponsePath records how the final response was produced, surfaced as the
 	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*

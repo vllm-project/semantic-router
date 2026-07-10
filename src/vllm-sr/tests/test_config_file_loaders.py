@@ -101,6 +101,25 @@ def test_parse_user_config_preserves_cached_input_pricing(tmp_path: Path) -> Non
     assert pricing.model_dump()["cached_input_per_1m"] == 0.25
 
 
+def test_parse_user_config_preserves_backend_identity_hints(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    backend_ref = data["providers"]["models"][0]["backend_refs"][0]
+    backend_ref["backend_id"] = "demo-primary"
+    backend_ref["engine_kind"] = "vllm"
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    parsed = parse_user_config(str(config_path))
+
+    parsed_backend = parsed.providers.models[0].backend_refs[0]
+    assert parsed_backend.backend_id == "demo-primary"
+    assert parsed_backend.engine_kind == "vllm"
+    dumped = parsed_backend.model_dump(exclude_none=True)
+    assert dumped["backend_id"] == "demo-primary"
+    assert dumped["engine_kind"] == "vllm"
+
+
 def test_embedding_models_config_accepts_remote_endpoint() -> None:
     config = EmbeddingModelsConfig(
         embedding_config={

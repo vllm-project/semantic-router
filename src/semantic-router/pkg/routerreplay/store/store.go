@@ -103,20 +103,28 @@ type ToolTraceStep struct {
 // protection outcome in a stable replay-facing shape. Detailed per-candidate
 // learning diagnostics live in the typed Learning block.
 type RouteDiagnostics struct {
-	Decision             string `json:"decision,omitempty"`
-	DecisionTier         int    `json:"decision_tier,omitempty"`
-	DecisionPriority     int    `json:"decision_priority,omitempty"`
-	SelectionMethod      string `json:"selection_method,omitempty"`
-	OriginalModel        string `json:"original_model,omitempty"`
-	ProposalModel        string `json:"proposal_model,omitempty"`
-	PreviousModel        string `json:"previous_model,omitempty"`
-	SelectedModel        string `json:"selected_model,omitempty"`
-	SessionPolicyApplied bool   `json:"session_policy_applied,omitempty"`
-	SessionAction        string `json:"session_action,omitempty"`
-	SessionPhase         string `json:"session_phase,omitempty"`
-	SessionReason        string `json:"session_reason,omitempty"`
-	HardLockReason       string `json:"hard_lock_reason,omitempty"`
-	DecisionReason       string `json:"decision_reason,omitempty"`
+	Decision              string `json:"decision,omitempty"`
+	DecisionTier          int    `json:"decision_tier,omitempty"`
+	DecisionPriority      int    `json:"decision_priority,omitempty"`
+	SelectionMethod       string `json:"selection_method,omitempty"`
+	OriginalModel         string `json:"original_model,omitempty"`
+	ProposalModel         string `json:"proposal_model,omitempty"`
+	PreviousModel         string `json:"previous_model,omitempty"`
+	SelectedModel         string `json:"selected_model,omitempty"`
+	SessionPolicyApplied  bool   `json:"session_policy_applied,omitempty"`
+	SessionAction         string `json:"session_action,omitempty"`
+	SessionPhase          string `json:"session_phase,omitempty"`
+	SessionReason         string `json:"session_reason,omitempty"`
+	HardLockReason        string `json:"hard_lock_reason,omitempty"`
+	DecisionReason        string `json:"decision_reason,omitempty"`
+	RequestedBackendID    string `json:"requested_backend_id,omitempty"`
+	RequestedReplicaID    string `json:"requested_replica_id,omitempty"`
+	ActualBackendID       string `json:"actual_backend_id,omitempty"`
+	ActualReplicaID       string `json:"actual_replica_id,omitempty"`
+	ActualUpstream        string `json:"actual_upstream,omitempty"`
+	BackendPolicyReason   string `json:"backend_policy_reason,omitempty"`
+	BackendFallbackReason string `json:"backend_fallback_reason,omitempty"`
+	BackendSelectionMode  string `json:"backend_selection_mode,omitempty"`
 }
 
 // Record represents a routing decision record with metadata and captured payloads.
@@ -262,6 +270,9 @@ type Enricher interface {
 
 	// UpdateToolTrace updates the request-local tool-calling timeline for an existing record.
 	UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error
+
+	// UpdateRouteDiagnostics updates final routing diagnostics for an existing record.
+	UpdateRouteDiagnostics(ctx context.Context, id string, diagnostics RouteDiagnostics) error
 }
 
 // Storage is the interface that all storage backends must implement.

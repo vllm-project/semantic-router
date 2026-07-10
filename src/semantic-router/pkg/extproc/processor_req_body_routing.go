@@ -245,7 +245,7 @@ func (r *OpenAIRouter) buildRouteHeaderState(
 ) (*routeHeaderState, *ext_proc.ProcessingResponse) {
 	state := &routeHeaderState{
 		setHeaders:    []*core.HeaderValueOption{},
-		removeHeaders: []string{},
+		removeHeaders: internalBackendHeaders(),
 	}
 	if contentLength != nil {
 		state.removeHeaders = append(state.removeHeaders, "content-length")
@@ -274,6 +274,7 @@ func (r *OpenAIRouter) buildRouteHeaderState(
 	appendProfileHeaders(&state.setHeaders, profile)
 	appendCapturedPassThroughHeaders(&state.setHeaders, profile, ctx)
 	appendRoutingHeaders(&state.setHeaders, model)
+	r.appendBackendSelectionHeaders(&state.setHeaders, model, ctx)
 
 	return state, nil
 }

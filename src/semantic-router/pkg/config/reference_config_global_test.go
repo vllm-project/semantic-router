@@ -76,6 +76,7 @@ func assertReferenceConfigObservabilityCoverage(t testingT, observability map[st
 	assertMapCoversStructFields(t, mustMapAt(t, tracing, "exporter"), reflect.TypeOf(TracingExporterConfig{}), "global.services.observability.tracing.exporter")
 	assertMapCoversStructFields(t, mustMapAt(t, tracing, "sampling"), reflect.TypeOf(TracingSamplingConfig{}), "global.services.observability.tracing.sampling")
 	assertMapCoversStructFields(t, mustMapAt(t, tracing, "resource"), reflect.TypeOf(TracingResourceConfig{}), "global.services.observability.tracing.resource")
+	assertMapCoversStructFields(t, mustMapAt(t, observability, "backend_telemetry"), reflect.TypeOf(BackendTelemetryConfig{}), "global.services.observability.backend_telemetry")
 	assertMapCoversStructFields(t, mustMapAt(t, observability, "metrics"), reflect.TypeOf(MetricsConfig{}), "global.services.observability.metrics")
 	assertMapCoversStructFields(
 		t,

@@ -163,7 +163,9 @@ func TestBuildResponseHeaderMutation_CacheHitSkipsNewHeaders(t *testing.T) {
 	}
 
 	mutation := buildResponseHeaderMutation(ctx, true)
-	assert.Nil(t, mutation, "cache hit should produce no header mutation")
+	assert.NotNil(t, mutation, "cache hit should still strip internal backend headers")
+	assert.Empty(t, mutation.SetHeaders, "cache hit should produce no response header additions")
+	assert.Contains(t, mutation.RemoveHeaders, headers.VSRActualBackend)
 }
 
 func TestBuildResponseHeaderMutation_NilContextReturnsNil(t *testing.T) {
@@ -260,7 +262,10 @@ func TestBuildResponseHeaderMutation_CacheHitSkipsRetentionHeaders(t *testing.T)
 	}
 
 	mutation := buildResponseHeaderMutation(ctx, true)
-	assert.Nil(t, mutation, "cache hit must not emit retention headers")
+	require.NotNil(t, mutation)
+	assert.Empty(t, mutation.SetHeaders, "cache hit must not emit retention headers")
+	assert.Contains(t, mutation.RemoveHeaders, headers.VSRActualBackend)
+	assert.Contains(t, mutation.RemoveHeaders, headers.VSRSelectedBackend)
 }
 
 func TestAddLossinessWarnings_EmptyProducesNoHeader(t *testing.T) {

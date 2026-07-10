@@ -32,6 +32,8 @@ providers:
         analytics: qwen3-routing
       backend_refs:
         - name: local-primary
+          backend_id: qwen3-8b-local-primary
+          engine_kind: vllm
           endpoint: 127.0.0.1:8000
           protocol: http
           weight: 80
@@ -1503,6 +1505,12 @@ global:
           model_metrics: true
           queue_depth_estimation: true
           max_models: 50
+      backend_telemetry:
+        enabled: false
+        poll_interval: 2s
+        ttl: 5s
+        request_timeout: 2s
+        metrics_path: /metrics
     authz:
       fail_open: false
       identity:

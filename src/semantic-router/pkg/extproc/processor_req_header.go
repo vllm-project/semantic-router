@@ -172,6 +172,7 @@ func extractHeaderValue(header interface {
 
 func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
 	return &ext_proc.HeaderMutation{
+		RemoveHeaders: internalBackendHeaders(),
 		SetHeaders: []*core.HeaderValueOption{{
 			Header: &core.HeaderValue{
 				Key:   "accept-encoding",
@@ -248,6 +249,7 @@ func applyHeaderPassThroughPolicy(ctx *RequestContext) {
 	for _, name := range hopByHopDropList {
 		delete(ctx.Headers, name)
 	}
+	stripInternalBackendHeaders(ctx)
 
 	if ctx.ClientProtocol != config.ClientProtocolAnthropic {
 		return

@@ -13,6 +13,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiserver"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backend"
+	backendvllm "github.com/vllm-project/semantic-router/src/semantic-router/pkg/backend/vllm"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
@@ -223,6 +225,90 @@ func initializeWindowedMetricsIfEnabled(cfg *config.RouterConfig) {
 	logging.ComponentEvent("router", "windowed_metrics_initialized", map[string]interface{}{
 		"mode": "load_balancing",
 	})
+}
+
+func initializeBackendTelemetryIfEnabled(cfg *config.RouterConfig, shutdownHooks *[]func()) {
+	telemetryCfg := cfg.Observability.BackendTelemetry
+	if !telemetryCfg.Enabled {
+		return
+	}
+
+	pollInterval := durationOrDefault(telemetryCfg.PollInterval, backend.DefaultCollectionInterval)
+	ttl := durationOrDefault(telemetryCfg.TTL, backend.DefaultTelemetryTTL)
+	requestTimeout := durationOrDefault(telemetryCfg.RequestTimeout, 2*time.Second)
+	targets := backendvllm.TargetsFromRouterConfig(cfg, backendvllm.TargetOptions{
+		MetricsPath:       telemetryCfg.MetricsPath,
+		IncludeLegacyVLLM: true,
+	})
+	if len(targets) == 0 {
+		logging.ComponentWarnEvent("router", "backend_telemetry_no_targets", map[string]interface{}{
+			"engine_kind": string(backend.EngineKindVLLM),
+		})
+		return
+	}
+
+	if err := backendvllm.Register(); err != nil {
+		logging.ComponentWarnEvent("router", "backend_telemetry_adapter_register_failed", map[string]interface{}{
+			"engine_kind": string(backend.EngineKindVLLM),
+			"error":       err.Error(),
+		})
+		return
+	}
+	adapter, err := backend.NewAdapter(backend.EngineKindVLLM, backend.AdapterConfig{
+		Targets:        targets,
+		Store:          backend.DefaultStore(),
+		Interval:       pollInterval,
+		TTL:            ttl,
+		RequestTimeout: requestTimeout,
+	})
+	if err != nil {
+		logging.ComponentWarnEvent("router", "backend_telemetry_adapter_create_failed", map[string]interface{}{
+			"engine_kind": string(backend.EngineKindVLLM),
+			"error":       err.Error(),
+		})
+		return
+	}
+	runner, err := backend.NewRunner(backend.RunnerConfig{
+		Adapters: []backend.TelemetryAdapter{adapter},
+		Store:    backend.DefaultStore(),
+		Interval: pollInterval,
+		OnError: func(kind backend.EngineKind, err error) {
+			logging.ComponentWarnEvent("router", "backend_telemetry_collect_failed", map[string]interface{}{
+				"engine_kind": string(kind),
+				"error":       err.Error(),
+			})
+		},
+	})
+	if err != nil {
+		logging.ComponentWarnEvent("router", "backend_telemetry_runner_create_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	*shutdownHooks = append(*shutdownHooks, func() {
+		cancel()
+		logging.ComponentEvent("router", "backend_telemetry_shutdown", map[string]interface{}{})
+	})
+	go runner.Run(ctx)
+	logging.ComponentEvent("router", "backend_telemetry_started", map[string]interface{}{
+		"engine_kind":   string(backend.EngineKindVLLM),
+		"targets":       len(targets),
+		"poll_interval": pollInterval.String(),
+		"ttl":           ttl.String(),
+	})
+}
+
+func durationOrDefault(value string, fallback time.Duration) time.Duration {
+	if value == "" {
+		return fallback
+	}
+	parsed, err := time.ParseDuration(value)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }
 
 func registerSignalHandler(shutdownHooks *[]func()) {
