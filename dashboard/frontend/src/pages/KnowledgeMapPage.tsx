@@ -53,7 +53,11 @@ export default function KnowledgeMapPage() {
       })
       .catch((nextError) => {
         if (!cancelled) {
-          setError(nextError instanceof Error ? nextError.message : 'Failed to load knowledge map metadata')
+          setError(
+            nextError instanceof Error
+              ? nextError.message
+              : 'Failed to load knowledge map metadata',
+          )
         }
       })
       .finally(() => {
@@ -71,7 +75,11 @@ export default function KnowledgeMapPage() {
 
   return (
     <div className={styles.page}>
-      {error ? <div className={styles.error}>{error}</div> : null}
+      {error ? (
+        <div className={styles.error} role="alert">
+          {error}
+        </div>
+      ) : null}
 
       <section className={styles.mapShell}>
         <Link to="/knowledge-bases/bases" className={styles.backLink}>
@@ -79,8 +87,8 @@ export default function KnowledgeMapPage() {
         </Link>
 
         {(loading || !iframeReady) && !error ? (
-          <div className={styles.loadingPanel}>
-            <div className={styles.spinner} />
+          <div className={styles.loadingPanel} role="status" aria-live="polite">
+            <div className={styles.spinner} aria-hidden="true" />
             <p>{loading ? 'Loading knowledge map metadata...' : 'Launching WizMap...'}</p>
           </div>
         ) : null}

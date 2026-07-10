@@ -30,7 +30,9 @@ test.describe('Public and transition surfaces on short screens', () => {
 
   test('uses the compact transition layout without clipping progress', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 568 })
-    await page.clock.install({ time: new Date('2026-07-11T00:00:00Z') })
+    const transitionTime = new Date('2026-07-11T00:00:00Z')
+    await page.clock.install({ time: transitionTime })
+    await page.clock.pauseAt(transitionTime)
     await mockAuthenticatedAppShell(page)
     await page.goto('/auth/transition?to=/dashboard', { waitUntil: 'domcontentloaded' })
 

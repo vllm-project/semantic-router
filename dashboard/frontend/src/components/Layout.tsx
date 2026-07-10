@@ -374,6 +374,8 @@ const Layout: React.FC<LayoutProps> = ({
               className={styles.mobileMenuButton}
               onClick={() => setMobileMenuOpen(prev => !prev)}
               aria-label="Toggle menu"
+              aria-controls="mobile-navigation"
+              aria-expanded={mobileMenuOpen}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 {mobileMenuOpen ? (
@@ -394,7 +396,7 @@ const Layout: React.FC<LayoutProps> = ({
         </div>
 
         {mobileMenuOpen ? (
-          <div className={styles.mobileNav} role="navigation" aria-label="Mobile navigation">
+          <div id="mobile-navigation" className={styles.mobileNav} role="navigation" aria-label="Mobile navigation">
             {PRIMARY_NAV_LINKS.map(link => (
               <NavLink
                 key={`mobile-${link.to}`}

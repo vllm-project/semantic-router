@@ -252,6 +252,43 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByRole('button', { name: 'Retry discovery' })).toBeVisible();
   });
 
+  test('rejects a MoM-only discovery response and never submits the retired alias', async ({
+    page,
+  }) => {
+    await page.unroute('**/api/router/v1/models*');
+    await page.route('**/api/router/v1/models*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          object: 'list',
+          data: [
+            {
+              id: 'MoM',
+              object: 'model',
+              owned_by: 'vllm-semantic-router',
+              description: 'Intelligent Router for Mixture-of-Models',
+            },
+          ],
+        }),
+      });
+    });
+
+    let completionRequests = 0;
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
+      completionRequests += 1;
+      await route.abort();
+    });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const composer = page.getByPlaceholder('Ask me anything...');
+    await composer.fill('Do not fall back to MoM');
+    await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Retry discovery' })).toBeVisible();
+    await composer.press('Enter');
+    expect(completionRequests).toBe(0);
+  });
+
   test('opens and collapses the left history rail', async ({ page }) => {
     await page.evaluate(() => {
       const now = Date.now();

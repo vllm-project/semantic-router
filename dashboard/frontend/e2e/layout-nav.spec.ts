@@ -373,10 +373,14 @@ test.describe('Layout top navigation', () => {
     await expect(page.getByRole('navigation', { name: 'Global navigation' })).toBeHidden();
     const menuButton = page.getByRole('button', { name: 'Toggle menu' });
     await expect(menuButton).toBeVisible();
+    await expect(menuButton).toHaveAttribute('aria-controls', 'mobile-navigation');
+    await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
     await menuButton.click();
+    await expect(menuButton).toHaveAttribute('aria-expanded', 'true');
     const mobileNavigation = page.getByRole('navigation', { name: 'Mobile navigation' });
+    await expect(mobileNavigation).toHaveAttribute('id', 'mobile-navigation');
     await expect(mobileNavigation.getByText('Manager', { exact: true })).toBeVisible();
     await expect(mobileNavigation.getByText('Simulator', { exact: true })).toBeVisible();
     await expect(mobileNavigation.getByText('System', { exact: true })).toBeVisible();
@@ -544,9 +548,12 @@ test.describe('Layout top navigation', () => {
 
     await page.goto('/dashboard');
 
-    await page.getByRole('button', { name: /Open account details/i }).click();
+    const accountTrigger = page.getByRole('button', { name: /Open account details/i });
+    await accountTrigger.click();
 
     const accountDialog = page.getByTestId('layout-account-dialog');
+    const closeDialogButton = accountDialog.getByRole('button', { name: 'Close account dialog' });
+    const logoutButton = accountDialog.getByRole('button', { name: 'Logout' });
     await expect(accountDialog).toBeVisible();
     await expect(accountDialog).toHaveAttribute('aria-modal', 'true');
     await expect(accountDialog.getByText('Ada Lovelace')).toBeVisible();
@@ -555,7 +562,17 @@ test.describe('Layout top navigation', () => {
     await expect(accountDialog.getByText('config.read')).toBeVisible();
     await expect(accountDialog.getByText('config.write')).toBeVisible();
     await expect(accountDialog.getByText('users.manage')).toBeVisible();
+    await expect(closeDialogButton).toBeFocused();
 
+    await page.keyboard.press('Shift+Tab');
+    await expect(logoutButton).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(closeDialogButton).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(accountDialog).toBeHidden();
+    await expect(accountTrigger).toBeFocused();
+
+    await accountTrigger.click();
     await accountDialog.getByRole('button', { name: 'Logout' }).click();
 
     await expect(page).toHaveURL(/\/login$/);

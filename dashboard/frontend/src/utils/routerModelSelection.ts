@@ -27,24 +27,38 @@ function modelId(entry: RouterModelRecord): string {
   return typeof entry.id === 'string' ? entry.id.trim() : ''
 }
 
+function isRouterOwned(entry: RouterModelRecord): boolean {
+  return (
+    typeof entry.owned_by === 'string' &&
+    entry.owned_by.trim().toLowerCase() === 'vllm-semantic-router'
+  )
+}
+
 function isAutomaticRouterModel(entry: RouterModelRecord): boolean {
   const id = modelId(entry)
-  if (!id) {
+  const normalizedId = id.toLowerCase()
+  if (
+    !id ||
+    !isRouterOwned(entry) ||
+    normalizedId === 'mom' ||
+    normalizedId.endsWith('/mom')
+  ) {
     return false
   }
 
   const description = typeof entry.description === 'string' ? entry.description.toLowerCase() : ''
 
   return id === 'auto'
-    || id === 'MoM'
-    || id.toLowerCase().includes('/auto')
+    || normalizedId.endsWith('/auto')
     || description.includes('automatic model routing')
     || description.includes('intelligent router for mixture-of-models')
 }
 
 export function selectRouterAutoModel(payload: unknown): string | null {
   const records = normalizeModelRecords(payload)
-  const canonical = records.find((entry) => modelId(entry) === CANONICAL_AUTO_MODEL)
+  const canonical = records.find(
+    (entry) => modelId(entry) === CANONICAL_AUTO_MODEL && isRouterOwned(entry),
+  )
   if (canonical) {
     return CANONICAL_AUTO_MODEL
   }

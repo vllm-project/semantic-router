@@ -110,7 +110,7 @@ async function mockLargeModelInventory(
     settings: { platform: 'amd', readonlyMode: false },
   })
 
-  const config = buildConfig()
+  let config = buildConfig()
   const writes: MockConfig[] = []
 
   await page.route('**/api/router/config/all', async (route) => {
@@ -130,7 +130,9 @@ async function mockLargeModelInventory(
   })
 
   await page.route('**/api/router/config/update', async (route) => {
-    writes.push(route.request().postDataJSON() as MockConfig)
+    const nextConfig = route.request().postDataJSON() as MockConfig
+    writes.push(nextConfig)
+    config = nextConfig
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -155,6 +157,89 @@ async function mockLargeModelInventory(
 }
 
 test.describe('Models inventory at 300+ scale', () => {
+  test('adds and edits one model with one canonical write per action', async ({ page }) => {
+    const { writes } = await mockLargeModelInventory(page)
+    await page.goto('/config/models')
+
+    await expect(page.getByText(`1–25 of ${MODEL_COUNT} models`, { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Add Model' }).click()
+
+    const addDialog = page.getByRole('dialog', { name: 'Add New Model' })
+    await addDialog.getByLabel('Model Name').fill('model-305-added')
+    await addDialog.getByLabel('Provider Model ID').fill('physical/Qwen-Scale-305')
+    await addDialog.getByLabel('API Format').fill('openai')
+    await addDialog.getByLabel('Description').fill('Added from the 305-model inventory.')
+    await addDialog.getByLabel('Capabilities').fill('chat\nreasoning')
+    await addDialog.getByLabel('Tags').fill('rocm\nnew')
+    await addDialog.getByRole('button', { name: 'Add', exact: true }).click()
+
+    await expect(addDialog).toBeHidden()
+    await expect.poll(() => writes.length).toBe(1)
+    const addedConfig = writes[0]
+    expect(addedConfig).not.toHaveProperty('signals')
+    expect(addedConfig).not.toHaveProperty('decisions')
+    expect(addedConfig).not.toHaveProperty('model_config')
+    expect(addedConfig.version).toBe('v0.3')
+    expect(addedConfig.providers.models).toHaveLength(MODEL_COUNT + 1)
+    expect(addedConfig.routing.modelCards).toHaveLength(MODEL_COUNT + 1)
+    expect(
+      addedConfig.providers.models.find((model) => model.name === 'model-305-added'),
+    ).toMatchObject({
+      name: 'model-305-added',
+      provider_model_id: 'physical/Qwen-Scale-305',
+      api_format: 'openai',
+      reasoning_family: 'family-alpha',
+      backend_refs: [
+        { name: 'endpoint-1', endpoint: 'localhost:8000', protocol: 'http', weight: 1 },
+      ],
+    })
+    expect(
+      addedConfig.routing.modelCards.find((model) => model.name === 'model-305-added'),
+    ).toMatchObject({
+      description: 'Added from the 305-model inventory.',
+      capabilities: ['chat', 'reasoning'],
+      tags: ['rocm', 'new'],
+    })
+
+    const search = page.getByRole('searchbox', {
+      name: 'Search name, ID, family, tag, or capability...',
+    })
+    await search.fill('model-305-added')
+    await expect(page.getByText('1–1 of 1 models', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Edit model-305-added' }).click()
+
+    const editDialog = page.getByRole('dialog', { name: 'Edit Model: model-305-added' })
+    await expect(editDialog.getByLabel('Provider Model ID')).toHaveValue('physical/Qwen-Scale-305')
+    await editDialog.getByLabel('Provider Model ID').fill('physical/Qwen-Scale-305-v2')
+    await editDialog
+      .getByLabel('Description')
+      .fill('Updated without shrinking the large inventory.')
+    await editDialog.getByLabel('Tags').fill('rocm\nupdated')
+    await editDialog.getByRole('button', { name: 'Save', exact: true }).click()
+
+    await expect(editDialog).toBeHidden()
+    await expect.poll(() => writes.length).toBe(2)
+    const editedConfig = writes[1]
+    expect(editedConfig).not.toHaveProperty('signals')
+    expect(editedConfig).not.toHaveProperty('decisions')
+    expect(editedConfig).not.toHaveProperty('model_config')
+    expect(editedConfig.providers.models).toHaveLength(MODEL_COUNT + 1)
+    expect(editedConfig.routing.modelCards).toHaveLength(MODEL_COUNT + 1)
+    expect(
+      editedConfig.providers.models.find((model) => model.name === 'model-305-added'),
+    ).toMatchObject({
+      provider_model_id: 'physical/Qwen-Scale-305-v2',
+    })
+    expect(
+      editedConfig.routing.modelCards.find((model) => model.name === 'model-305-added'),
+    ).toMatchObject({
+      description: 'Updated without shrinking the large inventory.',
+      tags: ['rocm', 'updated'],
+    })
+    expect(editedConfig.providers.models.some((model) => model.name === DEFAULT_MODEL)).toBe(true)
+    expect(editedConfig.providers.models.some((model) => model.name === 'model-304')).toBe(true)
+  })
+
   test('paginates 25 rows and composes family filters with search', async ({ page }) => {
     await mockLargeModelInventory(page)
     await page.goto('/config/models')

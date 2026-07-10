@@ -3,8 +3,8 @@
  */
 
 .panel {
-  background: var(--bg-secondary, #1e1e2e);
-  border: 1px solid var(--border-color, #313244);
+  background: var(--bg-secondary, #18181b);
+  border: 1px solid var(--border-color, #3f3f46);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -32,7 +32,7 @@
 }
 
 .embeddedSummary {
-  color: var(--color-text-secondary, var(--text-secondary, #a6adc8));
+  color: var(--color-text-secondary, var(--text-secondary, #a1a1aa));
   font-size: 0.92rem;
   font-weight: 500;
   line-height: 1.5;
@@ -43,14 +43,14 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color, #313244);
+  border-bottom: 1px solid var(--border-color, #3f3f46);
 }
 
 .header h2 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: var(--text-primary, #cdd6f4);
+  color: var(--text-primary, #f5f5f7);
 }
 
 .headerActions {
@@ -62,7 +62,7 @@
 .closeBtn {
   background: transparent;
   border: none;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   cursor: pointer;
   font-size: 18px;
   padding: 4px 8px;
@@ -72,22 +72,22 @@
 
 .refreshBtn:hover,
 .closeBtn:hover {
-  background: var(--bg-hover, #313244);
-  color: var(--text-primary, #cdd6f4);
+  background: var(--bg-hover, #3f3f46);
+  color: var(--text-primary, #f5f5f7);
 }
 
 .loading,
 .empty {
   padding: 40px 20px;
   text-align: center;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
 }
 
 .error {
   padding: 12px 20px;
-  background: rgba(243, 139, 168, 0.1);
-  color: #f38ba8;
-  border-bottom: 1px solid var(--border-color, #313244);
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-bottom: 1px solid var(--border-color, #3f3f46);
 }
 
 .serverList {
@@ -97,8 +97,8 @@
 }
 
 .serverCard {
-  background: var(--bg-tertiary, #181825);
-  border: 1px solid var(--border-color, #313244);
+  background: var(--bg-tertiary, #101012);
+  border: 1px solid var(--border-color, #3f3f46);
   border-radius: 8px;
   margin-bottom: 12px;
   transition: border-color 0.2s;
@@ -106,23 +106,23 @@
 }
 
 .serverCard:hover {
-  border-color: var(--accent-color, #89b4fa);
+  border-color: var(--accent-color, #e4e4e7);
 }
 
 .serverCard.builtInSection {
-  border-color: rgba(166, 227, 161, 0.3);
+  border-color: rgba(34, 197, 94, 0.3);
 }
 
 .serverCard.builtInSection:hover {
-  border-color: rgba(166, 227, 161, 0.6);
+  border-color: rgba(34, 197, 94, 0.6);
 }
 
 .serverCard.toolsDbSection {
-  border-color: rgba(249, 226, 175, 0.3);
+  border-color: rgba(245, 158, 11, 0.3);
 }
 
 .serverCard.toolsDbSection:hover {
-  border-color: rgba(249, 226, 175, 0.6);
+  border-color: rgba(245, 158, 11, 0.6);
 }
 
 .serverHeader {
@@ -134,7 +134,7 @@
 }
 
 .serverHeader:hover {
-  background: var(--bg-hover, rgba(49, 50, 68, 0.5));
+  background: var(--bg-hover, rgba(63, 63, 70, 0.5));
 }
 
 .serverInfo {
@@ -146,7 +146,7 @@
 
 .expandIcon {
   font-size: 10px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   width: 12px;
   transition: transform 0.2s;
 }
@@ -156,20 +156,20 @@
 }
 
 .statusDot[data-status="connected"] {
-  color: #a6e3a1;
+  color: #22c55e;
 }
 
 .statusDot[data-status="connecting"] {
-  color: #f9e2af;
+  color: #f59e0b;
   animation: pulse 1s infinite;
 }
 
 .statusDot[data-status="error"] {
-  color: #f38ba8;
+  color: #ef4444;
 }
 
 .statusDot[data-status="disconnected"] {
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
 }
 
 @keyframes pulse {
@@ -179,16 +179,16 @@
 
 .serverName {
   font-weight: 500;
-  color: var(--text-primary, #cdd6f4);
+  color: var(--text-primary, #f5f5f7);
 }
 
 .transportBadge {
   font-size: 11px;
   padding: 2px 6px;
-  background: var(--bg-secondary, #1e1e2e);
-  border: 1px solid var(--border-color, #313244);
+  background: var(--bg-secondary, #18181b);
+  border: 1px solid var(--border-color, #3f3f46);
   border-radius: 4px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
 }
 
 .statusBadge {
@@ -200,28 +200,28 @@
 }
 
 .statusBadge.connected {
-  background: rgba(166, 227, 161, 0.15);
-  color: #a6e3a1;
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
 }
 
 .statusBadge.connecting {
-  background: rgba(249, 226, 175, 0.15);
-  color: #f9e2af;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
 }
 
 .statusBadge.disconnected {
-  background: var(--bg-secondary, #1e1e2e);
-  color: var(--text-secondary, #a6adc8);
+  background: var(--bg-secondary, #18181b);
+  color: var(--text-secondary, #a1a1aa);
 }
 
 .statusBadge.error {
-  background: rgba(243, 139, 168, 0.15);
-  color: #f38ba8;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
 }
 
 .toolCount {
   font-size: 11px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   margin-left: 4px;
 }
 
@@ -233,7 +233,7 @@
 .actionBtn {
   background: transparent;
   border: none;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
@@ -242,8 +242,8 @@
 }
 
 .actionBtn:hover:not(:disabled) {
-  background: var(--bg-hover, #313244);
-  color: var(--text-primary, #cdd6f4);
+  background: var(--bg-hover, #3f3f46);
+  color: var(--text-primary, #f5f5f7);
 }
 
 .actionBtn:disabled {
@@ -254,28 +254,28 @@
 .serverDescription {
   padding: 0 16px 8px;
   font-size: 13px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
 }
 
 .serverError {
   margin: 8px 16px;
   font-size: 12px;
-  color: #f38ba8;
+  color: #ef4444;
   padding: 8px 12px;
-  background: rgba(243, 139, 168, 0.1);
+  background: rgba(239, 68, 68, 0.1);
   border-radius: 4px;
 }
 
 .connectionHint {
   padding: 8px 16px;
   font-size: 12px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   font-style: italic;
 }
 
 /* Tools Container & Cards */
 .toolsContainer {
-  border-top: 1px solid var(--border-color, #313244);
+  border-top: 1px solid var(--border-color, #3f3f46);
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
@@ -286,20 +286,20 @@
 .toolsLoading {
   padding: 20px;
   text-align: center;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   font-size: 13px;
 }
 
 .toolCard {
-  background: var(--bg-secondary, #1e1e2e);
-  border: 1px solid var(--border-color, #313244);
+  background: var(--bg-secondary, #18181b);
+  border: 1px solid var(--border-color, #3f3f46);
   border-radius: 6px;
   padding: 12px;
   transition: border-color 0.2s;
 }
 
 .toolCard:hover {
-  border-color: rgba(137, 180, 250, 0.5);
+  border-color: rgba(212, 212, 216, 0.5);
 }
 
 .toolHeader {
@@ -316,15 +316,15 @@
 .toolName {
   font-weight: 600;
   font-size: 14px;
-  color: #89b4fa;
+  color: #e4e4e7;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
 }
 
 .categoryBadge {
   font-size: 10px;
   padding: 2px 6px;
-  background: rgba(203, 166, 247, 0.15);
-  color: #cba6f7;
+  background: rgba(212, 212, 216, 0.15);
+  color: #d4d4d8;
   border-radius: 4px;
   text-transform: uppercase;
   font-weight: 500;
@@ -332,7 +332,7 @@
 
 .toolDescription {
   font-size: 13px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   margin-bottom: 8px;
   line-height: 1.4;
 }
@@ -347,10 +347,10 @@
 .tagBadge {
   font-size: 10px;
   padding: 2px 6px;
-  background: var(--bg-tertiary, #181825);
-  border: 1px solid var(--border-color, #313244);
+  background: var(--bg-tertiary, #101012);
+  border: 1px solid var(--border-color, #3f3f46);
   border-radius: 3px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
 }
 
 .toolParams {
@@ -359,7 +359,7 @@
 
 .paramsLabel {
   font-weight: 500;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   display: block;
   margin-bottom: 6px;
 }
@@ -381,27 +381,27 @@
 .paramName {
   font-family: 'SF Mono', Monaco, Consolas, monospace;
   font-weight: 500;
-  color: #f9e2af;
+  color: #f59e0b;
 }
 
 .paramType {
   font-size: 11px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
 }
 
 .paramRequired {
-  color: #f38ba8;
+  color: #ef4444;
   font-weight: bold;
 }
 
 .paramDesc {
   font-size: 11px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   opacity: 0.8;
 }
 
 .noParams {
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   font-style: italic;
   padding-left: 12px;
 }
@@ -417,26 +417,26 @@
 
 .toolsLabel {
   font-size: 12px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
 }
 
 .toolBadge {
   font-size: 11px;
   padding: 2px 8px;
-  background: rgba(137, 180, 250, 0.1);
-  border: 1px solid rgba(137, 180, 250, 0.3);
+  background: rgba(212, 212, 216, 0.1);
+  border: 1px solid rgba(212, 212, 216, 0.3);
   border-radius: 4px;
-  color: #89b4fa;
+  color: #e4e4e7;
 }
 
 .moreTools {
   font-size: 11px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
 }
 
 .footer {
   padding: 12px 20px;
-  border-top: 1px solid var(--border-color, #313244);
+  border-top: 1px solid var(--border-color, #3f3f46);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -445,8 +445,8 @@
 }
 
 .addBtn {
-  background: var(--accent-color, #89b4fa);
-  color: var(--bg-primary, #1e1e2e);
+  background: var(--accent-color, #e4e4e7);
+  color: var(--bg-primary, #18181b);
   border: none;
   padding: 8px 16px;
   border-radius: 6px;
@@ -462,7 +462,7 @@
 
 .summary {
   font-size: 12px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
 }
 
 /* Dialog Styles */
@@ -478,8 +478,8 @@
 }
 
 .dialog {
-  background: var(--bg-secondary, #1e1e2e);
-  border: 1px solid var(--border-color, #313244);
+  background: var(--bg-secondary, #18181b);
+  border: 1px solid var(--border-color, #3f3f46);
   border-radius: 12px;
   width: 90%;
   max-width: 500px;
@@ -494,14 +494,14 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color, #313244);
+  border-bottom: 1px solid var(--border-color, #3f3f46);
 }
 
 .dialogHeader h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-primary, #cdd6f4);
+  color: var(--text-primary, #f5f5f7);
 }
 
 .dialogContent {
@@ -519,7 +519,7 @@
   margin-bottom: 6px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-primary, #cdd6f4);
+  color: var(--text-primary, #f5f5f7);
 }
 
 .formGroup input[type="text"],
@@ -527,10 +527,10 @@
 .formGroup textarea {
   width: 100%;
   padding: 10px 12px;
-  background: var(--bg-tertiary, #181825);
-  border: 1px solid var(--border-color, #313244);
+  background: var(--bg-tertiary, #101012);
+  border: 1px solid var(--border-color, #3f3f46);
   border-radius: 6px;
-  color: var(--text-primary, #cdd6f4);
+  color: var(--text-primary, #f5f5f7);
   font-size: 14px;
   transition: border-color 0.2s;
 }
@@ -538,7 +538,7 @@
 .formGroup input:focus,
 .formGroup textarea:focus {
   outline: none;
-  border-color: var(--accent-color, #89b4fa);
+  border-color: var(--accent-color, #e4e4e7);
 }
 
 .formGroup textarea {
@@ -558,15 +558,15 @@
   align-items: flex-start;
   gap: 12px;
   padding: 10px 12px;
-  background: var(--bg-tertiary, #181825);
-  border: 1px solid var(--border-color, #313244);
+  background: var(--bg-tertiary, #101012);
+  border: 1px solid var(--border-color, #3f3f46);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .radioLabel:hover {
-  border-color: var(--accent-color, #89b4fa);
+  border-color: var(--accent-color, #e4e4e7);
 }
 
 .radioLabel input[type="radio"] {
@@ -582,13 +582,13 @@
 
 .radioLabel span {
   font-weight: 500;
-  color: var(--text-primary, #cdd6f4);
+  color: var(--text-primary, #f5f5f7);
 }
 
 .radioLabel small {
   display: block;
   font-size: 12px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   margin-top: 2px;
 }
 
@@ -610,19 +610,19 @@
 
 .testSuccess {
   padding: 12px;
-  background: rgba(166, 227, 161, 0.1);
-  border: 1px solid rgba(166, 227, 161, 0.3);
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
   border-radius: 6px;
-  color: #a6e3a1;
+  color: #22c55e;
   font-size: 13px;
 }
 
 .testError {
   padding: 12px;
-  background: rgba(243, 139, 168, 0.1);
-  border: 1px solid rgba(243, 139, 168, 0.3);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 6px;
-  color: #f38ba8;
+  color: #ef4444;
   font-size: 13px;
 }
 
@@ -631,7 +631,7 @@
   justify-content: flex-end;
   gap: 8px;
   padding: 16px 20px;
-  border-top: 1px solid var(--border-color, #313244);
+  border-top: 1px solid var(--border-color, #3f3f46);
 }
 
 .cancelBtn,
@@ -646,23 +646,23 @@
 
 .cancelBtn {
   background: transparent;
-  border: 1px solid var(--border-color, #313244);
-  color: var(--text-secondary, #a6adc8);
+  border: 1px solid var(--border-color, #3f3f46);
+  color: var(--text-secondary, #a1a1aa);
 }
 
 .cancelBtn:hover {
-  background: var(--bg-hover, #313244);
-  color: var(--text-primary, #cdd6f4);
+  background: var(--bg-hover, #3f3f46);
+  color: var(--text-primary, #f5f5f7);
 }
 
 .testBtn {
   background: transparent;
-  border: 1px solid var(--accent-color, #89b4fa);
-  color: #89b4fa;
+  border: 1px solid var(--accent-color, #e4e4e7);
+  color: #e4e4e7;
 }
 
 .testBtn:hover:not(:disabled) {
-  background: rgba(137, 180, 250, 0.1);
+  background: rgba(212, 212, 216, 0.1);
 }
 
 .testBtn:disabled {
@@ -671,9 +671,9 @@
 }
 
 .saveBtn {
-  background: var(--accent-color, #89b4fa);
+  background: var(--accent-color, #e4e4e7);
   border: none;
-  color: var(--bg-primary, #1e1e2e);
+  color: var(--bg-primary, #18181b);
 }
 
 .saveBtn:hover:not(:disabled) {
@@ -689,7 +689,7 @@
   display: block;
   margin-top: 4px;
   font-size: 11px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   opacity: 0.8;
 }
 
@@ -698,19 +698,19 @@
 /* Section 通用样式 */
 .availableToolsSection,
 .mcpServersSection {
-  background: var(--bg-tertiary, #181825);
-  border: 1px solid var(--border-color, #313244);
+  background: var(--bg-tertiary, #101012);
+  border: 1px solid var(--border-color, #3f3f46);
   border-radius: 8px;
   margin-bottom: 12px;
   overflow: hidden;
 }
 
 .availableToolsSection {
-  border-color: rgba(137, 180, 250, 0.3);
+  border-color: rgba(212, 212, 216, 0.3);
 }
 
 .availableToolsSection:hover {
-  border-color: rgba(137, 180, 250, 0.5);
+  border-color: rgba(212, 212, 216, 0.5);
 }
 
 .sectionHeader {
@@ -718,14 +718,14 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: var(--bg-secondary, #1e1e2e);
+  background: var(--bg-secondary, #18181b);
   cursor: pointer;
   user-select: none;
   gap: 12px;
 }
 
 .sectionHeader:hover {
-  background: var(--bg-hover, rgba(49, 50, 68, 0.7));
+  background: var(--bg-hover, rgba(63, 63, 70, 0.7));
 }
 
 .sectionTitle {
@@ -733,22 +733,22 @@
   align-items: center;
   gap: 8px;
   font-weight: 500;
-  color: var(--text-primary, #cdd6f4);
+  color: var(--text-primary, #f5f5f7);
 }
 
 .toolCountBadge,
 .serverCountBadge {
   font-size: 11px;
   padding: 2px 8px;
-  background: rgba(137, 180, 250, 0.15);
-  color: #89b4fa;
+  background: rgba(212, 212, 216, 0.15);
+  color: #e4e4e7;
   border-radius: 10px;
   font-weight: 500;
 }
 
 .serverCountBadge {
-  background: rgba(166, 227, 161, 0.15);
-  color: #a6e3a1;
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
 }
 
 /* 工具搜索框 */
@@ -760,22 +760,22 @@
 .toolSearchInput {
   width: 200px;
   padding: 6px 28px 6px 10px;
-  background: var(--bg-tertiary, #181825);
-  border: 1px solid var(--border-color, #313244);
+  background: var(--bg-tertiary, #101012);
+  border: 1px solid var(--border-color, #3f3f46);
   border-radius: 6px;
-  color: var(--text-primary, #cdd6f4);
+  color: var(--text-primary, #f5f5f7);
   font-size: 13px;
   transition: border-color 0.2s, width 0.2s;
 }
 
 .toolSearchInput:focus {
   outline: none;
-  border-color: var(--accent-color, #89b4fa);
+  border-color: var(--accent-color, #e4e4e7);
   width: 240px;
 }
 
 .toolSearchInput::placeholder {
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   opacity: 0.7;
 }
 
@@ -786,7 +786,7 @@
   transform: translateY(-50%);
   background: transparent;
   border: none;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   cursor: pointer;
   font-size: 14px;
   padding: 2px 6px;
@@ -794,8 +794,8 @@
 }
 
 .clearSearchBtn:hover {
-  background: var(--bg-hover, #313244);
-  color: var(--text-primary, #cdd6f4);
+  background: var(--bg-hover, #3f3f46);
+  color: var(--text-primary, #f5f5f7);
 }
 
 /* Tools grid scrollable wrapper */
@@ -811,17 +811,17 @@
 }
 
 .toolsGridWrapper::-webkit-scrollbar-track {
-  background: var(--bg-tertiary, #181825);
+  background: var(--bg-tertiary, #101012);
   border-radius: 4px;
 }
 
 .toolsGridWrapper::-webkit-scrollbar-thumb {
-  background: var(--border-color, #313244);
+  background: var(--border-color, #3f3f46);
   border-radius: 4px;
 }
 
 .toolsGridWrapper::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-color, #89b4fa);
+  background: var(--accent-color, #e4e4e7);
 }
 
 /* Tools grid layout */
@@ -834,8 +834,8 @@
 
 /* 工具卡片 */
 .toolGridCard {
-  background: var(--bg-secondary, #1e1e2e);
-  border: 1px solid var(--border-color, #313244);
+  background: var(--bg-secondary, #18181b);
+  border: 1px solid var(--border-color, #3f3f46);
   border-radius: 8px;
   padding: 12px;
   cursor: pointer;
@@ -846,20 +846,20 @@
 .toolGridCard:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  border-color: var(--accent-color, #89b4fa);
+  border-color: var(--accent-color, #e4e4e7);
 }
 
 /* 来源类型颜色 */
 .toolGridCard.source_mcp {
-  border-left-color: #a6e3a1;
+  border-left-color: #22c55e;
 }
 
 .toolGridCard.source_frontend {
-  border-left-color: #89b4fa;
+  border-left-color: #e4e4e7;
 }
 
 .toolGridCard.source_backend {
-  border-left-color: #f9e2af;
+  border-left-color: #f59e0b;
 }
 
 .toolGridHeader {
@@ -876,7 +876,7 @@
 .toolGridName {
   font-weight: 600;
   font-size: 13px;
-  color: #89b4fa;
+  color: #e4e4e7;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -885,7 +885,7 @@
 
 .toolGridDesc {
   font-size: 12px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   line-height: 1.4;
   margin-bottom: 10px;
   min-height: 34px;
@@ -912,27 +912,27 @@
 }
 
 .sourceTypeBadge.mcp {
-  background: rgba(166, 227, 161, 0.15);
-  color: #a6e3a1;
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
 }
 
 .sourceTypeBadge.frontend {
-  background: rgba(137, 180, 250, 0.15);
-  color: #89b4fa;
+  background: rgba(212, 212, 216, 0.15);
+  color: #e4e4e7;
 }
 
 .sourceTypeBadge.backend {
-  background: rgba(249, 226, 175, 0.15);
-  color: #f9e2af;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
 }
 
 .sourceNameBadge {
   font-size: 10px;
   padding: 2px 6px;
-  background: var(--bg-tertiary, #181825);
-  border: 1px solid var(--border-color, #313244);
+  background: var(--bg-tertiary, #101012);
+  border: 1px solid var(--border-color, #3f3f46);
   border-radius: 4px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -946,14 +946,14 @@
   justify-content: center;
   gap: 16px;
   padding: 12px 16px;
-  border-top: 1px solid var(--border-color, #313244);
-  background: var(--bg-secondary, #1e1e2e);
+  border-top: 1px solid var(--border-color, #3f3f46);
+  background: var(--bg-secondary, #18181b);
 }
 
 .pageBtn {
   background: transparent;
-  border: 1px solid var(--border-color, #313244);
-  color: var(--text-secondary, #a6adc8);
+  border: 1px solid var(--border-color, #3f3f46);
+  color: var(--text-secondary, #a1a1aa);
   padding: 6px 12px;
   border-radius: 6px;
   cursor: pointer;
@@ -962,9 +962,9 @@
 }
 
 .pageBtn:hover:not(:disabled) {
-  background: var(--bg-hover, #313244);
-  color: var(--text-primary, #cdd6f4);
-  border-color: var(--accent-color, #89b4fa);
+  background: var(--bg-hover, #3f3f46);
+  color: var(--text-primary, #f5f5f7);
+  border-color: var(--accent-color, #e4e4e7);
 }
 
 .pageBtn:disabled {
@@ -974,7 +974,7 @@
 
 .pageInfo {
   font-size: 13px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   min-width: 60px;
   text-align: center;
 }
@@ -983,7 +983,7 @@
 .noToolsFound {
   padding: 40px 20px;
   text-align: center;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   font-size: 14px;
 }
 
@@ -993,25 +993,25 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 16px;
-  border-top: 1px solid var(--border-color, #313244);
-  background: var(--bg-secondary, #1e1e2e);
+  border-top: 1px solid var(--border-color, #3f3f46);
+  background: var(--bg-secondary, #18181b);
   font-size: 12px;
 }
 
 .toolCountInfo {
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
 }
 
 .scrollHint {
-  color: var(--accent-color, #89b4fa);
+  color: var(--accent-color, #e4e4e7);
   opacity: 0.7;
   font-size: 11px;
 }
 
 /* ========== Tool Detail Modal Styles (新增) ========== */
 .toolDetailDialog {
-  background: var(--bg-secondary, #1e1e2e);
-  border: 1px solid var(--border-color, #313244);
+  background: var(--bg-secondary, #18181b);
+  border: 1px solid var(--border-color, #3f3f46);
   border-radius: 12px;
   width: 90%;
   max-width: 560px;
@@ -1031,7 +1031,7 @@
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #89b4fa;
+  color: #e4e4e7;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
 }
 
@@ -1054,7 +1054,7 @@
 .detailLabel {
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   display: block;
@@ -1063,30 +1063,30 @@
 
 .detailValue {
   font-size: 14px;
-  color: var(--text-primary, #cdd6f4);
+  color: var(--text-primary, #f5f5f7);
   padding: 8px 12px;
-  background: var(--bg-tertiary, #181825);
+  background: var(--bg-tertiary, #101012);
   border-radius: 6px;
   display: inline-block;
 }
 
 .toolDetailDescription p {
   font-size: 14px;
-  color: var(--text-primary, #cdd6f4);
+  color: var(--text-primary, #f5f5f7);
   line-height: 1.6;
   margin: 0;
   padding: 12px;
-  background: var(--bg-tertiary, #181825);
+  background: var(--bg-tertiary, #101012);
   border-radius: 6px;
 }
 
 .noParamsHint {
   font-size: 13px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   font-style: italic;
   margin: 0;
   padding: 12px;
-  background: var(--bg-tertiary, #181825);
+  background: var(--bg-tertiary, #101012);
   border-radius: 6px;
 }
 
@@ -1097,8 +1097,8 @@
 }
 
 .paramDetailItem {
-  background: var(--bg-tertiary, #181825);
-  border: 1px solid var(--border-color, #313244);
+  background: var(--bg-tertiary, #101012);
+  border: 1px solid var(--border-color, #3f3f46);
   border-radius: 6px;
   padding: 10px 12px;
 }
@@ -1113,27 +1113,27 @@
 .paramDetailName {
   font-weight: 600;
   font-size: 14px;
-  color: #f9e2af;
+  color: #f59e0b;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
 }
 
 .paramDetailType {
   font-size: 12px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
 }
 
 .paramDetailRequired {
   font-size: 10px;
   padding: 2px 6px;
-  background: rgba(243, 139, 168, 0.15);
-  color: #f38ba8;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
   border-radius: 4px;
   font-weight: 500;
 }
 
 .paramDetailDesc {
   font-size: 12px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   margin-top: 6px;
   line-height: 1.4;
 }
@@ -1145,7 +1145,7 @@
   align-items: center;
   justify-content: center;
   padding: 32px 16px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   text-align: center;
 }
 
@@ -1159,7 +1159,7 @@
   font-size: 14px;
   font-weight: 500;
   margin: 0 0 8px 0;
-  color: var(--text-primary, #cdd6f4);
+  color: var(--text-primary, #f5f5f7);
 }
 
 .noToolsAvailable .emptyHint {
@@ -1173,7 +1173,7 @@
 .serverFilterWrapper {
   display: flex;
   gap: 4px;
-  background: var(--bg-tertiary, #181825);
+  background: var(--bg-tertiary, #101012);
   border-radius: 6px;
   padding: 2px;
 }
@@ -1181,7 +1181,7 @@
 .filterBtn {
   background: transparent;
   border: none;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   padding: 4px 10px;
   border-radius: 4px;
   font-size: 11px;
@@ -1192,19 +1192,19 @@
 }
 
 .filterBtn:hover {
-  background: var(--bg-hover, rgba(49, 50, 68, 0.5));
-  color: var(--text-primary, #cdd6f4);
+  background: var(--bg-hover, rgba(63, 63, 70, 0.5));
+  color: var(--text-primary, #f5f5f7);
 }
 
 .filterBtn.filterActive {
-  background: var(--accent-color, #89b4fa);
-  color: var(--bg-primary, #1e1e2e);
+  background: var(--accent-color, #e4e4e7);
+  color: var(--bg-primary, #18181b);
 }
 
 .noServersFiltered {
   padding: 24px 16px;
   text-align: center;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--text-secondary, #a1a1aa);
   font-size: 13px;
   font-style: italic;
 }
@@ -1213,7 +1213,7 @@
 .panel,
 .dialog,
 .toolDetailDialog {
-  --bg-primary: #101311;
+  --bg-primary: #101012;
   --bg-secondary: var(--color-bg-secondary);
   --bg-hover: rgba(143, 148, 156, 0.08);
   --border-color: rgba(255, 255, 255, 0.08);
@@ -1448,7 +1448,7 @@
 .addBtn,
 .saveBtn {
   background: var(--mcp-accent);
-  color: #0f1304;
+  color: #09090a;
 }
 
 .addBtn:hover,
@@ -1502,7 +1502,7 @@
   border: 1px solid rgba(143, 148, 156, 0.16);
   background:
     linear-gradient(180deg, rgba(143, 148, 156, 0.06), rgba(143, 148, 156, 0.01) 22%),
-    rgba(6, 10, 9, 0.94);
+    rgba(9, 9, 10, 0.94);
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.2);
   overflow: hidden;
 }
@@ -1513,7 +1513,7 @@
   border-bottom: 1px solid rgba(143, 148, 156, 0.14);
   background:
     linear-gradient(135deg, rgba(143, 148, 156, 0.12), rgba(143, 148, 156, 0.03) 46%, rgba(166, 171, 179, 0.08)),
-    rgba(10, 14, 13, 0.92);
+    rgba(16, 16, 18, 0.92);
 }
 
 .header::after {
@@ -1572,7 +1572,7 @@
 .dialog {
   border-radius: var(--radius-lg);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(7, 11, 10, 0.86);
+  background: rgba(16, 16, 18, 0.86);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
 }
 
@@ -1581,7 +1581,7 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background:
     linear-gradient(180deg, rgba(143, 148, 156, 0.08), rgba(143, 148, 156, 0.02)),
-    rgba(7, 11, 10, 0.92);
+    rgba(16, 16, 18, 0.92);
 }
 
 .sectionTitle {
@@ -1597,7 +1597,7 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0)),
-    rgba(10, 14, 13, 0.82);
+    rgba(24, 24, 27, 0.82);
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
 }
 
@@ -1613,13 +1613,13 @@
 
 .toolsContainer,
 .dialogContent {
-  background: rgba(3, 6, 6, 0.46);
+  background: rgba(9, 9, 10, 0.46);
 }
 
 .footer,
 .dialogFooter {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(5, 8, 8, 0.82);
+  background: rgba(9, 9, 10, 0.82);
 }
 
 .empty,

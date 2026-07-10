@@ -30,7 +30,8 @@
 }
 
 @keyframes highlightPulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow:
       0 0 0 3px #8f949c,
       0 0 25px rgba(143, 148, 156, 0.8),
@@ -195,7 +196,7 @@
   right: -4px;
   width: 12px;
   height: 12px;
-  background: #FF9800;
+  background: #ff9800;
   border-radius: 50%;
   border: 2px solid rgba(0, 0, 0, 0.3);
 }
@@ -235,7 +236,7 @@
   border-radius: 4px;
   font-size: 10px;
   text-align: center;
-  color: #FFE082;
+  color: #ffe082;
   font-weight: 500;
 }
 
@@ -459,9 +460,9 @@
 
 .pluginChain {
   display: flex;
-  flex-direction: column;  /* Changed to vertical layout */
+  flex-direction: column; /* Changed to vertical layout */
   align-items: center;
-  gap: 8px;  /* Increased gap for vertical spacing */
+  gap: 8px; /* Increased gap for vertical spacing */
   margin-top: 8px;
 }
 
@@ -473,7 +474,7 @@
   border-radius: 4px;
   font-size: 10px;
   color: white;
-  width: 100%;  /* Full width for vertical layout */
+  width: 100%; /* Full width for vertical layout */
   justify-content: center;
 }
 
@@ -489,7 +490,7 @@
 }
 
 .chainArrow {
-  font-size: 14px;  /* Slightly larger for vertical arrow */
+  font-size: 14px; /* Slightly larger for vertical arrow */
   opacity: 0.5;
   /* No rotation needed - arrow is already ↓ in the component */
 }
@@ -568,7 +569,7 @@
   align-items: center;
   gap: 4px;
   padding: 2px 6px;
-  background: linear-gradient(135deg, #673AB7, #3F51B5);
+  background: linear-gradient(135deg, #673ab7, #3f51b5);
   border-radius: 4px;
   font-size: 10px;
   color: white;
@@ -653,7 +654,7 @@
   composes: decisionNode;
   background: linear-gradient(135deg, #556270, #41505d);
   color: white;
-  border: 2px dashed #90A4AE;
+  border: 2px dashed #90a4ae;
   min-width: 200px;
 }
 
@@ -668,15 +669,15 @@
 /* ============== Fallback Decision Node ============== */
 .fallbackDecisionNode {
   composes: nodeBase;
-  background: linear-gradient(135deg, #FF9800, #F57C00);
+  background: linear-gradient(135deg, #ff9800, #f57c00);
   color: white;
-  border: 2px solid #EF6C00;
+  border: 2px solid #ef6c00;
   min-width: 180px;
 }
 
 .fallbackDecisionNode.highlighted {
   box-shadow: 0 0 20px rgba(255, 152, 0, 0.8);
-  border-color: #FFE082;
+  border-color: #ffe082;
 }
 
 .fallbackDecisionHeader {
@@ -736,8 +737,8 @@
   border-radius: 10px;
   min-width: 180px;
   border: 1px dashed rgba(143, 148, 156, 0.65);
-  background: rgba(20, 30, 20, 0.86);
-  color: #e8efe1;
+  background: rgba(24, 24, 27, 0.86);
+  color: #e4e4e7;
   display: flex;
   align-items: center;
   justify-content: space-between;

@@ -102,6 +102,73 @@ async function enableClawRoom(page: Page, waitForWebSocket = true) {
 }
 
 test.describe('Claw room collaboration', () => {
+  test('keeps team details focus contained and returns it to the opener', async ({ page }) => {
+    await mockCollaborationBootstrap(page)
+
+    await page.addInitScript(() => {
+      class MockWebSocket {
+        static OPEN = 1
+        static CONNECTING = 0
+        readyState = MockWebSocket.OPEN
+        onopen: ((event: Event) => void) | null = null
+        onmessage: ((event: MessageEvent) => void) | null = null
+        onerror: ((event: Event) => void) | null = null
+        onclose: ((event: CloseEvent) => void) | null = null
+
+        constructor() {
+          window.setTimeout(() => this.onopen?.(new Event('open')), 0)
+        }
+
+        send() {}
+        close() {
+          this.readyState = 3
+        }
+      }
+
+      window.WebSocket = MockWebSocket as unknown as typeof WebSocket
+    })
+
+    await enableClawRoom(page)
+    await page.getByRole('button', { name: 'Open sidebar' }).click()
+    const detailsButton = page.getByTestId('claw-room-team-details-button')
+    const overflowBeforeDialog = await page.evaluate(() => document.body.style.overflow)
+    await detailsButton.click()
+
+    const dialog = page.getByTestId('claw-room-team-details-dialog')
+    const headerCloseButton = dialog.getByRole('button', { name: 'Close team details' })
+    const footerCloseButton = dialog.getByRole('button', { name: 'Close', exact: true })
+    await expect(dialog).toBeVisible()
+    await expect(headerCloseButton).toBeFocused()
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe('hidden')
+
+    await page.keyboard.press('Shift+Tab')
+    await expect(footerCloseButton).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(headerCloseButton).toBeFocused()
+
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+    await expect(detailsButton).toBeFocused()
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe(overflowBeforeDialog)
+
+    await detailsButton.click()
+    await expect(headerCloseButton).toBeFocused()
+    const accountTrigger = page.getByRole('button', { name: /Open account details/i })
+    await accountTrigger.evaluate((button: HTMLButtonElement) => button.click())
+    const accountDialog = page.getByTestId('layout-account-dialog')
+    const accountCloseButton = accountDialog.getByRole('button', { name: 'Close account dialog' })
+    await expect(accountCloseButton).toBeFocused()
+
+    await headerCloseButton.evaluate((button: HTMLButtonElement) => button.click())
+    await expect(dialog).toBeHidden()
+    await expect(accountCloseButton).toBeFocused()
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe('hidden')
+
+    await page.keyboard.press('Escape')
+    await expect(accountDialog).toBeHidden()
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe(overflowBeforeDialog)
+  })
+
   test('renders streaming worker chunks in the transcript', async ({ page }) => {
     await mockCollaborationBootstrap(page)
 

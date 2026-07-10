@@ -65,20 +65,22 @@
   font-size: 0.82rem;
   font-weight: 700;
   cursor: pointer;
-  transition: transform var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+  transition:
+    transform var(--transition-fast),
+    border-color var(--transition-fast),
+    background var(--transition-fast);
 }
 
 .primaryButton {
   background: var(--color-primary);
-  color: #081000;
+  color: #09090a;
 }
 
 .mapCtaButton {
   position: relative;
   border-color: rgba(143, 148, 156, 0.32);
-  background:
-    linear-gradient(135deg, rgba(143, 148, 156, 0.24), rgba(24, 34, 17, 0.92));
-  color: #f4ffe7;
+  background: linear-gradient(135deg, rgba(143, 148, 156, 0.24), rgba(24, 24, 27, 0.92));
+  color: #f5f5f7;
   box-shadow: 0 10px 26px rgba(143, 148, 156, 0.18);
 }
 
@@ -550,7 +552,10 @@
   background: rgba(255, 255, 255, 0.03);
   color: var(--color-text);
   cursor: pointer;
-  transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .scopePickerOptionActive {

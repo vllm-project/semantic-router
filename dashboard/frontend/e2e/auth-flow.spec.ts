@@ -162,6 +162,12 @@ test.describe("Dashboard auth flow", () => {
     page,
   }) => {
     test.slow();
+    await page.addInitScript(() => {
+      // A background tab may suspend animation frames. Authentication handoff must
+      // still complete from its wall-clock timer even when the visual scene is paused.
+      window.requestAnimationFrame = () => 1;
+      window.cancelAnimationFrame = () => undefined;
+    });
     const issuedToken = "issued-dashboard-token";
     let settingsAuthHeader = "";
     let statusAuthHeader = "";
@@ -282,10 +288,11 @@ test.describe("Dashboard auth flow", () => {
     await page.goto("/login");
     await page.getByPlaceholder("you@example.com").fill("admin@example.com");
     await page.getByPlaceholder("••••••••").fill("secret-password");
-    await page.getByRole("button", { name: "Continue" }).click();
-
-    await expect(page).toHaveURL(/\/auth\/transition\?to=%2Fdashboard$/);
-    await expect(page.getByText(transitionCopyPattern)).toBeVisible();
+    await Promise.all([
+      page.waitForURL(/\/auth\/transition\?to=%2Fdashboard$/),
+      page.getByText(transitionCopyPattern).waitFor({ state: "visible" }),
+      page.getByRole("button", { name: "Continue" }).click(),
+    ]);
     await expect(page).toHaveURL(/\/dashboard$/, { timeout: 12000 });
     await expect.poll(() => settingsAuthHeader).toBe(`Bearer ${issuedToken}`);
     await expect.poll(() => statusAuthHeader).toBe(`Bearer ${issuedToken}`);
@@ -431,7 +438,11 @@ test.describe("Dashboard auth flow", () => {
       }),
     ).toBeVisible();
     await page.getByLabel("Password").fill("future-password");
-    await page.getByRole("button", { name: "Enter Future" }).click();
+    await Promise.all([
+      page.waitForURL(/\/auth\/transition\?to=%2Fsetup$/),
+      page.getByText(transitionCopyPattern).waitFor({ state: "visible" }),
+      page.getByRole("button", { name: "Enter Future" }).click(),
+    ]);
 
     await expect
       .poll(() => registerPayload)
@@ -441,8 +452,6 @@ test.describe("Dashboard auth flow", () => {
         name: "Ada Router",
       });
     await expect.poll(() => setupStateRequestCount).toBeGreaterThanOrEqual(2);
-    await expect(page).toHaveURL(/\/auth\/transition\?to=%2Fsetup$/);
-    await expect(page.getByText(transitionCopyPattern)).toBeVisible();
     await expect(page).toHaveURL(/\/setup$/, { timeout: 12000 });
   });
 
@@ -548,10 +557,11 @@ test.describe("Dashboard auth flow", () => {
 
     await page.getByPlaceholder("you@example.com").fill("admin@example.com");
     await page.getByPlaceholder("••••••••").fill("secret-password");
-    await page.getByRole("button", { name: "Continue" }).click();
-
-    await expect(page).toHaveURL(/\/auth\/transition\?to=%2Fstatus$/);
-    await expect(page.getByText(transitionCopyPattern)).toBeVisible();
+    await Promise.all([
+      page.waitForURL(/\/auth\/transition\?to=%2Fstatus$/),
+      page.getByText(transitionCopyPattern).waitFor({ state: "visible" }),
+      page.getByRole("button", { name: "Continue" }).click(),
+    ]);
     await expect(page).toHaveURL(/\/status$/, { timeout: 12000 });
     await expect(
       page.getByRole("heading", { name: "System Status", exact: true }),

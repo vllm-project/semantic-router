@@ -25,9 +25,8 @@
   border-radius: var(--radius-lg);
   background:
     radial-gradient(120% 160% at 0% 0%, rgba(255, 255, 255, 0.065), transparent 45%),
-    radial-gradient(110% 140% at 100% 100%, rgba(15, 23, 42, 0.4), transparent 60%),
-    linear-gradient(145deg, rgba(15, 23, 42, 0.35), rgba(2, 6, 23, 0.1)),
-    var(--color-bg-secondary);
+    radial-gradient(110% 140% at 100% 100%, rgba(24, 24, 27, 0.4), transparent 60%),
+    linear-gradient(145deg, rgba(24, 24, 27, 0.35), rgba(9, 9, 10, 0.1)), var(--color-bg-secondary);
 }
 
 .logoPanel {
@@ -123,9 +122,9 @@
 }
 
 .badgeTeam {
-  background: rgba(148, 163, 184, 0.18);
-  color: #cbd5e1;
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(166, 171, 179, 0.18);
+  color: #d4d4d8;
+  border: 1px solid rgba(166, 171, 179, 0.3);
 }
 
 .subtitle {
@@ -328,12 +327,14 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: 1.25rem;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .statusCardClickable:hover {
-  border-color: var(--color-primary, #3b82f6);
-  box-shadow: 0 0 0 1px var(--color-primary, #3b82f6);
+  border-color: var(--color-primary, #f5f5f7);
+  box-shadow: 0 0 0 1px var(--color-primary, #f5f5f7);
 }
 
 .statusCardHeader {
@@ -785,7 +786,7 @@
 .codePreviewContent {
   font-family: 'SF Mono', Monaco, monospace;
   font-size: 0.8rem;
-  color: var(--color-accent-cyan);
+  color: var(--color-text);
   white-space: pre-wrap;
   word-break: break-all;
   line-height: 1.5;
@@ -947,7 +948,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Container Table */
@@ -992,7 +995,7 @@
 .containerTablePort {
   font-family: 'SF Mono', Monaco, monospace;
   font-size: 0.8rem;
-  color: var(--color-accent-cyan, #22d3ee);
+  color: var(--color-text-secondary, #d4d4d8);
 }
 
 .healthBadge {
@@ -1093,7 +1096,7 @@
   border-radius: var(--radius-lg);
   background:
     radial-gradient(130% 135% at 0% 0%, rgba(143, 148, 156, 0.22), transparent 55%),
-    radial-gradient(100% 90% at 100% 100%, rgba(15, 23, 42, 0.42), transparent 58%),
+    radial-gradient(100% 90% at 100% 100%, rgba(24, 24, 27, 0.42), transparent 58%),
     var(--color-bg-secondary);
   overflow: hidden;
 }
@@ -1154,9 +1157,9 @@
   font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #cbd5e1;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(15, 23, 42, 0.5);
+  color: #d4d4d8;
+  border: 1px solid rgba(166, 171, 179, 0.35);
+  background: rgba(24, 24, 27, 0.5);
   border-radius: 999px;
   padding: 0.15rem 0.52rem;
 }
@@ -1172,8 +1175,8 @@
   border: 1px solid rgba(143, 148, 156, 0.28);
   border-radius: var(--radius-lg);
   background:
-    linear-gradient(160deg, rgba(143, 148, 156, 0.12), rgba(2, 6, 23, 0.12) 45%, transparent 80%),
-    rgba(2, 6, 23, 0.42);
+    linear-gradient(160deg, rgba(143, 148, 156, 0.12), rgba(9, 9, 10, 0.12) 45%, transparent 80%),
+    rgba(9, 9, 10, 0.42);
   padding: 0.66rem;
   display: flex;
   flex-direction: column;
@@ -1203,9 +1206,9 @@
 }
 
 .kernelNodeCard {
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  border: 1px solid rgba(166, 171, 179, 0.35);
   border-radius: var(--radius-md);
-  background: rgba(15, 23, 42, 0.68);
+  background: rgba(24, 24, 27, 0.68);
   padding: 0.56rem 0.58rem;
   min-height: 62px;
   display: flex;
@@ -1278,7 +1281,7 @@
   border-radius: var(--radius-lg);
   background:
     radial-gradient(140px 140px at 50% 48%, rgba(143, 148, 156, 0.18), transparent 78%),
-    rgba(2, 6, 23, 0.78);
+    rgba(9, 9, 10, 0.78);
   padding: 0.78rem;
   display: flex;
   flex-direction: column;
@@ -1319,7 +1322,7 @@
   font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #a8b4c8;
+  color: #a1a1aa;
 }
 
 .kernelCoreLead {
@@ -1329,8 +1332,8 @@
   border-radius: var(--radius-md);
   padding: 0.62rem 0.68rem;
   background:
-    linear-gradient(150deg, rgba(143, 148, 156, 0.18), rgba(15, 23, 42, 0.42) 58%),
-    rgba(2, 6, 23, 0.5);
+    linear-gradient(150deg, rgba(143, 148, 156, 0.18), rgba(24, 24, 27, 0.42) 58%),
+    rgba(9, 9, 10, 0.5);
 }
 
 .kernelCoreTitle {
@@ -1351,8 +1354,8 @@
 .kernelLayerCore {
   border-color: rgba(143, 148, 156, 0.38);
   background:
-    linear-gradient(160deg, rgba(143, 148, 156, 0.14), rgba(2, 6, 23, 0.2) 45%, transparent 82%),
-    rgba(2, 6, 23, 0.44);
+    linear-gradient(160deg, rgba(143, 148, 156, 0.14), rgba(9, 9, 10, 0.2) 45%, transparent 82%),
+    rgba(9, 9, 10, 0.44);
 }
 
 .kernelFlowConnector {
@@ -1371,7 +1374,12 @@
   left: 50%;
   width: 1px;
   transform: translateX(-50%);
-  background: linear-gradient(180deg, rgba(143, 148, 156, 0), rgba(143, 148, 156, 0.7), rgba(143, 148, 156, 0));
+  background: linear-gradient(
+    180deg,
+    rgba(143, 148, 156, 0),
+    rgba(143, 148, 156, 0.7),
+    rgba(143, 148, 156, 0)
+  );
 }
 
 .kernelFlowConnectorDot {
@@ -1385,8 +1393,8 @@
 
 .kernelModelCard {
   background:
-    linear-gradient(150deg, rgba(143, 148, 156, 0.16), rgba(15, 23, 42, 0.58) 42%),
-    rgba(2, 6, 23, 0.7);
+    linear-gradient(150deg, rgba(143, 148, 156, 0.16), rgba(24, 24, 27, 0.58) 42%),
+    rgba(9, 9, 10, 0.7);
 }
 
 .kernelFeatureGrid {
@@ -1401,8 +1409,8 @@
   border: 1px solid rgba(143, 148, 156, 0.3);
   border-radius: var(--radius-md);
   background:
-    linear-gradient(145deg, rgba(143, 148, 156, 0.16), rgba(15, 23, 42, 0.4) 45%, transparent 80%),
-    rgba(2, 6, 23, 0.55);
+    linear-gradient(145deg, rgba(143, 148, 156, 0.16), rgba(24, 24, 27, 0.4) 45%, transparent 80%),
+    rgba(9, 9, 10, 0.55);
   padding: 0.6rem;
   display: grid;
   grid-template-columns: auto 1fr;
@@ -1518,7 +1526,12 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background:
-    linear-gradient(145deg, rgba(34, 211, 238, 0.09), rgba(143, 148, 156, 0.03) 40%, transparent 75%),
+    linear-gradient(
+      145deg,
+      rgba(227, 27, 35, 0.06),
+      rgba(143, 148, 156, 0.03) 40%,
+      transparent 75%
+    ),
     var(--color-bg-secondary);
   padding: 0.8rem;
   display: flex;
@@ -1667,7 +1680,12 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background:
-    linear-gradient(145deg, rgba(34, 211, 238, 0.11), rgba(34, 197, 94, 0.03) 45%, rgba(0, 0, 0, 0) 70%),
+    linear-gradient(
+      145deg,
+      rgba(227, 27, 35, 0.07),
+      rgba(255, 255, 255, 0.02) 45%,
+      rgba(0, 0, 0, 0) 70%
+    ),
     var(--color-bg-secondary);
   padding: 0.9rem 1rem;
 }
@@ -1760,7 +1778,7 @@
 .breakdownTrack {
   width: 100%;
   height: 8px;
-  background: rgba(148, 163, 184, 0.18);
+  background: rgba(166, 171, 179, 0.18);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -1788,7 +1806,12 @@
   border: 1px solid rgba(143, 148, 156, 0.32);
   border-radius: var(--radius-lg);
   background:
-    linear-gradient(140deg, rgba(143, 148, 156, 0.18), rgba(143, 148, 156, 0.07) 40%, rgba(0, 0, 0, 0) 72%),
+    linear-gradient(
+      140deg,
+      rgba(143, 148, 156, 0.18),
+      rgba(143, 148, 156, 0.07) 40%,
+      rgba(0, 0, 0, 0) 72%
+    ),
     var(--color-bg-secondary);
   padding: 1rem;
   display: flex;
@@ -1872,7 +1895,7 @@
 .agentBody {
   border: 1px solid rgba(143, 148, 156, 0.25);
   border-radius: var(--radius-md);
-  background: linear-gradient(180deg, rgba(143, 148, 156, 0.08), rgba(2, 6, 23, 0.28));
+  background: linear-gradient(180deg, rgba(143, 148, 156, 0.08), rgba(9, 9, 10, 0.28));
   padding: 0.75rem;
   display: flex;
   flex-direction: column;
@@ -1930,7 +1953,12 @@
   border: 1px solid rgba(143, 148, 156, 0.32);
   border-radius: var(--radius-lg);
   background:
-    linear-gradient(145deg, rgba(143, 148, 156, 0.16), rgba(143, 148, 156, 0.05) 48%, rgba(0, 0, 0, 0) 78%),
+    linear-gradient(
+      145deg,
+      rgba(143, 148, 156, 0.16),
+      rgba(143, 148, 156, 0.05) 48%,
+      rgba(0, 0, 0, 0) 78%
+    ),
     var(--color-bg-secondary);
   padding: 1rem;
   display: flex;
@@ -1990,7 +2018,7 @@
 .ocModalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(2, 6, 23, 0.7);
+  background: rgba(9, 9, 10, 0.7);
   backdrop-filter: blur(3px);
   z-index: 50;
   display: flex;
@@ -2198,7 +2226,8 @@
     gap: 0.3rem;
   }
 
-  .formRow, .formRowThree {
+  .formRow,
+  .formRowThree {
     grid-template-columns: 1fr;
   }
 
@@ -2270,7 +2299,8 @@
     flex-direction: column;
   }
 
-  .actionsLeft, .actionsRight {
+  .actionsLeft,
+  .actionsRight {
     width: 100%;
   }
 }

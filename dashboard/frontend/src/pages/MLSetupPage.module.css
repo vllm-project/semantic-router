@@ -165,7 +165,7 @@
 
 .fileDropZone:hover {
   border-color: var(--color-primary);
-  background: rgba(59, 130, 246, 0.05);
+  background: rgba(255, 255, 255, 0.045);
 }
 
 .fileDropZoneActive {
@@ -203,7 +203,7 @@
 .numberInput:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 3px rgba(245, 245, 247, 0.09);
 }
 
 .textInput {
@@ -219,7 +219,7 @@
 .textInput:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 3px rgba(245, 245, 247, 0.09);
 }
 
 /* Algorithm selection grid */
@@ -243,8 +243,8 @@
 }
 
 .algorithmCardSelected {
-  border-color: var(--color-primary);
-  background: rgba(59, 130, 246, 0.05);
+  border-color: rgba(227, 27, 35, 0.52);
+  background: rgba(227, 27, 35, 0.08);
 }
 
 .algorithmHeader {
@@ -296,9 +296,9 @@
 }
 
 .deviceOptionSelected {
-  border-color: var(--color-primary);
-  background: rgba(59, 130, 246, 0.08);
-  color: var(--color-primary);
+  border-color: rgba(227, 27, 35, 0.52);
+  background: rgba(227, 27, 35, 0.08);
+  color: var(--color-text);
 }
 
 /* Decision entries */
@@ -596,7 +596,7 @@
 .selectInput:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 3px rgba(245, 245, 247, 0.09);
 }
 
 /* Model ref row */
@@ -616,8 +616,8 @@
   gap: 1rem;
   padding: 1rem 1.25rem;
   margin-bottom: 1.5rem;
-  background: rgba(59, 130, 246, 0.06);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-md);
 }
 

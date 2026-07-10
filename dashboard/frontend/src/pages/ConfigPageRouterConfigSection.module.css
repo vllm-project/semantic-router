@@ -25,7 +25,9 @@
   font-size: 0.8rem;
   font-weight: 700;
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .modeButton:hover {
@@ -34,7 +36,7 @@
 }
 
 .modeButtonActive {
-  color: #081000;
+  color: #09090a;
   background: var(--color-primary);
 }
 
@@ -140,7 +142,10 @@
     linear-gradient(180deg, rgba(143, 148, 156, 0.08), rgba(143, 148, 156, 0.01)),
     rgba(7, 11, 10, 0.88);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
-  transition: transform var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition:
+    transform var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .systemCard:hover {

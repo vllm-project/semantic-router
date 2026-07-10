@@ -127,8 +127,13 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 /* ===== Split Panes ===== */
@@ -256,7 +261,7 @@
 
 .diagResizeHandle:hover,
 .diagResizeHandle:active {
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary, #f5f5f7);
 }
 
 .diagnosticsHeader {
@@ -436,7 +441,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ===== Status Bar (bottom) ===== */

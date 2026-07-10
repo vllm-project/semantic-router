@@ -1,5 +1,6 @@
-import React, { useEffect, useId } from 'react'
+import React, { useId } from 'react'
 import { createPortal } from 'react-dom'
+import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import styles from './LayoutAccountControl.module.css'
 
 interface LayoutAccountControlProps {
@@ -53,26 +54,7 @@ const LayoutAccountControl: React.FC<LayoutAccountControlProps> = ({
   const dialogTitleId = `${dialogId}-title`
   const isRail = variant === 'rail'
 
-  useEffect(() => {
-    if (!isOpen) {
-      return
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose()
-      }
-    }
-
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    window.addEventListener('keydown', handleKeyDown)
-
-    return () => {
-      document.body.style.overflow = previousOverflow
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isOpen, onClose])
+  const dialogRef = useAccessibleDialog<HTMLDivElement>({ isOpen, onClose })
 
   return (
     <>
@@ -97,11 +79,13 @@ const LayoutAccountControl: React.FC<LayoutAccountControlProps> = ({
         ? createPortal(
         <div className={styles.overlay} data-testid="layout-account-overlay" onClick={onClose}>
           <div
+            ref={dialogRef}
             id={dialogId}
             className={styles.dialog}
             role="dialog"
             aria-modal="true"
             aria-labelledby={dialogTitleId}
+            tabIndex={-1}
             data-testid="layout-account-dialog"
             onClick={(event) => event.stopPropagation()}
           >
@@ -117,6 +101,7 @@ const LayoutAccountControl: React.FC<LayoutAccountControlProps> = ({
                 className={styles.closeButton}
                 aria-label="Close account dialog"
                 onClick={onClose}
+                data-dialog-initial-focus
               >
                 ×
               </button>

@@ -7,6 +7,7 @@ import {
 import type { ConfigSection } from '../components/ConfigNav'
 import { useAuth } from '../contexts/AuthContext'
 import { useSetup } from '../contexts/SetupContext'
+import AuthTransitionPage from '../pages/AuthTransitionPage'
 import { canAccessMLSetup } from '../utils/accessControl'
 import AuthGate from './AuthGate'
 import AuthenticatedShell from './AuthenticatedShell'
@@ -14,7 +15,6 @@ import { renderAuthenticatedAppRoutes } from './AuthenticatedAppRoutes'
 import RouteLoadingFallback from './RouteLoadingFallback'
 import SetupStatusPage from './SetupStatusPage'
 
-const AuthTransitionPage = lazy(() => import('../pages/AuthTransitionPage'))
 const LandingPage = lazy(() => import('../pages/LandingPage'))
 const LoginPage = lazy(() => import('../pages/LoginPage'))
 
@@ -64,7 +64,7 @@ const AppRouter: React.FC = () => {
       <Routes>
         <Route path="/" element={renderLazyRoute(<LandingPage />)} />
         <Route path="/login" element={renderLazyRoute(<LoginPage />)} />
-        <Route path="/auth/transition" element={renderLazyRoute(<AuthTransitionPage />)} />
+        <Route path="/auth/transition" element={<AuthTransitionPage />} />
 
         <Route element={<AuthGate />}>
           <Route element={<AuthenticatedShell />}>

@@ -11,7 +11,7 @@
   border-radius: 1.25rem;
   background:
     linear-gradient(155deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
-    rgba(7, 10, 19, 0.9);
+    rgba(16, 16, 18, 0.9);
   box-shadow: 0 22px 48px rgba(0, 0, 0, 0.2);
 }
 
@@ -116,7 +116,7 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)),
-    rgba(9, 12, 22, 0.82);
+    rgba(16, 16, 18, 0.82);
 }
 
 .field {
@@ -144,10 +144,13 @@
   padding: 0.68rem 0.82rem;
   border-radius: 0.82rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(8, 11, 20, 0.82);
+  background: rgba(9, 9, 10, 0.82);
   color: var(--color-text);
   font: inherit;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
 }
 
 .input:focus,
@@ -181,12 +184,15 @@
   font: inherit;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    opacity 0.18s ease;
 }
 
 .primaryButton {
   background: linear-gradient(135deg, var(--color-primary), #d4d4d8);
-  color: #081000;
+  color: #09090a;
 }
 
 .secondaryButton {
@@ -232,7 +238,11 @@
   color: var(--color-text);
   text-align: left;
   cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .choiceButton:hover {
@@ -270,7 +280,7 @@
   background:
     radial-gradient(circle at top right, rgba(166, 171, 179, 0.08), rgba(166, 171, 179, 0) 42%),
     linear-gradient(155deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
-    rgba(7, 10, 19, 0.9);
+    rgba(16, 16, 18, 0.9);
   box-shadow: 0 22px 48px rgba(0, 0, 0, 0.2);
 }
 
@@ -460,7 +470,7 @@
   align-items: center;
   justify-content: center;
   padding: 1.25rem;
-  background: rgba(3, 6, 14, 0.78);
+  background: rgba(0, 0, 0, 0.78);
   backdrop-filter: blur(10px);
 }
 
@@ -476,7 +486,7 @@
   background:
     radial-gradient(circle at top right, rgba(166, 171, 179, 0.1), rgba(166, 171, 179, 0) 32%),
     linear-gradient(155deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015)),
-    rgba(6, 10, 18, 0.96);
+    rgba(16, 16, 18, 0.96);
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.48);
 }
 
@@ -517,7 +527,10 @@
   border-radius: 999px;
   font-size: 1.2rem;
   cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease;
 }
 
 .dialogCloseButton:hover {
@@ -541,8 +554,8 @@
   padding: 1rem;
   border-radius: 1rem;
   border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(3, 6, 14, 0.82);
-  color: #d9e3f2;
+  background: rgba(9, 9, 10, 0.82);
+  color: #e4e4e7;
   overflow: auto;
   font-size: 0.82rem;
   line-height: 1.62;

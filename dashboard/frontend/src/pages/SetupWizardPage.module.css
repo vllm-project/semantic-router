@@ -9,22 +9,14 @@
 }
 
 .page::before {
-  content: "";
+  content: '';
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(
-      circle at top left,
-      rgba(255, 255, 255, 0.08),
-      transparent 30%
-    ),
-    radial-gradient(
-      circle at top right,
-      rgba(227, 27, 35, 0.055),
-      transparent 24%
-    ),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 30%),
+    radial-gradient(circle at top right, rgba(227, 27, 35, 0.055), transparent 24%),
     linear-gradient(
       180deg,
       rgba(5, 5, 5, 0.44) 0%,
@@ -54,8 +46,7 @@
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.11);
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.05), transparent 42%),
-    rgba(16, 16, 18, 0.72);
+    linear-gradient(145deg, rgba(255, 255, 255, 0.05), transparent 42%), rgba(16, 16, 18, 0.72);
   box-shadow:
     0 28px 60px rgba(0, 0, 0, 0.32),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
@@ -70,16 +61,12 @@
 .previewCard::before,
 .presetCard::before,
 .reviewStat::before {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(
-      circle at top left,
-      rgba(255, 255, 255, 0.08),
-      transparent 30%
-    ),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 30%),
     linear-gradient(
       180deg,
       rgba(255, 255, 255, 0.045),
@@ -119,7 +106,7 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
-  color: #f5f7ff;
+  color: #f5f5f7;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -142,11 +129,7 @@
   border-radius: 1rem;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background:
-    radial-gradient(
-      circle at top left,
-      rgba(255, 255, 255, 0.14),
-      transparent 44%
-    ),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.14), transparent 44%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
@@ -185,7 +168,7 @@
   padding: 0.74rem 0.85rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 0.85rem;
-  background: rgba(12, 18, 36, 0.44);
+  background: rgba(16, 16, 18, 0.44);
   color: var(--color-text-secondary);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
@@ -205,11 +188,7 @@
 
 .stepButtonActive {
   border-color: rgba(143, 148, 156, 0.36);
-  background: linear-gradient(
-    135deg,
-    rgba(143, 148, 156, 0.16),
-    rgba(9, 12, 24, 0.52) 68%
-  );
+  background: linear-gradient(135deg, rgba(143, 148, 156, 0.16), rgba(24, 24, 27, 0.52) 68%);
   color: var(--color-text);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
@@ -217,15 +196,15 @@
 }
 
 .stepButtonDone {
-  border-color: rgba(0, 180, 216, 0.18);
+  border-color: rgba(227, 27, 35, 0.32);
   background: rgba(255, 255, 255, 0.06);
   color: var(--color-text);
 }
 
 .stepButtonActive .stepNumber,
 .stepButtonDone .stepNumber {
-  background: rgba(143, 148, 156, 0.2);
-  color: #d4d4d8;
+  background: rgba(227, 27, 35, 0.12);
+  color: #f5f5f7;
 }
 
 .stepNumber {
@@ -481,11 +460,7 @@
   padding: 0.82rem;
   border-radius: 0.95rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.06),
-    rgba(9, 12, 24, 0.46)
-  );
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(24, 24, 27, 0.46));
 }
 
 .remoteImportActions {
@@ -497,11 +472,7 @@
   padding: 0.75rem 0.82rem;
   border-radius: 0.9rem;
   border: 1px solid rgba(143, 148, 156, 0.22);
-  background: linear-gradient(
-    135deg,
-    rgba(143, 148, 156, 0.12),
-    rgba(9, 12, 24, 0.46)
-  );
+  background: linear-gradient(135deg, rgba(143, 148, 156, 0.12), rgba(24, 24, 27, 0.46));
 }
 
 .remoteImportSummaryHeader {
@@ -540,11 +511,7 @@
 
 .presetCardActive {
   border-color: rgba(143, 148, 156, 0.36);
-  background: linear-gradient(
-    135deg,
-    rgba(143, 148, 156, 0.16),
-    rgba(9, 12, 24, 0.52) 68%
-  );
+  background: linear-gradient(135deg, rgba(143, 148, 156, 0.16), rgba(24, 24, 27, 0.52) 68%);
 }
 
 .presetCardHeader {
@@ -615,9 +582,9 @@
   margin-top: 0.7rem;
   padding: 0.75rem 0.82rem;
   border-radius: 0.85rem;
-  background: #060706;
+  background: #09090a;
   border: 1px solid rgba(143, 148, 156, 0.08);
-  color: #d8f7a5;
+  color: #e4e4e7;
   font-size: 0.78rem;
   line-height: 1.45;
   overflow: auto;
@@ -683,7 +650,7 @@
 
 .primaryButton {
   background: var(--color-primary);
-  color: #081000;
+  color: #09090a;
 }
 
 .primaryButton:hover:not(:disabled) {

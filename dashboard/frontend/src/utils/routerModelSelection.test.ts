@@ -33,7 +33,45 @@ describe('router model selection', () => {
   it('does not mistake a backend model for the automatic router', () => {
     expect(selectRouterAutoModel({ data: [{ id: 'qwen/qwen3.5-rocm', owned_by: 'vllm' }] }))
       .toBeNull()
+    expect(selectRouterAutoModel({
+      data: [
+        {
+          id: 'backend/auto',
+          owned_by: 'upstream-endpoint',
+          description: 'Automatic model routing',
+        },
+      ],
+    })).toBeNull()
     expect(selectRouterAutoModel({ data: 'invalid' })).toBeNull()
+  })
+
+  it('rejects the retired MoM compatibility alias instead of sending it from Playground', () => {
+    expect(selectRouterAutoModel({
+      data: [
+        {
+          id: 'MoM',
+          owned_by: 'vllm-semantic-router',
+          description: 'Intelligent Router for Mixture-of-Models',
+        },
+        {
+          id: 'vllm-sr/MoM',
+          owned_by: 'vllm-semantic-router',
+          description: 'Intelligent Router for Mixture-of-Models',
+        },
+      ],
+    })).toBeNull()
+  })
+
+  it('requires the canonical alias to be advertised by the semantic router', () => {
+    expect(selectRouterAutoModel({
+      data: [
+        {
+          id: CANONICAL_AUTO_MODEL,
+          owned_by: 'upstream-endpoint',
+          description: 'Automatic model routing',
+        },
+      ],
+    })).toBeNull()
   })
 
   it('derives the models endpoint from local and absolute chat endpoints', () => {
