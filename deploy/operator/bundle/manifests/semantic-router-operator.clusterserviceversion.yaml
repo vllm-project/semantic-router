@@ -8,30 +8,52 @@ metadata:
           "apiVersion": "vllm.ai/v1alpha1",
           "kind": "SemanticRouter",
           "metadata": {
-            "name": "semanticrouter-sample",
+            "name": "semantic-router-simple",
             "namespace": "default"
           },
           "spec": {
-            "replicas": 1,
-            "image": {
-              "repository": "ghcr.io/vllm-project/semantic-router/extproc",
-              "tag": "latest",
-              "pullPolicy": "IfNotPresent"
-            },
-            "resources": {
-              "limits": {
-                "memory": "7Gi",
-                "cpu": "2"
+            "config": {
+              "prompt_guard": {
+                "enabled": true,
+                "threshold": "0.7"
               },
-              "requests": {
-                "memory": "3Gi",
-                "cpu": "1"
+              "semantic_cache": {
+                "enabled": true,
+                "max_entries": 1000,
+                "similarity_threshold": "0.85",
+                "ttl_seconds": 3600
+              },
+              "tools": {
+                "enabled": true,
+                "top_k": 3
               }
             },
             "persistence": {
               "enabled": true,
               "size": "10Gi"
-            }
+            },
+            "replicas": 1,
+            "resources": {
+              "limits": {
+                "cpu": "2000m",
+                "memory": "4Gi"
+              },
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            },
+            "vllmEndpoints": [
+              {
+                "backend": {
+                  "inferenceServiceName": "llama-3-8b",
+                  "type": "kserve"
+                },
+                "model": "llama3-8b",
+                "name": "my-llama-model",
+                "reasoningFamily": "qwen3"
+              }
+            ]
           }
         }
       ]
@@ -41,6 +63,8 @@ metadata:
     containerImage: ghcr.io/vllm-project/semantic-router-operator:latest
     createdAt: "2026-01-14T00:00:00Z"
     description: Operator for deploying and managing vLLM Semantic Router instances
+    operators.operatorframework.io/builder: operator-sdk-v1.34.1
+    operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     repository: https://github.com/vllm-project/semantic-router
     support: vLLM Community
   name: semantic-router-operator.v0.1.0
@@ -53,7 +77,6 @@ spec:
       displayName: Semantic Router
       kind: SemanticRouter
       name: semanticrouters.vllm.ai
-      version: v1alpha1
       resources:
       - kind: Deployment
         name: ""
@@ -109,6 +132,7 @@ spec:
         path: phase
         x-descriptors:
         - urn:alm:descriptor:io.kubernetes.phase
+      version: v1alpha1
   description: |
     ## About the Semantic Router Operator
 
@@ -184,7 +208,6 @@ spec:
     For issues, feature requests, and contributions:
     * GitHub: https://github.com/vllm-project/semantic-router
     * Documentation: https://vllm-semantic-router.com
-
   displayName: Semantic Router Operator
   icon:
   - base64data: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
@@ -193,6 +216,106 @@ spec:
     spec:
       clusterPermissions:
       - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          - persistentvolumeclaims
+          - serviceaccounts
+          - services
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - autoscaling
+          resources:
+          - horizontalpodautoscalers
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - gateway.networking.k8s.io
+          resources:
+          - gateways
+          - httproutes
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - networking.k8s.io
+          resources:
+          - ingresses
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - route.openshift.io
+          resources:
+          - routes
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - serving.kserve.io
+          resources:
+          - inferenceservices
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - storage.k8s.io
+          resources:
+          - storageclasses
+          verbs:
+          - get
+          - list
+          - watch
         - apiGroups:
           - vllm.ai
           resources:
@@ -219,72 +342,31 @@ spec:
           - get
           - patch
           - update
-        - apiGroups:
-          - apps
-          resources:
-          - deployments
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - ""
-          resources:
-          - services
-          - serviceaccounts
-          - configmaps
-          - persistentvolumeclaims
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - autoscaling
-          resources:
-          - horizontalpodautoscalers
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - networking.k8s.io
-          resources:
-          - ingresses
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        serviceAccountName: semantic-router-operator-controller-manager
+        serviceAccountName: semantic-router-operator-semantic-router-operator-controller-manager
       deployments:
-      - name: semantic-router-operator-controller-manager
+      - label:
+          app.kubernetes.io/component: manager
+          app.kubernetes.io/name: semantic-router-operator
+          app.kubernetes.io/part-of: semantic-router
+          control-plane: controller-manager
+        name: semantic-router-operator-semantic-router-operator-controller-manager
         spec:
           replicas: 1
           selector:
             matchLabels:
+              app.kubernetes.io/component: manager
               app.kubernetes.io/name: semantic-router-operator
+              app.kubernetes.io/part-of: semantic-router
               control-plane: controller-manager
+          strategy: {}
           template:
             metadata:
               annotations:
                 kubectl.kubernetes.io/default-container: manager
               labels:
+                app.kubernetes.io/component: manager
                 app.kubernetes.io/name: semantic-router-operator
+                app.kubernetes.io/part-of: semantic-router
                 control-plane: controller-manager
             spec:
               containers:
@@ -293,6 +375,7 @@ spec:
                 command:
                 - /manager
                 image: ghcr.io/vllm-project/semantic-router-operator:latest
+                imagePullPolicy: IfNotPresent
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -318,13 +401,11 @@ spec:
                   capabilities:
                     drop:
                     - ALL
-                  readOnlyRootFilesystem: true
-                  runAsUser: 65532
               securityContext:
                 runAsNonRoot: true
                 seccompProfile:
                   type: RuntimeDefault
-              serviceAccountName: semantic-router-operator-controller-manager
+              serviceAccountName: semantic-router-operator-semantic-router-operator-controller-manager
               terminationGracePeriodSeconds: 10
       permissions:
       - rules:
@@ -359,7 +440,7 @@ spec:
           verbs:
           - create
           - patch
-        serviceAccountName: semantic-router-operator-controller-manager
+        serviceAccountName: semantic-router-operator-semantic-router-operator-controller-manager
     strategy: deployment
   installModes:
   - supported: true

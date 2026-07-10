@@ -76,6 +76,11 @@ var (
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
 		},
 		{
+			name:     "memory",
+			validate: validateMemoryContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
 			name:     "embedding",
 			validate: validateEmbeddingContracts,
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
@@ -83,6 +88,11 @@ var (
 		{
 			name:     "modality",
 			validate: validateModalityContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
+			name:     "complexity",
+			validate: validateComplexityContracts,
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
 		},
 		{
@@ -96,8 +106,18 @@ var (
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
 		},
 		{
+			name:     "remom",
+			validate: validateReMoMContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
 			name:     "fusion",
 			validate: validateFusionContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
+			name:     "flow",
+			validate: validateFlowContracts,
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
 		},
 		{

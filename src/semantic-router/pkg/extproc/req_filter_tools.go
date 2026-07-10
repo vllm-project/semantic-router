@@ -119,7 +119,7 @@ func (r *OpenAIRouter) runSemanticToolSelection(
 ) error {
 	selectedTools, strategyID, confidence, latency, toolErr := r.findToolsForQuery(openAIRequest, classificationText, historySummary, ctx, toolsCfg)
 
-	emitToolObservability(response, strategyID, confidence, latency)
+	emitToolObservability(response, ctx, strategyID, confidence, latency)
 	metrics.RecordToolsRetrieval(strategyID, latency.Seconds())
 
 	if toolErr != nil {
@@ -390,8 +390,15 @@ func (r *OpenAIRouter) findToolsForQueryExt(
 
 // emitToolObservability writes the three x-vsr-tools-* headers into the
 // in-flight ProcessingResponse so they reach the client as response headers.
-func emitToolObservability(response **ext_proc.ProcessingResponse, strategyID string, confidence float32, latency time.Duration) {
+// Per the v0.4 contract (#2205) these are intermediate observability details
+// demoted off the default surface: they are emitted only when the request opted
+// into debug headers via x-vsr-debug. The Prometheus tools-retrieval metric is
+// recorded by the caller and stays unconditional.
+func emitToolObservability(response **ext_proc.ProcessingResponse, ctx *RequestContext, strategyID string, confidence float32, latency time.Duration) {
 	if response == nil || *response == nil {
+		return
+	}
+	if !debugHeadersRequested(ctx) {
 		return
 	}
 	commonResponse := ensureRequestBodyCommonResponse(response)

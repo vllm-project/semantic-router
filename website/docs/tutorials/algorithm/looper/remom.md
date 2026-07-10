@@ -6,14 +6,20 @@
 
 It aligns to `config/algorithm/looper/remom.yaml`.
 
+The runtime also supports a direct ReMoM model slug through
+`global.integrations.looper.remom.model_names`. The built-in default is
+`vllm-sr/remom`. Direct ReMoM calls evaluate only decisions with
+`algorithm.type=remom`, matching the direct Fusion and Flow model surfaces.
+
 **Inspired by**: [PaCoRe](https://arxiv.org/abs/2601.05593) — extended to support mixture of models.
 
 ## Key Advantages
 
 - Multi-round parallel reasoning with configurable breadth schedule.
 - Intelligent synthesis from multiple model responses.
-- Model distribution strategies: `weighted`, `equal`, or `first_only`.
+- Model distribution strategies: `weighted`, `equal`, `round_robin`, or `first_only`.
 - Compaction strategy to manage token budgets across rounds.
+- Optional quorum and round timeout controls to avoid waiting on provider long tails.
 - Customizable synthesis templates.
 
 ## Algorithm Principle
@@ -35,7 +41,7 @@ flowchart TD
     B --> C[algorithm.type = remom]
     C --> D[Initialize: parse breadth_schedule]
     D --> E["Round 1: Launch N=breadth_schedule[0], parallel calls"]
-    E --> F[Collect all responses]
+    E --> F[Collect responses until all, quorum, or timeout]
     F --> G{Include reasoning?}
     G -- Yes --> H[Append reasoning content]
     G -- No --> I[Use response text only]
@@ -56,6 +62,7 @@ flowchart TD
 |----------|-------------|
 | `weighted` | Distribute calls proportional to model weights in `modelRefs` |
 | `equal` | Distribute calls equally across all candidate models |
+| `round_robin` | Cycle through candidate models in configured order |
 | `first_only` | All calls go to the first (highest-weight) model |
 
 ## What Problem Does It Solve?
@@ -78,18 +85,70 @@ Some tasks benefit from parallel exploration and later synthesis rather than one
 
 ## Configuration
 
+Register the direct model slug:
+
+```yaml
+global:
+  integrations:
+    looper:
+      endpoint: http://localhost:8899/v1/chat/completions
+      remom:
+        model_names:
+          - vllm-sr/remom
+```
+
+Configure a ReMoM decision:
+
+```yaml
+routing:
+  decisions:
+    - name: reasoning_panel
+      output_contract: Preserve any explicit output format exactly.
+      output_contract_spec:
+        type: reference_selection
+        reference:
+          source: candidate_responses
+          id_format: index
+        extract:
+          mode: exact
+          sources: [content]
+        postprocess:
+          - type: dereference_selected_reference
+      modelRefs:
+        - model: qwen3-32b
+        - model: deepseek-worker
+      algorithm:
+        type: remom
+        remom:
+          breadth_schedule: [3, 2]
+          model_distribution: weighted
+```
+
+`output_contract` is decision-scoped prompt text. Use it for benchmark or
+application format requirements that should apply across ReMoM, Fusion, and
+Flow instead of hard-coding task-specific prompts into an algorithm.
+`output_contract_spec` is the typed router-executable contract for post-processing
+and normalization; keep runtime behavior there instead of encoding it as
+prompt-text heuristics. Extraction defaults to exact `content` matching; use
+`extract.sources` or `extract.mode: json_object` only when the decision
+explicitly permits a wider parser.
+
+Algorithm-only fragment:
+
 ```yaml
 algorithm:
   type: remom
   remom:
-    breadth_schedule: [3, 2, 1]         # Parallel calls per round
-    model_distribution: weighted         # weighted, equal, or first_only
+    breadth_schedule: [3, 2]            # Parallel calls before final synthesis
+    model_distribution: weighted         # weighted, equal, round_robin, or first_only
     temperature: 0.7                     # Temperature for model calls
     include_reasoning: false             # Include reasoning in synthesis
     compaction_strategy: full            # full or last_n_tokens
     compaction_tokens: 1000              # Tokens to keep for last_n_tokens
     synthesis_template: ""               # Custom synthesis template (optional)
     max_concurrent: 3                    # Max concurrent calls per round
+    round_timeout_seconds: 120           # Optional round-level wait cap
+    min_successful_responses: 2          # Optional early-success quorum
     shuffle_seed: 42                     # Seed for response shuffling
     include_intermediate_responses: false # Include intermediate responses in output
     max_responses_per_round: null        # Limit responses per round
@@ -100,14 +159,16 @@ algorithm:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `breadth_schedule` | list[int] | **required** | Parallel calls per round (e.g., `[3, 2, 1]`) |
-| `model_distribution` | string | `weighted` | Strategy: `weighted`, `equal`, `first_only` |
+| `breadth_schedule` | list[int] | **required** | Parallel calls before the final synthesis call (e.g., `[3, 2]`) |
+| `model_distribution` | string | `weighted` | Strategy: `weighted`, `equal`, `round_robin`, `first_only` |
 | `temperature` | float | `1.0` | Temperature for model calls |
 | `include_reasoning` | bool | `false` | Include reasoning content in synthesis prompts |
 | `compaction_strategy` | string | `full` | Strategy: `full` or `last_n_tokens` |
 | `compaction_tokens` | int | `1000` | Tokens to keep for `last_n_tokens` compaction |
 | `synthesis_template` | string | — | Custom synthesis prompt template |
 | `max_concurrent` | int | — | Maximum concurrent model calls per round |
+| `round_timeout_seconds` | int | — | Maximum seconds to wait for a round before using partial responses when `on_error: skip` |
+| `min_successful_responses` | int | — | Return from a parallel round after this many successful responses |
 | `shuffle_seed` | int | `42` | Random seed for response shuffling |
 | `include_intermediate_responses` | bool | `true` | Include intermediate responses in output |
 | `max_responses_per_round` | int | — | Maximum responses to keep per round |

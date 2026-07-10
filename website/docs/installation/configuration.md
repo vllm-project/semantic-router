@@ -48,6 +48,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `global.stores` groups shared storage-backed services such as `semantic_cache`, `memory`, and `vector_store`
 - `global.integrations` groups helper runtime integrations such as `tools` and `looper`
 - `global.integrations.looper.fusion` defines direct Fusion model slugs. The built-in default is `vllm-sr/fusion`; add aliases such as `openrouter/fusion` explicitly only when you want them. Judge and panel settings stay per-decision under `routing.decisions[].algorithm.fusion`.
+- `global.integrations.looper.flow` defines direct Router Flow model slugs. The built-in default is `vllm-sr/flow`; workflow planning and worker policy stay per-decision under `routing.decisions[].algorithm.workflows`.
 - `global.model_catalog` groups router-owned model assets such as embeddings, system models, external models, reusable classifiers, and model-backed modules
 - `global.model_catalog.embeddings.semantic.embedding_config.top_k` limits how many ranked embedding rules are emitted for routing after scoring; the built-in default is `1`
 - `prototype_scoring` is the shared prototype-aware scoring block for embedding-backed signal families; use it under `global.model_catalog.embeddings.semantic.embedding_config`, `global.model_catalog.modules.classifier.preference`, `global.model_catalog.kbs[]`, and `global.model_catalog.modules.complexity` when you want exemplar banks compressed into representative prototypes
@@ -404,6 +405,36 @@ vllm-sr config import --from openclaw --source openclaw.json --target config.yam
 ```
 
 When `--source` is omitted, the importer checks `OPENCLAW_CONFIG_PATH`, `./openclaw.json`, and `~/.openclaw/openclaw.json` in that order.
+
+## Environment variable substitution
+
+During config load, string values anywhere in the canonical YAML tree can reference environment variables. This is the supported way to keep passwords, API keys, and other secrets out of ConfigMaps while still using a checked-in config skeleton.
+
+Supported forms:
+
+- `${VAR}` and `$VAR`
+- `${VAR:-default}` when `VAR` is unset or empty
+- `${VAR-default}` when `VAR` is unset
+- `$$` for a literal `$`
+
+Example for Router Replay on Kubernetes:
+
+```yaml
+global:
+  services:
+    router_replay:
+      enabled: true
+      store_backend: postgres
+      postgres:
+        host: 10.0.0.1
+        database: vsr
+        user: default
+        password: "${POSTGRES_PASSWORD}"
+        ssl_mode: disable
+        table_name: router_replay
+```
+
+Wire `POSTGRES_PASSWORD` from a Secret into the router Deployment environment, then mount or generate the config that references it. The same pattern works for Milvus, Redis, Valkey, Qdrant, and provider `backend_refs[].api_key` values.
 
 ## Quick guides by environment
 

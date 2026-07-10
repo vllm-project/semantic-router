@@ -70,8 +70,10 @@ class ReMoMAlgorithmConfig(BaseModel):
     # e.g., [32, 4] means 32 calls in round 1, 4 in round 2, then 1 final
     breadth_schedule: list[int]
 
-    # Model distribution strategy: "weighted", "equal", or "first_only"
-    model_distribution: str | None = "weighted"
+    # Model distribution strategy: "weighted", "equal", "round_robin", or "first_only"
+    model_distribution: (
+        Literal["weighted", "equal", "round_robin", "first_only"] | None
+    ) = "weighted"
 
     # Temperature for model calls (default: 1.0 for diverse exploration)
     temperature: float | None = 1.0
@@ -88,8 +90,18 @@ class ReMoMAlgorithmConfig(BaseModel):
     # Custom synthesis template (uses default if not provided)
     synthesis_template: str | None = None
 
+    # Explicit final synthesis model. Must be one of the decision modelRefs.
+    synthesis_model: str | None = None
+
     # Maximum concurrent model calls per round
     max_concurrent: int | None = None
+
+    # Maximum wall-clock time to wait for a ReMoM round before using partial
+    # responses when on_error="skip".
+    round_timeout_seconds: int | None = Field(default=None, ge=1)
+
+    # Return from a parallel round as soon as this many responses succeed.
+    min_successful_responses: int | None = Field(default=None, ge=1)
 
     # Behavior on model call failure: "skip" or "fail"
     on_error: str | None = "skip"
@@ -141,6 +153,8 @@ class FusionAlgorithmConfig(BaseModel):
     analysis_models: list[str] | None = None
     max_concurrent: int | None = Field(default=None, ge=1)
     max_completion_tokens: int | None = Field(default=None, ge=1)
+    round_timeout_seconds: int | None = Field(default=None, ge=1)
+    min_successful_responses: int | None = Field(default=None, ge=1)
     temperature: float | None = Field(default=None, ge=0)
     include_analysis: bool | None = True
     include_intermediate_responses: bool | None = True
@@ -149,6 +163,59 @@ class FusionAlgorithmConfig(BaseModel):
     synthesis_template: str | None = None
     judge_prompt_version: str | None = "fusion-v1"
     grounding: FusionGroundingConfig | None = None
+
+
+class WorkflowPlannerConfig(BaseModel):
+    """Control-plane model used by dynamic Router Flow planning."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model: str | None = None
+    max_completion_tokens: int | None = Field(default=None, ge=1)
+
+
+class WorkflowRoleConfig(BaseModel):
+    """Static Router Flow role mapped to decision modelRefs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    models: list[str] = Field(min_length=1)
+    prompt: str | None = None
+    access_list: list[str] | None = None
+
+
+class WorkflowFinalConfig(BaseModel):
+    """Static Router Flow final synthesis override."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model: str | None = None
+    prompt: str | None = None
+
+
+class WorkflowsAlgorithmConfig(BaseModel):
+    """Configuration for Router Flow workflow orchestration.
+
+    decision.modelRefs is the worker boundary. ``planner.model`` is the
+    control-plane model that generates dynamic workflow plans.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["static", "dynamic"] | None = "static"
+    template: str | None = "micro_agent"
+    roles: list[WorkflowRoleConfig] | None = None
+    final: WorkflowFinalConfig | None = None
+    planner: WorkflowPlannerConfig | None = None
+    max_steps: int | None = Field(default=3, ge=1)
+    max_parallel: int | None = Field(default=2, ge=1)
+    max_completion_tokens: int | None = Field(default=None, ge=1)
+    round_timeout_seconds: int | None = Field(default=None, ge=1)
+    min_successful_responses: int | None = Field(default=None, ge=1)
+    temperature: float | None = Field(default=None, ge=0)
+    include_intermediate_responses: bool | None = True
+    on_error: Literal["skip", "fail"] | None = "fail"
 
 
 class LatencyAwareAlgorithmConfig(BaseModel):
@@ -291,6 +358,7 @@ class AlgorithmConfig(BaseModel):
        - "ratings": Coordinate bounded candidate execution
        - "remom": Multi-round parallel reasoning with intelligent synthesis
        - "fusion": Parallel panel deliberation with judge analysis and final synthesis
+       - "workflows": Router Flow dynamic/static micro-agent workflows
 
     2. Selection algorithms (single model selection from candidates):
        - "static": Use first model (default)
@@ -306,7 +374,8 @@ class AlgorithmConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # Algorithm type: looper ("confidence", "ratings", "remom", "fusion") or
+    # Algorithm type: looper ("confidence", "ratings", "remom", "fusion",
+    # "workflows") or
     # selection ("static", "router_dc", "automix", "hybrid", "knn",
     #            "kmeans", "svm", "mlp", "multi_factor", "latency_aware")
     type: Literal[
@@ -314,6 +383,7 @@ class AlgorithmConfig(BaseModel):
         "ratings",
         "remom",
         "fusion",
+        "workflows",
         "static",
         "router_dc",
         "automix",
@@ -331,6 +401,7 @@ class AlgorithmConfig(BaseModel):
     ratings: RatingsAlgorithmConfig | None = None
     remom: ReMoMAlgorithmConfig | None = None
     fusion: FusionAlgorithmConfig | None = None
+    workflows: WorkflowsAlgorithmConfig | None = None
     latency_aware: LatencyAwareAlgorithmConfig | None = None
 
     # Selection algorithm configurations

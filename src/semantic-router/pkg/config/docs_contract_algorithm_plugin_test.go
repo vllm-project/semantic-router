@@ -23,6 +23,7 @@ var algorithmTutorialBuckets = map[string]string{
 	"router-dc":     "selection",
 	"static":        "selection",
 	"svm":           "selection",
+	"workflows":     "looper",
 }
 
 var retiredAlgorithmTutorialDocs = []string{

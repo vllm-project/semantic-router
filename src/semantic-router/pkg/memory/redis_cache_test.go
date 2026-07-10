@@ -83,6 +83,82 @@ func TestRedisCache_Close_NilReceiver_NoError(t *testing.T) {
 	assert.NoError(t, c.Close())
 }
 
+// TestRedisCache_InvalidateByUser_DeletesTrackedKeys verifies that Set registers
+// each value key in the user's index set and that InvalidateByUser deletes every
+// tracked value key plus the index set itself (no keyspace scan).
+func TestRedisCache_InvalidateByUser_DeletesTrackedKeys(t *testing.T) {
+	cacheCfg := &RedisCacheConfig{Address: "localhost:6379", TTLSeconds: 60}
+	cache, err := NewRedisCache(context.Background(), cacheCfg)
+	if err != nil {
+		t.Skipf("Redis not available: %v", err)
+	}
+	defer func() { _ = cache.Close() }()
+	ctx := context.Background()
+
+	user := "u_inv_idx"
+	cache.InvalidateByUser(ctx, user) // clean slate from prior runs
+
+	// Two distinct queries -> two distinct value keys for the same user.
+	opts1 := RetrieveOptions{Query: "alpha", UserID: user, Limit: 5, Threshold: 0.5}
+	opts2 := RetrieveOptions{Query: "beta", UserID: user, Limit: 5, Threshold: 0.5}
+	cache.Set(ctx, opts1, []*RetrieveResult{})
+	cache.Set(ctx, opts2, []*RetrieveResult{})
+
+	// The index set tracks exactly the two value keys.
+	idxKey := cache.userIndexKey(user)
+	members, err := cache.client.SMembers(ctx, idxKey).Result()
+	require.NoError(t, err)
+	assert.ElementsMatch(t,
+		[]string{cacheKey(cache.prefix, user, opts1), cacheKey(cache.prefix, user, opts2)},
+		members,
+	)
+
+	// Both are cache hits before invalidation.
+	_, ok1 := cache.Get(ctx, opts1)
+	_, ok2 := cache.Get(ctx, opts2)
+	require.True(t, ok1)
+	require.True(t, ok2)
+
+	cache.InvalidateByUser(ctx, user)
+
+	// Value keys and the index set are all gone.
+	_, ok1 = cache.Get(ctx, opts1)
+	_, ok2 = cache.Get(ctx, opts2)
+	assert.False(t, ok1)
+	assert.False(t, ok2)
+	exists, err := cache.client.Exists(ctx, idxKey).Result()
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), exists, "index set should be deleted after invalidation")
+}
+
+// TestRedisCache_InvalidateByUser_ScopedToUser verifies that invalidating one
+// user leaves another user's cached entries intact.
+func TestRedisCache_InvalidateByUser_ScopedToUser(t *testing.T) {
+	cacheCfg := &RedisCacheConfig{Address: "localhost:6379", TTLSeconds: 60}
+	cache, err := NewRedisCache(context.Background(), cacheCfg)
+	if err != nil {
+		t.Skipf("Redis not available: %v", err)
+	}
+	defer func() { _ = cache.Close() }()
+	ctx := context.Background()
+
+	optsA := RetrieveOptions{Query: "q", UserID: "u_scope_a", Limit: 5, Threshold: 0.5}
+	optsB := RetrieveOptions{Query: "q", UserID: "u_scope_b", Limit: 5, Threshold: 0.5}
+	cache.InvalidateByUser(ctx, optsA.UserID)
+	cache.InvalidateByUser(ctx, optsB.UserID)
+	cache.Set(ctx, optsA, []*RetrieveResult{})
+	cache.Set(ctx, optsB, []*RetrieveResult{})
+
+	cache.InvalidateByUser(ctx, optsA.UserID)
+
+	_, okA := cache.Get(ctx, optsA)
+	_, okB := cache.Get(ctx, optsB)
+	assert.False(t, okA, "invalidated user should miss")
+	assert.True(t, okB, "other user's cache must be untouched")
+
+	cache.InvalidateByUser(ctx, optsB.UserID) // cleanup
+}
+
 func TestRedisCache_SetThenGet_RoundTrip(t *testing.T) {
 	cacheCfg := &RedisCacheConfig{Address: "localhost:6379", TTLSeconds: 60}
 	cache, err := NewRedisCache(context.Background(), cacheCfg)

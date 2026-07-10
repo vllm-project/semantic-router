@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // PreferenceResult represents the result of preference classification
@@ -28,6 +29,15 @@ type PreferenceClassifier struct {
 
 // NewPreferenceClassifier creates a new preference classifier
 func NewPreferenceClassifier(externalCfg *config.ExternalModelConfig, rules []config.PreferenceRule, localCfg *config.PreferenceModelConfig) (*PreferenceClassifier, error) {
+	return NewPreferenceClassifierWithProvider(externalCfg, rules, localCfg, nil)
+}
+
+func NewPreferenceClassifierWithProvider(
+	externalCfg *config.ExternalModelConfig,
+	rules []config.PreferenceRule,
+	localCfg *config.PreferenceModelConfig,
+	provider embedding.Provider,
+) (*PreferenceClassifier, error) {
 	resolvedLocalCfg := config.PreferenceModelConfig{}
 	if localCfg != nil {
 		resolvedLocalCfg = *localCfg
@@ -36,7 +46,7 @@ func NewPreferenceClassifier(externalCfg *config.ExternalModelConfig, rules []co
 
 	// Contrastive few-shot preference routing
 	if resolvedLocalCfg.ContrastiveEnabled() {
-		return newContrastivePreferenceClassifier(rules, resolvedLocalCfg)
+		return newContrastivePreferenceClassifier(rules, resolvedLocalCfg, provider)
 	}
 
 	return newExternalPreferenceClassifier(externalCfg, rules)

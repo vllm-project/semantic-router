@@ -94,6 +94,39 @@ the generated `ga-readiness.json` for details.
 Do not mutate GitHub.
 ```
 
+## Scheduled CI Workflow
+
+`.github/workflows/maintainer-board.yml` runs the read-only maintainer board on
+a daily schedule and via `workflow_dispatch`. It calls
+`tools/agent/scripts/run_maintainer_board_ci.sh`, which wraps
+`maintainer_board.py sync` and publishes:
+
+- the GitHub Actions job summary (`today.md`)
+- downloadable artifacts: `today.md`, `current.json`,
+  `proposed-actions.json`, and milestone notes
+
+The scheduled workflow does not label, comment on, or close issues or pull
+requests. `proposed-actions.json` is informational only in CI; use the local
+`apply` command after maintainer review when mutations are intended.
+
+### Relationship to `stale.yml`
+
+- `.github/workflows/stale.yml` mutates GitHub directly: it marks inactive
+  issues and pull requests as stale and closes them after the grace period.
+- `.github/workflows/maintainer-board.yml` is visibility-only: it classifies
+  the current queue using `tools/agent/maintainer-policy.yaml` and gives
+  maintainers a daily brief without changing GitHub state.
+
+Use the maintainer board to decide what needs review, rebase, unblock, or
+close-candidate follow-up. Use `stale.yml` only for the automated stale/close
+lifecycle.
+
+Manual trigger example:
+
+```bash
+gh workflow run maintainer-board.yml -f milestone=v0.4 -f issue_limit=100 -f pr_limit=50
+```
+
 ## Apply Policy
 
 GitHub mutations are never implicit. Applying proposed labels, comments, issue

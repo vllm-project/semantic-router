@@ -371,48 +371,36 @@
   "homepage.hero.publicBeta": {
     "message": "抢先体验"
   },
+  "homepage.hero.logoAlt": {
+    "message": "vLLM Semantic Router 标志"
+  },
   "homepage.hero.label": {
-    "message": "开源 LLM 路由器"
+    "message": "Mixture-of-Models"
   },
-  "homepage.hero.line1Accent": {
-    "message": "路由"
+  "homepage.hero.line1": {
+    "message": "智能，"
   },
-  "homepage.hero.line1Suffix": {
-    "message": "每一个请求"
-  },
-  "homepage.hero.line2Prefix": {
-    "message": "用一个系统"
-  },
-  "homepage.hero.line2Accent": {
-    "message": "大脑"
-  },
-  "homepage.hero.line3Prefix": {
-    "message": "到"
-  },
-  "homepage.hero.line3Accent": {
-    "message": "最合适的"
-  },
-  "homepage.hero.line3Suffix": {
-    "message": "模型"
+  "homepage.hero.line2": {
+    "message": "因你而组合。"
   },
   "homepage.hero.description": {
-    "message": "在本地、私有与前沿模型之间统一路由，由成本、时延、隐私与安全共同驱动。"
+    "message": "单个模型或多模型协作，跨算力与位置，按你的偏好组合。"
   },
   "homepage.hero.primaryCta": {
-    "message": "试用演示"
+    "message": "体验 Playground"
   },
   "homepage.hero.manifesto": {
     "message": "先把请求看明白，再把系统做大；以信号驱动，以不确定性为标尺，让决策足够清晰。"
   },
   "homepage.hero.secondaryCta": {
-    "message": "阅读白皮书"
+    "message": "浏览文档"
   },
   "homepage.hero.modelBand.eyebrow": {
-    "message": "系统大脑"
+    "message": "Mixture-of-Models"
   },
-  "homepage.hero.modelBand.copy": {
-    "message": "用系统大脑连接所有模型"
-  },    
+  "homepage.hero.modelBand.aria": {
+    "message": "Mixture-of-Models 模型生态"
+  },
   "homepage.stats.signals.label": {
     "message": "信号"
   },
@@ -432,85 +420,58 @@
     "message": "{count} 篇研究论文，覆盖路由、系统、安全与多模态。"
   },
   "homepage.capabilities.label": {
-    "message": "为什么需要路由"
+    "message": "为什么需要 Mixture-of-Models"
   },
   "homepage.capabilities.heading": {
-    "message": "一个请求，多种模型选择。"
+    "message": "碎片化是现实，偏好决定组合。"
   },
-  "homepage.capabilities.copy": {
-    "message": "模型在质量、成本、时延、隐私和模态上都不一样。一旦你不止跑一个模型，难点就不再是调用 LLM，而是把每个请求路由到正确的模型系统。"
+  "homepage.capabilities.axis.models": {
+    "message": "模型"
   },
-  "homepage.capabilities.axis.capability": {
-    "message": "能力"
+  "homepage.capabilities.axis.compute": {
+    "message": "算力"
   },
-  "homepage.capabilities.axis.cost": {
-    "message": "成本"
+  "homepage.capabilities.axis.location": {
+    "message": "位置"
   },
-  "homepage.capabilities.axis.privacy": {
-    "message": "隐私"
+  "homepage.capabilities.axis.preference": {
+    "message": "偏好"
   },
-  "homepage.capabilities.axis.latency": {
-    "message": "时延"
+  "homepage.capabilities.table.dimension": {
+    "message": "维度"
   },
-  "homepage.capabilities.checklist.label": {
-    "message": "路由器要决定什么"
+  "homepage.capabilities.table.reality": {
+    "message": "碎片化现状"
   },
-  "homepage.capabilities.checklist.copy": {
-    "message": "在回复到达用户之前，路由器每次都要回答同一组运行问题。"
+  "homepage.capabilities.table.value": {
+    "message": "使用 vLLM SR"
   },
-  "homepage.capabilities.task.choose": {
-    "message": "为每个请求选择合适的模型路径。"
+  "homepage.capabilities.models.reality": {
+    "message": "闭源前沿、开源通用、领域与端侧模型各有所长。"
   },
-  "homepage.capabilities.task.connect": {
-    "message": "把本地、私有和前沿模型接进同一产品，而不是各管一摊。"
+  "homepage.capabilities.models.value": {
+    "message": "路由单一模型，或协同多个模型。"
   },
-  "homepage.capabilities.task.govern": {
-    "message": "在路由时同时执行成本、安全和隐私约束。"
+  "homepage.capabilities.compute.reality": {
+    "message": "新旧 GPU、专用加速器、端侧设备与云端算力长期共存。"
   },
-  "homepage.capabilities.checklist.footer": {
-    "message": "成本控制、安全控制和模型选择，必须在同一步完成。"
+  "homepage.capabilities.compute.value": {
+    "message": "在异构算力承载的已配置模型端点之间路由。"
   },
-  "homepage.capabilities.meta.selection": {
-    "message": "选择"
+  "homepage.capabilities.location.reality": {
+    "message": "推理分布在端侧、私有数据中心与云端。"
   },
-  "homepage.capabilities.meta.connection": {
-    "message": "连接"
+  "homepage.capabilities.location.value": {
+    "message": "在隐私与数据边界内跨位置路由。"
   },
-  "homepage.capabilities.meta.governance": {
-    "message": "治理"
+  "homepage.capabilities.preference.reality": {
+    "message": "不同用户、产品与工作负载对“最好”的定义不同。"
   },
-  "homepage.capabilities.values.label": {
-    "message": "团队为什么部署它"
+  "homepage.capabilities.preference.value": {
+    "message": "让偏好决定每条模型路径。"
   },
-  "homepage.capabilities.values.copy": {
-    "message": "用同一层路由同时处理成本、质量和策略决策。"
-  },
-  "homepage.capabilities.value1.title": {
-    "message": "降低单次请求成本"
-  },
-  "homepage.capabilities.value1.text": {
-    "message": "把常规流量发往更高效的模型，把真正需要的请求交给前沿推理模型，让模型选择变成可衡量的 ROI。"
-  },
-  "homepage.capabilities.value1.detail": {
-    "message": "每一美元换来更多有效输出。"
-  },
-  "homepage.capabilities.value2.title": {
-    "message": "更安全的模型决策"
-  },
-  "homepage.capabilities.value2.text": {
-    "message": "把越狱、PII 和幻觉处理放进路由链路里，让高风险请求在生成前就被拦住。"
-  },
-  "homepage.capabilities.value2.detail": {
-    "message": "安全能力直接进入请求路径。"
-  },
-  "homepage.capabilities.value3.title": {
-    "message": "一层路由接所有模型"
-  },
-  "homepage.capabilities.value3.text": {
-    "message": "用同一层路由协调本地、私有和前沿模型，从边缘部署一直覆盖到托管云。"
-  },
-  "homepage.capabilities.value3.detail": {
-    "message": "一套系统贯穿设备、VPC 和云。"
+  "homepage.capabilities.docsCta": {
+    "message": "了解工作原理"
   },
   "homepage.capabilities.signal.title": {
     "message": "信号提取"
@@ -2432,13 +2393,13 @@
     "message": "用于 LLM 推理优化的 Workload-Router-Pool 架构，以 vLLM Semantic Router 愿景论文的完整 PDF 阅读器形式呈现。"
   },
   "homepage.meta.description": {
-    "message": "面向 Mixture-of-Models 的开源 LLM 路由器。基于成本、时延、隐私、安全和模态信号，为每个请求选择最合适的本地、私有或前沿模型。"
+    "message": "Mixture-of-Models 是下一代偏好驱动的模型架构。vLLM Semantic Router 是其开源运行时。"
   },
   "homepage.meta.title": {
-    "message": "面向 Mixture-of-Models 的开源 LLM 路由器"
+    "message": "Mixture-of-Models 的开源运行时"
   },
   "homepage.meta.socialTitle": {
-    "message": "vLLM Semantic Router | 开源 LLM 路由器"
+    "message": "vLLM Semantic Router | Mixture-of-Models 开源运行时"
   },
 
   "homepage.whereItLives.title": {
@@ -2549,6 +2510,18 @@
   "community.contributors.updated": {
     "message": "更新于"
   },
+  "community.contributors.sort.label": {
+    "message": "排序"
+  },
+  "community.contributors.sort.aria": {
+    "message": "贡献者排行榜排序方式"
+  },
+  "community.contributors.sort.commits": {
+    "message": "提交"
+  },
+  "community.contributors.sort.reviews": {
+    "message": "审查"
+  },
   "community.contributors.table.rank": {
     "message": "排名"
   },
@@ -2557,6 +2530,9 @@
   },
   "community.contributors.table.commits": {
     "message": "提交"
+  },
+  "community.contributors.table.reviews": {
+    "message": "审查"
   },
   "community.contributors.table.share": {
     "message": "占比"
@@ -2572,6 +2548,33 @@
   },
   "community.contributors.avatarAlt": {
     "message": "{name} 头像"
+  },
+  "community.contributors.committers.aria": {
+    "message": "{rangeLabel} 提交者活动"
+  },
+  "community.contributors.committers.h2": {
+    "message": "提交者活动"
+  },
+  "community.contributors.committers.metrics.aria": {
+    "message": "提交者活动摘要"
+  },
+  "community.contributors.committers.metrics.committers": {
+    "message": "活跃提交者"
+  },
+  "community.contributors.committers.metrics.reviews": {
+    "message": "PR 审查"
+  },
+  "community.contributors.committers.metrics.merges": {
+    "message": "PR 合并"
+  },
+  "community.contributors.committers.table.reviews": {
+    "message": "审查"
+  },
+  "community.contributors.committers.table.merges": {
+    "message": "合并"
+  },
+  "community.contributors.committers.table.total": {
+    "message": "合计"
   },
   "community.contributors.range.v03ToNow.label": {
     "message": "v0.3 -> 当前"

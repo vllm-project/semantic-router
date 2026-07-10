@@ -10,7 +10,7 @@ COPY ${BASE_DIR}/frontend/ ./
 RUN npm run build
 
 # Build backend (needs src/semantic-router for replace directive)
-FROM golang:1.24.1-alpine AS backend-builder
+FROM golang:1.25-alpine AS backend-builder
 ARG BASE_DIR=dashboard
 ARG ROUTER_DIR=src/semantic-router
 WORKDIR /app
