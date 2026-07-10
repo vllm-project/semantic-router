@@ -75,6 +75,8 @@ export default function ConfigPageModelsSection({
       .map((entry) => {
         const normalized: BackendRefEntry = {}
         if (typeof entry.name === 'string' && entry.name.trim()) normalized.name = entry.name.trim()
+        if (typeof entry.backend_id === 'string' && entry.backend_id.trim()) normalized.backend_id = entry.backend_id.trim()
+        if (typeof entry.engine_kind === 'string' && entry.engine_kind.trim()) normalized.engine_kind = entry.engine_kind.trim()
         if (typeof entry.endpoint === 'string' && entry.endpoint.trim()) normalized.endpoint = entry.endpoint.trim()
         if (entry.protocol === 'https') normalized.protocol = 'https'
         else if (entry.protocol === 'http') normalized.protocol = 'http'
@@ -353,6 +355,8 @@ export default function ConfigPageModelsSection({
                           {isReadonly ? '************' : displayAddress}
                         </span>
                         {backendRef.protocol ? <span>Protocol: {backendRef.protocol}</span> : null}
+                        {backendRef.backend_id ? <span>Backend ID: {backendRef.backend_id}</span> : null}
+                        {backendRef.engine_kind ? <span>Engine: {backendRef.engine_kind}</span> : null}
                         {typeof backendRef.weight === 'number' ? <span>Weight: {backendRef.weight}</span> : null}
                         {backendRef.provider ? <span>Provider: {backendRef.provider}</span> : null}
                         {backendRef.type ? <span>Type: {backendRef.type}</span> : null}

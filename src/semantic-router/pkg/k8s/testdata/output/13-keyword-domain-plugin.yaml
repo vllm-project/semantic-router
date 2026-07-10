@@ -135,6 +135,8 @@ global:
           enabled: false
           model_metrics: false
           queue_depth_estimation: false
+      backend_telemetry:
+        enabled: false
     authz: {}
     ratelimit: {}
     router_replay: {}

@@ -17,6 +17,8 @@ providers:
     - name: "replace-with-your-model"
       backend_refs:
         - name: "primary"
+          backend_id: "replace-with-your-model-primary"
+          engine_kind: "vllm"
           endpoint: "host.docker.internal:8000"
           protocol: "http"
           weight: 100
@@ -35,3 +37,13 @@ routing:
       modelRefs:
         - model: "replace-with-your-model"
           use_reasoning: false
+
+global:
+  services:
+    observability:
+      backend_telemetry:
+        enabled: false
+        poll_interval: 2s
+        ttl: 5s
+        request_timeout: 2s
+        metrics_path: /metrics

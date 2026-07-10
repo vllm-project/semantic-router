@@ -37,13 +37,14 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `defaults`
   - `models`
   - `providers.defaults` holds `default_model`, `reasoning_families`, and `default_reasoning_effort`
-  - `providers.models[*]` holds `provider_model_id`, `backend_refs`, `pricing`, `api_format`, and `external_model_ids`
+  - `providers.models[*]` holds `provider_model_id`, `backend_refs`, `pricing`, `api_format`, and `external_model_ids`; each backend ref can include optional `backend_id` and `engine_kind` identity hints for backend telemetry adapters
 - `global` owns router-wide runtime overrides.
   - `global.router` groups router-engine control knobs such as config-source selection, route-cache, and model-selection defaults
   - `global.router.config_source` selects whether runtime config comes from the canonical YAML file (`file`) or from in-process Kubernetes CRD reconciliation (`kubernetes`)
   - `global.router.auto_model_names` declares the request model aliases that enter full automatic routing. Defaults include `vllm-sr/auto`, `auto`, and `MoM`; `auto_model_name` remains the legacy single-name compatibility field.
   - `global.router.learning.adaptation` enables online model-choice learning after the base decision algorithm. `global.router.learning.protection` protects agentic continuity, cache, tool loops, and handoff cost. `decision.algorithm.type=session_aware|elo|rl_driven|gmtrouter|bandit|personalization` is removed; decisions can use normal base algorithms or omit `algorithm`. Per-decision `adaptations` is strictly validated and should be used only for `mode: apply|observe|bypass`, component modes, optional `adaptation.candidate_set`, and sparse `protection.stability_weight` / `protection.switch_margin` overrides.
   - `global.services` groups shared APIs and control-plane services such as `response_api`, `router_replay`, `observability`, `authz`, and `ratelimit`
+  - `global.services.observability.backend_telemetry` opt-in enables backend metrics collection for engine-aware adapters such as vLLM; it defaults to disabled and reads `backend_refs[].backend_id` / `engine_kind`
   - `global.services.router_replay.enabled` acts as the default replay switch for every decision; route-local `router_replay.enabled: false` is the explicit opt-out
   - `global.stores` groups shared storage-backed services such as `semantic_cache`, `memory`, and `vector_store`
 - `global.integrations` groups helper runtime integrations such as `tools` and `looper`
@@ -83,6 +84,8 @@ providers:
       backend_refs:
         - name: primary
           endpoint: host.docker.internal:8000
+          backend_id: qwen3-primary
+          engine_kind: vllm
           protocol: http
           weight: 100
           api_key_env: OPENAI_API_KEY
@@ -182,6 +185,12 @@ global:
     config_source: file
   services:
     observability:
+      backend_telemetry:
+        enabled: false
+        poll_interval: 2s
+        ttl: 5s
+        request_timeout: 2s
+        metrics_path: /metrics
       metrics:
         enabled: true
     router_replay:
