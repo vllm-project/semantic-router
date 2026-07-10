@@ -1493,7 +1493,7 @@ global:
           endpoint: jaeger:4317
           insecure: true
         sampling:
-          type: traceidratio
+          type: probabilistic
           rate: 0.5
         resource:
           service_name: vllm-sr

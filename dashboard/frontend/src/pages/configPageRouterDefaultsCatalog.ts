@@ -227,8 +227,8 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
         insecure: true,
       },
       sampling: {
-        type: 'always_on',
-        rate: 1.0,
+        type: 'probabilistic',
+        rate: 0.1,
       },
       resource: {
         service_name: 'vllm-sr',
