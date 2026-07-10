@@ -18,7 +18,7 @@ ARG BUILDPLATFORM
 ARG GIT_SSL_NO_VERIFY=0
 ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bullseye
 ARG ONNX_RUST_RUNTIME_COMPAT_IMAGE=rust:1.90-bullseye
-ARG GO_RUNTIME_COMPAT_IMAGE=golang:1.24-bullseye
+ARG GO_RUNTIME_COMPAT_IMAGE=golang:1.25-bookworm
 
 # Stage 1: Build Rust candle-binding (CPU-only, cross-compiled for TARGETARCH)
 # Identical to Dockerfile / Dockerfile.rocm. candle does not expose ROCm and

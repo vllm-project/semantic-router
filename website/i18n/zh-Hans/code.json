@@ -371,32 +371,20 @@
   "homepage.hero.publicBeta": {
     "message": "抢先体验"
   },
+  "homepage.hero.logoAlt": {
+    "message": "vLLM Semantic Router 标志"
+  },
   "homepage.hero.label": {
-    "message": "开源 LLM 路由器"
+    "message": "Mixture-of-Models 开源运行时"
   },
-  "homepage.hero.line1Accent": {
-    "message": "路由"
+  "homepage.hero.line1": {
+    "message": "智能，"
   },
-  "homepage.hero.line1Suffix": {
-    "message": "每一个请求"
-  },
-  "homepage.hero.line2Prefix": {
-    "message": "用一个系统"
-  },
-  "homepage.hero.line2Accent": {
-    "message": "大脑"
-  },
-  "homepage.hero.line3Prefix": {
-    "message": "到"
-  },
-  "homepage.hero.line3Accent": {
-    "message": "最合适的"
-  },
-  "homepage.hero.line3Suffix": {
-    "message": "模型"
+  "homepage.hero.line2": {
+    "message": "因你而组合。"
   },
   "homepage.hero.description": {
-    "message": "在本地、私有与前沿模型之间统一路由，由成本、时延、隐私与安全共同驱动。"
+    "message": "没有一个模型对所有人都是最好的。vLLM Semantic Router 依据通过可配置信号与策略表达的用户偏好，为每个请求选择、级联或协作编排模型。"
   },
   "homepage.hero.primaryCta": {
     "message": "试用演示"
@@ -408,11 +396,14 @@
     "message": "阅读白皮书"
   },
   "homepage.hero.modelBand.eyebrow": {
-    "message": "系统大脑"
+    "message": "Mixture-of-Models"
   },
   "homepage.hero.modelBand.copy": {
-    "message": "用系统大脑连接所有模型"
-  },    
+    "message": "你的偏好，决定模型如何组合"
+  },
+  "homepage.hero.modelBand.aria": {
+    "message": "Mixture-of-Models 模型生态"
+  },
   "homepage.stats.signals.label": {
     "message": "信号"
   },
@@ -432,85 +423,94 @@
     "message": "{count} 篇研究论文，覆盖路由、系统、安全与多模态。"
   },
   "homepage.capabilities.label": {
-    "message": "为什么需要路由"
+    "message": "为什么需要 Mixture-of-Models"
   },
   "homepage.capabilities.heading": {
-    "message": "一个请求，多种模型选择。"
+    "message": "供给是碎片化的，“最好”因人而异。"
   },
   "homepage.capabilities.copy": {
-    "message": "模型在质量、成本、时延、隐私和模态上都不一样。一旦你不止跑一个模型，难点就不再是调用 LLM，而是把每个请求路由到正确的模型系统。"
+    "message": "模型、算力和部署位置持续分化；偏好决定对每个用户和工作负载而言，什么才算“好”。Mixture-of-Models 将碎片化供给组合为与偏好一致的智能。"
   },
-  "homepage.capabilities.axis.capability": {
-    "message": "能力"
+  "homepage.capabilities.axis.models": {
+    "message": "模型"
   },
-  "homepage.capabilities.axis.cost": {
-    "message": "成本"
+  "homepage.capabilities.axis.compute": {
+    "message": "算力"
   },
-  "homepage.capabilities.axis.privacy": {
-    "message": "隐私"
+  "homepage.capabilities.axis.location": {
+    "message": "位置"
   },
-  "homepage.capabilities.axis.latency": {
-    "message": "时延"
+  "homepage.capabilities.axis.preference": {
+    "message": "偏好"
   },
   "homepage.capabilities.checklist.label": {
-    "message": "路由器要决定什么"
+    "message": "开源运行时"
   },
   "homepage.capabilities.checklist.copy": {
-    "message": "在回复到达用户之前，路由器每次都要回答同一组运行问题。"
+    "message": "vLLM Semantic Router 让 Mixture-of-Models 在在线请求链路中真正运行起来。"
   },
-  "homepage.capabilities.task.choose": {
-    "message": "为每个请求选择合适的模型路径。"
+  "homepage.capabilities.task.extract": {
+    "message": "读取任务、上下文、安全、偏好和运行时信号。"
   },
-  "homepage.capabilities.task.connect": {
-    "message": "把本地、私有和前沿模型接进同一产品，而不是各管一摊。"
+  "homepage.capabilities.task.compose": {
+    "message": "选择单个模型、沿置信度级联升级，或协调多个模型。"
   },
-  "homepage.capabilities.task.govern": {
-    "message": "在路由时同时执行成本、安全和隐私约束。"
+  "homepage.capabilities.task.apply": {
+    "message": "应用可配置的请求与响应控制，并公开结果供检查。"
   },
   "homepage.capabilities.checklist.footer": {
-    "message": "成本控制、安全控制和模型选择，必须在同一步完成。"
+    "message": "偏好定义目标，Mixture-of-Models 定义架构，vLLM Semantic Router 负责运行它。"
   },
-  "homepage.capabilities.meta.selection": {
-    "message": "选择"
+  "homepage.capabilities.meta.signals": {
+    "message": "信号"
   },
-  "homepage.capabilities.meta.connection": {
-    "message": "连接"
+  "homepage.capabilities.meta.preferences": {
+    "message": "偏好"
   },
-  "homepage.capabilities.meta.governance": {
-    "message": "治理"
+  "homepage.capabilities.meta.modelPaths": {
+    "message": "模型路径"
   },
   "homepage.capabilities.values.label": {
-    "message": "团队为什么部署它"
+    "message": "什么决定模型组合"
   },
   "homepage.capabilities.values.copy": {
-    "message": "用同一层路由同时处理成本、质量和策略决策。"
+    "message": "模型、算力和部署位置决定有哪些可用资源；偏好决定最佳组合。"
   },
   "homepage.capabilities.value1.title": {
-    "message": "降低单次请求成本"
+    "message": "组合，而不只是选择。"
   },
   "homepage.capabilities.value1.text": {
-    "message": "把常规流量发往更高效的模型，把真正需要的请求交给前沿推理模型，让模型选择变成可衡量的 ROI。"
+    "message": "选择单个模型、按置信度逐级升级、通过 Fusion 进行多模型研判，或编排有边界的微智能体工作流。"
   },
   "homepage.capabilities.value1.detail": {
-    "message": "每一美元换来更多有效输出。"
+    "message": "让每个请求采用它真正需要的模型路径。"
   },
   "homepage.capabilities.value2.title": {
-    "message": "更安全的模型决策"
+    "message": "让每个 token 都物有所值。"
   },
   "homepage.capabilities.value2.text": {
-    "message": "把越狱、PII 和幻觉处理放进路由链路里，让高风险请求在生成前就被拦住。"
+    "message": "将常规任务路由到高效模型路径，仅为真正需要的请求启用级联与多模型推理，并通过语义缓存复用相似回答。"
   },
   "homepage.capabilities.value2.detail": {
-    "message": "安全能力直接进入请求路径。"
+    "message": "只有更多智能能带来价值时，才投入更多计算。"
   },
   "homepage.capabilities.value3.title": {
-    "message": "一层路由接所有模型"
+    "message": "让智能在合适的位置运行。"
   },
   "homepage.capabilities.value3.text": {
-    "message": "用同一层路由协调本地、私有和前沿模型，从边缘部署一直覆盖到托管云。"
+    "message": "在已配置的本地、私有和云端后端之间路由，让隐私敏感任务留在策略批准的路径上，并在策略允许时使用云端模型。"
   },
   "homepage.capabilities.value3.detail": {
-    "message": "一套系统贯穿设备、VPC 和云。"
+    "message": "用一套路由策略连接已配置的模型端点。"
+  },
+  "homepage.capabilities.value4.title": {
+    "message": "让偏好定义“最好”。"
+  },
+  "homepage.capabilities.value4.text": {
+    "message": "将质量、成本、时延、安全、隐私、模态和幻觉容忍度等优先级编码为显式信号与策略，塑造每条请求路径。"
+  },
+  "homepage.capabilities.value4.detail": {
+    "message": "最好的组合，就是最符合用户需求的组合。"
   },
   "homepage.capabilities.signal.title": {
     "message": "信号提取"
@@ -2432,13 +2432,13 @@
     "message": "用于 LLM 推理优化的 Workload-Router-Pool 架构，以 vLLM Semantic Router 愿景论文的完整 PDF 阅读器形式呈现。"
   },
   "homepage.meta.description": {
-    "message": "面向 Mixture-of-Models 的开源 LLM 路由器。基于成本、时延、隐私、安全和模态信号，为每个请求选择最合适的本地、私有或前沿模型。"
+    "message": "Mixture-of-Models 是偏好驱动的模型系统架构。vLLM Semantic Router 是其开源运行时，依据偏好与策略为每个请求选择、级联和协作编排模型。"
   },
   "homepage.meta.title": {
-    "message": "面向 Mixture-of-Models 的开源 LLM 路由器"
+    "message": "Mixture-of-Models 的开源运行时"
   },
   "homepage.meta.socialTitle": {
-    "message": "vLLM Semantic Router | 开源 LLM 路由器"
+    "message": "vLLM Semantic Router | Mixture-of-Models 开源运行时"
   },
 
   "homepage.whereItLives.title": {

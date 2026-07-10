@@ -1,6 +1,7 @@
 .page {
   display: grid;
   gap: 0;
+  overflow-x: clip;
 }
 
 .heroStage {
@@ -34,6 +35,7 @@
   z-index: 1;
   display: grid;
   width: min(100%, 76rem);
+  min-width: 0;
   margin: 0 auto;
   justify-items: center;
 }
@@ -42,6 +44,7 @@
   position: relative;
   display: grid;
   width: min(100%, 56rem);
+  min-width: 0;
   gap: clamp(1.05rem, 2vh, 1.65rem);
   justify-items: center;
   text-align: center;
@@ -49,6 +52,7 @@
 
 .heroIntroPanel {
   width: min(100%, 56rem);
+  min-width: 0;
 }
 
 .heroIntroPanel :global(h1) {
@@ -87,12 +91,15 @@
 
 .heroTitle {
   display: grid;
+  width: 100%;
+  min-width: 0;
   gap: 0.03em;
   justify-items: center;
 }
 
 .heroTitleLine {
   display: block;
+  max-width: 100%;
   white-space: nowrap;
 }
 
@@ -522,6 +529,12 @@
   text-transform: uppercase;
 }
 
+.problemAxis:last-child {
+  border-color: rgba(48, 162, 255, 0.28);
+  background: rgba(48, 162, 255, 0.08);
+  color: #167fce;
+}
+
 .problemChecklist {
   display: flex;
   flex-direction: column;
@@ -643,7 +656,7 @@
 
 .valueGrid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1.1rem;
 }
 
@@ -720,6 +733,15 @@
   gap: 0.8rem;
 }
 
+.valueCardAxis {
+  color: var(--site-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
 .valueCardCopy h3 {
   margin: 0;
   font-size: 1.35rem;
@@ -764,6 +786,55 @@
 .valueCard:hover .valueGlyph {
   transform: translateY(-2px) scale(1.02);
   color: rgba(17, 17, 17, 0.72);
+}
+
+.valueCardPreference {
+  border-color: rgba(48, 162, 255, 0.34);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(48, 162, 255, 0.12), transparent 38%),
+    linear-gradient(180deg, rgba(48, 162, 255, 0.045), transparent 42%),
+    var(--site-surface);
+}
+
+.valueCardPreference::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, #30A2FF, rgba(48, 162, 255, 0.18));
+  content: '';
+}
+
+.valueCardPreference .valueCardIndex {
+  border-color: rgba(48, 162, 255, 0.25);
+  background: rgba(48, 162, 255, 0.09);
+  color: #167fce;
+}
+
+.valueCardPreference .valueCardAxis {
+  color: #167fce;
+}
+
+.valueCardPreference .valueGlyphShell {
+  border-color: rgba(48, 162, 255, 0.2);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(48, 162, 255, 0.1), transparent 60%),
+    rgba(48, 162, 255, 0.035);
+}
+
+.valueCardPreference .valueGlyph {
+  color: rgba(22, 127, 206, 0.7);
+}
+
+.valueCardPreference:hover {
+  border-color: rgba(48, 162, 255, 0.52);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(48, 162, 255, 0.16), transparent 40%),
+    linear-gradient(180deg, rgba(48, 162, 255, 0.06), transparent 44%),
+    var(--site-surface-alt);
+}
+
+.valueCardPreference:hover .valueGlyph {
+  color: rgba(22, 127, 206, 0.9);
 }
 
 .encoderShowcase {
@@ -966,14 +1037,19 @@
   margin: 0;
 }
 
+@media (max-width: 1180px) {
+  .valueGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 996px) {
   .heroGrid,
   .sectionHeading,
   .encoderShowcase,
   .bandGrid,
   .problemPanel,
-  .valueIntro,
-  .valueGrid {
+  .valueIntro {
     grid-template-columns: 1fr;
   }
 
@@ -1007,7 +1083,14 @@
 
   .heroIntro,
   .heroIntroPanel {
-    width: min(100%, 32rem);
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .heroGrid,
+  .heroTitle {
+    width: 100%;
+    max-width: 100%;
   }
 
   .heroBrandLockup {
@@ -1024,7 +1107,20 @@
   }
 
   .heroTitleAccent {
+    white-space: normal;
     font-size: 1.04em;
+  }
+
+  .heroIntroPanel :global(h1) {
+    width: 100%;
+    max-width: 100%;
+    font-size: clamp(2.15rem, 9.5vw, 2.6rem);
+    line-height: 0.96;
+  }
+
+  .heroDescriptionText {
+    width: 100%;
+    max-width: 100%;
   }
 
   .heroPrimaryCta,
@@ -1112,5 +1208,11 @@
   .encoderPipelineFrame,
   .encoderCard {
     padding: 1.15rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .valueGrid {
+    grid-template-columns: 1fr;
   }
 }
