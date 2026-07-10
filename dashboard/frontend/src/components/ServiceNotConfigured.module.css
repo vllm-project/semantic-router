@@ -145,6 +145,7 @@
   gap: 0.5rem;
   padding: 0.625rem 1rem;
   background-color: var(--color-primary);
+  color: #09090a;
   border: none;
   border-radius: var(--radius-md);
   font-size: 0.875rem;

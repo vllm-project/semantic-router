@@ -2,6 +2,7 @@ import React, { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import styles from './Layout.module.css'
 import LayoutAccountControl from './LayoutAccountControl'
+import PlatformBranding from './PlatformBranding'
 import {
   ANALYSIS_OPERATIONS_MENU_SECTIONS,
   FLEET_SIM_MENU_SECTIONS,
@@ -54,9 +55,8 @@ const Layout: React.FC<LayoutProps> = ({
     ANALYSIS_OPERATIONS_MENU_SECTIONS,
     item => canUseMLSetup || item.kind !== 'route' || item.to !== '/ml-setup'
   )
-  const systemMenuSections = fleetSimEnabled
-    ? [...analysisOperationsMenuSections, ...FLEET_SIM_MENU_SECTIONS]
-    : analysisOperationsMenuSections
+  const systemMenuSections = analysisOperationsMenuSections
+  const simulatorMenuSections = fleetSimEnabled ? FLEET_SIM_MENU_SECTIONS : []
   const accountName = user?.name?.trim() || 'Account'
   const accountEmail = user?.email?.trim() || 'Session pending'
   const accountPermissions = user?.permissions ?? []
@@ -70,6 +70,12 @@ const Layout: React.FC<LayoutProps> = ({
   )
   const isAnalysisOpsActive = hasActiveLayoutMenuSection(
     systemMenuSections,
+    location.pathname,
+    isConfigPage,
+    configSection
+  )
+  const isSimulatorActive = hasActiveLayoutMenuSection(
+    simulatorMenuSections,
     location.pathname,
     isConfigPage,
     configSection
@@ -218,7 +224,7 @@ const Layout: React.FC<LayoutProps> = ({
         <div className={styles.headerContent}>
           <NavLink to="/" className={styles.brand}>
             <img src="/vllm.png" alt="vLLM" className={styles.logo} />
-            <span className={styles.brandText}></span>
+            <span className={styles.brandText}>Semantic Router</span>
           </NavLink>
 
           <nav className={styles.nav} aria-label="Global navigation">
@@ -258,6 +264,36 @@ const Layout: React.FC<LayoutProps> = ({
                   ? renderDropdownMenu(managerMenuSections, styles.dropdownMenu, 'Manager')
                   : null}
               </div>
+              {fleetSimEnabled ? (
+                <div className={styles.navDropdown}>
+                  <button
+                    type="button"
+                    aria-expanded={openDropdown === 'simulator'}
+                    aria-haspopup="menu"
+                    className={`${styles.navLink} ${isSimulatorActive ? styles.navLinkActive : ''}`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleDropdown('simulator')
+                    }}
+                  >
+                    Simulator
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      className={`${styles.dropdownArrow} ${openDropdown === 'simulator' ? styles.dropdownArrowOpen : ''}`}
+                    >
+                      <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  {openDropdown === 'simulator'
+                    ? renderDropdownMenu(simulatorMenuSections, styles.dropdownMenu, 'Simulator')
+                    : null}
+                </div>
+              ) : null}
               <div className={styles.navDropdown}>
                 <button
                   type="button"
@@ -294,6 +330,7 @@ const Layout: React.FC<LayoutProps> = ({
           </nav>
 
           <div className={styles.headerRight}>
+            <PlatformBranding variant="inline" className={styles.headerBranding} />
             {hideAccountControl ? null : (
               <LayoutAccountControl
                 accountName={accountName}
@@ -357,7 +394,7 @@ const Layout: React.FC<LayoutProps> = ({
         </div>
 
         {mobileMenuOpen ? (
-          <div className={styles.mobileNav}>
+          <div className={styles.mobileNav} role="navigation" aria-label="Mobile navigation">
             {PRIMARY_NAV_LINKS.map(link => (
               <NavLink
                 key={`mobile-${link.to}`}
@@ -381,6 +418,7 @@ const Layout: React.FC<LayoutProps> = ({
               </NavLink>
             ))}
             {renderMobileMenuSection('Manager', managerMenuSections)}
+            {fleetSimEnabled ? renderMobileMenuSection('Simulator', simulatorMenuSections) : null}
             {renderMobileMenuSection('System', systemMenuSections)}
           </div>
         ) : null}

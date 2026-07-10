@@ -32,7 +32,7 @@
 
 .refreshButton:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.05);
-  border-color: var(--color-primary, #76b900);
+  border-color: var(--color-primary, #8f949c);
   color: var(--color-text, #e8e8e8);
 }
 
@@ -112,7 +112,7 @@
   top: 0;
   left: 0;
   height: 100%;
-  background: var(--color-primary, #76b900);
+  background: var(--color-primary, #8f949c);
   border-radius: 4px;
   transition: width 0.3s ease;
 }
@@ -198,7 +198,7 @@
   width: 32px;
   height: 32px;
   border: 3px solid var(--color-border, #333);
-  border-top-color: var(--color-primary, #76b900);
+  border-top-color: var(--color-primary, #8f949c);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }

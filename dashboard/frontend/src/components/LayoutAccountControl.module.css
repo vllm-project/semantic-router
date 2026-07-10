@@ -30,7 +30,7 @@
 }
 
 .trigger:focus-visible {
-  outline: 1px solid rgba(118, 185, 0, 0.5);
+  outline: 1px solid rgba(143, 148, 156, 0.5);
   outline-offset: 2px;
   color: var(--color-text);
   background: rgba(255, 255, 255, 0.05);
@@ -38,7 +38,7 @@
 
 .triggerActive {
   color: var(--color-text);
-  background: rgba(118, 185, 0, 0.1);
+  background: rgba(143, 148, 156, 0.1);
 }
 
 .triggerAvatar {
@@ -48,7 +48,7 @@
   width: 24px;
   height: 24px;
   border-radius: 999px;
-  background: rgba(118, 185, 0, 0.16);
+  background: rgba(143, 148, 156, 0.16);
   color: var(--color-text);
   font-size: 0.68rem;
   font-weight: 700;
@@ -96,7 +96,7 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 18px;
   background:
-    linear-gradient(180deg, rgba(118, 185, 0, 0.08), rgba(118, 185, 0, 0.02) 18%, rgba(10, 10, 10, 0.96) 18%),
+    linear-gradient(180deg, rgba(143, 148, 156, 0.08), rgba(143, 148, 156, 0.02) 18%, rgba(10, 10, 10, 0.96) 18%),
     var(--color-bg-secondary);
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55);
   animation: dialogEnter 160ms ease-out;
@@ -155,7 +155,7 @@
 .closeButton:focus-visible,
 .secondaryButton:focus-visible,
 .logoutButton:focus-visible {
-  outline: 1px solid rgba(118, 185, 0, 0.5);
+  outline: 1px solid rgba(143, 148, 156, 0.5);
   outline-offset: 2px;
 }
 
@@ -181,7 +181,7 @@
   width: 56px;
   height: 56px;
   border-radius: 999px;
-  background: rgba(118, 185, 0, 0.18);
+  background: rgba(143, 148, 156, 0.18);
   color: var(--color-text);
   font-size: 1rem;
   font-weight: 700;
@@ -246,7 +246,7 @@
   height: 1.6rem;
   padding: 0 0.45rem;
   border-radius: 999px;
-  background: rgba(118, 185, 0, 0.12);
+  background: rgba(143, 148, 156, 0.12);
   color: var(--color-text);
   font-size: 0.74rem;
   letter-spacing: normal;
@@ -267,8 +267,8 @@
   min-height: 2rem;
   padding: 0.35rem 0.7rem;
   border-radius: 999px;
-  border: 1px solid rgba(118, 185, 0, 0.22);
-  background: rgba(118, 185, 0, 0.08);
+  border: 1px solid rgba(143, 148, 156, 0.22);
+  background: rgba(143, 148, 156, 0.08);
   color: var(--color-text);
   font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
   font-size: 0.78rem;
@@ -315,13 +315,13 @@
 }
 
 .logoutButton {
-  border: 1px solid rgba(118, 185, 0, 0.28);
-  background: rgba(118, 185, 0, 0.12);
+  border: 1px solid rgba(143, 148, 156, 0.28);
+  background: rgba(143, 148, 156, 0.12);
   color: var(--color-text);
 }
 
 .logoutButton:hover {
-  background: rgba(118, 185, 0, 0.2);
+  background: rgba(143, 148, 156, 0.2);
 }
 
 @keyframes dialogEnter {

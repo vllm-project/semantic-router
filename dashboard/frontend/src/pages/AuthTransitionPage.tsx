@@ -3,10 +3,7 @@ import * as THREE from 'three'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useSetup } from '../contexts/SetupContext'
-import {
-  AUTH_TRANSITION_MIN_DURATION_MS,
-  sanitizeAuthTransitionTarget,
-} from './authTransitionSupport'
+import { sanitizeAuthTransitionTarget } from './authTransitionSupport'
 import styles from './AuthTransitionPage.module.css'
 
 type Milestone = {
@@ -17,41 +14,66 @@ type Milestone = {
 }
 
 const PROGRESS_SEGMENTS = [
-  { duration: 520, from: 0, to: 24 },
-  { duration: 620, from: 24, to: 54 },
-  { duration: 680, from: 54, to: 84 },
-  { duration: 480, from: 84, to: 100 },
+  { duration: 160, from: 0, to: 24 },
+  { duration: 200, from: 24, to: 54 },
+  { duration: 250, from: 54, to: 84 },
+  { duration: 310, from: 84, to: 100 },
 ]
+
+const TRANSITION_DURATION_MS = 920
 
 const MILESTONES: Milestone[] = [
   {
     key: 'session',
     label: 'Session verified',
-    detail: 'Credentials accepted',
+    detail: 'Identity confirmed',
     revealAt: 8,
   },
   {
     key: 'workspace',
     label: 'Workspace synced',
-    detail: 'Setup state loaded',
+    detail: 'Configuration loaded',
     revealAt: 34,
   },
   {
     key: 'policy',
     label: 'Policy hydrated',
-    detail: 'Routes and signals prepared',
+    detail: 'Routes prepared',
     revealAt: 62,
   },
   {
     key: 'dashboard',
     label: 'Dashboard ready',
-    detail: 'Opening console',
+    detail: 'Opening workspace',
     revealAt: 86,
   },
 ]
 
 function easeOutCubic(value: number): number {
   return 1 - (1 - value) ** 3
+}
+
+function usePrefersReducedMotion(): boolean {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => {
+    return Boolean(
+      typeof window !== 'undefined' &&
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+    )
+  })
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    if (!mediaQuery) {
+      return
+    }
+
+    const handleChange = (event: MediaQueryListEvent) => setPrefersReducedMotion(event.matches)
+    mediaQuery.addEventListener('change', handleChange)
+
+    return () => mediaQuery.removeEventListener('change', handleChange)
+  }, [])
+
+  return prefersReducedMotion
 }
 
 function getTransitionProgress(elapsedMs: number): number {
@@ -76,7 +98,10 @@ function getActiveMilestoneIndex(progress: number): number {
   }, 0)
 }
 
-const TransitionScene: React.FC<{ progress: number }> = ({ progress }) => {
+const TransitionScene: React.FC<{ progress: number; reducedMotion: boolean }> = ({
+  progress,
+  reducedMotion,
+}) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const progressRef = useRef(progress)
 
@@ -104,16 +129,16 @@ const TransitionScene: React.FC<{ progress: number }> = ({ progress }) => {
     const group = new THREE.Group()
     scene.add(group)
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.48)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.58)
     scene.add(ambientLight)
 
-    const keyLight = new THREE.PointLight(0x8fd400, 18, 12)
+    const keyLight = new THREE.PointLight(0xf4f4f5, 16, 12)
     keyLight.position.set(-2.6, 2.4, 4)
     scene.add(keyLight)
 
-    const cyanLight = new THREE.PointLight(0x00d4ff, 10, 12)
-    cyanLight.position.set(2.8, -1.4, 3)
-    scene.add(cyanLight)
+    const signalLight = new THREE.PointLight(0xed1c24, 3.2, 9)
+    signalLight.position.set(3.1, -1.5, 2.8)
+    scene.add(signalLight)
 
     const nodePositions = [
       new THREE.Vector3(-3.2, -0.65, 0),
@@ -126,33 +151,37 @@ const TransitionScene: React.FC<{ progress: number }> = ({ progress }) => {
     const curvePoints = curve.getPoints(96)
     const routeGeometry = new THREE.BufferGeometry().setFromPoints(curvePoints)
     const routeMaterial = new THREE.LineBasicMaterial({
-      color: 0x8fd400,
+      color: 0x777b82,
       transparent: true,
-      opacity: 0.28,
+      opacity: 0.3,
     })
     const routeLine = new THREE.Line(routeGeometry, routeMaterial)
     group.add(routeLine)
 
-    const completedRouteGeometry = new THREE.BufferGeometry().setFromPoints([nodePositions[0], nodePositions[0]])
+    const completedRouteGeometry = new THREE.BufferGeometry().setFromPoints([
+      nodePositions[0],
+      nodePositions[0],
+    ])
     const completedRouteMaterial = new THREE.LineBasicMaterial({
-      color: 0xb7ff56,
+      color: 0xf4f4f5,
       transparent: true,
-      opacity: 0.86,
+      opacity: 0.9,
     })
     const completedRouteLine = new THREE.Line(completedRouteGeometry, completedRouteMaterial)
     group.add(completedRouteLine)
 
     const nodeGeometry = new THREE.SphereGeometry(0.17, 32, 16)
-    const nodeMaterials = nodePositions.map(() =>
-      new THREE.MeshStandardMaterial({
-        color: 0x76b900,
-        emissive: 0x76b900,
-        emissiveIntensity: 0.15,
-        metalness: 0.18,
-        roughness: 0.48,
-        transparent: true,
-        opacity: 0.5,
-      }),
+    const nodeMaterials = nodePositions.map(
+      () =>
+        new THREE.MeshStandardMaterial({
+          color: 0x777b82,
+          emissive: 0xd4d4d8,
+          emissiveIntensity: 0.1,
+          metalness: 0.74,
+          roughness: 0.28,
+          transparent: true,
+          opacity: 0.5,
+        }),
     )
     const nodeMeshes = nodePositions.map((position, index) => {
       const mesh = new THREE.Mesh(nodeGeometry, nodeMaterials[index])
@@ -179,7 +208,7 @@ const TransitionScene: React.FC<{ progress: number }> = ({ progress }) => {
     const particleCount = 22
     const particleGeometry = new THREE.SphereGeometry(0.045, 16, 8)
     const particleMaterial = new THREE.MeshBasicMaterial({
-      color: 0xd9ff8a,
+      color: 0xf4f4f5,
       transparent: true,
       opacity: 0.78,
     })
@@ -192,7 +221,7 @@ const TransitionScene: React.FC<{ progress: number }> = ({ progress }) => {
 
     const arcGeometry = new THREE.TorusGeometry(1.65, 0.01, 8, 128, Math.PI * 1.42)
     const arcMaterial = new THREE.MeshBasicMaterial({
-      color: 0x76b900,
+      color: 0xa1a1aa,
       transparent: true,
       opacity: 0.42,
     })
@@ -229,17 +258,18 @@ const TransitionScene: React.FC<{ progress: number }> = ({ progress }) => {
       renderer.setSize(width, height, false)
     }
 
-    const renderFrame = () => {
-      frameId = window.requestAnimationFrame(renderFrame)
-      const time = (performance.now() - startTime) / 1000
+    const renderFrame = (staticFrame = false) => {
+      const time = staticFrame ? 0 : (performance.now() - startTime) / 1000
 
-      currentProgress += (progressRef.current - currentProgress) * 0.08
+      currentProgress = staticFrame
+        ? 100
+        : currentProgress + (progressRef.current - currentProgress) * 0.12
       const normalizedProgress = Math.max(0, Math.min(currentProgress / 100, 1))
       const visiblePointCount = Math.max(2, Math.floor(curvePoints.length * normalizedProgress))
       completedRouteGeometry.setFromPoints(curvePoints.slice(0, visiblePointCount))
 
       keyLight.intensity = 15 + Math.sin(time * 1.4) * 2
-      cyanLight.intensity = 8 + Math.cos(time * 1.1) * 1.5
+      signalLight.intensity = 2.8 + Math.cos(time * 1.1) * 0.45
       group.rotation.y = Math.sin(time * 0.28) * 0.12
       group.rotation.x = Math.cos(time * 0.24) * 0.06
 
@@ -275,21 +305,34 @@ const TransitionScene: React.FC<{ progress: number }> = ({ progress }) => {
         const wobble = Math.sin(time * 2.2 + index) * 0.035
         particle.position.set(point.x, point.y + wobble, point.z + Math.cos(time + index) * 0.025)
         const particleActive = travel <= normalizedProgress || normalizedProgress > 0.96
-        ;(particle.material as THREE.MeshBasicMaterial).opacity = particleActive ? 0.28 + normalizedProgress * 0.62 : 0
+        ;(particle.material as THREE.MeshBasicMaterial).opacity = particleActive
+          ? 0.28 + normalizedProgress * 0.62
+          : 0
         particle.scale.setScalar(0.7 + Math.sin(time * 3 + index) * 0.16)
       })
 
       renderer.render(scene, camera)
+
+      if (!staticFrame && !(progressRef.current >= 100 && currentProgress >= 99.5)) {
+        frameId = window.requestAnimationFrame(() => renderFrame(false))
+      }
     }
 
     updateRendererSize()
-    renderFrame()
+    renderFrame(reducedMotion)
 
-    window.addEventListener('resize', updateRendererSize)
+    const handleResize = () => {
+      updateRendererSize()
+      if (reducedMotion) {
+        renderFrame(true)
+      }
+    }
+
+    window.addEventListener('resize', handleResize)
 
     return () => {
       window.cancelAnimationFrame(frameId)
-      window.removeEventListener('resize', updateRendererSize)
+      window.removeEventListener('resize', handleResize)
       renderer.dispose()
       routeGeometry.dispose()
       routeMaterial.dispose()
@@ -307,7 +350,7 @@ const TransitionScene: React.FC<{ progress: number }> = ({ progress }) => {
       haloMaterial.dispose()
       container.removeChild(renderer.domElement)
     }
-  }, [])
+  }, [reducedMotion])
 
   return <div ref={containerRef} className={styles.canvasContainer} aria-hidden="true" />
 }
@@ -317,6 +360,7 @@ const AuthTransitionPage: React.FC = () => {
   const [searchParams] = useSearchParams()
   const { isAuthenticated, isLoading } = useAuth()
   const { setupState } = useSetup()
+  const prefersReducedMotion = usePrefersReducedMotion()
   const [progress, setProgress] = useState(0)
   const [animationComplete, setAnimationComplete] = useState(false)
 
@@ -326,6 +370,14 @@ const AuthTransitionPage: React.FC = () => {
   const activeMilestone = MILESTONES[activeMilestoneIndex]
 
   useEffect(() => {
+    if (prefersReducedMotion) {
+      setProgress(100)
+      setAnimationComplete(true)
+      return
+    }
+
+    setAnimationComplete(false)
+    setProgress(0)
     let frameId = 0
     const startTime = performance.now()
 
@@ -334,7 +386,7 @@ const AuthTransitionPage: React.FC = () => {
       const nextProgress = getTransitionProgress(elapsed)
       setProgress(nextProgress)
 
-      if (elapsed >= AUTH_TRANSITION_MIN_DURATION_MS) {
+      if (elapsed >= TRANSITION_DURATION_MS) {
         setAnimationComplete(true)
         setProgress(100)
         return
@@ -346,7 +398,7 @@ const AuthTransitionPage: React.FC = () => {
     frameId = window.requestAnimationFrame(tick)
 
     return () => window.cancelAnimationFrame(frameId)
-  }, [])
+  }, [prefersReducedMotion])
 
   useEffect(() => {
     if (animationComplete && isAuthenticated && !isLoading) {
@@ -366,23 +418,23 @@ const AuthTransitionPage: React.FC = () => {
         ))}
       </div>
 
-      <TransitionScene progress={progress} />
+      <TransitionScene progress={progress} reducedMotion={prefersReducedMotion} />
 
       <div className={styles.overlay}>
         <section className={styles.topLeft}>
-          <span className={styles.metaText}>VSR Dashboard</span>
+          <span className={styles.metaText}>vLLM Semantic Router</span>
           <span className={styles.metaText}>{activeMilestone.label}</span>
         </section>
 
         <section className={styles.topRight} aria-hidden="true">
           <span className={styles.statusBeacon} />
-          <span className={styles.metaText}>Live route handoff</span>
+          <span className={styles.metaText}>Secure handoff</span>
         </section>
 
         <section className={styles.center}>
           <div className={styles.centerCopy}>
-            <span className={styles.centerEyebrow}>Authenticated</span>
-            <h1 className={styles.centerTitle}>Opening dashboard</h1>
+            <span className={styles.centerEyebrow}>Access confirmed</span>
+            <h1 className={styles.centerTitle}>Preparing workspace</h1>
             <p className={styles.centerText}>{activeMilestone.detail}</p>
           </div>
         </section>
@@ -400,7 +452,9 @@ const AuthTransitionPage: React.FC = () => {
                     key={milestone.key}
                     className={`${styles.sequenceItem} ${isVisible ? styles.sequenceItemVisible : ''} ${isActive ? styles.sequenceItemActive : ''}`}
                   >
-                    <span className={styles.sequenceYear}>{String(index + 1).padStart(2, '0')}</span>
+                    <span className={styles.sequenceYear}>
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
                     <span>
                       <span className={styles.sequenceCopy}>{milestone.label}</span>
                       <span className={styles.sequenceDetail}>{milestone.detail}</span>

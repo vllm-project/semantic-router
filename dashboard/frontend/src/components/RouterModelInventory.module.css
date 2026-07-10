@@ -94,7 +94,7 @@
 
 .previewCard.cardReady {
   background:
-    radial-gradient(circle at top right, rgba(118, 185, 0, 0.2), transparent 42%),
+    radial-gradient(circle at top right, rgba(143, 148, 156, 0.2), transparent 42%),
     radial-gradient(circle at bottom left, rgba(34, 197, 94, 0.14), transparent 40%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(12, 32, 18, 0.12)),
     color-mix(in srgb, var(--color-surface) 93%, #102113 7%);
@@ -102,7 +102,7 @@
 
 .detailCard.cardReady {
   background:
-    linear-gradient(180deg, rgba(118, 185, 0, 0.05), rgba(16, 33, 19, 0.02)),
+    linear-gradient(180deg, rgba(143, 148, 156, 0.05), rgba(16, 33, 19, 0.02)),
     color-mix(in srgb, var(--color-surface) 95%, #101c12 5%);
 }
 
@@ -146,7 +146,7 @@
   align-items: center;
   padding: 0.34rem 0.62rem;
   border-radius: 999px;
-  background: rgba(118, 185, 0, 0.18);
+  background: rgba(143, 148, 156, 0.18);
   color: #dcfce7;
   font-size: 0.72rem;
   font-weight: 700;
@@ -246,7 +246,7 @@
   align-items: center;
   padding: 0.34rem 0.58rem;
   border-radius: 999px;
-  background: rgba(118, 185, 0, 0.14);
+  background: rgba(143, 148, 156, 0.14);
   color: #bef264;
   font-size: 0.74rem;
   line-height: 1;
@@ -328,7 +328,7 @@
 }
 
 .cardLink {
-  color: #84cc16;
+  color: rgba(255, 255, 255, 0.68);
   font-size: 0.82rem;
   font-weight: 700;
   line-height: 1.4;
@@ -336,7 +336,7 @@
 }
 
 .cardLink:hover {
-  color: #a3e635;
+  color: #ffffff;
 }
 
 .platformLogo {

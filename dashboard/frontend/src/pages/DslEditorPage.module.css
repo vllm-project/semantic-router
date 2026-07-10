@@ -378,8 +378,8 @@
   font-size: 0.625rem;
   font-weight: 600;
   color: var(--color-primary);
-  background: rgba(118, 185, 0, 0.12);
-  border: 1px solid rgba(118, 185, 0, 0.3);
+  background: rgba(143, 148, 156, 0.12);
+  border: 1px solid rgba(143, 148, 156, 0.3);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -387,7 +387,7 @@
 }
 
 .diagFixBtn:hover {
-  background: rgba(118, 185, 0, 0.25);
+  background: rgba(143, 148, 156, 0.25);
   border-color: var(--color-primary);
   color: #fff;
 }

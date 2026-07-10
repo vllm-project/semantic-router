@@ -6,9 +6,9 @@
   justify-content: center;
   padding: 1rem;
   background:
-    radial-gradient(circle at top center, rgba(143, 212, 0, 0.08), transparent 42%),
-    radial-gradient(circle at bottom right, rgba(118, 185, 0, 0.12), transparent 34%),
-    rgba(3, 7, 2, 0.56);
+    radial-gradient(circle at top center, rgba(227, 27, 35, 0.055), transparent 42%),
+    radial-gradient(circle at bottom right, rgba(143, 148, 156, 0.12), transparent 34%),
+    rgba(5, 5, 5, 0.62);
   backdrop-filter: blur(24px) saturate(130%);
   z-index: 1200;
   pointer-events: auto;
@@ -19,11 +19,11 @@
   max-height: calc(100vh - 2rem);
   overflow: auto;
   padding: 1.35rem;
-  border: 1px solid rgba(118, 185, 0, 0.25);
+  border: 1px solid rgba(143, 148, 156, 0.25);
   border-radius: 1.25rem;
   background:
-    radial-gradient(circle at top right, rgba(143, 212, 0, 0.14), transparent 32%),
-    linear-gradient(180deg, rgba(17, 22, 13, 0.97), rgba(7, 9, 6, 0.99));
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.065), transparent 32%),
+    linear-gradient(180deg, rgba(18, 18, 20, 0.97), rgba(7, 7, 8, 0.99));
   box-shadow:
     0 28px 72px rgba(0, 0, 0, 0.48),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
@@ -55,8 +55,8 @@
   width: 2rem;
   height: 2rem;
   border-radius: 999px;
-  border: 1px solid rgba(118, 185, 0, 0.18);
-  background: rgba(118, 185, 0, 0.08);
+  border: 1px solid rgba(143, 148, 156, 0.18);
+  background: rgba(143, 148, 156, 0.08);
   color: var(--color-text-secondary);
   font-size: 1.4rem;
 }
@@ -79,7 +79,7 @@
 }
 
 .progressDotDone {
-  background: rgba(143, 212, 0, 0.55);
+  background: rgba(255, 255, 255, 0.55);
 }
 
 .description {
@@ -91,10 +91,10 @@
 .detailCard {
   margin-top: 1rem;
   padding: 1rem 1.05rem;
-  border: 1px solid rgba(118, 185, 0, 0.16);
+  border: 1px solid rgba(143, 148, 156, 0.16);
   border-radius: 1rem;
   background:
-    radial-gradient(circle at top right, rgba(118, 185, 0, 0.08), transparent 40%),
+    radial-gradient(circle at top right, rgba(143, 148, 156, 0.08), transparent 40%),
     rgba(255, 255, 255, 0.025);
 }
 
@@ -130,7 +130,7 @@
   height: 0.38rem;
   border-radius: 999px;
   background: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(118, 185, 0, 0.16);
+  box-shadow: 0 0 0 3px rgba(143, 148, 156, 0.16);
 }
 
 .detailHint {
@@ -140,8 +140,8 @@
   margin-top: 0.85rem;
   padding: 0 0.8rem;
   border-radius: 999px;
-  border: 1px solid rgba(118, 185, 0, 0.18);
-  background: rgba(118, 185, 0, 0.08);
+  border: 1px solid rgba(143, 148, 156, 0.18);
+  background: rgba(143, 148, 156, 0.08);
   color: var(--color-primary-light);
   font-size: 0.84rem;
   font-weight: 600;
@@ -183,8 +183,8 @@
 
 .secondaryButton,
 .replayButton {
-  background: rgba(118, 185, 0, 0.06);
-  border: 1px solid rgba(118, 185, 0, 0.18);
+  background: rgba(143, 148, 156, 0.06);
+  border: 1px solid rgba(143, 148, 156, 0.18);
   color: var(--color-text);
 }
 
@@ -207,7 +207,7 @@
 .card::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 999px;
-  background: rgba(118, 185, 0, 0.25);
+  background: rgba(143, 148, 156, 0.25);
   background-clip: padding-box;
 }
 
@@ -243,6 +243,6 @@
 
   .replayButton {
     right: 0.75rem;
-    bottom: 0.75rem;
+    bottom: 7.25rem;
   }
 }

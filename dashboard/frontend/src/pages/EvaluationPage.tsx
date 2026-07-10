@@ -137,10 +137,15 @@ export function EvaluationPage() {
 
       {tabState.active !== 'progress' && tabState.active !== 'report' && (
         <>
-          <div className={styles.tabs}>
+          <div className={styles.tabs} role="tablist" aria-label="Evaluation views">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
+                id={`evaluation-tab-${tab.id}`}
+                type="button"
+                role="tab"
+                aria-selected={tabState.active === tab.id}
+                aria-controls={`evaluation-panel-${tab.id}`}
                 className={`${styles.tab} ${tabState.active === tab.id ? styles.activeTab : ''}`}
                 onClick={() => setTabState({ active: tab.id, selectedTaskId: null })}
               >
@@ -150,7 +155,12 @@ export function EvaluationPage() {
             ))}
           </div>
 
-          <div className={styles.tabContent}>
+          <div
+            id={`evaluation-panel-${tabState.active}`}
+            className={styles.tabContent}
+            role="tabpanel"
+            aria-labelledby={`evaluation-tab-${tabState.active}`}
+          >
             {tabState.active === 'tasks' && (
               <TaskList
                 tasks={tasks}

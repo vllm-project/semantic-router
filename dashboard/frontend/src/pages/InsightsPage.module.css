@@ -71,7 +71,7 @@
   padding: 0.55rem 0.95rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: rgba(118, 185, 0, 0.14);
+  background: rgba(143, 148, 156, 0.14);
   color: var(--color-text);
   font-weight: 600;
   cursor: pointer;
@@ -80,8 +80,8 @@
 
 .refreshButton:hover,
 .paginationButton:hover:not(:disabled) {
-  border-color: rgba(0, 212, 255, 0.3);
-  background: rgba(0, 212, 255, 0.12);
+  border-color: rgba(166, 171, 179, 0.3);
+  background: rgba(166, 171, 179, 0.12);
 }
 
 .error {
@@ -284,7 +284,7 @@
 }
 
 .reasoningOn {
-  background: rgba(118, 185, 0, 0.15);
+  background: rgba(143, 148, 156, 0.15);
   color: var(--color-primary-light);
 }
 
@@ -306,7 +306,7 @@
   min-width: 0;
   padding: 0.22rem 0.55rem;
   border-radius: var(--radius-sm);
-  background: rgba(118, 185, 0, 0.08);
+  background: rgba(143, 148, 156, 0.08);
   color: var(--color-text);
   font-family: var(--font-mono);
   font-size: 0.78rem;
@@ -355,7 +355,7 @@
 }
 
 .statusSuccess {
-  background: rgba(118, 185, 0, 0.15);
+  background: rgba(143, 148, 156, 0.15);
   color: var(--color-primary-light);
 }
 
@@ -382,7 +382,7 @@
 }
 
 .indicatorActive {
-  background: rgba(118, 185, 0, 0.14);
+  background: rgba(143, 148, 156, 0.14);
   color: var(--color-primary-light);
 }
 
@@ -424,8 +424,8 @@
 }
 
 .alertSuccess {
-  background: rgba(118, 185, 0, 0.12);
-  color: #f7fff0;
+  background: rgba(143, 148, 156, 0.12);
+  color: #f5f5f7;
 }
 
 .alertInfo {
@@ -481,7 +481,7 @@
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: var(--radius-md);
   background:
-    radial-gradient(circle at top right, rgba(118, 185, 0, 0.12), transparent 42%),
+    radial-gradient(circle at top right, rgba(143, 148, 156, 0.12), transparent 42%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
     rgba(9, 13, 13, 0.92);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
@@ -665,8 +665,8 @@
 }
 
 .toolTraceStatusBadgeSuccess {
-  background: rgba(118, 185, 0, 0.1);
-  color: #efffe4;
+  background: rgba(143, 148, 156, 0.1);
+  color: #f5f5f7;
 }
 
 .toolTraceStatusBadgeFailed {
@@ -734,12 +734,12 @@
 }
 
 .toolTraceMarkdown :global(.markdown a) {
-  color: #d7ff94;
+  color: #d4d4d8;
 }
 
 .toolTraceMarkdown :global(.markdown blockquote) {
   background: rgba(255, 255, 255, 0.03);
-  border-left-color: rgba(118, 185, 0, 0.8);
+  border-left-color: rgba(143, 148, 156, 0.8);
   color: rgba(255, 255, 255, 0.82);
 }
 

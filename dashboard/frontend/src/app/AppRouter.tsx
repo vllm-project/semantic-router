@@ -36,6 +36,7 @@ const AppRouter: React.FC = () => {
         title="Loading setup state"
         description="The dashboard is checking whether this workspace is already activated or still in first-run setup mode."
         actionLabel="Refresh"
+        variant="loading"
         onAction={() => {
           window.location.reload()
         }}

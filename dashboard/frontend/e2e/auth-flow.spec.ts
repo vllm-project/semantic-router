@@ -91,9 +91,39 @@ const redactedReplayRecordWithDetailedToolTrace = {
 };
 
 const transitionCopyPattern =
-  /A Symbolic Analysis of Relay and Switching Circuits/i;
+  /Preparing workspace/i;
 
 test.describe("Dashboard auth flow", () => {
+  test("keeps the mobile sign-in form reachable below the story panel", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.route("**/api/setup/state", async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(baseSetupState),
+      });
+    });
+    await page.route("**/api/auth/bootstrap/can-register", async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ canRegister: false }),
+      });
+    });
+    await page.route("**/api/auth/me", async (route) => {
+      await route.fulfill({ status: 401, body: "Unauthorized" });
+    });
+
+    await page.goto("/login");
+    const continueButton = page.getByRole("button", { name: "Continue" });
+    await continueButton.scrollIntoViewIfNeeded();
+    await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
+    await expect(page.getByPlaceholder("••••••••")).toBeVisible();
+    await expect(continueButton).toBeVisible();
+  });
+
   test("redirects unauthenticated protected routes to login", async ({
     page,
   }) => {
@@ -169,6 +199,10 @@ test.describe("Dashboard auth flow", () => {
     });
 
     await page.route("**/api/auth/me", async (route) => {
+      if (route.request().headers().authorization !== `Bearer ${issuedToken}`) {
+        await route.fulfill({ status: 401, body: "Unauthorized" });
+        return;
+      }
       await route.fulfill({
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -315,6 +349,10 @@ test.describe("Dashboard auth flow", () => {
     });
 
     await page.route("**/api/auth/me", async (route) => {
+      if (route.request().headers().authorization !== `Bearer ${issuedToken}`) {
+        await route.fulfill({ status: 401, body: "Unauthorized" });
+        return;
+      }
       await route.fulfill({
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -446,6 +484,10 @@ test.describe("Dashboard auth flow", () => {
     });
 
     await page.route("**/api/auth/me", async (route) => {
+      if (route.request().headers().authorization !== "Bearer status-flow-token") {
+        await route.fulfill({ status: 401, body: "Unauthorized" });
+        return;
+      }
       await route.fulfill({
         status: 200,
         headers: { "Content-Type": "application/json" },

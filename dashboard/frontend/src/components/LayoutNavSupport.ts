@@ -1,6 +1,6 @@
 import { FLEET_SIM_NAV_ITEMS } from '../utils/fleetSimApi'
 
-export type LayoutDropdownKey = 'manager' | 'analysisOps'
+export type LayoutDropdownKey = 'manager' | 'simulator' | 'analysisOps'
 
 export type LayoutConfigSection =
   | 'models'
@@ -81,7 +81,7 @@ export const ANALYSIS_OPERATIONS_MENU_SECTIONS: LayoutMenuSection[] = [
       { kind: 'config', label: 'Global Config', configSection: 'global-config' },
       { kind: 'route', label: 'Evaluation', to: '/evaluation' },
       { kind: 'route', label: 'ML Setup', to: '/ml-setup' },
-      { kind: 'config', label: 'MCP Setup', configSection: 'mcp' },
+      { kind: 'config', label: 'MCP Servers', configSection: 'mcp' },
     ],
   },
   {
@@ -89,7 +89,7 @@ export const ANALYSIS_OPERATIONS_MENU_SECTIONS: LayoutMenuSection[] = [
     items: [
       { kind: 'route', label: 'Status', to: '/status' },
       { kind: 'route', label: 'Logs', to: '/logs' },
-      { kind: 'route', label: 'Monitoring', to: '/monitoring' },
+      { kind: 'route', label: 'Grafana', to: '/monitoring' },
       { kind: 'route', label: 'Tracing', to: '/tracing' },
     ],
   },
@@ -97,7 +97,6 @@ export const ANALYSIS_OPERATIONS_MENU_SECTIONS: LayoutMenuSection[] = [
 
 export const FLEET_SIM_MENU_SECTIONS: LayoutMenuSection[] = [
   {
-    title: 'Simulator',
     items: FLEET_SIM_NAV_ITEMS.map((item) => ({
       kind: 'route' as const,
       label: item.label,

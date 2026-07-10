@@ -75,17 +75,17 @@
 
 .mapCtaButton {
   position: relative;
-  border-color: rgba(118, 185, 0, 0.32);
+  border-color: rgba(143, 148, 156, 0.32);
   background:
-    linear-gradient(135deg, rgba(118, 185, 0, 0.24), rgba(24, 34, 17, 0.92));
+    linear-gradient(135deg, rgba(143, 148, 156, 0.24), rgba(24, 34, 17, 0.92));
   color: #f4ffe7;
-  box-shadow: 0 10px 26px rgba(118, 185, 0, 0.18);
+  box-shadow: 0 10px 26px rgba(143, 148, 156, 0.18);
 }
 
 .mapCtaButton:hover {
   transform: translateY(-1px);
-  border-color: rgba(118, 185, 0, 0.5);
-  box-shadow: 0 14px 30px rgba(118, 185, 0, 0.22);
+  border-color: rgba(143, 148, 156, 0.5);
+  box-shadow: 0 14px 30px rgba(143, 148, 156, 0.22);
 }
 
 .secondaryButton {
@@ -114,8 +114,8 @@
 }
 
 .notice {
-  border: 1px solid rgba(0, 212, 255, 0.12);
-  background: rgba(0, 212, 255, 0.08);
+  border: 1px solid rgba(166, 171, 179, 0.12);
+  background: rgba(166, 171, 179, 0.08);
   color: var(--color-text-secondary);
 }
 
@@ -396,8 +396,8 @@
   min-height: 24px;
   padding: 0.2rem 0.6rem;
   border-radius: 999px;
-  background: rgba(118, 185, 0, 0.14);
-  border: 1px solid rgba(118, 185, 0, 0.24);
+  background: rgba(143, 148, 156, 0.14);
+  border: 1px solid rgba(143, 148, 156, 0.24);
   color: var(--color-primary);
   font-size: 0.74rem;
   font-weight: 700;
@@ -554,8 +554,8 @@
 }
 
 .scopePickerOptionActive {
-  border-color: rgba(118, 185, 0, 0.3);
-  background: rgba(118, 185, 0, 0.1);
+  border-color: rgba(143, 148, 156, 0.3);
+  background: rgba(143, 148, 156, 0.1);
 }
 
 .scopePickerOption:hover,
@@ -701,7 +701,7 @@
   gap: 0.8rem;
   padding: 0.9rem;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(118, 185, 0, 0.14);
+  border: 1px solid rgba(143, 148, 156, 0.14);
   background: rgba(7, 10, 10, 0.78);
 }
 

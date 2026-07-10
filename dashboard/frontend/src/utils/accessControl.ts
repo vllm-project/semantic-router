@@ -36,6 +36,14 @@ export function canAccessReplayFlowDetails(user?: PermissionUser | null): boolea
   return hasWriteCapableRole(user)
 }
 
+export function canWriteConfig(user?: PermissionUser | null): boolean {
+  if (Array.isArray(user?.permissions)) {
+    return user.permissions.includes(CONFIG_WRITE_PERMISSION)
+  }
+
+  return hasWriteCapableRole(user)
+}
+
 export function canAccessMLSetup(user?: PermissionUser | null): boolean {
   if (hasPermission(user, ML_PIPELINE_MANAGE_PERMISSION)) {
     return true

@@ -64,6 +64,7 @@
 
 .inline .text {
   font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 /* Dark mode support */
@@ -74,4 +75,3 @@
 :global([data-theme='dark']) .text {
   color: var(--color-text-secondary);
 }
-

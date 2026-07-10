@@ -22,9 +22,9 @@
 .highlighted {
   transform: scale(1.08);
   box-shadow:
-    0 0 0 3px #76b900,
-    0 0 25px rgba(118, 185, 0, 0.8),
-    0 0 50px rgba(118, 185, 0, 0.4);
+    0 0 0 3px #8f949c,
+    0 0 25px rgba(143, 148, 156, 0.8),
+    0 0 50px rgba(143, 148, 156, 0.4);
   z-index: 1000;
   animation: highlightPulse 1.5s ease-in-out infinite;
 }
@@ -32,24 +32,24 @@
 @keyframes highlightPulse {
   0%, 100% {
     box-shadow:
-      0 0 0 3px #76b900,
-      0 0 25px rgba(118, 185, 0, 0.8),
-      0 0 50px rgba(118, 185, 0, 0.4);
+      0 0 0 3px #8f949c,
+      0 0 25px rgba(143, 148, 156, 0.8),
+      0 0 50px rgba(143, 148, 156, 0.4);
   }
   50% {
     box-shadow:
-      0 0 0 4px #8fd400,
-      0 0 35px rgba(143, 212, 0, 1),
-      0 0 70px rgba(143, 212, 0, 0.6);
+      0 0 0 4px #c9cbd0,
+      0 0 35px rgba(201, 203, 208, 0.8),
+      0 0 70px rgba(201, 203, 208, 0.32);
   }
 }
 
-/* ============== Client Node (NVIDIA Green) ============== */
+/* ============== Client Node (Graphite Alloy) ============== */
 .clientNode {
   composes: nodeBase;
-  background: #76b900;
+  background: #8f949c;
   color: white;
-  border: 2px solid #5a8f00;
+  border: 2px solid #696d74;
   min-width: 140px;
 }
 
@@ -223,8 +223,8 @@
 
 .decisionNode.focusTarget {
   box-shadow:
-    0 0 0 2px rgba(118, 185, 0, 0.95),
-    0 0 20px rgba(118, 185, 0, 0.55);
+    0 0 0 2px rgba(143, 148, 156, 0.95),
+    0 0 20px rgba(143, 148, 156, 0.55);
 }
 
 .unreachableBanner {
@@ -281,12 +281,12 @@
 }
 
 .focusDecisionBtn:hover {
-  border-color: rgba(118, 185, 0, 0.9);
+  border-color: rgba(143, 148, 156, 0.9);
 }
 
 .focusDecisionBtnActive {
-  background: rgba(118, 185, 0, 0.26);
-  border-color: rgba(118, 185, 0, 0.95);
+  background: rgba(143, 148, 156, 0.26);
+  border-color: rgba(143, 148, 156, 0.95);
 }
 
 .rulesSection {
@@ -536,8 +536,8 @@
   align-items: center;
   gap: 4px;
   padding: 3px 8px;
-  background: rgba(118, 185, 0, 0.2);
-  border: 1px solid #76b900;
+  background: rgba(143, 148, 156, 0.2);
+  border: 1px solid #8f949c;
   border-radius: 4px;
   font-size: 10px;
   color: white;
@@ -735,7 +735,7 @@
   padding: 12px 14px;
   border-radius: 10px;
   min-width: 180px;
-  border: 1px dashed rgba(118, 185, 0, 0.65);
+  border: 1px dashed rgba(143, 148, 156, 0.65);
   background: rgba(20, 30, 20, 0.86);
   color: #e8efe1;
   display: flex;
@@ -751,8 +751,8 @@
 }
 
 .moreDecisionsButton {
-  border: 1px solid rgba(118, 185, 0, 0.75);
-  background: rgba(118, 185, 0, 0.16);
+  border: 1px solid rgba(143, 148, 156, 0.75);
+  background: rgba(143, 148, 156, 0.16);
   color: #f0f6ea;
   border-radius: 8px;
   padding: 4px 8px;
@@ -761,8 +761,8 @@
 }
 
 .moreDecisionsButton:hover {
-  border-color: rgba(118, 185, 0, 0.95);
-  background: rgba(118, 185, 0, 0.25);
+  border-color: rgba(143, 148, 156, 0.95);
+  background: rgba(143, 148, 156, 0.25);
 }
 
 /* Mobile Responsive */

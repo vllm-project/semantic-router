@@ -13,6 +13,7 @@ import {
   DEFAULT_ROUTER_EVAL_ENDPOINT,
   getDefaultDimensionsForLevel,
 } from './evaluationConfig';
+import { CANONICAL_AUTO_MODEL } from './routerModelSelection';
 
 const API_BASE = '/api/evaluation';
 
@@ -177,7 +178,7 @@ export function createDefaultConfig(): CreateTaskRequest['config'] {
     datasets: Object.fromEntries(dimensions.map((dimension) => [dimension, []])),
     max_samples: 50,
     endpoint: DEFAULT_ROUTER_EVAL_ENDPOINT,
-    model: 'MoM',
+    model: CANONICAL_AUTO_MODEL,
     concurrent: 1,
     samples_per_cat: 10,
   };

@@ -23,7 +23,7 @@
   padding: 0.95rem 1rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-md);
-  background: linear-gradient(180deg, rgba(118, 185, 0, 0.08), rgba(0, 212, 255, 0.04)), rgba(12, 16, 16, 0.86);
+  background: linear-gradient(180deg, rgba(143, 148, 156, 0.08), rgba(166, 171, 179, 0.04)), rgba(12, 16, 16, 0.86);
 }
 
 .summaryLabel {
@@ -50,16 +50,16 @@
 }
 
 .summaryCardHighlight {
-  border-color: rgba(143, 212, 0, 0.36);
+  border-color: rgba(255, 255, 255, 0.15);
   background:
-    linear-gradient(180deg, rgba(143, 212, 0, 0.18), rgba(118, 185, 0, 0.08)),
-    rgba(12, 18, 12, 0.94);
-  box-shadow: 0 0 0 1px rgba(143, 212, 0, 0.12), 0 16px 34px rgba(118, 185, 0, 0.16);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(143, 148, 156, 0.035)),
+    rgba(14, 14, 16, 0.94);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.045), 0 16px 34px rgba(0, 0, 0, 0.24);
 }
 
 .summaryValueHighlight {
-  color: #d9ff72;
-  text-shadow: 0 0 18px rgba(143, 212, 0, 0.28);
+  color: #d4d4d8;
+  text-shadow: 0 0 18px rgba(255, 255, 255, 0.12);
 }
 
 .summaryHint {

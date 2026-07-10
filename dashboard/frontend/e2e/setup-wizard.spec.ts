@@ -127,6 +127,9 @@ test.describe("Setup wizard routing import", () => {
       .toEqual({
         config: {
           providers: {
+            defaults: {
+              default_model: "qwen/qwen3.5-rocm",
+            },
             models: [
               {
                 name: "qwen/qwen3.5-rocm",
@@ -141,7 +144,6 @@ test.describe("Setup wizard routing import", () => {
                 ],
               },
             ],
-            default_model: "qwen/qwen3.5-rocm",
           },
           routing: {
             modelCards: [

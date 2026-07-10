@@ -222,9 +222,9 @@ const SecurityPolicyPage: React.FC = () => {
             padding: '0.75rem 1rem',
             marginBottom: '1rem',
             borderRadius: '0.5rem',
-            background: 'rgba(118, 185, 0, 0.1)',
-            border: '1px solid rgba(118, 185, 0, 0.3)',
-            color: '#76b900',
+            background: 'rgba(143, 148, 156, 0.1)',
+            border: '1px solid rgba(143, 148, 156, 0.3)',
+            color: '#8f949c',
           }}
         >
           {success}

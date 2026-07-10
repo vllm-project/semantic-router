@@ -70,7 +70,7 @@
 .stepActive .stepCircle {
   border-color: var(--color-primary);
   background: var(--color-primary);
-  color: white;
+  color: #09090a;
 }
 
 .stepCompleted .stepCircle {
@@ -452,7 +452,7 @@
 .btnPrimary {
   padding: 0.625rem 1.5rem;
   background: var(--color-primary);
-  color: white;
+  color: #09090a;
   border: none;
   border-radius: var(--radius-md);
   font-size: 0.875rem;
@@ -495,7 +495,7 @@
 .btnSuccess {
   padding: 0.625rem 1.5rem;
   background: #22c55e;
-  color: white;
+  color: #09090a;
   border: none;
   border-radius: var(--radius-md);
   font-size: 0.875rem;
@@ -568,7 +568,7 @@
   gap: 0.5rem;
   padding: 0.625rem 1.5rem;
   background: var(--color-primary);
-  color: white;
+  color: #09090a;
   border: none;
   border-radius: var(--radius-md);
   font-size: 0.875rem;
