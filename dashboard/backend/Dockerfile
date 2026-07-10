@@ -1,6 +1,6 @@
 ARG IMAGE_REGISTRY=docker.io/
 # Stage 0: Build DSL compiler WASM assets
-FROM ${IMAGE_REGISTRY}library/golang:1.24-alpine AS wasm-builder
+FROM ${IMAGE_REGISTRY}library/golang:1.25-alpine AS wasm-builder
 WORKDIR /app/src/semantic-router
 
 ENV GOPROXY=https://proxy.golang.org,direct
@@ -49,7 +49,7 @@ COPY dashboard/wizmap/ ./
 RUN npm run build -- --outDir /app/wizmap-dist
 
 # Stage 2: Build backend with Go
-FROM ${IMAGE_REGISTRY}library/golang:1.24-bookworm AS backend-builder
+FROM ${IMAGE_REGISTRY}library/golang:1.25-bookworm AS backend-builder
 WORKDIR /app
 
 # Use Go proxy for reliable downloads
