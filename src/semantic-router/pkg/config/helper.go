@@ -181,47 +181,21 @@ func (c *RouterConfig) resolveModelConfig(modelName string) (ModelParams, bool) 
 // Accepts both short names ("claude-haiku-4-5") and provider model IDs
 // ("eu.anthropic.claude-haiku-4-5-20251001-v1:0").
 func (c *RouterConfig) GetModelPricing(modelName string) (promptPer1M float64, completionPer1M float64, currency string, ok bool) {
-	if modelConfig, okc := c.resolveModelConfig(modelName); okc {
-		p := modelConfig.Pricing
-		// Treat an explicit zero-price entry as configured pricing when a currency is
-		// present so self-hosted/free models still produce cost=0 and savings data.
-		if p.PromptPer1M != 0 || p.CompletionPer1M != 0 || p.Currency != "" {
-			cur := p.Currency
-			if cur == "" {
-				cur = "USD"
-			}
-			return p.PromptPer1M, p.CompletionPer1M, cur, true
-		}
+	pricing, ok := c.GetFullModelPricing(modelName)
+	if !ok {
+		return 0, 0, "", false
 	}
-	return 0, 0, "", false
+	return pricing.PromptPer1M, pricing.CompletionPer1M, pricing.Currency, true
 }
 
-// GetMostExpensivePricedModel returns the configured model with the highest combined
-// prompt+completion rate among models that define pricing.
+// GetMostExpensivePricedModel returns prompt and completion rates for the model
+// selected by GetMostExpensiveFullModelPricing.
 func (c *RouterConfig) GetMostExpensivePricedModel() (modelName string, promptPer1M float64, completionPer1M float64, currency string, ok bool) {
-	if c == nil || c.ModelConfig == nil {
+	modelName, pricing, ok := c.GetMostExpensiveFullModelPricing()
+	if !ok {
 		return "", 0, 0, "", false
 	}
-
-	bestScore := 0.0
-	for candidate := range c.ModelConfig {
-		promptRate, completionRate, candidateCurrency, found := c.GetModelPricing(candidate)
-		if !found {
-			continue
-		}
-
-		score := promptRate + completionRate
-		if !ok || score > bestScore {
-			modelName = candidate
-			promptPer1M = promptRate
-			completionPer1M = completionRate
-			currency = candidateCurrency
-			bestScore = score
-			ok = true
-		}
-	}
-
-	return modelName, promptPer1M, completionPer1M, currency, ok
+	return modelName, pricing.PromptPer1M, pricing.CompletionPer1M, pricing.Currency, true
 }
 
 // GetModelAPIFormat returns the API format for the given model.
