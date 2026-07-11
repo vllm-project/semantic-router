@@ -185,7 +185,7 @@ func TestHandleRouterReplayAPIListSummarySkipsLargeBodies(t *testing.T) {
 	oversizedBody := strings.Repeat("x", 5*1024*1024)
 	router := newReplayAPITestRouterWithRecords(t, 1, oversizedBody)
 
-	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=1&showDetails=false")
+	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=1")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate replay list response")
 	}
@@ -196,7 +196,26 @@ func TestHandleRouterReplayAPIListSummarySkipsLargeBodies(t *testing.T) {
 	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
 	record := mustSingleReplayRecord(t, body)
 	if got := record["request_body"]; got != nil && got != "" {
-		t.Fatalf("expected empty request_body in summary list, got %#v", got)
+		t.Fatalf("expected empty request_body in default summary list, got %#v", got)
+	}
+}
+
+func TestHandleRouterReplayAPIListShowDetailsTrueReturnsFullBodies(t *testing.T) {
+	oversizedBody := strings.Repeat("x", 1024)
+	router := newReplayAPITestRouterWithRecords(t, 1, oversizedBody)
+
+	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=1&showDetails=true")
+	if response == nil || response.GetImmediateResponse() == nil {
+		t.Fatal("expected immediate replay list response")
+	}
+	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_OK {
+		t.Fatalf("expected OK status, got %v", got)
+	}
+
+	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
+	record := mustSingleReplayRecord(t, body)
+	if got := record["request_body"]; got != oversizedBody {
+		t.Fatalf("expected full request_body when showDetails=true, got len=%d", len(fmt.Sprint(got)))
 	}
 }
 
@@ -220,11 +239,11 @@ func TestHandleRouterReplayAPIListRejectsInvalidShowDetails(t *testing.T) {
 	}
 }
 
-func TestHandleRouterReplayAPIListReturnsPayloadTooLargeForOversizedPage(t *testing.T) {
+func TestHandleRouterReplayAPIListReturnsPayloadTooLargeWhenShowDetailsTrue(t *testing.T) {
 	oversizedBody := strings.Repeat("x", 5*1024*1024)
 	router := newReplayAPITestRouterWithRecords(t, 1, oversizedBody)
 
-	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=1")
+	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=1&showDetails=true")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate error response")
 	}
