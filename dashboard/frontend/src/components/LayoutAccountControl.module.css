@@ -20,25 +20,30 @@
   justify-content: center;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  background: #101012;
 }
 
 .trigger:hover {
   color: var(--color-text);
-  background: rgba(255, 255, 255, 0.05);
+  background: #18181b;
 }
 
 .trigger:focus-visible {
   outline: 1px solid rgba(143, 148, 156, 0.5);
   outline-offset: 2px;
   color: var(--color-text);
-  background: rgba(255, 255, 255, 0.05);
+  background: #18181b;
 }
 
 .triggerActive {
   color: var(--color-text);
-  background: rgba(143, 148, 156, 0.1);
+  background: #18181b;
+}
+
+.triggerRail.triggerActive {
+  border-color: rgba(227, 27, 35, 0.4);
+  box-shadow: inset 3px 0 0 var(--brand-amd);
 }
 
 .triggerAvatar {
@@ -47,8 +52,8 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  border-radius: 999px;
-  background: rgba(143, 148, 156, 0.16);
+  border-radius: 6px;
+  background: #27272a;
   color: var(--color-text);
   font-size: 0.68rem;
   font-weight: 700;
@@ -78,8 +83,7 @@
   width: 100vw;
   height: 100dvh;
   padding: 2rem 1rem;
-  background: rgba(0, 0, 0, 0.68);
-  backdrop-filter: blur(6px);
+  background: rgba(0, 0, 0, 0.78);
   z-index: 1200;
   isolation: isolate;
 }
@@ -94,11 +98,8 @@
   flex-direction: column;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 18px;
-  background:
-    linear-gradient(180deg, rgba(143, 148, 156, 0.08), rgba(143, 148, 156, 0.02) 18%, rgba(10, 10, 10, 0.96) 18%),
-    var(--color-bg-secondary);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55);
+  border-radius: 8px;
+  background: #101012;
   animation: dialogEnter 160ms ease-out;
   transform: translate(-50%, -50%);
 }
@@ -138,8 +139,8 @@
   width: 36px;
   height: 36px;
   border: none;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  background: #18181b;
   color: var(--color-text-secondary);
   font-size: 1.35rem;
   line-height: 1;
@@ -149,7 +150,7 @@
 
 .closeButton:hover {
   color: var(--color-text);
-  background: rgba(255, 255, 255, 0.1);
+  background: #27272a;
 }
 
 .closeButton:focus-visible,
@@ -180,8 +181,8 @@
   justify-content: center;
   width: 56px;
   height: 56px;
-  border-radius: 999px;
-  background: rgba(143, 148, 156, 0.18);
+  border-radius: 8px;
+  background: #18181b;
   color: var(--color-text);
   font-size: 1rem;
   font-weight: 700;
@@ -245,8 +246,8 @@
   min-width: 1.6rem;
   height: 1.6rem;
   padding: 0 0.45rem;
-  border-radius: 999px;
-  background: rgba(143, 148, 156, 0.12);
+  border-radius: 6px;
+  background: #18181b;
   color: var(--color-text);
   font-size: 0.74rem;
   letter-spacing: normal;
@@ -266,9 +267,9 @@
   align-items: center;
   min-height: 2rem;
   padding: 0.35rem 0.7rem;
-  border-radius: 999px;
+  border-radius: 6px;
   border: 1px solid rgba(143, 148, 156, 0.22);
-  background: rgba(143, 148, 156, 0.08);
+  background: #18181b;
   color: var(--color-text);
   font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
   font-size: 0.78rem;
@@ -296,7 +297,7 @@
   min-width: 8rem;
   height: 40px;
   padding: 0 1rem;
-  border-radius: 999px;
+  border-radius: 6px;
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
@@ -311,17 +312,17 @@
 
 .secondaryButton:hover {
   color: var(--color-text);
-  background: rgba(255, 255, 255, 0.04);
+  background: #18181b;
 }
 
 .logoutButton {
   border: 1px solid rgba(143, 148, 156, 0.28);
-  background: rgba(143, 148, 156, 0.12);
+  background: #18181b;
   color: var(--color-text);
 }
 
 .logoutButton:hover {
-  background: rgba(143, 148, 156, 0.2);
+  background: #27272a;
 }
 
 @keyframes dialogEnter {

@@ -407,9 +407,15 @@ test.describe('Layout top navigation', () => {
 
     await expect(secondaryGroup.getByRole('link', { name: 'Users' })).toHaveCount(0);
     await expect(secondaryGroup.getByRole('link', { name: 'ClawOS' })).toHaveCount(0);
-    await expect(secondaryGroup.getByRole('button', { name: 'Manager' })).toBeVisible();
-    await expect(secondaryGroup.getByRole('button', { name: 'Simulator' })).toBeVisible();
-    await expect(secondaryGroup.getByRole('button', { name: 'System' })).toBeVisible();
+    const managerTrigger = secondaryGroup.getByRole('button', { name: 'Manager' });
+    const simulatorTrigger = secondaryGroup.getByRole('button', { name: 'Simulator' });
+    const systemTrigger = secondaryGroup.getByRole('button', { name: 'System' });
+    await expect(managerTrigger).toBeVisible();
+    await expect(simulatorTrigger).toBeVisible();
+    await expect(systemTrigger).toBeVisible();
+    await expect(managerTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-manager');
+    await expect(simulatorTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-simulator');
+    await expect(systemTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-system');
     const secondaryButtons = secondaryGroup.getByRole('button');
     await expect(secondaryButtons.nth(0)).toHaveText(/Manager/);
     await expect(secondaryButtons.nth(1)).toHaveText(/Simulator/);
@@ -417,18 +423,49 @@ test.describe('Layout top navigation', () => {
     await expect(globalNav.getByRole('button', { name: 'Analysis', exact: true })).toHaveCount(0);
     await expect(globalNav.getByRole('button', { name: 'Operations', exact: true })).toHaveCount(0);
 
-    await secondaryGroup.getByRole('button', { name: 'Manager' }).click();
+    const header = page.locator('header').first();
+    await expect(header).toHaveCSS('background-color', 'rgb(0, 0, 0)');
+
+    const playgroundLink = primaryGroup.getByRole('link', { name: 'Playground' });
+    await expect(playgroundLink).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    const activeUnderline = await playgroundLink.evaluate((element) => {
+      const underline = window.getComputedStyle(element, '::after');
+      return { backgroundColor: underline.backgroundColor, height: underline.height };
+    });
+    expect(activeUnderline).toEqual({ backgroundColor: 'rgb(227, 27, 35)', height: '2px' });
+
+    await managerTrigger.hover();
+    await expect(managerTrigger).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await managerTrigger.click();
 
     const managerMenu = page.getByRole('menu', { name: 'Manager' });
+    await expect(managerMenu).toHaveAttribute('id', 'layout-mega-menu-manager');
+    await expect(managerTrigger).toHaveAttribute('aria-expanded', 'true');
+    await expect(managerMenu.getByTestId('layout-mega-menu-rail')).toHaveCSS(
+      'background-color',
+      'rgb(8, 8, 8)',
+    );
+    await expect(managerMenu.getByTestId('layout-mega-menu-content')).toHaveCSS(
+      'background-color',
+      'rgb(244, 244, 241)',
+    );
     await expect(managerMenu.getByRole('menuitem', { name: 'Users' })).toBeVisible();
     await expect(managerMenu.getByRole('menuitem', { name: 'ClawOS' })).toBeVisible();
     await expect(managerMenu.getByRole('menuitem', { name: 'Models' })).toBeVisible();
     await expect(managerMenu.getByRole('menuitem', { name: 'Decisions' })).toBeVisible();
     await expect(managerMenu.getByRole('menuitem', { name: 'Signals' })).toBeVisible();
+    await expect(managerMenu.getByRole('menuitem').first()).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(managerMenu.getByRole('menuitem').nth(1)).toBeFocused();
+    const managerBounds = await managerMenu.boundingBox();
+    expect(managerBounds).not.toBeNull();
+    expect(managerBounds!.x).toBeGreaterThanOrEqual(0);
+    expect(managerBounds!.x + managerBounds!.width).toBeLessThanOrEqual(1440);
 
-    await secondaryGroup.getByRole('button', { name: 'System' }).click();
+    await systemTrigger.click();
 
     const menu = page.getByRole('menu', { name: 'System' });
+    await expect(menu).toHaveAttribute('id', 'layout-mega-menu-system');
     await expect(menu.getByText('Analysis')).toBeVisible();
     const menuItems = menu.getByRole('menuitem');
     await expect(menuItems.nth(0)).toHaveText('Global Config');
@@ -445,6 +482,54 @@ test.describe('Layout top navigation', () => {
     await expect(menu.getByRole('menuitem', { name: 'Logs' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Grafana' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Tracing' })).toBeVisible();
+
+    await menu.getByRole('menuitem', { name: 'Evaluation' }).focus();
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await expect(systemTrigger).toHaveAttribute('aria-expanded', 'false');
+    await expect(systemTrigger).toBeFocused();
+
+    await page.keyboard.press('ArrowUp');
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole('menuitem').last()).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(systemTrigger).toBeFocused();
+
+    await page.keyboard.press('ArrowDown');
+    await expect(menu.getByRole('menuitem').first()).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(systemTrigger).toBeFocused();
+    await expect(systemTrigger).toHaveAttribute('aria-expanded', 'true');
+
+    await page.keyboard.press('ArrowDown');
+    await expect(menu.getByRole('menuitem').first()).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(systemTrigger).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(menu).toBeHidden();
+    await expect(systemTrigger).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('keeps the desktop mega menu inside the viewport at 1024px', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await mockCommon(page);
+
+    await page.goto('/dashboard');
+
+    const globalNav = page.getByRole('navigation', { name: 'Global navigation' });
+    await expect(globalNav).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Toggle menu' })).toBeHidden();
+
+    const systemTrigger = globalNav.getByRole('button', { name: 'System' });
+    await systemTrigger.click();
+    const systemMenu = page.getByRole('menu', { name: 'System' });
+    await expect(systemMenu).toBeVisible();
+
+    const bounds = await systemMenu.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(1024);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 
   test('loads Insights charts and does not preserve the legacy replay route', async ({ page }) => {

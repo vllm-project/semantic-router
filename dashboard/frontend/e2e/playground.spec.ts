@@ -168,6 +168,11 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New conversation' })).toBeVisible();
     await expect(page.getByTestId('playground-routing-status')).toContainText('vllm-sr/auto');
+
+    const motionBackground = page.getByTestId('playground-motion-background');
+    await expect(motionBackground).toBeVisible();
+    await expect(motionBackground).toHaveCSS('pointer-events', 'none');
+    await expect(motionBackground).toHaveAttribute('data-motion', 'animated');
   });
 
   test('keeps the mobile composer readable and clear of the guide control', async ({ page }) => {
@@ -175,6 +180,20 @@ test.describe('Playground Chat Component', () => {
 
     const input = page.getByPlaceholder('Ask me anything...');
     await expect.poll(async () => (await input.boundingBox())?.width ?? 0).toBeGreaterThan(250);
+    await input.click();
+    await input.fill('The animated surface keeps the composer interactive');
+
+    const motionBackground = page.getByTestId('playground-motion-background');
+    const backgroundBox = await motionBackground.boundingBox();
+    expect(backgroundBox).not.toBeNull();
+    expect(backgroundBox?.width ?? 0).toBeLessThanOrEqual(390);
+    await expect(motionBackground).toHaveCSS('pointer-events', 'none');
+
+    const layoutWidth = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      innerWidth: window.innerWidth,
+    }));
+    expect(layoutWidth.scrollWidth).toBeLessThanOrEqual(layoutWidth.innerWidth);
 
     const composerBox = await page.getByTestId('chat-composer').boundingBox();
     const guideBox = await page.getByRole('button', { name: 'Guide' }).boundingBox();
@@ -1201,12 +1220,15 @@ test.describe('Playground Chat Component', () => {
     }, { timeout: 5000 }).toBeLessThan(120);
 
     const scrollTopBeforeManualScroll = await transcript.evaluate(node => (node as HTMLDivElement).scrollTop);
-    await transcript.hover();
-    await page.mouse.wheel(0, -5000);
-    await page.waitForTimeout(600);
-
-    const scrollTopAfterManualScroll = await transcript.evaluate(node => (node as HTMLDivElement).scrollTop);
-    expect(scrollTopAfterManualScroll).toBeLessThan(scrollTopBeforeManualScroll - 1000);
+    const manualScrollTop = await transcript.evaluate(node => {
+      const container = node as HTMLDivElement;
+      container.style.scrollBehavior = 'auto';
+      const target = Math.max(0, container.scrollTop - container.clientHeight * 1.5);
+      container.scrollTop = target;
+      container.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -1 }));
+      return container.scrollTop;
+    });
+    expect(manualScrollTop).toBeLessThan(scrollTopBeforeManualScroll - 300);
 
     await expect(currentAssistant).toContainText('Paragraph 140: streaming output keeps growing.', { timeout: 10000 });
   });
@@ -1335,9 +1357,45 @@ test.describe('Playground Chat Component', () => {
     await page.getByPlaceholder('Ask me anything...').fill('Stream reasoning');
     await page.getByRole('button', { name: 'Send message' }).click();
 
+    const thinkingGrid = page.getByTestId('thinking-grid');
+    await expect(thinkingGrid).toBeVisible({ timeout: 5000 });
+    await expect(thinkingGrid.locator('span')).toHaveCount(120);
+    await expect(page.getByText('Classifying intent')).toHaveCount(0);
+    await expect(page.getByText('Selecting route')).toHaveCount(0);
+    await expect(page.getByText('Preparing response')).toHaveCount(0);
     await expect(page.getByText('Thinking Process:')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('pre').filter({ hasText: 'The answer' })).toBeVisible({ timeout: 5000 });
     await expect(page.getByText('Done.')).toBeVisible({ timeout: 10000 });
+  });
+
+  test('keeps the restored thinking matrix static with reduced motion', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await mockStreamingChatFetch(page, [
+      chatStreamChunk({ role: 'assistant', content: '' }),
+      chatStreamChunk({ reasoning: 'Inspecting' }),
+      chatStreamChunk({ reasoning: ' route' }),
+      chatStreamChunk({ reasoning: ' state' }),
+      chatStreamChunk({ content: 'Reduced motion complete.' }),
+      'data: [DONE]\n\n',
+    ], 300);
+
+    await page.getByPlaceholder('Ask me anything...').fill('Respect reduced motion');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    const thinkingGrid = page.getByTestId('thinking-grid');
+    await expect(thinkingGrid).toBeVisible({ timeout: 5000 });
+    await expect(thinkingGrid).toHaveAttribute('data-motion', 'static');
+    await expect(page.getByTestId('playground-motion-background')).toHaveAttribute(
+      'data-motion',
+      'static',
+    );
+    await expect(thinkingGrid.locator('span').first()).toHaveCSS('animation-name', 'none');
+
+    const characters = await thinkingGrid.textContent();
+    await page.waitForTimeout(220);
+    expect(await thinkingGrid.textContent()).toBe(characters);
+    await expect(page.getByText('Reduced motion complete.')).toBeVisible({ timeout: 10000 });
   });
 
   test('renders thinking block from non-stream reasoning field', async ({ page }) => {

@@ -187,8 +187,13 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 /* ===== Main Content Area ===== */
@@ -231,7 +236,9 @@
   height: 32px;
   border-radius: 1px;
   background: var(--color-border);
-  transition: background var(--transition-fast), height var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    height var(--transition-fast);
 }
 
 .resizeHandle:hover .resizeHandleLine,
@@ -257,7 +264,7 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: var(--color-bg);
+  background: #050505;
   border-left: 1px solid var(--color-border);
   overflow: hidden;
   min-width: 200px;
@@ -446,7 +453,9 @@
   height: 32px;
   border-radius: 1px;
   background: var(--color-border);
-  transition: background var(--transition-fast), height var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    height var(--transition-fast);
 }
 
 .guideDrawerResizeHandle:hover .guideDrawerResizeLine,
@@ -456,13 +465,21 @@
 }
 
 @keyframes slideInRight {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .guideDrawerHeader {
@@ -1271,7 +1288,9 @@
   background: var(--color-bg-tertiary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
   font-family: var(--font-mono);
   cursor: pointer;
   user-select: none;
@@ -1307,7 +1326,9 @@
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.4),
+    0 2px 8px rgba(0, 0, 0, 0.3);
   padding: 4px;
 }
 
@@ -1772,8 +1793,16 @@
 }
 
 .emptyIcon {
-  font-size: 2rem;
-  opacity: 0.5;
+  width: 2rem;
+  height: 2rem;
+  color: var(--brand-amd);
+  opacity: 0.78;
+}
+
+.emptyIcon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* ===== WASM loading overlay ===== */
@@ -1802,7 +1831,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ===== Responsive ===== */
@@ -2209,7 +2240,7 @@
   color: var(--color-text-muted);
 }
 
-.gsSectionChevron[data-open="true"] {
+.gsSectionChevron[data-open='true'] {
   transform: rotate(90deg);
 }
 
@@ -2266,7 +2297,7 @@
   cursor: pointer;
 }
 
-.gsRadio input[type="radio"] {
+.gsRadio input[type='radio'] {
   accent-color: var(--color-primary);
   margin: 0;
   cursor: pointer;
@@ -2282,7 +2313,7 @@
   cursor: pointer;
 }
 
-.gsCheckbox input[type="checkbox"] {
+.gsCheckbox input[type='checkbox'] {
   accent-color: var(--color-primary);
   margin: 0;
   cursor: pointer;
@@ -2506,7 +2537,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .deployModalHeader {
@@ -2562,7 +2595,10 @@
   background: var(--color-bg-secondary);
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .deployDiffNavBtn:hover {

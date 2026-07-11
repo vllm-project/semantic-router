@@ -1,7 +1,8 @@
-import React, { useEffect, useState, type ReactNode } from 'react'
+import React, { useEffect, useRef, useState, type ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import styles from './Layout.module.css'
 import LayoutAccountControl from './LayoutAccountControl'
+import LayoutMegaMenu from './LayoutMegaMenu'
 import PlatformBranding from './PlatformBranding'
 import {
   ANALYSIS_OPERATIONS_MENU_SECTIONS,
@@ -30,6 +31,18 @@ interface LayoutProps {
   hideAccountControl?: boolean
 }
 
+const DESKTOP_MENU_IDS: Record<LayoutDropdownKey, string> = {
+  manager: 'layout-mega-menu-manager',
+  simulator: 'layout-mega-menu-simulator',
+  analysisOps: 'layout-mega-menu-system',
+}
+
+const DESKTOP_MENU_TRIGGER_IDS: Record<LayoutDropdownKey, string> = {
+  manager: 'layout-mega-menu-trigger-manager',
+  simulator: 'layout-mega-menu-trigger-simulator',
+  analysisOps: 'layout-mega-menu-trigger-system',
+}
+
 const Layout: React.FC<LayoutProps> = ({
   children,
   configSection,
@@ -40,20 +53,26 @@ const Layout: React.FC<LayoutProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [openDropdown, setOpenDropdown] = useState<LayoutDropdownKey | null>(null)
   const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false)
+  const dropdownTriggerRefs = useRef<Partial<Record<LayoutDropdownKey, HTMLButtonElement | null>>>(
+    {},
+  )
+  const pendingMenuFocusRef = useRef<'first' | 'last'>('first')
   const { user, logout } = useAuth()
   const { fleetSimEnabled } = useReadonly()
   const location = useLocation()
   const navigate = useNavigate()
   const canManageUsers = user?.role === 'admin'
   const canUseMLSetup = canAccessMLSetup(user)
-  const secondaryNavLinks = SECONDARY_NAV_LINKS.filter((link) => link.to !== '/users' || canManageUsers)
+  const secondaryNavLinks = SECONDARY_NAV_LINKS.filter(
+    (link) => link.to !== '/users' || canManageUsers,
+  )
   const managerMenuSections = filterLayoutMenuSections(
     [...MANAGER_MENU_SECTIONS, ...KNOWLEDGE_BASE_MENU_SECTIONS],
-    item => canManageUsers || item.kind !== 'route' || item.to !== '/users'
+    (item) => canManageUsers || item.kind !== 'route' || item.to !== '/users',
   )
   const analysisOperationsMenuSections = filterLayoutMenuSections(
     ANALYSIS_OPERATIONS_MENU_SECTIONS,
-    item => canUseMLSetup || item.kind !== 'route' || item.to !== '/ml-setup'
+    (item) => canUseMLSetup || item.kind !== 'route' || item.to !== '/ml-setup',
   )
   const systemMenuSections = analysisOperationsMenuSections
   const simulatorMenuSections = fleetSimEnabled ? FLEET_SIM_MENU_SECTIONS : []
@@ -66,19 +85,19 @@ const Layout: React.FC<LayoutProps> = ({
     managerMenuSections,
     location.pathname,
     isConfigPage,
-    configSection
+    configSection,
   )
   const isAnalysisOpsActive = hasActiveLayoutMenuSection(
     systemMenuSections,
     location.pathname,
     isConfigPage,
-    configSection
+    configSection,
   )
   const isSimulatorActive = hasActiveLayoutMenuSection(
     simulatorMenuSections,
     location.pathname,
     isConfigPage,
-    configSection
+    configSection,
   )
 
   const closeMenus = () => {
@@ -89,13 +108,33 @@ const Layout: React.FC<LayoutProps> = ({
 
   const toggleDropdown = (dropdown: LayoutDropdownKey) => {
     setIsAccountDialogOpen(false)
-    setOpenDropdown(prev => (prev === dropdown ? null : dropdown))
+    pendingMenuFocusRef.current = 'first'
+    setOpenDropdown((prev) => (prev === dropdown ? null : dropdown))
+  }
+
+  const openDropdownFromKeyboard = (
+    dropdown: LayoutDropdownKey,
+    focusTarget: 'first' | 'last',
+  ) => {
+    setIsAccountDialogOpen(false)
+    pendingMenuFocusRef.current = focusTarget
+
+    if (openDropdown === dropdown) {
+      const menu = document.getElementById(DESKTOP_MENU_IDS[dropdown])
+      const menuItems = menu?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])')
+      const targetIndex = focusTarget === 'last' ? (menuItems?.length ?? 1) - 1 : 0
+      menuItems?.[targetIndex]?.focus()
+      pendingMenuFocusRef.current = 'first'
+      return
+    }
+
+    setOpenDropdown(dropdown)
   }
 
   const toggleAccountDialog = () => {
     setOpenDropdown(null)
     setMobileMenuOpen(false)
-    setIsAccountDialogOpen(prev => !prev)
+    setIsAccountDialogOpen((prev) => !prev)
   }
 
   const handleMenuItemSelect = (item: LayoutMenuItem) => {
@@ -119,7 +158,9 @@ const Layout: React.FC<LayoutProps> = ({
       key={link.to}
       end={link.matchMode !== 'prefix'}
       to={link.to}
-      className={({ isActive }) => (isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink)}
+      className={({ isActive }) =>
+        isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+      }
     >
       {link.label}
     </NavLink>
@@ -130,7 +171,7 @@ const Layout: React.FC<LayoutProps> = ({
     key: string,
     className: string,
     activeClassName: string,
-    useMenuRole: boolean
+    useMenuRole: boolean,
   ) => {
     const active = isLayoutMenuItemActive(item, location.pathname, isConfigPage, configSection)
     const roleProps = useMenuRole ? { role: 'menuitem' as const } : {}
@@ -162,49 +203,131 @@ const Layout: React.FC<LayoutProps> = ({
     )
   }
 
-  const renderDropdownMenu = (
-    sections: LayoutMenuSection[],
-    className: string,
-    label: string
-  ) => (
-    <div className={className} role="menu" aria-label={label}>
+  const renderMobileMenuSection = (title: string, sections: LayoutMenuSection[]) => (
+    <div className={styles.mobileNavSection}>
+      <div className={styles.mobileNavSectionTitle}>{title}</div>
       {sections.map((section, sectionIndex) => (
-        <React.Fragment key={`${label}-${section.title || sectionIndex}`}>
-          {sectionIndex > 0 ? <div className={styles.dropdownDivider} /> : null}
-          {section.title ? <div className={styles.dropdownSectionLabel}>{section.title}</div> : null}
-          {section.items.map(item =>
+        <React.Fragment key={`${title}-${section.title || sectionIndex}`}>
+          {section.title ? (
+            <div className={styles.mobileNavSubsectionTitle}>{section.title}</div>
+          ) : null}
+          {section.items.map((item) =>
             renderMenuItem(
               item,
-              `${label}-${section.title || 'items'}-${item.label}`,
-              styles.dropdownItem,
-              styles.dropdownItemActive,
-              true
-            )
+              `${title}-${section.title || 'items'}-${item.label}`,
+              styles.mobileNavLink,
+              styles.mobileNavLinkActive,
+              false,
+            ),
           )}
         </React.Fragment>
       ))}
     </div>
   )
 
-  const renderMobileMenuSection = (title: string, sections: LayoutMenuSection[]) => (
-    <div className={styles.mobileNavSection}>
-      <div className={styles.mobileNavSectionTitle}>{title}</div>
-      {sections.map((section, sectionIndex) => (
-        <React.Fragment key={`${title}-${section.title || sectionIndex}`}>
-          {section.title ? <div className={styles.mobileNavSubsectionTitle}>{section.title}</div> : null}
-          {section.items.map(item =>
-            renderMenuItem(
-              item,
-              `${title}-${section.title || 'items'}-${item.label}`,
-              styles.mobileNavLink,
-              styles.mobileNavLinkActive,
-              false
-            )
-          )}
-        </React.Fragment>
-      ))}
-    </div>
-  )
+  const renderDesktopDropdown = (
+    dropdown: LayoutDropdownKey,
+    label: string,
+    sections: LayoutMenuSection[],
+    active: boolean,
+  ) => {
+    const isOpen = openDropdown === dropdown
+    const menuId = DESKTOP_MENU_IDS[dropdown]
+    const triggerId = DESKTOP_MENU_TRIGGER_IDS[dropdown]
+
+    return (
+      <div className={styles.navDropdown}>
+        <button
+          id={triggerId}
+          ref={(element) => {
+            dropdownTriggerRefs.current[dropdown] = element
+          }}
+          type="button"
+          aria-controls={menuId}
+          aria-expanded={isOpen}
+          aria-haspopup="menu"
+          className={`${styles.navLink} ${active ? styles.navLinkActive : ''}`}
+          onClick={(event) => {
+            event.stopPropagation()
+            toggleDropdown(dropdown)
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+              return
+            }
+
+            event.preventDefault()
+            openDropdownFromKeyboard(dropdown, event.key === 'ArrowUp' ? 'last' : 'first')
+          }}
+          onBlur={(event) => {
+            const nextTarget = event.relatedTarget
+            const menu = document.getElementById(menuId)
+            if (nextTarget instanceof Node && menu?.contains(nextTarget)) {
+              return
+            }
+
+            if (openDropdown === dropdown) {
+              setOpenDropdown(null)
+            }
+          }}
+        >
+          {label}
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            className={`${styles.dropdownArrow} ${isOpen ? styles.dropdownArrowOpen : ''}`}
+            aria-hidden="true"
+          >
+            <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
+        {isOpen ? (
+          <LayoutMegaMenu
+            id={menuId}
+            triggerId={triggerId}
+            label={label}
+            sections={sections}
+            isItemActive={(item) =>
+              isLayoutMenuItemActive(item, location.pathname, isConfigPage, configSection)
+            }
+            onConfigSelect={handleMenuItemSelect}
+            onNavigate={closeMenus}
+          />
+        ) : null}
+      </div>
+    )
+  }
+
+  useEffect(() => {
+    if (!openDropdown) {
+      return
+    }
+
+    const menu = document.getElementById(DESKTOP_MENU_IDS[openDropdown])
+    const menuItems = menu?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])')
+    const targetIndex = pendingMenuFocusRef.current === 'last' ? (menuItems?.length ?? 1) - 1 : 0
+    menuItems?.[targetIndex]?.focus()
+    pendingMenuFocusRef.current = 'first'
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return
+      }
+
+      const trigger = dropdownTriggerRefs.current[openDropdown]
+      event.preventDefault()
+      setOpenDropdown(null)
+      trigger?.focus()
+    }
+
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [openDropdown])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -234,98 +357,27 @@ const Layout: React.FC<LayoutProps> = ({
 
             <div className={styles.navDivider} />
 
-            <div className={`${styles.navSection} ${styles.navSectionSecondary}`} role="group" aria-label="Secondary navigation">
+            <div
+              className={`${styles.navSection} ${styles.navSectionSecondary}`}
+              role="group"
+              aria-label="Secondary navigation"
+            >
               {secondaryNavLinks.map(renderTopNavLink)}
-              <div className={styles.navDropdown}>
-                <button
-                  type="button"
-                  aria-expanded={openDropdown === 'manager'}
-                  aria-haspopup="menu"
-                  className={`${styles.navLink} ${isManagerActive ? styles.navLinkActive : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleDropdown('manager')
-                  }}
-                >
-                  Manager
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    className={`${styles.dropdownArrow} ${openDropdown === 'manager' ? styles.dropdownArrowOpen : ''}`}
-                  >
-                    <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                {openDropdown === 'manager'
-                  ? renderDropdownMenu(managerMenuSections, styles.dropdownMenu, 'Manager')
-                  : null}
-              </div>
-              {fleetSimEnabled ? (
-                <div className={styles.navDropdown}>
-                  <button
-                    type="button"
-                    aria-expanded={openDropdown === 'simulator'}
-                    aria-haspopup="menu"
-                    className={`${styles.navLink} ${isSimulatorActive ? styles.navLinkActive : ''}`}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      toggleDropdown('simulator')
-                    }}
-                  >
-                    Simulator
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 12 12"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      className={`${styles.dropdownArrow} ${openDropdown === 'simulator' ? styles.dropdownArrowOpen : ''}`}
-                    >
-                      <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                  {openDropdown === 'simulator'
-                    ? renderDropdownMenu(simulatorMenuSections, styles.dropdownMenu, 'Simulator')
-                    : null}
-                </div>
-              ) : null}
-              <div className={styles.navDropdown}>
-                <button
-                  type="button"
-                  aria-expanded={openDropdown === 'analysisOps'}
-                  aria-haspopup="menu"
-                  className={`${styles.navLink} ${isAnalysisOpsActive ? styles.navLinkActive : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleDropdown('analysisOps')
-                  }}
-                >
-                  System
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    className={`${styles.dropdownArrow} ${openDropdown === 'analysisOps' ? styles.dropdownArrowOpen : ''}`}
-                  >
-                    <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                {openDropdown === 'analysisOps'
-                  ? renderDropdownMenu(
-                      systemMenuSections,
-                      styles.dropdownMenu,
-                      'System'
-                    )
-                  : null}
-              </div>
+              {renderDesktopDropdown('manager', 'Manager', managerMenuSections, isManagerActive)}
+              {fleetSimEnabled
+                ? renderDesktopDropdown(
+                    'simulator',
+                    'Simulator',
+                    simulatorMenuSections,
+                    isSimulatorActive,
+                  )
+                : null}
+              {renderDesktopDropdown(
+                'analysisOps',
+                'System',
+                systemMenuSections,
+                isAnalysisOpsActive,
+              )}
             </div>
           </nav>
 
@@ -363,7 +415,16 @@ const Layout: React.FC<LayoutProps> = ({
               aria-label="Documentation"
               title="Documentation"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
                 <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
               </svg>
@@ -372,12 +433,20 @@ const Layout: React.FC<LayoutProps> = ({
             <button
               type="button"
               className={styles.mobileMenuButton}
-              onClick={() => setMobileMenuOpen(prev => !prev)}
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
               aria-label="Toggle menu"
               aria-controls="mobile-navigation"
               aria-expanded={mobileMenuOpen}
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              >
                 {mobileMenuOpen ? (
                   <>
                     <path d="M18 6L6 18" />
@@ -396,8 +465,13 @@ const Layout: React.FC<LayoutProps> = ({
         </div>
 
         {mobileMenuOpen ? (
-          <div id="mobile-navigation" className={styles.mobileNav} role="navigation" aria-label="Mobile navigation">
-            {PRIMARY_NAV_LINKS.map(link => (
+          <div
+            id="mobile-navigation"
+            className={styles.mobileNav}
+            role="navigation"
+            aria-label="Mobile navigation"
+          >
+            {PRIMARY_NAV_LINKS.map((link) => (
               <NavLink
                 key={`mobile-${link.to}`}
                 end
@@ -408,7 +482,7 @@ const Layout: React.FC<LayoutProps> = ({
                 {link.label}
               </NavLink>
             ))}
-            {secondaryNavLinks.map(link => (
+            {secondaryNavLinks.map((link) => (
               <NavLink
                 key={`mobile-${link.to}`}
                 end

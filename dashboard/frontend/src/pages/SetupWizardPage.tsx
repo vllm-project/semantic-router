@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ColorBends from "../components/ColorBends";
+import {
+  DASHBOARD_COLOR_BENDS_MOTION,
+  DASHBOARD_MOTION_COLORS,
+} from "../components/dashboardMotionTheme";
 import { useReadonly } from "../contexts/ReadonlyContext";
 import { useSetup } from "../contexts/SetupContext";
 import { markOnboardingPending } from "../utils/onboarding";
@@ -438,19 +442,14 @@ const SetupWizardPage: React.FC = () => {
 
   return (
     <div className={styles.page}>
-      <div className={styles.backgroundEffect}>
+      <div
+        className={styles.backgroundEffect}
+        data-testid="setup-motion-background"
+      >
         <ColorBends
-          colors={["#f5f5f7", "#e31b23", "#5f636a"]}
-          rotation={138}
-          speed={0.08}
-          scale={1}
-          frequency={1}
-          warpStrength={0.55}
-          mouseInfluence={0.35}
-          parallax={0.22}
-          noise={0.04}
+          colors={DASHBOARD_MOTION_COLORS}
+          {...DASHBOARD_COLOR_BENDS_MOTION}
           transparent
-          autoRotate={0.22}
         />
       </div>
 
@@ -468,7 +467,7 @@ const SetupWizardPage: React.FC = () => {
             </h1>
           </div>
           <p className={styles.heroDescription}>
-            Extract signals. Compose decisions. Route the best model.
+            One model or many, shaped by your priorities.
           </p>
         </div>
 

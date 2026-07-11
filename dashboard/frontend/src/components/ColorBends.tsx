@@ -8,7 +8,7 @@ type ColorBendsProps = {
   style?: CSSProperties
   rotation?: number
   speed?: number
-  colors?: string[]
+  colors?: readonly string[]
   transparent?: boolean
   autoRotate?: number
   scale?: number
@@ -129,7 +129,7 @@ const hexToVector3 = (hex: string): THREE.Vector3 => {
   return new THREE.Vector3(
     ((parsed >> 16) & 255) / 255,
     ((parsed >> 8) & 255) / 255,
-    (parsed & 255) / 255
+    (parsed & 255) / 255,
   )
 }
 
@@ -167,7 +167,10 @@ export default function ColorBends({
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
     const geometry = new THREE.PlaneGeometry(2, 2)
 
-    const uColorsArray: THREE.Vector3[] = Array.from({ length: MAX_COLORS }, () => new THREE.Vector3())
+    const uColorsArray: THREE.Vector3[] = Array.from(
+      { length: MAX_COLORS },
+      () => new THREE.Vector3(),
+    )
 
     const material = new THREE.ShaderMaterial({
       vertexShader: vert,

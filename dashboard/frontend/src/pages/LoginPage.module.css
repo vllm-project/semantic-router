@@ -16,7 +16,10 @@
     linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px),
     radial-gradient(circle at 50% 45%, transparent 0, rgba(5, 5, 5, 0.46) 74%);
-  background-size: 42px 42px, 42px 42px, auto;
+  background-size:
+    42px 42px,
+    42px 42px,
+    auto;
 }
 
 .backgroundEffect {
@@ -24,8 +27,7 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.34;
-  filter: saturate(72%) contrast(108%);
+  opacity: 0.85;
 }
 
 .mainContent {
@@ -52,28 +54,14 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border-radius: 18px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.055), transparent 42%),
-    rgba(16, 16, 18, 0.72);
-  box-shadow:
-    0 36px 96px rgba(0, 0, 0, 0.52),
-    inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  backdrop-filter: blur(26px) saturate(112%);
-  -webkit-backdrop-filter: blur(26px) saturate(112%);
+  background: #101012;
 }
 
 .storyPanel::before,
 .card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.1), transparent 32%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015) 28%, transparent 72%);
-  pointer-events: none;
+  content: none;
 }
 
 .storyPanel {
@@ -91,9 +79,9 @@
   width: fit-content;
   max-width: 100%;
   padding: 0.6rem 1rem;
-  border-radius: 999px;
+  border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
+  background: #18181b;
   color: #f7f8fb;
   font-size: 0.95rem;
   font-weight: 650;
@@ -149,14 +137,15 @@
   gap: 0.85rem;
   align-items: center;
   padding: 0.85rem 0.95rem;
-  border-radius: 1rem;
+  border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
+  background: #18181b;
 }
 
 .progressStepActive {
   border-color: rgba(227, 27, 35, 0.34);
-  background: linear-gradient(180deg, rgba(227, 27, 35, 0.1), rgba(16, 16, 18, 0.88));
+  background: #18181b;
+  box-shadow: inset 3px 0 0 var(--brand-amd);
 }
 
 .progressStepComplete {
@@ -166,7 +155,7 @@
 .progressIndex {
   width: 2rem;
   height: 2rem;
-  border-radius: 999px;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -202,9 +191,9 @@
   display: grid;
   gap: 0.4rem;
   padding: 1rem;
-  border-radius: 1rem;
+  border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.05);
+  background: #18181b;
 }
 
 .metricValue,
@@ -252,9 +241,9 @@
   min-height: 58px;
   padding: 0 1rem;
   box-sizing: border-box;
-  border-radius: 1rem;
+  border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(5, 5, 5, 0.58);
+  background: #09090a;
   color: #ffffff;
   font-size: 1rem;
 }
@@ -276,7 +265,7 @@
 
 .error {
   padding: 0.9rem 1rem;
-  border-radius: 0.95rem;
+  border-radius: 6px;
   border: 1px solid rgba(255, 107, 107, 0.26);
   background: rgba(255, 107, 107, 0.1);
   color: #ff9f9f;
@@ -293,39 +282,36 @@
 .secondaryButton {
   flex: 1 1 0;
   min-height: 52px;
-  border-radius: 10px;
+  border-radius: 6px;
   padding: 0 1.2rem;
   font-size: 0.95rem;
   font-weight: 650;
   letter-spacing: 0.01em;
-  transition: transform 0.2s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .button {
   border: 1px solid transparent;
   color: #0c0c10;
   background: #ffffff;
-  box-shadow: 0 14px 28px rgba(255, 255, 255, 0.2);
 }
 
 .button:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 16px 34px rgba(255, 255, 255, 0.28);
+  background: #e4e4e7;
 }
 
 .secondaryButton {
   border: 1px solid rgba(255, 255, 255, 0.24);
   color: #f5f5f7;
-  background: rgba(255, 255, 255, 0.045);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  background: #18181b;
 }
 
 .secondaryButton:hover:not(:disabled) {
   border-color: rgba(255, 255, 255, 0.45);
-  transform: translateY(-2px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.15),
-    0 14px 26px rgba(0, 0, 0, 0.5);
+  background: #202024;
 }
 
 .button:disabled,

@@ -18,7 +18,8 @@ const routerModels = [
       max_context_length: 32768,
       num_classes: 14,
       license: 'apache-2.0',
-      model_card_url: 'https://huggingface.co/llm-semantic-router/mmbert32k-intent-classifier-merged',
+      model_card_url:
+        'https://huggingface.co/llm-semantic-router/mmbert32k-intent-classifier-merged',
       tags: ['text-classification', 'intent-classification'],
     },
     metadata: {
@@ -42,7 +43,8 @@ const routerModels = [
       max_context_length: 32768,
       num_classes: 2,
       license: 'apache-2.0',
-      model_card_url: 'https://huggingface.co/llm-semantic-router/mmbert32k-factcheck-classifier-merged',
+      model_card_url:
+        'https://huggingface.co/llm-semantic-router/mmbert32k-factcheck-classifier-merged',
       tags: ['text-classification', 'fact-check'],
     },
     metadata: {
@@ -67,7 +69,8 @@ const routerModels = [
       max_context_length: 32768,
       num_classes: 4,
       license: 'apache-2.0',
-      model_card_url: 'https://huggingface.co/llm-semantic-router/mmbert32k-feedback-detector-merged',
+      model_card_url:
+        'https://huggingface.co/llm-semantic-router/mmbert32k-feedback-detector-merged',
       tags: ['text-classification', 'feedback-detection'],
     },
     metadata: {
@@ -92,7 +95,8 @@ const routerModels = [
       max_context_length: 32768,
       num_classes: 2,
       license: 'apache-2.0',
-      model_card_url: 'https://huggingface.co/llm-semantic-router/mmbert32k-jailbreak-detector-merged',
+      model_card_url:
+        'https://huggingface.co/llm-semantic-router/mmbert32k-jailbreak-detector-merged',
       tags: ['text-classification', 'security'],
     },
     metadata: {
@@ -208,7 +212,9 @@ async function mockRouterInventoryShell(page: Page) {
 }
 
 test.describe('Router model inventory surfaces', () => {
-  test('renders six preview cards and keeps embedding metadata clean in status view', async ({ page }) => {
+  test('renders six preview cards and keeps embedding metadata clean in status view', async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1920, height: 1200 })
 
     await mockRouterInventoryShell(page)
@@ -223,6 +229,8 @@ test.describe('Router model inventory surfaces', () => {
     await expect(embeddingPreview).toContainText('Embedding')
     await expect(embeddingPreview).not.toContainText('MmBertEmbeddingModel(')
     await expect(previewGrid.getByAltText('AMD platform')).toHaveCount(6)
+    await expect(page.getByAltText('AMD', { exact: true })).toBeVisible()
+    await expect(page.getByText('AMD GPU', { exact: true })).toHaveCount(0)
 
     await embeddingPreview.click()
     await expect(page).toHaveURL(/\/status#model-mmbert-embedding-model$/)
@@ -236,7 +244,9 @@ test.describe('Router model inventory surfaces', () => {
     await expect(fullCard.getByAltText('AMD platform')).toBeVisible()
   })
 
-  test('keeps status model inventory and services reachable inside the page scroll container', async ({ page }) => {
+  test('keeps status model inventory and services reachable inside the page scroll container', async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1600, height: 900 })
 
     await mockRouterInventoryShell(page)
