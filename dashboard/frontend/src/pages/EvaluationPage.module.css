@@ -69,7 +69,7 @@
 }
 
 .backButton:hover {
-  border-color: var(--color-primary, #76b900);
+  border-color: var(--color-primary, #8f949c);
   color: var(--color-text, #e8e8e8);
 }
 

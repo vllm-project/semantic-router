@@ -23,7 +23,7 @@ interface InsightsChartsProps {
   aggregate: InsightsAggregateResponse
 }
 
-const COLORS = ['#76b900', '#8fd400', '#6ba300', '#5a8f00', '#718096', '#5a6c7d', '#606c7a', '#556b7d']
+const COLORS = ['#8f949c', '#c9cbd0', '#737780', '#696d74', '#718096', '#5a6c7d', '#606c7a', '#556b7d']
 
 interface PieLabelProps {
   cx: number
@@ -146,8 +146,8 @@ function TokenBreakdownChart({ title, data }: TokenBreakdownChartProps) {
             itemStyle={{ color: 'var(--color-text-primary)' }}
           />
           <Legend verticalAlign="top" height={30} />
-          <Bar dataKey="input_tokens" name="Input Tokens" fill="#76b900" radius={[6, 6, 0, 0]} />
-          <Bar dataKey="output_tokens" name="Output Tokens" fill="#00d4ff" radius={[6, 6, 0, 0]} />
+          <Bar dataKey="input_tokens" name="Input Tokens" fill="#8f949c" radius={[6, 6, 0, 0]} />
+          <Bar dataKey="output_tokens" name="Output Tokens" fill="#a6abb3" radius={[6, 6, 0, 0]} />
           <Bar dataKey="total_tokens" name="Total Tokens" fill="#f59e0b" radius={[6, 6, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
@@ -193,8 +193,8 @@ export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
   const tokenVolume = aggregate.token_volume
   const tokenBreakdown = aggregate.token_breakdown
   const tokenValues = [
-    { name: 'Input Tokens', value: tokenVolume.input_tokens, fill: '#76b900' },
-    { name: 'Output Tokens', value: tokenVolume.output_tokens, fill: '#00d4ff' },
+    { name: 'Input Tokens', value: tokenVolume.input_tokens, fill: '#8f949c' },
+    { name: 'Output Tokens', value: tokenVolume.output_tokens, fill: '#a6abb3' },
     { name: 'Total Tokens', value: tokenVolume.total_tokens, fill: '#f59e0b' },
   ]
   const barColors = generateBarColors(modelData.length)

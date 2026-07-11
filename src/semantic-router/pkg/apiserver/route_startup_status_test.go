@@ -70,6 +70,71 @@ func TestHandleStartupStatusReturns200WhenReady(t *testing.T) {
 	}
 }
 
+func TestHandleStartupStatusReturnsEmbeddingProviderStatus(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "router-config.yaml")
+	apiKeyEnvSet := true
+	healthy := true
+	if err := startupstatus.NewFileWriter(configPath).Write(startupstatus.State{
+		Phase:   "ready",
+		Ready:   true,
+		Message: "Router startup complete",
+		EmbeddingProvider: &startupstatus.EmbeddingProviderStatus{
+			Mode:          "remote",
+			Backend:       config.EmbeddingBackendOpenAICompatible,
+			Model:         "text-embedding-3-small",
+			Dimension:     1536,
+			APIKeyEnv:     "OPENAI_API_KEY",
+			APIKeyEnvSet:  &apiKeyEnvSet,
+			Healthy:       &healthy,
+			LastCheckedAt: "2026-07-08T00:00:00Z",
+		},
+	}); err != nil {
+		t.Fatalf("failed to write startup status: %v", err)
+	}
+
+	apiServer := &ClassificationAPIServer{
+		classificationSvc: services.NewPlaceholderClassificationService(),
+		config:            &config.RouterConfig{},
+		configPath:        configPath,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/startup-status", nil)
+	rr := httptest.NewRecorder()
+
+	apiServer.handleStartupStatus(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 when startup ready, got %d", rr.Code)
+	}
+
+	var state startupstatus.State
+	if err := json.Unmarshal(rr.Body.Bytes(), &state); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if state.EmbeddingProvider == nil {
+		t.Fatal("expected embedding provider status")
+	}
+	if state.EmbeddingProvider.APIKeyEnv != "OPENAI_API_KEY" {
+		t.Fatalf("api key env = %q", state.EmbeddingProvider.APIKeyEnv)
+	}
+	if state.EmbeddingProvider.APIKeyEnvSet == nil || !*state.EmbeddingProvider.APIKeyEnvSet {
+		t.Fatalf("api key env set = %v, want true", state.EmbeddingProvider.APIKeyEnvSet)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("failed to unmarshal raw response: %v", err)
+	}
+	embeddingProvider, ok := raw["embedding_provider"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("embedding_provider missing from raw response: %+v", raw)
+	}
+	if _, ok := embeddingProvider["api_key"]; ok {
+		t.Fatalf("startup status leaked api_key field: %+v", embeddingProvider)
+	}
+}
+
 func TestHandleStartupStatusReturns503WhenDownloading(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "router-config.yaml")

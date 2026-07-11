@@ -21,7 +21,7 @@
 }
 
 .header:hover {
-  background: rgba(118, 185, 0, 0.1);
+  background: rgba(143, 148, 156, 0.1);
   border-color: var(--color-primary);
 }
 

@@ -375,7 +375,7 @@
     "message": "vLLM Semantic Router 标志"
   },
   "homepage.hero.label": {
-    "message": "Mixture-of-Models 开源运行时"
+    "message": "Mixture-of-Models"
   },
   "homepage.hero.line1": {
     "message": "智能，"
@@ -384,22 +384,19 @@
     "message": "因你而组合。"
   },
   "homepage.hero.description": {
-    "message": "没有一个模型对所有人都是最好的。vLLM Semantic Router 依据通过可配置信号与策略表达的用户偏好，为每个请求选择、级联或协作编排模型。"
+    "message": "单个模型或多模型协作，跨算力与位置，按你的偏好组合。"
   },
   "homepage.hero.primaryCta": {
-    "message": "试用演示"
+    "message": "体验 Playground"
   },
   "homepage.hero.manifesto": {
     "message": "先把请求看明白，再把系统做大；以信号驱动，以不确定性为标尺，让决策足够清晰。"
   },
   "homepage.hero.secondaryCta": {
-    "message": "阅读白皮书"
+    "message": "浏览文档"
   },
   "homepage.hero.modelBand.eyebrow": {
     "message": "Mixture-of-Models"
-  },
-  "homepage.hero.modelBand.copy": {
-    "message": "你的偏好，决定模型如何组合"
   },
   "homepage.hero.modelBand.aria": {
     "message": "Mixture-of-Models 模型生态"
@@ -426,10 +423,7 @@
     "message": "为什么需要 Mixture-of-Models"
   },
   "homepage.capabilities.heading": {
-    "message": "供给是碎片化的，“最好”因人而异。"
-  },
-  "homepage.capabilities.copy": {
-    "message": "模型、算力和部署位置持续分化；偏好决定对每个用户和工作负载而言，什么才算“好”。Mixture-of-Models 将碎片化供给组合为与偏好一致的智能。"
+    "message": "碎片化是现实，偏好决定组合。"
   },
   "homepage.capabilities.axis.models": {
     "message": "模型"
@@ -443,74 +437,41 @@
   "homepage.capabilities.axis.preference": {
     "message": "偏好"
   },
-  "homepage.capabilities.checklist.label": {
-    "message": "开源运行时"
+  "homepage.capabilities.table.dimension": {
+    "message": "维度"
   },
-  "homepage.capabilities.checklist.copy": {
-    "message": "vLLM Semantic Router 让 Mixture-of-Models 在在线请求链路中真正运行起来。"
+  "homepage.capabilities.table.reality": {
+    "message": "碎片化现状"
   },
-  "homepage.capabilities.task.extract": {
-    "message": "读取任务、上下文、安全、偏好和运行时信号。"
+  "homepage.capabilities.table.value": {
+    "message": "使用 vLLM SR"
   },
-  "homepage.capabilities.task.compose": {
-    "message": "选择单个模型、沿置信度级联升级，或协调多个模型。"
+  "homepage.capabilities.models.reality": {
+    "message": "闭源前沿、开源通用、领域与端侧模型各有所长。"
   },
-  "homepage.capabilities.task.apply": {
-    "message": "应用可配置的请求与响应控制，并公开结果供检查。"
+  "homepage.capabilities.models.value": {
+    "message": "路由单一模型，或协同多个模型。"
   },
-  "homepage.capabilities.checklist.footer": {
-    "message": "偏好定义目标，Mixture-of-Models 定义架构，vLLM Semantic Router 负责运行它。"
+  "homepage.capabilities.compute.reality": {
+    "message": "新旧 GPU、专用加速器、端侧设备与云端算力长期共存。"
   },
-  "homepage.capabilities.meta.signals": {
-    "message": "信号"
+  "homepage.capabilities.compute.value": {
+    "message": "在异构算力承载的已配置模型端点之间路由。"
   },
-  "homepage.capabilities.meta.preferences": {
-    "message": "偏好"
+  "homepage.capabilities.location.reality": {
+    "message": "推理分布在端侧、私有数据中心与云端。"
   },
-  "homepage.capabilities.meta.modelPaths": {
-    "message": "模型路径"
+  "homepage.capabilities.location.value": {
+    "message": "在隐私与数据边界内跨位置路由。"
   },
-  "homepage.capabilities.values.label": {
-    "message": "什么决定模型组合"
+  "homepage.capabilities.preference.reality": {
+    "message": "不同用户、产品与工作负载对“最好”的定义不同。"
   },
-  "homepage.capabilities.values.copy": {
-    "message": "模型、算力和部署位置决定有哪些可用资源；偏好决定最佳组合。"
+  "homepage.capabilities.preference.value": {
+    "message": "让偏好决定每条模型路径。"
   },
-  "homepage.capabilities.value1.title": {
-    "message": "组合，而不只是选择。"
-  },
-  "homepage.capabilities.value1.text": {
-    "message": "选择单个模型、按置信度逐级升级、通过 Fusion 进行多模型研判，或编排有边界的微智能体工作流。"
-  },
-  "homepage.capabilities.value1.detail": {
-    "message": "让每个请求采用它真正需要的模型路径。"
-  },
-  "homepage.capabilities.value2.title": {
-    "message": "让每个 token 都物有所值。"
-  },
-  "homepage.capabilities.value2.text": {
-    "message": "将常规任务路由到高效模型路径，仅为真正需要的请求启用级联与多模型推理，并通过语义缓存复用相似回答。"
-  },
-  "homepage.capabilities.value2.detail": {
-    "message": "只有更多智能能带来价值时，才投入更多计算。"
-  },
-  "homepage.capabilities.value3.title": {
-    "message": "让智能在合适的位置运行。"
-  },
-  "homepage.capabilities.value3.text": {
-    "message": "在已配置的本地、私有和云端后端之间路由，让隐私敏感任务留在策略批准的路径上，并在策略允许时使用云端模型。"
-  },
-  "homepage.capabilities.value3.detail": {
-    "message": "用一套路由策略连接已配置的模型端点。"
-  },
-  "homepage.capabilities.value4.title": {
-    "message": "让偏好定义“最好”。"
-  },
-  "homepage.capabilities.value4.text": {
-    "message": "将质量、成本、时延、安全、隐私、模态和幻觉容忍度等优先级编码为显式信号与策略，塑造每条请求路径。"
-  },
-  "homepage.capabilities.value4.detail": {
-    "message": "最好的组合，就是最符合用户需求的组合。"
+  "homepage.capabilities.docsCta": {
+    "message": "了解工作原理"
   },
   "homepage.capabilities.signal.title": {
     "message": "信号提取"
@@ -2432,7 +2393,7 @@
     "message": "用于 LLM 推理优化的 Workload-Router-Pool 架构，以 vLLM Semantic Router 愿景论文的完整 PDF 阅读器形式呈现。"
   },
   "homepage.meta.description": {
-    "message": "Mixture-of-Models 是偏好驱动的模型系统架构。vLLM Semantic Router 是其开源运行时，依据偏好与策略为每个请求选择、级联和协作编排模型。"
+    "message": "Mixture-of-Models 是下一代偏好驱动的模型架构。vLLM Semantic Router 是其开源运行时。"
   },
   "homepage.meta.title": {
     "message": "Mixture-of-Models 的开源运行时"

@@ -28,7 +28,7 @@
 }
 
 .backButton:hover {
-  border-color: var(--color-primary, #76b900);
+  border-color: var(--color-primary, #8f949c);
   color: var(--color-text, #e8e8e8);
 }
 
@@ -60,7 +60,7 @@
 
 .exportButton:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: var(--color-primary, #76b900);
+  border-color: var(--color-primary, #8f949c);
   color: var(--color-text, #e8e8e8);
 }
 
@@ -238,8 +238,8 @@
   align-items: center;
   margin-top: var(--spacing-md, 1rem);
   padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
-  background: rgba(118, 185, 0, 0.1);
-  border: 1px solid rgba(118, 185, 0, 0.3);
+  background: rgba(143, 148, 156, 0.1);
+  border: 1px solid rgba(143, 148, 156, 0.3);
   border-radius: var(--radius-md, 0.375rem);
 }
 
@@ -250,7 +250,7 @@
 
 .efficiencyValue {
   font-weight: 600;
-  color: var(--color-primary, #76b900);
+  color: var(--color-primary, #8f949c);
 }
 
 .metadata {
@@ -287,8 +287,8 @@
 .dimensionInfoBox {
   margin-top: var(--spacing-md, 1rem);
   padding: var(--spacing-lg, 1.5rem);
-  background: linear-gradient(135deg, rgba(118, 185, 0, 0.05) 0%, rgba(118, 185, 0, 0.02) 100%);
-  border: 1px solid rgba(118, 185, 0, 0.2);
+  background: linear-gradient(135deg, rgba(143, 148, 156, 0.05) 0%, rgba(143, 148, 156, 0.02) 100%);
+  border: 1px solid rgba(143, 148, 156, 0.2);
   border-radius: var(--radius-md, 0.375rem);
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -346,7 +346,7 @@
 
 .toggleDetailsButton:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: var(--color-primary, #76b900);
+  border-color: var(--color-primary, #8f949c);
 }
 
 .testCaseList {
@@ -480,7 +480,7 @@
 
 .paginationButton:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.05);
-  border-color: var(--color-primary, #76b900);
+  border-color: var(--color-primary, #8f949c);
 }
 
 .paginationButton:disabled {

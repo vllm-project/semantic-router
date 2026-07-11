@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import styles from './FleetSimPage.module.css'
 import type { TraceInfo, TraceSample } from '../utils/fleetSimApi'
 import { formatDateTime, formatNumber, formatTraceFormat } from './fleetSimPageSupport'
@@ -15,20 +15,8 @@ export default function FleetSimTracePreviewDialog({
   sample,
   onClose,
 }: FleetSimTracePreviewDialogProps) {
-  useEffect(() => {
-    if (!trace || !sample) {
-      return
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose()
-      }
-    }
-
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose, sample, trace])
+  const isOpen = Boolean(trace && sample)
+  const dialogRef = useAccessibleDialog<HTMLDivElement>({ isOpen, onClose })
 
   if (!trace || !sample) {
     return null
@@ -39,11 +27,13 @@ export default function FleetSimTracePreviewDialog({
   return createPortal(
     <div className={styles.dialogOverlay} onClick={onClose}>
       <div
+        ref={dialogRef}
         className={styles.dialogPanel}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="fleet-sim-trace-preview-title"
+        tabIndex={-1}
       >
         <div className={styles.dialogHeader}>
           <div>
@@ -61,6 +51,7 @@ export default function FleetSimTracePreviewDialog({
             className={styles.dialogCloseButton}
             aria-label="Close trace preview"
             onClick={onClose}
+            data-dialog-initial-focus
           >
             ×
           </button>

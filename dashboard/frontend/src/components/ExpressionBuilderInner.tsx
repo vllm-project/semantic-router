@@ -399,14 +399,14 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
                 edgesFocusable={false}
                 proOptions={{ hideAttribution: true }}
               >
-                <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="rgba(118, 185, 0, 0.15)" />
+                <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="rgba(143, 148, 156, 0.15)" />
                 <Controls
                   showInteractive={false}
                   position="bottom-left"
                   className={styles.rfControls}
                 />
                 <MiniMap
-                  nodeColor={(n) => n.type === 'operatorNode' ? 'rgba(99, 102, 241, 0.7)' : 'rgba(118, 185, 0, 0.7)'}
+                  nodeColor={(n) => n.type === 'operatorNode' ? 'rgba(99, 102, 241, 0.7)' : 'rgba(143, 148, 156, 0.7)'}
                   maskColor="rgba(0, 0, 0, 0.15)"
                   className={styles.rfMinimap}
                   pannable

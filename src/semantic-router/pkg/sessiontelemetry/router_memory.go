@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"sync"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelpricing"
 )
 
 const routerMemoryTTL = 24 * time.Hour
@@ -33,6 +35,7 @@ type RouterSessionSnapshot struct {
 
 	CumulativePromptTokens          int64
 	CumulativeCachedTokens          int64
+	CumulativeCacheWriteTokens      int64
 	CumulativeEstimatedCachedTokens int64
 	CumulativeCompletionTokens      int64
 	CumulativeCost                  float64
@@ -66,6 +69,7 @@ type SessionUsageParams struct {
 	Model                       string
 	PromptTokens                int
 	CachedPromptTokens          int
+	CacheWriteTokens            int
 	EstimatedCachedPromptTokens int
 	CompletionTokens            int
 	Cost                        float64
@@ -87,6 +91,7 @@ type routerSessionState struct {
 
 	cumulativePrompt                int64
 	cumulativeCached                int64
+	cumulativeCacheWrite            int64
 	cumulativeEstimatedCached       int64
 	cumulativeCompletion            int64
 	cumulativeCost                  float64
@@ -172,10 +177,17 @@ func RecordSessionUsage(p SessionUsageParams) {
 	st := s.sessionLocked(p.SessionID)
 	st.currentModel = p.Model
 	st.lastSeen = now
-	st.cumulativePrompt += int64(p.PromptTokens)
-	st.cumulativeCached += int64(clampCachedPromptTokens(p.PromptTokens, p.CachedPromptTokens))
+	usage := modelpricing.Normalize(modelpricing.Usage{
+		PromptTokens:      p.PromptTokens,
+		CachedInputTokens: p.CachedPromptTokens,
+		CacheWriteTokens:  p.CacheWriteTokens,
+		CompletionTokens:  p.CompletionTokens,
+	})
+	st.cumulativePrompt += int64(usage.PromptTokens)
+	st.cumulativeCached += int64(usage.CachedInputTokens)
+	st.cumulativeCacheWrite += int64(usage.CacheWriteTokens)
 	st.cumulativeEstimatedCached += int64(clampCachedPromptTokens(p.PromptTokens, p.EstimatedCachedPromptTokens))
-	st.cumulativeCompletion += int64(p.CompletionTokens)
+	st.cumulativeCompletion += int64(usage.CompletionTokens)
 	st.cumulativeCost += p.Cost
 	if p.EstimatedCacheSavings > 0 {
 		st.cumulativeEstimatedCacheSavings += p.EstimatedCacheSavings
@@ -220,6 +232,7 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 		ModelTurns:                      cloneIntMap(st.modelTurns),
 		CumulativePromptTokens:          st.cumulativePrompt,
 		CumulativeCachedTokens:          st.cumulativeCached,
+		CumulativeCacheWriteTokens:      st.cumulativeCacheWrite,
 		CumulativeEstimatedCachedTokens: st.cumulativeEstimatedCached,
 		CumulativeCompletionTokens:      st.cumulativeCompletion,
 		CumulativeCost:                  st.cumulativeCost,
