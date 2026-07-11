@@ -28,6 +28,8 @@ import { useReadonly } from '../contexts/ReadonlyContext'
 import { usePlaygroundAttachments } from './usePlaygroundAttachments'
 import { useChatConversationState } from './useChatConversationState'
 import { usePlaygroundConversationMessages } from './usePlaygroundConversationMessages'
+import { usePlaygroundRoutingModel } from './usePlaygroundRoutingModel'
+import PlaygroundRoutingStatus from './PlaygroundRoutingStatus'
 
 interface ChatComponentProps {
   endpoint?: string
@@ -44,7 +46,12 @@ const ChatComponent = ({
   const [conversationId, setConversationId] = useState<string>(() => generateConversationId())
   const [inputValue, setInputValue] = useState('')
   const [activeTasks, setActiveTasks] = useState<Record<string, PlaygroundTask>>({})
-  const model = 'MoM' // Fixed to MoM
+  const {
+    model,
+    retry: retryRoutingModelDiscovery,
+    status: routingModelStatus,
+  } = usePlaygroundRoutingModel(endpoint)
+  const isRoutingModelReady = routingModelStatus === 'ready'
   const {
     conversationErrors,
     conversationThinking,
@@ -305,7 +312,7 @@ const ChatComponent = ({
       enableWebSearch,
       model,
     }),
-    [clawManagementDisabled, enableClawMode, enableWebSearch]
+    [clawManagementDisabled, enableClawMode, enableWebSearch, model]
   )
 
   const buildTaskTools = useCallback(
@@ -425,15 +432,26 @@ const ChatComponent = ({
   ])
 
   const startTask = useCallback((task: PlaygroundTask) => {
-    if (activeTasksRef.current[task.conversationId]) {
+    if (!isRoutingModelReady || activeTasksRef.current[task.conversationId]) {
       return
     }
 
-    setActiveTaskForConversation(task)
-    void executeTask(task)
-  }, [executeTask, setActiveTaskForConversation])
+    const reboundTask = task.requestOptions.model === model
+      ? task
+      : {
+          ...task,
+          requestOptions: {
+            ...task.requestOptions,
+            model,
+          },
+        }
+
+    setActiveTaskForConversation(reboundTask)
+    void executeTask(reboundTask)
+  }, [executeTask, isRoutingModelReady, model, setActiveTaskForConversation])
 
   const handleSend = useCallback(() => {
+    if (!isRoutingModelReady) return
     const trimmedInput = inputValue.trim()
     if (!trimmedInput && pendingAttachments.length === 0) return
 
@@ -468,6 +486,7 @@ const ChatComponent = ({
     enqueueTask,
     getConversationMessagesSnapshot,
     inputValue,
+    isRoutingModelReady,
     pendingAttachments,
     clearPendingAttachments,
     copyPendingAttachmentsForTask,
@@ -477,6 +496,9 @@ const ChatComponent = ({
   ])
 
   useEffect(() => {
+    if (!isRoutingModelReady) {
+      return
+    }
     Object.entries(queues).forEach(([targetConversationId, queue]) => {
       if (queue.length === 0 || activeTasksRef.current[targetConversationId]) {
         return
@@ -492,6 +514,7 @@ const ChatComponent = ({
   }, [
     activeTasks,
     executeTask,
+    isRoutingModelReady,
     queues,
     removeQueuedTask,
     startTask,
@@ -657,6 +680,11 @@ const ChatComponent = ({
               />
             ) : (
               <>
+                <PlaygroundRoutingStatus
+                  model={model}
+                  onRetry={retryRoutingModelDiscovery}
+                  status={routingModelStatus}
+                />
                 {visibleError && (
                   <div className={styles.error}>
                     <span className={styles.errorIcon}>⚠️</span>
@@ -703,6 +731,10 @@ const ChatComponent = ({
                   onToggleClawMode={handleToggleClawMode}
                   onToggleWebSearch={() => setEnableWebSearch(prev => !prev)}
                   roomChatToggleControl={roomChatToggleControl}
+                  sendDisabled={!isRoutingModelReady}
+                  sendDisabledReason={routingModelStatus === 'error'
+                    ? 'Retry model discovery before sending'
+                    : 'Discovering an available router model'}
                 />
               </>
             )}

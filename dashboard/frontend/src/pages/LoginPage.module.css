@@ -1,8 +1,22 @@
 .container {
   position: relative;
   min-height: 100vh;
-  overflow: hidden;
-  background: #000;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: #050505;
+}
+
+.container::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    radial-gradient(circle at 50% 45%, transparent 0, rgba(5, 5, 5, 0.46) 74%);
+  background-size: 42px 42px, 42px 42px, auto;
 }
 
 .backgroundEffect {
@@ -10,7 +24,8 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.85;
+  opacity: 0.34;
+  filter: saturate(72%) contrast(108%);
 }
 
 .mainContent {
@@ -37,16 +52,16 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border-radius: 1.35rem;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   background:
-    linear-gradient(135deg, rgba(16, 22, 44, 0.58), rgba(9, 12, 24, 0.38) 58%, rgba(4, 8, 18, 0.62)),
-    rgba(8, 12, 24, 0.26);
+    linear-gradient(145deg, rgba(255, 255, 255, 0.055), transparent 42%),
+    rgba(16, 16, 18, 0.72);
   box-shadow:
-    0 30px 72px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
+    0 36px 96px rgba(0, 0, 0, 0.52),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(26px) saturate(112%);
+  -webkit-backdrop-filter: blur(26px) saturate(112%);
 }
 
 .storyPanel::before,
@@ -99,7 +114,7 @@
 .storyEyebrow,
 .stageEyebrow {
   margin: 0;
-  color: rgba(118, 185, 0, 0.96);
+  color: rgba(255, 255, 255, 0.52);
   font-size: 0.76rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -140,12 +155,12 @@
 }
 
 .progressStepActive {
-  border-color: rgba(118, 185, 0, 0.22);
-  background: linear-gradient(180deg, rgba(118, 185, 0, 0.14), rgba(8, 10, 20, 0.9));
+  border-color: rgba(227, 27, 35, 0.34);
+  background: linear-gradient(180deg, rgba(227, 27, 35, 0.1), rgba(16, 16, 18, 0.88));
 }
 
 .progressStepComplete {
-  border-color: rgba(0, 212, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .progressIndex {
@@ -239,7 +254,7 @@
   box-sizing: border-box;
   border-radius: 1rem;
   border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(9, 12, 22, 0.62);
+  background: rgba(5, 5, 5, 0.58);
   color: #ffffff;
   font-size: 1rem;
 }
@@ -250,8 +265,8 @@
 
 .input:focus {
   outline: none;
-  border-color: rgba(118, 185, 0, 0.95);
-  box-shadow: 0 0 0 3px rgba(118, 185, 0, 0.14);
+  border-color: rgba(255, 255, 255, 0.42);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
 }
 
 .summaryDetail {
@@ -278,7 +293,7 @@
 .secondaryButton {
   flex: 1 1 0;
   min-height: 52px;
-  border-radius: 999px;
+  border-radius: 10px;
   padding: 0 1.2rem;
   font-size: 0.95rem;
   font-weight: 650;
@@ -301,7 +316,7 @@
 .secondaryButton {
   border: 1px solid rgba(255, 255, 255, 0.24);
   color: #f5f5f7;
-  background: rgba(16, 18, 31, 0.56);
+  background: rgba(255, 255, 255, 0.045);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
@@ -310,7 +325,7 @@
   transform: translateY(-2px);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.15),
-    0 14px 26px rgba(5, 10, 24, 0.5);
+    0 14px 26px rgba(0, 0, 0, 0.5);
 }
 
 .button:disabled,

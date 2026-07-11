@@ -1,4 +1,4 @@
-/* NVIDIA Brev Console Style */
+/* AMD Graphite Control Plane Style */
 .container {
   display: flex;
   flex-direction: column;
@@ -14,7 +14,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.5rem;
-  background: linear-gradient(135deg, rgba(118, 185, 0, 0.08) 0%, rgba(0, 212, 255, 0.05) 100%);
+  background: linear-gradient(135deg, rgba(143, 148, 156, 0.08) 0%, rgba(166, 171, 179, 0.05) 100%);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   flex-shrink: 0;
@@ -56,7 +56,7 @@
 }
 
 .toggleButton:hover {
-  background-color: rgba(118, 185, 0, 0.1);
+  background-color: rgba(143, 148, 156, 0.1);
   color: var(--color-text);
 }
 
@@ -79,7 +79,7 @@
 .select:focus {
   border-color: var(--color-primary);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(118, 185, 0, 0.2);
+  box-shadow: 0 0 0 2px rgba(143, 148, 156, 0.2);
 }
 
 .button {
@@ -144,7 +144,7 @@
 }
 
 .editButton:hover {
-  background-color: rgba(118, 185, 0, 0.1);
+  background-color: rgba(143, 148, 156, 0.1);
   transform: scale(1.05);
 }
 
@@ -251,8 +251,8 @@
 
 .observabilityInfo {
   padding: 1.5rem;
-  background: linear-gradient(135deg, rgba(118, 185, 0, 0.05) 0%, rgba(0, 212, 255, 0.05) 100%);
-  border: 1px solid rgba(118, 185, 0, 0.2);
+  background: linear-gradient(135deg, rgba(143, 148, 156, 0.05) 0%, rgba(166, 171, 179, 0.05) 100%);
+  border: 1px solid rgba(143, 148, 156, 0.2);
   border-radius: var(--radius-md);
   text-align: center;
 }
@@ -265,7 +265,7 @@
 
 .observabilityInfo code {
   padding: 0.25rem 0.5rem;
-  background-color: rgba(118, 185, 0, 0.1);
+  background-color: rgba(143, 148, 156, 0.1);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   color: var(--color-primary);
@@ -436,7 +436,7 @@
   align-items: center;
   gap: 0.75rem;
   padding: 1rem 1.25rem;
-  background: linear-gradient(135deg, rgba(118, 185, 0, 0.05) 0%, rgba(0, 212, 255, 0.03) 100%);
+  background: linear-gradient(135deg, rgba(143, 148, 156, 0.05) 0%, rgba(166, 171, 179, 0.03) 100%);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
@@ -485,7 +485,7 @@
   display: inline-flex;
   align-items: center;
   padding: 0.25rem 0.75rem;
-  background-color: rgba(118, 185, 0, 0.15);
+  background-color: rgba(143, 148, 156, 0.15);
   color: var(--color-primary);
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
@@ -577,7 +577,7 @@
 
 .endpointCard:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 0 15px rgba(118, 185, 0, 0.1);
+  box-shadow: 0 0 15px rgba(143, 148, 156, 0.1);
 }
 
 .endpointCard:last-child {
@@ -589,7 +589,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 0.875rem;
-  background: rgba(118, 185, 0, 0.05);
+  background: rgba(143, 148, 156, 0.05);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -640,8 +640,8 @@
   display: inline-flex;
   align-items: center;
   padding: 0.25rem 0.75rem;
-  background: rgba(118, 185, 0, 0.1);
-  border: 1px solid rgba(118, 185, 0, 0.2);
+  background: rgba(143, 148, 156, 0.1);
+  border: 1px solid rgba(143, 148, 156, 0.2);
   color: var(--color-primary);
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
@@ -661,7 +661,7 @@
 
 .modelCard:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 0 15px rgba(118, 185, 0, 0.1);
+  box-shadow: 0 0 15px rgba(143, 148, 156, 0.1);
 }
 
 .modelCard:last-child {
@@ -673,7 +673,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 0.875rem;
-  background: rgba(118, 185, 0, 0.05);
+  background: rgba(143, 148, 156, 0.05);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -694,8 +694,8 @@
   display: flex;
   gap: 2rem;
   padding: 1rem 1.25rem;
-  background: rgba(118, 185, 0, 0.05);
-  border: 1px solid rgba(118, 185, 0, 0.2);
+  background: rgba(143, 148, 156, 0.05);
+  border: 1px solid rgba(143, 148, 156, 0.2);
   border-radius: var(--radius-md);
   margin-bottom: 1.5rem;
   flex-wrap: wrap;
@@ -720,7 +720,7 @@
   color: var(--color-primary);
   font-family: var(--font-mono);
   padding: 0.25rem 0.75rem;
-  background-color: rgba(118, 185, 0, 0.1);
+  background-color: rgba(143, 148, 156, 0.1);
   border-radius: var(--radius-sm);
 }
 
@@ -776,7 +776,7 @@
 
 .categoryCard:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 0 20px rgba(118, 185, 0, 0.1);
+  box-shadow: 0 0 20px rgba(143, 148, 156, 0.1);
 }
 
 .categoryHeader {
@@ -829,8 +829,8 @@
 }
 
 .categoryModels {
-  background-color: rgba(118, 185, 0, 0.03);
-  border: 1px solid rgba(118, 185, 0, 0.1);
+  background-color: rgba(143, 148, 156, 0.03);
+  border: 1px solid rgba(143, 148, 156, 0.1);
   border-radius: var(--radius-sm);
   padding: 0.75rem;
 }
@@ -875,7 +875,7 @@
 }
 
 .modelScoreRow:hover {
-  background-color: rgba(118, 185, 0, 0.05);
+  background-color: rgba(143, 148, 156, 0.05);
 }
 
 .modelScoreRow:last-child {
@@ -908,7 +908,7 @@
 
 .scoreBarFill {
   height: 100%;
-  background: linear-gradient(90deg, var(--color-primary) 0%, rgba(0, 212, 255, 0.8) 100%);
+  background: linear-gradient(90deg, var(--color-primary) 0%, rgba(166, 171, 179, 0.8) 100%);
   transition: width 0.3s ease;
   border-radius: var(--radius-sm);
 }
@@ -952,7 +952,7 @@
 
 .featureCard:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 0 15px rgba(118, 185, 0, 0.1);
+  box-shadow: 0 0 15px rgba(143, 148, 156, 0.1);
 }
 
 .featureCard:last-child {
@@ -964,7 +964,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.25rem;
-  background: rgba(118, 185, 0, 0.05);
+  background: rgba(143, 148, 156, 0.05);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -995,7 +995,7 @@
 
 .modelConfigCard:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 0 15px rgba(118, 185, 0, 0.1);
+  box-shadow: 0 0 15px rgba(143, 148, 156, 0.1);
 }
 
 .modelConfigCard:last-child {
@@ -1007,7 +1007,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 0.875rem;
-  background: rgba(118, 185, 0, 0.05);
+  background: rgba(143, 148, 156, 0.05);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -1057,8 +1057,8 @@
   display: inline-flex;
   align-items: center;
   padding: 0.25rem 0.75rem;
-  background-color: rgba(118, 185, 0, 0.1);
-  border: 1px solid rgba(118, 185, 0, 0.2);
+  background-color: rgba(143, 148, 156, 0.1);
+  border: 1px solid rgba(143, 148, 156, 0.2);
   color: var(--color-primary);
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
@@ -1089,7 +1089,7 @@
 }
 
 .badgeInfo {
-  background-color: rgba(0, 212, 255, 0.1);
+  background-color: rgba(166, 171, 179, 0.1);
   color: var(--color-accent);
 }
 
@@ -1110,12 +1110,12 @@
 
 .reasoningFamilyCard:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 0 15px rgba(118, 185, 0, 0.1);
+  box-shadow: 0 0 15px rgba(143, 148, 156, 0.1);
 }
 
 .reasoningFamilyHeader {
   padding: 0.875rem 1.25rem;
-  background: rgba(0, 212, 255, 0.05);
+  background: rgba(166, 171, 179, 0.05);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -1137,7 +1137,7 @@
   text-align: center;
   color: var(--color-text-secondary);
   font-size: 0.95rem;
-  background: rgba(118, 185, 0, 0.03);
+  background: rgba(143, 148, 156, 0.03);
   border: 2px dashed var(--color-border);
   border-radius: var(--radius-lg);
   font-style: italic;
@@ -1165,7 +1165,7 @@
 .systemPromptSection {
   margin: 1rem 0;
   padding: 1rem;
-  background: rgba(118, 185, 0, 0.05);
+  background: rgba(143, 148, 156, 0.05);
   border-left: 3px solid var(--color-primary);
   border-radius: var(--radius-sm);
 }
@@ -1218,7 +1218,7 @@
 
 .toolCard:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 0 20px rgba(118, 185, 0, 0.1);
+  box-shadow: 0 0 20px rgba(143, 148, 156, 0.1);
 }
 
 .toolHeader {
@@ -1257,7 +1257,7 @@
 .toolSimilarityDescription {
   margin: 0.75rem 0;
   padding: 0.75rem;
-  background: rgba(0, 212, 255, 0.05);
+  background: rgba(166, 171, 179, 0.05);
   border-left: 3px solid var(--color-accent);
   border-radius: var(--radius-sm);
 }
@@ -1299,7 +1299,7 @@
   gap: 0.25rem;
   padding: 0.6rem 0.75rem;
   margin-bottom: 0.4rem;
-  background-color: rgba(118, 185, 0, 0.05);
+  background-color: rgba(143, 148, 156, 0.05);
   border-radius: var(--radius-sm);
   font-size: 0.85rem;
 }
@@ -1325,7 +1325,7 @@
 .parameterType {
   font-size: 0.75rem;
   color: var(--color-text-secondary);
-  background-color: rgba(0, 212, 255, 0.1);
+  background-color: rgba(166, 171, 179, 0.1);
   padding: 0.2rem 0.5rem;
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
@@ -1349,7 +1349,7 @@
 .toolTag {
   font-size: 0.75rem;
   padding: 0.25rem 0.6rem;
-  background-color: rgba(118, 185, 0, 0.1);
+  background-color: rgba(143, 148, 156, 0.1);
   color: var(--color-primary);
   border-radius: var(--radius-sm);
   font-weight: 500;

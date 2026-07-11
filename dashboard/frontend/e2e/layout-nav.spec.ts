@@ -364,6 +364,28 @@ async function mockCommon(
 }
 
 test.describe('Layout top navigation', () => {
+  test('switches to the complete mobile navigation before tablet controls clip', async ({ page }) => {
+    await page.setViewportSize({ width: 900, height: 700 });
+    await mockCommon(page);
+
+    await page.goto('/dashboard');
+
+    await expect(page.getByRole('navigation', { name: 'Global navigation' })).toBeHidden();
+    const menuButton = page.getByRole('button', { name: 'Toggle menu' });
+    await expect(menuButton).toBeVisible();
+    await expect(menuButton).toHaveAttribute('aria-controls', 'mobile-navigation');
+    await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+    await menuButton.click();
+    await expect(menuButton).toHaveAttribute('aria-expanded', 'true');
+    const mobileNavigation = page.getByRole('navigation', { name: 'Mobile navigation' });
+    await expect(mobileNavigation).toHaveAttribute('id', 'mobile-navigation');
+    await expect(mobileNavigation.getByText('Manager', { exact: true })).toBeVisible();
+    await expect(mobileNavigation.getByText('Simulator', { exact: true })).toBeVisible();
+    await expect(mobileNavigation.getByText('System', { exact: true })).toBeVisible();
+  });
+
   test('keeps Insight in primary nav and groups manager routes under Manager beside Simulator and System', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await mockCommon(page);
@@ -416,7 +438,7 @@ test.describe('Layout top navigation', () => {
     await expect(menu.getByRole('menuitem', { name: 'Evaluation' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Replay' })).toHaveCount(0);
     await expect(menu.getByRole('menuitem', { name: 'Ratings' })).toHaveCount(0);
-    await expect(menu.getByText('Operations')).toBeVisible();
+    await expect(menu.getByText('Observability')).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'ML Setup' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'MCP Servers' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Status' })).toBeVisible();
@@ -478,9 +500,10 @@ test.describe('Layout top navigation', () => {
 
     await expect(decisionNode).toBeVisible();
     await expect(decisionNode).toContainText('AND');
-    await expect(decisionNode).toContainText('OR: domain: business | domain: economics');
-    await expect(decisionNode).toContainText('OR: embedding: business_analysis');
-    await expect(decisionNode).toContainText('preference: structured_delivery');
+    await expect(decisionNode).toContainText('OR');
+    await expect(decisionNode).toContainText('domain: business');
+    await expect(decisionNode).toContainText('domain: economics');
+    await expect(decisionNode).toContainText('embedding: business_analysis');
     await expect(decisionNode.getByText('Referenced signals not configured')).toHaveCount(0);
   });
 
@@ -525,9 +548,12 @@ test.describe('Layout top navigation', () => {
 
     await page.goto('/dashboard');
 
-    await page.getByRole('button', { name: /Open account details/i }).click();
+    const accountTrigger = page.getByRole('button', { name: /Open account details/i });
+    await accountTrigger.click();
 
     const accountDialog = page.getByTestId('layout-account-dialog');
+    const closeDialogButton = accountDialog.getByRole('button', { name: 'Close account dialog' });
+    const logoutButton = accountDialog.getByRole('button', { name: 'Logout' });
     await expect(accountDialog).toBeVisible();
     await expect(accountDialog).toHaveAttribute('aria-modal', 'true');
     await expect(accountDialog.getByText('Ada Lovelace')).toBeVisible();
@@ -536,7 +562,17 @@ test.describe('Layout top navigation', () => {
     await expect(accountDialog.getByText('config.read')).toBeVisible();
     await expect(accountDialog.getByText('config.write')).toBeVisible();
     await expect(accountDialog.getByText('users.manage')).toBeVisible();
+    await expect(closeDialogButton).toBeFocused();
 
+    await page.keyboard.press('Shift+Tab');
+    await expect(logoutButton).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(closeDialogButton).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(accountDialog).toBeHidden();
+    await expect(accountTrigger).toBeFocused();
+
+    await accountTrigger.click();
     await accountDialog.getByRole('button', { name: 'Logout' }).click();
 
     await expect(page).toHaveURL(/\/login$/);

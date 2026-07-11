@@ -124,6 +124,22 @@ async function mockReadonlyCommon(page: Page) {
   await page.route('**/api/mcp/tools', async route => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tools: [] }) });
   });
+
+  await page.route('**/api/router/v1/models*', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        object: 'list',
+        data: [{
+          id: 'vllm-sr/auto',
+          object: 'model',
+          owned_by: 'vllm-semantic-router',
+          description: 'Intelligent Router for Mixture-of-Models',
+        }],
+      }),
+    });
+  });
 }
 
 async function mockReadonlyOpenClaw(page: Page) {

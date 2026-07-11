@@ -90,7 +90,7 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			req.Container.ModelAPIKey = "not-needed"
 		}
 		if req.Container.ModelName == "" {
-			req.Container.ModelName = "auto"
+			req.Container.ModelName = "vllm-sr/auto"
 		}
 		if req.Container.MemoryBackend == "" {
 			req.Container.MemoryBackend = "local"

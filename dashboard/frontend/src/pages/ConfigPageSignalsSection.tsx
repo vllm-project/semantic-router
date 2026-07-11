@@ -329,7 +329,7 @@ export default function ConfigPageSignalsSection({
                 {(signal.rawData.keywords || []).map((kw: string, i: number) => (
                   <span key={i} style={{
                     padding: '0.25rem 0.75rem',
-                    background: 'rgba(118, 185, 0, 0.1)',
+                    background: 'rgba(143, 148, 156, 0.1)',
                     borderRadius: '4px',
                     fontSize: '0.875rem',
                     fontFamily: 'var(--font-mono)'
@@ -356,7 +356,7 @@ export default function ConfigPageSignalsSection({
                 {(signal.rawData.candidates || []).map((c: string, i: number) => (
                   <div key={i} style={{
                     padding: '0.5rem',
-                    background: 'rgba(0, 212, 255, 0.1)',
+                    background: 'rgba(166, 171, 179, 0.1)',
                     borderRadius: '4px',
                     fontSize: '0.875rem'
                   }}>
