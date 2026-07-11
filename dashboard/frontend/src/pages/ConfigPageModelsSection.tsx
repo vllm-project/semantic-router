@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import styles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import ConfigPageModelInventoryPanel from './ConfigPageModelInventoryPanel'
@@ -111,14 +111,6 @@ export default function ConfigPageModelsSection({
     setEndpointFilter('all')
     setRoleFilter('all')
   }
-
-  useEffect(() => {
-    const availableModels = new Set(models.map((model) => model.name))
-    setSelectedModelKeys((current) => {
-      const next = new Set([...current].filter((key) => availableModels.has(key)))
-      return next.size === current.size ? current : next
-    })
-  }, [models])
 
   type ModelRow = NormalizedModel
   const renderModelEndpoints = (model: ModelRow) => {
@@ -301,6 +293,8 @@ export default function ConfigPageModelsSection({
         fields: [
           { label: 'Currency', value: model.pricing.currency || 'USD' },
           { label: 'Prompt (per 1M tokens)', value: model.pricing.prompt_per_1m?.toFixed(2) || '0.00' },
+          { label: 'Cached input (per 1M tokens)', value: model.pricing.cached_input_per_1m?.toFixed(2) || '0.00' },
+          { label: 'Cache write (per 1M tokens)', value: model.pricing.cache_write_per_1m?.toFixed(2) || 'Prompt rate' },
           { label: 'Completion (per 1M tokens)', value: model.pricing.completion_per_1m?.toFixed(2) || '0.00' }
         ]
       })
@@ -337,6 +331,7 @@ export default function ConfigPageModelsSection({
         pricing: {
           currency: 'USD',
           prompt_per_1m: 0,
+          cached_input_per_1m: 0,
           completion_per_1m: 0,
         },
       },
@@ -439,7 +434,7 @@ export default function ConfigPageModelsSection({
           name: 'pricing',
           label: 'Pricing (JSON)',
           type: 'json',
-          placeholder: '{"currency":"USD","prompt_per_1m":0.5,"completion_per_1m":1.5}',
+          placeholder: '{"currency":"USD","prompt_per_1m":0.5,"cached_input_per_1m":0.05,"cache_write_per_1m":0.625,"completion_per_1m":1.5}',
           description: 'Structured pricing block stored under providers.models[].pricing'
         }
       ],
@@ -601,7 +596,7 @@ export default function ConfigPageModelsSection({
           name: 'pricing',
           label: 'Pricing (JSON)',
           type: 'json',
-          placeholder: '{"currency":"USD","prompt_per_1m":0.5,"completion_per_1m":1.5}',
+          placeholder: '{"currency":"USD","prompt_per_1m":0.5,"cached_input_per_1m":0.05,"cache_write_per_1m":0.625,"completion_per_1m":1.5}',
           description: 'Structured pricing block stored under providers.models[].pricing'
         }
       ],
