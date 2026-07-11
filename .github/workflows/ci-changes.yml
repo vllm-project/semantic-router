@@ -63,6 +63,8 @@ on:
         value: ${{ jobs.filter.outputs.e2e_anthropic_shim }}
       e2e_common:
         value: ${{ jobs.filter.outputs.e2e_common }}
+      docs_only:
+        value: ${{ jobs.filter.outputs.docs_only }}
 
 jobs:
   filter:
@@ -99,6 +101,7 @@ jobs:
       e2e_streaming: ${{ steps.changes.outputs.e2e_streaming }}
       e2e_anthropic_shim: ${{ steps.changes.outputs.e2e_anthropic_shim }}
       e2e_common: ${{ steps.changes.outputs.e2e_common }}
+      docs_only: ${{ steps.docs_only.outputs.docs_only }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -150,6 +153,14 @@ jobs:
             make:
               - 'Makefile'
               - 'tools/make/**'
+            operator:
+              - 'deploy/operator/**'
+            perf:
+              - 'perf/**'
+            bindings:
+              - 'ml-binding/**'
+              - 'nlp-binding/**'
+              - 'onnx-binding/**'
             agent_text:
               - 'AGENTS.md'
               - 'docs/agent/**'
@@ -259,3 +270,21 @@ jobs:
               - 'e2e/*.go'
               - 'e2e/go.mod'
               - 'e2e/go.sum'
+      - id: docs_only
+        run: |
+          python3 tools/agent/scripts/ci_docs_only.py \
+            --website "${{ steps.changes.outputs.website }}" \
+            --docs "${{ steps.changes.outputs.docs }}" \
+            --agent-text "${{ steps.changes.outputs.agent_text }}" \
+            --core "${{ steps.changes.outputs.core }}" \
+            --dashboard "${{ steps.changes.outputs.dashboard }}" \
+            --helm "${{ steps.changes.outputs.helm }}" \
+            --e2e "${{ steps.changes.outputs.e2e }}" \
+            --docker "${{ steps.changes.outputs.docker }}" \
+            --make "${{ steps.changes.outputs.make }}" \
+            --ci "${{ steps.changes.outputs.ci }}" \
+            --agent-exec "${{ steps.changes.outputs.agent_exec }}" \
+            --operator "${{ steps.changes.outputs.operator }}" \
+            --perf "${{ steps.changes.outputs.perf }}" \
+            --bindings "${{ steps.changes.outputs.bindings }}" \
+            --github-output
