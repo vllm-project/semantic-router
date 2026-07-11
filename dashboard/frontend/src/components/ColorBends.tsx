@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import * as THREE from 'three'
 import './ColorBends.css'
@@ -21,6 +21,13 @@ type ColorBendsProps = {
 
 const MAX_COLORS = 8 as const
 const INITIAL_TRANSPARENT = true
+
+function prefersReducedMotion() {
+  return (
+    typeof window === 'undefined' ||
+    (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
+  )
+}
 
 const frag = `
 #define MAX_COLORS ${MAX_COLORS}
@@ -158,10 +165,22 @@ export default function ColorBends({
   const pointerCurrentRef = useRef(new THREE.Vector2(0, 0))
   const rotationRef = useRef(rotation)
   const autoRotateRef = useRef(autoRotate)
+  const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion)
+
+  useEffect(() => {
+    const motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    if (!motionQuery) return
+
+    const handleMotionChange = (event: MediaQueryListEvent) => {
+      setReducedMotion(event.matches)
+    }
+    motionQuery.addEventListener?.('change', handleMotionChange)
+    return () => motionQuery.removeEventListener?.('change', handleMotionChange)
+  }, [])
 
   useEffect(() => {
     const container = containerRef.current
-    if (!container) return
+    if (!container || reducedMotion) return
 
     const scene = new THREE.Scene()
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
@@ -237,8 +256,6 @@ export default function ColorBends({
 
     const clock = new THREE.Clock()
 
-    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
-
     const renderScene = () => renderer.render(scene, camera)
     renderRef.current = renderScene
 
@@ -261,11 +278,7 @@ export default function ColorBends({
       rafRef.current = requestAnimationFrame(loop)
     }
 
-    if (reducedMotion) {
-      renderScene()
-    } else {
-      rafRef.current = requestAnimationFrame(loop)
-    }
+    rafRef.current = requestAnimationFrame(loop)
 
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
@@ -279,13 +292,17 @@ export default function ColorBends({
       geometry.dispose()
       material.dispose()
       renderer.dispose()
+      materialRef.current = null
+      rendererRef.current = null
       renderRef.current = null
+      resizeObserverRef.current = null
+      rafRef.current = null
 
       if (renderer.domElement.parentElement === container) {
         container.removeChild(renderer.domElement)
       }
     }
-  }, [])
+  }, [reducedMotion])
 
   useEffect(() => {
     const material = materialRef.current
@@ -328,6 +345,7 @@ export default function ColorBends({
     noise,
     parallax,
     rotation,
+    reducedMotion,
     scale,
     speed,
     transparent,
@@ -336,7 +354,7 @@ export default function ColorBends({
 
   useEffect(() => {
     const container = containerRef.current
-    if (!container) return
+    if (!container || reducedMotion) return
 
     const handlePointerMove = (event: PointerEvent) => {
       const rect = container.getBoundingClientRect()
@@ -356,11 +374,18 @@ export default function ColorBends({
       container.removeEventListener('pointermove', handlePointerMove)
       container.removeEventListener('pointerleave', handlePointerLeave)
     }
-  }, [])
+  }, [reducedMotion])
 
   const containerClassName = className
     ? `color-bends-container ${className}`
     : 'color-bends-container'
 
-  return <div ref={containerRef} className={containerClassName} style={style} />
+  return (
+    <div
+      ref={containerRef}
+      className={containerClassName}
+      style={style}
+      data-motion={reducedMotion ? 'reduced' : 'animated'}
+    />
+  )
 }

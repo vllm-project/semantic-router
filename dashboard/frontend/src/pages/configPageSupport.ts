@@ -1198,33 +1198,33 @@ export interface AddSignalFormState {
   name: string
   description: string
   operator: 'AND' | 'OR'
-  keywords: string
+  keywords: string[]
   case_sensitive: boolean
   threshold: number
-  candidates: string
+  candidates: string[]
   aggregation_method: string
-  mmlu_categories: string
+  mmlu_categories: string[]
   min_tokens?: string
   max_tokens?: string
-  preference_examples?: string
+  preference_examples?: string[]
   preference_threshold?: number
   lookback_turns?: number
   complexity_threshold?: number
-  structure_feature?: string
-  structure_predicate?: string
+  structure_feature?: StructureFeature
+  structure_predicate?: NumericPredicate
   role?: string
-  subjects?: string
-  hard_candidates?: string
-  easy_candidates?: string
+  subjects?: Subject[]
+  hard_candidates?: string[]
+  easy_candidates?: string[]
   composer_operator?: 'AND' | 'OR' | 'NOT'
-  composer_conditions?: string
+  composer_conditions?: DecisionCondition[]
   jailbreak_threshold?: number
   jailbreak_method?: string
   include_history?: boolean
-  jailbreak_patterns?: string
-  benign_patterns?: string
+  jailbreak_patterns?: string[]
+  benign_patterns?: string[]
   pii_threshold?: number
-  pii_types_allowed?: string
+  pii_types_allowed?: string[]
   pii_include_history?: boolean
   kb_name?: string
   target_kind?: 'label' | 'group'

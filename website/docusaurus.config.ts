@@ -8,13 +8,15 @@ import rehypeKatex from 'rehype-katex'
 const lightCodeTheme = themes.github
 const darkCodeTheme = themes.vsDark
 const siteUrl = 'https://vllm-semantic-router.com'
-const siteDefaultDescription = 'Mixture-of-Models is the next-generation model architecture, composed around user, product, and workload preferences. vLLM Semantic Router is its open-source runtime.'
-const siteSocialTitle = 'Build Your Mixture-of-Models | vLLM Semantic Router'
+const siteDefaultDescription
+  = 'Building Mixture-of-Models: The Next-Generation Model Architecture for Heterogeneous LLM Inference. Make signals and preferences executable.'
+const siteSocialTitle
+  = 'Mixture-of-Models for Heterogeneous LLM Inference | vLLM Semantic Router'
 const siteSocialPreviewImageUrl = `${siteUrl}/${SITE_SOCIAL_PREVIEW_IMAGE}`
 
 const config: Config = {
   title: 'vLLM Semantic Router',
-  tagline: 'Build Your Mixture-of-Models',
+  tagline: 'Building Mixture-of-Models for Heterogeneous LLM Inference',
   favicon: 'img/vllm.png',
 
   // Set the production url of your site here
@@ -54,12 +56,8 @@ const config: Config = {
       'classic',
       {
         docs: {
-          beforeDefaultRemarkPlugins: [
-            [remarkMath, {}],
-          ],
-          beforeDefaultRehypePlugins: [
-            [rehypeKatex, {}],
-          ],
+          beforeDefaultRemarkPlugins: [[remarkMath, {}]],
+          beforeDefaultRehypePlugins: [[rehypeKatex, {}]],
           sidebarPath: './sidebars.ts',
           lastVersion: 'current',
           versions: {
@@ -98,7 +96,8 @@ const config: Config = {
           showReadingTime: true,
           postsPerPage: 10,
           blogTitle: 'vLLM Semantic Router Blog',
-          blogDescription: 'Latest updates, insights, and technical articles about vLLM Semantic Router',
+          blogDescription:
+            'Latest updates, insights, and technical articles about vLLM Semantic Router',
           blogSidebarTitle: 'Recent Posts',
           blogSidebarCount: 10,
           // Please change this to your repo.
@@ -157,7 +156,11 @@ const config: Config = {
     image: SITE_SOCIAL_PREVIEW_IMAGE,
     metadata: [
       { name: 'description', content: siteDefaultDescription },
-      { name: 'keywords', content: 'Mixture-of-Models runtime, preference-driven AI, open-source LLM router, multi-model routing, model orchestration, model selection, model cascade, Fusion API, micro-agent workflows, semantic router, policy-aware routing, vLLM' },
+      {
+        name: 'keywords',
+        content:
+          'Mixture-of-Models, heterogeneous LLM inference, preference-driven AI, open-source LLM router, multi-model routing, model orchestration, model selection, model cascade, Fusion API, semantic router, vLLM',
+      },
       { name: 'author', content: 'vLLM Semantic Router Team' },
       { name: 'application-name', content: 'vLLM Semantic Router' },
       { property: 'og:title', content: siteSocialTitle },
@@ -165,12 +168,18 @@ const config: Config = {
       { property: 'og:type', content: 'website' },
       { property: 'og:site_name', content: 'vLLM Semantic Router' },
       { property: 'og:image', content: siteSocialPreviewImageUrl },
-      { property: 'og:image:alt', content: 'vLLM Semantic Router social preview' },
+      {
+        property: 'og:image:alt',
+        content: 'vLLM Semantic Router social preview',
+      },
       { name: 'twitter:card', content: 'summary_large_image' },
       { name: 'twitter:title', content: siteSocialTitle },
       { name: 'twitter:description', content: siteDefaultDescription },
       { name: 'twitter:image', content: siteSocialPreviewImageUrl },
-      { name: 'twitter:image:alt', content: 'vLLM Semantic Router social preview' },
+      {
+        name: 'twitter:image:alt',
+        content: 'vLLM Semantic Router social preview',
+      },
 
       // GEO metadata config
       { name: 'geo.region', content: 'US-CA' },
@@ -284,7 +293,7 @@ const config: Config = {
       ],
     },
     footer: {
-      style: 'light',
+      style: 'dark',
       links: [
         {
           title: 'Documentation',

@@ -3,7 +3,7 @@
 .page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 56px); /* subtract header height */
+  height: calc(100vh - 72px);
   overflow: hidden;
   background: #050505;
 }

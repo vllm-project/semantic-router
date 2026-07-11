@@ -375,7 +375,7 @@
     "message": "vLLM Semantic Router 标志"
   },
   "homepage.hero.label": {
-    "message": "下一代模型架构"
+    "message": "面向异构 LLM 推理"
   },
   "homepage.hero.line1": {
     "message": "构建你的"
@@ -384,7 +384,7 @@
     "message": "Mixture-of-Models。"
   },
   "homepage.hero.description": {
-    "message": "围绕每位用户、每个产品与每类工作负载的偏好组合模型系统。vLLM Semantic Router 将偏好与请求信号转化为可执行的模型路径。"
+    "message": "将信号与偏好转化为跨异构 LLM 的个性化模型路径。"
   },
   "homepage.hero.primaryCta": {
     "message": "体验 Playground"
@@ -423,52 +423,55 @@
     "message": "为什么需要 Mixture-of-Models"
   },
   "homepage.capabilities.heading": {
-    "message": "碎片化是现实，偏好决定组合。"
+    "message": "多模型，一套架构。"
+  },
+  "homepage.capabilities.description": {
+    "message": "让模型、算力与偏好成为每一次请求的可执行路径。"
   },
   "homepage.capabilities.axis.models": {
-    "message": "模型"
+    "message": "模型集群"
   },
   "homepage.capabilities.axis.compute": {
-    "message": "算力"
+    "message": "运行时"
   },
   "homepage.capabilities.axis.location": {
     "message": "位置"
   },
   "homepage.capabilities.axis.preference": {
-    "message": "偏好"
+    "message": "组合"
   },
   "homepage.capabilities.table.dimension": {
-    "message": "维度"
+    "message": "架构层"
   },
   "homepage.capabilities.table.reality": {
-    "message": "碎片化现状"
+    "message": "输入"
   },
   "homepage.capabilities.table.value": {
-    "message": "使用 vLLM SR"
+    "message": "输出"
   },
   "homepage.capabilities.models.reality": {
-    "message": "闭源前沿、开源通用、领域与端侧模型各有所长。"
+    "message": "前沿 · 开源 · 专用 · 边缘"
   },
   "homepage.capabilities.models.value": {
-    "message": "将专长各异的模型组合成一个模型系统。"
+    "message": "异构 LLM"
   },
   "homepage.capabilities.compute.reality": {
-    "message": "新旧 GPU、专用加速器、端侧设备与云端算力长期共存。"
+    "message": "路由 · 级联 · 融合"
   },
   "homepage.capabilities.compute.value": {
-    "message": "在异构算力承载的已配置模型端点之间路由。"
+    "message": "可执行模型路径"
   },
   "homepage.capabilities.location.reality": {
-    "message": "推理分布在端侧、私有数据中心与云端。"
+    "message": "边缘 · 私有云 · 公有云"
   },
   "homepage.capabilities.location.value": {
-    "message": "在隐私与数据边界内跨位置路由。"
+    "message": "跨位置模型路径"
   },
   "homepage.capabilities.preference.reality": {
-    "message": "不同用户、产品与工作负载对“最好”的定义不同。"
+    "message": "用户 · 产品 · 工作负载"
   },
   "homepage.capabilities.preference.value": {
-    "message": "将用户、产品与工作负载偏好转化为明确的路由决策。"
+    "message": "你的 Mixture-of-Models"
   },
   "homepage.capabilities.docsCta": {
     "message": "了解工作原理"
@@ -1026,7 +1029,7 @@
     "message": "我们的目标"
   },
   "features.sectionSubtitle": {
-    "message": "构建下一代模型架构 Mixture-of-Models，以及驱动它运行的系统级智能"
+    "message": "构建 Mixture-of-Models：面向异构 LLM 推理的下一代模型架构"
   },
   "translationBanner.outdated": {
     "message": "此翻译可能已过时。英文原文已更新，中文尚未同步。",
@@ -2393,13 +2396,13 @@
     "message": "用于 LLM 推理优化的 Workload-Router-Pool 架构，以 vLLM Semantic Router 愿景论文的完整 PDF 阅读器形式呈现。"
   },
   "homepage.meta.description": {
-    "message": "Mixture-of-Models 是围绕用户、产品与工作负载偏好进行组合的下一代模型架构。vLLM Semantic Router 是其开源运行时。"
+    "message": "构建 Mixture-of-Models：面向异构 LLM 推理的下一代模型架构。vLLM Semantic Router 将信号与偏好转化为可执行的模型路径。"
   },
   "homepage.meta.title": {
     "message": "构建你的 Mixture-of-Models"
   },
   "homepage.meta.socialTitle": {
-    "message": "构建你的 Mixture-of-Models | vLLM Semantic Router"
+    "message": "Mixture-of-Models：面向异构 LLM 推理的下一代模型架构 | vLLM Semantic Router"
   },
 
   "homepage.whereItLives.title": {

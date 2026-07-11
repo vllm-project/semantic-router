@@ -36,8 +36,7 @@ const LandingPage: React.FC = () => {
           </h1>
 
           <p className={styles.subtitle}>
-            Compose a model system around every user, product, and workload. vLLM Semantic Router
-            turns preferences and request signals into executable model paths.
+            Compose heterogeneous LLMs into personalized model paths.
           </p>
 
           <div className={styles.ctaGroup}>
@@ -61,25 +60,25 @@ const LandingPage: React.FC = () => {
 
         <section className={styles.routingSection} aria-labelledby="routing-section-title">
           <div className={styles.sectionHeading}>
-            <span>Signal-driven composition</span>
-            <h2 id="routing-section-title">From signals and preference to model path.</h2>
+            <span>Preference-driven routing</span>
+            <h2 id="routing-section-title">Every request. A personalized model path.</h2>
           </div>
 
           <div className={styles.routingGrid}>
             <article className={styles.routingStep}>
               <span className={styles.stepIndex}>01</span>
               <h3>Understand every request</h3>
-              <p>Extract intent, context, safety, modality, and feedback before generation.</p>
+              <p>Capture intent, context, safety, modality, and feedback.</p>
             </article>
             <article className={styles.routingStep}>
               <span className={styles.stepIndex}>02</span>
               <h3>Make preference executable</h3>
-              <p>Turn user, product, and workload preferences into executable policy.</p>
+              <p>Apply user, product, and workload preferences as policy.</p>
             </article>
             <article className={styles.routingStep}>
               <span className={styles.stepIndex}>03</span>
               <h3>Compose the model path</h3>
-              <p>Route, cascade, or fuse across the models that fit each request.</p>
+              <p>Route, cascade, or fuse across heterogeneous LLMs.</p>
             </article>
           </div>
         </section>

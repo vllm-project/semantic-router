@@ -1,6 +1,14 @@
-import { useEffect, useMemo, useState, type FocusEvent, type KeyboardEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type FocusEvent,
+  type KeyboardEvent,
+} from 'react'
 import { NavLink } from 'react-router-dom'
 import type { LayoutMenuCategory, LayoutMenuItem } from './LayoutNavSupport'
+import { getLayoutMegaMenuGeometry } from './LayoutMegaMenuSupport'
 import styles from './LayoutMegaMenu.module.css'
 
 interface LayoutMegaMenuProps {
@@ -11,6 +19,7 @@ interface LayoutMegaMenuProps {
   activeCategoryKey?: string
   isItemActive: (item: LayoutMenuItem) => boolean
   onConfigSelect: (item: Extract<LayoutMenuItem, { kind: 'config' }>) => void
+  onItemIntent: (item: LayoutMenuItem) => void
   onNavigate: () => void
 }
 
@@ -34,6 +43,7 @@ const LayoutMegaMenu = ({
   activeCategoryKey,
   isItemActive,
   onConfigSelect,
+  onItemIntent,
   onNavigate,
 }: LayoutMegaMenuProps) => {
   const initialCategoryKey = activeCategoryKey ?? categories[0]?.key ?? ''
@@ -100,7 +110,7 @@ const LayoutMegaMenu = ({
     focusCategory(nextIndex)
   }
 
-  const handlePanelBlur = (event: FocusEvent<HTMLDivElement>) => {
+  const handlePanelBlur = (event: FocusEvent<HTMLElement>) => {
     const nextTarget = event.relatedTarget
     if (
       nextTarget instanceof Node &&
@@ -119,13 +129,21 @@ const LayoutMegaMenu = ({
 
   const columnsClassName =
     selectedCategory.sections.length >= 3 ? styles.columnsThree : styles.columnsTwo
+  const geometry = getLayoutMegaMenuGeometry(selectedCategory)
+  const menuStyle = {
+    '--layout-mega-menu-rail-width': `${geometry.railWidth}px`,
+    '--layout-mega-menu-width': `${geometry.maxWidth}px`,
+  } as CSSProperties
 
   return (
-    <div
+    <nav
       id={id}
-      role="dialog"
       aria-labelledby={triggerId}
       className={styles.menu}
+      style={menuStyle}
+      data-density={geometry.density}
+      data-item-count={geometry.itemCount}
+      data-section-count={geometry.sectionCount}
       data-testid={`layout-mega-menu-${label.toLowerCase()}`}
       onBlur={handlePanelBlur}
     >
@@ -225,6 +243,8 @@ const LayoutMegaMenu = ({
                         type="button"
                         data-mega-link
                         className={className}
+                        onFocus={() => onItemIntent(item)}
+                        onPointerEnter={() => onItemIntent(item)}
                         onClick={() => onConfigSelect(item)}
                       >
                         <span>{item.label}</span>
@@ -241,6 +261,8 @@ const LayoutMegaMenu = ({
                       data-mega-link
                       to={item.to}
                       className={className}
+                      onFocus={() => onItemIntent(item)}
+                      onPointerEnter={() => onItemIntent(item)}
                       onClick={onNavigate}
                     >
                       <span>{item.label}</span>
@@ -255,7 +277,7 @@ const LayoutMegaMenu = ({
           ))}
         </div>
       </div>
-    </div>
+    </nav>
   )
 }
 

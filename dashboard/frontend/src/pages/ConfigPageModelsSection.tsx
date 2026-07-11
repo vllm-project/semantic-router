@@ -3,8 +3,10 @@ import styles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import ConfigPageModelInventoryPanel from './ConfigPageModelInventoryPanel'
 import ModelDeleteDialog from './ModelDeleteDialog'
+import ConfirmDialog from '../components/ConfirmDialog'
 import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
+import { normalizeStringList } from '../components/structuredFieldEditorSupport'
 import type { ViewSection } from '../components/ViewModal'
 import {
   ConfigData,
@@ -32,9 +34,19 @@ import {
 import {
   buildProviderModelPayload,
   normalizeModelBackendRefs,
+  normalizeModelLoras,
   normalizeModelPricing,
   normalizeModelStringMap,
 } from './configPageModelFormSupport'
+import { getModelStructuredFormFields } from './configPageModelFormFields'
+import {
+  ModelBackendRefsEditor,
+  ModelCapabilitiesEditor,
+  ModelExternalIdsEditor,
+  ModelLorasEditor,
+  ModelPricingEditor,
+  ModelTagsEditor,
+} from './configPageModelStructuredEditors'
 
 interface ConfigPageModelsSectionProps {
   config: ConfigData | null
@@ -73,15 +85,18 @@ export default function ConfigPageModelsSection({
   saveConfig,
   openEditModal,
   openViewModal,
-  listInputToArray,
 }: ConfigPageModelsSectionProps) {
   const [reasoningFamilyFilter, setReasoningFamilyFilter] = useState('all')
   const [endpointFilter, setEndpointFilter] = useState<ModelEndpointFilter>('all')
   const [roleFilter, setRoleFilter] = useState<ModelRoleFilter>('all')
+  const [reasoningFamilySearch, setReasoningFamilySearch] = useState('')
   const [selectedModelKeys, setSelectedModelKeys] = useState<Set<string>>(new Set())
   const [bulkDeletePending, setBulkDeletePending] = useState(false)
   const [operationError, setOperationError] = useState<string | null>(null)
   const [modelsPendingDelete, setModelsPendingDelete] = useState<string[]>([])
+  const [reasoningFamilyPendingDelete, setReasoningFamilyPendingDelete] = useState<string | null>(null)
+  const [reasoningFamilyDeletePending, setReasoningFamilyDeletePending] = useState(false)
+  const [reasoningFamilyDeleteError, setReasoningFamilyDeleteError] = useState<string | null>(null)
 
   const reasoningFamilyOptions = useMemo(() => getReasoningFamilyFilterOptions(models), [models])
   const modelReferenceCounts = useMemo(() => getModelReferenceCounts(config), [config])
@@ -195,9 +210,21 @@ export default function ConfigPageModelsSection({
         title: 'Routing Metadata',
         fields: [
           { label: 'Description', value: model.description || 'N/A', fullWidth: true },
-          { label: 'Capabilities', value: model.capabilities?.join(', ') || 'N/A', fullWidth: true },
-          { label: 'Tags', value: model.tags?.join(', ') || 'N/A', fullWidth: true },
-          { label: 'LoRAs', value: model.loras?.map((lora) => lora.name).join(', ') || 'N/A', fullWidth: true },
+          {
+            label: 'Capabilities',
+            value: <ModelCapabilitiesEditor value={model.capabilities || []} readOnly />,
+            fullWidth: true,
+          },
+          {
+            label: 'Tags',
+            value: <ModelTagsEditor value={model.tags || []} readOnly />,
+            fullWidth: true,
+          },
+          {
+            label: 'LoRAs',
+            value: <ModelLorasEditor value={model.loras || []} readOnly />,
+            fullWidth: true,
+          },
           { label: 'Quality Score', value: typeof model.quality_score === 'number' ? `${model.quality_score}` : 'N/A' },
         ]
       })
@@ -209,13 +236,7 @@ export default function ConfigPageModelsSection({
         fields: [
           {
             label: 'Provider IDs',
-            value: (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', fontFamily: 'var(--font-mono)', fontSize: '0.875rem' }}>
-                {Object.entries(model.external_model_ids).map(([key, value]) => (
-                  <div key={key}>{key}: {value}</div>
-                ))}
-              </div>
-            ),
+            value: <ModelExternalIdsEditor value={model.external_model_ids} readOnly />,
             fullWidth: true,
           },
         ],
@@ -229,57 +250,11 @@ export default function ConfigPageModelsSection({
           {
             label: 'Configured Backend Refs',
             value: (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {model.backend_refs.map((backendRef, i) => {
-                  const displayAddress = backendRef.endpoint || backendRef.base_url || 'N/A'
-                  return (
-                    <div key={i} style={{
-                      border: '1px solid var(--color-border)',
-                      borderRadius: '6px',
-                      padding: '0.75rem',
-                      background: 'rgba(0, 0, 0, 0.2)'
-                    }}>
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '0.5rem'
-                      }}>
-                        <span style={{
-                          fontWeight: 600,
-                          fontSize: '0.95rem'
-                        }}>
-                          {backendRef.name || `backend-${i + 1}`}
-                        </span>
-                      </div>
-                      <div style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: '1rem',
-                        fontSize: '0.875rem',
-                        color: 'var(--color-text-secondary)'
-                      }}>
-                        <span style={{ fontFamily: 'var(--font-mono)' }}>
-                          {isReadonly ? '************' : displayAddress}
-                        </span>
-                        {backendRef.protocol ? <span>Protocol: {backendRef.protocol}</span> : null}
-                        {typeof backendRef.weight === 'number' ? <span>Weight: {backendRef.weight}</span> : null}
-                        {backendRef.provider ? <span>Provider: {backendRef.provider}</span> : null}
-                        {backendRef.type ? <span>Type: {backendRef.type}</span> : null}
-                        {backendRef.api_key_env ? <span>API Key Env: {backendRef.api_key_env}</span> : null}
-                        {backendRef.api_key ? <span>API Key: ••••••••</span> : null}
-                        {backendRef.chat_path ? <span>Chat Path: {backendRef.chat_path}</span> : null}
-                        {backendRef.api_version ? <span>API Version: {backendRef.api_version}</span> : null}
-                      </div>
-                      {backendRef.extra_headers && Object.keys(backendRef.extra_headers).length > 0 ? (
-                        <div style={{ marginTop: '0.6rem', fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
-                          extra_headers: {JSON.stringify(backendRef.extra_headers)}
-                        </div>
-                      ) : null}
-                    </div>
-                  )
-                })}
-              </div>
+              <ModelBackendRefsEditor
+                value={model.backend_refs}
+                readOnly
+                maskSensitive={isReadonly}
+              />
             ),
             fullWidth: true
           }
@@ -291,11 +266,11 @@ export default function ConfigPageModelsSection({
       sections.push({
         title: 'Pricing',
         fields: [
-          { label: 'Currency', value: model.pricing.currency || 'USD' },
-          { label: 'Prompt (per 1M tokens)', value: model.pricing.prompt_per_1m?.toFixed(2) || '0.00' },
-          { label: 'Cached input (per 1M tokens)', value: model.pricing.cached_input_per_1m?.toFixed(2) || '0.00' },
-          { label: 'Cache write (per 1M tokens)', value: model.pricing.cache_write_per_1m?.toFixed(2) || 'Prompt rate' },
-          { label: 'Completion (per 1M tokens)', value: model.pricing.completion_per_1m?.toFixed(2) || '0.00' }
+          {
+            label: 'Token Pricing',
+            value: <ModelPricingEditor value={model.pricing} readOnly />,
+            fullWidth: true,
+          },
         ]
       })
     }
@@ -317,9 +292,9 @@ export default function ConfigPageModelsSection({
         param_size: '',
         context_window_size: '',
         description: '',
-        capabilities: '',
+        capabilities: [],
         loras: [],
-        tags: '',
+        tags: [],
         quality_score: '',
         modality: '',
         backend_refs: [{
@@ -389,54 +364,7 @@ export default function ConfigPageModelsSection({
           type: 'textarea',
           placeholder: 'Short routing-facing model description'
         },
-        {
-          name: 'capabilities',
-          label: 'Capabilities',
-          type: 'textarea',
-          placeholder: 'Comma or newline separated capabilities'
-        },
-        {
-          name: 'tags',
-          label: 'Tags',
-          type: 'textarea',
-          placeholder: 'Comma or newline separated tags'
-        },
-        {
-          name: 'quality_score',
-          label: 'Quality Score',
-          type: 'number',
-          min: 0,
-          max: 1,
-          step: 0.01,
-          placeholder: '0.85'
-        },
-        {
-          name: 'loras',
-          label: 'LoRAs (JSON)',
-          type: 'json',
-          placeholder: '[{"name":"adapter","description":"optional"}]'
-        },
-        {
-          name: 'backend_refs',
-          label: 'Backend Refs (JSON)',
-          type: 'json',
-          placeholder: '[{"name":"endpoint-1","endpoint":"localhost:8000","protocol":"http","weight":1}]',
-          description: 'Latest provider binding format stored under providers.models[].backend_refs'
-        },
-        {
-          name: 'external_model_ids',
-          label: 'External Model IDs (JSON)',
-          type: 'json',
-          placeholder: '{"openai":"gpt-4.1"}',
-          description: 'Optional external provider aliases stored under providers.models[].external_model_ids'
-        },
-        {
-          name: 'pricing',
-          label: 'Pricing (JSON)',
-          type: 'json',
-          placeholder: '{"currency":"USD","prompt_per_1m":0.5,"cached_input_per_1m":0.05,"cache_write_per_1m":0.625,"completion_per_1m":1.5}',
-          description: 'Structured pricing block stored under providers.models[].pricing'
-        }
+        ...getModelStructuredFormFields(),
       ],
       async (data) => {
         if (!config) {
@@ -444,9 +372,9 @@ export default function ConfigPageModelsSection({
         }
         validateModelStructuredFields(data)
         const modelName = validateNewModelName(data.model_name, models)
-        const capabilities = listInputToArray(data.capabilities || '')
-        const tags = listInputToArray(data.tags || '')
-        const loras = Array.isArray(data.loras) ? data.loras : []
+        const capabilities = normalizeStringList(data.capabilities)
+        const tags = normalizeStringList(data.tags)
+        const loras = normalizeModelLoras(data.loras)
 
         const newConfig = cloneConfigData(config)
 
@@ -497,9 +425,9 @@ export default function ConfigPageModelsSection({
         param_size: model.param_size || '',
         context_window_size: model.context_window_size || '',
         description: model.description || '',
-        capabilities: (model.capabilities || []).join('\n'),
+        capabilities: model.capabilities || [],
         loras: model.loras || [],
-        tags: (model.tags || []).join('\n'),
+        tags: model.tags || [],
         quality_score: model.quality_score ?? '',
         modality: model.modality || '',
         backend_refs: model.backend_refs || [],
@@ -551,54 +479,7 @@ export default function ConfigPageModelsSection({
           type: 'textarea',
           placeholder: 'Short routing-facing model description'
         },
-        {
-          name: 'capabilities',
-          label: 'Capabilities',
-          type: 'textarea',
-          placeholder: 'Comma or newline separated capabilities'
-        },
-        {
-          name: 'tags',
-          label: 'Tags',
-          type: 'textarea',
-          placeholder: 'Comma or newline separated tags'
-        },
-        {
-          name: 'quality_score',
-          label: 'Quality Score',
-          type: 'number',
-          min: 0,
-          max: 1,
-          step: 0.01,
-          placeholder: '0.85'
-        },
-        {
-          name: 'loras',
-          label: 'LoRAs (JSON)',
-          type: 'json',
-          placeholder: '[{"name":"adapter","description":"optional"}]'
-        },
-        {
-          name: 'backend_refs',
-          label: 'Backend Refs (JSON)',
-          type: 'json',
-          placeholder: '[{"name":"endpoint-1","endpoint":"localhost:8000","protocol":"http","weight":1}]',
-          description: 'Latest provider binding format stored under providers.models[].backend_refs'
-        },
-        {
-          name: 'external_model_ids',
-          label: 'External Model IDs (JSON)',
-          type: 'json',
-          placeholder: '{"openai":"gpt-4.1"}',
-          description: 'Optional external provider aliases stored under providers.models[].external_model_ids'
-        },
-        {
-          name: 'pricing',
-          label: 'Pricing (JSON)',
-          type: 'json',
-          placeholder: '{"currency":"USD","prompt_per_1m":0.5,"cached_input_per_1m":0.05,"cache_write_per_1m":0.625,"completion_per_1m":1.5}',
-          description: 'Structured pricing block stored under providers.models[].pricing'
-        }
+        ...getModelStructuredFormFields(),
       ],
       async (data) => {
         if (!config) {
@@ -606,9 +487,9 @@ export default function ConfigPageModelsSection({
         }
         validateModelStructuredFields(data)
         const newConfig = cloneConfigData(config)
-        const capabilities = listInputToArray(data.capabilities || '')
-        const tags = listInputToArray(data.tags || '')
-        const loras = Array.isArray(data.loras) ? data.loras : []
+        const capabilities = normalizeStringList(data.capabilities)
+        const tags = normalizeStringList(data.tags)
+        const loras = normalizeModelLoras(data.loras)
 
         if (isPythonCLI && newConfig.providers?.models) {
           const providers = ensureProvidersConfig(newConfig)
@@ -829,21 +710,38 @@ export default function ConfigPageModelsSection({
     )
   }
 
-  const handleDeleteReasoningFamily = async (familyName: string) => {
-    if (!config) return
-    if (!confirm(`Are you sure you want to delete reasoning family "${familyName}"?`)) {
+  const handleDeleteReasoningFamily = (familyName: string) => {
+    setReasoningFamilyDeleteError(null)
+    setReasoningFamilyPendingDelete(familyName)
+  }
+
+  const confirmDeleteReasoningFamily = async () => {
+    if (!reasoningFamilyPendingDelete) return
+    if (!config) {
+      setReasoningFamilyDeleteError('No active configuration is available.')
       return
     }
 
-    const newConfig = cloneConfigData(config)
-    if (isPythonCLI && newConfig.providers?.defaults?.reasoning_families) {
-      const defaults = ensureProviderDefaultsConfig(newConfig)
-      defaults.reasoning_families = { ...defaults.reasoning_families }
-      delete defaults.reasoning_families[familyName]
-    } else if (newConfig.reasoning_families) {
-      delete newConfig.reasoning_families[familyName]
+    setReasoningFamilyDeletePending(true)
+    setReasoningFamilyDeleteError(null)
+    try {
+      const newConfig = cloneConfigData(config)
+      if (isPythonCLI && newConfig.providers?.defaults?.reasoning_families) {
+        const defaults = ensureProviderDefaultsConfig(newConfig)
+        defaults.reasoning_families = { ...defaults.reasoning_families }
+        delete defaults.reasoning_families[reasoningFamilyPendingDelete]
+      } else if (newConfig.reasoning_families) {
+        delete newConfig.reasoning_families[reasoningFamilyPendingDelete]
+      }
+      await saveConfig(newConfig)
+      setReasoningFamilyPendingDelete(null)
+    } catch (error) {
+      setReasoningFamilyDeleteError(
+        error instanceof Error ? error.message : 'Failed to delete reasoning family.',
+      )
+    } finally {
+      setReasoningFamilyDeletePending(false)
     }
-    await saveConfig(newConfig)
   }
 
   type ReasoningFamilyRow = { name: string; type: string; parameter: string }
@@ -852,6 +750,14 @@ export default function ConfigPageModelsSection({
     type: config.type,
     parameter: config.parameter
   }))
+  const normalizedReasoningFamilySearch = reasoningFamilySearch.trim().toLocaleLowerCase()
+  const filteredReasoningFamilyData = normalizedReasoningFamilySearch
+    ? reasoningFamilyData.filter((family) => (
+        family.name.toLocaleLowerCase().includes(normalizedReasoningFamilySearch)
+        || family.type.toLocaleLowerCase().includes(normalizedReasoningFamilySearch)
+        || family.parameter.toLocaleLowerCase().includes(normalizedReasoningFamilySearch)
+      ))
+    : reasoningFamilyData
 
   const reasoningFamilyColumns: Column<ReasoningFamilyRow>[] = [
     {
@@ -926,10 +832,20 @@ export default function ConfigPageModelsSection({
           </div>
 
           <div className={styles.sectionTableBlock}>
-            <TableHeader title="Reasoning Families" count={reasoningFamilyData.length} onAdd={handleAddReasoningFamily} addButtonText="Add Family" disabled={isReadonly} variant="embedded" />
+            <TableHeader
+              title="Reasoning Families"
+              count={filteredReasoningFamilyData.length}
+              searchPlaceholder="Search family, type, or parameter..."
+              searchValue={reasoningFamilySearch}
+              onSearchChange={setReasoningFamilySearch}
+              onAdd={handleAddReasoningFamily}
+              addButtonText="Add Family"
+              disabled={isReadonly}
+              variant="embedded"
+            />
             <DataTable
               columns={reasoningFamilyColumns}
-              data={reasoningFamilyData}
+              data={filteredReasoningFamilyData}
               keyExtractor={(row) => row.name}
               onView={(row) => handleViewReasoningFamily(row.name)}
               onEdit={(row) => handleEditReasoningFamily(row.name)}
@@ -937,6 +853,12 @@ export default function ConfigPageModelsSection({
               emptyMessage="No reasoning families configured"
               className={styles.managerTable}
               readonly={isReadonly}
+              pagination={{
+                pageSize: 25,
+                pageSizeOptions: [25, 50, 100],
+                itemLabel: 'families',
+                resetKey: reasoningFamilySearch,
+              }}
             />
           </div>
         </div>
@@ -947,6 +869,24 @@ export default function ConfigPageModelsSection({
         pending={bulkDeletePending}
         onCancel={() => setModelsPendingDelete([])}
         onConfirm={() => void handleDeleteModelsAction(modelsPendingDelete)}
+      />
+
+      <ConfirmDialog
+        isOpen={reasoningFamilyPendingDelete !== null}
+        title={`Delete reasoning family “${reasoningFamilyPendingDelete || ''}”?`}
+        description="Remove this reasoning control definition from the active model configuration. Models that still reference it may need to be updated separately."
+        eyebrow="Destructive configuration change"
+        confirmLabel="Delete family"
+        pending={reasoningFamilyDeletePending}
+        details={reasoningFamilyDeleteError ? (
+          <span role="alert">{reasoningFamilyDeleteError}</span>
+        ) : undefined}
+        onCancel={() => {
+          if (reasoningFamilyDeletePending) return
+          setReasoningFamilyPendingDelete(null)
+          setReasoningFamilyDeleteError(null)
+        }}
+        onConfirm={confirmDeleteReasoningFamily}
       />
     </>
   )

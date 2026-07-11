@@ -5,9 +5,9 @@ export type { PlaygroundAttachment, PlaygroundAttachmentSummary }
 
 export const GREETING_LINES = [
   'Understand every request.',
-  'Make every preference executable.',
-  'Compose the right model path.',
-  'Route, cascade, or fuse across your model system.',
+  'Make preference executable.',
+  'Compose heterogeneous LLMs.',
+  'Execute the right model path.',
   'What should we solve next?'
 ]
 

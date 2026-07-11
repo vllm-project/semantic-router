@@ -1,5 +1,5 @@
 .container {
-  --layout-header-height: 64px;
+  --layout-header-height: 72px;
 
   display: flex;
   flex-direction: column;
@@ -17,13 +17,16 @@
 }
 
 .headerContent {
+  --layout-header-inline-gutter: clamp(1.5rem, 3.5vw, 4.5rem);
+  --layout-header-inline-span: clamp(3rem, 7vw, 9rem);
+
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: clamp(1.25rem, 2.25vw, 2.75rem);
+  gap: clamp(1.5rem, 2vw, 2.5rem);
   align-items: center;
   height: var(--layout-header-height);
-  padding: 0 clamp(1rem, 2.4vw, 2.5rem);
-  max-width: 1800px;
+  padding: 0 var(--layout-header-inline-gutter);
+  max-width: none;
   margin: 0 auto;
   width: 100%;
 }
@@ -36,6 +39,7 @@
   text-decoration: none;
   padding: 0.35rem 0;
   transition: opacity var(--transition-fast);
+  min-width: 10.4rem;
 }
 
 .brand:hover {
@@ -43,13 +47,13 @@
 }
 
 .logo {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
 }
 
 .brandText {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 720;
   color: #f5f5f7;
   letter-spacing: 0.09em;
@@ -60,14 +64,14 @@
 .nav {
   display: flex;
   align-items: center;
-  gap: 0.72rem;
+  gap: 0.8rem;
   justify-self: start;
 }
 
 .navSection {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.3rem;
 }
 
 .navSectionSecondary {
@@ -80,10 +84,10 @@
   justify-content: center;
   gap: 0.375rem;
   position: relative;
-  padding: 0 0.85rem;
-  height: 38px;
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 0.78rem;
+  padding: 0 0.95rem;
+  height: 44px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.84rem;
   font-weight: 620;
   line-height: 1;
   letter-spacing: 0.03em;
@@ -151,9 +155,9 @@ a.navLink.navLinkActive {
 
 /* Ensure button.navLink has same height as a.navLink */
 button.navLink {
-  height: 38px;
+  height: 44px;
   box-sizing: border-box;
-  padding: 0 0.85rem;
+  padding: 0 0.95rem;
 }
 
 /* Nav Dropdowns */
@@ -180,7 +184,7 @@ button.navLink {
   display: flex;
   align-items: center;
   justify-self: end;
-  gap: 0.45rem;
+  gap: 0.6rem;
 }
 
 .headerBranding {
@@ -207,9 +211,9 @@ button.navLink {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
   transition: all var(--transition-fast);
   background: transparent;
   border: none;
@@ -234,8 +238,8 @@ button.navLink {
   display: none;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radius-sm);
   background: transparent;
   border: none;
@@ -245,15 +249,23 @@ button.navLink {
 
 .mobileMenuButton:hover {
   color: var(--color-text);
+  background: #18181b;
+}
+
+.mobileMenuButton:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
 }
 
 /* Mobile Navigation */
 .mobileNav {
   display: none;
   flex-direction: column;
-  padding: 0.5rem 1rem;
-  border-top: 1px solid var(--color-border);
-  background-color: var(--color-bg-header);
+  gap: 0.2rem;
+  padding: 0.75rem clamp(0.75rem, 3vw, 1.25rem) 1rem;
+  border-top: 1px solid #202020;
+  background: #09090a;
+  box-shadow: 0 24px 52px rgba(0, 0, 0, 0.46);
 }
 
 .mobileNavLink {
@@ -261,8 +273,9 @@ button.navLink {
   align-items: center;
   gap: 0.5rem;
   width: 100%;
-  padding: 0.625rem 0.75rem;
-  border-radius: var(--radius-sm);
+  min-height: 46px;
+  padding: 0.7rem 0.8rem;
+  border-radius: 6px;
   color: var(--color-text-secondary);
   font-size: var(--text-sm);
   font-weight: 400;
@@ -277,18 +290,26 @@ button.navLink {
 .mobileNavLink:hover,
 .mobileNavLink.active {
   color: var(--color-text);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .mobileNavLinkActive {
-  color: var(--color-text);
-  background-color: var(--color-bg-tertiary);
+  position: relative;
+  color: #ffffff;
+  background: #18181b;
+  box-shadow: inset 3px 0 0 var(--brand-amd);
+}
+
+.mobileNavLink:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: -2px;
 }
 
 .mobileNavSection {
   display: flex;
   flex-direction: column;
-  margin-top: 0.5rem;
-  border-top: 1px solid var(--color-border);
+  margin-top: 0.35rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .mobileNavSectionToggle {
@@ -296,8 +317,8 @@ button.navLink {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  min-height: 46px;
-  padding: 0.7rem 0.75rem;
+  min-height: 48px;
+  padding: 0.75rem 0.8rem;
   color: var(--color-text);
   font-family: inherit;
   font-size: 0.76rem;
@@ -311,25 +332,56 @@ button.navLink {
   cursor: pointer;
 }
 
+.mobileNavSectionToggle:hover,
+.mobileNavSectionToggleActive {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.mobileNavSectionToggleActive {
+  color: #ffffff;
+}
+
+.mobileNavSectionLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.mobileNavActiveMarker {
+  padding: 0.18rem 0.35rem;
+  color: #ff969a;
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.06em;
+  background: rgba(227, 27, 35, 0.1);
+  border: 1px solid rgba(227, 27, 35, 0.24);
+  border-radius: 4px;
+}
+
 .mobileNavSectionToggle:focus-visible {
   outline: 2px solid var(--brand-amd);
   outline-offset: -2px;
 }
 
 .mobileNavSectionPanel {
-  padding: 0 0.35rem 0.75rem;
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.15rem 0 0.75rem;
 }
 
 .mobileNavCategory {
-  padding: 0.65rem 0.4rem 0.35rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0.8rem 0.55rem 0.55rem;
+  background: rgba(255, 255, 255, 0.018);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 7px;
 }
 
 .mobileNavCategory:first-child {
-  border-top: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .mobileNavCategoryTitle {
+  margin: 0;
   color: var(--color-text);
   font-size: 0.76rem;
   font-weight: 660;
@@ -344,6 +396,7 @@ button.navLink {
 }
 
 .mobileNavSubsectionTitle {
+  margin: 0;
   padding: 0.5rem 0.75rem 0.125rem;
   color: var(--color-text-secondary);
   font-size: 0.68rem;
@@ -373,6 +426,10 @@ button.navLink {
   .headerContent {
     grid-template-columns: auto 1fr auto;
     gap: 0.75rem;
+  }
+
+  .brand {
+    min-width: 0;
   }
 
   .brandText,

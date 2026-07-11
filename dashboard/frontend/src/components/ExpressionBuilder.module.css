@@ -1092,6 +1092,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  outline: none;
 }
 
 .editDialogHeader {
@@ -1187,7 +1188,13 @@
 }
 
 .editSignalOption {
+  display: block;
+  width: 100%;
   padding: 0.25rem 0.5rem;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-family: inherit;
   font-size: 0.625rem;
   cursor: pointer;
   color: var(--color-text);
@@ -1196,6 +1203,14 @@
 
 .editSignalOption:hover {
   background: var(--color-bg-tertiary);
+}
+
+.editSignalOption:focus-visible,
+.addPickerSignalItem:focus-visible,
+.addPickerOpBtn:focus-visible,
+.editDialogClose:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .editSignalOptionActive {
@@ -1258,6 +1273,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  outline: none;
 }
 
 .addPickerBody {

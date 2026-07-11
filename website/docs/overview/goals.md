@@ -4,7 +4,9 @@ sidebar_position: 1
 
 # What are our Goals?
 
-We are building **Mixture-of-Models (MoM)**: the next-generation model architecture composed around the preferences of every user, product, and workload. **vLLM Semantic Router** provides the system-level intelligence that turns those preferences and request signals into executable model paths.
+**Building Mixture-of-Models: The Next-Generation Model Architecture for Heterogeneous LLM Inference.**
+
+**vLLM Semantic Router** turns signals and preferences into executable model paths defined for each user, product, and workload.
 
 ## Core Questions
 

@@ -33,78 +33,6 @@
   overflow: hidden;
 }
 
-.routingStatus {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 48px;
-  padding: 0.62rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: #09090a;
-}
-
-.routingStatusIdentity {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  gap: 0.58rem;
-}
-
-.routingStatusMark {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: #f4f4f5;
-  box-shadow: 0 0 0 4px rgba(244, 244, 245, 0.08);
-}
-
-.routingStatusTitle {
-  color: #f8f8f8;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.routingStatusDivider {
-  width: 1px;
-  height: 14px;
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.routingStatusLabel {
-  color: rgba(255, 255, 255, 0.52);
-  font-size: 0.74rem;
-  letter-spacing: 0.03em;
-}
-
-.routingStatusModel {
-  max-width: 44%;
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.68);
-  font-size: 0.72rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.routingStatusRetry {
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.82);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.72rem;
-  padding: 0.36rem 0.58rem;
-}
-
-.routingStatusRetry:hover {
-  border-color: rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-}
-
 .playgroundSidebarShell {
   display: flex;
   flex: 0 0 auto;
@@ -668,6 +596,30 @@ body.playground-fullscreen .container {
 
 .errorDismiss:hover {
   opacity: 0.7;
+}
+
+.errorAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  margin-left: auto;
+  padding: 0 0.7rem;
+  color: var(--color-danger);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.32);
+  border-radius: 6px;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.errorAction:hover {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.52);
 }
 
 .messagesContainer {
@@ -2464,31 +2416,5 @@ body.playground-fullscreen .container {
     bottom: 0;
     z-index: 6;
     box-shadow: none;
-  }
-}
-
-@media (max-width: 600px) {
-  .routingStatus {
-    min-height: 52px;
-    padding: 0.55rem 0.68rem;
-  }
-
-  .routingStatusIdentity {
-    gap: 0.42rem;
-  }
-
-  .routingStatusTitle {
-    font-size: 0.68rem;
-    white-space: nowrap;
-  }
-
-  .routingStatusDivider,
-  .routingStatusLabel {
-    display: none;
-  }
-
-  .routingStatusModel {
-    max-width: 42%;
-    font-size: 0.65rem;
   }
 }

@@ -8,7 +8,9 @@ sidebar_position: 1
 
 # 我们的目标是什么？
 
-我们正在构建 **Mixture-of-Models（MoM）**：围绕每位用户、每个产品与每类工作负载的偏好进行组合的下一代模型架构。**vLLM Semantic Router** 提供系统级智能，将这些偏好与请求信号转化为可执行的模型路径。
+**构建 Mixture-of-Models：面向异构 LLM 推理的下一代模型架构。**
+
+**vLLM Semantic Router** 将信号与偏好转化为可执行的模型路径，让用户、产品与工作负载偏好直接进入路由决策。
 
 ## 核心问题
 

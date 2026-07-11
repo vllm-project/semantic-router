@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { mockAuthenticatedSession } from './support/auth'
 
 const setupState = {
@@ -33,6 +33,14 @@ const readUser = {
     'tools.use',
     'topology.read',
   ],
+}
+
+const minimalPermissionUser = {
+  id: 'user-minimal-1',
+  email: 'minimal@example.com',
+  name: 'Minimal User',
+  role: 'read',
+  permissions: ['tools.use'],
 }
 
 const configResponse = {
@@ -375,7 +383,32 @@ async function mockCommon(
   })
 }
 
+async function expectInsideViewport(page: Page, locator: Locator) {
+  await expect(locator).toBeVisible()
+  const bounds = await locator.boundingBox()
+  const viewport = page.viewportSize()
+  expect(bounds).not.toBeNull()
+  expect(viewport).not.toBeNull()
+  expect(bounds!.x).toBeGreaterThanOrEqual(0)
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport!.width)
+}
+
 test.describe('Layout top navigation', () => {
+  test('keeps every mobile header control inside 320px and 375px viewports', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 700 })
+    await mockCommon(page)
+
+    await page.goto('/dashboard')
+
+    for (const width of [320, 375]) {
+      await page.setViewportSize({ width, height: 700 })
+      await expectInsideViewport(page, page.getByRole('link', { name: 'Documentation' }))
+      await expectInsideViewport(page, page.getByRole('link', { name: 'GitHub' }))
+      await expectInsideViewport(page, page.getByRole('button', { name: /Open account menu/i }))
+      await expectInsideViewport(page, page.getByRole('button', { name: 'Toggle menu' }))
+    }
+  })
+
   test('switches to the complete mobile navigation before tablet controls clip', async ({
     page,
   }) => {
@@ -399,6 +432,19 @@ test.describe('Layout top navigation', () => {
     await expect(mobileNavigation).toHaveAttribute('id', 'mobile-navigation')
     const mobileDashboardLink = mobileNavigation.getByRole('link', { name: 'Dashboard' })
     await expect(mobileDashboardLink).toHaveAttribute('aria-current', 'page')
+    await expect(mobileDashboardLink).toBeFocused()
+    await page.keyboard.press('ArrowDown')
+    await expect(mobileNavigation.getByRole('link', { name: 'Playground' })).toBeFocused()
+    await page.keyboard.press('Home')
+    await expect(mobileDashboardLink).toBeFocused()
+    await page.keyboard.press('End')
+    await expect(mobileNavigation.getByRole('button', { name: 'Operate' })).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(mobileNavigation).toBeHidden()
+    await expect(menuButton).toBeFocused()
+
+    await menuButton.click()
+    await expect(mobileNavigation).toBeVisible()
     expect(
       await mobileDashboardLink.evaluate(
         (element) => window.getComputedStyle(element).backgroundColor,
@@ -418,6 +464,28 @@ test.describe('Layout top navigation', () => {
     await expect(mobileNavigation.getByText('Knowledge', { exact: true })).toBeVisible()
     await expect(mobileNavigation.getByText('Integrations & Policy', { exact: true })).toBeVisible()
     await expect(mobileNavigation.getByRole('link', { name: 'Config Builder' })).toBeVisible()
+  })
+
+  test('omits empty workflow navigation after permission filtering', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockCommon(page, { user: minimalPermissionUser })
+
+    await page.goto('/dashboard')
+
+    await expect(page.getByRole('group', { name: 'Workflow navigation' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /^(Build|Analyze|Operate)$/ })).toHaveCount(0)
+
+    await page.setViewportSize({ width: 900, height: 700 })
+    const menuButton = page.getByRole('button', { name: 'Toggle menu' })
+    await menuButton.click()
+
+    const mobileNavigation = page.getByRole('navigation', { name: 'Mobile navigation' })
+    await expect(
+      mobileNavigation.getByRole('button', { name: /^(Build|Analyze|Operate)$/ }),
+    ).toHaveCount(0)
+    await expect(mobileNavigation.getByRole('link')).toHaveCount(2)
+    await page.keyboard.press('End')
+    await expect(mobileNavigation.getByRole('link', { name: 'Playground' })).toBeFocused()
   })
 
   test('organizes the control plane around Build, Analyze, and Operate mega navigation', async ({
@@ -441,7 +509,7 @@ test.describe('Layout top navigation', () => {
     await expect(buildTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-build')
     await expect(analyzeTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-analyze')
     await expect(operateTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-operate')
-    await expect(buildTrigger).toHaveAttribute('aria-haspopup', 'dialog')
+    await expect(buildTrigger).not.toHaveAttribute('aria-haspopup')
     await expect(workflowGroup.getByRole('button')).toHaveCount(3)
 
     const header = page.locator('header').first()
@@ -459,7 +527,7 @@ test.describe('Layout top navigation', () => {
     await expect(buildTrigger).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
     await buildTrigger.click()
 
-    const buildMenu = page.getByRole('dialog', { name: 'Build' })
+    const buildMenu = page.getByRole('navigation', { name: 'Build' })
     await expect(buildMenu).toHaveAttribute('id', 'layout-mega-menu-build')
     await expect(buildTrigger).toHaveAttribute('aria-expanded', 'true')
     await expect(buildMenu.getByTestId('layout-mega-menu-rail')).toHaveCSS(
@@ -475,7 +543,10 @@ test.describe('Layout top navigation', () => {
     const integrationsTab = buildMenu.getByRole('tab', { name: /Integrations & Policy/ })
     await expect(routingTab).toBeFocused()
     await expect(routingTab).toHaveAttribute('aria-selected', 'true')
-    await expect(routingTab).toHaveAttribute('aria-controls', 'layout-mega-menu-build-routing-panel')
+    await expect(routingTab).toHaveAttribute(
+      'aria-controls',
+      'layout-mega-menu-build-routing-panel',
+    )
     await expect(knowledgeTab).not.toHaveAttribute('aria-controls', /.+/)
     await expect(buildMenu.getByRole('link', { name: 'Config Builder' })).toBeVisible()
     await expect(buildMenu.getByRole('link', { name: 'Brain Topology' })).toBeVisible()
@@ -507,7 +578,7 @@ test.describe('Layout top navigation', () => {
     await expect(buildTrigger).toBeFocused()
 
     await analyzeTrigger.click()
-    const analyzeMenu = page.getByRole('dialog', { name: 'Analyze' })
+    const analyzeMenu = page.getByRole('navigation', { name: 'Analyze' })
     await expect(analyzeMenu.getByRole('tab', { name: /Outcomes/ })).toHaveAttribute(
       'aria-selected',
       'true',
@@ -520,7 +591,7 @@ test.describe('Layout top navigation', () => {
     await expect(analyzeMenu.getByRole('link', { name: 'Runs' })).toBeVisible()
 
     await operateTrigger.click()
-    const operateMenu = page.getByRole('dialog', { name: 'Operate' })
+    const operateMenu = page.getByRole('navigation', { name: 'Operate' })
     await expect(operateMenu.getByRole('link', { name: 'Status' })).toBeVisible()
     await expect(operateMenu.getByRole('link', { name: 'Logs' })).toBeVisible()
     await operateMenu.getByRole('tab', { name: /Observability/ }).click()
@@ -561,7 +632,7 @@ test.describe('Layout top navigation', () => {
 
     const buildTrigger = globalNav.getByRole('button', { name: 'Build' })
     await buildTrigger.click()
-    const buildMenu = page.getByRole('dialog', { name: 'Build' })
+    const buildMenu = page.getByRole('navigation', { name: 'Build' })
     await expect(buildMenu).toBeVisible()
 
     const bounds = await buildMenu.boundingBox()
@@ -571,6 +642,29 @@ test.describe('Layout top navigation', () => {
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true)
+  })
+
+  test('keeps desktop utility controls visible at 961px with a long account name', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 961, height: 768 })
+    await mockCommon(page, {
+      user: {
+        id: 'user-long-name',
+        email: 'alexandria.montgomery@example.com',
+        name: 'Alexandria Catherine Montgomery',
+        role: 'admin',
+        permissions: ['config.read', 'config.write'],
+      },
+    })
+
+    await page.goto('/dashboard')
+
+    await expect(page.getByRole('navigation', { name: 'Global navigation' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Toggle menu' })).toBeHidden()
+    await expectInsideViewport(page, page.getByRole('link', { name: 'Documentation' }))
+    await expectInsideViewport(page, page.getByRole('link', { name: 'GitHub' }))
+    await expectInsideViewport(page, page.getByRole('button', { name: /Open account menu/i }))
   })
 
   test('keeps a manually selected category open from an active route', async ({ page }) => {
@@ -584,7 +678,7 @@ test.describe('Layout top navigation', () => {
       .getByRole('button', { name: 'Build' })
     await buildTrigger.click()
 
-    const buildMenu = page.getByRole('dialog', { name: 'Build' })
+    const buildMenu = page.getByRole('navigation', { name: 'Build' })
     const routingTab = buildMenu.getByRole('tab', { name: /Routing/ })
     const knowledgeTab = buildMenu.getByRole('tab', { name: /Knowledge/ })
     await expect(routingTab).toHaveAttribute('aria-selected', 'true')
@@ -605,7 +699,7 @@ test.describe('Layout top navigation', () => {
       .getByRole('button', { name: 'Build' })
     await buildTrigger.click()
 
-    const buildMenu = page.getByRole('dialog', { name: 'Build' })
+    const buildMenu = page.getByRole('navigation', { name: 'Build' })
     const routingTab = buildMenu.getByRole('tab', { name: /Routing/ })
     const integrationsTab = buildMenu.getByRole('tab', { name: /Integrations & Policy/ })
     await routingTab.focus()
@@ -627,7 +721,7 @@ test.describe('Layout top navigation', () => {
     await page.goto('/dashboard')
     await page.getByRole('button', { name: 'Analyze' }).click()
     await page
-      .getByRole('dialog', { name: 'Analyze' })
+      .getByRole('navigation', { name: 'Analyze' })
       .getByRole('link', { name: 'Insights' })
       .click()
 
@@ -721,18 +815,18 @@ test.describe('Layout top navigation', () => {
     const workflowGroup = page.getByRole('group', { name: 'Workflow navigation' })
     await workflowGroup.getByRole('button', { name: 'Operate' }).click()
 
-    const operateMenu = page.getByRole('dialog', { name: 'Operate' })
+    const operateMenu = page.getByRole('navigation', { name: 'Operate' })
     await operateMenu.getByRole('tab', { name: /Platform & Access/ }).click()
     await expect(operateMenu.getByRole('link', { name: 'Users' })).toHaveCount(0)
     await expect(operateMenu.getByRole('button', { name: 'Global Config' })).toBeVisible()
 
     await workflowGroup.getByRole('button', { name: 'Analyze' }).click()
 
-    const analyzeMenu = page.getByRole('dialog', { name: 'Analyze' })
+    const analyzeMenu = page.getByRole('navigation', { name: 'Analyze' })
     await expect(analyzeMenu.getByRole('link', { name: 'ML Setup' })).toHaveCount(0)
 
     await workflowGroup.getByRole('button', { name: 'Build' }).click()
-    const buildMenu = page.getByRole('dialog', { name: 'Build' })
+    const buildMenu = page.getByRole('navigation', { name: 'Build' })
     await buildMenu.getByRole('tab', { name: /Integrations & Policy/ }).click()
     await expect(buildMenu.getByRole('button', { name: 'MCP Servers' })).toBeVisible()
     await expect(buildMenu.getByRole('link', { name: 'ClawOS' })).toBeVisible()
@@ -743,7 +837,7 @@ test.describe('Layout top navigation', () => {
     await expect(page.getByRole('button', { name: 'ML Setup', exact: true })).toHaveCount(0)
   })
 
-  test('opens a centered account dialog and allows logging out from the header', async ({
+  test('opens an anchored account dropdown and allows logging out from the header', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
@@ -759,7 +853,7 @@ test.describe('Layout top navigation', () => {
 
     await page.goto('/dashboard')
 
-    const accountTrigger = page.getByRole('button', { name: /Open account details/i })
+    const accountTrigger = page.getByRole('button', { name: /Open account menu/i })
     await accountTrigger.click()
 
     const accountDialog = page.getByTestId('layout-account-dialog')
@@ -774,6 +868,14 @@ test.describe('Layout top navigation', () => {
     await expect(accountDialog.getByText('config.write')).toBeVisible()
     await expect(accountDialog.getByText('users.manage')).toBeVisible()
     await expect(closeDialogButton).toBeFocused()
+
+    const accountBounds = await accountDialog.boundingBox()
+    const viewport = page.viewportSize()
+    expect(accountBounds).not.toBeNull()
+    expect(viewport).not.toBeNull()
+    expect(accountBounds!.x).toBeGreaterThan(viewport!.width / 2)
+    expect(accountBounds!.y).toBeLessThan(120)
+    expect(accountBounds!.width).toBeLessThanOrEqual(400)
 
     await page.keyboard.press('Shift+Tab')
     await expect(logoutButton).toBeFocused()

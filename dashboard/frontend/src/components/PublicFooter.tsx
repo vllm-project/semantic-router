@@ -43,7 +43,7 @@ export default function PublicFooter() {
               <img className={styles.logo} src="/vllm.png" alt="" aria-hidden="true" />
               <span>vLLM Semantic Router</span>
             </div>
-            <p>Building Mixture-of-Models—the next-generation model architecture.</p>
+            <p>Mixture-of-Models for heterogeneous LLM inference.</p>
           </div>
 
           {FOOTER_GROUPS.map((group) => (
@@ -63,7 +63,7 @@ export default function PublicFooter() {
         </div>
 
         <div className={styles.bottomLine}>
-          <span>Open source. Built around preference.</span>
+          <span>Open source. Preference-driven.</span>
           <span>© {new Date().getFullYear()} vLLM Semantic Router</span>
         </div>
       </div>

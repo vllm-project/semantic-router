@@ -838,7 +838,7 @@ test.describe("Dashboard auth flow", () => {
   test("authenticated admins can open the users page", async ({ page }) => {
     await mockAuthenticatedAppShell(page);
 
-    await page.route("**/api/admin/users", async (route) => {
+    await page.route(/\/api\/admin\/users(?:\?.*)?$/, async (route) => {
       await route.fulfill({
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -871,7 +871,7 @@ test.describe("Dashboard auth flow", () => {
     let patchPayload: Record<string, unknown> | null = null;
     let passwordPayload: Record<string, unknown> | null = null;
 
-    await page.route("**/api/admin/users", async (route) => {
+    await page.route(/\/api\/admin\/users(?:\?.*)?$/, async (route) => {
       if (route.request().method() === "POST") {
         createPayload = route.request().postDataJSON() as Record<
           string,
@@ -989,7 +989,7 @@ test.describe("Dashboard auth flow", () => {
       token: "transport-auth-token",
     });
 
-    await page.route("**/api/admin/users", async (route) => {
+    await page.route(/\/api\/admin\/users(?:\?.*)?$/, async (route) => {
       await route.fulfill({
         status: 200,
         headers: { "Content-Type": "application/json" },

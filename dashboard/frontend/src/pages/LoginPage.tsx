@@ -40,7 +40,7 @@ const BOOTSTRAP_STEPS: BootstrapStep[] = [
     eyebrow: "Step 1",
     title: "Name your first administrator.",
     description:
-      "This name identifies the person who will configure the first Mixture-of-Models workspace.",
+      "This name identifies who will configure the first model system.",
   },
   {
     key: "email",
@@ -256,7 +256,7 @@ const LoginPage: React.FC = () => {
               </p>
               <h1 className={styles.storyTitle}>
                 {bootstrapStatus === "checking"
-                  ? "Preparing your Mixture-of-Models workspace."
+                  ? "Preparing your workspace."
                   : isBootstrapMode
                     ? "Create the first administrator."
                     : "Continue building your Mixture-of-Models."}
@@ -265,7 +265,7 @@ const LoginPage: React.FC = () => {
                 {bootstrapStatus === "checking"
                   ? "We are checking whether this workspace needs an administrator or is ready for sign-in."
                   : isBootstrapMode
-                    ? "Create the account that will connect models and define how they work together."
+                    ? "Create the account that will connect heterogeneous LLMs and define their model paths."
                     : "Sign in to inspect model paths, tune decisions, and operate the running system."}
               </p>
             </div>

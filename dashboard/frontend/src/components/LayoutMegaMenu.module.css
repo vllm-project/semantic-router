@@ -1,20 +1,24 @@
 .menu {
   position: fixed;
   top: var(--layout-header-height, 64px);
-  left: 50vw;
+  left: var(--layout-header-inline-gutter, clamp(1.5rem, 3.5vw, 4.5rem));
   z-index: 220;
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  width: min(1480px, calc(100vw - 3rem));
-  min-height: min(360px, calc(100dvh - var(--layout-header-height, 64px) - 1.25rem));
+  grid-template-columns: var(--layout-mega-menu-rail-width, 200px) minmax(0, 1fr);
+  width: min(
+    var(--layout-mega-menu-width, 860px),
+    calc(100vw - var(--layout-header-inline-span, clamp(3rem, 7vw, 9rem)))
+  );
+  min-height: 0;
   max-height: calc(100dvh - var(--layout-header-height, 64px) - 1.25rem);
+  box-sizing: border-box;
   overflow: hidden;
   color: #171717;
   background: #f4f4f1;
   border: 1px solid #2b2b2b;
   border-radius: 0 0 6px 6px;
   box-shadow: 0 28px 84px rgba(0, 0, 0, 0.62);
-  transform: translateX(-50%);
+  transform-origin: top left;
   isolation: isolate;
   animation: megaMenuEnter 150ms ease-out;
 }
@@ -22,12 +26,12 @@
 @keyframes megaMenuEnter {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(-5px);
+    transform: translateY(-5px);
   }
 
   to {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateY(0);
   }
 }
 
@@ -56,14 +60,14 @@
 }
 
 .railIntro {
-  padding: 1.65rem 1.45rem 1.35rem;
+  padding: 1.35rem 1.4rem 1.1rem;
 }
 
 .railMarker {
   display: block;
   width: 34px;
   height: 3px;
-  margin-bottom: 1.75rem;
+  margin-bottom: 1.15rem;
   background: #e31b23;
 }
 
@@ -89,7 +93,7 @@
 
 .railDescription {
   max-width: 13.5rem;
-  margin: 0.85rem 0 0;
+  margin: 0.7rem 0 0;
   color: #b7b7ba;
   font-size: 0.73rem;
   line-height: 1.55;
@@ -97,7 +101,7 @@
 
 .railSequence {
   display: block;
-  margin-top: 1.15rem;
+  margin-top: 0.85rem;
   color: #747478;
   font-family: var(--font-mono);
   font-size: 0.56rem;
@@ -185,10 +189,10 @@
 
 .panelHeader {
   display: grid;
-  grid-template-columns: minmax(180px, 0.72fr) minmax(260px, 1.28fr);
-  gap: 2rem;
+  grid-template-columns: minmax(160px, 0.36fr) minmax(260px, 1fr);
+  gap: 1.5rem;
   align-items: end;
-  padding: 1.65rem 2rem 1.35rem;
+  padding: 1.3rem 1.75rem 1.05rem;
   border-bottom: 1px solid #d3d3cf;
 }
 
@@ -222,9 +226,9 @@
 
 .content {
   display: grid;
-  gap: 2rem;
+  gap: 1.5rem;
   min-width: 0;
-  padding: 1.55rem 2rem 2rem;
+  padding: 1.2rem 1.75rem 1.5rem;
   background: #f4f4f1;
 }
 
@@ -255,7 +259,7 @@
 }
 
 .sectionDescription {
-  min-height: 2.8em;
+  min-height: 0;
   margin: 0.48rem 0 0.75rem;
   color: #707074;
   font-size: 0.68rem;
@@ -282,8 +286,8 @@
   gap: 0.75rem;
   width: 100%;
   min-width: 0;
-  min-height: 43px;
-  padding: 0.7rem 0.15rem;
+  min-height: 40px;
+  padding: 0.62rem 0.15rem;
   overflow: hidden;
   color: #242424 !important;
   font-family: inherit;
@@ -357,11 +361,6 @@
 }
 
 @media (max-width: 1199px) {
-  .menu {
-    grid-template-columns: 200px minmax(0, 1fr);
-    width: calc(100vw - 1.5rem);
-  }
-
   .railIntro {
     padding-right: 1.1rem;
     padding-left: 1.1rem;

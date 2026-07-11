@@ -45,6 +45,103 @@
   line-height: 1.5;
 }
 
+.inventoryToolbar {
+  display: grid;
+  grid-template-columns: minmax(16rem, 1fr) auto auto auto;
+  align-items: end;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #101012;
+}
+
+.searchField input,
+.selectField select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #18181b;
+  color: var(--color-text);
+  font: inherit;
+}
+
+.searchField input {
+  padding: 0.65rem 0.8rem;
+}
+
+.selectField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 9rem;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.selectField select {
+  padding: 0.55rem 2rem 0.55rem 0.7rem;
+  text-transform: none;
+}
+
+.resultCount {
+  align-self: center;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.clearFilters {
+  display: block;
+  margin: 0.75rem auto 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #18181b;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+}
+
+.pagination button {
+  min-height: 38px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #18181b;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .previewGrid,
 .fullGrid {
   display: grid;
@@ -379,6 +476,10 @@
   .detailSections {
     grid-template-columns: 1fr;
   }
+
+  .inventoryToolbar {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 720px) {
@@ -400,5 +501,13 @@
   .previewTopRow,
   .detailFooter {
     flex-wrap: wrap;
+  }
+
+  .inventoryToolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .resultCount {
+    justify-self: start;
   }
 }

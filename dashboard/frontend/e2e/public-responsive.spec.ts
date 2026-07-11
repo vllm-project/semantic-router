@@ -55,7 +55,7 @@ test.describe('Public and transition surfaces on short screens', () => {
       page.getByRole('heading', { name: 'Build your Mixture-of-Models.' }),
     ).toBeVisible()
     await expect(
-      page.getByRole('heading', { name: 'From signals and preference to model path.' }),
+      page.getByRole('heading', { name: 'Every request. A personalized model path.' }),
     ).toBeVisible()
 
     const routingHeadings = [
@@ -100,7 +100,7 @@ test.describe('Public and transition surfaces on short screens', () => {
     ).toBeVisible()
     await expect(
       page.getByText(
-        'Compose a model system around every user, product, and workload. vLLM Semantic Router turns preferences and request signals into executable model paths.',
+        'Compose heterogeneous LLMs into personalized model paths.',
       ),
     ).toBeVisible()
     const exploreDocs = page.getByRole('button', { name: 'Explore the Docs' })

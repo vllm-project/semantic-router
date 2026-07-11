@@ -29,7 +29,6 @@ import { usePlaygroundAttachments } from './usePlaygroundAttachments'
 import { useChatConversationState } from './useChatConversationState'
 import { usePlaygroundConversationMessages } from './usePlaygroundConversationMessages'
 import { usePlaygroundRoutingModel } from './usePlaygroundRoutingModel'
-import PlaygroundRoutingStatus from './PlaygroundRoutingStatus'
 
 interface ChatComponentProps {
   endpoint?: string
@@ -680,11 +679,19 @@ const ChatComponent = ({
               />
             ) : (
               <>
-                <PlaygroundRoutingStatus
-                  model={model}
-                  onRetry={retryRoutingModelDiscovery}
-                  status={routingModelStatus}
-                />
+                {routingModelStatus === 'error' && !visibleError ? (
+                  <div className={styles.error} role="alert">
+                    <span className={styles.errorIcon}>⚠️</span>
+                    <span>The automatic routing model is unavailable.</span>
+                    <button
+                      type="button"
+                      className={styles.errorAction}
+                      onClick={retryRoutingModelDiscovery}
+                    >
+                      Retry discovery
+                    </button>
+                  </div>
+                ) : null}
                 {visibleError && (
                   <div className={styles.error}>
                     <span className={styles.errorIcon}>⚠️</span>

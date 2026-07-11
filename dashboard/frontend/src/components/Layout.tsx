@@ -21,7 +21,8 @@ import {
 } from './LayoutNavSupport'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
-import { canAccessMLSetup, canViewUsers } from '../utils/accessControl'
+import { canAccessDashboardPath, canAccessMLSetup, canViewUsers } from '../utils/accessControl'
+import { preloadDashboardRoute } from '../app/routeLoaders'
 
 interface LayoutProps {
   children: ReactNode
@@ -64,17 +65,25 @@ const Layout: React.FC<LayoutProps> = ({
   const navigate = useNavigate()
   const canAccessUsers = canViewUsers(user)
   const canUseMLSetup = canAccessMLSetup(user)
-  const buildMenuCategories = filterLayoutMenuCategories(BUILD_MENU_CATEGORIES, () => true)
+  const canAccessMenuItem = (item: LayoutMenuItem) =>
+    canAccessDashboardPath(user, item.kind === 'config' ? `/config/${item.configSection}` : item.to)
+  const buildMenuCategories = filterLayoutMenuCategories(BUILD_MENU_CATEGORIES, canAccessMenuItem)
   const analyzeMenuCategories = filterLayoutMenuCategories(
     ANALYZE_MENU_CATEGORIES,
     (item, category) =>
+      canAccessMenuItem(item) &&
       (fleetSimEnabled || category.key !== 'fleet-simulation') &&
       (canUseMLSetup || item.kind !== 'route' || item.to !== '/ml-setup'),
   )
   const operateMenuCategories = filterLayoutMenuCategories(
     OPERATE_MENU_CATEGORIES,
-    (item) => canAccessUsers || item.kind !== 'route' || item.to !== '/users',
+    (item) =>
+      canAccessMenuItem(item) && (canAccessUsers || item.kind !== 'route' || item.to !== '/users'),
   )
+  const hasWorkflowNavigation =
+    buildMenuCategories.length > 0 ||
+    analyzeMenuCategories.length > 0 ||
+    operateMenuCategories.length > 0
   const accountName = user?.name?.trim() || 'Account'
   const accountEmail = user?.email?.trim() || 'Session pending'
   const accountPermissions = user?.permissions ?? []
@@ -186,6 +195,8 @@ const Layout: React.FC<LayoutProps> = ({
       className={({ isActive }) =>
         isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
       }
+      onFocus={() => void preloadDashboardRoute(link.to)}
+      onPointerEnter={() => void preloadDashboardRoute(link.to)}
     >
       {link.label}
     </NavLink>
@@ -198,6 +209,8 @@ const Layout: React.FC<LayoutProps> = ({
     active: boolean,
     activeCategoryKey?: string,
   ) => {
+    if (categories.length === 0) return null
+
     const isOpen = openDropdown === dropdown
     const menuId = DESKTOP_MENU_IDS[dropdown]
     const triggerId = DESKTOP_MENU_TRIGGER_IDS[dropdown]
@@ -212,7 +225,6 @@ const Layout: React.FC<LayoutProps> = ({
           type="button"
           aria-controls={menuId}
           aria-expanded={isOpen}
-          aria-haspopup="dialog"
           className={`${styles.navLink} ${active ? styles.navLinkActive : ''}`}
           onClick={(event) => {
             event.stopPropagation()
@@ -264,6 +276,10 @@ const Layout: React.FC<LayoutProps> = ({
               isLayoutMenuItemActive(item, location.pathname, isConfigPage, configSection)
             }
             onConfigSelect={handleMenuItemSelect}
+            onItemIntent={(item) => {
+              const target = item.kind === 'config' ? `/config/${item.configSection}` : item.to
+              void preloadDashboardRoute(target)
+            }}
             onNavigate={closeMenus}
           />
         ) : null}
@@ -326,35 +342,39 @@ const Layout: React.FC<LayoutProps> = ({
               {PRIMARY_NAV_LINKS.map(renderTopNavLink)}
             </div>
 
-            <div className={styles.navDivider} />
+            {hasWorkflowNavigation ? (
+              <>
+                <div className={styles.navDivider} />
 
-            <div
-              className={`${styles.navSection} ${styles.navSectionSecondary}`}
-              role="group"
-              aria-label="Workflow navigation"
-            >
-              {renderDesktopDropdown(
-                'build',
-                'Build',
-                buildMenuCategories,
-                isBuildActive,
-                activeBuildCategory,
-              )}
-              {renderDesktopDropdown(
-                'analyze',
-                'Analyze',
-                analyzeMenuCategories,
-                isAnalyzeActive,
-                activeAnalyzeCategory,
-              )}
-              {renderDesktopDropdown(
-                'operate',
-                'Operate',
-                operateMenuCategories,
-                isOperateActive,
-                activeOperateCategory,
-              )}
-            </div>
+                <div
+                  className={`${styles.navSection} ${styles.navSectionSecondary}`}
+                  role="group"
+                  aria-label="Workflow navigation"
+                >
+                  {renderDesktopDropdown(
+                    'build',
+                    'Build',
+                    buildMenuCategories,
+                    isBuildActive,
+                    activeBuildCategory,
+                  )}
+                  {renderDesktopDropdown(
+                    'analyze',
+                    'Analyze',
+                    analyzeMenuCategories,
+                    isAnalyzeActive,
+                    activeAnalyzeCategory,
+                  )}
+                  {renderDesktopDropdown(
+                    'operate',
+                    'Operate',
+                    operateMenuCategories,
+                    isOperateActive,
+                    activeOperateCategory,
+                  )}
+                </div>
+              </>
+            ) : null}
           </nav>
 
           <div className={styles.headerRight}>
@@ -413,8 +433,23 @@ const Layout: React.FC<LayoutProps> = ({
               type="button"
               className={styles.mobileMenuButton}
               onClick={() => {
-                setOpenMobileSection(null)
-                setMobileMenuOpen((prev) => !prev)
+                setIsAccountDialogOpen(false)
+                setOpenDropdown(null)
+                setMobileMenuOpen((current) => {
+                  const next = !current
+                  setOpenMobileSection(
+                    next
+                      ? isBuildActive
+                        ? 'build'
+                        : isAnalyzeActive
+                          ? 'analyze'
+                          : isOperateActive
+                            ? 'operate'
+                            : null
+                      : null,
+                  )
+                  return next
+                })
               }}
               aria-label="Toggle menu"
               aria-controls="mobile-navigation"

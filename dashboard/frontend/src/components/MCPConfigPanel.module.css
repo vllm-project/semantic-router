@@ -155,26 +155,31 @@
   font-size: 10px;
 }
 
-.statusDot[data-status="connected"] {
+.statusDot[data-status='connected'] {
   color: #22c55e;
 }
 
-.statusDot[data-status="connecting"] {
+.statusDot[data-status='connecting'] {
   color: #f59e0b;
   animation: pulse 1s infinite;
 }
 
-.statusDot[data-status="error"] {
+.statusDot[data-status='error'] {
   color: #ef4444;
 }
 
-.statusDot[data-status="disconnected"] {
+.statusDot[data-status='disconnected'] {
   color: var(--text-secondary, #a1a1aa);
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .serverName {
@@ -473,6 +478,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 1rem;
+  overflow-y: auto;
   z-index: 1000;
   backdrop-filter: blur(4px);
 }
@@ -484,6 +491,7 @@
   width: 90%;
   max-width: 500px;
   max-height: 80vh;
+  outline: none;
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
@@ -514,7 +522,8 @@
   margin-bottom: 16px;
 }
 
-.formGroup label {
+.formGroup label,
+.formGroup > span {
   display: block;
   margin-bottom: 6px;
   font-size: 13px;
@@ -522,8 +531,8 @@
   color: var(--text-primary, #f5f5f7);
 }
 
-.formGroup input[type="text"],
-.formGroup input[type="number"],
+.formGroup input[type='text'],
+.formGroup input[type='number'],
 .formGroup textarea {
   width: 100%;
   padding: 10px 12px;
@@ -569,7 +578,7 @@
   border-color: var(--accent-color, #e4e4e7);
 }
 
-.radioLabel input[type="radio"] {
+.radioLabel input[type='radio'] {
   margin-top: 2px;
   flex-shrink: 0;
 }
@@ -599,7 +608,7 @@
   cursor: pointer;
 }
 
-.checkboxLabel input[type="checkbox"] {
+.checkboxLabel input[type='checkbox'] {
   width: 16px;
   height: 16px;
 }
@@ -765,7 +774,9 @@
   border-radius: 6px;
   color: var(--text-primary, #f5f5f7);
   font-size: 13px;
-  transition: border-color 0.2s, width 0.2s;
+  transition:
+    border-color 0.2s,
+    width 0.2s;
 }
 
 .toolSearchInput:focus {
@@ -1016,6 +1027,7 @@
   width: 90%;
   max-width: 560px;
   max-height: 80vh;
+  outline: none;
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
@@ -1298,8 +1310,8 @@
 .toolDetailDialog,
 .serverFilterWrapper,
 .toolSearchInput,
-.formGroup input[type="text"],
-.formGroup input[type="number"],
+.formGroup input[type='text'],
+.formGroup input[type='number'],
 .formGroup textarea,
 .radioLabel {
   background: var(--color-bg-secondary);
@@ -1379,15 +1391,15 @@
   color: var(--mcp-accent-bright);
 }
 
-.statusDot[data-status="connected"] {
+.statusDot[data-status='connected'] {
   color: var(--mcp-success);
 }
 
-.statusDot[data-status="connecting"] {
+.statusDot[data-status='connecting'] {
   color: var(--mcp-warning);
 }
 
-.statusDot[data-status="error"] {
+.statusDot[data-status='error'] {
   color: var(--mcp-danger);
 }
 
@@ -1512,7 +1524,12 @@
   padding: 1.35rem 1.5rem;
   border-bottom: 1px solid rgba(143, 148, 156, 0.14);
   background:
-    linear-gradient(135deg, rgba(143, 148, 156, 0.12), rgba(143, 148, 156, 0.03) 46%, rgba(166, 171, 179, 0.08)),
+    linear-gradient(
+      135deg,
+      rgba(143, 148, 156, 0.12),
+      rgba(143, 148, 156, 0.03) 46%,
+      rgba(166, 171, 179, 0.08)
+    ),
     rgba(16, 16, 18, 0.92);
 }
 
@@ -1626,4 +1643,303 @@
 .loading,
 .error {
   border-radius: var(--radius-md);
+}
+
+.permissionNotice {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 1rem 1rem 0;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.78rem;
+}
+
+.permissionNotice code {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+/* Enterprise catalog controls */
+.sectionHeader {
+  cursor: default;
+}
+
+.sectionToggle {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sectionToggle:focus-visible,
+.serverHeaderButton:focus-visible,
+.toolGridCard:focus-visible,
+.toolCard:focus-visible,
+.pageBtn:focus-visible,
+.retryBtn:focus-visible,
+.dismissBtn:focus-visible {
+  outline: 2px solid var(--color-primary-light);
+  outline-offset: 2px;
+}
+
+.catalogControls {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) repeat(2, minmax(150px, 0.36fr));
+  gap: 0.75rem;
+  padding: 1rem 1.15rem 0.75rem;
+}
+
+.searchField,
+.catalogSelect {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.toolSearchWrapper {
+  width: 100%;
+}
+
+.toolSearchInput,
+.catalogSelect select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(9, 9, 10, 0.72);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.toolSearchInput {
+  padding-right: 2.1rem;
+}
+
+.toolSearchInput:focus,
+.catalogSelect select:focus {
+  width: 100%;
+  outline: none;
+  border-color: rgba(143, 148, 156, 0.42);
+  box-shadow: 0 0 0 3px rgba(143, 148, 156, 0.1);
+}
+
+.catalogMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 1.15rem 0.75rem;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+}
+
+.catalogMeta strong {
+  color: var(--color-text);
+}
+
+.catalogMeta span {
+  margin-left: auto;
+}
+
+.toolsGridWrapper {
+  max-height: none;
+  overflow: visible;
+}
+
+.toolGridCard,
+.toolCard {
+  width: 100%;
+  appearance: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.toolGridCard {
+  min-width: 0;
+}
+
+.toolGridHeader,
+.toolCardMeta,
+.toolHeader,
+.toolParams {
+  display: flex;
+}
+
+.toolCardMeta {
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.toolGridDesc,
+.toolDescription {
+  display: -webkit-box;
+}
+
+.serverCatalog {
+  padding: 0 1rem 1rem;
+}
+
+.serverHeader {
+  gap: 0.5rem;
+}
+
+.serverHeaderButton {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.serverHeaderButton:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.serverActions {
+  flex: none;
+}
+
+.pagination {
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+
+.pageRange {
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+}
+
+.pageControls {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.pageBtn {
+  min-width: 34px;
+  min-height: 32px;
+  padding: 0.3rem 0.55rem;
+}
+
+.pageInfo {
+  min-width: 92px;
+  font-size: 0.76rem;
+}
+
+.toolsContainer .pagination {
+  margin: 0.2rem -1rem -0.75rem;
+}
+
+.requestNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0.75rem 1rem 0;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.14);
+  color: var(--color-text);
+}
+
+.requestNotice strong {
+  font-size: 0.82rem;
+}
+
+.requestNotice p {
+  margin: 0.2rem 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+}
+
+.noticeActions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.retryBtn,
+.dismissBtn {
+  min-height: 34px;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.retryBtn:hover,
+.dismissBtn:hover {
+  border-color: rgba(143, 148, 156, 0.34);
+  background: rgba(143, 148, 156, 0.12);
+}
+
+.dismissBtn {
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 760px) {
+  .catalogControls {
+    grid-template-columns: 1fr;
+  }
+
+  .catalogMeta,
+  .pagination,
+  .requestNotice {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .catalogMeta span {
+    margin-left: 0;
+  }
+
+  .pageControls,
+  .noticeActions {
+    width: 100%;
+  }
+
+  .pageControls {
+    justify-content: space-between;
+  }
+
+  .serverHeader {
+    align-items: flex-start;
+  }
 }

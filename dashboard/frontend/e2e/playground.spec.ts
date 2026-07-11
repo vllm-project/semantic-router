@@ -167,7 +167,7 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByPlaceholder('Ask me anything...')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New conversation' })).toBeVisible();
-    await expect(page.getByTestId('playground-routing-status')).toContainText('vllm-sr/auto');
+    await expect(page.getByTestId('playground-routing-status')).toHaveCount(0);
 
     const motionBackground = page.getByTestId('playground-motion-background');
     await expect(motionBackground).toBeVisible();
@@ -231,7 +231,7 @@ test.describe('Playground Chat Component', () => {
     });
 
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(page.getByTestId('playground-routing-status')).toContainText('router/production');
+    await expect(page.getByTestId('playground-routing-status')).toHaveCount(0);
     await page.getByPlaceholder('Ask me anything...').fill('Use the effective runtime alias');
     await page.getByRole('button', { name: 'Send message' }).click();
     await expect(page.getByText('Custom route is live.')).toBeVisible();
@@ -350,7 +350,7 @@ test.describe('Playground Chat Component', () => {
 
     await expect(shell).toBeVisible();
     await expect(accountButton).toBeVisible();
-    await expect(page.getByRole('button', { name: /Open account details for Admin User/i })).toHaveCount(1);
+    await expect(page.getByRole('button', { name: /Open account menu for Admin User/i })).toHaveCount(1);
 
     await accountButton.click();
 
@@ -365,11 +365,9 @@ test.describe('Playground Chat Component', () => {
     expect(dialogBox).not.toBeNull();
     expect(viewport).not.toBeNull();
 
-    const dialogCenterX = dialogBox!.x + dialogBox!.width / 2;
-    const dialogCenterY = dialogBox!.y + dialogBox!.height / 2;
-
-    expect(Math.abs(dialogCenterX - viewport!.width / 2)).toBeLessThan(80);
-    expect(Math.abs(dialogCenterY - viewport!.height / 2)).toBeLessThan(80);
+    expect(dialogBox!.x).toBeLessThan(120);
+    expect(Math.abs(dialogBox!.y + dialogBox!.height - viewport!.height)).toBeLessThan(40);
+    expect(dialogBox!.width).toBeLessThanOrEqual(400);
   });
 
   test('hides the guide button permanently after finishing onboarding', async ({ page }) => {
@@ -381,6 +379,11 @@ test.describe('Playground Chat Component', () => {
     await page.goto('/playground', { waitUntil: 'domcontentloaded' });
 
     await expect(page.getByText('Product guide')).toBeVisible();
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('Step 2 of 5')).toBeVisible();
+    await page.getByRole('button', { name: 'Pause tour' }).click();
+    await page.getByRole('button', { name: 'Resume guide' }).click();
+    await expect(page.getByText('Step 2 of 5')).toBeVisible();
 
     while (await page.getByRole('button', { name: 'Finish' }).count() === 0) {
       await page.getByRole('button', { name: 'Next' }).click();

@@ -153,7 +153,7 @@ test.describe('Claw room collaboration', () => {
 
     await detailsButton.click()
     await expect(headerCloseButton).toBeFocused()
-    const accountTrigger = page.getByRole('button', { name: /Open account details/i })
+    const accountTrigger = page.getByRole('button', { name: /Open account menu/i })
     await accountTrigger.evaluate((button: HTMLButtonElement) => button.click())
     const accountDialog = page.getByTestId('layout-account-dialog')
     const accountCloseButton = accountDialog.getByRole('button', { name: 'Close account dialog' })
@@ -496,7 +496,7 @@ test.describe('Claw room collaboration', () => {
     })
 
     await page.goto('/clawos')
-    await page.getByRole('button', { name: /Claw Dashboard/ }).click()
+    await page.getByRole('tab', { name: /Claw Dashboard/ }).click()
     await page.getByRole('button', { name: 'Dashboard', exact: true }).click()
 
     await expect(page.getByTestId('claw-room-bridge-activity')).toBeVisible()

@@ -8,6 +8,8 @@ import {
   getTotalKnownModelCount,
   type SystemStatus,
 } from '../utils/routerRuntime'
+import { createVisibilityAwareRequest } from './visibilityAwareRequest'
+import { clampPage, filterServices, type ServiceHealthFilter } from './statusPageSupport'
 import styles from './StatusPage.module.css'
 
 const StatusPage: React.FC = () => {
@@ -16,6 +18,9 @@ const StatusPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [autoRefresh, setAutoRefresh] = useState(true)
+  const [serviceQuery, setServiceQuery] = useState('')
+  const [serviceHealth, setServiceHealth] = useState<ServiceHealthFilter>('all')
+  const [servicePage, setServicePage] = useState(1)
   const scrolledHashRef = useRef<string | null>(null)
 
   const fetchStatus = useCallback(async () => {
@@ -36,19 +41,29 @@ const StatusPage: React.FC = () => {
     }
   }, [])
 
+  const statusRequest = useMemo(() => createVisibilityAwareRequest(fetchStatus), [fetchStatus])
+
   useEffect(() => {
-    void fetchStatus()
+    void statusRequest.run({ allowHidden: true })
+
+    const refreshWhenVisible = () => {
+      if (!document.hidden) void statusRequest.run()
+    }
+    document.addEventListener('visibilitychange', refreshWhenVisible)
 
     if (!autoRefresh) {
-      return
+      return () => document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
 
     const interval = window.setInterval(() => {
-      void fetchStatus()
+      void statusRequest.run()
     }, 10000)
 
-    return () => window.clearInterval(interval)
-  }, [fetchStatus, autoRefresh])
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
+  }, [autoRefresh, statusRequest])
 
   const getModelToneClass = (tone: 'ok' | 'warn' | 'down') => {
     if (tone === 'ok') return styles.modelStatusOk
@@ -99,6 +114,21 @@ const StatusPage: React.FC = () => {
   )
   const loadedModels = useMemo(() => getLoadedModelCount(status?.models), [status])
   const knownModels = useMemo(() => getTotalKnownModelCount(status?.models), [status])
+  const filteredServices = useMemo(
+    () => filterServices(status?.services ?? [], serviceQuery, serviceHealth),
+    [serviceHealth, serviceQuery, status?.services],
+  )
+  const servicePageSize = 9
+  const currentServicePage = clampPage(servicePage, filteredServices.length, servicePageSize)
+  const servicePageCount = Math.max(1, Math.ceil(filteredServices.length / servicePageSize))
+  const visibleServices = filteredServices.slice(
+    (currentServicePage - 1) * servicePageSize,
+    currentServicePage * servicePageSize,
+  )
+
+  useEffect(() => {
+    setServicePage(1)
+  }, [serviceHealth, serviceQuery])
 
   useEffect(() => {
     if (!status?.models?.models.length) {
@@ -137,7 +167,8 @@ const StatusPage: React.FC = () => {
         <div className={styles.headerLeft}>
           <h1 className={styles.title}>System Status</h1>
           <p className={styles.subtitle}>
-            Real-time health status of vLLM Semantic Router services, model warmup, and deployment readiness.
+            Real-time health status of vLLM Semantic Router services, model warmup, and deployment
+            readiness.
           </p>
         </div>
         <div className={styles.headerRight}>
@@ -154,7 +185,10 @@ const StatusPage: React.FC = () => {
             />
             <span>Auto-refresh</span>
           </label>
-          <button onClick={() => void fetchStatus()} className={styles.refreshButton}>
+          <button
+            onClick={() => void statusRequest.run({ allowHidden: true })}
+            className={styles.refreshButton}
+          >
             Refresh
           </button>
         </div>
@@ -211,7 +245,9 @@ const StatusPage: React.FC = () => {
                       <div className={styles.routerHighlight}>
                         <span className={styles.routerHighlightLabel}>Coverage</span>
                         <span className={styles.routerHighlightValue}>
-                          {healthyServices === status.services.length ? 'All services ready' : 'Attention required'}
+                          {healthyServices === status.services.length
+                            ? 'All services ready'
+                            : 'Attention required'}
                         </span>
                       </div>
                     </div>
@@ -220,7 +256,9 @@ const StatusPage: React.FC = () => {
               </div>
             </section>
 
-            <section className={`${styles.summaryCard} ${styles.modelCard} ${getModelSurfaceClass(modelStatus.tone)}`}>
+            <section
+              className={`${styles.summaryCard} ${styles.modelCard} ${getModelSurfaceClass(modelStatus.tone)}`}
+            >
               <div className={styles.cardHeader}>
                 <div className={styles.cardTitleBlock}>
                   <h2 className={styles.cardTitle}>Model Status</h2>
@@ -277,7 +315,9 @@ const StatusPage: React.FC = () => {
                 <div className={styles.metaGrid}>
                   <div className={styles.metaItem}>
                     <span className={styles.metaLabel}>Deployment</span>
-                    <span className={styles.metaValue}>{formatDeploymentType(status.deployment_type)}</span>
+                    <span className={styles.metaValue}>
+                      {formatDeploymentType(status.deployment_type)}
+                    </span>
                   </div>
 
                   <div className={styles.metaItem}>
@@ -308,7 +348,8 @@ const StatusPage: React.FC = () => {
               <div>
                 <span className={styles.servicesSectionTitle}>Model Inventory</span>
                 <p className={styles.servicesSectionDescription}>
-                  The router-reported model list, load state, and metadata exposed by <code>/info/models</code>.
+                  The router-reported model list, load state, and metadata exposed by{' '}
+                  <code>/info/models</code>.
                 </p>
               </div>
               <div className={styles.servicesHeaderMeta}>
@@ -350,9 +391,39 @@ const StatusPage: React.FC = () => {
               </div>
             </div>
 
+            {status.services.length > 0 && (
+              <div className={styles.servicesToolbar}>
+                <label className={styles.serviceSearchField}>
+                  <span className={styles.srOnly}>Search services</span>
+                  <input
+                    type="search"
+                    value={serviceQuery}
+                    onChange={(event) => setServiceQuery(event.target.value)}
+                    placeholder="Search service, component, or status"
+                  />
+                </label>
+                <label className={styles.serviceFilterField}>
+                  <span>Health</span>
+                  <select
+                    value={serviceHealth}
+                    onChange={(event) =>
+                      setServiceHealth(event.target.value as ServiceHealthFilter)
+                    }
+                  >
+                    <option value="all">All services</option>
+                    <option value="healthy">Healthy</option>
+                    <option value="unhealthy">Needs attention</option>
+                  </select>
+                </label>
+                <span className={styles.serviceResultCount} aria-live="polite">
+                  {filteredServices.length} of {status.services.length} services
+                </span>
+              </div>
+            )}
+
             <div className={styles.servicesGrid}>
-              {status.services.length > 0 ? (
-                status.services.map((service, index) => (
+              {status.services.length > 0 && visibleServices.length > 0 ? (
+                visibleServices.map((service, index) => (
                   <article
                     key={`${service.name}-${index}`}
                     className={`${styles.serviceCard} ${
@@ -363,7 +434,9 @@ const StatusPage: React.FC = () => {
                       <div className={styles.serviceNameWrap}>
                         <span
                           className={`${styles.serviceStateDot} ${
-                            service.healthy ? styles.serviceStateDotHealthy : styles.serviceStateDotUnhealthy
+                            service.healthy
+                              ? styles.serviceStateDotHealthy
+                              : styles.serviceStateDotUnhealthy
                           }`}
                         />
                         <h3 className={styles.serviceName}>{service.name}</h3>
@@ -373,7 +446,9 @@ const StatusPage: React.FC = () => {
                       </div>
                       <span
                         className={`${styles.serviceHealthChip} ${
-                          service.healthy ? styles.serviceHealthHealthy : styles.serviceHealthUnhealthy
+                          service.healthy
+                            ? styles.serviceHealthHealthy
+                            : styles.serviceHealthUnhealthy
                         }`}
                       >
                         <span className={styles.serviceHealthDot} />
@@ -388,7 +463,7 @@ const StatusPage: React.FC = () => {
                     )}
                   </article>
                 ))
-              ) : (
+              ) : status.services.length === 0 ? (
                 <div className={styles.noServices}>
                   <span className={styles.noServicesIcon}>🔍</span>
                   <h3>No Running Services Detected</h3>
@@ -408,8 +483,45 @@ const StatusPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
+              ) : (
+                <div className={styles.noServices}>
+                  <h3>No matching services</h3>
+                  <p>Change the search or health filter.</p>
+                  <button
+                    type="button"
+                    className={styles.clearServiceFilters}
+                    onClick={() => {
+                      setServiceQuery('')
+                      setServiceHealth('all')
+                    }}
+                  >
+                    Clear filters
+                  </button>
+                </div>
               )}
             </div>
+
+            {servicePageCount > 1 && (
+              <nav className={styles.servicePagination} aria-label="Service inventory pages">
+                <button
+                  type="button"
+                  disabled={currentServicePage === 1}
+                  onClick={() => setServicePage((value) => Math.max(1, value - 1))}
+                >
+                  Previous
+                </button>
+                <span>
+                  Page {currentServicePage} of {servicePageCount}
+                </span>
+                <button
+                  type="button"
+                  disabled={currentServicePage === servicePageCount}
+                  onClick={() => setServicePage((value) => Math.min(servicePageCount, value + 1))}
+                >
+                  Next
+                </button>
+              </nav>
+            )}
           </section>
         </>
       )}

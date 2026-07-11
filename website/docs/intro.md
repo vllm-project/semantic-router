@@ -5,11 +5,11 @@ description: Research-driven introduction to vLLM Semantic Router, an Envoy-base
 
 # vLLM Semantic Router
 
-We are building **Mixture-of-Models (MoM)**: the next-generation model
-architecture composed around the preferences of every user, product, and
-workload. **vLLM Semantic Router** is its open-source runtime, turning those
-preferences and request signals into executable model paths while advancing
-frontier problems in **LLMRouting** and **Token economy**.
+**Building Mixture-of-Models: The Next-Generation Model Architecture for
+Heterogeneous LLM Inference.**
+
+**vLLM Semantic Router** turns signals and preferences into executable model
+paths.
 
 The project sits between clients and model backends as an Envoy External
 Processor (`ext_proc`), turning routing from ad hoc application logic into an

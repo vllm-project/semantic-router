@@ -2,17 +2,24 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import DashboardSurfaceHero from '../components/DashboardSurfaceHero'
 import { DataTable, type Column } from '../components/DataTable'
+import ConfirmDialog from '../components/ConfirmDialog'
 import styles from './UsersPage.module.css'
 import UsersPageUserDialog, {
   type UsersPageUserDialogMode,
   type UsersPageUserDraft,
 } from './UsersPageUserDialog'
 import {
+  createLatestUsersRequest,
   EMPTY_ROLE_PERMISSIONS,
+  isUsersRequestAbortError,
   type UsersPageRolePermissions,
   type UsersPageRolePermissionsPayload,
 } from './usersPageSupport'
-import { canManageUsers as canManageDashboardUsers, canViewUsers as canViewDashboardUsers } from '../utils/accessControl'
+import {
+  canManageUsers as canManageDashboardUsers,
+  canViewUsers as canViewDashboardUsers,
+} from '../utils/accessControl'
+import UsersPageAuditPanel from './UsersPageAuditPanel'
 
 type AdminUser = {
   id: string
@@ -25,20 +32,6 @@ type AdminUser = {
   lastLoginAt?: number
 }
 
-type AuditLog = {
-  id: number
-  userId?: string
-  action: string
-  resource: string
-  method: string
-  path: string
-  ip: string
-  userAgent: string
-  statusCode: number
-  createdAt: number
-  extraJson?: string
-}
-
 type ToastType = 'error' | 'success'
 
 type ToastState = {
@@ -49,6 +42,13 @@ type ToastState = {
 const ROLE_OPTIONS = ['admin', 'write', 'read'] as const
 const STATUS_OPTIONS = ['active', 'inactive'] as const
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const
+const SORT_OPTIONS = [
+  { value: 'createdAt', label: 'Created' },
+  { value: 'email', label: 'Email' },
+  { value: 'name', label: 'Name' },
+  { value: 'role', label: 'Role' },
+  { value: 'lastLoginAt', label: 'Last login' },
+] as const
 
 const EMPTY_USER_DRAFT: UsersPageUserDraft = {
   email: '',
@@ -77,15 +77,20 @@ const UsersPage: React.FC = () => {
   const canViewUsers = canViewDashboardUsers(currentUser)
 
   const [users, setUsers] = useState<AdminUser[]>([])
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
-  const [rolePermissions, setRolePermissions] = useState<UsersPageRolePermissions>(EMPTY_ROLE_PERMISSIONS)
+  const [totalUsers, setTotalUsers] = useState(0)
+  const [activeUserCount, setActiveUserCount] = useState(0)
+  const [privilegedUserCount, setPrivilegedUserCount] = useState(0)
+  const [rolePermissions, setRolePermissions] =
+    useState<UsersPageRolePermissions>(EMPTY_ROLE_PERMISSIONS)
 
   const [loadingUsers, setLoadingUsers] = useState(true)
-  const [loadingAudits, setLoadingAudits] = useState(false)
   const [loadingRolePermissions, setLoadingRolePermissions] = useState(false)
 
   const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [sortField, setSortField] = useState('createdAt')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState<number>(10)
 
@@ -96,61 +101,78 @@ const UsersPage: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
   const [dialogError, setDialogError] = useState<string | null>(null)
   const [dialogSubmitting, setDialogSubmitting] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null)
+  const [deletePending, setDeletePending] = useState(false)
+  const [userRequests] = useState(createLatestUsersRequest)
 
   const userHeaders = useMemo(
     () => ({
       'Content-Type': 'application/json',
     }),
-    []
+    [],
   )
 
   const fetchUsers = useCallback(async () => {
+    const request = userRequests.start()
     setLoadingUsers(true)
     try {
       const q = new URLSearchParams()
       if (statusFilter !== 'all') {
         q.set('status', statusFilter)
       }
+      if (debouncedQuery) {
+        q.set('q', debouncedQuery)
+      }
+      q.set('page', String(page))
+      q.set('limit', String(pageSize))
+      q.set('sort', sortField)
+      q.set('order', sortOrder)
       const querySuffix = q.toString() ? `?${q.toString()}` : ''
       const response = await fetch(`/api/admin/users${querySuffix}`, {
         method: 'GET',
         headers: userHeaders,
+        signal: request.signal,
       })
       if (!response.ok) {
         throw new Error(await getResponseError(response))
       }
-      const payload = (await response.json()) as { users: AdminUser[] }
-      setUsers(payload.users || [])
-      setPage(1)
-    } catch (err) {
-      setToast({ type: 'error', message: (err as Error).message })
-    } finally {
-      setLoadingUsers(false)
-    }
-  }, [statusFilter, userHeaders])
-
-  const fetchAuditLogs = useCallback(async () => {
-    if (!canManageUsers) {
-      return
-    }
-
-    setLoadingAudits(true)
-    try {
-      const response = await fetch('/api/admin/audit-logs?limit=100', {
-        method: 'GET',
-        headers: userHeaders,
-      })
-      if (!response.ok) {
-        throw new Error(await getResponseError(response))
+      const payload = (await response.json()) as {
+        users: AdminUser[]
+        total?: number
+        page?: number
+        active?: number
+        privileged?: number
       }
-      const payload = (await response.json()) as AuditLog[]
-      setAuditLogs(payload)
+      if (!request.isCurrent()) {
+        return
+      }
+      const nextUsers = payload.users || []
+      const nextTotal = payload.total ?? nextUsers.length
+      const lastPage = Math.max(1, Math.ceil(nextTotal / pageSize))
+      if (page > lastPage) {
+        setPage(lastPage)
+        return
+      }
+      setUsers(nextUsers)
+      setTotalUsers(nextTotal)
+      setActiveUserCount(
+        payload.active ?? nextUsers.filter((user) => user.status === 'active').length,
+      )
+      setPrivilegedUserCount(
+        payload.privileged ?? nextUsers.filter((user) => user.role === 'admin').length,
+      )
     } catch (err) {
+      if (!request.isCurrent() || isUsersRequestAbortError(err)) {
+        return
+      }
       setToast({ type: 'error', message: (err as Error).message })
     } finally {
-      setLoadingAudits(false)
+      if (request.isCurrent()) {
+        setLoadingUsers(false)
+      }
+      request.finish()
     }
-  }, [canManageUsers, userHeaders])
+  }, [debouncedQuery, page, pageSize, sortField, sortOrder, statusFilter, userHeaders, userRequests])
 
   const fetchRolePermissions = useCallback(async () => {
     if (!canManageUsers) {
@@ -180,17 +202,14 @@ const UsersPage: React.FC = () => {
 
   useEffect(() => {
     if (!canViewUsers) {
+      userRequests.abort()
+      setLoadingUsers(false)
       return
     }
 
     void fetchUsers()
-  }, [canViewUsers, fetchUsers])
-
-  useEffect(() => {
-    if (showAudit) {
-      void fetchAuditLogs()
-    }
-  }, [showAudit, fetchAuditLogs])
+    return () => userRequests.abort()
+  }, [canViewUsers, fetchUsers, userRequests])
 
   useEffect(() => {
     if (!canManageUsers) {
@@ -304,59 +323,39 @@ const UsersPage: React.FC = () => {
     }
   }
 
-  const onDelete = async (id: string) => {
+  const onDelete = (user: AdminUser) => {
     if (!canManageUsers) {
       return
     }
-    if (!window.confirm('Delete this user?')) {
+    setDeleteTarget(user)
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || !canManageUsers) {
       return
     }
 
+    setDeletePending(true)
     try {
-      const response = await fetch(`/api/admin/users/${id}`, {
+      const response = await fetch(`/api/admin/users/${deleteTarget.id}`, {
         method: 'DELETE',
         headers: userHeaders,
       })
       if (!response.ok && response.status !== 204) {
         throw new Error(await getResponseError(response))
       }
+      setDeleteTarget(null)
       setToast({ type: 'success', message: 'User deleted.' })
       await fetchUsers()
     } catch (err) {
       setToast({ type: 'error', message: (err as Error).message })
+    } finally {
+      setDeletePending(false)
     }
   }
 
-  const filteredUsers = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
-    if (!normalized) {
-      return users
-    }
-
-    return users.filter(
-      (user) =>
-        user.email.toLowerCase().includes(normalized) ||
-        user.name.toLowerCase().includes(normalized) ||
-        user.role.toLowerCase().includes(normalized)
-    )
-  }, [users, query])
-
-  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize))
+  const totalPages = Math.max(1, Math.ceil(totalUsers / pageSize))
   const currentPage = Math.min(page, totalPages)
-  const pagedUsers = useMemo(
-    () => filteredUsers.slice((currentPage - 1) * pageSize, currentPage * pageSize),
-    [filteredUsers, currentPage, pageSize]
-  )
-
-  const activeUsers = useMemo(
-    () => users.filter((user) => user.status === 'active').length,
-    [users]
-  )
-
-  const privilegedUsers = useMemo(
-    () => users.filter((user) => user.role === 'admin').length,
-    [users]
-  )
 
   const dialogInitialValues = useMemo<UsersPageUserDraft>(() => {
     if (!selectedUser) {
@@ -373,14 +372,15 @@ const UsersPage: React.FC = () => {
   }, [selectedUser])
 
   useEffect(() => {
-    setPage(1)
-  }, [query, pageSize])
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 300)
+    return () => window.clearTimeout(timer)
+  }, [query])
 
   const userColumns: Column<AdminUser>[] = useMemo(
     () => [
-      { key: 'email', header: 'Email', width: '240px', sortable: true },
-      { key: 'name', header: 'Name', width: '180px', sortable: true },
-      { key: 'role', header: 'Role', width: '150px', sortable: true },
+      { key: 'email', header: 'Email', width: '240px' },
+      { key: 'name', header: 'Name', width: '180px' },
+      { key: 'role', header: 'Role', width: '150px' },
       {
         key: 'status',
         header: 'Status',
@@ -393,30 +393,20 @@ const UsersPage: React.FC = () => {
           </span>
         ),
       },
-      { key: 'createdAt', header: 'Created', width: '170px', render: (row) => formatTs(row.createdAt) },
-      { key: 'lastLoginAt', header: 'Last Login', width: '170px', render: (row) => formatTs(row.lastLoginAt) },
-    ],
-    []
-  )
-
-  const auditColumns: Column<AuditLog>[] = useMemo(
-    () => [
-      { key: 'id', header: 'ID', width: '80px', sortable: true, render: (row) => `#${row.id}` },
-      { key: 'createdAt', header: 'Time', width: '180px', render: (row) => formatTs(row.createdAt) },
-      { key: 'action', header: 'Action', width: '150px' },
-      { key: 'resource', header: 'Resource', width: '200px' },
-      { key: 'method', header: 'Method', width: '90px' },
-      { key: 'statusCode', header: 'Code', width: '90px', render: (row) => row.statusCode || '-' },
       {
-        key: 'path',
-        header: 'Path',
-        width: '220px',
-        render: (row) => <code className={styles.code}>{row.path}</code>,
+        key: 'createdAt',
+        header: 'Created',
+        width: '170px',
+        render: (row) => formatTs(row.createdAt),
       },
-      { key: 'ip', header: 'IP', width: '150px', render: (row) => row.ip || '-' },
-      { key: 'userId', header: 'User ID', width: '180px', render: (row) => row.userId || '-' },
+      {
+        key: 'lastLoginAt',
+        header: 'Last Login',
+        width: '170px',
+        render: (row) => formatTs(row.lastLoginAt),
+      },
     ],
-    []
+    [],
   )
 
   return (
@@ -427,8 +417,8 @@ const UsersPage: React.FC = () => {
         description="Manage dashboard users, privileged roles, and lifecycle controls without leaving the admin workspace."
         meta={[
           { label: 'Current surface', value: showAudit ? 'Audit logs' : 'User directory' },
-          { label: 'Active accounts', value: `${activeUsers} active` },
-          { label: 'Privileged users', value: `${privilegedUsers} elevated` },
+          { label: 'Active accounts', value: `${activeUserCount} active` },
+          { label: 'Privileged users', value: `${privilegedUserCount} elevated` },
         ]}
         panelEyebrow="Workspace access"
         panelTitle="Dashboard user control"
@@ -459,7 +449,9 @@ const UsersPage: React.FC = () => {
       />
 
       {toast ? (
-        <div className={`${styles.toast} ${toast.type === 'error' ? styles.toastError : styles.toastSuccess}`}>
+        <div
+          className={`${styles.toast} ${toast.type === 'error' ? styles.toastError : styles.toastSuccess}`}
+        >
           {toast.message}
         </div>
       ) : null}
@@ -476,37 +468,16 @@ const UsersPage: React.FC = () => {
               </div>
             </div>
           </section>
-        ) : showAudit ? (
-          <section className={styles.card}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <h2 className={styles.sectionTitle}>Audit logs</h2>
-                <p className={styles.sectionDescription}>
-                  Review user-management activity and privileged account changes across the dashboard.
-                </p>
-              </div>
-            </div>
-
-            {loadingAudits ? (
-              <div className={styles.loading}>Loading audit logs...</div>
-            ) : (
-              <DataTable
-                columns={auditColumns}
-                data={auditLogs}
-                keyExtractor={(row) => `${row.id}`}
-                onEdit={undefined}
-                onDelete={undefined}
-                emptyMessage="No audit log entries found."
-              />
-            )}
-          </section>
+        ) : showAudit && canManageUsers ? (
+          <UsersPageAuditPanel />
         ) : (
           <section className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
                 <h2 className={styles.sectionTitle}>User directory</h2>
                 <p className={styles.sectionDescription}>
-                  Search active accounts, review roles, and open the centered editor to update access.
+                  Search active accounts, review roles, and open the centered editor to update
+                  access.
                 </p>
               </div>
               {canManageUsers ? (
@@ -518,19 +489,28 @@ const UsersPage: React.FC = () => {
 
             <div className={styles.toolbar}>
               <div className={styles.toolbarLeft}>
-                <input
-                  className={styles.search}
-                  type="text"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search by email, name, role"
-                />
+                <label className={styles.filterGroup}>
+                  <span>Search</span>
+                  <input
+                    className={styles.search}
+                    type="search"
+                    value={query}
+                    onChange={(event) => {
+                      setQuery(event.target.value)
+                      setPage(1)
+                    }}
+                    placeholder="Email, name, or role"
+                  />
+                </label>
                 <label className={styles.filterGroup}>
                   <span>Status</span>
                   <select
                     className={styles.filter}
                     value={statusFilter}
-                    onChange={(event) => setStatusFilter(event.target.value)}
+                    onChange={(event) => {
+                      setStatusFilter(event.target.value)
+                      setPage(1)
+                    }}
                   >
                     <option value="all">All</option>
                     <option value="active">Active</option>
@@ -543,13 +523,49 @@ const UsersPage: React.FC = () => {
                   <select
                     className={styles.filter}
                     value={pageSize}
-                    onChange={(event) => setPageSize(Number.parseInt(event.target.value, 10))}
+                    onChange={(event) => {
+                      setPageSize(Number.parseInt(event.target.value, 10))
+                      setPage(1)
+                    }}
                   >
                     {PAGE_SIZE_OPTIONS.map((size) => (
                       <option key={size} value={size}>
                         {size}
                       </option>
                     ))}
+                  </select>
+                </label>
+
+                <label className={styles.filterGroup}>
+                  <span>Sort</span>
+                  <select
+                    className={styles.filter}
+                    value={sortField}
+                    onChange={(event) => {
+                      setSortField(event.target.value)
+                      setPage(1)
+                    }}
+                  >
+                    {SORT_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className={styles.filterGroup}>
+                  <span>Order</span>
+                  <select
+                    className={styles.filter}
+                    value={sortOrder}
+                    onChange={(event) => {
+                      setSortOrder(event.target.value === 'asc' ? 'asc' : 'desc')
+                      setPage(1)
+                    }}
+                  >
+                    <option value="desc">Descending</option>
+                    <option value="asc">Ascending</option>
                   </select>
                 </label>
               </div>
@@ -569,10 +585,10 @@ const UsersPage: React.FC = () => {
             ) : (
               <DataTable
                 columns={userColumns}
-                data={pagedUsers}
+                data={users}
                 keyExtractor={(row) => row.id}
                 onEdit={canManageUsers ? openEditDialog : undefined}
-                onDelete={canManageUsers ? (row) => onDelete(row.id) : undefined}
+                onDelete={canManageUsers ? onDelete : undefined}
                 className={styles.tableContainer}
                 emptyMessage="No users found for the current filters."
               />
@@ -580,7 +596,7 @@ const UsersPage: React.FC = () => {
 
             <div className={styles.pagination}>
               <span>
-                Page {currentPage} / {totalPages} · {filteredUsers.length} users
+                Page {currentPage} / {totalPages} · {totalUsers} users
               </span>
 
               <div className={styles.paginationActions}>
@@ -616,6 +632,23 @@ const UsersPage: React.FC = () => {
         error={dialogError}
         onClose={closeDialog}
         onSubmit={handleDialogSubmit}
+      />
+
+      <ConfirmDialog
+        isOpen={deleteTarget !== null}
+        title={`Delete ${deleteTarget?.name || deleteTarget?.email || 'this user'}?`}
+        description={
+          <p>
+            This permanently removes the dashboard account and its access. Audit records remain
+            available to administrators.
+          </p>
+        }
+        eyebrow="Account lifecycle"
+        confirmLabel="Delete user"
+        pending={deletePending}
+        details={deleteTarget ? <code>{deleteTarget.email}</code> : null}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
       />
     </div>
   )

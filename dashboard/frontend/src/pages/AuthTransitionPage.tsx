@@ -8,6 +8,7 @@ import {
   sanitizeAuthTransitionTarget,
 } from './authTransitionSupport'
 import styles from './AuthTransitionPage.module.css'
+import { preloadDashboardRoute } from '../app/routeLoaders'
 
 type Milestone = {
   key: string
@@ -109,6 +110,10 @@ const AuthTransitionPage: React.FC = () => {
   const target = sanitizeAuthTransitionTarget(searchParams.get('to'), fallbackTarget)
   const activeMilestoneIndex = getActiveMilestoneIndex(progress)
   const activeMilestone = MILESTONES[activeMilestoneIndex]
+
+  useEffect(() => {
+    void preloadDashboardRoute(target)
+  }, [target])
 
   useEffect(() => {
     if (prefersReducedMotion) {

@@ -9,7 +9,9 @@ translation:
 
 # vLLM Semantic Router
 
-我们正在构建 **Mixture-of-Models（MoM）**：围绕每位用户、每个产品与每类工作负载的偏好进行组合的下一代模型架构。**vLLM Semantic Router** 是其开源运行时，在推进 **LLM 路由（LLMRouting）** 与 **Token 经济** 前沿问题的同时，将这些偏好与请求信号转化为可执行的模型路径。
+**构建 Mixture-of-Models：面向异构 LLM 推理的下一代模型架构。**
+
+**vLLM Semantic Router** 将信号与偏好转化为可执行的模型路径。
 
 项目位于客户端与模型后端之间，以 Envoy External Processor（`ext_proc`）形式运行，将路由从零散的应用逻辑提升为**可观测、可配置**的多模型系统控制面。
 
