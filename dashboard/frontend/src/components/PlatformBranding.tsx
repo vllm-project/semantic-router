@@ -38,7 +38,7 @@ const PlatformBranding = ({ variant = 'default', className = '' }: PlatformBrand
         alt="AMD"
         className={styles.logo}
       />
-      <span className={styles.text}>Powered by AMD GPU</span>
+      <span className={styles.text}>{variant === 'inline' ? 'AMD GPU' : 'Powered by AMD GPU'}</span>
     </div>
   )
 }

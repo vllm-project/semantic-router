@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import styles from './OpenClawPage.module.css'
+import { CANONICAL_AUTO_MODEL } from '../utils/routerModelSelection'
 import {
   deriveModelBaseUrlFromRouterConfig,
   getInitialModelBaseUrl,
@@ -35,7 +36,7 @@ export const WorkerProvisionWizard: React.FC<{
     gatewayPort: 0,
     authToken: '',
     modelBaseUrl: getInitialModelBaseUrl(),
-    modelName: 'auto',
+    modelName: CANONICAL_AUTO_MODEL,
     memoryBackend: 'local',
     memoryBaseUrl: '',
     vectorStore: 'openclaw-demo',

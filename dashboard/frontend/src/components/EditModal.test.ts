@@ -1,0 +1,26 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { describe, expect, it, vi } from 'vitest'
+
+import EditModal from './EditModal'
+
+describe('EditModal accessibility contract', () => {
+  it('renders a labelled modal dialog with an explicit close control', () => {
+    const markup = renderToStaticMarkup(
+      createElement(EditModal, {
+        isOpen: true,
+        onClose: vi.fn(),
+        onSave: vi.fn(async () => undefined),
+        title: 'Edit model',
+        data: null,
+        fields: [],
+      }),
+    )
+
+    expect(markup).toContain('role="dialog"')
+    expect(markup).toContain('aria-modal="true"')
+    expect(markup).toMatch(/aria-labelledby="[^"]+"/)
+    expect(markup).toContain('aria-label="Close editor"')
+    expect(markup).toContain('type="submit"')
+  })
+})

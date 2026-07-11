@@ -151,6 +151,7 @@ export default function ColorBends({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
   const materialRef = useRef<THREE.ShaderMaterial | null>(null)
+  const renderRef = useRef<(() => void) | null>(null)
   const rafRef = useRef<number | null>(null)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
   const pointerTargetRef = useRef(new THREE.Vector2(0, 0))
@@ -233,6 +234,11 @@ export default function ColorBends({
 
     const clock = new THREE.Clock()
 
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+
+    const renderScene = () => renderer.render(scene, camera)
+    renderRef.current = renderScene
+
     const loop = () => {
       const delta = clock.getDelta()
       const elapsed = clock.elapsedTime
@@ -248,11 +254,15 @@ export default function ColorBends({
       currentPointer.lerp(targetPointer, lerpAmount)
       ;(material.uniforms.uPointer.value as THREE.Vector2).copy(currentPointer)
 
-      renderer.render(scene, camera)
+      renderScene()
       rafRef.current = requestAnimationFrame(loop)
     }
 
-    rafRef.current = requestAnimationFrame(loop)
+    if (reducedMotion) {
+      renderScene()
+    } else {
+      rafRef.current = requestAnimationFrame(loop)
+    }
 
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
@@ -266,6 +276,7 @@ export default function ColorBends({
       geometry.dispose()
       material.dispose()
       renderer.dispose()
+      renderRef.current = null
 
       if (renderer.domElement.parentElement === container) {
         container.removeChild(renderer.domElement)
@@ -305,6 +316,7 @@ export default function ColorBends({
     if (renderer) {
       renderer.setClearColor(0x000000, transparent ? 0 : 1)
     }
+    renderRef.current?.()
   }, [
     autoRotate,
     colors,

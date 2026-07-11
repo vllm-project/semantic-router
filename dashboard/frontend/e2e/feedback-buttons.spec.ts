@@ -28,6 +28,22 @@ test.describe('FeedbackButtons', () => {
   test.beforeEach(async ({ page }) => {
     await mockAuthenticatedAppShell(page)
 
+    await page.route('**/api/router/v1/models*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          object: 'list',
+          data: [{
+            id: 'vllm-sr/auto',
+            object: 'model',
+            owned_by: 'vllm-semantic-router',
+            description: 'Intelligent Router for Mixture-of-Models',
+          }],
+        }),
+      })
+    })
+
     await page.route('**/api/router/v1/chat/completions', async (route) => {
       await route.fulfill({
         status: 200,

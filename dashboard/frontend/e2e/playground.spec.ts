@@ -112,6 +112,23 @@ async function mockStreamingChatFetch(
 
 async function mockPlaygroundBootstrap(page: import('@playwright/test').Page): Promise<void> {
   await mockAuthenticatedAppShell(page);
+  await page.route('**/api/router/v1/models*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        object: 'list',
+        data: [
+          {
+            id: 'vllm-sr/auto',
+            object: 'model',
+            owned_by: 'vllm-semantic-router',
+            description: 'Intelligent Router for Mixture-of-Models',
+          },
+        ],
+      }),
+    });
+  });
 }
 
 async function readStoredQueuePrompts(page: import('@playwright/test').Page): Promise<string[]> {
@@ -150,6 +167,126 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByPlaceholder('Ask me anything...')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New conversation' })).toBeVisible();
+    await expect(page.getByTestId('playground-routing-status')).toContainText('vllm-sr/auto');
+  });
+
+  test('keeps the mobile composer readable and clear of the guide control', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    const input = page.getByPlaceholder('Ask me anything...');
+    await expect.poll(async () => (await input.boundingBox())?.width ?? 0).toBeGreaterThan(250);
+
+    const composerBox = await page.getByTestId('chat-composer').boundingBox();
+    const guideBox = await page.getByRole('button', { name: 'Guide' }).boundingBox();
+    expect(composerBox).not.toBeNull();
+    expect(guideBox).not.toBeNull();
+    expect((guideBox?.y ?? 0) + (guideBox?.height ?? 0)).toBeLessThanOrEqual((composerBox?.y ?? 0) + 1);
+  });
+
+  test('uses the live auto alias and rebinds a restored legacy MoM task', async ({ page }) => {
+    await page.unroute('**/api/router/v1/models*');
+    await page.route('**/api/router/v1/models*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          object: 'list',
+          data: [{
+            id: 'router/production',
+            object: 'model',
+            owned_by: 'vllm-semantic-router',
+            description: 'Intelligent Router for Mixture-of-Models',
+          }],
+        }),
+      });
+    });
+
+    const requestModels: string[] = [];
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
+      requestModels.push((route.request().postDataJSON() as { model?: string }).model ?? '');
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+        body: chatStreamBody('Custom route is live.'),
+      });
+    });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('playground-routing-status')).toContainText('router/production');
+    await page.getByPlaceholder('Ask me anything...').fill('Use the effective runtime alias');
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await expect(page.getByText('Custom route is live.')).toBeVisible();
+    expect(requestModels).toEqual(['router/production']);
+
+    await page.evaluate(() => {
+      const conversationId = 'restored-legacy-conversation';
+      window.localStorage.setItem('sr:playground:queue', JSON.stringify({
+        [conversationId]: [{
+          id: 'restored-legacy-task',
+          conversationId,
+          prompt: 'Restore this legacy task',
+          createdAt: Date.now(),
+          requestOptions: {
+            enableClawMode: false,
+            enableWebSearch: false,
+            model: 'MoM',
+          },
+        }],
+      }));
+    });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect.poll(() => requestModels.length).toBe(2);
+    expect(requestModels).toEqual(['router/production', 'router/production']);
+  });
+
+  test('blocks sending and offers retry when model discovery fails', async ({ page }) => {
+    await page.unroute('**/api/router/v1/models*');
+    await page.route('**/api/router/v1/models*', async (route) => {
+      await route.fulfill({ status: 503, body: 'router unavailable' });
+    });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.getByPlaceholder('Ask me anything...').fill('Do not send this request');
+    await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Retry discovery' })).toBeVisible();
+  });
+
+  test('rejects a MoM-only discovery response and never submits the retired alias', async ({
+    page,
+  }) => {
+    await page.unroute('**/api/router/v1/models*');
+    await page.route('**/api/router/v1/models*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          object: 'list',
+          data: [
+            {
+              id: 'MoM',
+              object: 'model',
+              owned_by: 'vllm-semantic-router',
+              description: 'Intelligent Router for Mixture-of-Models',
+            },
+          ],
+        }),
+      });
+    });
+
+    let completionRequests = 0;
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
+      completionRequests += 1;
+      await route.abort();
+    });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const composer = page.getByPlaceholder('Ask me anything...');
+    await composer.fill('Do not fall back to MoM');
+    await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Retry discovery' })).toBeVisible();
+    await composer.press('Enter');
+    expect(completionRequests).toBe(0);
   });
 
   test('opens and collapses the left history rail', async ({ page }) => {
@@ -413,7 +550,7 @@ test.describe('Playground Chat Component', () => {
     await page.getByRole('button', { name: 'New conversation' }).click();
 
     await expect(page.locator('[data-message-role="user"]').filter({ hasText: 'Clear me' })).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: /Hi there, I am MoM/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Route with confidence/i })).toBeVisible();
   });
 
   test('keeps streaming in the original session after switching away and shows progress when switching back', async ({ page }) => {
@@ -435,7 +572,7 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible();
 
     await page.getByRole('button', { name: 'New conversation' }).click();
-    await expect(page.getByRole('heading', { name: /Hi there, I am MoM/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Route with confidence/i })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Stop generating' })).toHaveCount(0);
     await expect(page.getByText('First visible chunk.')).toHaveCount(0);
 
@@ -544,7 +681,7 @@ test.describe('Playground Chat Component', () => {
       
       // Verify request structure
       expect(postData).toHaveProperty('messages');
-      expect(postData).toHaveProperty('model');
+      expect(postData).toHaveProperty('model', 'vllm-sr/auto');
       expect(postData).toHaveProperty('stream');
       
       // Return mock streaming response
@@ -568,7 +705,7 @@ test.describe('Playground Chat Component', () => {
     await page.getByRole('button', { name: 'Send message' }).click();
     
     // User message should appear
-    await expect(page.getByText('Hello, how are you?')).toBeVisible();
+    await expect(page.getByTestId('chat-transcript').getByText('Hello, how are you?')).toBeVisible();
     
     // Wait for response to appear (the mocked response)
     await expect(page.getByText('Hello! This is a mock response.')).toBeVisible({ timeout: 10000 });
@@ -709,9 +846,12 @@ test.describe('Playground Chat Component', () => {
     }, { timeout: 10000 }).not.toBeNull();
 
     const refreshedFollowUpRequest = await page.evaluate(() =>
-      (window as typeof window & { __lastFollowUpRequest?: { messages?: Array<Record<string, unknown>> } }).__lastFollowUpRequest
+      (window as typeof window & {
+        __lastFollowUpRequest?: { messages?: Array<Record<string, unknown>>; model?: string }
+      }).__lastFollowUpRequest
     );
 
+    expect(refreshedFollowUpRequest?.model).toBe('vllm-sr/auto');
     expect(refreshedFollowUpRequest?.messages?.some((message) => message.role === 'tool')).toBeTruthy();
     const resolvedToolMessage = refreshedFollowUpRequest?.messages?.find((message) => message.role === 'tool');
     expect(resolvedToolMessage?.content).toContain('Tool execution failed:');
@@ -801,7 +941,7 @@ test.describe('Playground Chat Component', () => {
     await page.getByRole('button', { name: 'Send message' }).click();
     
     // User message should still appear
-    await expect(page.getByText('Test error handling')).toBeVisible();
+    await expect(page.getByTestId('chat-transcript').getByText('Test error handling')).toBeVisible();
     
     // Error should be displayed (specific API error message)
     await expect(page.getByText('API error:')).toBeVisible({ timeout: 5000 });
