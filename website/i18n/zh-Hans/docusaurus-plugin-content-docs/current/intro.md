@@ -2,7 +2,7 @@
 sidebar_position: 1
 description: vLLM Semantic Router 的研究导论，介绍这套基于 Envoy 的控制平面如何实现面向信号的 LLM 路由、策略执行与 token 效率优化。
 translation:
-  source_commit: "44813b64"
+  source_commit: "8fc3b86c"
   source_file: "docs/intro.md"
   outdated: false
 ---

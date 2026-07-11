@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "44813b64"
+  source_commit: "8fc3b86c"
   source_file: "docs/overview/goals.md"
   outdated: false
 sidebar_position: 1
