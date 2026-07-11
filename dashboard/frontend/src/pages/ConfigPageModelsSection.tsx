@@ -30,6 +30,7 @@ import {
   type ModelRoleFilter,
 } from './configPageModelInventory'
 import {
+  buildProviderModelPayload,
   normalizeModelBackendRefs,
   normalizeModelPricing,
   normalizeModelStringMap,
@@ -110,43 +111,6 @@ export default function ConfigPageModelsSection({
     setEndpointFilter('all')
     setRoleFilter('all')
   }
-
-  const normalizePricing = (value: unknown): ModelPricing | undefined => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      return undefined
-    }
-    const pricing = value as Record<string, unknown>
-    const normalized: ModelPricing = {}
-    if (typeof pricing.currency === 'string' && pricing.currency.trim()) normalized.currency = pricing.currency.trim()
-    if (typeof pricing.prompt_per_1m === 'number' && Number.isFinite(pricing.prompt_per_1m)) normalized.prompt_per_1m = pricing.prompt_per_1m
-    if (typeof pricing.cached_input_per_1m === 'number' && Number.isFinite(pricing.cached_input_per_1m)) normalized.cached_input_per_1m = pricing.cached_input_per_1m
-    if (typeof pricing.cache_write_per_1m === 'number' && Number.isFinite(pricing.cache_write_per_1m)) normalized.cache_write_per_1m = pricing.cache_write_per_1m
-    if (typeof pricing.completion_per_1m === 'number' && Number.isFinite(pricing.completion_per_1m)) normalized.completion_per_1m = pricing.completion_per_1m
-    return Object.keys(normalized).length > 0 ? normalized : undefined
-  }
-
-  const buildProviderModelPayload = (
-    name: string,
-    data: Record<string, unknown>,
-    existingModel?: NonNullable<NonNullable<ConfigData['providers']>['models']>[number],
-  ) => ({
-    name,
-    reasoning_family:
-      typeof data.reasoning_family === 'string' && data.reasoning_family.trim()
-        ? data.reasoning_family.trim()
-        : undefined,
-    provider_model_id:
-      typeof data.provider_model_id === 'string' && data.provider_model_id.trim()
-        ? data.provider_model_id.trim()
-        : existingModel?.provider_model_id || name,
-    api_format:
-      typeof data.api_format === 'string' && data.api_format.trim()
-        ? data.api_format.trim()
-        : undefined,
-    external_model_ids: normalizeStringMap(data.external_model_ids),
-    backend_refs: normalizeBackendRefs(data.backend_refs),
-    pricing: normalizePricing(data.pricing),
-  })
 
   type ModelRow = NormalizedModel
   const renderModelEndpoints = (model: ModelRow) => {

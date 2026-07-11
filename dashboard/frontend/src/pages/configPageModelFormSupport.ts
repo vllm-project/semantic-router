@@ -52,6 +52,12 @@ export function normalizeModelPricing(value: unknown): ModelPricing | undefined 
   const normalized: ModelPricing = {}
   if (typeof pricing.currency === 'string' && pricing.currency.trim()) normalized.currency = pricing.currency.trim()
   if (typeof pricing.prompt_per_1m === 'number' && Number.isFinite(pricing.prompt_per_1m)) normalized.prompt_per_1m = pricing.prompt_per_1m
+  if (typeof pricing.cached_input_per_1m === 'number' && Number.isFinite(pricing.cached_input_per_1m)) {
+    normalized.cached_input_per_1m = pricing.cached_input_per_1m
+  }
+  if (typeof pricing.cache_write_per_1m === 'number' && Number.isFinite(pricing.cache_write_per_1m)) {
+    normalized.cache_write_per_1m = pricing.cache_write_per_1m
+  }
   if (typeof pricing.completion_per_1m === 'number' && Number.isFinite(pricing.completion_per_1m)) normalized.completion_per_1m = pricing.completion_per_1m
   return Object.keys(normalized).length > 0 ? normalized : undefined
 }
