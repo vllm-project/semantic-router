@@ -52,14 +52,16 @@ test.describe('Public and transition surfaces on short screens', () => {
     )
 
     await expect(
-      page.getByRole('heading', { name: 'Intelligence, composed for you.' }),
+      page.getByRole('heading', { name: 'Build your Mixture-of-Models.' }),
     ).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'From request to model path.' })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'From signals and preference to model path.' }),
+    ).toBeVisible()
 
     const routingHeadings = [
-      page.getByRole('heading', { name: 'Extract signals', exact: true }),
-      page.getByRole('heading', { name: 'Compose decisions', exact: true }),
-      page.getByRole('heading', { name: 'Route one—or coordinate many', exact: true }),
+      page.getByRole('heading', { name: 'Understand every request', exact: true }),
+      page.getByRole('heading', { name: 'Make preference executable', exact: true }),
+      page.getByRole('heading', { name: 'Compose the model path', exact: true }),
     ]
     const routingBoxes = await Promise.all(
       routingHeadings.map(async (heading) => heading.boundingBox()),
@@ -94,10 +96,12 @@ test.describe('Public and transition surfaces on short screens', () => {
     await expect(landingMotion.locator('canvas')).toBeVisible()
 
     await expect(
-      page.getByRole('heading', { name: 'Intelligence, composed for you.' }),
+      page.getByRole('heading', { name: 'Build your Mixture-of-Models.' }),
     ).toBeVisible()
     await expect(
-      page.getByText('One model or many, across compute and locations—shaped by your priorities.'),
+      page.getByText(
+        'Compose a model system around every user, product, and workload. vLLM Semantic Router turns preferences and request signals into executable model paths.',
+      ),
     ).toBeVisible()
     const exploreDocs = page.getByRole('button', { name: 'Explore the Docs' })
     await exploreDocs.scrollIntoViewIfNeeded()
@@ -110,7 +114,7 @@ test.describe('Public and transition surfaces on short screens', () => {
     expect((buttonBox?.y ?? 0) + (buttonBox?.height ?? 0)).toBeLessThanOrEqual(viewportHeight + 1)
 
     const routeStep = page.getByRole('heading', {
-      name: 'Route one—or coordinate many',
+      name: 'Compose the model path',
       exact: true,
     })
     await routeStep.scrollIntoViewIfNeeded()

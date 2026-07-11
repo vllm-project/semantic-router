@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # What are our Goals?
 
-We are building the **System Level Intelligence** for Mixture-of-Models (MoM), bringing **Collective Intelligence** into **LLM systems**.
+We are building **Mixture-of-Models (MoM)**: the next-generation model architecture composed around the preferences of every user, product, and workload. **vLLM Semantic Router** provides the system-level intelligence that turns those preferences and request signals into executable model paths.
 
 ## Core Questions
 
@@ -32,16 +32,16 @@ Having multiple signals is great, but how do we use them together to make better
 **Our solution**: A reusable signal catalog plus projection coordination and
 AND/OR decision logic that lets you combine signals without duplicating policy.
 
-### 3. How to collaborate more efficiently?
+### 3. How do models become one system?
 
-Different models are good at different things. How do we make them work together as a team?
+Different models are good at different things. How do we compose their strengths into one system?
 
 - Route math questions to specialized math models
 - Route creative writing to models with better creativity
 - Route code questions to models trained on code
 - Use smaller models for simple tasks, larger models for complex ones
 
-**Our solution**: Intelligent routing that matches queries to the best model based on multiple signals, not just simple rules.
+**Our solution**: Executable model paths that select, cascade, or fuse models using request signals and explicit preferences—not just simple rules.
 
 ### 4. How to secure the system?
 

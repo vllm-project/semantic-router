@@ -30,15 +30,15 @@ import styles from './index.module.css'
 const paperCount = researchPapers.length
 const homepageMetaTitle = translate({
   id: 'homepage.meta.title',
-  message: 'Open-Source Runtime for Mixture-of-Models',
+  message: 'Build Your Mixture-of-Models',
 })
 const homepageMetaDescription = translate({
   id: 'homepage.meta.description',
-  message: 'Mixture-of-Models is a next-generation model architecture shaped by preference. vLLM Semantic Router is its open-source runtime.',
+  message: 'Mixture-of-Models is the next-generation model architecture, composed around user, product, and workload preferences. vLLM Semantic Router is its open-source runtime.',
 })
 const homepageSocialTitle = translate({
   id: 'homepage.meta.socialTitle',
-  message: 'vLLM Semantic Router | Runtime for Mixture-of-Models',
+  message: 'Build Your Mixture-of-Models | vLLM Semantic Router',
 })
 
 type HeroModelLogo = {
@@ -113,7 +113,7 @@ const fragmentationRows: FragmentationRow[] = [
     }),
     value: translate({
       id: 'homepage.capabilities.models.value',
-      message: 'Route one—or coordinate many.',
+      message: 'Compose specialized models into one model system.',
     }),
   },
   {
@@ -149,7 +149,7 @@ const fragmentationRows: FragmentationRow[] = [
     }),
     value: translate({
       id: 'homepage.capabilities.preference.value',
-      message: 'Let preference shape every model path.',
+      message: 'Turn user, product, and workload preferences into explicit routing decisions.',
     }),
   },
 ]
@@ -267,21 +267,22 @@ function DitherHero(): JSX.Element {
               <PageIntro
                 align="center"
                 className={styles.heroIntroPanel}
-                label={<Translate id="homepage.hero.label">Mixture-of-Models</Translate>}
+                label={<Translate id="homepage.hero.label">The next-generation model architecture</Translate>}
                 title={(
                   <span className={styles.heroTitle}>
                     <span className={`${styles.heroTitleLine} ${styles.heroTitleAccent}`}>
-                      <Translate id="homepage.hero.line1">Intelligence,</Translate>
+                      <Translate id="homepage.hero.line1">Build your</Translate>
                     </span>
                     <span className={styles.heroTitleLine}>
-                      <Translate id="homepage.hero.line2">composed for you.</Translate>
+                      <Translate id="homepage.hero.line2">Mixture-of-Models.</Translate>
                     </span>
                   </span>
                 )}
                 description={(
                   <span className={styles.heroDescriptionText}>
                     <Translate id="homepage.hero.description">
-                      One model or many, across compute and locations—shaped by your priorities.
+                      Compose a model system around every user, product, and workload. vLLM Semantic
+                      Router turns preferences and request signals into executable model paths.
                     </Translate>
                   </span>
                 )}

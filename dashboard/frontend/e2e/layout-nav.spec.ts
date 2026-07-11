@@ -1,5 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-import { mockAuthenticatedSession } from './support/auth';
+import { expect, test, type Page } from '@playwright/test'
+import { mockAuthenticatedSession } from './support/auth'
 
 const setupState = {
   setupMode: false,
@@ -9,7 +9,7 @@ const setupState = {
   hasModels: true,
   hasDecisions: true,
   canActivate: true,
-};
+}
 
 const settingsResponse = {
   readonlyMode: false,
@@ -17,7 +17,7 @@ const settingsResponse = {
   platform: '',
   envoyUrl: '',
   fleetSimEnabled: true,
-};
+}
 
 const readUser = {
   id: 'user-read-1',
@@ -33,7 +33,7 @@ const readUser = {
     'tools.use',
     'topology.read',
   ],
-};
+}
 
 const configResponse = {
   version: 'v0.3',
@@ -133,14 +133,14 @@ const configResponse = {
       response_api: { enabled: true },
     },
   },
-};
+}
 
 const rawGlobalYaml = `router:
   strategy: priority
 services:
   response_api:
     enabled: true
-`;
+`
 
 const statusResponse = {
   overall: 'healthy',
@@ -159,7 +159,7 @@ const statusResponse = {
       total_models: 0,
     },
   },
-};
+}
 
 const replayRecordsResponse = {
   object: 'router_replay.list',
@@ -212,7 +212,7 @@ const replayRecordsResponse = {
       streaming: true,
     },
   ],
-};
+}
 
 const replayAggregateResponse = {
   object: 'router_replay.aggregate',
@@ -225,12 +225,8 @@ const replayAggregateResponse = {
     cost_record_count: 1,
     excluded_record_count: 1,
   },
-  model_selection: [
-    { name: 'test-model', value: 2 },
-  ],
-  decision_distribution: [
-    { name: 'business-route', value: 2 },
-  ],
+  model_selection: [{ name: 'test-model', value: 2 }],
+  decision_distribution: [{ name: 'business-route', value: 2 }],
   signal_distribution: [
     { name: 'domain', value: 2 },
     { name: 'keyword', value: 1 },
@@ -262,365 +258,495 @@ const replayAggregateResponse = {
   },
   available_decisions: ['business-route'],
   available_models: ['test-model'],
-};
+}
 
 async function mockCommon(
   page: Page,
   options: {
     user?: {
-      id: string;
-      email: string;
-      name: string;
-      role?: string;
-      permissions?: string[];
-    };
+      id: string
+      email: string
+      name: string
+      role?: string
+      permissions?: string[]
+    }
   } = {},
 ) {
-  await mockAuthenticatedSession(page, options);
+  await mockAuthenticatedSession(page, options)
 
-  await page.route('**/api/setup/state', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(setupState) });
-  });
+  await page.route('**/api/setup/state', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(setupState),
+    })
+  })
 
-  await page.route('**/api/settings', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(settingsResponse) });
-  });
+  await page.route('**/api/settings', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(settingsResponse),
+    })
+  })
 
-  await page.route('**/api/mcp/tools', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tools: [] }) });
-  });
+  await page.route('**/api/mcp/tools', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ tools: [] }),
+    })
+  })
 
-  await page.route('**/api/mcp/servers', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
-  });
+  await page.route('**/api/mcp/servers', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) })
+  })
 
-  await page.route('**/api/router/config/all', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(configResponse) });
-  });
+  await page.route('**/api/router/config/all', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(configResponse),
+    })
+  })
 
-  await page.route('**/api/router/config/global', async route => {
+  await page.route('**/api/router/config/global', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(configResponse.global),
-    });
-  });
+    })
+  })
 
-  await page.route('**/api/router/config/global/raw', async route => {
-    await route.fulfill({ status: 200, contentType: 'text/yaml', body: rawGlobalYaml });
-  });
+  await page.route('**/api/router/config/global/raw', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'text/yaml', body: rawGlobalYaml })
+  })
 
-  await page.route('**/api/status', async route => {
+  await page.route('**/api/status', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(statusResponse),
-    });
-  });
+    })
+  })
 
-  await page.route('**/api/auth/bootstrap/can-register', async route => {
+  await page.route('**/api/auth/bootstrap/can-register', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ canRegister: false }),
-    });
-  });
+    })
+  })
 
-  await page.route(/\/api\/router\/v1\/router_replay(?:\?.*)?$/, async route => {
+  await page.route(/\/api\/router\/v1\/router_replay(?:\?.*)?$/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(replayRecordsResponse),
-    });
-  });
+    })
+  })
 
-  await page.route(/\/api\/router\/v1\/router_replay\/aggregate(?:\?.*)?$/, async route => {
+  await page.route(/\/api\/router\/v1\/router_replay\/aggregate(?:\?.*)?$/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(replayAggregateResponse),
-    });
-  });
+    })
+  })
 
-  await page.route('**/api/router/v1/router_replay/*', async route => {
-    const requestURL = new URL(route.request().url());
-    const replayID = requestURL.pathname.split('/').pop();
+  await page.route('**/api/router/v1/router_replay/*', async (route) => {
+    const requestURL = new URL(route.request().url())
+    const replayID = requestURL.pathname.split('/').pop()
     if (replayID === 'aggregate') {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(replayAggregateResponse),
-      });
-      return;
+      })
+      return
     }
-    const record = replayRecordsResponse.data.find(item => item.id === replayID);
+    const record = replayRecordsResponse.data.find((item) => item.id === replayID)
 
     await route.fulfill({
       status: record ? 200 : 404,
       contentType: 'application/json',
       body: JSON.stringify(record ?? { error: { message: 'not found' } }),
-    });
-  });
+    })
+  })
 }
 
 test.describe('Layout top navigation', () => {
-  test('switches to the complete mobile navigation before tablet controls clip', async ({ page }) => {
-    await page.setViewportSize({ width: 900, height: 700 });
-    await mockCommon(page);
+  test('switches to the complete mobile navigation before tablet controls clip', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 900, height: 700 })
+    await mockCommon(page)
 
-    await page.goto('/dashboard');
+    await page.goto('/dashboard')
 
-    await expect(page.getByRole('navigation', { name: 'Global navigation' })).toBeHidden();
-    const menuButton = page.getByRole('button', { name: 'Toggle menu' });
-    await expect(menuButton).toBeVisible();
-    await expect(menuButton).toHaveAttribute('aria-controls', 'mobile-navigation');
-    await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await expect(page.getByRole('navigation', { name: 'Global navigation' })).toBeHidden()
+    const menuButton = page.getByRole('button', { name: 'Toggle menu' })
+    await expect(menuButton).toBeVisible()
+    await expect(menuButton).toHaveAttribute('aria-controls', 'mobile-navigation')
+    await expect(menuButton).toHaveAttribute('aria-expanded', 'false')
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
 
-    await menuButton.click();
-    await expect(menuButton).toHaveAttribute('aria-expanded', 'true');
-    const mobileNavigation = page.getByRole('navigation', { name: 'Mobile navigation' });
-    await expect(mobileNavigation).toHaveAttribute('id', 'mobile-navigation');
-    await expect(mobileNavigation.getByText('Manager', { exact: true })).toBeVisible();
-    await expect(mobileNavigation.getByText('Simulator', { exact: true })).toBeVisible();
-    await expect(mobileNavigation.getByText('System', { exact: true })).toBeVisible();
-  });
+    await menuButton.click()
+    await expect(menuButton).toHaveAttribute('aria-expanded', 'true')
+    const mobileNavigation = page.getByRole('navigation', { name: 'Mobile navigation' })
+    await expect(mobileNavigation).toHaveAttribute('id', 'mobile-navigation')
+    const mobileDashboardLink = mobileNavigation.getByRole('link', { name: 'Dashboard' })
+    await expect(mobileDashboardLink).toHaveAttribute('aria-current', 'page')
+    expect(
+      await mobileDashboardLink.evaluate(
+        (element) => window.getComputedStyle(element).backgroundColor,
+      ),
+    ).not.toBe('rgba(0, 0, 0, 0)')
+    const buildToggle = mobileNavigation.getByRole('button', { name: 'Build' })
+    const analyzeToggle = mobileNavigation.getByRole('button', { name: 'Analyze' })
+    const operateToggle = mobileNavigation.getByRole('button', { name: 'Operate' })
+    await expect(buildToggle).toBeVisible()
+    await expect(analyzeToggle).toBeVisible()
+    await expect(operateToggle).toBeVisible()
+    await expect(buildToggle).toHaveAttribute('aria-expanded', 'false')
 
-  test('keeps Insight in primary nav and groups manager routes under Manager beside Simulator and System', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await mockCommon(page);
+    await buildToggle.click()
+    await expect(buildToggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(mobileNavigation.getByText('Routing', { exact: true })).toBeVisible()
+    await expect(mobileNavigation.getByText('Knowledge', { exact: true })).toBeVisible()
+    await expect(mobileNavigation.getByText('Integrations & Policy', { exact: true })).toBeVisible()
+    await expect(mobileNavigation.getByRole('link', { name: 'Config Builder' })).toBeVisible()
+  })
 
-    await page.goto('/playground');
+  test('organizes the control plane around Build, Analyze, and Operate mega navigation', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockCommon(page)
 
-    const globalNav = page.getByRole('navigation', { name: 'Global navigation' });
-    const primaryGroup = page.getByRole('group', { name: 'Primary navigation' });
-    const secondaryGroup = page.getByRole('group', { name: 'Secondary navigation' });
+    await page.goto('/playground')
 
-    await expect(primaryGroup.getByRole('link', { name: 'Dashboard' })).toBeVisible();
-    await expect(primaryGroup.getByRole('link', { name: 'Playground' })).toBeVisible();
-    await expect(primaryGroup.getByRole('link', { name: 'Brain' })).toBeVisible();
-    await expect(primaryGroup.getByRole('link', { name: 'DSL' })).toBeVisible();
-    await expect(primaryGroup.getByRole('link', { name: 'Insight' })).toBeVisible();
-    await expect(primaryGroup.getByRole('button', { name: 'Manager' })).toHaveCount(0);
-    await expect(primaryGroup.getByRole('link', { name: 'ClawOS' })).toHaveCount(0);
-    await expect(primaryGroup.getByRole('link', { name: 'Users' })).toHaveCount(0);
+    const primaryGroup = page.getByRole('group', { name: 'Primary navigation' })
+    const workflowGroup = page.getByRole('group', { name: 'Workflow navigation' })
 
-    await expect(secondaryGroup.getByRole('link', { name: 'Users' })).toHaveCount(0);
-    await expect(secondaryGroup.getByRole('link', { name: 'ClawOS' })).toHaveCount(0);
-    const managerTrigger = secondaryGroup.getByRole('button', { name: 'Manager' });
-    const simulatorTrigger = secondaryGroup.getByRole('button', { name: 'Simulator' });
-    const systemTrigger = secondaryGroup.getByRole('button', { name: 'System' });
-    await expect(managerTrigger).toBeVisible();
-    await expect(simulatorTrigger).toBeVisible();
-    await expect(systemTrigger).toBeVisible();
-    await expect(managerTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-manager');
-    await expect(simulatorTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-simulator');
-    await expect(systemTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-system');
-    const secondaryButtons = secondaryGroup.getByRole('button');
-    await expect(secondaryButtons.nth(0)).toHaveText(/Manager/);
-    await expect(secondaryButtons.nth(1)).toHaveText(/Simulator/);
-    await expect(secondaryButtons.nth(2)).toHaveText(/System/);
-    await expect(globalNav.getByRole('button', { name: 'Analysis', exact: true })).toHaveCount(0);
-    await expect(globalNav.getByRole('button', { name: 'Operations', exact: true })).toHaveCount(0);
+    await expect(primaryGroup.getByRole('link', { name: 'Dashboard' })).toBeVisible()
+    await expect(primaryGroup.getByRole('link', { name: 'Playground' })).toBeVisible()
+    await expect(primaryGroup.getByRole('link')).toHaveCount(2)
 
-    const header = page.locator('header').first();
-    await expect(header).toHaveCSS('background-color', 'rgb(0, 0, 0)');
+    const buildTrigger = workflowGroup.getByRole('button', { name: 'Build' })
+    const analyzeTrigger = workflowGroup.getByRole('button', { name: 'Analyze' })
+    const operateTrigger = workflowGroup.getByRole('button', { name: 'Operate' })
+    await expect(buildTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-build')
+    await expect(analyzeTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-analyze')
+    await expect(operateTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-operate')
+    await expect(buildTrigger).toHaveAttribute('aria-haspopup', 'dialog')
+    await expect(workflowGroup.getByRole('button')).toHaveCount(3)
 
-    const playgroundLink = primaryGroup.getByRole('link', { name: 'Playground' });
-    await expect(playgroundLink).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    const header = page.locator('header').first()
+    await expect(header).toHaveCSS('background-color', 'rgb(0, 0, 0)')
+
+    const playgroundLink = primaryGroup.getByRole('link', { name: 'Playground' })
+    await expect(playgroundLink).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
     const activeUnderline = await playgroundLink.evaluate((element) => {
-      const underline = window.getComputedStyle(element, '::after');
-      return { backgroundColor: underline.backgroundColor, height: underline.height };
-    });
-    expect(activeUnderline).toEqual({ backgroundColor: 'rgb(227, 27, 35)', height: '2px' });
+      const underline = window.getComputedStyle(element, '::after')
+      return { backgroundColor: underline.backgroundColor, height: underline.height }
+    })
+    expect(activeUnderline).toEqual({ backgroundColor: 'rgb(227, 27, 35)', height: '2px' })
 
-    await managerTrigger.hover();
-    await expect(managerTrigger).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-    await managerTrigger.click();
+    await buildTrigger.hover()
+    await expect(buildTrigger).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+    await buildTrigger.click()
 
-    const managerMenu = page.getByRole('menu', { name: 'Manager' });
-    await expect(managerMenu).toHaveAttribute('id', 'layout-mega-menu-manager');
-    await expect(managerTrigger).toHaveAttribute('aria-expanded', 'true');
-    await expect(managerMenu.getByTestId('layout-mega-menu-rail')).toHaveCSS(
+    const buildMenu = page.getByRole('dialog', { name: 'Build' })
+    await expect(buildMenu).toHaveAttribute('id', 'layout-mega-menu-build')
+    await expect(buildTrigger).toHaveAttribute('aria-expanded', 'true')
+    await expect(buildMenu.getByTestId('layout-mega-menu-rail')).toHaveCSS(
       'background-color',
       'rgb(8, 8, 8)',
-    );
-    await expect(managerMenu.getByTestId('layout-mega-menu-content')).toHaveCSS(
+    )
+    await expect(buildMenu.getByTestId('layout-mega-menu-content')).toHaveCSS(
       'background-color',
       'rgb(244, 244, 241)',
-    );
-    await expect(managerMenu.getByRole('menuitem', { name: 'Users' })).toBeVisible();
-    await expect(managerMenu.getByRole('menuitem', { name: 'ClawOS' })).toBeVisible();
-    await expect(managerMenu.getByRole('menuitem', { name: 'Models' })).toBeVisible();
-    await expect(managerMenu.getByRole('menuitem', { name: 'Decisions' })).toBeVisible();
-    await expect(managerMenu.getByRole('menuitem', { name: 'Signals' })).toBeVisible();
-    await expect(managerMenu.getByRole('menuitem').first()).toBeFocused();
-    await page.keyboard.press('ArrowDown');
-    await expect(managerMenu.getByRole('menuitem').nth(1)).toBeFocused();
-    const managerBounds = await managerMenu.boundingBox();
-    expect(managerBounds).not.toBeNull();
-    expect(managerBounds!.x).toBeGreaterThanOrEqual(0);
-    expect(managerBounds!.x + managerBounds!.width).toBeLessThanOrEqual(1440);
+    )
+    const routingTab = buildMenu.getByRole('tab', { name: /Routing/ })
+    const knowledgeTab = buildMenu.getByRole('tab', { name: /Knowledge/ })
+    const integrationsTab = buildMenu.getByRole('tab', { name: /Integrations & Policy/ })
+    await expect(routingTab).toBeFocused()
+    await expect(routingTab).toHaveAttribute('aria-selected', 'true')
+    await expect(routingTab).toHaveAttribute('aria-controls', 'layout-mega-menu-build-routing-panel')
+    await expect(knowledgeTab).not.toHaveAttribute('aria-controls', /.+/)
+    await expect(buildMenu.getByRole('link', { name: 'Config Builder' })).toBeVisible()
+    await expect(buildMenu.getByRole('link', { name: 'Brain Topology' })).toBeVisible()
+    await expect(buildMenu.getByRole('button', { name: 'Signals' })).toBeVisible()
+    await expect(buildMenu.getByRole('button', { name: 'Decisions' })).toBeVisible()
 
-    await systemTrigger.click();
+    await routingTab.focus()
+    await page.keyboard.press('ArrowDown')
+    await expect(knowledgeTab).toBeFocused()
+    await expect(knowledgeTab).toHaveAttribute('aria-selected', 'true')
+    await expect(buildMenu.getByRole('link', { name: 'Bases' })).toBeVisible()
+    await page.keyboard.press('End')
+    await expect(integrationsTab).toBeFocused()
+    await expect(buildMenu.getByRole('button', { name: 'MCP Servers' })).toBeVisible()
+    await expect(buildMenu.getByRole('link', { name: 'Security Policy' })).toBeVisible()
+    await page.keyboard.press('Home')
+    await expect(routingTab).toBeFocused()
+    await page.keyboard.press('ArrowRight')
+    await expect(buildMenu.getByRole('link', { name: 'Config Builder' })).toBeFocused()
 
-    const menu = page.getByRole('menu', { name: 'System' });
-    await expect(menu).toHaveAttribute('id', 'layout-mega-menu-system');
-    await expect(menu.getByText('Analysis')).toBeVisible();
-    const menuItems = menu.getByRole('menuitem');
-    await expect(menuItems.nth(0)).toHaveText('Global Config');
-    await expect(menuItems.nth(1)).toHaveText('Evaluation');
-    await expect(menuItems.nth(2)).toHaveText('ML Setup');
-    await expect(menu.getByRole('menuitem', { name: 'Global Config' })).toBeVisible();
-    await expect(menu.getByRole('menuitem', { name: 'Evaluation' })).toBeVisible();
-    await expect(menu.getByRole('menuitem', { name: 'Replay' })).toHaveCount(0);
-    await expect(menu.getByRole('menuitem', { name: 'Ratings' })).toHaveCount(0);
-    await expect(menu.getByText('Observability')).toBeVisible();
-    await expect(menu.getByRole('menuitem', { name: 'ML Setup' })).toBeVisible();
-    await expect(menu.getByRole('menuitem', { name: 'MCP Servers' })).toBeVisible();
-    await expect(menu.getByRole('menuitem', { name: 'Status' })).toBeVisible();
-    await expect(menu.getByRole('menuitem', { name: 'Logs' })).toBeVisible();
-    await expect(menu.getByRole('menuitem', { name: 'Grafana' })).toBeVisible();
-    await expect(menu.getByRole('menuitem', { name: 'Tracing' })).toBeVisible();
+    const buildBounds = await buildMenu.boundingBox()
+    expect(buildBounds).not.toBeNull()
+    expect(buildBounds!.x).toBeGreaterThanOrEqual(0)
+    expect(buildBounds!.x + buildBounds!.width).toBeLessThanOrEqual(1440)
 
-    await menu.getByRole('menuitem', { name: 'Evaluation' }).focus();
-    await page.keyboard.press('Escape');
-    await expect(menu).toBeHidden();
-    await expect(systemTrigger).toHaveAttribute('aria-expanded', 'false');
-    await expect(systemTrigger).toBeFocused();
+    await page.keyboard.press('Escape')
+    await expect(buildMenu).toBeHidden()
+    await expect(buildTrigger).toHaveAttribute('aria-expanded', 'false')
+    await expect(buildTrigger).toBeFocused()
 
-    await page.keyboard.press('ArrowUp');
-    await expect(menu).toBeVisible();
-    await expect(menu.getByRole('menuitem').last()).toBeFocused();
-    await page.keyboard.press('Escape');
-    await expect(systemTrigger).toBeFocused();
+    await analyzeTrigger.click()
+    const analyzeMenu = page.getByRole('dialog', { name: 'Analyze' })
+    await expect(analyzeMenu.getByRole('tab', { name: /Outcomes/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    await expect(analyzeMenu.getByRole('link', { name: 'Insights' })).toBeVisible()
+    await expect(analyzeMenu.getByRole('link', { name: 'Evaluation' })).toBeVisible()
+    await expect(analyzeMenu.getByRole('link', { name: 'ML Setup' })).toBeVisible()
+    await analyzeMenu.getByRole('tab', { name: /Fleet Simulation/ }).click()
+    await expect(analyzeMenu.getByRole('link', { name: 'Overview' })).toBeVisible()
+    await expect(analyzeMenu.getByRole('link', { name: 'Runs' })).toBeVisible()
 
-    await page.keyboard.press('ArrowDown');
-    await expect(menu.getByRole('menuitem').first()).toBeFocused();
-    await page.keyboard.press('Shift+Tab');
-    await expect(systemTrigger).toBeFocused();
-    await expect(systemTrigger).toHaveAttribute('aria-expanded', 'true');
+    await operateTrigger.click()
+    const operateMenu = page.getByRole('dialog', { name: 'Operate' })
+    await expect(operateMenu.getByRole('link', { name: 'Status' })).toBeVisible()
+    await expect(operateMenu.getByRole('link', { name: 'Logs' })).toBeVisible()
+    await operateMenu.getByRole('tab', { name: /Observability/ }).click()
+    await expect(operateMenu.getByRole('link', { name: 'Grafana' })).toBeVisible()
+    await expect(operateMenu.getByRole('link', { name: 'Tracing' })).toBeVisible()
+    await operateMenu.getByRole('tab', { name: /Platform & Access/ }).click()
+    await expect(operateMenu.getByRole('button', { name: 'Global Config' })).toBeVisible()
+    await expect(operateMenu.getByRole('link', { name: 'Users' })).toBeVisible()
 
-    await page.keyboard.press('ArrowDown');
-    await expect(menu.getByRole('menuitem').first()).toBeFocused();
-    await page.keyboard.press('Shift+Tab');
-    await expect(systemTrigger).toBeFocused();
-    await page.keyboard.press('Shift+Tab');
-    await expect(menu).toBeHidden();
-    await expect(systemTrigger).toHaveAttribute('aria-expanded', 'false');
-  });
+    await page.keyboard.press('Escape')
+    await expect(operateTrigger).toBeFocused()
+
+    await page.keyboard.press('ArrowUp')
+    await expect(operateMenu).toBeVisible()
+    await expect(operateMenu.getByRole('link', { name: 'Logs' })).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(operateTrigger).toBeFocused()
+
+    await page.keyboard.press('ArrowDown')
+    await expect(operateMenu.getByRole('tab', { name: /Runtime/ })).toBeFocused()
+    await page.keyboard.press('Shift+Tab')
+    await expect(operateTrigger).toBeFocused()
+    await expect(operateTrigger).toHaveAttribute('aria-expanded', 'true')
+    await page.keyboard.press('Shift+Tab')
+    await expect(operateMenu).toBeHidden()
+    await expect(operateTrigger).toHaveAttribute('aria-expanded', 'false')
+  })
 
   test('keeps the desktop mega menu inside the viewport at 1024px', async ({ page }) => {
-    await page.setViewportSize({ width: 1024, height: 768 });
-    await mockCommon(page);
+    await page.setViewportSize({ width: 1024, height: 768 })
+    await mockCommon(page)
 
-    await page.goto('/dashboard');
+    await page.goto('/dashboard')
 
-    const globalNav = page.getByRole('navigation', { name: 'Global navigation' });
-    await expect(globalNav).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Toggle menu' })).toBeHidden();
+    const globalNav = page.getByRole('navigation', { name: 'Global navigation' })
+    await expect(globalNav).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Toggle menu' })).toBeHidden()
 
-    const systemTrigger = globalNav.getByRole('button', { name: 'System' });
-    await systemTrigger.click();
-    const systemMenu = page.getByRole('menu', { name: 'System' });
-    await expect(systemMenu).toBeVisible();
+    const buildTrigger = globalNav.getByRole('button', { name: 'Build' })
+    await buildTrigger.click()
+    const buildMenu = page.getByRole('dialog', { name: 'Build' })
+    await expect(buildMenu).toBeVisible()
 
-    const bounds = await systemMenu.boundingBox();
-    expect(bounds).not.toBeNull();
-    expect(bounds!.x).toBeGreaterThanOrEqual(0);
-    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(1024);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  });
+    const bounds = await buildMenu.boundingBox()
+    expect(bounds).not.toBeNull()
+    expect(bounds!.x).toBeGreaterThanOrEqual(0)
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(1024)
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
+  })
+
+  test('keeps a manually selected category open from an active route', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockCommon(page)
+
+    await page.goto('/builder')
+
+    const buildTrigger = page
+      .getByRole('group', { name: 'Workflow navigation' })
+      .getByRole('button', { name: 'Build' })
+    await buildTrigger.click()
+
+    const buildMenu = page.getByRole('dialog', { name: 'Build' })
+    const routingTab = buildMenu.getByRole('tab', { name: /Routing/ })
+    const knowledgeTab = buildMenu.getByRole('tab', { name: /Knowledge/ })
+    await expect(routingTab).toHaveAttribute('aria-selected', 'true')
+
+    await knowledgeTab.click()
+    await expect(knowledgeTab).toHaveAttribute('aria-selected', 'true')
+    await expect(buildMenu.getByRole('link', { name: 'Bases' })).toBeVisible()
+    await expect(routingTab).toHaveAttribute('aria-selected', 'false')
+  })
+
+  test('keeps every mega-menu category reachable in a short desktop window', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 400 })
+    await mockCommon(page)
+
+    await page.goto('/dashboard')
+    const buildTrigger = page
+      .getByRole('group', { name: 'Workflow navigation' })
+      .getByRole('button', { name: 'Build' })
+    await buildTrigger.click()
+
+    const buildMenu = page.getByRole('dialog', { name: 'Build' })
+    const routingTab = buildMenu.getByRole('tab', { name: /Routing/ })
+    const integrationsTab = buildMenu.getByRole('tab', { name: /Integrations & Policy/ })
+    await routingTab.focus()
+    await page.keyboard.press('End')
+
+    await expect(integrationsTab).toBeFocused()
+    await expect(integrationsTab).toBeInViewport()
+    expect(
+      await buildMenu.evaluate(
+        (element) => element.getBoundingClientRect().bottom <= window.innerHeight,
+      ),
+    ).toBe(true)
+  })
 
   test('loads Insights charts and does not preserve the legacy replay route', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await mockCommon(page);
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockCommon(page)
 
-    await page.goto('/dashboard');
-    await page.getByRole('link', { name: 'Insight' }).click();
+    await page.goto('/dashboard')
+    await page.getByRole('button', { name: 'Analyze' }).click()
+    await page
+      .getByRole('dialog', { name: 'Analyze' })
+      .getByRole('link', { name: 'Insights' })
+      .click()
 
-    await expect(page).toHaveURL(/\/insights$/);
-    await expect(page.getByRole('heading', { name: 'Insights', exact: true })).toBeVisible();
-    await expect(page.getByText('Total Saved')).toBeVisible();
-    await expect(page.getByText('Saved %')).toBeVisible();
-    await expect(page.getByText('Baseline Spend')).toBeVisible();
-    await expect(page.getByText('Actual Spend')).toBeVisible();
-    await expect(page.getByText('See what the router picked, what signals fired, and how much it saved.')).toBeVisible();
-    await expect(page.getByText('Decisions, model picks, token usage, and savings in one view.')).toBeVisible();
-    await expect(page.getByText('Replay-backed routing records with spend, savings, and token details per request.')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Model Selection', exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Decision Distribution', exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Signal Distribution', exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Token Volume', exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Tokens by Decision', exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Tokens by Selected Model', exact: true })).toBeVisible();
-    await expect(page.getByText('Input Tokens').first()).toBeVisible();
-    await expect(page.getByText('Output Tokens').first()).toBeVisible();
-    await expect(page.getByText('Total Tokens').first()).toBeVisible();
-    await expect(page.getByText('1 filtered record excluded from cost totals because usage or pricing data is incomplete.')).toBeVisible();
-    await expect(page.getByText('1 filtered record excluded from token totals because usage data is incomplete.')).toBeVisible();
+    await expect(page).toHaveURL(/\/insights$/)
+    await expect(page.getByRole('heading', { name: 'Insights', exact: true })).toBeVisible()
+    await expect(page.getByText('Total Saved')).toBeVisible()
+    await expect(page.getByText('Saved %')).toBeVisible()
+    await expect(page.getByText('Baseline Spend')).toBeVisible()
+    await expect(page.getByText('Actual Spend')).toBeVisible()
+    await expect(
+      page.getByText('See what the router picked, what signals fired, and how much it saved.'),
+    ).toBeVisible()
+    await expect(
+      page.getByText('Decisions, model picks, token usage, and savings in one view.'),
+    ).toBeVisible()
+    await expect(
+      page.getByText(
+        'Replay-backed routing records with spend, savings, and token details per request.',
+      ),
+    ).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Model Selection', exact: true })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Decision Distribution', exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Signal Distribution', exact: true }),
+    ).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Token Volume', exact: true })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Tokens by Decision', exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Tokens by Selected Model', exact: true }),
+    ).toBeVisible()
+    await expect(page.getByText('Input Tokens').first()).toBeVisible()
+    await expect(page.getByText('Output Tokens').first()).toBeVisible()
+    await expect(page.getByText('Total Tokens').first()).toBeVisible()
+    await expect(
+      page.getByText(
+        '1 filtered record excluded from cost totals because usage or pricing data is incomplete.',
+      ),
+    ).toBeVisible()
+    await expect(
+      page.getByText(
+        '1 filtered record excluded from token totals because usage data is incomplete.',
+      ),
+    ).toBeVisible()
     await expect(
       page.getByRole('article').filter({ hasText: 'Total Saved' }).getByRole('strong'),
-    ).toHaveText('$0.0060');
+    ).toHaveText('$0.0060')
     await expect(
       page.getByRole('article').filter({ hasText: 'Saved %' }).getByRole('strong'),
-    ).toHaveText('75.0%');
-    await expect(page.getByRole('columnheader', { name: 'Actual Cost' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Saved vs Baseline' })).toBeVisible();
+    ).toHaveText('75.0%')
+    await expect(page.getByRole('columnheader', { name: 'Actual Cost' })).toBeVisible()
+    await expect(page.getByRole('columnheader', { name: 'Saved vs Baseline' })).toBeVisible()
 
-    await page.goto('/replay');
-    await expect(page).toHaveURL(/\/dashboard$/);
-  });
+    await page.goto('/replay')
+    await expect(page).toHaveURL(/\/dashboard$/)
+  })
 
   test('renders nested canonical decision groups in Brain topology', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await mockCommon(page);
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockCommon(page)
 
-    await page.goto('/topology');
+    await page.goto('/topology')
 
     const decisionNode = page
       .locator('[class*="decisionNode"]')
       .filter({ has: page.getByText('medium_business', { exact: true }) })
-      .first();
+      .first()
 
-    await expect(decisionNode).toBeVisible();
-    await expect(decisionNode).toContainText('AND');
-    await expect(decisionNode).toContainText('OR');
-    await expect(decisionNode).toContainText('domain: business');
-    await expect(decisionNode).toContainText('domain: economics');
-    await expect(decisionNode).toContainText('embedding: business_analysis');
-    await expect(decisionNode.getByText('Referenced signals not configured')).toHaveCount(0);
-  });
+    await expect(decisionNode).toBeVisible()
+    await expect(decisionNode).toContainText('AND')
+    await expect(decisionNode).toContainText('OR')
+    await expect(decisionNode).toContainText('domain: business')
+    await expect(decisionNode).toContainText('domain: economics')
+    await expect(decisionNode).toContainText('embedding: business_analysis')
+    await expect(decisionNode.getByText('Referenced signals not configured')).toHaveCount(0)
+  })
 
-  test('hides ML Setup for read users and redirects direct access back to the dashboard', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await mockCommon(page, { user: readUser });
+  test('hides ML Setup for read users and redirects direct access back to the dashboard', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockCommon(page, { user: readUser })
 
-    await page.goto('/dashboard');
+    await page.goto('/dashboard')
 
-    await expect(page.getByRole('button', { name: 'ML Setup', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'ML Setup', exact: true })).toHaveCount(0)
 
-    const secondaryGroup = page.getByRole('group', { name: 'Secondary navigation' });
-    await secondaryGroup.getByRole('button', { name: 'Manager' }).click();
+    const workflowGroup = page.getByRole('group', { name: 'Workflow navigation' })
+    await workflowGroup.getByRole('button', { name: 'Operate' }).click()
 
-    const managerMenu = page.getByRole('menu', { name: 'Manager' });
-    await expect(managerMenu.getByRole('menuitem', { name: 'Users' })).toHaveCount(0);
-    await expect(managerMenu.getByRole('menuitem', { name: 'ClawOS' })).toBeVisible();
+    const operateMenu = page.getByRole('dialog', { name: 'Operate' })
+    await operateMenu.getByRole('tab', { name: /Platform & Access/ }).click()
+    await expect(operateMenu.getByRole('link', { name: 'Users' })).toHaveCount(0)
+    await expect(operateMenu.getByRole('button', { name: 'Global Config' })).toBeVisible()
 
-    await secondaryGroup.getByRole('button', { name: 'System' }).click();
+    await workflowGroup.getByRole('button', { name: 'Analyze' }).click()
 
-    const menu = page.getByRole('menu', { name: 'System' });
-    await expect(menu.getByRole('menuitem', { name: 'ML Setup' })).toHaveCount(0);
-    await expect(menu.getByRole('menuitem', { name: 'MCP Servers' })).toBeVisible();
+    const analyzeMenu = page.getByRole('dialog', { name: 'Analyze' })
+    await expect(analyzeMenu.getByRole('link', { name: 'ML Setup' })).toHaveCount(0)
 
-    await page.goto('/ml-setup');
+    await workflowGroup.getByRole('button', { name: 'Build' }).click()
+    const buildMenu = page.getByRole('dialog', { name: 'Build' })
+    await buildMenu.getByRole('tab', { name: /Integrations & Policy/ }).click()
+    await expect(buildMenu.getByRole('button', { name: 'MCP Servers' })).toBeVisible()
+    await expect(buildMenu.getByRole('link', { name: 'ClawOS' })).toBeVisible()
 
-    await expect(page).toHaveURL(/\/dashboard$/);
-    await expect(page.getByRole('button', { name: 'ML Setup', exact: true })).toHaveCount(0);
-  });
+    await page.goto('/ml-setup')
 
-  test('opens a centered account dialog and allows logging out from the header', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(page).toHaveURL(/\/dashboard$/)
+    await expect(page.getByRole('button', { name: 'ML Setup', exact: true })).toHaveCount(0)
+  })
+
+  test('opens a centered account dialog and allows logging out from the header', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
     await mockCommon(page, {
       user: {
         id: 'user-admin-2',
@@ -629,52 +755,52 @@ test.describe('Layout top navigation', () => {
         role: 'admin',
         permissions: ['config.read', 'config.write', 'users.manage'],
       },
-    });
+    })
 
-    await page.goto('/dashboard');
+    await page.goto('/dashboard')
 
-    const accountTrigger = page.getByRole('button', { name: /Open account details/i });
-    await accountTrigger.click();
+    const accountTrigger = page.getByRole('button', { name: /Open account details/i })
+    await accountTrigger.click()
 
-    const accountDialog = page.getByTestId('layout-account-dialog');
-    const closeDialogButton = accountDialog.getByRole('button', { name: 'Close account dialog' });
-    const logoutButton = accountDialog.getByRole('button', { name: 'Logout' });
-    await expect(accountDialog).toBeVisible();
-    await expect(accountDialog).toHaveAttribute('aria-modal', 'true');
-    await expect(accountDialog.getByText('Ada Lovelace')).toBeVisible();
-    await expect(accountDialog.getByText('ada@example.com')).toBeVisible();
-    await expect(accountDialog.getByText('Admin')).toBeVisible();
-    await expect(accountDialog.getByText('config.read')).toBeVisible();
-    await expect(accountDialog.getByText('config.write')).toBeVisible();
-    await expect(accountDialog.getByText('users.manage')).toBeVisible();
-    await expect(closeDialogButton).toBeFocused();
+    const accountDialog = page.getByTestId('layout-account-dialog')
+    const closeDialogButton = accountDialog.getByRole('button', { name: 'Close account dialog' })
+    const logoutButton = accountDialog.getByRole('button', { name: 'Logout' })
+    await expect(accountDialog).toBeVisible()
+    await expect(accountDialog).toHaveAttribute('aria-modal', 'true')
+    await expect(accountDialog.getByText('Ada Lovelace')).toBeVisible()
+    await expect(accountDialog.getByText('ada@example.com')).toBeVisible()
+    await expect(accountDialog.getByText('Admin')).toBeVisible()
+    await expect(accountDialog.getByText('config.read')).toBeVisible()
+    await expect(accountDialog.getByText('config.write')).toBeVisible()
+    await expect(accountDialog.getByText('users.manage')).toBeVisible()
+    await expect(closeDialogButton).toBeFocused()
 
-    await page.keyboard.press('Shift+Tab');
-    await expect(logoutButton).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(closeDialogButton).toBeFocused();
-    await page.keyboard.press('Escape');
-    await expect(accountDialog).toBeHidden();
-    await expect(accountTrigger).toBeFocused();
+    await page.keyboard.press('Shift+Tab')
+    await expect(logoutButton).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(closeDialogButton).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(accountDialog).toBeHidden()
+    await expect(accountTrigger).toBeFocused()
 
-    await accountTrigger.click();
-    await accountDialog.getByRole('button', { name: 'Logout' }).click();
+    await accountTrigger.click()
+    await accountDialog.getByRole('button', { name: 'Logout' }).click()
 
-    await expect(page).toHaveURL(/\/login$/);
-    await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible();
-  });
+    await expect(page).toHaveURL(/\/login$/)
+    await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible()
+  })
 
   test('defaults /config to Global Config and loads raw global YAML', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await mockCommon(page);
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockCommon(page)
 
-    await page.goto('/config');
+    await page.goto('/config')
 
-    await expect(page.getByRole('heading', { name: 'Global Config', exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Global Config Overview' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Global Config', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Global Config Overview' })).toBeVisible()
 
-    await page.getByRole('button', { name: 'Raw YAML' }).click();
-    await expect(page.getByRole('heading', { name: 'Raw Global YAML' })).toBeVisible();
-    await expect(page.locator('textarea')).toHaveValue(rawGlobalYaml);
-  });
-});
+    await page.getByRole('button', { name: 'Raw YAML' }).click()
+    await expect(page.getByRole('heading', { name: 'Raw Global YAML' })).toBeVisible()
+    await expect(page.locator('textarea')).toHaveValue(rawGlobalYaml)
+  })
+})

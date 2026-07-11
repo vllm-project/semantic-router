@@ -45,7 +45,7 @@ const MILESTONES: Milestone[] = [
   {
     key: 'route',
     label: 'Route ready',
-    detail: 'Workspace ready',
+    detail: 'Model path prepared',
     revealAt: 86,
   },
 ]

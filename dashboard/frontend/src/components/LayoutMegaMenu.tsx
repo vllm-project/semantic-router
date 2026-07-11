@@ -1,90 +1,111 @@
-import type { FocusEvent, KeyboardEvent } from 'react'
+import { useEffect, useMemo, useState, type FocusEvent, type KeyboardEvent } from 'react'
 import { NavLink } from 'react-router-dom'
-import type { LayoutMenuItem, LayoutMenuSection } from './LayoutNavSupport'
+import type { LayoutMenuCategory, LayoutMenuItem } from './LayoutNavSupport'
 import styles from './LayoutMegaMenu.module.css'
 
 interface LayoutMegaMenuProps {
   id: string
   triggerId: string
   label: string
-  sections: LayoutMenuSection[]
+  categories: LayoutMenuCategory[]
+  activeCategoryKey?: string
   isItemActive: (item: LayoutMenuItem) => boolean
   onConfigSelect: (item: Extract<LayoutMenuItem, { kind: 'config' }>) => void
   onNavigate: () => void
 }
 
 const MENU_DESCRIPTIONS: Record<string, string> = {
-  Manager: 'Configure the signals, decisions, and resources behind every route.',
-  Simulator: 'Explore routing behavior before it reaches the live model fleet.',
-  System: 'Inspect, evaluate, and operate the router from one control surface.',
+  Build: 'Shape signals, decisions, model paths, and the context behind them.',
+  Analyze: 'Measure routing outcomes and plan the heterogeneous model fleet.',
+  Operate: 'Run, observe, and administer the live routing control plane.',
 }
 
-function getSectionTitle(label: string, section: LayoutMenuSection, sectionIndex: number) {
-  if (section.title) {
-    return section.title
-  }
-
-  if (label === 'Manager') {
-    return sectionIndex === 0 ? 'Workspace' : 'Routing'
-  }
-
-  return label
+const MENU_SEQUENCE: Record<string, string> = {
+  Build: 'DESIGN / DECIDE / CONNECT',
+  Analyze: 'INSPECT / EVALUATE / PLAN',
+  Operate: 'RUN / OBSERVE / GOVERN',
 }
 
 const LayoutMegaMenu = ({
   id,
   triggerId,
   label,
-  sections,
+  categories,
+  activeCategoryKey,
   isItemActive,
   onConfigSelect,
   onNavigate,
 }: LayoutMegaMenuProps) => {
-  const handleMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const menuItems = Array.from(
-      event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])'),
-    )
+  const initialCategoryKey = activeCategoryKey ?? categories[0]?.key ?? ''
+  const [selectedCategoryKey, setSelectedCategoryKey] = useState(initialCategoryKey)
 
-    if (menuItems.length === 0) {
-      return
-    }
+  useEffect(() => {
+    setSelectedCategoryKey((currentCategoryKey) => {
+      if (categories.some((category) => category.key === currentCategoryKey)) {
+        return currentCategoryKey
+      }
 
-    const focusedIndex = menuItems.indexOf(document.activeElement as HTMLElement)
+      if (activeCategoryKey && categories.some((category) => category.key === activeCategoryKey)) {
+        return activeCategoryKey
+      }
+
+      return categories[0]?.key ?? ''
+    })
+  }, [activeCategoryKey, categories])
+
+  const selectedCategory = useMemo(
+    () => categories.find((category) => category.key === selectedCategoryKey) ?? categories[0],
+    [categories, selectedCategoryKey],
+  )
+
+  const focusCategory = (categoryIndex: number) => {
+    const category = categories[categoryIndex]
+    if (!category) return
+
+    setSelectedCategoryKey(category.key)
+    document.getElementById(`${id}-${category.key}-tab`)?.focus()
+  }
+
+  const handleCategoryKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    categoryIndex: number,
+  ) => {
     let nextIndex: number | null = null
 
     switch (event.key) {
       case 'ArrowDown':
-      case 'ArrowRight':
-        nextIndex = focusedIndex < 0 ? 0 : (focusedIndex + 1) % menuItems.length
+        nextIndex = (categoryIndex + 1) % categories.length
         break
       case 'ArrowUp':
-      case 'ArrowLeft':
-        nextIndex =
-          focusedIndex < 0
-            ? menuItems.length - 1
-            : (focusedIndex - 1 + menuItems.length) % menuItems.length
+        nextIndex = (categoryIndex - 1 + categories.length) % categories.length
         break
       case 'Home':
         nextIndex = 0
         break
       case 'End':
-        nextIndex = menuItems.length - 1
+        nextIndex = categories.length - 1
         break
+      case 'ArrowRight':
+        event.preventDefault()
+        document
+          .getElementById(`${id}-${selectedCategoryKey}-panel`)
+          ?.querySelector<HTMLElement>('[data-mega-link]')
+          ?.focus()
+        return
       default:
         return
     }
 
     event.preventDefault()
-    menuItems[nextIndex].focus()
+    focusCategory(nextIndex)
   }
 
-  const columnsClassName = sections.length >= 3 ? styles.columnsThree : styles.columnsTwo
-
-  const handleMenuBlur = (event: FocusEvent<HTMLDivElement>) => {
+  const handlePanelBlur = (event: FocusEvent<HTMLDivElement>) => {
     const nextTarget = event.relatedTarget
     if (
       nextTarget instanceof Node &&
-      (event.currentTarget.contains(nextTarget) || nextTarget === document.getElementById(triggerId))
+      (event.currentTarget.contains(nextTarget) ||
+        nextTarget === document.getElementById(triggerId))
     ) {
       return
     }
@@ -92,70 +113,147 @@ const LayoutMegaMenu = ({
     onNavigate()
   }
 
+  if (!selectedCategory) {
+    return null
+  }
+
+  const columnsClassName =
+    selectedCategory.sections.length >= 3 ? styles.columnsThree : styles.columnsTwo
+
   return (
     <div
       id={id}
-      role="menu"
+      role="dialog"
       aria-labelledby={triggerId}
       className={styles.menu}
       data-testid={`layout-mega-menu-${label.toLowerCase()}`}
-      onKeyDown={handleMenuKeyDown}
-      onBlur={handleMenuBlur}
+      onBlur={handlePanelBlur}
     >
-      <aside className={styles.rail} data-testid="layout-mega-menu-rail" aria-hidden="true">
-        <span className={styles.railMarker} />
-        <span className={styles.eyebrow}>Semantic Router</span>
-        <strong className={styles.railTitle}>{label}</strong>
-        <p className={styles.railDescription}>
-          {MENU_DESCRIPTIONS[label] ?? 'Navigate the semantic routing control plane.'}
-        </p>
+      <aside className={styles.rail} data-testid="layout-mega-menu-rail">
+        <div className={styles.railIntro}>
+          <span className={styles.railMarker} />
+          <span className={styles.eyebrow}>Semantic Router control plane</span>
+          <strong className={styles.railTitle}>{label}</strong>
+          <p className={styles.railDescription}>
+            {MENU_DESCRIPTIONS[label] ?? 'Navigate the semantic routing control plane.'}
+          </p>
+          <span className={styles.railSequence} aria-hidden="true">
+            {MENU_SEQUENCE[label]}
+          </span>
+        </div>
+
+        <div
+          className={styles.categoryTabs}
+          role="tablist"
+          aria-label={`${label} categories`}
+          aria-orientation="vertical"
+        >
+          {categories.map((category, categoryIndex) => {
+            const selected = category.key === selectedCategory.key
+            return (
+              <button
+                key={category.key}
+                id={`${id}-${category.key}-tab`}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                aria-controls={selected ? `${id}-${category.key}-panel` : undefined}
+                tabIndex={selected ? 0 : -1}
+                className={`${styles.categoryTab} ${selected ? styles.categoryTabSelected : ''}`}
+                onClick={() => setSelectedCategoryKey(category.key)}
+                onFocus={() => setSelectedCategoryKey(category.key)}
+                onKeyDown={(event) => handleCategoryKeyDown(event, categoryIndex)}
+              >
+                <span className={styles.categoryIndex}>
+                  {String(categoryIndex + 1).padStart(2, '0')}
+                </span>
+                <span>{category.label}</span>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  aria-hidden="true"
+                >
+                  <path d="M4.5 2.75L8.75 7L4.5 11.25" strokeLinecap="round" />
+                </svg>
+              </button>
+            )
+          })}
+        </div>
       </aside>
 
       <div
-        className={`${styles.content} ${columnsClassName}`}
-        data-testid="layout-mega-menu-content"
+        id={`${id}-${selectedCategory.key}-panel`}
+        role="tabpanel"
+        aria-labelledby={`${id}-${selectedCategory.key}-tab`}
+        className={styles.panel}
       >
-        {sections.map((section, sectionIndex) => (
-          <section
-            key={`${label}-${section.title || sectionIndex}`}
-            className={`${styles.section} ${sections.length === 1 ? styles.singleSection : ''}`}
-          >
-            <h2 className={styles.sectionTitle}>{getSectionTitle(label, section, sectionIndex)}</h2>
-            <div className={styles.items}>
-              {section.items.map((item) => {
-                const active = isItemActive(item)
-                const className = `${styles.item} ${active ? styles.itemActive : ''}`
-                const key = `${section.title || sectionIndex}-${item.label}`
+        <div className={styles.panelHeader}>
+          <div>
+            <span className={styles.panelEyebrow}>{label}</span>
+            <h2 className={styles.panelTitle}>{selectedCategory.label}</h2>
+          </div>
+          <p className={styles.panelDescription}>{selectedCategory.description}</p>
+        </div>
 
-                if (item.kind === 'config') {
+        <div
+          className={`${styles.content} ${columnsClassName}`}
+          data-testid="layout-mega-menu-content"
+        >
+          {selectedCategory.sections.map((section) => (
+            <section
+              key={`${selectedCategory.key}-${section.title}`}
+              className={`${styles.section} ${selectedCategory.sections.length === 1 ? styles.singleSection : ''}`}
+            >
+              <h3 className={styles.sectionTitle}>{section.title}</h3>
+              {section.description ? (
+                <p className={styles.sectionDescription}>{section.description}</p>
+              ) : null}
+              <div className={styles.items}>
+                {section.items.map((item) => {
+                  const active = isItemActive(item)
+                  const className = `${styles.item} ${active ? styles.itemActive : ''}`
+                  const key = `${section.title}-${item.label}`
+
+                  if (item.kind === 'config') {
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        data-mega-link
+                        className={className}
+                        onClick={() => onConfigSelect(item)}
+                      >
+                        <span>{item.label}</span>
+                        <span className={styles.itemArrow} aria-hidden="true">
+                          ↗
+                        </span>
+                      </button>
+                    )
+                  }
+
                   return (
-                    <button
+                    <NavLink
                       key={key}
-                      type="button"
-                      role="menuitem"
+                      data-mega-link
+                      to={item.to}
                       className={className}
-                      onClick={() => onConfigSelect(item)}
+                      onClick={onNavigate}
                     >
-                      {item.label}
-                    </button>
+                      <span>{item.label}</span>
+                      <span className={styles.itemArrow} aria-hidden="true">
+                        ↗
+                      </span>
+                    </NavLink>
                   )
-                }
-
-                return (
-                  <NavLink
-                    key={key}
-                    role="menuitem"
-                    to={item.to}
-                    className={className}
-                    onClick={onNavigate}
-                  >
-                    {item.label}
-                  </NavLink>
-                )
-              })}
-            </div>
-          </section>
-        ))}
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
       </div>
     </div>
   )

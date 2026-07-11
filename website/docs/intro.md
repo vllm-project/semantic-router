@@ -5,11 +5,11 @@ description: Research-driven introduction to vLLM Semantic Router, an Envoy-base
 
 # vLLM Semantic Router
 
-vLLM Semantic Router is a research-driven project focused on frontier problems in
-**LLMRouting** and **Token economy**. We build system-level intelligence for
-Mixture-of-Models (MoM): deciding how to capture the right signals, select the
-right model path, enforce the right policy, and spend the right token budget for
-each request.
+We are building **Mixture-of-Models (MoM)**: the next-generation model
+architecture composed around the preferences of every user, product, and
+workload. **vLLM Semantic Router** is its open-source runtime, turning those
+preferences and request signals into executable model paths while advancing
+frontier problems in **LLMRouting** and **Token economy**.
 
 The project sits between clients and model backends as an Envoy External
 Processor (`ext_proc`), turning routing from ad hoc application logic into an

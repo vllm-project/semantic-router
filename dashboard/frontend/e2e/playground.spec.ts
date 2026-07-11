@@ -569,7 +569,7 @@ test.describe('Playground Chat Component', () => {
     await page.getByRole('button', { name: 'New conversation' }).click();
 
     await expect(page.locator('[data-message-role="user"]').filter({ hasText: 'Clear me' })).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: /Route with confidence/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Understand every request/i })).toBeVisible();
   });
 
   test('keeps streaming in the original session after switching away and shows progress when switching back', async ({ page }) => {
@@ -591,7 +591,7 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible();
 
     await page.getByRole('button', { name: 'New conversation' }).click();
-    await expect(page.getByRole('heading', { name: /Route with confidence/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Understand every request/i })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Stop generating' })).toHaveCount(0);
     await expect(page.getByText('First visible chunk.')).toHaveCount(0);
 

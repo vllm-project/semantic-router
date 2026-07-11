@@ -134,7 +134,9 @@ const DashboardPage: React.FC = () => {
       <div className={styles.header}>
         <div>
           <h1 className={styles.title}>Dashboard</h1>
-          <p className={styles.subtitle}>Routing health, policy coverage, and model readiness</p>
+          <p className={styles.subtitle}>
+            Your Mixture-of-Models—from signal coverage to model readiness
+          </p>
         </div>
         <div className={styles.headerActions}>
           {lastUpdated && (

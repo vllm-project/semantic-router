@@ -13,7 +13,7 @@ const HomepageFeatures: React.FC = () => {
             <Translate id="features.sectionTitle">Our Goals</Translate>
           </h2>
           <p className={styles.featuresSubtitle}>
-            <Translate id="features.sectionSubtitle">Building the System Level Intelligence for Mixture-of-Models (MoM), bringing Collective Intelligence into LLM systems</Translate>
+            <Translate id="features.sectionSubtitle">Building Mixture-of-Models—the next-generation model architecture—and the system-level intelligence that makes it work</Translate>
           </p>
         </div>
         <div className={styles.goalsBanner}>

@@ -28,15 +28,16 @@ const LandingPage: React.FC = () => {
 
       <main className={styles.mainContent}>
         <section className={styles.heroSection}>
-          <div className={styles.heroBadge}>Open-source runtime for Mixture-of-Models</div>
+          <div className={styles.heroBadge}>The next-generation model architecture</div>
 
           <h1 className={styles.title}>
-            <span className={styles.titleAccent}>Intelligence,</span>
-            <span>composed for you.</span>
+            <span className={styles.titleAccent}>Build your</span>
+            <span>Mixture-of-Models.</span>
           </h1>
 
           <p className={styles.subtitle}>
-            One model or many, across compute and locations—shaped by your priorities.
+            Compose a model system around every user, product, and workload. vLLM Semantic Router
+            turns preferences and request signals into executable model paths.
           </p>
 
           <div className={styles.ctaGroup}>
@@ -60,25 +61,25 @@ const LandingPage: React.FC = () => {
 
         <section className={styles.routingSection} aria-labelledby="routing-section-title">
           <div className={styles.sectionHeading}>
-            <span>Signal-driven routing</span>
-            <h2 id="routing-section-title">From request to model path.</h2>
+            <span>Signal-driven composition</span>
+            <h2 id="routing-section-title">From signals and preference to model path.</h2>
           </div>
 
           <div className={styles.routingGrid}>
             <article className={styles.routingStep}>
               <span className={styles.stepIndex}>01</span>
-              <h3>Extract signals</h3>
-              <p>Read intent, safety, context, and modality before generation begins.</p>
+              <h3>Understand every request</h3>
+              <p>Extract intent, context, safety, modality, and feedback before generation.</p>
             </article>
             <article className={styles.routingStep}>
               <span className={styles.stepIndex}>02</span>
-              <h3>Compose decisions</h3>
-              <p>Turn heterogeneous signals into policies shaped by your priorities.</p>
+              <h3>Make preference executable</h3>
+              <p>Turn user, product, and workload preferences into executable policy.</p>
             </article>
             <article className={styles.routingStep}>
               <span className={styles.stepIndex}>03</span>
-              <h3>Route one—or coordinate many</h3>
-              <p>Select model paths across compute and locations without changing your API.</p>
+              <h3>Compose the model path</h3>
+              <p>Route, cascade, or fuse across the models that fit each request.</p>
             </article>
           </div>
         </section>

@@ -12,6 +12,7 @@ import {
   type UsersPageRolePermissions,
   type UsersPageRolePermissionsPayload,
 } from './usersPageSupport'
+import { canManageUsers as canManageDashboardUsers, canViewUsers as canViewDashboardUsers } from '../utils/accessControl'
 
 type AdminUser = {
   id: string
@@ -72,8 +73,8 @@ const getResponseError = async (response: Response) => {
 
 const UsersPage: React.FC = () => {
   const { user: currentUser } = useAuth()
-  const canManageUsers = currentUser?.role === 'admin'
-  const canViewUsers = canManageUsers
+  const canManageUsers = canManageDashboardUsers(currentUser)
+  const canViewUsers = canViewDashboardUsers(currentUser)
 
   const [users, setUsers] = useState<AdminUser[]>([])
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])

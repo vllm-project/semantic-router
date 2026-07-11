@@ -375,16 +375,16 @@
     "message": "vLLM Semantic Router 标志"
   },
   "homepage.hero.label": {
-    "message": "Mixture-of-Models"
+    "message": "下一代模型架构"
   },
   "homepage.hero.line1": {
-    "message": "智能，"
+    "message": "构建你的"
   },
   "homepage.hero.line2": {
-    "message": "因你而组合。"
+    "message": "Mixture-of-Models。"
   },
   "homepage.hero.description": {
-    "message": "单个模型或多模型协作，跨算力与位置，按你的偏好组合。"
+    "message": "围绕每位用户、每个产品与每类工作负载的偏好组合模型系统。vLLM Semantic Router 将偏好与请求信号转化为可执行的模型路径。"
   },
   "homepage.hero.primaryCta": {
     "message": "体验 Playground"
@@ -450,7 +450,7 @@
     "message": "闭源前沿、开源通用、领域与端侧模型各有所长。"
   },
   "homepage.capabilities.models.value": {
-    "message": "路由单一模型，或协同多个模型。"
+    "message": "将专长各异的模型组合成一个模型系统。"
   },
   "homepage.capabilities.compute.reality": {
     "message": "新旧 GPU、专用加速器、端侧设备与云端算力长期共存。"
@@ -468,7 +468,7 @@
     "message": "不同用户、产品与工作负载对“最好”的定义不同。"
   },
   "homepage.capabilities.preference.value": {
-    "message": "让偏好决定每条模型路径。"
+    "message": "将用户、产品与工作负载偏好转化为明确的路由决策。"
   },
   "homepage.capabilities.docsCta": {
     "message": "了解工作原理"
@@ -1026,7 +1026,7 @@
     "message": "我们的目标"
   },
   "features.sectionSubtitle": {
-    "message": "为混合模型（MoM）构建系统级智能，将全局智能引入 LLM 系统"
+    "message": "构建下一代模型架构 Mixture-of-Models，以及驱动它运行的系统级智能"
   },
   "translationBanner.outdated": {
     "message": "此翻译可能已过时。英文原文已更新，中文尚未同步。",
@@ -2393,13 +2393,13 @@
     "message": "用于 LLM 推理优化的 Workload-Router-Pool 架构，以 vLLM Semantic Router 愿景论文的完整 PDF 阅读器形式呈现。"
   },
   "homepage.meta.description": {
-    "message": "Mixture-of-Models 是下一代偏好驱动的模型架构。vLLM Semantic Router 是其开源运行时。"
+    "message": "Mixture-of-Models 是围绕用户、产品与工作负载偏好进行组合的下一代模型架构。vLLM Semantic Router 是其开源运行时。"
   },
   "homepage.meta.title": {
-    "message": "Mixture-of-Models 的开源运行时"
+    "message": "构建你的 Mixture-of-Models"
   },
   "homepage.meta.socialTitle": {
-    "message": "vLLM Semantic Router | Mixture-of-Models 开源运行时"
+    "message": "构建你的 Mixture-of-Models | vLLM Semantic Router"
   },
 
   "homepage.whereItLives.title": {

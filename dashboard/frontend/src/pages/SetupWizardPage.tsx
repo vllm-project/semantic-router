@@ -463,11 +463,11 @@ const SetupWizardPage: React.FC = () => {
               <img className={styles.heroLogo} src="/vllm.png" alt="" />
             </div>
             <h1 className={styles.heroTitle}>
-              Configure a model first. Routing can follow.
+              Connect your first model. Compose the system from there.
             </h1>
           </div>
           <p className={styles.heroDescription}>
-            One model or many, shaped by your priorities.
+            Add models, then define how they should work together for every user and workload.
           </p>
         </div>
 

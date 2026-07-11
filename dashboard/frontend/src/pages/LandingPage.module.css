@@ -39,7 +39,7 @@
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  max-width: 880px;
+  max-width: 1000px;
   padding: clamp(4.5rem, 10vh, 8rem) 0 clamp(3.5rem, 8vh, 6rem);
   animation: fadeIn 0.7s ease-out both;
 }
@@ -74,7 +74,7 @@
   flex-direction: column;
   gap: 0.04em;
   color: var(--text-primary);
-  font-size: clamp(3.6rem, 7.8vw, 7.4rem);
+  font-size: clamp(3.6rem, 7.8vw, 5.6rem);
   font-weight: 760;
   line-height: 0.92;
   letter-spacing: -0.055em;
@@ -83,6 +83,10 @@
 
 .titleAccent {
   color: #ffffff;
+}
+
+.title > span:last-child {
+  white-space: nowrap;
 }
 
 .subtitle {
@@ -241,6 +245,10 @@
 
   .title {
     font-size: clamp(3.25rem, 12vw, 5.6rem);
+  }
+
+  .title > span:last-child {
+    white-space: normal;
   }
 
   .sectionHeading {

@@ -415,7 +415,7 @@ test.describe("Dashboard auth flow", () => {
 
     await expect(
       page.getByRole("heading", {
-        name: "Who are you? What should we call you?",
+        name: "Name your first administrator.",
       }),
     ).toBeVisible();
     await expect(page.getByRole("heading", { name: "Sign in" })).toHaveCount(0);
@@ -425,7 +425,7 @@ test.describe("Dashboard auth flow", () => {
 
     await expect(
       page.getByRole("heading", {
-        name: "Where should your future admin sign in?",
+        name: "Choose the administrator email.",
       }),
     ).toBeVisible();
     await page.getByLabel("Admin email").fill("ada@example.com");
@@ -433,14 +433,14 @@ test.describe("Dashboard auth flow", () => {
 
     await expect(
       page.getByRole("heading", {
-        name: "Set the key, then step into the future.",
+        name: "Secure the workspace.",
       }),
     ).toBeVisible();
     await page.getByLabel("Password").fill("future-password");
     await Promise.all([
       page.waitForURL(/\/auth\/transition\?to=%2Fsetup$/),
       page.getByText(transitionCopyPattern).waitFor({ state: "visible" }),
-      page.getByRole("button", { name: "Enter Future" }).click(),
+      page.getByRole("button", { name: "Create admin and continue" }).click(),
     ]);
 
     await expect

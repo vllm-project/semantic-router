@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   canAccessMLSetup,
   canAccessReplayFlowDetails,
+  canManageUsers,
+  canViewUsers,
   canWriteConfig,
 } from './accessControl'
 
@@ -35,5 +37,16 @@ describe('config write access', () => {
     expect(canAccessMLSetup({ role: 'admin' })).toBe(true)
     expect(canAccessReplayFlowDetails({ role: 'read', permissions: ['config.write'] })).toBe(true)
     expect(canAccessMLSetup({ role: 'read', permissions: ['mlpipeline.manage'] })).toBe(true)
+  })
+
+  it('uses effective user permissions for user-management surfaces', () => {
+    expect(canViewUsers({ role: 'read', permissions: ['users.view'] })).toBe(true)
+    expect(canViewUsers({ role: 'read', permissions: ['users.manage'] })).toBe(true)
+    expect(canManageUsers({ role: 'read', permissions: ['users.manage'] })).toBe(true)
+    expect(canManageUsers({ role: 'read', permissions: ['users.view'] })).toBe(false)
+    expect(canViewUsers({ role: 'admin', permissions: [] })).toBe(false)
+    expect(canManageUsers({ role: 'admin', permissions: [] })).toBe(false)
+    expect(canViewUsers({ role: 'admin' })).toBe(true)
+    expect(canManageUsers({ role: 'admin' })).toBe(true)
   })
 })
