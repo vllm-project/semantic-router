@@ -1,6 +1,6 @@
 import { createElement, createRef } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-dom', () => ({
   createPortal: (children: unknown) => children,
@@ -10,11 +10,11 @@ import { BuilderDeployConfirmModal } from './builderPageDeployOverlays'
 import { BuilderGuideDrawer } from './builderPageGuideDrawer'
 import { BuilderImportModal } from './builderPageImportModal'
 
-beforeAll(() => {
+beforeEach(() => {
   vi.stubGlobal('document', { body: {} })
 })
 
-afterAll(() => {
+afterEach(() => {
   vi.unstubAllGlobals()
 })
 

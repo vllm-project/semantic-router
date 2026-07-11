@@ -42,9 +42,9 @@ const DashboardPage: React.FC = () => {
   }, [])
 
   const fetchConfig = useCallback(async () => {
-    const configRes = await fetch('/api/router/config/all')
-    if (configRes.ok) {
-      setConfig(await configRes.json())
+    const configResult = await fetch('/api/router/config/all')
+    if (configResult.ok) {
+      setConfig(await configResult.json())
       setLastUpdated(new Date())
       setError(null)
     }
