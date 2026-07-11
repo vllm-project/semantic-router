@@ -152,7 +152,7 @@ export default function ConfigPageDecisionsSection({
                 {decision.rules.conditions.map((cond, i) => (
                   <div key={i} style={{
                     padding: '0.5rem',
-                    background: 'rgba(118, 185, 0, 0.1)',
+                    background: 'rgba(143, 148, 156, 0.1)',
                     borderRadius: '4px',
                     fontFamily: 'var(--font-mono)',
                     fontSize: '0.875rem'

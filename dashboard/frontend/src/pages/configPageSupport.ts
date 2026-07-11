@@ -220,6 +220,7 @@ export interface DecisionConfig {
   rules: DecisionRuleSet
   modelRefs: DecisionModelRef[]
   plugins?: DecisionPluginConfig[]
+  algorithm?: Record<string, unknown>
 }
 
 export interface RoutingConfig {

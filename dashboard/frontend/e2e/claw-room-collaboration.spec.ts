@@ -90,14 +90,85 @@ async function mockCollaborationBootstrap(page: Page) {
   })
 }
 
-async function enableClawRoom(page: Page) {
+async function enableClawRoom(page: Page, waitForWebSocket = true) {
   await page.goto('/playground')
   await page.getByRole('button', { name: 'Enable HireClaw' }).click()
   await page.getByRole('button', { name: 'Open ClawRoom view' }).click()
   await expect(page.getByTestId('claw-room-transcript')).toBeVisible()
+  await expect(page.getByText('hello team')).toBeVisible()
+  if (waitForWebSocket) {
+    await expect(page.getByTestId('claw-room-transport-status')).toContainText('Live')
+  }
 }
 
 test.describe('Claw room collaboration', () => {
+  test('keeps team details focus contained and returns it to the opener', async ({ page }) => {
+    await mockCollaborationBootstrap(page)
+
+    await page.addInitScript(() => {
+      class MockWebSocket {
+        static OPEN = 1
+        static CONNECTING = 0
+        readyState = MockWebSocket.OPEN
+        onopen: ((event: Event) => void) | null = null
+        onmessage: ((event: MessageEvent) => void) | null = null
+        onerror: ((event: Event) => void) | null = null
+        onclose: ((event: CloseEvent) => void) | null = null
+
+        constructor() {
+          window.setTimeout(() => this.onopen?.(new Event('open')), 0)
+        }
+
+        send() {}
+        close() {
+          this.readyState = 3
+        }
+      }
+
+      window.WebSocket = MockWebSocket as unknown as typeof WebSocket
+    })
+
+    await enableClawRoom(page)
+    await page.getByRole('button', { name: 'Open sidebar' }).click()
+    const detailsButton = page.getByTestId('claw-room-team-details-button')
+    const overflowBeforeDialog = await page.evaluate(() => document.body.style.overflow)
+    await detailsButton.click()
+
+    const dialog = page.getByTestId('claw-room-team-details-dialog')
+    const headerCloseButton = dialog.getByRole('button', { name: 'Close team details' })
+    const footerCloseButton = dialog.getByRole('button', { name: 'Close', exact: true })
+    await expect(dialog).toBeVisible()
+    await expect(headerCloseButton).toBeFocused()
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe('hidden')
+
+    await page.keyboard.press('Shift+Tab')
+    await expect(footerCloseButton).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(headerCloseButton).toBeFocused()
+
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+    await expect(detailsButton).toBeFocused()
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe(overflowBeforeDialog)
+
+    await detailsButton.click()
+    await expect(headerCloseButton).toBeFocused()
+    const accountTrigger = page.getByRole('button', { name: /Open account details/i })
+    await accountTrigger.evaluate((button: HTMLButtonElement) => button.click())
+    const accountDialog = page.getByTestId('layout-account-dialog')
+    const accountCloseButton = accountDialog.getByRole('button', { name: 'Close account dialog' })
+    await expect(accountCloseButton).toBeFocused()
+
+    await headerCloseButton.evaluate((button: HTMLButtonElement) => button.click())
+    await expect(dialog).toBeHidden()
+    await expect(accountCloseButton).toBeFocused()
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe('hidden')
+
+    await page.keyboard.press('Escape')
+    await expect(accountDialog).toBeHidden()
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe(overflowBeforeDialog)
+  })
+
   test('renders streaming worker chunks in the transcript', async ({ page }) => {
     await mockCollaborationBootstrap(page)
 
@@ -160,6 +231,33 @@ test.describe('Claw room collaboration', () => {
 
   test('renders streaming tool trace cards from websocket events', async ({ page }) => {
     await mockCollaborationBootstrap(page)
+
+    await page.addInitScript(() => {
+      class MockWebSocket {
+        static instances: MockWebSocket[] = []
+        static OPEN = 1
+        static CONNECTING = 0
+        readyState = MockWebSocket.OPEN
+        onopen: ((event: Event) => void) | null = null
+        onmessage: ((event: MessageEvent) => void) | null = null
+        onerror: ((event: Event) => void) | null = null
+        onclose: ((event: CloseEvent) => void) | null = null
+
+        constructor() {
+          MockWebSocket.instances.push(this)
+          window.setTimeout(() => this.onopen?.(new Event('open')), 0)
+        }
+
+        send() {}
+        close() { this.readyState = 3 }
+        emit(payload: Record<string, unknown>) {
+          this.onmessage?.({ data: JSON.stringify(payload) } as MessageEvent)
+        }
+      }
+
+      ;(window as typeof window & { __mockRoomSockets?: MockWebSocket[] }).__mockRoomSockets = MockWebSocket.instances
+      window.WebSocket = MockWebSocket as unknown as typeof WebSocket
+    })
     await enableClawRoom(page)
 
     await page.evaluate(() => {
@@ -200,6 +298,18 @@ test.describe('Claw room collaboration', () => {
           ],
         },
       })
+    })
+
+    await expect(page.getByTestId('claw-room-tool-trace')).toBeVisible()
+    await expect(page.getByTestId('claw-room-tool-trace')).toContainText('exec')
+    await page.getByRole('button', { name: 'Expand details for exec' }).click()
+    await expect(page.getByTestId('claw-room-tool-trace')).toContainText('/workspace')
+
+    await page.evaluate(() => {
+      const sockets = (window as typeof window & {
+        __mockRoomSockets?: Array<{ emit: (payload: Record<string, unknown>) => void }>
+      }).__mockRoomSockets
+      const socket = sockets?.[sockets.length - 1]
       socket?.emit({
         type: 'message_updated',
         message: {
@@ -211,23 +321,19 @@ test.describe('Claw room collaboration', () => {
           content: 'Done.',
           createdAt: '2026-05-31T00:00:00Z',
           metadata: {
-            toolTrace: JSON.stringify([
-              {
-                id: 'call_1',
-                name: 'exec',
-                arguments: '{"command":"pwd"}',
-                status: 'completed',
-                result: '/workspace',
-              },
-            ]),
+            toolTrace: JSON.stringify([{
+              id: 'call_1',
+              name: 'exec',
+              arguments: '{"command":"pwd"}',
+              status: 'completed',
+              result: '/workspace',
+            }]),
           },
         },
       })
     })
 
     await expect(page.getByTestId('claw-room-tool-trace')).toBeVisible()
-    await expect(page.getByTestId('claw-room-tool-trace')).toContainText('exec')
-    await expect(page.getByTestId('claw-room-tool-trace')).toContainText('/workspace')
     await expect(page.locator('[data-room-message-streaming="true"]')).toHaveCount(0)
     await expect(page.locator('[data-room-message-id="stream-worker-tools"]')).toContainText('Done.')
   })
@@ -283,7 +389,7 @@ test.describe('Claw room collaboration', () => {
       ;(window as typeof window & { __mockEventSource?: typeof MockEventSource }).__mockEventSource = MockEventSource
     })
 
-    await enableClawRoom(page)
+    await enableClawRoom(page, false)
     await expect(page.getByTestId('claw-room-transport-status')).toContainText('SSE')
 
     await page.evaluate(() => {
@@ -315,8 +421,10 @@ test.describe('Claw room collaboration', () => {
     await page.addInitScript(() => {
       class MockWebSocket {
         static instances: MockWebSocket[] = []
+        static OPEN = 1
+        static CONNECTING = 0
         sent: string[] = []
-        readyState = 1
+        readyState = MockWebSocket.OPEN
         onopen: ((event: Event) => void) | null = null
         onmessage: ((event: MessageEvent) => void) | null = null
         onerror: ((event: Event) => void) | null = null

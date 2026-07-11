@@ -4,6 +4,8 @@ import { ConfigSection } from '../components/ConfigNav'
 import EditModal, { type EditFormData, FieldConfig } from '../components/EditModal'
 import ViewModal, { ViewSection } from '../components/ViewModal'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import { useAuth } from '../contexts/AuthContext'
+import { canWriteConfig } from '../utils/accessControl'
 import ConfigPageRouterConfigSection from './ConfigPageRouterConfigSection'
 import ConfigPageModelsSection from './ConfigPageModelsSection'
 import ConfigPageSignalsSection from './ConfigPageSignalsSection'
@@ -37,6 +39,8 @@ interface ConfigPageProps {
 
 const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config' }) => {
   const { isReadonly } = useReadonly()
+  const { user } = useAuth()
+  const configReadonly = isReadonly || !canWriteConfig(user)
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -156,7 +160,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
 
   const saveConfig = async (updatedConfig: ConfigData) => {
     // Prevent save in read-only mode
-    if (isReadonly) {
+    if (configReadonly) {
       throw new Error('Dashboard is in read-only mode. Configuration editing is disabled.')
     }
 
@@ -318,7 +322,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     <ConfigPageSignalsSection
       config={config}
       isPythonCLI={isPythonCLI}
-      isReadonly={isReadonly}
+      isReadonly={configReadonly}
       signalsSearch={signalsSearch}
       onSignalsSearchChange={setSignalsSearch}
       saveConfig={saveConfig}
@@ -333,7 +337,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     <ConfigPageDecisionsSection
       config={config}
       isPythonCLI={isPythonCLI}
-      isReadonly={isReadonly}
+      isReadonly={configReadonly}
       decisionsSearch={decisionsSearch}
       onDecisionsSearchChange={setDecisionsSearch}
       saveConfig={saveConfig}
@@ -347,7 +351,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const renderProjectionsSection = () => (
     <ConfigPageProjectionsSection
       config={config}
-      isReadonly={isReadonly}
+      isReadonly={configReadonly}
       saveConfig={saveConfig}
       openEditModal={openEditModal}
       openViewModal={openViewModal}
@@ -358,7 +362,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     <ConfigPageModelsSection
       config={config}
       isPythonCLI={isPythonCLI}
-      isReadonly={isReadonly}
+      isReadonly={configReadonly}
       models={models}
       defaultModel={defaultModel}
       reasoningFamilies={reasoningFamilies}
@@ -380,7 +384,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
             toolsData={toolsData}
             toolsLoading={toolsLoading}
             toolsError={toolsError}
-            isReadonly={isReadonly}
+            isReadonly={configReadonly}
             openEditModal={openEditModal}
             saveConfig={saveConfig}
             refreshConfig={fetchConfig}
@@ -449,7 +453,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       <ViewModal
         isOpen={viewModalOpen}
         onClose={handleCloseViewModal}
-        onEdit={isReadonly ? undefined : (viewModalEditCallback || undefined)}
+        onEdit={configReadonly ? undefined : (viewModalEditCallback || undefined)}
         title={viewModalTitle}
         sections={viewModalSections}
       />

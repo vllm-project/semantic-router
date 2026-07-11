@@ -219,17 +219,17 @@ const LoginPage: React.FC = () => {
     <div className={styles.container}>
       <div className={styles.backgroundEffect}>
         <ColorBends
-          colors={["#76b900", "#00b4d8", "#ffffff"]}
-          rotation={20}
-          speed={0.2}
+          colors={["#f5f5f7", "#e31b23", "#5f636a"]}
+          rotation={138}
+          speed={0.08}
           scale={1}
           frequency={1}
-          warpStrength={1}
-          mouseInfluence={1}
-          parallax={0.5}
-          noise={0.08}
+          warpStrength={0.55}
+          mouseInfluence={0.35}
+          parallax={0.22}
+          noise={0.04}
           transparent
-          autoRotate={0.8}
+          autoRotate={0.22}
         />
       </div>
 

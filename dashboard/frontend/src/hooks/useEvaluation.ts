@@ -19,6 +19,7 @@ import {
   getDefaultEndpointForLevel,
   normalizeDimensionsForLevel,
 } from '../utils/evaluationConfig';
+import { CANONICAL_AUTO_MODEL } from '../utils/routerModelSelection';
 
 // Hook for managing tasks list
 export function useTasks(autoRefresh = false, refreshInterval = 5000) {
@@ -278,7 +279,7 @@ export function useTaskCreationForm() {
   const [selectedDatasets, setSelectedDatasets] = useState<Record<string, string[]>>({});
   const [maxSamples, setMaxSamples] = useState(50);
   const [endpoint, setEndpoint] = useState(DEFAULT_ROUTER_EVAL_ENDPOINT);
-  const [model, setModel] = useState('MoM');
+  const [model, setModel] = useState(CANONICAL_AUTO_MODEL);
   const [concurrent, setConcurrent] = useState(1);
   const [samplesPerCat, setSamplesPerCat] = useState(10);
 
@@ -355,7 +356,7 @@ export function useTaskCreationForm() {
     setSelectedDatasets({});
     setMaxSamples(50);
     setEndpoint(getDefaultEndpointForLevel('router', routerEvalEndpoint, envoyUrl));
-    setModel('MoM');
+    setModel(CANONICAL_AUTO_MODEL);
     setConcurrent(1);
     setSamplesPerCat(10);
   }, [envoyUrl, routerEvalEndpoint]);
