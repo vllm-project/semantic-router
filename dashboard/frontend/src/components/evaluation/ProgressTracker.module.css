@@ -19,7 +19,7 @@
   width: 32px;
   height: 32px;
   border: 3px solid var(--color-border, #333);
-  border-top-color: var(--color-primary, #76b900);
+  border-top-color: var(--color-primary, #8f949c);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -73,7 +73,7 @@
 
 .progressPercent {
   font-weight: 600;
-  color: var(--color-primary, #76b900);
+  color: var(--color-primary, #8f949c);
 }
 
 .progressBar {
@@ -85,7 +85,7 @@
 
 .progressFill {
   height: 100%;
-  background: var(--color-primary, #76b900);
+  background: var(--color-primary, #8f949c);
   border-radius: 6px;
   transition: width 0.5s ease;
 }
@@ -93,9 +93,9 @@
 .progressFill.animated {
   background: linear-gradient(
     90deg,
-    var(--color-primary, #76b900) 0%,
-    var(--color-primary-light, #8fd400) 50%,
-    var(--color-primary, #76b900) 100%
+    var(--color-primary, #8f949c) 0%,
+    var(--color-primary-light, #c9cbd0) 50%,
+    var(--color-primary, #8f949c) 100%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;

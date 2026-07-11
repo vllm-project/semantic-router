@@ -4,11 +4,11 @@ import type { PlaygroundAttachment, PlaygroundAttachmentSummary } from './playgr
 export type { PlaygroundAttachment, PlaygroundAttachmentSummary }
 
 export const GREETING_LINES = [
-  'Hi there, I am MoM :-)',
-  'The System Intelligence for Agents and LLMs',
-  'The World First Model-of-Models',
-  'Open Source for Everyone',
-  'How can I help you today?'
+  'Route with confidence.',
+  'One interface. Every local model.',
+  'Policy-aware intelligence for production systems.',
+  'Open source. Built for operators.',
+  'What would you like to solve?'
 ]
 
 export const generateMessageId = () => `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`

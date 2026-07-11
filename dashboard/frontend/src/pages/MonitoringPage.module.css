@@ -49,7 +49,7 @@
 .button {
   padding: 0.5rem 1rem;
   background-color: var(--color-primary);
-  color: white;
+  color: #09090a;
   border-radius: var(--radius-md);
   font-size: 0.875rem;
   font-weight: 500;

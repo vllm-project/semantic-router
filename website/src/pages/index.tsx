@@ -23,7 +23,6 @@ import TeamCarousel from '@site/src/components/TeamCarousel'
 import { researchPapers } from '@site/src/data/researchContent'
 import { SITE_SOCIAL_PREVIEW_IMAGE_PATH } from '@site/src/data/socialPreview'
 import TransformerPipelineAnimation from '@site/src/components/TransformerPipelineAnimation'
-import CapabilityGlyph, { type CapabilityGlyphKind } from '@site/src/components/site/CapabilityGlyph'
 import DitherField from '@site/src/components/site/DitherField'
 import { PageIntro, PillLink, SectionLabel, StatStrip } from '@site/src/components/site/Chrome'
 import styles from './index.module.css'
@@ -31,15 +30,15 @@ import styles from './index.module.css'
 const paperCount = researchPapers.length
 const homepageMetaTitle = translate({
   id: 'homepage.meta.title',
-  message: 'Open-Source LLM Router for Mixture-of-Models',
+  message: 'Open-Source Runtime for Mixture-of-Models',
 })
 const homepageMetaDescription = translate({
   id: 'homepage.meta.description',
-  message: 'Open-source LLM router for Mixture-of-Models. Route each request by cost, latency, privacy, safety, and modality across local, private, and frontier models.',
+  message: 'Mixture-of-Models is a next-generation model architecture shaped by preference. vLLM Semantic Router is its open-source runtime.',
 })
 const homepageSocialTitle = translate({
   id: 'homepage.meta.socialTitle',
-  message: 'vLLM Semantic Router | Open-Source LLM Router',
+  message: 'vLLM Semantic Router | Runtime for Mixture-of-Models',
 })
 
 type HeroModelLogo = {
@@ -91,80 +90,66 @@ const heroStats = [
   },
 ]
 
-interface ValueCard {
-  detail: string
-  index: string
-  kind: CapabilityGlyphKind
-  text: string
-  title: string
+interface FragmentationRow {
+  dimension: string
+  id: 'models' | 'compute' | 'location' | 'preference'
+  reality: string
+  value: string
 }
 
-const problemAxes = [
-  translate({ id: 'homepage.capabilities.axis.capability', message: 'Capability' }),
-  translate({ id: 'homepage.capabilities.axis.cost', message: 'Cost' }),
-  translate({ id: 'homepage.capabilities.axis.privacy', message: 'Privacy' }),
-  translate({ id: 'homepage.capabilities.axis.latency', message: 'Latency' }),
-]
+const comparisonHeaders = {
+  dimension: translate({ id: 'homepage.capabilities.table.dimension', message: 'Dimension' }),
+  reality: translate({ id: 'homepage.capabilities.table.reality', message: 'Fragmented today' }),
+  value: translate({ id: 'homepage.capabilities.table.value', message: 'With vLLM SR' }),
+}
 
-const problemTasks = [
-  translate({
-    id: 'homepage.capabilities.task.choose',
-    message: 'Choose the right model lane for each request.',
-  }),
-  translate({
-    id: 'homepage.capabilities.task.connect',
-    message: 'Connect local, private, and frontier models without fragmenting the product.',
-  }),
-  translate({
-    id: 'homepage.capabilities.task.govern',
-    message: 'Enforce cost, safety, and privacy at routing time.',
-  }),
-]
-
-const problemMeta = [
-  translate({ id: 'homepage.capabilities.meta.selection', message: 'Selection' }),
-  translate({ id: 'homepage.capabilities.meta.connection', message: 'Connection' }),
-  translate({ id: 'homepage.capabilities.meta.governance', message: 'Governance' }),
-]
-
-const valueCards: ValueCard[] = [
+const fragmentationRows: FragmentationRow[] = [
   {
-    index: '01',
-    kind: 'economics',
-    title: translate({ id: 'homepage.capabilities.value1.title', message: 'Lower cost per request' }),
-    text: translate({
-      id: 'homepage.capabilities.value1.text',
-      message: 'Send routine traffic to efficient lanes, reserve frontier reasoning for the requests that need it, and turn model choice into measurable ROI.',
+    dimension: translate({ id: 'homepage.capabilities.axis.models', message: 'Models' }),
+    id: 'models',
+    reality: translate({
+      id: 'homepage.capabilities.models.reality',
+      message: 'Closed frontier, open, domain-specialized, and edge models excel at different work.',
     }),
-    detail: translate({
-      id: 'homepage.capabilities.value1.detail',
-      message: 'More useful output per dollar.',
+    value: translate({
+      id: 'homepage.capabilities.models.value',
+      message: 'Route one—or coordinate many.',
     }),
   },
   {
-    index: '02',
-    kind: 'safety',
-    title: translate({ id: 'homepage.capabilities.value2.title', message: 'Safer model decisions' }),
-    text: translate({
-      id: 'homepage.capabilities.value2.text',
-      message: 'Move jailbreak, PII, and hallucination handling into the routing path so risky traffic is intercepted before it becomes product behavior.',
+    dimension: translate({ id: 'homepage.capabilities.axis.compute', message: 'Compute' }),
+    id: 'compute',
+    reality: translate({
+      id: 'homepage.capabilities.compute.reality',
+      message: 'New and legacy GPUs, accelerators, edge devices, and cloud capacity coexist.',
     }),
-    detail: translate({
-      id: 'homepage.capabilities.value2.detail',
-      message: 'Safety becomes part of the request path.',
+    value: translate({
+      id: 'homepage.capabilities.compute.value',
+      message: 'Route across configured model endpoints on heterogeneous compute.',
     }),
   },
   {
-    index: '03',
-    kind: 'mesh',
-    title: translate({ id: 'homepage.capabilities.value3.title', message: 'One router across every model' }),
-    text: translate({
-      id: 'homepage.capabilities.value3.text',
-      message: 'Coordinate local, private, and frontier models through one layer that works from edge deployment to managed cloud.',
+    dimension: translate({ id: 'homepage.capabilities.axis.location', message: 'Location' }),
+    id: 'location',
+    reality: translate({
+      id: 'homepage.capabilities.location.reality',
+      message: 'Inference spans edge, private data centers, and cloud.',
     }),
-    detail: translate({
-      id: 'homepage.capabilities.value3.detail',
-      message: 'One system across device, VPC, and cloud.',
+    value: translate({
+      id: 'homepage.capabilities.location.value',
+      message: 'Route across locations within privacy and data boundaries.',
+    }),
+  },
+  {
+    dimension: translate({ id: 'homepage.capabilities.axis.preference', message: 'Preference' }),
+    id: 'preference',
+    reality: translate({
+      id: 'homepage.capabilities.preference.reality',
+      message: '“Best” varies by user, product, and workload.',
+    }),
+    value: translate({
+      id: 'homepage.capabilities.preference.value',
+      message: 'Let preference shape every model path.',
     }),
   },
 ]
@@ -282,39 +267,21 @@ function DitherHero(): JSX.Element {
               <PageIntro
                 align="center"
                 className={styles.heroIntroPanel}
-                label={<Translate id="homepage.hero.label">Open-source LLM router</Translate>}
+                label={<Translate id="homepage.hero.label">Mixture-of-Models</Translate>}
                 title={(
                   <span className={styles.heroTitle}>
-                    <span className={styles.heroTitleLine}>
-                      <span className={styles.heroTitleAccent}>
-                        <Translate id="homepage.hero.line1Accent">Route</Translate>
-                      </span>
-                      {' '}
-                      <Translate id="homepage.hero.line1Suffix">every request</Translate>
+                    <span className={`${styles.heroTitleLine} ${styles.heroTitleAccent}`}>
+                      <Translate id="homepage.hero.line1">Intelligence,</Translate>
                     </span>
                     <span className={styles.heroTitleLine}>
-                      <Translate id="homepage.hero.line2Prefix">with one system</Translate>
-                      {' '}
-                      <span className={styles.heroTitleAccent}>
-                        <Translate id="homepage.hero.line2Accent">brain</Translate>
-                      </span>
-                    </span>
-                    <span className={styles.heroTitleLine}>
-                      <Translate id="homepage.hero.line3Prefix">to the</Translate>
-                      {' '}
-                      <span className={styles.heroTitleAccent}>
-                        <Translate id="homepage.hero.line3Accent">best</Translate>
-                      </span>
-                      {' '}
-                      <Translate id="homepage.hero.line3Suffix">model</Translate>
+                      <Translate id="homepage.hero.line2">composed for you.</Translate>
                     </span>
                   </span>
                 )}
                 description={(
                   <span className={styles.heroDescriptionText}>
                     <Translate id="homepage.hero.description">
-                      Unified routing across local, private, and frontier models—guided by
-                      cost, latency, privacy, and safety.
+                      One model or many, across compute and locations—shaped by your priorities.
                     </Translate>
                   </span>
                 )}
@@ -326,10 +293,10 @@ function DitherHero(): JSX.Element {
                       rel="noreferrer"
                       target="_blank"
                     >
-                      <Translate id="homepage.hero.primaryCta">Public Beta</Translate>
+                      <Translate id="homepage.hero.primaryCta">Try the Playground</Translate>
                     </PillLink>
-                    <PillLink className={styles.heroSecondaryCta} to="/white-paper" muted>
-                      <Translate id="homepage.hero.secondaryCta">Read white paper</Translate>
+                    <PillLink className={styles.heroSecondaryCta} to="/docs/intro" muted>
+                      <Translate id="homepage.hero.secondaryCta">Explore the Docs</Translate>
                     </PillLink>
                   </>
                 )}
@@ -343,19 +310,14 @@ function DitherHero(): JSX.Element {
         className={styles.heroModelSection}
         aria-label={translate({
           id: 'homepage.hero.modelBand.aria',
-          message: 'Supported model ecosystem',
+          message: 'Mixture-of-Models ecosystem',
         })}
       >
         <div className={styles.heroModelBand}>
           <div className={styles.heroModelBandHeader}>
             <span className={styles.heroModelBandEyebrow}>
-              <Translate id="homepage.hero.modelBand.eyebrow">System brain</Translate>
+              <Translate id="homepage.hero.modelBand.eyebrow">Mixture-of-Models</Translate>
             </span>
-            <p className={styles.heroModelBandCopy}>
-              <Translate id="homepage.hero.modelBand.copy">
-                Connect all models with system brain
-              </Translate>
-            </p>
           </div>
 
           <div className={styles.heroModelBandViewport} aria-hidden="true">
@@ -390,95 +352,42 @@ function CapabilitySection(): JSX.Element {
     <section className={styles.capabilitySection}>
       <div className="site-shell-container">
         <div className={styles.capabilityFrame}>
-          <div className={styles.problemPanel}>
-            <div className={styles.problemIntro}>
-              <SectionLabel>
-                <Translate id="homepage.capabilities.label">Why routing matters</Translate>
-              </SectionLabel>
-              <h2>
-                <Translate id="homepage.capabilities.heading">
-                  One request. Many model choices.
-                </Translate>
-              </h2>
-              <p>
-                <Translate id="homepage.capabilities.copy">
-                  Models now differ on quality, cost, latency, privacy, and modality. Once you run
-                  more than one model, the hard part is no longer calling an LLM. It is routing every
-                  request to the right model system.
-                </Translate>
-              </p>
-              <div className={styles.problemAxes}>
-                {problemAxes.map(axis => (
-                  <span key={axis} className={styles.problemAxis}>
-                    {axis}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <aside className={styles.problemChecklist}>
-              <div className={styles.problemChecklistHeader}>
-                <SectionLabel>
-                  <Translate id="homepage.capabilities.checklist.label">What the router decides</Translate>
-                </SectionLabel>
-                <p>
-                  <Translate id="homepage.capabilities.checklist.copy">
-                    Before a response reaches the user, the router has to answer the same operating
-                    questions every time.
-                  </Translate>
-                </p>
-              </div>
-              <ul className={styles.problemChecklistList}>
-                {problemTasks.map(task => (
-                  <li key={task} className={styles.problemChecklistItem}>
-                    {task}
-                  </li>
-                ))}
-              </ul>
-              <div className={styles.problemChecklistFooter}>
-                <p>
-                  <Translate id="homepage.capabilities.checklist.footer">
-                    Cost control, safety, and model choice have to happen in one step.
-                  </Translate>
-                </p>
-                <div className={styles.problemChecklistMeta}>
-                  {problemMeta.map(item => (
-                    <span key={item} className={styles.problemChecklistMetaItem}>
-                      {item}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </aside>
-          </div>
-
-          <div className={styles.valueIntro}>
+          <div className={styles.comparisonHeading}>
             <SectionLabel>
-              <Translate id="homepage.capabilities.values.label">Why teams deploy it</Translate>
+              <Translate id="homepage.capabilities.label">Why Mixture-of-Models</Translate>
             </SectionLabel>
-            <p>
-              <Translate id="homepage.capabilities.values.copy">
-                A single routing layer for cost, quality, and policy decisions.
+            <h2 id="fragmentation-comparison-title">
+              <Translate id="homepage.capabilities.heading">
+                Fragmented by nature. Composed by preference.
               </Translate>
-            </p>
+            </h2>
           </div>
 
-          <div className={styles.valueGrid}>
-            {valueCards.map(card => (
-              <article key={card.title} className={styles.valueCard}>
-                <div className={styles.valueCardHeader}>
-                  <span className={styles.valueCardIndex}>{card.index}</span>
-                  <div className={styles.valueGlyphShell}>
-                    <CapabilityGlyph kind={card.kind} className={styles.valueGlyph} />
-                  </div>
-                </div>
-                <div className={styles.valueCardCopy}>
-                  <h3>{card.title}</h3>
-                  <p>{card.text}</p>
-                </div>
-                <p className={styles.valueCardDetail}>{card.detail}</p>
-              </article>
-            ))}
+          <div className={styles.comparisonTableWrap}>
+            <table className={styles.comparisonTable} aria-labelledby="fragmentation-comparison-title">
+              <thead>
+                <tr>
+                  <th scope="col">{comparisonHeaders.dimension}</th>
+                  <th scope="col">{comparisonHeaders.reality}</th>
+                  <th scope="col">{comparisonHeaders.value}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fragmentationRows.map(row => (
+                  <tr key={row.id}>
+                    <th scope="row" className={styles.comparisonDimension}>{row.dimension}</th>
+                    <td data-label={comparisonHeaders.reality}>{row.reality}</td>
+                    <td data-label={comparisonHeaders.value} className={styles.comparisonValue}>{row.value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className={styles.comparisonCta}>
+            <PillLink to="/docs/intro" muted>
+              <Translate id="homepage.capabilities.docsCta">Explore how it works</Translate>
+            </PillLink>
           </div>
         </div>
       </div>
@@ -650,7 +559,7 @@ export default function Home(): JSX.Element {
         <meta property="og:type" content="website" />
         <meta
           name="keywords"
-          content="open-source LLM router, multi-model routing, AI gateway, model selection, semantic router, inference routing, policy-aware routing, vLLM"
+          content="Mixture-of-Models runtime, preference-driven AI, open-source LLM router, multi-model routing, model orchestration, model selection, model cascade, Fusion API, micro-agent workflows, semantic router, policy-aware routing, vLLM"
         />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={homepageSocialTitle} />
@@ -665,6 +574,8 @@ export default function Home(): JSX.Element {
       <main className={styles.page}>
         <DitherHero />
 
+        <CapabilitySection />
+
         <section className={styles.statsSection}>
           <div className="site-shell-container">
             <StatStrip items={heroStats} />
@@ -673,7 +584,6 @@ export default function Home(): JSX.Element {
 
         <InstallQuickStartSection />
         <ResearchPaperCarousel />
-        <CapabilitySection />
         <PaperFigureShowcase />
         <EncoderIntelligenceSection />
         <TeamCarousel />

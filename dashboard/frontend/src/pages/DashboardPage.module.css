@@ -1,8 +1,9 @@
 /* DashboardPage.module.css */
 
 .page {
-  padding: var(--spacing-lg) var(--spacing-xl);
-  max-width: 1440px;
+  width: 100%;
+  padding: clamp(1.4rem, 3vw, 2.5rem) clamp(1rem, 3vw, 2.4rem) 3rem;
+  max-width: 1600px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -66,19 +67,22 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  padding: 0.4rem 0 0.2rem;
 }
 
 .title {
-  font-size: var(--text-xl);
-  font-weight: 700;
+  font-size: clamp(1.8rem, 3vw, 2.65rem);
+  font-weight: 740;
   color: var(--color-text);
   margin: 0;
+  letter-spacing: -0.045em;
+  line-height: 1.04;
 }
 
 .subtitle {
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-  margin: 4px 0 0;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0.55rem 0 0;
 }
 
 .headerActions {
@@ -97,18 +101,18 @@
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  background: var(--color-bg-elevated);
+  background: rgba(255, 255, 255, 0.045);
   color: var(--color-text-secondary);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: 9px;
   font-size: var(--text-xs);
   cursor: pointer;
   transition: var(--transition-fast);
 }
 
 .refreshBtn:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
 }
 
 .refreshBtn:disabled {
@@ -127,7 +131,7 @@
 .statsGrid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: var(--spacing-md);
+  gap: 0.75rem;
 }
 
 .statCard {
@@ -135,9 +139,10 @@
   align-items: center;
   gap: var(--spacing-md);
   padding: var(--spacing-md) var(--spacing-lg);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  min-height: 104px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.045), transparent), rgba(16, 16, 18, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
   cursor: pointer;
   transition: var(--transition-fast);
   text-align: left;
@@ -146,10 +151,10 @@
 }
 
 .statCard:hover {
-  border-color: var(--color-border-hover);
-  background: var(--color-bg-elevated);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(24, 24, 27, 0.94);
+  transform: translateY(-2px);
+  box-shadow: 0 16px 35px rgba(0, 0, 0, 0.26);
 }
 
 .statIcon {
@@ -158,7 +163,10 @@
   justify-content: center;
   width: 44px;
   height: 44px;
-  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(255, 255, 255, 0.82);
   flex-shrink: 0;
 }
 
@@ -190,8 +198,8 @@
 }
 
 .statValue {
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-size: 1.65rem;
+  font-weight: 740;
   color: var(--color-text);
   line-height: 1.2;
 }
@@ -220,7 +228,7 @@
 }
 
 .statCard:hover .statArrow {
-  color: var(--color-primary);
+  color: #ffffff;
   transform: translateX(2px);
 }
 
@@ -265,10 +273,11 @@
 /* ------------------------------------------------------------------ */
 
 .card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  background: rgba(16, 16, 18, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
   overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
 .cardHeader {
@@ -276,12 +285,13 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-md) var(--spacing-lg);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.075);
 }
 
 .cardTitle {
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: 680;
+  letter-spacing: -0.01em;
   color: var(--color-text);
   margin: 0;
 }
@@ -295,7 +305,7 @@
 .cardAction {
   background: none;
   border: none;
-  color: var(--color-primary);
+  color: rgba(255, 255, 255, 0.62);
   font-size: var(--text-xs);
   cursor: pointer;
   padding: 0;
@@ -303,7 +313,7 @@
 }
 
 .cardAction:hover {
-  color: var(--color-primary-light);
+  color: #ffffff;
 }
 
 .emptyState {
@@ -448,7 +458,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1px;
-  background: var(--color-border);
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .quickLink {
@@ -456,7 +466,7 @@
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-md);
-  background: var(--color-surface);
+  background: #101012;
   border: none;
   color: var(--color-text-secondary);
   font-size: var(--text-xs);
@@ -467,8 +477,8 @@
 }
 
 .quickLink:hover {
-  background: var(--color-bg-elevated);
-  color: var(--color-primary);
+  background: #18181b;
+  color: #ffffff;
 }
 
 .quickLink svg {

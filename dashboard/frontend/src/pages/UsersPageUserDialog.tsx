@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import styles from './UsersPageUserDialog.module.css'
 import type { UsersPageRolePermissions } from './usersPageSupport'
 
@@ -40,6 +41,11 @@ export default function UsersPageUserDialog({
   onSubmit,
 }: UsersPageUserDialogProps) {
   const [values, setValues] = useState<UsersPageUserDraft>(initialValues)
+  const dialogRef = useAccessibleDialog<HTMLDivElement>({
+    isOpen,
+    onClose,
+    dismissible: !isSubmitting,
+  })
 
   useEffect(() => {
     if (!isOpen) {
@@ -48,21 +54,6 @@ export default function UsersPageUserDialog({
 
     setValues(initialValues)
   }, [initialValues, isOpen])
-
-  useEffect(() => {
-    if (!isOpen) {
-      return
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !isSubmitting) {
-        onClose()
-      }
-    }
-
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [isOpen, isSubmitting, onClose])
 
   if (!isOpen) {
     return null
@@ -93,11 +84,13 @@ export default function UsersPageUserDialog({
   return (
     <div className={styles.overlay} onClick={!isSubmitting ? onClose : undefined}>
       <div
+        ref={dialogRef}
         className={styles.modal}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="users-dialog-title"
+        tabIndex={-1}
       >
         <div className={styles.header}>
           <div>
@@ -132,6 +125,7 @@ export default function UsersPageUserDialog({
                 onChange={(event) => setValues((prev) => ({ ...prev, email: event.target.value }))}
                 placeholder="you@example.com"
                 disabled={isEditMode || isSubmitting}
+                data-dialog-initial-focus={!isEditMode ? true : undefined}
                 required
               />
               {isEditMode ? <span className={styles.hint}>Existing users keep their email address.</span> : null}
@@ -159,6 +153,7 @@ export default function UsersPageUserDialog({
                 value={values.role}
                 onChange={(event) => setValues((prev) => ({ ...prev, role: event.target.value }))}
                 disabled={isSubmitting}
+                data-dialog-initial-focus={isEditMode ? true : undefined}
               >
                 {roleOptions.map((role) => (
                   <option key={role} value={role}>
