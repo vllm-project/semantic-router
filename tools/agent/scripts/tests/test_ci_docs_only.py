@@ -1,3 +1,4 @@
+import importlib
 import sys
 import unittest
 from pathlib import Path
@@ -6,11 +7,14 @@ SCRIPT_DIR = Path(__file__).resolve().parents[1]
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from ci_docs_only import HEAVY_CHANGE_KEYS, LIGHT_CHANGE_KEYS, is_docs_only  # noqa: E402
+ci_docs_only = importlib.import_module("ci_docs_only")
+HEAVY_CHANGE_KEYS = ci_docs_only.HEAVY_CHANGE_KEYS
+LIGHT_CHANGE_KEYS = ci_docs_only.LIGHT_CHANGE_KEYS
+is_docs_only = ci_docs_only.is_docs_only
 
 
 def _changes(**overrides: bool) -> dict[str, bool]:
-    base = {key: False for key in (*LIGHT_CHANGE_KEYS, *HEAVY_CHANGE_KEYS)}
+    base = dict.fromkeys((*LIGHT_CHANGE_KEYS, *HEAVY_CHANGE_KEYS), False)
     base.update(overrides)
     return base
 

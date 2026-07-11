@@ -50,7 +50,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     changes = {
-        key: _as_bool(getattr(args, key)) for key in (*LIGHT_CHANGE_KEYS, *HEAVY_CHANGE_KEYS)
+        key: _as_bool(getattr(args, key))
+        for key in (*LIGHT_CHANGE_KEYS, *HEAVY_CHANGE_KEYS)
     }
     docs_only = is_docs_only(changes)
     value = "true" if docs_only else "false"
