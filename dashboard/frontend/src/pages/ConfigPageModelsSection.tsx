@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import styles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import ConfigPageModelInventoryPanel from './ConfigPageModelInventoryPanel'
@@ -30,7 +30,6 @@ import {
   type ModelRoleFilter,
 } from './configPageModelInventory'
 import {
-  buildProviderModelPayload,
   normalizeModelBackendRefs,
   normalizeModelPricing,
   normalizeModelStringMap,
