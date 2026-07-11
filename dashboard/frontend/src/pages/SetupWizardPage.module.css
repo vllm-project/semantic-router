@@ -3,33 +3,25 @@
   min-height: 100vh;
   min-height: 100dvh;
   overflow-x: hidden;
-  background: #000;
+  background: #050505;
   display: flex;
   flex-direction: column;
 }
 
 .page::before {
-  content: "";
+  content: '';
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(
-      circle at top left,
-      rgba(255, 255, 255, 0.08),
-      transparent 30%
-    ),
-    radial-gradient(
-      circle at top right,
-      rgba(0, 180, 216, 0.08),
-      transparent 24%
-    ),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 30%),
+    radial-gradient(circle at top right, rgba(227, 27, 35, 0.055), transparent 24%),
     linear-gradient(
       180deg,
-      rgba(4, 7, 15, 0.44) 0%,
-      rgba(6, 10, 20, 0.56) 34%,
-      rgba(9, 12, 24, 0.74) 100%
+      rgba(5, 5, 5, 0.44) 0%,
+      rgba(8, 8, 9, 0.56) 34%,
+      rgba(5, 5, 5, 0.78) 100%
     );
 }
 
@@ -38,7 +30,8 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.85;
+  opacity: 0.32;
+  filter: saturate(72%) contrast(108%);
 }
 
 .hero,
@@ -51,20 +44,14 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.11);
   background:
-    linear-gradient(
-      135deg,
-      rgba(16, 22, 44, 0.58),
-      rgba(9, 12, 24, 0.38) 58%,
-      rgba(4, 8, 18, 0.62)
-    ),
-    rgba(8, 12, 24, 0.24);
+    linear-gradient(145deg, rgba(255, 255, 255, 0.05), transparent 42%), rgba(16, 16, 18, 0.72);
   box-shadow:
     0 28px 60px rgba(0, 0, 0, 0.32),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(112%);
+  -webkit-backdrop-filter: blur(24px) saturate(112%);
 }
 
 .hero::before,
@@ -74,16 +61,12 @@
 .previewCard::before,
 .presetCard::before,
 .reviewStat::before {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(
-      circle at top left,
-      rgba(255, 255, 255, 0.08),
-      transparent 30%
-    ),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 30%),
     linear-gradient(
       180deg,
       rgba(255, 255, 255, 0.045),
@@ -123,7 +106,7 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
-  color: #f5f7ff;
+  color: #f5f5f7;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -146,12 +129,8 @@
   border-radius: 1rem;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background:
-    radial-gradient(
-      circle at top left,
-      rgba(255, 255, 255, 0.14),
-      transparent 44%
-    ),
-    linear-gradient(180deg, rgba(0, 180, 216, 0.14), rgba(255, 255, 255, 0.02));
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.14), transparent 44%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
@@ -189,7 +168,7 @@
   padding: 0.74rem 0.85rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 0.85rem;
-  background: rgba(12, 18, 36, 0.44);
+  background: rgba(16, 16, 18, 0.44);
   color: var(--color-text-secondary);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
@@ -208,28 +187,24 @@
 }
 
 .stepButtonActive {
-  border-color: rgba(118, 185, 0, 0.36);
-  background: linear-gradient(
-    135deg,
-    rgba(118, 185, 0, 0.16),
-    rgba(9, 12, 24, 0.52) 68%
-  );
+  border-color: rgba(143, 148, 156, 0.36);
+  background: linear-gradient(135deg, rgba(143, 148, 156, 0.16), rgba(24, 24, 27, 0.52) 68%);
   color: var(--color-text);
   box-shadow:
-    inset 0 1px 0 rgba(143, 212, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
     0 14px 34px rgba(0, 0, 0, 0.2);
 }
 
 .stepButtonDone {
-  border-color: rgba(0, 180, 216, 0.18);
+  border-color: rgba(227, 27, 35, 0.32);
   background: rgba(255, 255, 255, 0.06);
   color: var(--color-text);
 }
 
 .stepButtonActive .stepNumber,
 .stepButtonDone .stepNumber {
-  background: rgba(118, 185, 0, 0.2);
-  color: #d9ff8d;
+  background: rgba(227, 27, 35, 0.12);
+  color: #f5f5f7;
 }
 
 .stepNumber {
@@ -456,7 +431,7 @@
   align-items: center;
   padding: 0.22rem 0.58rem;
   border-radius: 999px;
-  background: rgba(118, 185, 0, 0.12);
+  background: rgba(143, 148, 156, 0.12);
   color: var(--color-primary-light);
   font-size: 0.72rem;
   letter-spacing: 0.04em;
@@ -485,11 +460,7 @@
   padding: 0.82rem;
   border-radius: 0.95rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.06),
-    rgba(9, 12, 24, 0.46)
-  );
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(24, 24, 27, 0.46));
 }
 
 .remoteImportActions {
@@ -500,12 +471,8 @@
 .remoteImportSummary {
   padding: 0.75rem 0.82rem;
   border-radius: 0.9rem;
-  border: 1px solid rgba(118, 185, 0, 0.22);
-  background: linear-gradient(
-    135deg,
-    rgba(118, 185, 0, 0.12),
-    rgba(9, 12, 24, 0.46)
-  );
+  border: 1px solid rgba(143, 148, 156, 0.22);
+  background: linear-gradient(135deg, rgba(143, 148, 156, 0.12), rgba(24, 24, 27, 0.46));
 }
 
 .remoteImportSummaryHeader {
@@ -543,12 +510,8 @@
 }
 
 .presetCardActive {
-  border-color: rgba(118, 185, 0, 0.36);
-  background: linear-gradient(
-    135deg,
-    rgba(118, 185, 0, 0.16),
-    rgba(9, 12, 24, 0.52) 68%
-  );
+  border-color: rgba(143, 148, 156, 0.36);
+  background: linear-gradient(135deg, rgba(143, 148, 156, 0.16), rgba(24, 24, 27, 0.52) 68%);
 }
 
 .presetCardHeader {
@@ -619,9 +582,9 @@
   margin-top: 0.7rem;
   padding: 0.75rem 0.82rem;
   border-radius: 0.85rem;
-  background: #060706;
-  border: 1px solid rgba(118, 185, 0, 0.08);
-  color: #d8f7a5;
+  background: #09090a;
+  border: 1px solid rgba(143, 148, 156, 0.08);
+  color: #e4e4e7;
   font-size: 0.78rem;
   line-height: 1.45;
   overflow: auto;
@@ -687,7 +650,7 @@
 
 .primaryButton {
   background: var(--color-primary);
-  color: #081000;
+  color: #09090a;
 }
 
 .primaryButton:hover:not(:disabled) {
@@ -704,7 +667,7 @@
 
 .secondaryButton:hover:not(:disabled),
 .ghostButton:hover:not(:disabled) {
-  border-color: rgba(118, 185, 0, 0.3);
+  border-color: rgba(143, 148, 156, 0.3);
 }
 
 .ghostButton {

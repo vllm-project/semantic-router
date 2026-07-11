@@ -11,7 +11,7 @@
   border-radius: 1.25rem;
   background:
     linear-gradient(155deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
-    rgba(7, 10, 19, 0.9);
+    rgba(16, 16, 18, 0.9);
   box-shadow: 0 22px 48px rgba(0, 0, 0, 0.2);
 }
 
@@ -79,7 +79,7 @@
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: rgba(0, 212, 255, 0.7);
+  color: rgba(166, 171, 179, 0.7);
 }
 
 .sectionDescription {
@@ -116,7 +116,7 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)),
-    rgba(9, 12, 22, 0.82);
+    rgba(16, 16, 18, 0.82);
 }
 
 .field {
@@ -144,10 +144,13 @@
   padding: 0.68rem 0.82rem;
   border-radius: 0.82rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(8, 11, 20, 0.82);
+  background: rgba(9, 9, 10, 0.82);
   color: var(--color-text);
   font: inherit;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
 }
 
 .input:focus,
@@ -155,8 +158,8 @@
 .fileInput:focus,
 .textarea:focus {
   outline: none;
-  border-color: rgba(0, 212, 255, 0.42);
-  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.08);
+  border-color: rgba(166, 171, 179, 0.42);
+  box-shadow: 0 0 0 3px rgba(166, 171, 179, 0.08);
 }
 
 .textarea {
@@ -181,12 +184,15 @@
   font: inherit;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    opacity 0.18s ease;
 }
 
 .primaryButton {
-  background: linear-gradient(135deg, var(--color-primary), #d7ff7a);
-  color: #081000;
+  background: linear-gradient(135deg, var(--color-primary), #d4d4d8);
+  color: #09090a;
 }
 
 .secondaryButton {
@@ -232,19 +238,23 @@
   color: var(--color-text);
   text-align: left;
   cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .choiceButton:hover {
   transform: translateY(-1px);
-  border-color: rgba(0, 212, 255, 0.22);
+  border-color: rgba(166, 171, 179, 0.22);
   background: rgba(255, 255, 255, 0.045);
 }
 
 .choiceButtonActive {
-  border-color: rgba(118, 185, 0, 0.45);
+  border-color: rgba(143, 148, 156, 0.45);
   background:
-    linear-gradient(145deg, rgba(118, 185, 0, 0.12), rgba(0, 212, 255, 0.06)),
+    linear-gradient(145deg, rgba(143, 148, 156, 0.12), rgba(166, 171, 179, 0.06)),
     rgba(255, 255, 255, 0.03);
   box-shadow: 0 14px 26px rgba(0, 0, 0, 0.16);
 }
@@ -268,9 +278,9 @@
   border: 1px solid var(--color-border);
   border-radius: 1.25rem;
   background:
-    radial-gradient(circle at top right, rgba(0, 212, 255, 0.08), rgba(0, 212, 255, 0) 42%),
+    radial-gradient(circle at top right, rgba(166, 171, 179, 0.08), rgba(166, 171, 179, 0) 42%),
     linear-gradient(155deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
-    rgba(7, 10, 19, 0.9);
+    rgba(16, 16, 18, 0.9);
   box-shadow: 0 22px 48px rgba(0, 0, 0, 0.2);
 }
 
@@ -284,7 +294,7 @@
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: rgba(118, 185, 0, 0.82);
+  color: rgba(143, 148, 156, 0.82);
 }
 
 .summaryTitle {
@@ -372,8 +382,8 @@
 }
 
 .statusDone {
-  background: rgba(118, 185, 0, 0.16);
-  color: #d7ff7a;
+  background: rgba(143, 148, 156, 0.16);
+  color: #d4d4d8;
 }
 
 .statusFailed {
@@ -392,7 +402,7 @@
 }
 
 .messageSuccess {
-  color: #c8ff8e;
+  color: #b2b2b8;
 }
 
 .hiddenFileInput {
@@ -460,7 +470,7 @@
   align-items: center;
   justify-content: center;
   padding: 1.25rem;
-  background: rgba(3, 6, 14, 0.78);
+  background: rgba(0, 0, 0, 0.78);
   backdrop-filter: blur(10px);
 }
 
@@ -474,9 +484,9 @@
   border-radius: 1.3rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background:
-    radial-gradient(circle at top right, rgba(0, 212, 255, 0.1), rgba(0, 212, 255, 0) 32%),
+    radial-gradient(circle at top right, rgba(166, 171, 179, 0.1), rgba(166, 171, 179, 0) 32%),
     linear-gradient(155deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015)),
-    rgba(6, 10, 18, 0.96);
+    rgba(16, 16, 18, 0.96);
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.48);
 }
 
@@ -493,7 +503,7 @@
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: rgba(118, 185, 0, 0.82);
+  color: rgba(143, 148, 156, 0.82);
 }
 
 .dialogTitle {
@@ -517,13 +527,16 @@
   border-radius: 999px;
   font-size: 1.2rem;
   cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease;
 }
 
 .dialogCloseButton:hover {
   transform: translateY(-1px);
-  border-color: rgba(0, 212, 255, 0.26);
-  background: rgba(0, 212, 255, 0.08);
+  border-color: rgba(166, 171, 179, 0.26);
+  background: rgba(166, 171, 179, 0.08);
 }
 
 .dialogMetaRow {
@@ -541,8 +554,8 @@
   padding: 1rem;
   border-radius: 1rem;
   border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(3, 6, 14, 0.82);
-  color: #d9e3f2;
+  background: rgba(9, 9, 10, 0.82);
+  color: #e4e4e7;
   overflow: auto;
   font-size: 0.82rem;
   line-height: 1.62;
@@ -600,7 +613,7 @@
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: rgba(0, 212, 255, 0.72);
+  color: rgba(166, 171, 179, 0.72);
 }
 
 .resultTitle {
@@ -615,9 +628,9 @@
 }
 
 .resultPillSuccess {
-  border-color: rgba(118, 185, 0, 0.22);
-  background: rgba(118, 185, 0, 0.12);
-  color: #d7ff7a;
+  border-color: rgba(143, 148, 156, 0.22);
+  background: rgba(143, 148, 156, 0.12);
+  color: #d4d4d8;
 }
 
 .resultPillWarning {

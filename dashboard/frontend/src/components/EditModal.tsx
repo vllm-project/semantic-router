@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useState } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
 import styles from './EditModal.module.css'
 
 export type EditFormData = Record<string, unknown>
@@ -15,6 +15,15 @@ interface EditModalProps {
   fields: FieldConfig[]
   mode?: 'edit' | 'add'
 }
+
+const focusableSelector = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
 
 export interface FieldConfig<TForm extends object = EditFormData> {
   name: string
@@ -44,6 +53,7 @@ const EditModal: React.FC<EditModalProps> = ({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
 
   const readField = (fieldName: string): unknown => formData[fieldName]
   const readString = (fieldName: string): string => {
@@ -82,6 +92,62 @@ const EditModal: React.FC<EditModalProps> = ({
       setError(null)
     }
   }, [isOpen, data, fields])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    const previousBodyOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const frame = window.requestAnimationFrame(() => {
+      const firstControl = dialogRef.current?.querySelector<HTMLElement>(focusableSelector)
+      ;(firstControl ?? dialogRef.current)?.focus()
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      document.body.style.overflow = previousBodyOverflow
+      previouslyFocused?.focus()
+    }
+  }, [isOpen])
+
+  const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      onClose()
+      return
+    }
+
+    if (event.key !== 'Tab' || !dialogRef.current) return
+
+    const controls = Array.from(
+      dialogRef.current.querySelectorAll<HTMLElement>(focusableSelector),
+    ).filter((element) => element.getAttribute('aria-hidden') !== 'true')
+
+    if (controls.length === 0) {
+      event.preventDefault()
+      dialogRef.current.focus()
+      return
+    }
+
+    const firstControl = controls[0]
+    const lastControl = controls[controls.length - 1]
+    const activeElement = document.activeElement
+
+    if (
+      event.shiftKey
+      && (activeElement === firstControl || !dialogRef.current.contains(activeElement))
+    ) {
+      event.preventDefault()
+      lastControl.focus()
+    } else if (!event.shiftKey && activeElement === lastControl) {
+      event.preventDefault()
+      firstControl.focus()
+    }
+  }
 
   const handleChange = (fieldName: string, value: unknown) => {
     setFormData((prev) => ({
@@ -126,15 +192,25 @@ const EditModal: React.FC<EditModalProps> = ({
   return (
     <div className={styles.overlay} onClick={onClose}>
       <div
+        ref={dialogRef}
         className={styles.modal}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleDialogKeyDown}
         onClick={(e) => e.stopPropagation()}
       >
         <div className={styles.header}>
           <h2 id={titleId} className={styles.title}>{title}</h2>
-          <button className={styles.closeButton} onClick={onClose}>✕</button>
+          <button
+            className={styles.closeButton}
+            type="button"
+            aria-label="Close editor"
+            onClick={onClose}
+          >
+            ×
+          </button>
         </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>
@@ -145,29 +221,42 @@ const EditModal: React.FC<EditModalProps> = ({
           )}
 
           <div className={styles.fields}>
-            {fields.map((field) => !field.shouldHide?.(formData) && (
+            {fields.map((field) => {
+              if (field.shouldHide?.(formData)) return null
+              const fieldId = `${titleId}-${field.name.replace(/[^a-zA-Z0-9_-]/g, '-')}`
+              const descriptionId = `${fieldId}-description`
+              const isGroupedField = field.type === 'multiselect' || field.type === 'custom'
+
+              return (
               <div key={field.name} className={styles.field}>
-                <label className={styles.label}>
+                <label
+                  id={`${fieldId}-label`}
+                  className={styles.label}
+                  htmlFor={isGroupedField ? undefined : fieldId}
+                >
                   {field.label}
                   {field.required && <span className={styles.required}>*</span>}
                 </label>
                 {field.description && (
-                  <p className={styles.description}>{field.description}</p>
+                  <p id={descriptionId} className={styles.description}>{field.description}</p>
                 )}
 
                 {field.type === 'text' && (
                   <input
+                    id={fieldId}
                     type="text"
                     className={styles.input}
                     value={readString(field.name)}
                     onChange={(e) => handleChange(field.name, e.target.value)}
                     placeholder={field.placeholder}
                     required={field.required}
+                    aria-describedby={field.description ? descriptionId : undefined}
                   />
                 )}
 
                 {field.type === 'number' && (
                   <input
+                    id={fieldId}
                     type="number"
                     step={field.step !== undefined ? field.step : "any"}
                     min={field.min}
@@ -177,12 +266,14 @@ const EditModal: React.FC<EditModalProps> = ({
                     onChange={(e) => handleChange(field.name, parseFloat(e.target.value))}
                     placeholder={field.placeholder}
                     required={field.required}
+                    aria-describedby={field.description ? descriptionId : undefined}
                   />
                 )}
 
                 {field.type === 'percentage' && (
                   <div style={{ position: 'relative' }}>
                     <input
+                      id={fieldId}
                       type="number"
                       step={field.step !== undefined ? field.step : 1}
                       min={0}
@@ -195,6 +286,7 @@ const EditModal: React.FC<EditModalProps> = ({
                       }}
                       placeholder={field.placeholder}
                       required={field.required}
+                      aria-describedby={field.description ? descriptionId : undefined}
                       style={{ paddingRight: '2.5rem' }}
                     />
                     <span style={{
@@ -214,6 +306,7 @@ const EditModal: React.FC<EditModalProps> = ({
                 {field.type === 'boolean' && (
                   <label className={styles.checkbox}>
                     <input
+                      id={fieldId}
                       type="checkbox"
                       checked={readBoolean(field.name)}
                       onChange={(e) => handleChange(field.name, e.target.checked)}
@@ -224,10 +317,12 @@ const EditModal: React.FC<EditModalProps> = ({
 
                 {field.type === 'select' && (
                   <select
+                    id={fieldId}
                     className={styles.select}
                     value={readString(field.name)}
                     onChange={(e) => handleChange(field.name, e.target.value)}
                     required={field.required}
+                    aria-describedby={field.description ? descriptionId : undefined}
                   >
                     {field.options?.map((option) => (
                       <option key={option} value={option}>
@@ -238,7 +333,12 @@ const EditModal: React.FC<EditModalProps> = ({
                 )}
 
                 {field.type === 'multiselect' && (
-                  <div className={styles.multiselect}>
+                  <div
+                    className={styles.multiselect}
+                    role="group"
+                    aria-labelledby={`${fieldId}-label`}
+                    aria-describedby={field.description ? descriptionId : undefined}
+                  >
                     {field.options?.map((option) => (
                       <label key={option} className={styles.multiselectOption}>
                         <input
@@ -260,17 +360,20 @@ const EditModal: React.FC<EditModalProps> = ({
 
                 {field.type === 'textarea' && (
                   <textarea
+                    id={fieldId}
                     className={styles.textarea}
                     value={readString(field.name)}
                     onChange={(e) => handleChange(field.name, e.target.value)}
                     placeholder={field.placeholder}
                     required={field.required}
                     rows={4}
+                    aria-describedby={field.description ? descriptionId : undefined}
                   />
                 )}
 
                 {field.type === 'json' && (
                   <textarea
+                    id={fieldId}
                     className={styles.textarea}
                     value={
                       typeof readField(field.name) === 'object' && readField(field.name) !== null
@@ -288,16 +391,22 @@ const EditModal: React.FC<EditModalProps> = ({
                     placeholder={field.placeholder}
                     required={field.required}
                     rows={6}
+                    aria-describedby={field.description ? descriptionId : undefined}
                   />
                 )}
 
                 {field.type === 'custom' && field.customRender && (
-                  <div>
+                  <div
+                    role="group"
+                    aria-labelledby={`${fieldId}-label`}
+                    aria-describedby={field.description ? descriptionId : undefined}
+                  >
                     {field.customRender(readField(field.name), (value) => handleChange(field.name, value))}
                   </div>
                 )}
               </div>
-            ))}
+              )
+            })}
           </div>
 
           <div className={styles.actions}>

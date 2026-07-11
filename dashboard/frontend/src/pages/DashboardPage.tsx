@@ -134,7 +134,7 @@ const DashboardPage: React.FC = () => {
       <div className={styles.header}>
         <div>
           <h1 className={styles.title}>Dashboard</h1>
-          <p className={styles.subtitle}>Building the System Intelligence</p>
+          <p className={styles.subtitle}>Routing health, policy coverage, and model readiness</p>
         </div>
         <div className={styles.headerActions}>
           {lastUpdated && (
@@ -165,8 +165,8 @@ const DashboardPage: React.FC = () => {
 
       <div className={styles.statsGrid}>
         <button type="button" className={styles.statCard} onClick={() => navigate('/config/models')}>
-          <div className={styles.statIcon} style={{ background: 'var(--color-accent-purple)', boxShadow: 'var(--glow-purple)' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
+          <div className={styles.statIcon}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <rect x="2" y="3" width="20" height="18" rx="3" />
               <path d="M8 7v10M12 7v10M16 7v10" />
             </svg>
@@ -179,8 +179,8 @@ const DashboardPage: React.FC = () => {
         </button>
 
         <button type="button" className={styles.statCard} onClick={() => navigate('/config/decisions')}>
-          <div className={styles.statIcon} style={{ background: 'var(--color-accent-cyan)', boxShadow: 'var(--glow-cyan)' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
+          <div className={styles.statIcon}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M4 6h16M4 12h8M4 18h12" />
             </svg>
           </div>
@@ -192,8 +192,8 @@ const DashboardPage: React.FC = () => {
         </button>
 
         <button type="button" className={styles.statCard} onClick={() => navigate('/config/signals')}>
-          <div className={styles.statIcon} style={{ background: 'var(--color-primary)', boxShadow: 'var(--glow-primary)' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
+          <div className={styles.statIcon}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <circle cx="12" cy="12" r="3" />
               <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
             </svg>

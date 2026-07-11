@@ -37,7 +37,7 @@ log = get_logger(__name__)
     "model",
     default=DEFAULT_CHAT_MODEL,
     show_default=True,
-    help="Model name sent to the router (default: MoM).",
+    help="Model name sent to the router.",
 )
 @click.option(
     "--system",
@@ -87,13 +87,13 @@ def chat(
     Send a one-shot chat completion through the Envoy-routed HTTP API.
 
     Uses the first listener port in config.yaml plus the stack port offset.
-    Default model is MoM.
+    The default model is the namespaced automatic-routing alias vllm-sr/auto.
 
     Examples:
 
         vllm-sr chat "hello"
 
-        vllm-sr chat --model MoM --prompt "Explain mixture of models"
+        vllm-sr chat --model vllm-sr/auto --prompt "Explain mixture of models"
 
         vllm-sr chat --json "hello"
     """

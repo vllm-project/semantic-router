@@ -167,21 +167,21 @@
 }
 
 .modelCardOk {
-  border-color: rgba(118, 185, 0, 0.16);
+  border-color: rgba(143, 148, 156, 0.16);
   background:
-    radial-gradient(circle at top right, rgba(118, 185, 0, 0.09), transparent 44%),
-    linear-gradient(180deg, rgba(118, 185, 0, 0.04), rgba(17, 28, 20, 0.02)),
+    radial-gradient(circle at top right, rgba(143, 148, 156, 0.09), transparent 44%),
+    linear-gradient(180deg, rgba(143, 148, 156, 0.04), rgba(17, 28, 20, 0.02)),
     color-mix(in srgb, var(--color-surface) 95%, #101912 5%);
 }
 
 .modelCardOk .cardHeader {
-  border-bottom-color: rgba(118, 185, 0, 0.1);
+  border-bottom-color: rgba(143, 148, 156, 0.1);
 }
 
 .modelCardOk .modelFacts,
 .modelCardOk .modelReadyPanel {
-  border-color: rgba(118, 185, 0, 0.12);
-  background: rgba(118, 185, 0, 0.04);
+  border-color: rgba(143, 148, 156, 0.12);
+  background: rgba(143, 148, 156, 0.04);
 }
 
 .modelCardWarn {
@@ -264,14 +264,14 @@
   gap: 1rem;
   min-height: 176px;
   padding: 1.15rem 1.2rem;
-  border: 1px solid rgba(118, 185, 0, 0.12);
+  border: 1px solid rgba(143, 148, 156, 0.12);
   border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, rgba(118, 185, 0, 0.08), rgba(118, 185, 0, 0));
+  background: linear-gradient(135deg, rgba(143, 148, 156, 0.08), rgba(143, 148, 156, 0));
 }
 
 .routerHeroOk {
   border-color: rgba(34, 197, 94, 0.16);
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(118, 185, 0, 0.04));
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(143, 148, 156, 0.04));
 }
 
 .routerHeroWarn {
@@ -593,9 +593,9 @@
 .componentBadge {
   padding: 0.18rem 0.45rem;
   border-radius: var(--radius-sm);
-  background: rgba(118, 185, 0, 0.12);
+  background: rgba(143, 148, 156, 0.12);
   color: var(--color-primary-light);
-  border: 1px solid rgba(118, 185, 0, 0.18);
+  border: 1px solid rgba(143, 148, 156, 0.18);
   font-size: 0.64rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -698,7 +698,7 @@
 .startOption code {
   padding: 0.25rem 0.5rem;
   border-radius: var(--radius-sm);
-  background: rgba(118, 185, 0, 0.1);
+  background: rgba(143, 148, 156, 0.1);
   color: var(--color-primary);
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 0.875rem;

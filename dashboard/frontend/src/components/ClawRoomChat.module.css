@@ -1,21 +1,21 @@
 .container {
-  --nv-green-900: #1f3200;
-  --nv-green-800: #355400;
-  --nv-green-700: #557f00;
-  --nv-green-600: #76B901;
-  --nv-green-500: #94d92e;
-  --nv-green-300: #dff3b1;
-  --nv-green-rgb: 118, 185, 1;
-  --nv-bg-strong: rgba(8, 13, 10, 0.24);
-  --nv-bg-medium: rgba(8, 13, 10, 0.18);
-  --nv-bg-soft: rgba(8, 13, 10, 0.14);
-  --nv-bg-subtle: rgba(var(--nv-green-rgb), 0.08);
-  --nv-border-soft: rgba(var(--nv-green-rgb), 0.22);
-  --nv-border-medium: rgba(var(--nv-green-rgb), 0.34);
-  --nv-border-strong: rgba(var(--nv-green-rgb), 0.52);
-  --nv-text-main: #eef8d9;
-  --nv-text-secondary: #c8e2a4;
-  --nv-text-muted: #9bb873;
+  --graphite-green-900: #17181a;
+  --graphite-green-800: #24262a;
+  --graphite-green-700: #484b51;
+  --graphite-green-600: #8f949c;
+  --graphite-green-500: #b2b5ba;
+  --graphite-green-300: #e2e3e5;
+  --graphite-green-rgb: 143, 148, 156;
+  --graphite-bg-strong: rgba(16, 16, 18, 0.32);
+  --graphite-bg-medium: rgba(16, 16, 18, 0.24);
+  --graphite-bg-soft: rgba(16, 16, 18, 0.18);
+  --graphite-bg-subtle: rgba(var(--graphite-green-rgb), 0.08);
+  --graphite-border-soft: rgba(var(--graphite-green-rgb), 0.22);
+  --graphite-border-medium: rgba(var(--graphite-green-rgb), 0.34);
+  --graphite-border-strong: rgba(var(--graphite-green-rgb), 0.52);
+  --graphite-text-main: #f5f5f7;
+  --graphite-text-secondary: #b2b2b8;
+  --graphite-text-muted: #797980;
   --room-rail-width: min(100%, 860px);
 
   display: flex;
@@ -36,9 +36,9 @@
   gap: 0.5rem;
   padding: 0.7rem 0.85rem;
   border-radius: 12px;
-  border: 1px solid var(--nv-border-medium);
-  background: rgba(var(--nv-green-rgb), 0.12);
-  color: var(--nv-green-300);
+  border: 1px solid var(--graphite-border-medium);
+  background: rgba(var(--graphite-green-rgb), 0.12);
+  color: var(--graphite-green-300);
   font-size: 0.86rem;
   backdrop-filter: blur(10px) saturate(130%);
   -webkit-backdrop-filter: blur(10px) saturate(130%);
@@ -206,8 +206,8 @@
   width: 30px;
   height: 30px;
   border-radius: 9px;
-  border: 1px solid var(--nv-border-medium);
-  background: rgba(var(--nv-green-rgb), 0.2);
+  border: 1px solid var(--graphite-border-medium);
+  background: rgba(var(--graphite-green-rgb), 0.2);
   color: #ffffff;
   font-size: 1rem;
   line-height: 1;
@@ -415,7 +415,7 @@
   margin: 0;
   font-size: 1rem;
   font-weight: 650;
-  color: var(--nv-text-main);
+  color: var(--graphite-text-main);
   max-width: min(100%, 760px);
   white-space: nowrap;
   overflow: hidden;
@@ -432,7 +432,7 @@
   display: inline-flex;
   align-items: center;
   font-size: 0.72rem;
-  color: var(--nv-green-500);
+  color: var(--graphite-green-500);
   animation: pulse 2s infinite;
   line-height: 1;
 }
@@ -441,7 +441,7 @@
   display: inline-flex;
   align-items: center;
   font-size: 0.72rem;
-  color: var(--nv-text-muted);
+  color: var(--graphite-text-muted);
   opacity: 0.7;
   line-height: 1;
 }
@@ -989,7 +989,7 @@
 
 .emptyParticipants {
   font-size: 0.8rem;
-  color: var(--nv-text-secondary);
+  color: var(--graphite-text-secondary);
 }
 
 .participantChip {
@@ -997,8 +997,8 @@
   align-items: center;
   gap: 0.36rem;
   border-radius: 999px;
-  border: 1px solid var(--nv-border-soft);
-  background: rgba(var(--nv-green-rgb), 0.07);
+  border: 1px solid var(--graphite-border-soft);
+  background: rgba(var(--graphite-green-rgb), 0.07);
   padding: 0.2rem 0.42rem;
   min-height: 30px;
 }
@@ -1011,7 +1011,7 @@
   align-items: center;
   justify-content: center;
   font-size: 0.75rem;
-  background: rgba(var(--nv-green-rgb), 0.16);
+  background: rgba(var(--graphite-green-rgb), 0.16);
   overflow: hidden;
 }
 
@@ -1023,7 +1023,7 @@
 
 .participantName {
   font-size: 0.78rem;
-  color: var(--nv-text-main);
+  color: var(--graphite-text-main);
 }
 
 .leaderBadge,
@@ -1036,21 +1036,21 @@
 }
 
 .leaderBadge {
-  background: rgba(var(--nv-green-rgb), 0.28);
-  color: var(--nv-green-300);
-  border: 1px solid var(--nv-border-strong);
+  background: rgba(var(--graphite-green-rgb), 0.28);
+  color: var(--graphite-green-300);
+  border: 1px solid var(--graphite-border-strong);
 }
 
 .workerBadge {
-  background: rgba(var(--nv-green-rgb), 0.16);
-  color: var(--nv-text-secondary);
-  border: 1px solid var(--nv-border-medium);
+  background: rgba(var(--graphite-green-rgb), 0.16);
+  color: var(--graphite-text-secondary);
+  border: 1px solid var(--graphite-border-medium);
 }
 
 .leaderAction {
   border: none;
-  background: rgba(var(--nv-green-rgb), 0.2);
-  color: var(--nv-green-300);
+  background: rgba(var(--graphite-green-rgb), 0.2);
+  color: var(--graphite-green-300);
   border-radius: 999px;
   width: 22px;
   height: 22px;
@@ -1158,7 +1158,7 @@
   font-size: 0.62rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--nv-text-muted);
+  color: var(--graphite-text-muted);
 }
 
 .senderTypeLeader {
@@ -1386,7 +1386,7 @@
   right: 0;
   bottom: calc(100% + 0.45rem);
   border-radius: 12px;
-  border: 1px solid var(--nv-border-medium);
+  border: 1px solid var(--graphite-border-medium);
   background: rgba(8, 13, 10, 0.88);
   box-shadow: 0 18px 30px rgba(0, 0, 0, 0.3);
   overflow: hidden;
@@ -1399,7 +1399,7 @@
   width: 100%;
   border: none;
   background: transparent;
-  color: var(--nv-text-main);
+  color: var(--graphite-text-main);
   display: flex;
   justify-content: space-between;
   gap: 0.6rem;
@@ -1410,16 +1410,16 @@
 
 .mentionItem:hover,
 .mentionItemActive {
-  background: rgba(var(--nv-green-rgb), 0.2);
+  background: rgba(var(--graphite-green-rgb), 0.2);
 }
 
 .mentionToken {
   font-weight: 600;
-  color: var(--nv-green-300);
+  color: var(--graphite-green-300);
 }
 
 .mentionDescription {
-  color: var(--nv-text-secondary);
+  color: var(--graphite-text-secondary);
   font-size: 0.8rem;
   white-space: nowrap;
   overflow: hidden;
@@ -1428,7 +1428,7 @@
 
 .loadingShell {
   border-radius: 18px;
-  border: 1px solid var(--nv-border-soft);
+  border: 1px solid var(--graphite-border-soft);
   background: rgba(8, 13, 10, 0.2);
   padding: 0.85rem;
   display: flex;
@@ -1460,7 +1460,7 @@
 
 .loadingSubtitle {
   font-size: 0.82rem;
-  color: var(--nv-text-secondary);
+  color: var(--graphite-text-secondary);
 }
 
 .loadingLayout {
@@ -1474,7 +1474,7 @@
   width: 280px;
   flex-shrink: 0;
   border-radius: 14px;
-  border: 1px solid var(--nv-border-soft);
+  border: 1px solid var(--graphite-border-soft);
   background: rgba(8, 13, 10, 0.18);
   padding: 0.62rem;
   display: flex;
@@ -1490,7 +1490,7 @@
 .loadingBubbleWide,
 .loadingInput {
   border-radius: 10px;
-  border: 1px solid rgba(118, 185, 1, 0.12);
+  border: 1px solid rgba(143, 148, 156, 0.12);
 }
 
 .loadingLine {
@@ -1512,15 +1512,15 @@
   flex: 1;
   min-width: 0;
   border-radius: 14px;
-  border: 1px solid var(--nv-border-soft);
-  background: var(--nv-bg-medium);
+  border: 1px solid var(--graphite-border-soft);
+  background: var(--graphite-bg-medium);
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
 
 .loadingChatHeader {
-  border-bottom: 1px solid var(--nv-border-soft);
+  border-bottom: 1px solid var(--graphite-border-soft);
   padding: 0.62rem;
   display: flex;
   flex-direction: column;
@@ -1565,7 +1565,7 @@
 }
 
 .loadingPulse {
-  background: rgba(var(--nv-green-rgb), 0.12);
+  background: rgba(var(--graphite-green-rgb), 0.12);
   position: relative;
   overflow: hidden;
 }
@@ -1594,7 +1594,7 @@
 }
 
 .stateHint {
-  color: var(--nv-text-secondary);
+  color: var(--graphite-text-secondary);
   font-size: 0.92rem;
   width: min(100%, var(--room-rail-width));
   padding: 1rem 0.25rem;

@@ -529,7 +529,7 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
       return [
         { name: 'config_source', label: 'Config Source', type: 'select', options: ['file', 'kubernetes'], required: true },
         { name: 'strategy', label: 'Routing Strategy', type: 'text', placeholder: 'static, router_dc, automix...' },
-        { name: 'auto_model_name', label: 'Auto Model Name', type: 'text', placeholder: 'MoM' },
+        { name: 'auto_model_name', label: 'Auto Model Name', type: 'text', placeholder: 'vllm-sr/auto' },
         { name: 'auto_model_names', label: 'Auto Model Aliases (JSON)', type: 'json', placeholder: '["vllm-sr/auto","auto","MoM"]' },
         { name: 'include_config_models_in_list', label: 'Include Config Models In List', type: 'boolean' },
         { name: 'streamed_body', label: 'Streamed Body (JSON)', type: 'json', placeholder: '{"enabled":false}' },
