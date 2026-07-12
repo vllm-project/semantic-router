@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -13,6 +14,38 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
+
+// multiModalEncodeImage is the FFI image-encode entry point, kept as a
+// package-level var so tests can inject a failing encoder without a loaded model.
+var multiModalEncodeImage = candle_binding.MultiModalEncodeImageFromBase64
+
+// imageEncodeError marks an image-encode failure driven by the request input:
+// the payload validated as a safe base64 data URI but was not a decodable image.
+// The handler maps it to 400 INVALID_IMAGE rather than 500, so a client-supplied
+// bad image is reported as a client error, not an internal one.
+type imageEncodeError struct {
+	index int
+	err   error
+}
+
+func (e *imageEncodeError) Error() string {
+	return fmt.Sprintf("images[%d]: %v", e.index, e.err)
+}
+
+func (e *imageEncodeError) Unwrap() error { return e.err }
+
+// classifyEmbeddingError maps a buildEmbeddingResults error to the HTTP status,
+// error code, and client message. Input-caused image-encode failures are 400
+// INVALID_IMAGE; every other failure is a genuine 500.
+func classifyEmbeddingError(err error) (int, string, string) {
+	var imgErr *imageEncodeError
+	if errors.As(err, &imgErr) {
+		return http.StatusBadRequest, "INVALID_IMAGE",
+			fmt.Sprintf("images[%d] could not be decoded as an image", imgErr.index)
+	}
+	return http.StatusInternalServerError, "EMBEDDING_GENERATION_FAILED",
+		fmt.Sprintf("failed to generate embedding: %v", err)
+}
 
 const (
 	defaultEmbeddingDimension = 768
@@ -31,8 +64,8 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 
 	results, totalProcessingTime, err := buildEmbeddingResults(req)
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "EMBEDDING_GENERATION_FAILED",
-			fmt.Sprintf("failed to generate embedding: %v", err))
+		status, code, message := classifyEmbeddingError(err)
+		s.writeErrorResponse(w, status, code, message)
 		return
 	}
 
@@ -150,16 +183,19 @@ func buildEmbeddingResults(req EmbeddingRequest) ([]EmbeddingResult, int64, erro
 		totalProcessingTime += processingTime
 	}
 
-	for _, image := range req.Images {
+	for i, image := range req.Images {
 		// Canonicalize so the FFI's case-sensitive ";base64," scan finds the
 		// payload boundary (validation already guaranteed a safe data URI).
 		encodeInput := image
 		if canonical, ok := imageurl.CanonicalDataURL(image); ok {
 			encodeInput = canonical
 		}
-		output, err := candle_binding.MultiModalEncodeImageFromBase64(encodeInput, req.Dimension)
+		output, err := multiModalEncodeImage(encodeInput, req.Dimension)
 		if err != nil {
-			return nil, 0, err
+			// The image already passed the safe-data-URI + base64-decode gate, so
+			// an encode failure here is input-caused (undecodable image bytes);
+			// surface it as a 400 rather than a 500.
+			return nil, 0, &imageEncodeError{index: i, err: err}
 		}
 
 		processingTime := int64(output.ProcessingTimeMs)
