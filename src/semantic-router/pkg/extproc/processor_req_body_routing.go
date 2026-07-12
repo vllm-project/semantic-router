@@ -272,6 +272,15 @@ func (r *OpenAIRouter) buildRouteHeaderState(
 		return nil, errorResponse
 	}
 	state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
+	// Strip the caller's inbound Authorization by default so a caller credential
+	// (e.g. a per-user virtual key) never reaches an upstream model backend unless
+	// a backend explicitly opts in via forward_authorization_header. Envoy applies
+	// remove_headers before set_headers, so the forwarding and static-key branches
+	// in appendCredentialHeaders re-set Authorization and win over this strip (the
+	// same ordering the content-length remove/set above relies on). This mirrors
+	// the Anthropic-native path, which unconditionally removes "authorization".
+	// See issue #2375.
+	state.removeHeaders = append(state.removeHeaders, forwardedAuthorizationHeaderName)
 	// The internal looper carrier for caller identity must never reach an upstream.
 	state.removeHeaders = append(state.removeHeaders, headers.VSRInboundAuthorization)
 	appendProfileHeaders(&state.setHeaders, profile)
@@ -315,11 +324,14 @@ func (r *OpenAIRouter) appendCredentialHeaders(
 		return r.createErrorResponse(401, "Authentication failed. Check your API key configuration.")
 	}
 	if accessKey == "" {
-		logging.ComponentDebugEvent("extproc", "provider_auth_preserved", map[string]interface{}{
+		// No static key and no forward opt-in: nothing is injected, and the
+		// caller's inbound Authorization is stripped by buildRouteHeaderState.
+		// The upstream receives no caller credential (issue #2375).
+		logging.ComponentDebugEvent("extproc", "provider_auth_stripped", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"provider":   llmProvider,
 			"model":      model,
-			"mode":       "preserve_original_header",
+			"mode":       "strip_caller_credential",
 		})
 		return nil
 	}
@@ -328,11 +340,16 @@ func (r *OpenAIRouter) appendCredentialHeaders(
 	if authPrefix != "" {
 		value = authPrefix + " " + accessKey
 	}
+	// OVERWRITE_IF_EXISTS_OR_ADD forces a single header. Without it, when the
+	// provider auth header is Authorization and the caller also sent one, the
+	// default APPEND_IF_EXISTS_OR_ADD would let the caller credential ride
+	// alongside the injected service key on the upstream request (issue #2375).
 	state.setHeaders = append(state.setHeaders, &core.HeaderValueOption{
 		Header: &core.HeaderValue{
 			Key:      authHeader,
 			RawValue: []byte(value),
 		},
+		AppendAction: core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
 	})
 	logging.ComponentDebugEvent("extproc", "provider_auth_injected", map[string]interface{}{
 		"request_id":  ctx.RequestID,
