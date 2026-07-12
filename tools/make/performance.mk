@@ -48,6 +48,16 @@ perf-bench-cache: build-router ensure-reports-dir
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 	cd perf && go test -bench=BenchmarkCache.* -benchmem -benchtime=10s ./benchmarks/
 
+# Run Looper family benchmarks. Unlike the other component benchmarks, the
+# Looper/Fusion/Flow/ReMoM benches live in the main module (src/semantic-router)
+# next to the unexported hot-path functions they measure, so go test runs there.
+perf-bench-looper: ## Run Looper family (ReMoM/Fusion/Flow/Base) benchmarks
+perf-bench-looper: build-router ensure-reports-dir
+	@$(LOG_TARGET)
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	cd src/semantic-router && go test -bench='^Benchmark(ReMoM|Fusion|Flow|Base)' -benchmem -benchtime=10s ./pkg/looper/... \
+	  | tee ../../reports/bench-results-looper.txt
+
 # Run E2E performance tests
 perf-e2e: ## Run E2E performance tests
 perf-e2e: build-e2e ensure-reports-dir
@@ -95,6 +105,10 @@ perf-baseline-update: ensure-reports-dir
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 	cd perf && go test -bench=. -benchmem -benchtime=30s ./benchmarks/... \
 	  | tee ../reports/bench-results.txt
+	@echo "Running Looper family benchmarks to update baseline..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	cd src/semantic-router && go test -bench='^Benchmark(ReMoM|Fusion|Flow|Base)' -benchmem -benchtime=30s ./pkg/looper/... \
+	  | tee -a ../../reports/bench-results.txt
 	@echo "Updating baselines..."
 	@cd perf/scripts && ./update-baseline.sh
 

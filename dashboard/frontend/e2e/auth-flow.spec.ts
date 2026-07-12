@@ -3,6 +3,7 @@ import {
   mockAuthenticatedAppShell,
   mockAuthenticatedSession,
 } from "./support/auth";
+import { openComposerAddMenu } from "./support/playground";
 
 const baseSetupState = {
   setupMode: false,
@@ -117,9 +118,18 @@ test.describe("Dashboard auth flow", () => {
 
     await page.goto("/login");
     const continueButton = page.getByRole("button", { name: "Continue" });
+    const emailInput = page.getByLabel("Email");
+    const passwordInput = page.getByLabel("Password");
     await continueButton.scrollIntoViewIfNeeded();
-    await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
-    await expect(page.getByPlaceholder("••••••••")).toBeVisible();
+    await expect(emailInput).toBeVisible();
+    await expect(emailInput).toHaveAttribute("name", "email");
+    await expect(emailInput).toHaveAttribute("autocomplete", "username");
+    await expect(passwordInput).toBeVisible();
+    await expect(passwordInput).toHaveAttribute("name", "password");
+    await expect(passwordInput).toHaveAttribute(
+      "autocomplete",
+      "current-password",
+    );
     await expect(continueButton).toBeVisible();
   });
 
@@ -428,7 +438,9 @@ test.describe("Dashboard auth flow", () => {
         name: "Choose the administrator email.",
       }),
     ).toBeVisible();
-    await page.getByLabel("Admin email").fill("ada@example.com");
+    const bootstrapEmail = page.getByLabel("Admin email");
+    await expect(bootstrapEmail).toHaveAttribute("autocomplete", "username");
+    await bootstrapEmail.fill("ada@example.com");
     await page.getByRole("button", { name: "Next" }).click();
 
     await expect(
@@ -436,7 +448,12 @@ test.describe("Dashboard auth flow", () => {
         name: "Secure the workspace.",
       }),
     ).toBeVisible();
-    await page.getByLabel("Password").fill("future-password");
+    const bootstrapPassword = page.getByLabel("Password");
+    await expect(bootstrapPassword).toHaveAttribute(
+      "autocomplete",
+      "new-password",
+    );
+    await bootstrapPassword.fill("future-password");
     await Promise.all([
       page.waitForURL(/\/auth\/transition\?to=%2Fsetup$/),
       page.getByText(transitionCopyPattern).waitFor({ state: "visible" }),
@@ -565,7 +582,7 @@ test.describe("Dashboard auth flow", () => {
     ]);
     await expect(page).toHaveURL(/\/status$/, { timeout: 12000 });
     await expect(
-      page.getByRole("heading", { name: "System Status", exact: true }),
+      page.getByRole("heading", { name: "System status", exact: true }),
     ).toBeVisible();
   });
 
@@ -731,18 +748,19 @@ test.describe("Dashboard auth flow", () => {
     await expect(page.getByRole("link", { name: "Users" })).toHaveCount(0);
 
     await page.goto("/playground");
+    const composerMenu = await openComposerAddMenu(page);
     await expect(
-      page.getByRole("button", { name: /Enable HireClaw|Disable HireClaw/i }),
+      composerMenu.getByRole("menuitemcheckbox", { name: /Enable HireClaw|Disable HireClaw/i }),
     ).toBeEnabled();
     await expect(
-      page.getByRole("button", {
+      composerMenu.getByRole("menuitemcheckbox", {
         name: /Open ClawRoom view|Exit ClawRoom view/i,
       }),
     ).toHaveCount(0);
 
-    await page.getByRole("button", { name: /Enable HireClaw/i }).click();
+    await composerMenu.getByRole("menuitemcheckbox", { name: /Enable HireClaw/i }).click();
     await expect(
-      page.getByRole("button", {
+      composerMenu.getByRole("menuitemcheckbox", {
         name: /Open ClawRoom view|Exit ClawRoom view/i,
       }),
     ).toBeEnabled();

@@ -2,30 +2,18 @@ import React from 'react'
 import Head from '@docusaurus/Head'
 import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
-import useBaseUrl from '@docusaurus/useBaseUrl'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
-import Claude from '@lobehub/icons/es/Claude/components/Mono'
-import DeepSeek from '@lobehub/icons/es/DeepSeek/components/Mono'
-import Gemini from '@lobehub/icons/es/Gemini/components/Mono'
-import Grok from '@lobehub/icons/es/Grok/components/Mono'
-import Kimi from '@lobehub/icons/es/Kimi/components/Mono'
-import Meta from '@lobehub/icons/es/Meta/components/Mono'
-import Minimax from '@lobehub/icons/es/Minimax/components/Mono'
-import Mistral from '@lobehub/icons/es/Mistral/components/Mono'
-import OpenAI from '@lobehub/icons/es/OpenAI/components/Mono'
-import Qwen from '@lobehub/icons/es/Qwen/components/Mono'
-import Zhipu from '@lobehub/icons/es/Zhipu/components/Mono'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
 import InstallQuickStartSection from '@site/src/components/InstallQuickStartSection'
 import PaperFigureShowcase from '@site/src/components/PaperFigureShowcase'
 import ResearchPaperCarousel from '@site/src/components/ResearchPaperCarousel'
 import TeamCarousel from '@site/src/components/TeamCarousel'
+import TestimonialsRail from '@site/src/components/TestimonialsRail'
 import { researchPapers } from '@site/src/data/researchContent'
 import { SITE_SOCIAL_PREVIEW_IMAGE_PATH } from '@site/src/data/socialPreview'
 import TransformerPipelineAnimation from '@site/src/components/TransformerPipelineAnimation'
-import DitherField from '@site/src/components/site/DitherField'
+import SemanticTerrainHero from '@site/src/components/site/SemanticTerrainHero'
 import {
-  PageIntro,
   PillLink,
   SectionLabel,
   StatStrip,
@@ -40,31 +28,12 @@ const homepageMetaTitle = translate({
 const homepageMetaDescription = translate({
   id: 'homepage.meta.description',
   message:
-    'Building Mixture-of-Models: The Next-Generation Model Architecture for Heterogeneous LLM Inference. Make signals and preferences executable.',
+    'We believe Mixture-of-Models is the next-generation model architecture for heterogeneous LLM inference. vLLM Semantic Router makes it executable.',
 })
 const homepageSocialTitle = translate({
   id: 'homepage.meta.socialTitle',
   message: 'Build Your Mixture-of-Models | vLLM Semantic Router',
 })
-
-type HeroModelLogo = {
-  label: string
-  Icon: React.ElementType
-}
-
-const heroModelLogos: HeroModelLogo[] = [
-  { label: 'Kimi', Icon: Kimi },
-  { label: 'Zhipu', Icon: Zhipu },
-  { label: 'MiniMax', Icon: Minimax },
-  { label: 'ChatGPT', Icon: OpenAI },
-  { label: 'Claude', Icon: Claude },
-  { label: 'Gemini', Icon: Gemini },
-  { label: 'DeepSeek', Icon: DeepSeek },
-  { label: 'Qwen', Icon: Qwen },
-  { label: 'Llama', Icon: Meta },
-  { label: 'Mistral', Icon: Mistral },
-  { label: 'Grok', Icon: Grok },
-]
 
 const heroStats = [
   {
@@ -102,6 +71,69 @@ const heroStats = [
       },
       { count: paperCount },
     ),
+  },
+]
+
+const architectureDimensions = [
+  {
+    marker: '01',
+    dimension: translate({
+      id: 'homepage.capabilities.axis.models',
+      message: 'Models',
+    }),
+    fragmented: translate({
+      id: 'homepage.capabilities.models.reality',
+      message: 'Models specialize in different work.',
+    }),
+    unified: translate({
+      id: 'homepage.capabilities.models.value',
+      message: 'Compose personalized model paths.',
+    }),
+  },
+  {
+    marker: '02',
+    dimension: translate({
+      id: 'homepage.capabilities.axis.compute',
+      message: 'Compute',
+    }),
+    fragmented: translate({
+      id: 'homepage.capabilities.compute.reality',
+      message: 'GPUs, accelerators, edge, and cloud coexist.',
+    }),
+    unified: translate({
+      id: 'homepage.capabilities.compute.value',
+      message: 'Route across heterogeneous compute.',
+    }),
+  },
+  {
+    marker: '03',
+    dimension: translate({
+      id: 'homepage.capabilities.axis.location',
+      message: 'Location',
+    }),
+    fragmented: translate({
+      id: 'homepage.capabilities.location.reality',
+      message: 'Inference spans edge, private, and cloud.',
+    }),
+    unified: translate({
+      id: 'homepage.capabilities.location.value',
+      message: 'Keep data within its boundaries.',
+    }),
+  },
+  {
+    marker: '04',
+    dimension: translate({
+      id: 'homepage.capabilities.axis.preference',
+      message: 'Preference',
+    }),
+    fragmented: translate({
+      id: 'homepage.capabilities.preference.reality',
+      message: '“Best” changes by user and workload.',
+    }),
+    unified: translate({
+      id: 'homepage.capabilities.preference.value',
+      message: 'Make every preference executable.',
+    }),
   },
 ]
 
@@ -214,142 +246,6 @@ const encoderCards = [
   },
 ]
 
-function DitherHero(): JSX.Element {
-  const marqueeCopies = [0, 1]
-  const marqueeRepeats = [0, 1, 2]
-  const heroLogoSrc = useBaseUrl('/img/artworks/vllm-sr-logo.dark.svg')
-  const heroLogoAlt = translate({
-    id: 'homepage.hero.logoAlt',
-    message: 'vLLM Semantic Router logo',
-  })
-
-  return (
-    <section className={styles.heroStage}>
-      <header className={styles.hero}>
-        <DitherField className={styles.heroNoise} />
-        <div className="site-shell-container">
-          <div className={styles.heroGrid}>
-            <div className={styles.heroIntro}>
-              <div className={styles.heroBrandLockup}>
-                <img
-                  src={heroLogoSrc}
-                  alt={heroLogoAlt}
-                  className={styles.heroBrandLogo}
-                  decoding="async"
-                  loading="eager"
-                />
-              </div>
-
-              <PageIntro
-                align="center"
-                className={styles.heroIntroPanel}
-                label={(
-                  <Translate id="homepage.hero.label">
-                    The next-generation model architecture
-                  </Translate>
-                )}
-                title={(
-                  <span className={styles.heroTitle}>
-                    <span
-                      className={`${styles.heroTitleLine} ${styles.heroTitleAccent}`}
-                    >
-                      <Translate id="homepage.hero.line1">Build your</Translate>
-                    </span>
-                    <span className={styles.heroTitleLine}>
-                      <Translate id="homepage.hero.line2">
-                        Mixture-of-Models.
-                      </Translate>
-                    </span>
-                  </span>
-                )}
-                description={(
-                  <span className={styles.heroDescriptionText}>
-                    <Translate id="homepage.hero.description">
-                      Turn signals and preferences into personalized model paths
-                      across heterogeneous LLMs.
-                    </Translate>
-                  </span>
-                )}
-                actions={(
-                  <>
-                    <PillLink
-                      className={styles.heroPrimaryCta}
-                      href="https://play.vllm-semantic-router.com/"
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      <Translate id="homepage.hero.primaryCta">
-                        Try the Playground
-                      </Translate>
-                    </PillLink>
-                    <PillLink
-                      className={styles.heroSecondaryCta}
-                      to="/docs/intro"
-                      muted
-                    >
-                      <Translate id="homepage.hero.secondaryCta">
-                        Explore the Docs
-                      </Translate>
-                    </PillLink>
-                  </>
-                )}
-              />
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <section
-        className={styles.heroModelSection}
-        aria-label={translate({
-          id: 'homepage.hero.modelBand.aria',
-          message: 'Mixture-of-Models ecosystem',
-        })}
-      >
-        <div className={styles.heroModelBand}>
-          <div className={styles.heroModelBandHeader}>
-            <span className={styles.heroModelBandEyebrow}>
-              <Translate id="homepage.hero.modelBand.eyebrow">
-                Mixture-of-Models
-              </Translate>
-            </span>
-          </div>
-
-          <div className={styles.heroModelBandViewport} aria-hidden="true">
-            <div className={styles.heroModelBandTrack}>
-              {marqueeCopies.map(copyIndex => (
-                <div
-                  key={`hero-model-sequence-${copyIndex}`}
-                  className={styles.heroModelBandSequence}
-                >
-                  {marqueeRepeats.map(repeatIndex =>
-                    heroModelLogos.map(({ label, Icon }) => (
-                      <div
-                        key={`${copyIndex}-${repeatIndex}-${label}`}
-                        className={styles.heroModelChip}
-                      >
-                        <span
-                          className={styles.heroModelChipIcon}
-                          aria-hidden="true"
-                        >
-                          <Icon size={20} className={styles.heroModelGlyph} />
-                        </span>
-                        <span className={styles.heroModelChipLabel}>
-                          {label}
-                        </span>
-                      </div>
-                    )),
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-    </section>
-  )
-}
-
 function CapabilitySection(): JSX.Element {
   return (
     <section
@@ -360,13 +256,11 @@ function CapabilitySection(): JSX.Element {
         <div className={styles.capabilityFrame}>
           <header className={styles.capabilityHeading}>
             <SectionLabel className={styles.capabilityLabel}>
-              <Translate id="homepage.capabilities.label">
-                Why Mixture-of-Models
-              </Translate>
+              <Translate id="homepage.capabilities.label">Architecture</Translate>
             </SectionLabel>
             <h2 id="mixture-architecture-title">
               <Translate id="homepage.capabilities.heading">
-                Many models. One architecture.
+                Unify heterogeneous inference.
               </Translate>
             </h2>
           </header>
@@ -374,8 +268,7 @@ function CapabilitySection(): JSX.Element {
           <div className={styles.capabilitySummary}>
             <p>
               <Translate id="homepage.capabilities.description">
-                Models, compute, and preferences become executable paths for
-                every request.
+                Unify a fragmented model landscape across four dimensions.
               </Translate>
             </p>
             <PillLink className={styles.capabilityCta} to="/docs/intro">
@@ -385,70 +278,61 @@ function CapabilitySection(): JSX.Element {
             </PillLink>
           </div>
 
-          <ol className={styles.architectureRail}>
-            <li className={styles.architectureStage}>
-              <div className={styles.stageMarker} aria-hidden="true">
-                <span>01</span>
-              </div>
-              <span className={styles.stageLabel}>
-                <Translate id="homepage.capabilities.axis.models">
-                  Model fleet
+          <div
+            className={styles.architectureMatrix}
+            role="table"
+            aria-label={translate({
+              id: 'homepage.capabilities.table.aria',
+              message: 'Fragmented inference compared with vLLM Semantic Router',
+            })}
+          >
+            <div className={styles.matrixHeader} role="row">
+              <span role="columnheader">
+                <Translate id="homepage.capabilities.table.dimension">
+                  Dimension
                 </Translate>
               </span>
-              <strong>
-                <Translate id="homepage.capabilities.models.value">
-                  Heterogeneous LLMs
-                </Translate>
-              </strong>
-              <span className={styles.stageDetail}>
-                <Translate id="homepage.capabilities.models.reality">
-                  Frontier · Open · Specialized · Edge
+              <span role="columnheader">
+                <Translate id="homepage.capabilities.table.reality">
+                  Fragmented today
                 </Translate>
               </span>
-            </li>
+              <span role="columnheader">
+                <Translate id="homepage.capabilities.table.value">
+                  With vLLM SR
+                </Translate>
+              </span>
+            </div>
 
-            <li className={styles.architectureStage}>
-              <div className={styles.stageMarker} aria-hidden="true">
-                <span>02</span>
+            {architectureDimensions.map(item => (
+              <div key={item.marker} className={styles.matrixRow} role="row">
+                <div className={styles.matrixDimension} role="rowheader">
+                  <span aria-hidden="true">{item.marker}</span>
+                  <strong>{item.dimension}</strong>
+                </div>
+                <div className={styles.matrixFragmented} role="cell">
+                  <span className={styles.matrixMobileLabel}>
+                    <Translate id="homepage.capabilities.table.reality">
+                      Fragmented today
+                    </Translate>
+                  </span>
+                  <p>{item.fragmented}</p>
+                </div>
+                <div className={styles.matrixUnified} role="cell">
+                  <span className={styles.matrixMobileLabel}>
+                    <Translate id="homepage.capabilities.table.value">
+                      With vLLM SR
+                    </Translate>
+                  </span>
+                  <p>{item.unified}</p>
+                </div>
               </div>
-              <span className={styles.stageLabel}>
-                <Translate id="homepage.capabilities.axis.preference">
-                  Composition
-                </Translate>
-              </span>
-              <strong>
-                <Translate id="homepage.capabilities.preference.value">
-                  Your Mixture-of-Models
-                </Translate>
-              </strong>
-              <span className={styles.stageDetail}>
-                <Translate id="homepage.capabilities.preference.reality">
-                  User · Product · Workload
-                </Translate>
-              </span>
-            </li>
+            ))}
+          </div>
 
-            <li className={styles.architectureStage}>
-              <div className={styles.stageMarker} aria-hidden="true">
-                <span>03</span>
-              </div>
-              <span className={styles.stageLabel}>
-                <Translate id="homepage.capabilities.axis.compute">
-                  Runtime
-                </Translate>
-              </span>
-              <strong>
-                <Translate id="homepage.capabilities.compute.value">
-                  Executable model paths
-                </Translate>
-              </strong>
-              <span className={styles.stageDetail}>
-                <Translate id="homepage.capabilities.compute.reality">
-                  Route · Cascade · Fuse
-                </Translate>
-              </span>
-            </li>
-          </ol>
+          <div className={styles.capabilityStats}>
+            <StatStrip items={heroStats} />
+          </div>
         </div>
       </div>
     </section>
@@ -462,19 +346,19 @@ function EncoderIntelligenceSection(): JSX.Element {
         <div className={styles.sectionHeading}>
           <SectionLabel>
             <Translate id="homepage.aiTech.label">
-              Built on Encoder Models
+              Signal intelligence
             </Translate>
           </SectionLabel>
           <div>
             <h2>
               <Translate id="homepage.aiTech.title">
-                Encoder-Based Intelligence
+                Intelligence before generation.
               </Translate>
             </h2>
             <p>
               <Translate id="homepage.aiTech.description">
-                Purpose-built encoders read intent, rank relevance, and classify
-                modality before generation begins.
+                Purpose-built encoders extract intent, context, safety, and
+                modality before a generative model is selected.
               </Translate>
             </p>
           </div>
@@ -555,52 +439,36 @@ function EncoderIntelligenceSection(): JSX.Element {
   )
 }
 
-function ClosingBands(): JSX.Element {
+function FinalCtaSection(): JSX.Element {
   return (
-    <section className={styles.closingBands}>
+    <section className={styles.finalCtaSection}>
       <div className="site-shell-container">
-        <div className={styles.bandGrid}>
-          <div className={styles.band}>
+        <div className={styles.finalCtaFrame}>
+          <div className={styles.finalCtaCopy}>
             <SectionLabel>
-              <Translate id="homepage.band.docs.label">Documentation</Translate>
+              <Translate id="homepage.finalCta.label">Start building</Translate>
             </SectionLabel>
-            <h3>
-              <Translate id="homepage.band.docs.title">
-                Architecture, written to be used.
+            <h2>
+              <Translate id="homepage.finalCta.title">
+                Compose your Mixture-of-Models.
               </Translate>
-            </h3>
+            </h2>
             <p>
-              <Translate id="homepage.band.docs.text">
-                Install, configure, train, and operate from one dense
-                documentation graph.
+              <Translate id="homepage.finalCta.description">
+                Shape every model path with signals, preferences, and policy.
               </Translate>
             </p>
-            <PillLink to="/docs/intro">
-              <Translate id="homepage.band.docs.cta">Docs index</Translate>
-            </PillLink>
           </div>
-
-          <div className={styles.band}>
-            <SectionLabel>
-              <Translate id="homepage.band.community.label">
-                Community
-              </Translate>
-            </SectionLabel>
-            <h3>
-              <Translate id="homepage.band.community.title">
-                Research and builders in one loop.
-              </Translate>
-            </h3>
-            <p>
-              <Translate id="homepage.band.community.text">
-                Papers, working groups, and contributors evolve the same system
-                in public.
-              </Translate>
-            </p>
-            <PillLink to="/community/team" muted>
-              <Translate id="homepage.band.community.cta">
-                Community routes
-              </Translate>
+          <div className={styles.finalCtaActions}>
+            <PillLink
+              href="https://play.vllm-semantic-router.com/"
+              rel="noreferrer"
+              target="_blank"
+            >
+              <Translate id="homepage.finalCta.playground">Try the Playground</Translate>
+            </PillLink>
+            <PillLink to="/docs/intro" muted>
+              <Translate id="homepage.finalCta.docs">Explore the Docs</Translate>
             </PillLink>
           </div>
         </div>
@@ -663,24 +531,36 @@ export default function Home(): JSX.Element {
           }}
         />
       </Head>
-      <main className={styles.page}>
-        <DitherHero />
+      <main className={styles.page} data-theme="dark">
+        <SemanticTerrainHero />
 
-        <CapabilitySection />
-
-        <section className={styles.statsSection}>
-          <div className="site-shell-container">
-            <StatStrip items={heroStats} />
-          </div>
-        </section>
-
-        <InstallQuickStartSection />
-        <ResearchPaperCarousel />
-        <PaperFigureShowcase />
-        <EncoderIntelligenceSection />
-        <TeamCarousel />
-        <AcknowledgementsSection />
-        <ClosingBands />
+        <div className={styles.bandGraphite}>
+          <CapabilitySection />
+        </div>
+        <div className={styles.bandBlack}>
+          <TestimonialsRail />
+        </div>
+        <div className={styles.bandRaised}>
+          <PaperFigureShowcase />
+        </div>
+        <div className={styles.bandBlack}>
+          <EncoderIntelligenceSection />
+        </div>
+        <div className={styles.bandGraphite}>
+          <InstallQuickStartSection />
+        </div>
+        <div className={styles.bandBlack}>
+          <ResearchPaperCarousel />
+        </div>
+        <div className={styles.bandGraphite}>
+          <TeamCarousel />
+        </div>
+        <div className={styles.bandBlack}>
+          <AcknowledgementsSection />
+        </div>
+        <div className={styles.bandGraphite}>
+          <FinalCtaSection />
+        </div>
       </main>
     </Layout>
   )

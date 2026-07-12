@@ -1,6 +1,7 @@
 .section {
   padding: 5rem 0;
-  border-bottom: 1px solid var(--site-border);
+  border-bottom: 0;
+  background: var(--site-bg);
 }
 
 .heading {
@@ -48,10 +49,7 @@
   padding: 1.5rem;
   border: 1px solid var(--site-border);
   border-radius: 1.2rem;
-  background:
-    radial-gradient(circle at top right, rgba(255, 255, 255, 0.04), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 38%),
-    var(--site-surface);
+  background: var(--site-surface-alt);
 }
 
 .frameHeader {
@@ -82,6 +80,9 @@
 
 .command {
   display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--site-text);
   font-family: var(--ifm-font-family-monospace);
   font-size: clamp(1rem, 1.85vw, 1.42rem);

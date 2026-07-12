@@ -9,14 +9,14 @@ const lightCodeTheme = themes.github
 const darkCodeTheme = themes.vsDark
 const siteUrl = 'https://vllm-semantic-router.com'
 const siteDefaultDescription
-  = 'Building Mixture-of-Models: The Next-Generation Model Architecture for Heterogeneous LLM Inference. Make signals and preferences executable.'
+  = 'We believe Mixture-of-Models is the next-generation model architecture for heterogeneous LLM inference. vLLM Semantic Router makes it executable.'
 const siteSocialTitle
   = 'Mixture-of-Models for Heterogeneous LLM Inference | vLLM Semantic Router'
 const siteSocialPreviewImageUrl = `${siteUrl}/${SITE_SOCIAL_PREVIEW_IMAGE}`
 
 const config: Config = {
   title: 'vLLM Semantic Router',
-  tagline: 'Building Mixture-of-Models for Heterogeneous LLM Inference',
+  tagline: 'Building Mixture-of-Models: The Next-Generation Model Architecture for Heterogeneous LLM Inference',
   favicon: 'img/vllm.png',
 
   // Set the production url of your site here

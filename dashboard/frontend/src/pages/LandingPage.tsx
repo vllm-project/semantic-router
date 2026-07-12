@@ -36,7 +36,7 @@ const LandingPage: React.FC = () => {
           </h1>
 
           <p className={styles.subtitle}>
-            Compose heterogeneous LLMs into personalized model paths.
+            System-level intelligence for heterogeneous LLM inference
           </p>
 
           <div className={styles.ctaGroup}>

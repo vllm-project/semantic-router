@@ -209,47 +209,59 @@ const OnboardingGuide: React.FC = () => {
           </button>
         </div>
 
-        <div
-          className={styles.progressRow}
-          role="progressbar"
-          aria-label="Guide progress"
-          aria-valuemin={1}
-          aria-valuemax={GUIDE_STEPS.length}
-          aria-valuenow={stepIndex + 1}
-        >
-          {GUIDE_STEPS.map((guideStep, index) => (
-            <span
-              key={guideStep.id}
-              className={`${styles.progressDot} ${
-                index === stepIndex ? styles.progressDotActive : ''
-              } ${index < stepIndex ? styles.progressDotDone : ''}`}
-              aria-hidden="true"
-            />
-          ))}
-        </div>
-        <p className={styles.progressCopy}>
-          Step {stepIndex + 1} of {GUIDE_STEPS.length}
-        </p>
-
-        <p id={descriptionId} className={styles.description}>
-          {step.description}
-        </p>
-
-        <div className={styles.detailCard}>
-          <div className={styles.detailLabel}>What to do in {step.pageLabel}</div>
-          <ul className={styles.detailList}>
-            {step.highlights.map((highlight) => (
-              <li key={highlight} className={styles.detailItem}>
-                {highlight}
-              </li>
+        <div className={styles.progressBlock}>
+          <div
+            className={styles.progressRow}
+            role="progressbar"
+            aria-label="Guide progress"
+            aria-valuemin={1}
+            aria-valuemax={GUIDE_STEPS.length}
+            aria-valuenow={stepIndex + 1}
+            aria-valuetext={`Step ${stepIndex + 1} of ${GUIDE_STEPS.length}`}
+          >
+            {GUIDE_STEPS.map((guideStep, index) => (
+              <span
+                key={guideStep.id}
+                className={`${styles.progressDot} ${
+                  index === stepIndex ? styles.progressDotActive : ''
+                } ${index < stepIndex ? styles.progressDotDone : ''}`}
+                aria-hidden="true"
+              />
             ))}
-          </ul>
-          {isOnTargetRoute && (
-            <div className={styles.detailHint}>You are already on this page.</div>
-          )}
+          </div>
+          <p className={styles.progressCopy} aria-live="polite" aria-atomic="true">
+            Step {stepIndex + 1} of {GUIDE_STEPS.length}
+          </p>
         </div>
 
-        <div className={styles.footer}>
+        <div
+          key={step.id}
+          className={styles.body}
+          role="region"
+          aria-label={`${step.pageLabel} guide details`}
+          tabIndex={0}
+          data-testid="onboarding-guide-body"
+        >
+          <p id={descriptionId} className={styles.description}>
+            {step.description}
+          </p>
+
+          <div className={styles.detailCard}>
+            <div className={styles.detailLabel}>What to do in {step.pageLabel}</div>
+            <ul className={styles.detailList}>
+              {step.highlights.map((highlight) => (
+                <li key={highlight} className={styles.detailItem}>
+                  {highlight}
+                </li>
+              ))}
+            </ul>
+            {isOnTargetRoute && (
+              <div className={styles.detailHint}>You are already on this page.</div>
+            )}
+          </div>
+        </div>
+
+        <div className={styles.footer} data-testid="onboarding-guide-actions">
           <div className={styles.footerLeft}>
             <button type="button" className={styles.secondaryButton} onClick={handlePause}>
               Pause tour

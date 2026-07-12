@@ -317,7 +317,7 @@ func responseAPIStreamUsage(ctx *RequestContext) map[string]interface{} {
 
 	inputTokens := int(usage.PromptTokens)
 	cachedTokens := 0
-	if cached, ok := streamingCachedPromptTokens(ctx, inputTokens); ok {
+	if cached, cachedReported, _, _ := streamingPromptTokenDetails(ctx, inputTokens); cachedReported {
 		cachedTokens = cached
 	}
 

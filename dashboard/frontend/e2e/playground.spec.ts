@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { mockAuthenticatedAppShell } from './support/auth';
+import { openComposerAddMenu } from './support/playground';
 
 function chatStreamChunk(delta: Record<string, unknown>): string {
   return `data: ${JSON.stringify({ choices: [{ index: 0, delta }] })}\n\n`;
@@ -152,11 +153,12 @@ test.describe('Playground Chat Component', () => {
   });
 
   test('defaults HireClaw mode off for a fresh session', async ({ page }) => {
-    const hireClawToggle = page.getByRole('button', { name: 'Enable HireClaw' });
+    const menu = await openComposerAddMenu(page);
+    const hireClawToggle = menu.getByRole('menuitemcheckbox', { name: 'Enable HireClaw' });
 
     await expect(hireClawToggle).toBeVisible();
-    await expect(hireClawToggle).toHaveAttribute('aria-pressed', 'false');
-    await expect(page.getByRole('button', { name: /Open ClawRoom view|Exit ClawRoom view/i })).toHaveCount(0);
+    await expect(hireClawToggle).toHaveAttribute('aria-checked', 'false');
+    await expect(menu.getByRole('menuitemcheckbox', { name: /Open ClawRoom view|Exit ClawRoom view/i })).toHaveCount(0);
 
     const storedValue = await page.evaluate(() => window.localStorage.getItem('sr:playground:claw-mode'));
     expect(storedValue).toBe('false');
@@ -173,6 +175,70 @@ test.describe('Playground Chat Component', () => {
     await expect(motionBackground).toBeVisible();
     await expect(motionBackground).toHaveCSS('pointer-events', 'none');
     await expect(motionBackground).toHaveAttribute('data-motion', 'animated');
+  });
+
+  test('consolidates composer tools into an accessible mobile add menu', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 700 });
+
+    const trigger = page.getByRole('button', { name: 'Add to prompt' });
+    await expect(trigger).toBeVisible();
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByRole('menu', { name: 'Add to prompt' })).toHaveCount(0);
+
+    await trigger.focus();
+    await trigger.press('Enter');
+
+    const menu = page.getByRole('menu', { name: 'Add to prompt' });
+    const attachFiles = menu.getByRole('menuitem', { name: 'Attach files' });
+    const webSearch = menu.getByRole('menuitemcheckbox', { name: 'Disable Web Search' });
+    const hireClaw = menu.getByRole('menuitemcheckbox', { name: 'Enable HireClaw' });
+
+    await expect(menu).toBeVisible();
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    await expect(attachFiles).toBeFocused();
+    await expect(webSearch).toHaveAttribute('aria-checked', 'true');
+
+    await page.keyboard.press('End');
+    await expect(hireClaw).toBeFocused();
+    await page.keyboard.press('Home');
+    await expect(attachFiles).toBeFocused();
+
+    const menuBox = await menu.boundingBox();
+    expect(menuBox).not.toBeNull();
+    expect(menuBox!.x).toBeGreaterThanOrEqual(0);
+    expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(320);
+    expect(menuBox!.y).toBeGreaterThanOrEqual(0);
+    expect(menuBox!.y + menuBox!.height).toBeLessThanOrEqual(700);
+
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+
+    const togglesMenu = await openComposerAddMenu(page);
+    await togglesMenu.getByRole('menuitemcheckbox', { name: 'Disable Web Search' }).click();
+    await expect(togglesMenu.getByRole('menuitemcheckbox', { name: 'Enable Web Search' })).toHaveAttribute('aria-checked', 'false');
+    await page.mouse.click(380, 100);
+    await expect(page.getByRole('menu', { name: 'Add to prompt' })).toHaveCount(0);
+
+    const reopenedMenu = await openComposerAddMenu(page);
+    const fileChooserPromise = page.waitForEvent('filechooser');
+    await reopenedMenu.getByRole('menuitem', { name: 'Attach files' }).click();
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles({
+      name: 'routing-notes.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('Prefer the most suitable heterogeneous model path.'),
+    });
+
+    await expect(page.getByTestId('playground-attachment-list')).toContainText('routing-notes.txt');
+    await expect(page.getByRole('menu', { name: 'Add to prompt' })).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+
+    const layoutWidth = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      innerWidth: window.innerWidth,
+    }));
+    expect(layoutWidth.scrollWidth).toBeLessThanOrEqual(layoutWidth.innerWidth);
   });
 
   test('keeps the mobile composer readable and clear of the guide control', async ({ page }) => {
@@ -394,6 +460,39 @@ test.describe('Playground Chat Component', () => {
 
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: 'Guide' })).toHaveCount(0);
+  });
+
+  test('keeps guide actions anchored while step copy changes', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 500 });
+    await page.evaluate(() => {
+      window.localStorage.setItem('vllm-sr.onboarding.status', 'pending');
+      window.localStorage.setItem('vllm-sr.onboarding.step', '0');
+    });
+    await page.goto('/playground', { waitUntil: 'domcontentloaded' });
+
+    const actions = page.getByTestId('onboarding-guide-actions');
+    const body = page.getByTestId('onboarding-guide-body');
+    await expect(actions).toBeVisible();
+    await expect(body).toBeVisible();
+
+    const initialActionsBox = await actions.boundingBox();
+    expect(initialActionsBox).not.toBeNull();
+
+    for (let index = 0; index < 3; index += 1) {
+      await page.getByRole('button', { name: 'Next' }).click();
+      const nextActionsBox = await actions.boundingBox();
+      expect(nextActionsBox).not.toBeNull();
+      expect(Math.abs((nextActionsBox?.y ?? 0) - (initialActionsBox?.y ?? 0))).toBeLessThan(2);
+    }
+
+    const viewport = page.viewportSize();
+    const finalActionsBox = await actions.boundingBox();
+    expect(viewport).not.toBeNull();
+    expect(finalActionsBox).not.toBeNull();
+    expect((finalActionsBox?.y ?? 0) + (finalActionsBox?.height ?? 0)).toBeLessThanOrEqual(
+      viewport?.height ?? 0,
+    );
+    await expect(body).toHaveCSS('overflow-y', 'auto');
   });
 
   test('can type message', async ({ page }) => {

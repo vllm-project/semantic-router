@@ -182,7 +182,7 @@ const statusPayload = {
   },
 }
 
-async function mockRouterInventoryShell(page: Page) {
+async function mockRouterInventoryShell(page: Page, status: unknown = statusPayload) {
   await mockAuthenticatedAppShell(page, {
     settings: {
       platform: 'amd',
@@ -206,7 +206,7 @@ async function mockRouterInventoryShell(page: Page) {
     await route.fulfill({
       status: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(statusPayload),
+      body: JSON.stringify(status),
     })
   })
 }
@@ -244,6 +244,27 @@ test.describe('Router model inventory surfaces', () => {
     await expect(fullCard.getByAltText('AMD platform')).toBeVisible()
   })
 
+  test('keeps model readiness independent from degraded service health', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 900 })
+
+    await mockRouterInventoryShell(page, {
+      ...statusPayload,
+      overall: 'degraded',
+      services: [
+        ...statusPayload.services,
+        { name: 'Telemetry', status: 'unavailable', healthy: false },
+      ],
+    })
+    await page.goto('/status')
+
+    const overview = page.getByTestId('status-overview')
+    await expect(overview).toContainText('Degraded')
+    await expect(page.getByTestId('status-metric-models')).toContainText('6/6')
+    await expect(page.getByTestId('status-metric-models')).toContainText('Ready')
+    await expect(page.getByTestId('status-model-fleet')).toContainText('Ready')
+    await expect(page.getByTestId('status-model-fleet')).not.toContainText('Degraded')
+  })
+
   test('keeps status model inventory and services reachable inside the page scroll container', async ({
     page,
   }) => {
@@ -253,9 +274,36 @@ test.describe('Router model inventory surfaces', () => {
     await page.goto('/status')
 
     const statusPage = page.getByTestId('status-page')
+    const overview = page.getByTestId('status-overview')
     const inventorySection = page.getByTestId('status-model-inventory-section')
     const servicesSection = page.getByTestId('status-services-section')
     const lastModelCard = page.getByTestId('router-model-full-pii_classifier')
+
+    await expect(overview).toContainText('Healthy')
+    await expect(page.getByTestId('status-metric-services')).toContainText('2/2')
+    await expect(page.getByTestId('status-metric-models')).toContainText('6/6')
+    await expect(page.getByTestId('status-metric-deployment')).toContainText('Local')
+
+    const [overviewBox, inventoryBox] = await Promise.all([
+      overview.boundingBox(),
+      inventorySection.boundingBox(),
+    ])
+    expect(overviewBox).not.toBeNull()
+    expect(inventoryBox).not.toBeNull()
+    expect(Math.abs((overviewBox?.x ?? 0) - (inventoryBox?.x ?? 0))).toBeLessThan(1)
+    expect(Math.abs((overviewBox?.width ?? 0) - (inventoryBox?.width ?? 0))).toBeLessThan(1)
+    expect(overviewBox?.height ?? Infinity).toBeLessThan(280)
+    expect(inventoryBox?.y ?? Infinity).toBeLessThan(600)
+
+    const overviewSurface = await overview.evaluate((node) => {
+      const style = window.getComputedStyle(node)
+      return {
+        backgroundImage: style.backgroundImage,
+        borderRadius: style.borderRadius,
+      }
+    })
+    expect(overviewSurface.backgroundImage).toBe('none')
+    expect(overviewSurface.borderRadius).toBe('8px')
 
     const metrics = await statusPage.evaluate((node) => ({
       overflowY: window.getComputedStyle(node).overflowY,
@@ -274,5 +322,82 @@ test.describe('Router model inventory surfaces', () => {
     await expect(servicesSection).toBeInViewport()
     await expect(servicesSection).toContainText('Router')
     await expect(servicesSection).toContainText('Dashboard')
+  })
+
+  test('stacks the status overview without introducing horizontal overflow on mobile', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+
+    await mockRouterInventoryShell(page, {
+      ...statusPayload,
+      deployment_type: 'none',
+      services: [],
+      models: { models: [] },
+    })
+    await page.goto('/status')
+
+    await expect(page.getByRole('heading', { name: 'System status' })).toBeVisible()
+    const overview = page.getByTestId('status-overview')
+    await expect(overview).toBeVisible()
+    await expect(overview).toContainText('Not reported')
+    await expect(overview).toContainText('No router services have been reported.')
+    await expect(overview).toContainText('The router has not reported model metadata yet.')
+    await expect(page.getByLabel('Refresh system status')).toBeVisible()
+
+    const pageMetrics = await page.getByTestId('status-page').evaluate((node) => ({
+      clientWidth: node.clientWidth,
+      scrollWidth: node.scrollWidth,
+    }))
+    expect(pageMetrics.scrollWidth).toBeLessThanOrEqual(pageMetrics.clientWidth + 1)
+
+    const metricWidths = await Promise.all(
+      ['services', 'models', 'deployment', 'version'].map((metric) =>
+        page
+          .getByTestId(`status-metric-${metric}`)
+          .evaluate((node) => node.getBoundingClientRect().width),
+      ),
+    )
+    expect(Math.max(...metricWidths) - Math.min(...metricWidths)).toBeLessThan(1)
+
+    const servicesSection = page.getByTestId('status-services-section')
+    await servicesSection.scrollIntoViewIfNeeded()
+    await expect(servicesSection).toContainText('No Running Services Detected')
+    const servicesMetrics = await servicesSection.evaluate((node) => ({
+      clientWidth: node.clientWidth,
+      scrollWidth: node.scrollWidth,
+    }))
+    expect(servicesMetrics.scrollWidth).toBeLessThanOrEqual(servicesMetrics.clientWidth + 1)
+  })
+
+  test('keeps long downloading model progress visible on mobile before inventory is available', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const downloadingModel =
+      'models/a-very-long-router-model-name-that-must-wrap-instead-of-expanding-the-status-surface'
+
+    await mockRouterInventoryShell(page, {
+      ...statusPayload,
+      models: undefined,
+      router_runtime: {
+        phase: 'downloading_models',
+        ready: false,
+        downloading_model: downloadingModel,
+        total_models: 6,
+      },
+    })
+    await page.goto('/status')
+
+    const overview = page.getByTestId('status-overview')
+    await expect(page.getByTestId('status-metric-models')).toContainText('0/6')
+    await expect(page.getByTestId('status-model-fleet')).toContainText('Downloading')
+    await expect(overview).toContainText(downloadingModel)
+
+    const overviewMetrics = await overview.evaluate((node) => ({
+      clientWidth: node.clientWidth,
+      scrollWidth: node.scrollWidth,
+    }))
+    expect(overviewMetrics.scrollWidth).toBeLessThanOrEqual(overviewMetrics.clientWidth + 1)
   })
 })
