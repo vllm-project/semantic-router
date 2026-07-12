@@ -96,8 +96,8 @@ Do not mutate GitHub.
 
 ## Scheduled CI Workflow
 
-`.github/workflows/maintainer-board.yml` runs the read-only maintainer board on
-a daily schedule and via `workflow_dispatch`. It calls
+`.github/workflows/maintainer-board.yml` runs the maintainer board on a daily
+schedule and via `workflow_dispatch`. The sync job calls
 `tools/agent/scripts/run_maintainer_board_ci.sh`, which wraps
 `maintainer_board.py sync` and publishes:
 
@@ -105,30 +105,51 @@ a daily schedule and via `workflow_dispatch`. It calls
 - downloadable artifacts: `today.md`, `current.json`,
   `proposed-actions.json`, and milestone notes
 
-The scheduled workflow does not label, comment on, or close issues or pull
-requests. `proposed-actions.json` is informational only in CI; use the local
-`apply` command after maintainer review when mutations are intended.
+The scheduled cron path is read-only: it does not label, comment on, or close
+issues or pull requests.
+
+### Optional CI apply mode
+
+Maintainers can optionally apply the generated `proposed-actions.json` payload
+from CI by running `workflow_dispatch` with `apply_actions=true`. This starts a
+second job that calls `tools/agent/scripts/run_maintainer_board_apply_ci.sh`,
+which wraps `maintainer_board.py apply --confirm`.
+
+Apply mode rules:
+
+- runs only on manual `workflow_dispatch`, never on the daily cron
+- applies only the reviewable `proposed-actions.json` produced by the sync job
+- v1 allowlist is the existing maintainer board actions: `label_issue` and
+  `label_pr` only
+- does not create, comment on, or close issues or pull requests
+
+Review the sync artifacts before enabling apply mode.
 
 ### Relationship to `stale.yml`
 
 - `.github/workflows/stale.yml` mutates GitHub directly: it marks inactive
   issues and pull requests as stale and closes them after the grace period.
-- `.github/workflows/maintainer-board.yml` is visibility-only: it classifies
-  the current queue using `tools/agent/maintainer-policy.yaml` and gives
-  maintainers a daily brief without changing GitHub state.
+- `.github/workflows/maintainer-board.yml` sync job classifies the current queue
+  using `tools/agent/maintainer-policy.yaml` and gives maintainers a daily brief
+  without changing GitHub state by default.
 
 Use the maintainer board to decide what needs review, rebase, unblock, or
 close-candidate follow-up. Use `stale.yml` only for the automated stale/close
 lifecycle.
 
-Manual trigger example:
+Manual trigger examples:
 
 ```bash
+# Read-only sync
 gh workflow run maintainer-board.yml -f milestone=v0.4 -f issue_limit=100 -f pr_limit=50
+
+# Sync then apply proposed labels (maintainer-only)
+gh workflow run maintainer-board.yml -f milestone=v0.4 -f issue_limit=100 -f pr_limit=50 -f apply_actions=true
 ```
 
 ## Apply Policy
 
 GitHub mutations are never implicit. Applying proposed labels, comments, issue
 creation, or close actions requires an explicit apply command and a maintainer
-review of the generated payload.
+review of the generated payload. Local apply remains available via
+`maintainer_board.py apply --actions .agent-harness/maintainer/proposed-actions.json --confirm`.

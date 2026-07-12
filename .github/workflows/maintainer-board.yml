@@ -1,8 +1,9 @@
 name: Maintainer Board
 
-# Read-only scheduled maintainer queue for open issues and pull requests.
+# Scheduled maintainer queue for open issues and pull requests.
 # Complements .github/workflows/stale.yml, which mutates GitHub by marking and
-# closing stale items. This workflow only syncs state and publishes artifacts.
+# closing stale items. The daily cron is read-only; optional label apply runs
+# only via manual workflow_dispatch.
 
 on:
   schedule:
@@ -24,16 +25,23 @@ on:
         required: false
         default: "50"
         type: string
+      apply_actions:
+        description: Apply proposed-actions.json labels after sync (workflow_dispatch only)
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
-  issues: read
-  pull-requests: read
 
 jobs:
   maintainer-board:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
 
     steps:
       - name: Check out the repo
@@ -66,3 +74,37 @@ jobs:
             ${{ runner.temp }}/maintainer-board/current.json
             ${{ runner.temp }}/maintainer-board/proposed-actions.json
             ${{ runner.temp }}/maintainer-board/milestone-*.md
+
+  apply-actions:
+    needs: maintainer-board
+    if: github.event_name == 'workflow_dispatch' && inputs.apply_actions == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install maintainer board dependencies
+        run: pip install PyYAML==6.0.3
+
+      - name: Download maintainer board artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: maintainer-board-${{ github.run_id }}
+          path: ${{ runner.temp }}/maintainer-board
+
+      - name: Apply proposed maintainer board actions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAINTAINER_BOARD_OUTPUT_DIR: ${{ runner.temp }}/maintainer-board
+        run: bash tools/agent/scripts/run_maintainer_board_apply_ci.sh
