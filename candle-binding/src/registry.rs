@@ -22,7 +22,7 @@ impl ModelRegistry {
     pub fn get<T: std::any::Any + Send + Sync>(&self, id: &str) -> Option<Arc<T>> {
         let map = self.models.read().ok()?;
         let any_model = map.get(id)?;
-        any_model.downcast_ref::<Arc<T>>().cloned()
+        any_model.clone().downcast::<T>().ok()
     }
 
     pub fn unregister(&self, id: &str) -> Result<(), String> {
