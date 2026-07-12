@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -79,24 +80,27 @@ func (r *OpenAIRouter) writeResponseAPIStreamDeltaEvents(
 	ctx *RequestContext,
 	chunkData map[string]interface{},
 ) {
+	r.writeResponseAPIReasoningDeltaEvents(out, ctx, chunkData)
+
 	deltas := responseAPITextDeltas(chunkData)
-	if len(deltas) == 0 {
-		return
+	if len(deltas) > 0 {
+		r.ensureResponseAPIStreamStarted(out, ctx)
+		for _, delta := range deltas {
+			writeResponseAPIStreamEvent(out, "response.output_text.delta", map[string]interface{}{
+				"type":          "response.output_text.delta",
+				"item_id":       ctx.ResponseAPIStreamItemID,
+				"output_index":  responseAPIMessageOutputIndex(ctx),
+				"content_index": 0,
+				"delta":         delta,
+			})
+		}
 	}
 
-	r.ensureResponseAPIStreamStarted(out, ctx)
-	for _, delta := range deltas {
-		writeResponseAPIStreamEvent(out, "response.output_text.delta", map[string]interface{}{
-			"type":          "response.output_text.delta",
-			"item_id":       ctx.ResponseAPIStreamItemID,
-			"output_index":  0,
-			"content_index": 0,
-			"delta":         delta,
-		})
-	}
+	r.writeResponseAPIRefusalDeltaEvents(out, ctx, chunkData)
+	r.writeResponseAPIToolCallDeltaEvents(out, ctx, chunkData)
 }
 
-func (r *OpenAIRouter) ensureResponseAPIStreamStarted(out *bytes.Buffer, ctx *RequestContext) {
+func (r *OpenAIRouter) ensureResponseAPIResponseStarted(out *bytes.Buffer, ctx *RequestContext) {
 	if ctx.ResponseAPIStreamStarted {
 		return
 	}
@@ -122,15 +126,25 @@ func (r *OpenAIRouter) ensureResponseAPIStreamStarted(out *bytes.Buffer, ctx *Re
 		"type":     "response.in_progress",
 		"response": startedResponse,
 	})
+}
+
+func (r *OpenAIRouter) ensureResponseAPIStreamStarted(out *bytes.Buffer, ctx *RequestContext) {
+	r.ensureResponseAPIResponseStarted(out, ctx)
+	if ctx.ResponseAPIStreamMessageStarted {
+		return
+	}
+
+	ctx.ResponseAPIStreamMessageStarted = true
+	ctx.ResponseAPIStreamMessageOutputIndex = responseAPIAssignOutputIndex(ctx)
 	writeResponseAPIStreamEvent(out, "response.output_item.added", map[string]interface{}{
 		"type":         "response.output_item.added",
-		"output_index": 0,
+		"output_index": responseAPIMessageOutputIndex(ctx),
 		"item":         responseAPIStreamMessageItem(ctx, responseapi.StatusInProgress, ""),
 	})
 	writeResponseAPIStreamEvent(out, "response.content_part.added", map[string]interface{}{
 		"type":          "response.content_part.added",
 		"item_id":       ctx.ResponseAPIStreamItemID,
-		"output_index":  0,
+		"output_index":  responseAPIMessageOutputIndex(ctx),
 		"content_index": 0,
 		"part": map[string]interface{}{
 			"type":        responseapi.ContentTypeOutputText,
@@ -141,37 +155,74 @@ func (r *OpenAIRouter) ensureResponseAPIStreamStarted(out *bytes.Buffer, ctx *Re
 }
 
 func (r *OpenAIRouter) writeResponseAPIStreamDoneEvents(out *bytes.Buffer, ctx *RequestContext) {
-	r.ensureResponseAPIStreamStarted(out, ctx)
+	if responseAPIStreamNeedsMessageItem(ctx) {
+		r.ensureResponseAPIStreamStarted(out, ctx)
+	} else {
+		r.ensureResponseAPIResponseStarted(out, ctx)
+	}
 	text := ctx.StreamingContent
 	usage := responseAPIStreamUsage(ctx)
 
-	writeResponseAPIStreamEvent(out, "response.output_text.done", map[string]interface{}{
-		"type":          "response.output_text.done",
-		"item_id":       ctx.ResponseAPIStreamItemID,
-		"output_index":  0,
-		"content_index": 0,
-		"text":          text,
-	})
-	writeResponseAPIStreamEvent(out, "response.content_part.done", map[string]interface{}{
-		"type":          "response.content_part.done",
-		"item_id":       ctx.ResponseAPIStreamItemID,
-		"output_index":  0,
-		"content_index": 0,
-		"part": map[string]interface{}{
-			"type":        responseapi.ContentTypeOutputText,
-			"text":        text,
-			"annotations": []interface{}{},
-		},
-	})
-	writeResponseAPIStreamEvent(out, "response.output_item.done", map[string]interface{}{
-		"type":         "response.output_item.done",
-		"output_index": 0,
-		"item":         responseAPIStreamMessageItem(ctx, responseapi.StatusCompleted, text),
-	})
+	r.writeResponseAPIReasoningDoneEvents(out, ctx)
+	r.writeResponseAPIMessageDoneEvents(out, ctx, text)
+	r.writeResponseAPIToolCallDoneEvents(out, ctx)
 	writeResponseAPIStreamEvent(out, "response.completed", map[string]interface{}{
 		"type":     "response.completed",
 		"response": responseAPIStreamCompletedResponse(ctx, text, usage),
 	})
+}
+
+func responseAPIStreamNeedsMessageItem(ctx *RequestContext) bool {
+	if ctx == nil {
+		return true
+	}
+	return ctx.ResponseAPIStreamMessageStarted || ctx.StreamingContent != "" || ctx.StreamingRefusal != "" || len(ctx.StreamingToolCalls) == 0
+}
+
+func (r *OpenAIRouter) writeResponseAPIMessageDoneEvents(out *bytes.Buffer, ctx *RequestContext, text string) {
+	if !ctx.ResponseAPIStreamMessageStarted {
+		return
+	}
+	if text != "" {
+		writeResponseAPIStreamEvent(out, "response.output_text.done", map[string]interface{}{
+			"type":          "response.output_text.done",
+			"item_id":       ctx.ResponseAPIStreamItemID,
+			"output_index":  responseAPIMessageOutputIndex(ctx),
+			"content_index": 0,
+			"text":          text,
+		})
+	}
+	if ctx.StreamingRefusal != "" {
+		writeResponseAPIStreamEvent(out, "response.refusal.done", map[string]interface{}{
+			"type":          "response.refusal.done",
+			"item_id":       ctx.ResponseAPIStreamItemID,
+			"output_index":  responseAPIMessageOutputIndex(ctx),
+			"content_index": 0,
+			"refusal":       ctx.StreamingRefusal,
+		})
+	}
+	writeResponseAPIStreamEvent(out, "response.content_part.done", map[string]interface{}{
+		"type":          "response.content_part.done",
+		"item_id":       ctx.ResponseAPIStreamItemID,
+		"output_index":  responseAPIMessageOutputIndex(ctx),
+		"content_index": 0,
+		"part":          responseAPIStreamMessageContentPart(ctx, text),
+	})
+	writeResponseAPIStreamEvent(out, "response.output_item.done", map[string]interface{}{
+		"type":         "response.output_item.done",
+		"output_index": responseAPIMessageOutputIndex(ctx),
+		"item":         responseAPIStreamMessageItem(ctx, responseapi.StatusCompleted, text),
+	})
+}
+
+func responseAPIAssignOutputIndex(ctx *RequestContext) int {
+	index := ctx.ResponseAPIStreamNextOutputIndex
+	ctx.ResponseAPIStreamNextOutputIndex++
+	return index
+}
+
+func responseAPIMessageOutputIndex(ctx *RequestContext) int {
+	return ctx.ResponseAPIStreamMessageOutputIndex
 }
 
 func responseAPITextDeltas(chunkData map[string]interface{}) []string {
@@ -198,6 +249,238 @@ func responseAPITextDeltas(chunkData map[string]interface{}) []string {
 	return deltas
 }
 
+func (r *OpenAIRouter) writeResponseAPIRefusalDeltaEvents(
+	out *bytes.Buffer,
+	ctx *RequestContext,
+	chunkData map[string]interface{},
+) {
+	for _, delta := range responseAPIStringDeltas(chunkData, "refusal") {
+		r.ensureResponseAPIStreamStarted(out, ctx)
+		if !ctx.ResponseAPIStreamRefusalStarted {
+			ctx.ResponseAPIStreamRefusalStarted = true
+		}
+		writeResponseAPIStreamEvent(out, "response.refusal.delta", map[string]interface{}{
+			"type":          "response.refusal.delta",
+			"item_id":       ctx.ResponseAPIStreamItemID,
+			"output_index":  responseAPIMessageOutputIndex(ctx),
+			"content_index": 0,
+			"delta":         delta,
+		})
+	}
+}
+
+func (r *OpenAIRouter) writeResponseAPIReasoningDeltaEvents(
+	out *bytes.Buffer,
+	ctx *RequestContext,
+	chunkData map[string]interface{},
+) {
+	for _, delta := range responseAPIStringDeltas(chunkData, "reasoning_content") {
+		r.ensureResponseAPIReasoningStarted(out, ctx)
+		writeResponseAPIStreamEvent(out, "response.reasoning_text.delta", map[string]interface{}{
+			"type":          "response.reasoning_text.delta",
+			"item_id":       ctx.ResponseAPIStreamReasoningItemID,
+			"output_index":  responseAPIReasoningOutputIndex(ctx),
+			"content_index": 0,
+			"delta":         delta,
+		})
+	}
+}
+
+func responseAPIStringDeltas(chunkData map[string]interface{}, field string) []string {
+	choices := replayStreamingChoices(chunkData)
+	if len(choices) == 0 {
+		return nil
+	}
+
+	deltas := make([]string, 0, len(choices))
+	for _, choice := range choices {
+		delta, ok := choice["delta"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		value, ok := delta[field].(string)
+		if ok && value != "" {
+			deltas = append(deltas, value)
+		}
+	}
+	return deltas
+}
+
+func (r *OpenAIRouter) ensureResponseAPIReasoningStarted(out *bytes.Buffer, ctx *RequestContext) {
+	r.ensureResponseAPIResponseStarted(out, ctx)
+	if ctx.ResponseAPIStreamReasoningStarted {
+		return
+	}
+
+	ctx.ResponseAPIStreamReasoningStarted = true
+	if ctx.ResponseAPIStreamReasoningItemID == "" {
+		ctx.ResponseAPIStreamReasoningItemID = responseapi.GenerateItemID()
+	}
+	ctx.ResponseAPIStreamReasoningOutputIndex = responseAPIAssignOutputIndex(ctx)
+	writeResponseAPIStreamEvent(out, "response.output_item.added", map[string]interface{}{
+		"type":         "response.output_item.added",
+		"output_index": responseAPIReasoningOutputIndex(ctx),
+		"item": map[string]interface{}{
+			"id":      ctx.ResponseAPIStreamReasoningItemID,
+			"type":    "reasoning",
+			"status":  responseapi.StatusInProgress,
+			"summary": []interface{}{},
+		},
+	})
+}
+
+func (r *OpenAIRouter) writeResponseAPIReasoningDoneEvents(out *bytes.Buffer, ctx *RequestContext) {
+	if !ctx.ResponseAPIStreamReasoningStarted {
+		return
+	}
+	writeResponseAPIStreamEvent(out, "response.reasoning_text.done", map[string]interface{}{
+		"type":          "response.reasoning_text.done",
+		"item_id":       ctx.ResponseAPIStreamReasoningItemID,
+		"output_index":  responseAPIReasoningOutputIndex(ctx),
+		"content_index": 0,
+		"text":          ctx.StreamingReasoning,
+	})
+	writeResponseAPIStreamEvent(out, "response.output_item.done", map[string]interface{}{
+		"type":         "response.output_item.done",
+		"output_index": responseAPIReasoningOutputIndex(ctx),
+		"item": map[string]interface{}{
+			"id":      ctx.ResponseAPIStreamReasoningItemID,
+			"type":    "reasoning",
+			"status":  responseapi.StatusCompleted,
+			"summary": []interface{}{},
+		},
+	})
+}
+
+func responseAPIReasoningOutputIndex(ctx *RequestContext) int {
+	return ctx.ResponseAPIStreamReasoningOutputIndex
+}
+
+func (r *OpenAIRouter) writeResponseAPIToolCallDeltaEvents(
+	out *bytes.Buffer,
+	ctx *RequestContext,
+	chunkData map[string]interface{},
+) {
+	for _, choice := range replayStreamingChoices(chunkData) {
+		for _, indexedToolCall := range replayStreamingToolCalls(choice) {
+			index := replayStreamingToolCallIndex(indexedToolCall.rawIndex, indexedToolCall.toolCall)
+			state := ctx.StreamingToolCalls[index]
+			r.ensureResponseAPIToolCallStarted(out, ctx, index, state)
+			if fn, ok := indexedToolCall.toolCall["function"].(map[string]interface{}); ok {
+				if arguments, ok := fn["arguments"].(string); ok && arguments != "" {
+					writeResponseAPIStreamEvent(out, "response.function_call_arguments.delta", map[string]interface{}{
+						"type":         "response.function_call_arguments.delta",
+						"item_id":      ctx.ResponseAPIStreamToolCallItemIDs[index],
+						"output_index": responseAPIToolCallOutputIndex(ctx, index),
+						"delta":        arguments,
+					})
+				}
+			}
+		}
+	}
+}
+
+func (r *OpenAIRouter) ensureResponseAPIToolCallStarted(
+	out *bytes.Buffer,
+	ctx *RequestContext,
+	index int,
+	state *StreamingToolCallState,
+) {
+	r.ensureResponseAPIResponseStarted(out, ctx)
+	if ctx.ResponseAPIStreamToolCallItemIDs == nil {
+		ctx.ResponseAPIStreamToolCallItemIDs = make(map[int]string)
+	}
+	if ctx.ResponseAPIStreamToolCallOutputIndex == nil {
+		ctx.ResponseAPIStreamToolCallOutputIndex = make(map[int]int)
+	}
+	if ctx.ResponseAPIStreamToolCallItemIDs[index] == "" {
+		ctx.ResponseAPIStreamToolCallItemIDs[index] = responseapi.GenerateItemID()
+		ctx.ResponseAPIStreamToolCallOutputIndex[index] = responseAPIAssignOutputIndex(ctx)
+		writeResponseAPIStreamEvent(out, "response.output_item.added", map[string]interface{}{
+			"type":         "response.output_item.added",
+			"output_index": responseAPIToolCallOutputIndex(ctx, index),
+			"item":         responseAPIStreamToolCallItem(ctx, index, state, responseapi.StatusInProgress),
+		})
+	}
+}
+
+func (r *OpenAIRouter) writeResponseAPIToolCallDoneEvents(out *bytes.Buffer, ctx *RequestContext) {
+	for _, index := range responseAPISortedToolCallIndexes(ctx) {
+		itemID := ctx.ResponseAPIStreamToolCallItemIDs[index]
+		if itemID == "" {
+			continue
+		}
+		state := ctx.StreamingToolCalls[index]
+		writeResponseAPIStreamEvent(out, "response.function_call_arguments.done", map[string]interface{}{
+			"type":         "response.function_call_arguments.done",
+			"item_id":      itemID,
+			"output_index": responseAPIToolCallOutputIndex(ctx, index),
+			"arguments":    responseAPIToolCallArguments(state),
+		})
+		writeResponseAPIStreamEvent(out, "response.output_item.done", map[string]interface{}{
+			"type":         "response.output_item.done",
+			"output_index": responseAPIToolCallOutputIndex(ctx, index),
+			"item":         responseAPIStreamToolCallItem(ctx, index, state, responseapi.StatusCompleted),
+		})
+	}
+}
+
+func responseAPIToolCallOutputIndex(ctx *RequestContext, index int) int {
+	if ctx != nil && ctx.ResponseAPIStreamToolCallOutputIndex != nil {
+		return ctx.ResponseAPIStreamToolCallOutputIndex[index]
+	}
+	return index
+}
+
+func responseAPISortedToolCallIndexes(ctx *RequestContext) []int {
+	if ctx == nil || len(ctx.StreamingToolCalls) == 0 {
+		return nil
+	}
+	indexes := make([]int, 0, len(ctx.StreamingToolCalls))
+	for index := range ctx.StreamingToolCalls {
+		indexes = append(indexes, index)
+	}
+	sort.Ints(indexes)
+	return indexes
+}
+
+func responseAPIStreamToolCallItem(
+	ctx *RequestContext,
+	index int,
+	state *StreamingToolCallState,
+	status string,
+) map[string]interface{} {
+	return map[string]interface{}{
+		"id":        ctx.ResponseAPIStreamToolCallItemIDs[index],
+		"type":      responseapi.ItemTypeFunctionCall,
+		"call_id":   responseAPIToolCallID(state),
+		"name":      responseAPIToolCallName(state),
+		"arguments": responseAPIToolCallArguments(state),
+		"status":    status,
+	}
+}
+
+func responseAPIToolCallID(state *StreamingToolCallState) string {
+	if state == nil {
+		return ""
+	}
+	return state.ID
+}
+
+func responseAPIToolCallName(state *StreamingToolCallState) string {
+	if state == nil {
+		return ""
+	}
+	return state.Name
+}
+
+func responseAPIToolCallArguments(state *StreamingToolCallState) string {
+	if state == nil {
+		return ""
+	}
+	return state.Arguments
+}
+
 func responseAPIStreamModel(ctx *RequestContext) string {
 	if model, ok := ctx.StreamingMetadata["model"].(string); ok && model != "" {
 		return model
@@ -213,12 +496,8 @@ func responseAPIStreamModel(ctx *RequestContext) string {
 
 func responseAPIStreamMessageItem(ctx *RequestContext, status string, text string) map[string]interface{} {
 	content := []interface{}{}
-	if status == responseapi.StatusCompleted || text != "" {
-		content = append(content, map[string]interface{}{
-			"type":        responseapi.ContentTypeOutputText,
-			"text":        text,
-			"annotations": []interface{}{},
-		})
+	if status == responseapi.StatusCompleted || text != "" || ctx.StreamingRefusal != "" {
+		content = append(content, responseAPIStreamMessageContentPart(ctx, text))
 	}
 
 	return map[string]interface{}{
@@ -230,13 +509,70 @@ func responseAPIStreamMessageItem(ctx *RequestContext, status string, text strin
 	}
 }
 
+func responseAPIStreamMessageContentPart(ctx *RequestContext, text string) map[string]interface{} {
+	if ctx != nil && ctx.StreamingRefusal != "" && text == "" {
+		return map[string]interface{}{
+			"type":    "refusal",
+			"refusal": ctx.StreamingRefusal,
+		}
+	}
+	return map[string]interface{}{
+		"type":        responseapi.ContentTypeOutputText,
+		"text":        text,
+		"annotations": []interface{}{},
+	}
+}
+
 func responseAPIStreamCompletedResponse(
 	ctx *RequestContext,
 	text string,
 	usage map[string]interface{},
 ) map[string]interface{} {
-	output := []interface{}{responseAPIStreamMessageItem(ctx, responseapi.StatusCompleted, text)}
+	output := responseAPIStreamOutput(ctx, text)
 	return responseAPIStreamResponse(ctx, responseapi.StatusCompleted, output, text, usage)
+}
+
+func responseAPIStreamOutput(ctx *RequestContext, text string) []interface{} {
+	indexed := []responseAPIIndexedOutput{}
+	if responseAPIStreamNeedsMessageItem(ctx) {
+		indexed = append(indexed, responseAPIIndexedOutput{
+			index: responseAPIMessageOutputIndex(ctx),
+			item:  responseAPIStreamMessageItem(ctx, responseapi.StatusCompleted, text),
+		})
+	}
+	if ctx != nil && ctx.ResponseAPIStreamReasoningStarted {
+		indexed = append(indexed, responseAPIIndexedOutput{
+			index: responseAPIReasoningOutputIndex(ctx),
+			item: map[string]interface{}{
+				"id":      ctx.ResponseAPIStreamReasoningItemID,
+				"type":    "reasoning",
+				"status":  responseapi.StatusCompleted,
+				"summary": []interface{}{},
+			},
+		})
+	}
+	for _, index := range responseAPISortedToolCallIndexes(ctx) {
+		indexed = append(indexed, responseAPIIndexedOutput{
+			index: responseAPIToolCallOutputIndex(ctx, index),
+			item: responseAPIStreamToolCallItem(
+				ctx,
+				index,
+				ctx.StreamingToolCalls[index],
+				responseapi.StatusCompleted,
+			),
+		})
+	}
+	sort.Slice(indexed, func(i, j int) bool { return indexed[i].index < indexed[j].index })
+	output := make([]interface{}, 0, len(indexed))
+	for _, entry := range indexed {
+		output = append(output, entry.item)
+	}
+	return output
+}
+
+type responseAPIIndexedOutput struct {
+	index int
+	item  interface{}
 }
 
 func responseAPIStreamResponse(
@@ -303,7 +639,9 @@ func responseAPIStreamResponse(
 	if status == responseapi.StatusCompleted {
 		response["output_text"] = text
 	}
-	if req.ConversationID != "" {
+	if ctx.ResponseAPICtx.ConversationID != "" {
+		response["conversation_id"] = ctx.ResponseAPICtx.ConversationID
+	} else if req.ConversationID != "" {
 		response["conversation_id"] = req.ConversationID
 	}
 	return response
