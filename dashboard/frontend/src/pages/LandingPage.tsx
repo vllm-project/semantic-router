@@ -36,7 +36,7 @@ const LandingPage: React.FC = () => {
           </h1>
 
           <p className={styles.subtitle}>
-            Compose heterogeneous LLMs into personalized model paths.
+            Turn signals and preferences into executable model paths across heterogeneous LLMs.
           </p>
 
           <div className={styles.ctaGroup}>

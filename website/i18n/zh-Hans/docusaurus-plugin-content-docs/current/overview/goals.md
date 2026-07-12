@@ -8,9 +8,9 @@ sidebar_position: 1
 
 # 我们的目标是什么？
 
-**构建 Mixture-of-Models：面向异构 LLM 推理的下一代模型架构。**
+**我们相信，Mixture-of-Models 是面向异构 LLM 推理的下一代模型架构。**
 
-**vLLM Semantic Router** 将信号与偏好转化为可执行的模型路径，让用户、产品与工作负载偏好直接进入路由决策。
+**正因如此，我们构建了 vLLM Semantic Router**——将信号与偏好转化为面向每位用户、每个产品与每类工作负载的可执行模型路径。
 
 ## 核心问题
 
