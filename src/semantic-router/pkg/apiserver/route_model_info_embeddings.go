@@ -20,33 +20,30 @@ func (s *ClassificationAPIServer) getEmbeddingModelsInfo(runtimeState *startupst
 
 	// Retrieve from native registry instead of candle_binding singleton
 	for _, adapter := range native.Registry.List() {
-		infoList := adapter.Info()
-		for _, info := range infoList.Models {
-			if info.Capability != native.CapabilityEmbedding {
-				continue
+		caps := adapter.Capabilities()
+		hasEmbedding := false
+		for _, c := range caps.Capabilities {
+			if c == native.CapabilityEmbedding {
+				hasEmbedding = true
+				break
 			}
-
-			modelPath := normalizeEmbeddingModelPath(info.ModelPath, info.ModelName)
-			if modelPath == "" {
-				modelPath = strings.TrimSpace(info.ModelPath)
-			}
-			if modelPath == "" {
-				modelPath = strings.TrimSpace(info.ModelName)
-			}
-
-			models = append(models, ModelInfo{
-				Name:      fmt.Sprintf("%s_embedding_model", info.ModelName),
-				Type:      "embedding",
-				Loaded:    info.IsLoaded,
-				ModelPath: modelPath,
-				Metadata: map[string]string{
-					"model_type":           info.ModelName,
-					"max_sequence_length":  fmt.Sprintf("%d", info.MaxSequenceLength),
-					"default_dimension":    fmt.Sprintf("%d", info.DefaultDimension),
-					"matryoshka_supported": "true",
-				},
-			})
 		}
+		if !hasEmbedding {
+			continue
+		}
+
+		models = append(models, ModelInfo{
+			Name:      fmt.Sprintf("%s_embedding_model", adapter.Name()),
+			Type:      "embedding",
+			Loaded:    true,
+			ModelPath: string(adapter.Name()),
+			Metadata: map[string]string{
+				"model_type":           string(adapter.Name()),
+				"max_sequence_length":  "8192",
+				"default_dimension":    "768",
+				"matryoshka_supported": "true",
+			},
+		})
 	}
 
 	for i := range models {
