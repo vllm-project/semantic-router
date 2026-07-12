@@ -4,6 +4,8 @@ import { ConfigSection } from '../components/ConfigNav'
 import EditModal, { type EditFormData, FieldConfig } from '../components/EditModal'
 import ViewModal, { ViewSection } from '../components/ViewModal'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import { useAuth } from '../contexts/AuthContext'
+import { canWriteConfig } from '../utils/accessControl'
 import ConfigPageRouterConfigSection from './ConfigPageRouterConfigSection'
 import ConfigPageModelsSection from './ConfigPageModelsSection'
 import ConfigPageSignalsSection from './ConfigPageSignalsSection'
@@ -37,8 +39,11 @@ interface ConfigPageProps {
 
 const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config' }) => {
   const { isReadonly } = useReadonly()
+  const { user } = useAuth()
+  const isMCPSection = activeSection === 'mcp'
+  const configReadonly = isReadonly || !canWriteConfig(user)
   const [config, setConfig] = useState<ConfigData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!isMCPSection)
   const [error, setError] = useState<string | null>(null)
   const [configFormat, setConfigFormat] = useState<ConfigFormat>('python-cli')
 
@@ -75,12 +80,20 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set())
 
   useEffect(() => {
+    if (isMCPSection) {
+      setLoading(false)
+      setError(null)
+      return
+    }
+
     fetchConfig()
     fetchRouterDefaults()
-  }, [])
+  }, [isMCPSection])
 
   // Fetch tools database when config is loaded
   useEffect(() => {
+    if (isMCPSection) return
+
     const toolsDBPath =
       routerDefaults?.integrations?.tools?.tools_db_path ||
       config?.global?.integrations?.tools?.tools_db_path ||
@@ -93,6 +106,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     config?.global?.integrations?.tools?.tools_db_path,
     config?.tools?.tools_db_path,
     routerDefaults?.integrations?.tools?.tools_db_path,
+    isMCPSection,
   ])
 
   const fetchConfig = async () => {
@@ -156,7 +170,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
 
   const saveConfig = async (updatedConfig: ConfigData) => {
     // Prevent save in read-only mode
-    if (isReadonly) {
+    if (configReadonly) {
       throw new Error('Dashboard is in read-only mode. Configuration editing is disabled.')
     }
 
@@ -318,7 +332,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     <ConfigPageSignalsSection
       config={config}
       isPythonCLI={isPythonCLI}
-      isReadonly={isReadonly}
+      isReadonly={configReadonly}
       signalsSearch={signalsSearch}
       onSignalsSearchChange={setSignalsSearch}
       saveConfig={saveConfig}
@@ -333,7 +347,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     <ConfigPageDecisionsSection
       config={config}
       isPythonCLI={isPythonCLI}
-      isReadonly={isReadonly}
+      isReadonly={configReadonly}
       decisionsSearch={decisionsSearch}
       onDecisionsSearchChange={setDecisionsSearch}
       saveConfig={saveConfig}
@@ -347,7 +361,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const renderProjectionsSection = () => (
     <ConfigPageProjectionsSection
       config={config}
-      isReadonly={isReadonly}
+      isReadonly={configReadonly}
       saveConfig={saveConfig}
       openEditModal={openEditModal}
       openViewModal={openViewModal}
@@ -358,7 +372,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     <ConfigPageModelsSection
       config={config}
       isPythonCLI={isPythonCLI}
-      isReadonly={isReadonly}
+      isReadonly={configReadonly}
       models={models}
       defaultModel={defaultModel}
       reasoningFamilies={reasoningFamilies}
@@ -380,7 +394,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
             toolsData={toolsData}
             toolsLoading={toolsLoading}
             toolsError={toolsError}
-            isReadonly={isReadonly}
+            isReadonly={configReadonly}
             openEditModal={openEditModal}
             saveConfig={saveConfig}
             refreshConfig={fetchConfig}
@@ -410,14 +424,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   return (
     <div className={styles.container}>
       <div className={styles.content}>
-        {loading && (
+        {!isMCPSection && loading && (
           <div className={styles.loading}>
             <div className={styles.spinner}></div>
             <p>Loading configuration...</p>
           </div>
         )}
 
-        {error && !loading && (
+        {!isMCPSection && error && !loading && (
           <div className={styles.error}>
             <span className={styles.errorIcon}></span>
             <div>
@@ -427,7 +441,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
           </div>
         )}
 
-        {config && !loading && !error && (
+        {isMCPSection && (
+          <div className={styles.contentArea}>
+            <ConfigPageMCPSection />
+          </div>
+        )}
+
+        {!isMCPSection && config && !loading && !error && (
           <div className={styles.contentArea}>
             {renderActiveSection()}
           </div>
@@ -449,7 +469,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       <ViewModal
         isOpen={viewModalOpen}
         onClose={handleCloseViewModal}
-        onEdit={isReadonly ? undefined : (viewModalEditCallback || undefined)}
+        onEdit={configReadonly ? undefined : (viewModalEditCallback || undefined)}
         title={viewModalTitle}
         sections={viewModalSections}
       />

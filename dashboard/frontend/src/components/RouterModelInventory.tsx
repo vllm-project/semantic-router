@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import styles from './RouterModelInventory.module.css'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import {
@@ -12,11 +12,18 @@ import {
   type RouterModelInfo,
   type RouterModelsInfo,
 } from '../utils/routerRuntime'
+import {
+  clampInventoryPage,
+  filterAndSortRouterModels,
+  type ModelInventorySort,
+  type ModelInventoryStateFilter,
+} from './routerModelInventorySupport'
 
 interface RouterModelInventoryProps {
   modelsInfo?: RouterModelsInfo | null
   mode?: 'preview' | 'full'
   previewLimit?: number
+  showSummary?: boolean
   emptyMessage?: string
   onSelectModel?: (model: RouterModelInfo) => void
 }
@@ -65,7 +72,11 @@ function formatTitleLabel(value?: string): string {
   return formatLabel(value)
     .split(/\s+/)
     .filter(Boolean)
-    .map((word) => TITLE_WORD_OVERRIDES[word.toLowerCase()] ?? `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+    .map(
+      (word) =>
+        TITLE_WORD_OVERRIDES[word.toLowerCase()] ??
+        `${word.charAt(0).toUpperCase()}${word.slice(1)}`,
+    )
     .join(' ')
 }
 
@@ -82,11 +93,13 @@ function summarizeValues(values?: string[], noun = 'items'): string | undefined 
 }
 
 function getDisplayModelID(model: RouterModelInfo): string {
-  return model.registry?.local_path
-    || model.resolved_model_path
-    || extractRuntimePath(model.model_path)
-    || model.model_path
-    || model.name
+  return (
+    model.registry?.local_path ||
+    model.resolved_model_path ||
+    extractRuntimePath(model.model_path) ||
+    model.model_path ||
+    model.name
+  )
 }
 
 function getModelTitle(model: RouterModelInfo): string {
@@ -176,7 +189,9 @@ function getModelChips(model: RouterModelInfo): string[] {
   }
 
   if (model.categories?.length) {
-    chips.add(`${model.categories.length} ${model.categories.length === 1 ? 'category' : 'categories'}`)
+    chips.add(
+      `${model.categories.length} ${model.categories.length === 1 ? 'category' : 'categories'}`,
+    )
   }
 
   return [...chips].slice(0, 6)
@@ -196,9 +211,7 @@ function buildDetailSections(model: RouterModelInfo): DetailSection[] {
     identityRows.push({ label: 'Base Model', value: model.registry.base_model })
   }
 
-  const capabilityRows: DetailRow[] = [
-    { label: 'Type', value: getModelKind(model) },
-  ]
+  const capabilityRows: DetailRow[] = [{ label: 'Type', value: getModelKind(model) }]
 
   if (model.registry?.parameter_size) {
     capabilityRows.push({ label: 'Size', value: model.registry.parameter_size })
@@ -329,7 +342,9 @@ const FullCardBody: React.FC<{
       {chips.length > 0 && (
         <div className={styles.chips}>
           {chips.map((chip) => (
-            <span key={chip} className={styles.chip}>{chip}</span>
+            <span key={chip} className={styles.chip}>
+              {chip}
+            </span>
           ))}
         </div>
       )}
@@ -344,7 +359,9 @@ const FullCardBody: React.FC<{
       </div>
 
       {hasFooter && (
-        <div className={`${styles.detailFooter} ${!model.registry?.model_card_url ? styles.detailFooterEnd : ''}`}>
+        <div
+          className={`${styles.detailFooter} ${!model.registry?.model_card_url ? styles.detailFooterEnd : ''}`}
+        >
           {model.registry?.model_card_url ? (
             <a
               className={styles.cardLink}
@@ -367,19 +384,44 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
   modelsInfo,
   mode = 'full',
   previewLimit,
+  showSummary = true,
   emptyMessage = 'No router model metadata is available yet.',
   onSelectModel,
 }) => {
   const { platform } = useReadonly()
   const isAmdPlatform = platform?.toLowerCase() === 'amd'
-  const models = mode === 'preview'
-    ? getPreviewRouterModels(modelsInfo, previewLimit)
-    : sortRouterModels(modelsInfo?.models ?? [])
+  const [query, setQuery] = useState('')
+  const [stateFilter, setStateFilter] = useState<ModelInventoryStateFilter>('all')
+  const [sort, setSort] = useState<ModelInventorySort>('state')
+  const [page, setPage] = useState(1)
+  const pageSize = 8
+  const allModels = useMemo(() => sortRouterModels(modelsInfo?.models ?? []), [modelsInfo?.models])
+  const filteredModels = useMemo(
+    () => filterAndSortRouterModels(allModels, query, stateFilter, sort),
+    [allModels, query, sort, stateFilter],
+  )
+  const totalPages = Math.max(1, Math.ceil(filteredModels.length / pageSize))
+  const currentPage = clampInventoryPage(page, filteredModels.length, pageSize)
+  const models =
+    mode === 'preview'
+      ? getPreviewRouterModels(modelsInfo, previewLimit)
+      : filteredModels.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
   const loadedCount = getLoadedModelCount(modelsInfo)
   const totalCount = getTotalKnownModelCount(modelsInfo)
   const phase = modelsInfo?.summary?.phase
   const summaryMessage = modelsInfo?.summary?.message
+
+  useEffect(() => {
+    setPage(1)
+  }, [query, sort, stateFilter])
+
+  useEffect(() => {
+    if (mode !== 'full' || !window.location.hash) return
+    const anchor = decodeURIComponent(window.location.hash.slice(1))
+    const modelIndex = filteredModels.findIndex((model) => getRouterModelAnchor(model) === anchor)
+    if (modelIndex >= 0) setPage(Math.floor(modelIndex / pageSize) + 1)
+  }, [filteredModels, mode])
 
   if (models.length === 0) {
     return <div className={styles.empty}>{emptyMessage}</div>
@@ -388,63 +430,155 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
   return (
     <div className={styles.inventory}>
       {mode === 'full' && (
-        <div className={styles.summaryRow}>
-          <div className={styles.summaryStat}>
-            <span className={styles.summaryLabel}>Loaded</span>
-            <span className={styles.summaryValue}>{loadedCount}/{totalCount}</span>
-          </div>
-          {phase && (
-            <div className={styles.summaryStat}>
-              <span className={styles.summaryLabel}>Phase</span>
-              <span className={styles.summaryValue}>{formatTitleLabel(phase)}</span>
+        <>
+          {showSummary && (
+            <div className={styles.summaryRow}>
+              <div className={styles.summaryStat}>
+                <span className={styles.summaryLabel}>Loaded</span>
+                <span className={styles.summaryValue}>
+                  {loadedCount}/{totalCount}
+                </span>
+              </div>
+              {phase && (
+                <div className={styles.summaryStat}>
+                  <span className={styles.summaryLabel}>Phase</span>
+                  <span className={styles.summaryValue}>{formatTitleLabel(phase)}</span>
+                </div>
+              )}
+              {summaryMessage && <p className={styles.summaryMessage}>{summaryMessage}</p>}
             </div>
           )}
-          {summaryMessage && <p className={styles.summaryMessage}>{summaryMessage}</p>}
-        </div>
+
+          <div className={styles.inventoryToolbar}>
+            <label className={styles.searchField}>
+              <span className={styles.srOnly}>Search models</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search name, type, repository, or tag"
+              />
+            </label>
+            <label className={styles.selectField}>
+              <span>Status</span>
+              <select
+                value={stateFilter}
+                onChange={(event) =>
+                  setStateFilter(event.target.value as ModelInventoryStateFilter)
+                }
+              >
+                <option value="all">All statuses</option>
+                <option value="ready">Ready</option>
+                <option value="loading">Loading</option>
+                <option value="not_loaded">Not loaded</option>
+              </select>
+            </label>
+            <label className={styles.selectField}>
+              <span>Sort</span>
+              <select
+                value={sort}
+                onChange={(event) => setSort(event.target.value as ModelInventorySort)}
+              >
+                <option value="state">Readiness</option>
+                <option value="name">Name</option>
+                <option value="type">Type</option>
+              </select>
+            </label>
+            <span className={styles.resultCount} aria-live="polite">
+              {filteredModels.length} of {allModels.length} models
+            </span>
+          </div>
+        </>
       )}
 
-      <div
-        className={mode === 'preview' ? styles.previewGrid : styles.fullGrid}
-        data-testid={`router-model-grid-${mode}`}
-      >
-        {models.map((model) => {
-          const className = [
-            styles.card,
-            mode === 'preview' ? styles.previewCard : styles.detailCard,
-            getCardToneClass(model),
-            onSelectModel && mode === 'preview' ? styles.cardInteractive : '',
-          ].filter(Boolean).join(' ')
+      {mode === 'full' && filteredModels.length === 0 ? (
+        <div className={styles.empty}>
+          No models match the current search and status filters.
+          <button
+            type="button"
+            className={styles.clearFilters}
+            onClick={() => {
+              setQuery('')
+              setStateFilter('all')
+              setSort('state')
+            }}
+          >
+            Clear filters
+          </button>
+        </div>
+      ) : (
+        <>
+          <div
+            className={mode === 'preview' ? styles.previewGrid : styles.fullGrid}
+            data-testid={`router-model-grid-${mode}`}
+          >
+            {models.map((model) => {
+              const className = [
+                styles.card,
+                mode === 'preview' ? styles.previewCard : styles.detailCard,
+                getCardToneClass(model),
+                onSelectModel && mode === 'preview' ? styles.cardInteractive : '',
+              ]
+                .filter(Boolean)
+                .join(' ')
 
-          const cardContent = mode === 'preview'
-            ? <PreviewCardBody model={model} isAmdPlatform={isAmdPlatform} />
-            : <FullCardBody model={model} isAmdPlatform={isAmdPlatform} />
+              const cardContent =
+                mode === 'preview' ? (
+                  <PreviewCardBody model={model} isAmdPlatform={isAmdPlatform} />
+                ) : (
+                  <FullCardBody model={model} isAmdPlatform={isAmdPlatform} />
+                )
 
-          if (onSelectModel && mode === 'preview') {
-            return (
+              if (onSelectModel && mode === 'preview') {
+                return (
+                  <button
+                    key={model.name}
+                    type="button"
+                    className={className}
+                    data-testid={`router-model-${mode}-${model.name}`}
+                    onClick={() => onSelectModel(model)}
+                  >
+                    {cardContent}
+                  </button>
+                )
+              }
+
+              return (
+                <article
+                  key={model.name}
+                  id={mode === 'full' ? getRouterModelAnchor(model) : undefined}
+                  className={className}
+                  data-testid={`router-model-${mode}-${model.name}`}
+                >
+                  {cardContent}
+                </article>
+              )
+            })}
+          </div>
+
+          {mode === 'full' && totalPages > 1 && (
+            <nav className={styles.pagination} aria-label="Model inventory pages">
               <button
-                key={model.name}
                 type="button"
-                className={className}
-                data-testid={`router-model-${mode}-${model.name}`}
-                onClick={() => onSelectModel(model)}
+                disabled={currentPage === 1}
+                onClick={() => setPage((value) => Math.max(1, value - 1))}
               >
-                {cardContent}
+                Previous
               </button>
-            )
-          }
-
-          return (
-            <article
-              key={model.name}
-              id={mode === 'full' ? getRouterModelAnchor(model) : undefined}
-              className={className}
-              data-testid={`router-model-${mode}-${model.name}`}
-            >
-              {cardContent}
-            </article>
-          )
-        })}
-      </div>
+              <span>
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={currentPage === totalPages}
+                onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+              >
+                Next
+              </button>
+            </nav>
+          )}
+        </>
+      )}
     </div>
   )
 }

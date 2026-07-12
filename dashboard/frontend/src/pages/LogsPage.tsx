@@ -1,10 +1,7 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createVisibilityAwareRequest } from './visibilityAwareRequest'
+import { filterLogs, getLogLevel, type LogEntry, type LogLevel } from './logsPageSupport'
 import styles from './LogsPage.module.css'
-
-interface LogEntry {
-  line: string
-  service?: string
-}
 
 interface LogsResponse {
   deployment_type: string
@@ -34,41 +31,71 @@ const LogsPage: React.FC = () => {
   const [autoScroll, setAutoScroll] = useState(true)
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [lines, setLines] = useState(100)
+  const [query, setQuery] = useState('')
+  const [level, setLevel] = useState<LogLevel>('all')
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const logsContainerRef = useRef<HTMLDivElement>(null)
+  const requestControllerRef = useRef<AbortController | null>(null)
 
   const fetchLogs = useCallback(async () => {
+    requestControllerRef.current?.abort()
+    const controller = new AbortController()
+    requestControllerRef.current = controller
     try {
-      const response = await fetch(`/api/logs?component=${selectedComponent}&lines=${lines}`)
+      const response = await fetch(`/api/logs?component=${selectedComponent}&lines=${lines}`, {
+        signal: controller.signal,
+      })
       if (!response.ok) {
         throw new Error(`Failed to fetch logs: ${response.statusText}`)
       }
       const data: LogsResponse = await response.json()
+      if (controller.signal.aborted) return
       setLogs(data.logs || [])
       setDeploymentType(data.deployment_type)
       setError(data.error || null)
       setMessage(data.message || null)
+      setLastUpdated(new Date())
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       setError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
-      setLoading(false)
+      if (requestControllerRef.current === controller) setLoading(false)
     }
   }, [selectedComponent, lines])
 
+  const logsRequest = useMemo(() => createVisibilityAwareRequest(fetchLogs), [fetchLogs])
+
   useEffect(() => {
     setLoading(true)
-    fetchLogs()
+    void logsRequest.run({ allowHidden: true })
+
+    const refreshWhenVisible = () => {
+      if (!document.hidden) void logsRequest.run()
+    }
+    document.addEventListener('visibilitychange', refreshWhenVisible)
 
     if (autoRefresh) {
-      const interval = setInterval(fetchLogs, 5000)
-      return () => clearInterval(interval)
+      const interval = window.setInterval(() => void logsRequest.run(), 5000)
+      return () => {
+        window.clearInterval(interval)
+        document.removeEventListener('visibilitychange', refreshWhenVisible)
+        requestControllerRef.current?.abort()
+      }
     }
-  }, [fetchLogs, autoRefresh])
+
+    return () => {
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+      requestControllerRef.current?.abort()
+    }
+  }, [autoRefresh, logsRequest])
+
+  const filteredLogs = useMemo(() => filterLogs(logs, query, level), [level, logs, query])
 
   useEffect(() => {
     if (autoScroll && logsContainerRef.current) {
       logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight
     }
-  }, [logs, autoScroll])
+  }, [filteredLogs, autoScroll])
 
   const formatDeploymentType = (type: string) => {
     if (type === 'none') return 'Not detected'
@@ -77,15 +104,6 @@ const LogsPage: React.FC = () => {
       .split(/[-_\s]+/)
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(' ')
-  }
-
-  const getLogLevel = (line: string): string => {
-    const lowerLine = line.toLowerCase()
-    if (lowerLine.includes('"level":"error"') || lowerLine.includes('[error]')) return 'error'
-    if (lowerLine.includes('"level":"warn"') || lowerLine.includes('[warn]')) return 'warn'
-    if (lowerLine.includes('"level":"info"') || lowerLine.includes('[info]')) return 'info'
-    if (lowerLine.includes('"level":"debug"') || lowerLine.includes('[debug]')) return 'debug'
-    return ''
   }
 
   const activeComponentLabel =
@@ -97,11 +115,18 @@ const LogsPage: React.FC = () => {
         <div className={styles.headerLeft}>
           <span className={styles.eyebrow}>Operations</span>
           <h1 className={styles.title}>System Logs</h1>
-          <p className={styles.subtitle}>View live output from vLLM Semantic Router services and runtime helpers.</p>
+          <p className={styles.subtitle}>
+            View live output from vLLM Semantic Router services and runtime helpers.
+          </p>
         </div>
         <div className={styles.headerRight}>
           <span className={styles.headerMeta}>Active stream: {activeComponentLabel}</span>
-          <span className={styles.headerMeta}>Deployment: {formatDeploymentType(deploymentType)}</span>
+          <span className={styles.headerMeta}>
+            Deployment: {formatDeploymentType(deploymentType)}
+          </span>
+          {lastUpdated && (
+            <span className={styles.headerMeta}>Updated: {lastUpdated.toLocaleTimeString()}</span>
+          )}
         </div>
       </div>
 
@@ -114,7 +139,9 @@ const LogsPage: React.FC = () => {
         <article className={styles.summaryCard}>
           <span className={styles.summaryLabel}>Selected source</span>
           <strong className={styles.summaryValue}>{activeComponentLabel}</strong>
-          <span className={styles.summaryHint}>Switch sources without changing the log viewport width.</span>
+          <span className={styles.summaryHint}>
+            Switch sources without changing the log viewport width.
+          </span>
         </article>
         <article className={styles.summaryCard}>
           <span className={styles.summaryLabel}>Entries loaded</span>
@@ -127,7 +154,9 @@ const LogsPage: React.FC = () => {
         <div className={styles.controlPanelHeader}>
           <div>
             <h2 className={styles.panelTitle}>Stream controls</h2>
-            <p className={styles.panelSubtitle}>Tune source selection, tail length, and live refresh behavior.</p>
+            <p className={styles.panelSubtitle}>
+              Tune source selection, tail length, and live refresh behavior.
+            </p>
           </div>
         </div>
 
@@ -145,6 +174,28 @@ const LogsPage: React.FC = () => {
           </div>
 
           <div className={styles.controlsRight}>
+            <label className={styles.filterField}>
+              <span>Search logs</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Message or service"
+              />
+            </label>
+
+            <label className={styles.filterField}>
+              <span>Level</span>
+              <select value={level} onChange={(event) => setLevel(event.target.value as LogLevel)}>
+                <option value="all">All levels</option>
+                <option value="error">Error</option>
+                <option value="warn">Warning</option>
+                <option value="info">Info</option>
+                <option value="debug">Debug</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+
             <div className={styles.linesSelector}>
               <label htmlFor="logs-lines">Lines</label>
               <select
@@ -178,7 +229,10 @@ const LogsPage: React.FC = () => {
               <span>Auto-scroll</span>
             </label>
 
-            <button onClick={fetchLogs} className={styles.refreshButton}>
+            <button
+              onClick={() => void logsRequest.run({ allowHidden: true })}
+              className={styles.refreshButton}
+            >
               Refresh
             </button>
           </div>
@@ -205,7 +259,11 @@ const LogsPage: React.FC = () => {
             <span className={styles.logsEyebrow}>Live stream</span>
             <span className={styles.logsTitle}>{activeComponentLabel}</span>
           </div>
-          <span className={styles.logsCount}>{logs.length} entries</span>
+          <span className={styles.logsCount} aria-live="polite">
+            {filteredLogs.length === logs.length
+              ? `${logs.length} entries`
+              : `${filteredLogs.length} of ${logs.length} entries`}
+          </span>
         </div>
 
         <div ref={logsContainerRef} className={styles.logsContainer}>
@@ -223,14 +281,19 @@ const LogsPage: React.FC = () => {
                 </p>
               )}
             </div>
+          ) : filteredLogs.length === 0 ? (
+            <div className={styles.noLogs}>
+              <p className={styles.noLogsTitle}>No matching logs</p>
+              <p className={styles.noLogsHint}>Change the search or level filter.</p>
+            </div>
           ) : (
             <div className={styles.logsList}>
-              {logs.map((log, index) => {
+              {filteredLogs.map((log, index) => {
                 const level = getLogLevel(log.line)
                 return (
-                  <div 
-                    key={index} 
-                    className={`${styles.logEntry} ${level ? styles[`level${level.charAt(0).toUpperCase() + level.slice(1)}`] : ''}`}
+                  <div
+                    key={`${log.service ?? 'service'}-${index}-${log.line.slice(0, 32)}`}
+                    className={`${styles.logEntry} ${level !== 'other' ? styles[`level${level.charAt(0).toUpperCase() + level.slice(1)}`] : ''}`}
                   >
                     <span className={styles.logLine}>{log.line}</span>
                   </div>

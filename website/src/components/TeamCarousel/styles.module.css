@@ -2,23 +2,12 @@
   position: relative;
   overflow: hidden;
   padding: 5rem 0;
-  border-bottom: 1px solid var(--site-border);
-  background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.018), transparent 42%),
-    linear-gradient(180deg, #ffffff 0%, var(--site-bg-alt) 100%);
+  border-bottom: 0;
+  background: var(--site-bg);
 }
 
 .teamSection::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 82% 20%, rgba(15, 23, 42, 0.045), transparent 26%),
-    linear-gradient(90deg, rgba(15, 23, 42, 0.028) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.028) 1px, transparent 1px);
-  background-size: auto, 34px 34px, 34px 34px;
-  opacity: 0.3;
+  content: none;
 }
 
 .teamHeader,
@@ -56,17 +45,16 @@
   position: relative;
   z-index: 1;
   border: 1px solid var(--site-border);
-  background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.028), transparent 34%),
-    var(--site-surface);
+  border-radius: 1.25rem;
+  background: var(--site-surface-alt);
   overflow: hidden;
 }
 
 .carouselContainer {
-  overflow: hidden;
-  padding: 1.5rem 0;
-  mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
-  -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+  overflow-x: auto;
+  padding: 1.5rem;
+  scroll-padding-inline: 1.5rem;
+  scroll-snap-type: x proximity;
 }
 
 .carouselTrack {
@@ -85,12 +73,13 @@
   padding: 1.15rem;
   border: 1px solid var(--site-border);
   background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.02), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 36%),
     var(--site-surface-alt);
   transition:
     border-color 180ms ease,
     transform 180ms ease,
     background 180ms ease;
+  scroll-snap-align: start;
 }
 
 .memberCard:hover {
@@ -120,7 +109,7 @@
   width: fit-content;
   padding: 0.18rem 0.46rem;
   border: 1px solid var(--site-border);
-  background: rgba(15, 23, 42, 0.045);
+  background: rgba(255, 255, 255, 0.045);
   color: var(--site-muted-bright);
   font-size: 0.62rem;
   font-weight: 600;
@@ -130,16 +119,16 @@
 }
 
 .steering {
-  background: rgba(15, 23, 42, 0.08);
+  background: rgba(48, 162, 255, 0.12);
   color: var(--site-text);
 }
 
 .committer {
-  background: rgba(15, 23, 42, 0.05);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .contributor {
-  background: rgba(15, 23, 42, 0.035);
+  background: rgba(255, 255, 255, 0.035);
 }
 
 .memberName {
@@ -214,8 +203,7 @@
 @media (max-width: 480px) {
   .carouselContainer {
     padding: 1rem 0.75rem;
-    mask-image: linear-gradient(to right, black, black 92%, transparent);
-    -webkit-mask-image: linear-gradient(to right, black, black 92%, transparent);
+    scroll-padding-inline: 0.75rem;
   }
 
   .memberCard {
