@@ -11,39 +11,42 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
 
 // getEmbeddingModelsInfo returns information about loaded embedding models.
 func (s *ClassificationAPIServer) getEmbeddingModelsInfo(runtimeState *startupstatus.State) []ModelInfo {
 	var models []ModelInfo
 
-	embeddingInfo, err := candle_binding.GetEmbeddingModelsInfo()
-	if err != nil {
-		logging.Warnf("Failed to get embedding models info: %v", err)
-		return models
-	}
+	// Retrieve from native registry instead of candle_binding singleton
+	for _, adapter := range native.Registry.List() {
+		infoList := adapter.Info()
+		for _, info := range infoList.Models {
+			if info.Capability != native.CapabilityEmbedding {
+				continue
+			}
 
-	for _, model := range embeddingInfo.Models {
-		modelPath := normalizeEmbeddingModelPath(model.ModelPath, model.ModelName)
-		if modelPath == "" {
-			modelPath = strings.TrimSpace(model.ModelPath)
-		}
-		if modelPath == "" {
-			modelPath = strings.TrimSpace(model.ModelName)
-		}
+			modelPath := normalizeEmbeddingModelPath(info.ModelPath, info.ModelName)
+			if modelPath == "" {
+				modelPath = strings.TrimSpace(info.ModelPath)
+			}
+			if modelPath == "" {
+				modelPath = strings.TrimSpace(info.ModelName)
+			}
 
-		models = append(models, ModelInfo{
-			Name:      fmt.Sprintf("%s_embedding_model", model.ModelName),
-			Type:      "embedding",
-			Loaded:    model.IsLoaded,
-			ModelPath: modelPath,
-			Metadata: map[string]string{
-				"model_type":           model.ModelName,
-				"max_sequence_length":  fmt.Sprintf("%d", model.MaxSequenceLength),
-				"default_dimension":    fmt.Sprintf("%d", model.DefaultDimension),
-				"matryoshka_supported": "true",
-			},
-		})
+			models = append(models, ModelInfo{
+				Name:      fmt.Sprintf("%s_embedding_model", info.ModelName),
+				Type:      "embedding",
+				Loaded:    info.IsLoaded,
+				ModelPath: modelPath,
+				Metadata: map[string]string{
+					"model_type":           info.ModelName,
+					"max_sequence_length":  fmt.Sprintf("%d", info.MaxSequenceLength),
+					"default_dimension":    fmt.Sprintf("%d", info.DefaultDimension),
+					"matryoshka_supported": "true",
+				},
+			})
+		}
 	}
 
 	for i := range models {
