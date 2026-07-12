@@ -167,21 +167,21 @@
 }
 
 .modelCardOk {
-  border-color: rgba(118, 185, 0, 0.16);
+  border-color: rgba(143, 148, 156, 0.16);
   background:
-    radial-gradient(circle at top right, rgba(118, 185, 0, 0.09), transparent 44%),
-    linear-gradient(180deg, rgba(118, 185, 0, 0.04), rgba(17, 28, 20, 0.02)),
+    radial-gradient(circle at top right, rgba(143, 148, 156, 0.09), transparent 44%),
+    linear-gradient(180deg, rgba(143, 148, 156, 0.04), rgba(17, 28, 20, 0.02)),
     color-mix(in srgb, var(--color-surface) 95%, #101912 5%);
 }
 
 .modelCardOk .cardHeader {
-  border-bottom-color: rgba(118, 185, 0, 0.1);
+  border-bottom-color: rgba(143, 148, 156, 0.1);
 }
 
 .modelCardOk .modelFacts,
 .modelCardOk .modelReadyPanel {
-  border-color: rgba(118, 185, 0, 0.12);
-  background: rgba(118, 185, 0, 0.04);
+  border-color: rgba(143, 148, 156, 0.12);
+  background: rgba(143, 148, 156, 0.04);
 }
 
 .modelCardWarn {
@@ -264,14 +264,14 @@
   gap: 1rem;
   min-height: 176px;
   padding: 1.15rem 1.2rem;
-  border: 1px solid rgba(118, 185, 0, 0.12);
+  border: 1px solid rgba(143, 148, 156, 0.12);
   border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, rgba(118, 185, 0, 0.08), rgba(118, 185, 0, 0));
+  background: linear-gradient(135deg, rgba(143, 148, 156, 0.08), rgba(143, 148, 156, 0));
 }
 
 .routerHeroOk {
   border-color: rgba(34, 197, 94, 0.16);
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(118, 185, 0, 0.04));
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(143, 148, 156, 0.04));
 }
 
 .routerHeroWarn {
@@ -513,6 +513,56 @@
   gap: 0.55rem;
 }
 
+.servicesToolbar {
+  display: grid;
+  grid-template-columns: minmax(18rem, 1fr) minmax(10rem, auto) auto;
+  align-items: end;
+  gap: 0.75rem;
+  padding: 1rem 1.2rem 0;
+}
+
+.serviceSearchField input,
+.serviceFilterField select {
+  width: 100%;
+  min-height: 42px;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.serviceFilterField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.serviceResultCount {
+  align-self: center;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .servicesCountChip {
   display: inline-flex;
   align-items: center;
@@ -531,13 +581,42 @@
   padding: 1rem 1.2rem 1.2rem;
 }
 
+.servicePagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 0 1.2rem 1.2rem;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+}
+
+.servicePagination button,
+.clearServiceFilters {
+  min-height: 38px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.servicePagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .serviceCard {
   min-height: 180px;
   padding: 1rem 1rem 1.05rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-bg-secondary);
-  transition: background 0.2s, border-color 0.2s, transform 0.2s;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    transform 0.2s;
 }
 
 .serviceCard:hover {
@@ -593,9 +672,9 @@
 .componentBadge {
   padding: 0.18rem 0.45rem;
   border-radius: var(--radius-sm);
-  background: rgba(118, 185, 0, 0.12);
+  background: rgba(143, 148, 156, 0.12);
   color: var(--color-primary-light);
-  border: 1px solid rgba(118, 185, 0, 0.18);
+  border: 1px solid rgba(143, 148, 156, 0.18);
   font-size: 0.64rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -698,7 +777,7 @@
 .startOption code {
   padding: 0.25rem 0.5rem;
   border-radius: var(--radius-sm);
-  background: rgba(118, 185, 0, 0.1);
+  background: rgba(143, 148, 156, 0.1);
   color: var(--color-primary);
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 0.875rem;
@@ -757,6 +836,15 @@
   .servicesGrid {
     grid-template-columns: 1fr;
     padding: 0.9rem;
+  }
+
+  .servicesToolbar {
+    grid-template-columns: 1fr;
+    padding: 0.9rem 0.9rem 0;
+  }
+
+  .serviceResultCount {
+    justify-self: start;
   }
 
   .routerHero {

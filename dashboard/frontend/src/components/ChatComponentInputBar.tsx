@@ -28,6 +28,8 @@ interface ChatComponentInputBarProps {
   onToggleClawMode: () => void
   onToggleWebSearch: () => void
   roomChatToggleControl: ReactNode
+  sendDisabled?: boolean
+  sendDisabledReason?: string
 }
 
 export default function ChatComponentInputBar({
@@ -50,6 +52,8 @@ export default function ChatComponentInputBar({
   onToggleClawMode,
   onToggleWebSearch,
   roomChatToggleControl,
+  sendDisabled = false,
+  sendDisabledReason,
 }: ChatComponentInputBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const canSend = Boolean(inputValue.trim()) || attachments.length > 0
@@ -209,8 +213,8 @@ export default function ChatComponentInputBar({
             <button
               className={styles.sendButton}
               onClick={onSend}
-              disabled={!canSend}
-              title="Send message"
+              disabled={!canSend || sendDisabled}
+              title={sendDisabled ? sendDisabledReason : 'Send message'}
               aria-label="Send message"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

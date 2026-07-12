@@ -33,13 +33,14 @@ type PIIModel struct {
 }
 
 type EmbeddingModels struct {
-	Qwen3ModelPath      string     `yaml:"qwen3_model_path"`
-	GemmaModelPath      string     `yaml:"gemma_model_path"`
-	MmBertModelPath     string     `yaml:"mmbert_model_path"`
-	MultiModalModelPath string     `yaml:"multimodal_model_path,omitempty"`
-	BertModelPath       string     `yaml:"bert_model_path"`
-	UseCPU              bool       `yaml:"use_cpu"`
-	EmbeddingConfig     HNSWConfig `yaml:"embedding_config,omitempty"`
+	Qwen3ModelPath      string                  `yaml:"qwen3_model_path"`
+	GemmaModelPath      string                  `yaml:"gemma_model_path"`
+	MmBertModelPath     string                  `yaml:"mmbert_model_path"`
+	MultiModalModelPath string                  `yaml:"multimodal_model_path,omitempty"`
+	BertModelPath       string                  `yaml:"bert_model_path"`
+	UseCPU              bool                    `yaml:"use_cpu"`
+	EmbeddingConfig     HNSWConfig              `yaml:"embedding_config,omitempty"`
+	Endpoint            EmbeddingEndpointConfig `yaml:"endpoint,omitempty"`
 }
 
 func (e EmbeddingModels) MinSimilarityThreshold() float32 {
@@ -62,10 +63,14 @@ type HNSWConfig struct {
 func (c HNSWConfig) WithDefaults() HNSWConfig {
 	result := c
 	if result.Backend == "" {
-		result.Backend = "candle"
+		result.Backend = EmbeddingBackendCandle
 	}
 	if result.ModelType == "" {
-		result.ModelType = "qwen3"
+		if normalizeEmbeddingBackend(result.Backend) == EmbeddingBackendOpenAICompatible {
+			result.ModelType = EmbeddingModelTypeRemote
+		} else {
+			result.ModelType = EmbeddingModelTypeQwen3
+		}
 	}
 	if result.TargetDimension <= 0 {
 		result.TargetDimension = 768
@@ -298,10 +303,11 @@ type ProviderProfile struct {
 }
 
 type ModelPricing struct {
-	Currency         string  `yaml:"currency,omitempty"`
-	PromptPer1M      float64 `yaml:"prompt_per_1m,omitempty"`
-	CompletionPer1M  float64 `yaml:"completion_per_1m,omitempty"`
-	CachedInputPer1M float64 `yaml:"cached_input_per_1m,omitempty"`
+	Currency         string   `yaml:"currency,omitempty"`
+	PromptPer1M      float64  `yaml:"prompt_per_1m,omitempty"`
+	CompletionPer1M  float64  `yaml:"completion_per_1m,omitempty"`
+	CachedInputPer1M float64  `yaml:"cached_input_per_1m,omitempty"`
+	CacheWritePer1M  *float64 `yaml:"cache_write_per_1m,omitempty"`
 }
 
 type ModelParams struct {

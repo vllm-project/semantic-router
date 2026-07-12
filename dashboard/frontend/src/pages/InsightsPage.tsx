@@ -1,17 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { DataTable } from '../components/DataTable'
-import InsightsCharts from '../components/InsightsCharts'
 import TableHeader from '../components/TableHeader'
 
 import configStyles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import styles from './InsightsPage.module.css'
-import {
-  fetchInsightsJSON,
-  isInsightsReplayUnavailableError,
-} from './insightsPageApi'
+import { isInsightsReplayUnavailableError } from './insightsPageApi'
+import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
 import {
   createInsightsTableColumns,
   getInsightsRecordPath,
@@ -24,6 +21,8 @@ import type {
 } from './insightsPageTypes'
 
 const insightsPageSize = 25
+const insightsSearchDebounceMs = 300
+const InsightsCharts = lazy(() => import('../components/InsightsCharts'))
 
 interface ReplayQueryFilters {
   searchTerm: string
@@ -69,21 +68,23 @@ export default function InsightsPage() {
   const [replayUnavailable, setReplayUnavailable] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
   const [filter, setFilter] = useState<InsightsFilterType>('all')
   const [decisionFilter, setDecisionFilter] = useState('all')
   const [modelFilter, setModelFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
   const requestSequenceRef = useRef(0)
+  const requestAbortControllerRef = useRef<AbortController | null>(null)
   const tableColumns = useMemo(() => createInsightsTableColumns(), [])
 
   const activeFilters = useMemo(
     () => ({
-      searchTerm,
+      searchTerm: debouncedSearchTerm,
       filter,
       decisionFilter,
       modelFilter,
     }),
-    [searchTerm, filter, decisionFilter, modelFilter],
+    [debouncedSearchTerm, filter, decisionFilter, modelFilter],
   )
 
   const totalPages = Math.max(1, Math.ceil(totalRecords / insightsPageSize))
@@ -100,14 +101,22 @@ export default function InsightsPage() {
   const fetchRecords = useCallback(async () => {
     const requestSequence = requestSequenceRef.current + 1
     requestSequenceRef.current = requestSequence
+    requestAbortControllerRef.current?.abort()
+    const abortController = new AbortController()
+    requestAbortControllerRef.current = abortController
     setLoading(true)
 
     try {
       const [listResponse, aggregateResponse] = await Promise.all([
-        fetchInsightsJSON<InsightsListResponse>(`/api/router/v1/router_replay${listQuery}`, 'insight records'),
-        fetchInsightsJSON<InsightsAggregateResponse>(
+        fetchAbortableInsightsJSON<InsightsListResponse>(
+          `/api/router/v1/router_replay${listQuery}`,
+          'insight records',
+          abortController.signal,
+        ),
+        fetchAbortableInsightsJSON<InsightsAggregateResponse>(
           `/api/router/v1/router_replay/aggregate${aggregateQuery}`,
           'insight aggregates',
+          abortController.signal,
         ),
       ])
       if (requestSequenceRef.current !== requestSequence) {
@@ -120,6 +129,9 @@ export default function InsightsPage() {
       setError(null)
       setReplayUnavailable(false)
     } catch (err) {
+      if (isAbortError(err)) {
+        return
+      }
       if (requestSequenceRef.current !== requestSequence) {
         return
       }
@@ -131,11 +143,28 @@ export default function InsightsPage() {
       setError(unavailable ? null : err instanceof Error ? err.message : 'Unknown error')
       setReplayUnavailable(unavailable)
     } finally {
+      if (requestAbortControllerRef.current === abortController) {
+        requestAbortControllerRef.current = null
+      }
       if (requestSequenceRef.current === requestSequence) {
         setLoading(false)
       }
     }
   }, [aggregateQuery, listQuery])
+
+  useEffect(() => {
+    const debounceTimer = window.setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm)
+      setCurrentPage(1)
+    }, insightsSearchDebounceMs)
+
+    return () => window.clearTimeout(debounceTimer)
+  }, [searchTerm])
+
+  useEffect(() => () => {
+    requestSequenceRef.current += 1
+    requestAbortControllerRef.current?.abort()
+  }, [])
 
   useEffect(() => {
     void fetchRecords()
@@ -167,7 +196,6 @@ export default function InsightsPage() {
 
   const handleSearchChange = useCallback((value: string) => {
     setSearchTerm(value)
-    setCurrentPage(1)
   }, [])
 
   const handleDecisionFilterChange = useCallback((value: string) => {
@@ -219,7 +247,11 @@ export default function InsightsPage() {
         </div>
       ) : null}
 
-      {aggregate ? <InsightsCharts aggregate={aggregate} /> : null}
+      {aggregate ? (
+        <Suspense fallback={null}>
+          <InsightsCharts aggregate={aggregate} />
+        </Suspense>
+      ) : null}
 
       <div className={configStyles.sectionPanel}>
         <section className={configStyles.sectionTableBlock}>

@@ -26,6 +26,7 @@ providers:
         currency: USD
         prompt_per_1m: 0.18
         cached_input_per_1m: 0.04
+        cache_write_per_1m: 0.225
         completion_per_1m: 0.42
       external_model_ids:
         openai: qwen3-8b
@@ -1496,7 +1497,7 @@ global:
           endpoint: jaeger:4317
           insecure: true
         sampling:
-          type: traceidratio
+          type: probabilistic
           rate: 0.5
         resource:
           service_name: vllm-sr
@@ -1971,6 +1972,13 @@ global:
             best_weight: 0.75
             top_m: 2
             margin_threshold: 0.0
+        endpoint:
+          base_url: http://embedding-service:8000/v1
+          model: BAAI/bge-m3
+          api_key_env: EMBEDDING_API_KEY
+          timeout_seconds: 5
+          max_retries: 2
+          dimensions: 1024
     system:
       prompt_guard: models/mmbert32k-jailbreak-detector-merged
       domain_classifier: models/mmbert32k-intent-classifier-merged

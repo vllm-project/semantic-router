@@ -103,10 +103,16 @@ func parseYAMLBytesWithBaseDir(data []byte, baseDir string) (*RouterConfig, erro
 		return nil, rejectErr
 	}
 
+	expandEnvSubstitutionsInMap(raw)
+	expandedData, marshalErr := yaml.Marshal(raw)
+	if marshalErr != nil {
+		return nil, fmt.Errorf("failed to marshal config after environment expansion: %w", marshalErr)
+	}
+
 	// Warn about unknown YAML fields (typos) before parsing into typed structs.
 	WarnUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
 
-	cfg, err := parseRouterConfigPayload(data, raw)
+	cfg, err := parseRouterConfigPayload(expandedData, raw)
 	if err != nil {
 		return nil, err
 	}

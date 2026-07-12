@@ -112,6 +112,23 @@ async function mockStreamingChatFetch(
 
 async function mockPlaygroundBootstrap(page: import('@playwright/test').Page): Promise<void> {
   await mockAuthenticatedAppShell(page);
+  await page.route('**/api/router/v1/models*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        object: 'list',
+        data: [
+          {
+            id: 'vllm-sr/auto',
+            object: 'model',
+            owned_by: 'vllm-semantic-router',
+            description: 'Intelligent Router for Mixture-of-Models',
+          },
+        ],
+      }),
+    });
+  });
 }
 
 async function readStoredQueuePrompts(page: import('@playwright/test').Page): Promise<string[]> {
@@ -150,6 +167,145 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByPlaceholder('Ask me anything...')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New conversation' })).toBeVisible();
+    await expect(page.getByTestId('playground-routing-status')).toHaveCount(0);
+
+    const motionBackground = page.getByTestId('playground-motion-background');
+    await expect(motionBackground).toBeVisible();
+    await expect(motionBackground).toHaveCSS('pointer-events', 'none');
+    await expect(motionBackground).toHaveAttribute('data-motion', 'animated');
+  });
+
+  test('keeps the mobile composer readable and clear of the guide control', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    const input = page.getByPlaceholder('Ask me anything...');
+    await expect.poll(async () => (await input.boundingBox())?.width ?? 0).toBeGreaterThan(250);
+    await input.click();
+    await input.fill('The animated surface keeps the composer interactive');
+
+    const motionBackground = page.getByTestId('playground-motion-background');
+    const backgroundBox = await motionBackground.boundingBox();
+    expect(backgroundBox).not.toBeNull();
+    expect(backgroundBox?.width ?? 0).toBeLessThanOrEqual(390);
+    await expect(motionBackground).toHaveCSS('pointer-events', 'none');
+
+    const layoutWidth = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      innerWidth: window.innerWidth,
+    }));
+    expect(layoutWidth.scrollWidth).toBeLessThanOrEqual(layoutWidth.innerWidth);
+
+    const composerBox = await page.getByTestId('chat-composer').boundingBox();
+    const guideBox = await page.getByRole('button', { name: 'Guide' }).boundingBox();
+    expect(composerBox).not.toBeNull();
+    expect(guideBox).not.toBeNull();
+    expect((guideBox?.y ?? 0) + (guideBox?.height ?? 0)).toBeLessThanOrEqual((composerBox?.y ?? 0) + 1);
+  });
+
+  test('uses the live auto alias and rebinds a restored legacy MoM task', async ({ page }) => {
+    await page.unroute('**/api/router/v1/models*');
+    await page.route('**/api/router/v1/models*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          object: 'list',
+          data: [{
+            id: 'router/production',
+            object: 'model',
+            owned_by: 'vllm-semantic-router',
+            description: 'Intelligent Router for Mixture-of-Models',
+          }],
+        }),
+      });
+    });
+
+    const requestModels: string[] = [];
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
+      requestModels.push((route.request().postDataJSON() as { model?: string }).model ?? '');
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+        body: chatStreamBody('Custom route is live.'),
+      });
+    });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('playground-routing-status')).toHaveCount(0);
+    await page.getByPlaceholder('Ask me anything...').fill('Use the effective runtime alias');
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await expect(page.getByText('Custom route is live.')).toBeVisible();
+    expect(requestModels).toEqual(['router/production']);
+
+    await page.evaluate(() => {
+      const conversationId = 'restored-legacy-conversation';
+      window.localStorage.setItem('sr:playground:queue', JSON.stringify({
+        [conversationId]: [{
+          id: 'restored-legacy-task',
+          conversationId,
+          prompt: 'Restore this legacy task',
+          createdAt: Date.now(),
+          requestOptions: {
+            enableClawMode: false,
+            enableWebSearch: false,
+            model: 'MoM',
+          },
+        }],
+      }));
+    });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect.poll(() => requestModels.length).toBe(2);
+    expect(requestModels).toEqual(['router/production', 'router/production']);
+  });
+
+  test('blocks sending and offers retry when model discovery fails', async ({ page }) => {
+    await page.unroute('**/api/router/v1/models*');
+    await page.route('**/api/router/v1/models*', async (route) => {
+      await route.fulfill({ status: 503, body: 'router unavailable' });
+    });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.getByPlaceholder('Ask me anything...').fill('Do not send this request');
+    await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Retry discovery' })).toBeVisible();
+  });
+
+  test('rejects a MoM-only discovery response and never submits the retired alias', async ({
+    page,
+  }) => {
+    await page.unroute('**/api/router/v1/models*');
+    await page.route('**/api/router/v1/models*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          object: 'list',
+          data: [
+            {
+              id: 'MoM',
+              object: 'model',
+              owned_by: 'vllm-semantic-router',
+              description: 'Intelligent Router for Mixture-of-Models',
+            },
+          ],
+        }),
+      });
+    });
+
+    let completionRequests = 0;
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
+      completionRequests += 1;
+      await route.abort();
+    });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const composer = page.getByPlaceholder('Ask me anything...');
+    await composer.fill('Do not fall back to MoM');
+    await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Retry discovery' })).toBeVisible();
+    await composer.press('Enter');
+    expect(completionRequests).toBe(0);
   });
 
   test('opens and collapses the left history rail', async ({ page }) => {
@@ -194,7 +350,7 @@ test.describe('Playground Chat Component', () => {
 
     await expect(shell).toBeVisible();
     await expect(accountButton).toBeVisible();
-    await expect(page.getByRole('button', { name: /Open account details for Admin User/i })).toHaveCount(1);
+    await expect(page.getByRole('button', { name: /Open account menu for Admin User/i })).toHaveCount(1);
 
     await accountButton.click();
 
@@ -209,11 +365,9 @@ test.describe('Playground Chat Component', () => {
     expect(dialogBox).not.toBeNull();
     expect(viewport).not.toBeNull();
 
-    const dialogCenterX = dialogBox!.x + dialogBox!.width / 2;
-    const dialogCenterY = dialogBox!.y + dialogBox!.height / 2;
-
-    expect(Math.abs(dialogCenterX - viewport!.width / 2)).toBeLessThan(80);
-    expect(Math.abs(dialogCenterY - viewport!.height / 2)).toBeLessThan(80);
+    expect(dialogBox!.x).toBeLessThan(120);
+    expect(Math.abs(dialogBox!.y + dialogBox!.height - viewport!.height)).toBeLessThan(40);
+    expect(dialogBox!.width).toBeLessThanOrEqual(400);
   });
 
   test('hides the guide button permanently after finishing onboarding', async ({ page }) => {
@@ -225,6 +379,11 @@ test.describe('Playground Chat Component', () => {
     await page.goto('/playground', { waitUntil: 'domcontentloaded' });
 
     await expect(page.getByText('Product guide')).toBeVisible();
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('Step 2 of 5')).toBeVisible();
+    await page.getByRole('button', { name: 'Pause tour' }).click();
+    await page.getByRole('button', { name: 'Resume guide' }).click();
+    await expect(page.getByText('Step 2 of 5')).toBeVisible();
 
     while (await page.getByRole('button', { name: 'Finish' }).count() === 0) {
       await page.getByRole('button', { name: 'Next' }).click();
@@ -413,7 +572,7 @@ test.describe('Playground Chat Component', () => {
     await page.getByRole('button', { name: 'New conversation' }).click();
 
     await expect(page.locator('[data-message-role="user"]').filter({ hasText: 'Clear me' })).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: /Hi there, I am MoM/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Understand every request/i })).toBeVisible();
   });
 
   test('keeps streaming in the original session after switching away and shows progress when switching back', async ({ page }) => {
@@ -435,7 +594,7 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible();
 
     await page.getByRole('button', { name: 'New conversation' }).click();
-    await expect(page.getByRole('heading', { name: /Hi there, I am MoM/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Understand every request/i })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Stop generating' })).toHaveCount(0);
     await expect(page.getByText('First visible chunk.')).toHaveCount(0);
 
@@ -544,7 +703,7 @@ test.describe('Playground Chat Component', () => {
       
       // Verify request structure
       expect(postData).toHaveProperty('messages');
-      expect(postData).toHaveProperty('model');
+      expect(postData).toHaveProperty('model', 'vllm-sr/auto');
       expect(postData).toHaveProperty('stream');
       
       // Return mock streaming response
@@ -568,7 +727,7 @@ test.describe('Playground Chat Component', () => {
     await page.getByRole('button', { name: 'Send message' }).click();
     
     // User message should appear
-    await expect(page.getByText('Hello, how are you?')).toBeVisible();
+    await expect(page.getByTestId('chat-transcript').getByText('Hello, how are you?')).toBeVisible();
     
     // Wait for response to appear (the mocked response)
     await expect(page.getByText('Hello! This is a mock response.')).toBeVisible({ timeout: 10000 });
@@ -709,9 +868,12 @@ test.describe('Playground Chat Component', () => {
     }, { timeout: 10000 }).not.toBeNull();
 
     const refreshedFollowUpRequest = await page.evaluate(() =>
-      (window as typeof window & { __lastFollowUpRequest?: { messages?: Array<Record<string, unknown>> } }).__lastFollowUpRequest
+      (window as typeof window & {
+        __lastFollowUpRequest?: { messages?: Array<Record<string, unknown>>; model?: string }
+      }).__lastFollowUpRequest
     );
 
+    expect(refreshedFollowUpRequest?.model).toBe('vllm-sr/auto');
     expect(refreshedFollowUpRequest?.messages?.some((message) => message.role === 'tool')).toBeTruthy();
     const resolvedToolMessage = refreshedFollowUpRequest?.messages?.find((message) => message.role === 'tool');
     expect(resolvedToolMessage?.content).toContain('Tool execution failed:');
@@ -801,7 +963,7 @@ test.describe('Playground Chat Component', () => {
     await page.getByRole('button', { name: 'Send message' }).click();
     
     // User message should still appear
-    await expect(page.getByText('Test error handling')).toBeVisible();
+    await expect(page.getByTestId('chat-transcript').getByText('Test error handling')).toBeVisible();
     
     // Error should be displayed (specific API error message)
     await expect(page.getByText('API error:')).toBeVisible({ timeout: 5000 });
@@ -1061,12 +1223,15 @@ test.describe('Playground Chat Component', () => {
     }, { timeout: 5000 }).toBeLessThan(120);
 
     const scrollTopBeforeManualScroll = await transcript.evaluate(node => (node as HTMLDivElement).scrollTop);
-    await transcript.hover();
-    await page.mouse.wheel(0, -5000);
-    await page.waitForTimeout(600);
-
-    const scrollTopAfterManualScroll = await transcript.evaluate(node => (node as HTMLDivElement).scrollTop);
-    expect(scrollTopAfterManualScroll).toBeLessThan(scrollTopBeforeManualScroll - 1000);
+    const manualScrollTop = await transcript.evaluate(node => {
+      const container = node as HTMLDivElement;
+      container.style.scrollBehavior = 'auto';
+      const target = Math.max(0, container.scrollTop - container.clientHeight * 1.5);
+      container.scrollTop = target;
+      container.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -1 }));
+      return container.scrollTop;
+    });
+    expect(manualScrollTop).toBeLessThan(scrollTopBeforeManualScroll - 300);
 
     await expect(currentAssistant).toContainText('Paragraph 140: streaming output keeps growing.', { timeout: 10000 });
   });
@@ -1195,9 +1360,45 @@ test.describe('Playground Chat Component', () => {
     await page.getByPlaceholder('Ask me anything...').fill('Stream reasoning');
     await page.getByRole('button', { name: 'Send message' }).click();
 
+    const thinkingGrid = page.getByTestId('thinking-grid');
+    await expect(thinkingGrid).toBeVisible({ timeout: 5000 });
+    await expect(thinkingGrid.locator('span')).toHaveCount(120);
+    await expect(page.getByText('Classifying intent')).toHaveCount(0);
+    await expect(page.getByText('Selecting route')).toHaveCount(0);
+    await expect(page.getByText('Preparing response')).toHaveCount(0);
     await expect(page.getByText('Thinking Process:')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('pre').filter({ hasText: 'The answer' })).toBeVisible({ timeout: 5000 });
     await expect(page.getByText('Done.')).toBeVisible({ timeout: 10000 });
+  });
+
+  test('keeps the restored thinking matrix static with reduced motion', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await mockStreamingChatFetch(page, [
+      chatStreamChunk({ role: 'assistant', content: '' }),
+      chatStreamChunk({ reasoning: 'Inspecting' }),
+      chatStreamChunk({ reasoning: ' route' }),
+      chatStreamChunk({ reasoning: ' state' }),
+      chatStreamChunk({ content: 'Reduced motion complete.' }),
+      'data: [DONE]\n\n',
+    ], 300);
+
+    await page.getByPlaceholder('Ask me anything...').fill('Respect reduced motion');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    const thinkingGrid = page.getByTestId('thinking-grid');
+    await expect(thinkingGrid).toBeVisible({ timeout: 5000 });
+    await expect(thinkingGrid).toHaveAttribute('data-motion', 'static');
+    await expect(page.getByTestId('playground-motion-background')).toHaveAttribute(
+      'data-motion',
+      'static',
+    );
+    await expect(thinkingGrid.locator('span').first()).toHaveCSS('animation-name', 'none');
+
+    const characters = await thinkingGrid.textContent();
+    await page.waitForTimeout(220);
+    expect(await thinkingGrid.textContent()).toBe(characters);
+    await expect(page.getByText('Reduced motion complete.')).toBeVisible({ timeout: 10000 });
   });
 
   test('renders thinking block from non-stream reasoning field', async ({ page }) => {

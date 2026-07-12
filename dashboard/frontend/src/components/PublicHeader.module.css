@@ -1,0 +1,129 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-canvas);
+}
+
+.inner {
+  width: min(1280px, 100%);
+  min-height: 68px;
+  margin: 0 auto;
+  padding: 0 clamp(1rem, 4vw, 3rem);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.72rem;
+  min-height: 44px;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 720;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.brand:hover {
+  color: #ffffff;
+}
+
+.logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.brandShort {
+  display: none;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.2rem;
+}
+
+.utilityLink,
+.dashboardLink {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 650;
+  letter-spacing: 0.015em;
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.utilityLink {
+  color: var(--text-secondary);
+}
+
+.utilityLink:hover {
+  color: #ffffff;
+}
+
+.dashboardLink {
+  margin-left: 0.55rem;
+  min-width: 142px;
+  border: 1px solid var(--color-primary-dark);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-dark);
+  color: #09090a;
+  white-space: nowrap;
+}
+
+.dashboardLink:hover {
+  border-color: var(--action-primary-bg);
+  background: var(--action-primary-bg);
+  color: #050505;
+}
+
+@media (max-width: 680px) {
+  .inner {
+    min-height: 62px;
+    gap: 0.75rem;
+  }
+
+  .brand {
+    gap: 0.5rem;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+  }
+
+  .brandLong {
+    display: none;
+  }
+
+  .brandShort {
+    display: inline;
+  }
+
+  .logo {
+    width: 24px;
+    height: 24px;
+  }
+
+  .utilityLink {
+    display: none;
+  }
+
+  .dashboardLink {
+    min-width: 0;
+    margin-left: 0;
+    padding: 0 0.72rem;
+    font-size: 0.72rem;
+  }
+}

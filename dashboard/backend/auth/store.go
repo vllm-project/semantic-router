@@ -121,41 +121,6 @@ func (s *Store) GetUserByID(ctx context.Context, userID string) (*User, error) {
 	return scanUser(row)
 }
 
-func (s *Store) ListUsers(ctx context.Context, statusFilter string, limit, offset int) ([]*User, error) {
-	if limit <= 0 || limit > 200 {
-		limit = defaultPageSize
-	}
-	q := `SELECT id, email, name, role, status, created_at, updated_at, last_login_at FROM users`
-	args := []interface{}{}
-	if statusFilter != "" {
-		q += ` WHERE status = ?`
-		args = append(args, statusFilter)
-	}
-	q += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
-	args = append(args, limit, offset)
-
-	rows, err := s.db.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	var out []*User
-	for rows.Next() {
-		u, err := scanUserRows(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, u)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (s *Store) UpdateUserRoleOrStatus(ctx context.Context, userID, role, status string) (*User, error) {
 	if role == "" && status == "" {
 		return s.GetUserByID(ctx, userID)

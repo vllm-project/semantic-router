@@ -2,14 +2,16 @@
 sidebar_position: 1
 description: vLLM Semantic Router 的研究导论，介绍这套基于 Envoy 的控制平面如何实现面向信号的 LLM 路由、策略执行与 token 效率优化。
 translation:
-  source_commit: "ab2aa160"
+  source_commit: "8fc3b86c"
   source_file: "docs/intro.md"
   outdated: false
 ---
 
 # vLLM Semantic Router
 
-vLLM Semantic Router 是一个面向 **LLM 路由（LLMRouting）** 与 **Token 经济** 前沿问题的研究型项目。我们为 **混合模型（Mixture-of-Models, MoM）** 构建系统级能力：如何捕获合适信号、选择合适模型路径、执行合适策略，并为每次请求花费合适的 token 预算。
+**构建 Mixture-of-Models：面向异构 LLM 推理的下一代模型架构。**
+
+**vLLM Semantic Router** 将信号与偏好转化为可执行的模型路径。
 
 项目位于客户端与模型后端之间，以 Envoy External Processor（`ext_proc`）形式运行，将路由从零散的应用逻辑提升为**可观测、可配置**的多模型系统控制面。
 

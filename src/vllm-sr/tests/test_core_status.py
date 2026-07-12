@@ -18,8 +18,8 @@ def test_check_envoy_status_uses_ready_probe_when_available(monkeypatch):
         captured.append((container_name, command))
         return (0, "200", "")
 
-    monkeypatch.setattr(core, "docker_exec", fake_exec)
-    monkeypatch.setattr(core, "docker_container_status", lambda _name: "running")
+    monkeypatch.setattr(core, "container_exec", fake_exec)
+    monkeypatch.setattr(core, "container_status", lambda _name: "running")
 
     assert core._check_envoy_status(stack_layout.envoy_container_name, stack_layout)
     assert captured == [
@@ -48,8 +48,8 @@ def test_check_envoy_status_falls_back_to_envoy_validate(monkeypatch):
         captured.append((container_name, command))
         return next(responses)
 
-    monkeypatch.setattr(core, "docker_exec", fake_exec)
-    monkeypatch.setattr(core, "docker_container_status", lambda _name: "running")
+    monkeypatch.setattr(core, "container_exec", fake_exec)
+    monkeypatch.setattr(core, "container_status", lambda _name: "running")
 
     assert core._check_envoy_status(stack_layout.envoy_container_name, stack_layout)
     assert captured == [
@@ -87,8 +87,8 @@ def test_check_envoy_status_does_not_fallback_for_non_envoy_container(monkeypatc
         captured.append((container_name, command))
         return (127, "", "curl missing")
 
-    monkeypatch.setattr(core, "docker_exec", fake_exec)
-    monkeypatch.setattr(core, "docker_container_status", lambda _name: "running")
+    monkeypatch.setattr(core, "container_exec", fake_exec)
+    monkeypatch.setattr(core, "container_status", lambda _name: "running")
 
     assert (
         core._check_envoy_status(stack_layout.router_container_name, stack_layout)
@@ -141,7 +141,7 @@ def test_never_pull_preflight_skips_dashboard_when_disabled(monkeypatch):
     monkeypatch.setattr(core, "get_runtime_images", fake_get_runtime_images)
     monkeypatch.setattr(
         core,
-        "get_fleet_sim_docker_image",
+        "get_fleet_sim_container_image",
         lambda image=None, pull_policy=None: sim_checks.append((image, pull_policy)),
     )
 
@@ -170,7 +170,7 @@ def test_never_pull_preflight_skips_sim_when_disabled(monkeypatch):
     )
     monkeypatch.setattr(
         core,
-        "get_fleet_sim_docker_image",
+        "get_fleet_sim_container_image",
         lambda image=None, pull_policy=None: sim_checks.append((image, pull_policy)),
     )
 

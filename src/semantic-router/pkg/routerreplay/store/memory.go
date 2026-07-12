@@ -186,6 +186,7 @@ func (m *MemoryStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 
 	rec.PromptTokens = cloneIntPtr(usage.PromptTokens)
 	rec.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
+	rec.CacheWriteTokens = cloneIntPtr(usage.CacheWriteTokens)
 	rec.CompletionTokens = cloneIntPtr(usage.CompletionTokens)
 	rec.TotalTokens = cloneIntPtr(usage.TotalTokens)
 	rec.ActualCost = cloneFloat64Ptr(usage.ActualCost)

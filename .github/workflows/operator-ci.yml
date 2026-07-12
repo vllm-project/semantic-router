@@ -21,7 +21,7 @@ on:
       - '.github/workflows/operator-ci.yml'
 
 env:
-  GO_VERSION: '1.24'
+  GO_VERSION: '1.25'
 
 jobs:
   lint:
@@ -53,12 +53,13 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
-      - name: Install golangci-lint
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.64.2
-
       - name: Run golangci-lint
-        run: $(go env GOPATH)/bin/golangci-lint run --timeout=5m
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.5.0
+          install-mode: binary
+          working-directory: deploy/operator
+          args: --timeout=5m
 
   test:
     name: Unit Tests
@@ -276,17 +277,27 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install operator-sdk
-        run: |
-          export ARCH=$(case $(uname -m) in x86_64) echo -n amd64 ;; aarch64) echo -n arm64 ;; *) echo -n $(uname -m) ;; esac)
-          export OS=$(uname | awk '{print tolower($0)}')
-          export OPERATOR_SDK_DL_URL=https://github.com/operator-framework/operator-sdk/releases/download/v1.34.1
-          curl -LO ${OPERATOR_SDK_DL_URL}/operator-sdk_${OS}_${ARCH}
-          chmod +x operator-sdk_${OS}_${ARCH}
-          sudo mv operator-sdk_${OS}_${ARCH} /usr/local/bin/operator-sdk
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
 
-      - name: Validate bundle
-        run: operator-sdk bundle validate ./bundle
+      - name: Regenerate bundle
+        # 'make bundle' installs pinned controller-gen/kustomize/operator-sdk into
+        # bin/, regenerates the manifests and OLM bundle, and runs
+        # 'operator-sdk bundle validate' as its final step.
+        run: make bundle
+
+      - name: Verify bundle is up to date
+        # Stage everything first so newly generated (untracked) files are caught
+        # and shown by the diff, not just modifications to tracked files.
+        run: |
+          git add -A -- .
+          if ! git diff --cached --quiet -- .; then
+            echo "::error::OLM bundle is out of date. Run 'make bundle' in deploy/operator and commit the regenerated bundle."
+            git diff --cached -- .
+            exit 1
+          fi
 
   integration-test:
     name: Integration Test (${{ matrix.cache-backend }})

@@ -38,6 +38,7 @@ func assignUsageCostFields(
 	record *Record,
 	promptTokens sql.NullInt64,
 	cachedPromptTokens sql.NullInt64,
+	cacheWriteTokens sql.NullInt64,
 	completionTokens sql.NullInt64,
 	totalTokens sql.NullInt64,
 	actualCost sql.NullFloat64,
@@ -53,6 +54,10 @@ func assignUsageCostFields(
 	if cachedPromptTokens.Valid {
 		value := int(cachedPromptTokens.Int64)
 		record.CachedPromptTokens = &value
+	}
+	if cacheWriteTokens.Valid {
+		value := int(cacheWriteTokens.Int64)
+		record.CacheWriteTokens = &value
 	}
 	if completionTokens.Valid {
 		value := int(completionTokens.Int64)
