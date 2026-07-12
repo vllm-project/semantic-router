@@ -110,6 +110,32 @@ func TestIntentRequestResolveSignalInput_AcceptsImageOnlyUserTurn(t *testing.T) 
 	assert.Equal(t, dataURI, input.imageURL)
 }
 
+func TestIntentRequestResolveSignalInput_CanonicalizesUppercaseImageURL(t *testing.T) {
+	// An uppercase-scheme data URI passes the safety gate, but the classifier
+	// backend scans for ";base64," case-sensitively. The resolved imageURL must be
+	// canonicalized (lowercase scheme/marker, payload preserved) so the image
+	// signal actually fires on the classify/eval path instead of silently dropping.
+	const rawURI = "DATA:IMAGE/PNG;BASE64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+	const canonicalURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{
+				Role: "user",
+				Content: mustMessageContent(t, []map[string]interface{}{
+					{"type": "text", "text": "What does this screenshot show?"},
+					{"type": "image_url", "image_url": map[string]string{"url": rawURI}},
+				}),
+			},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Equal(t, "What does this screenshot show?", input.evaluationText)
+	assert.Equal(t, canonicalURI, input.imageURL)
+}
+
 func TestIntentRequestResolveSignalInput_StringImageURLDoesNotPoisonText(t *testing.T) {
 	// Responses API shape: image_url is a bare string, not a {"url": ...} object.
 	// A string-valued part must not fail the whole content-parts unmarshal, which

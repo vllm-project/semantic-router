@@ -171,7 +171,7 @@ test.describe('Public and transition surfaces on short screens', () => {
     ).toBeVisible()
     await expect(
       page.getByText(
-        'Turn signals and preferences into executable model paths across heterogeneous LLMs.',
+        'System-level intelligence for heterogeneous LLM inference',
       ),
     ).toBeVisible()
     const exploreDocs = page.getByRole('button', { name: 'Explore the Docs' })

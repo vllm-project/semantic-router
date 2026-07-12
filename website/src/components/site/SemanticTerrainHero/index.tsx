@@ -50,7 +50,7 @@ export default function SemanticTerrainHero(): JSX.Element {
 
             <p className={styles.systemLabel}>
               <Translate id="homepage.hero.systemLabel">
-                System-level intelligence for heterogeneous LLM inference
+                The next-generation model architecture
               </Translate>
             </p>
 
@@ -67,8 +67,7 @@ export default function SemanticTerrainHero(): JSX.Element {
 
             <p className={styles.description}>
               <Translate id="homepage.hero.description">
-                Turn signals and preferences into executable model paths across
-                heterogeneous LLMs.
+                System-level intelligence for heterogeneous LLM inference
               </Translate>
             </p>
 
