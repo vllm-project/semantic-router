@@ -1439,21 +1439,13 @@
 .paperFigureSection,
 [data-theme='dark'] .paperFigureSection {
   padding: 5rem 0;
-  border-bottom: 1px solid var(--site-border);
-  background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.02), transparent 40%),
-    linear-gradient(180deg, #ffffff 0%, var(--site-bg-alt) 100%);
+  border-bottom: 0;
+  background: var(--site-bg);
 }
 
 .paperFigureSection::before,
 [data-theme='dark'] .paperFigureSection::before {
-  background:
-    radial-gradient(circle at 16% 18%, rgba(15, 23, 42, 0.05), transparent 34%),
-    radial-gradient(circle at 82% 78%, rgba(15, 23, 42, 0.03), transparent 32%),
-    linear-gradient(90deg, rgba(15, 23, 42, 0.03) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.03) 1px, transparent 1px);
-  background-size: auto, auto, 30px 30px, 30px 30px;
-  opacity: 0.34;
+  content: none;
 }
 
 .paperHeader,
@@ -1490,6 +1482,11 @@
 .agentNodeOutput,
 [data-theme='dark'] .agentNodeOutput {
   color: var(--site-muted-bright);
+}
+
+.paperLabel,
+[data-theme='dark'] .paperLabel {
+  color: var(--site-accent-strong);
 }
 
 .paperTitle,
@@ -1630,9 +1627,9 @@
 [data-theme='dark'] .transformerBlockActive,
 .transformerExitDotActive,
 [data-theme='dark'] .transformerExitDotActive {
-  border-color: var(--site-border-strong);
-  background: var(--site-surface-alt);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  border-color: rgba(48, 162, 255, 0.5);
+  background: var(--site-accent-soft);
+  box-shadow: 0 0 0 1px rgba(48, 162, 255, 0.08);
 }
 
 .figureIndex,
@@ -1655,7 +1652,7 @@
 [data-theme='dark'] .transformerExitDot {
   border: 1px solid var(--site-border);
   background: rgba(255, 255, 255, 0.05);
-  color: var(--site-text);
+  color: var(--site-accent-strong);
 }
 
 .tokenTagMuted,
@@ -1683,8 +1680,8 @@
 [data-theme='dark'] .agentLoopReturnArrow,
 .transformerArrow,
 [data-theme='dark'] .transformerArrow {
-  color: rgba(15, 23, 42, 0.78);
-  text-shadow: 0 0 0.01px rgba(15, 23, 42, 0.45);
+  color: var(--site-muted-bright);
+  text-shadow: 0 0 12px rgba(48, 162, 255, 0.18);
 }
 
 .entropyLabelActive,
@@ -1698,7 +1695,7 @@
 [data-theme='dark'] .transformerEntropyBar,
 .transformerDepthBars span,
 [data-theme='dark'] .transformerDepthBars span {
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(79, 70, 229, 0.24));
+  background: linear-gradient(180deg, var(--site-accent), rgba(48, 162, 255, 0.22));
 }
 
 .agentLoopTrack,
@@ -1709,8 +1706,8 @@
 [data-theme='dark'] .transformerExitLane,
 .transformerEntropyTrack,
 [data-theme='dark'] .transformerEntropyTrack {
-  border-color: rgba(15, 23, 42, 0.18);
-  background: rgba(15, 23, 42, 0.035);
+  border-color: var(--site-border-strong);
+  background: rgba(255, 255, 255, 0.028);
 }
 
 .figureCanvas,

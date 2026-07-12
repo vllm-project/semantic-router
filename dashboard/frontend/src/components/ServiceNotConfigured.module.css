@@ -4,18 +4,17 @@
   justify-content: center;
   height: 100%;
   padding: 2rem;
-  background-color: var(--color-bg);
+  background: #09090b;
 }
 
 .card {
   max-width: 480px;
   padding: 2.5rem;
-  background-color: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  text-align: center;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
-    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  background: #101012;
+  border: 1px solid #303036;
+  border-radius: 6px;
+  text-align: left;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.3);
 }
 
 .iconWrapper {
@@ -25,14 +24,15 @@
   width: 64px;
   height: 64px;
   margin-bottom: 1.5rem;
-  background-color: var(--color-warning-bg, rgba(245, 158, 11, 0.1));
-  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.24);
+  border-radius: 4px;
 }
 
 .icon {
   width: 32px;
   height: 32px;
-  color: var(--color-warning, #f59e0b);
+  color: #ef4444;
 }
 
 .title {
@@ -51,9 +51,9 @@
 
 .configSection {
   padding: 1.25rem;
-  background-color: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  background: #09090b;
+  border: 1px solid #27272a;
+  border-radius: 4px;
   text-align: left;
 }
 
@@ -73,11 +73,12 @@
 .envVar {
   display: block;
   padding: 0.625rem 0.875rem;
-  background-color: var(--color-bg-tertiary, rgba(0, 0, 0, 0.2));
-  border-radius: var(--radius-sm);
+  background: #18181b;
+  border: 1px solid #303036;
+  border-radius: 4px;
   font-family: var(--font-mono);
   font-size: 0.875rem;
-  color: var(--color-primary);
+  color: #fca5a5;
   word-break: break-all;
 }
 
@@ -97,8 +98,8 @@
 .exampleCode {
   display: block;
   padding: 0.5rem 0.75rem;
-  background-color: var(--color-bg-tertiary, rgba(0, 0, 0, 0.2));
-  border-radius: var(--radius-sm);
+  background: #18181b;
+  border-radius: 4px;
   font-family: var(--font-mono);
   font-size: 0.75rem;
   color: var(--color-text-secondary);
@@ -109,7 +110,7 @@
   display: flex;
   gap: 0.75rem;
   margin-top: 1.5rem;
-  justify-content: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
 }
 
@@ -120,7 +121,7 @@
   padding: 0.625rem 1rem;
   background-color: transparent;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: 4px;
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--color-text);
@@ -129,9 +130,9 @@
 }
 
 .docsLink:hover {
-  background-color: var(--color-bg);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  background: #18181b;
+  border-color: #ef4444;
+  color: #fca5a5;
 }
 
 .linkIcon {
@@ -144,9 +145,9 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.625rem 1rem;
-  background-color: var(--color-primary);
+  background: #ef4444;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: 4px;
   font-size: 0.875rem;
   font-weight: 500;
   color: white;
@@ -155,7 +156,7 @@
 }
 
 .retryButton:hover {
-  background-color: var(--color-primary-dark);
+  background: #dc2626;
 }
 
 .retryIcon {

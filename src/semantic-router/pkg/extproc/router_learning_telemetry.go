@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelpricing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
@@ -35,7 +36,11 @@ func (r *OpenAIRouter) observeRouterLearningUsageTelemetry(
 	cacheObserved := promptTokens > 0
 	if promptTokens > 0 {
 		cacheHitRatio = float64(usage.cachedPromptTokens) / float64(promptTokens)
-		cacheWritePressure = float64(promptTokens-usage.cachedPromptTokens) / float64(promptTokens)
+		if usage.cacheWriteTokensReported {
+			cacheWritePressure = float64(usage.cacheWriteTokens) / float64(promptTokens)
+		} else {
+			cacheWritePressure = float64(promptTokens-usage.cachedPromptTokens) / float64(promptTokens)
+		}
 	}
 	inputCostMultiplier := r.learningInputCostMultiplier(ctx.RequestModel, usage)
 	r.routerLearningRuntimeState().recordModelTelemetry(
@@ -91,15 +96,7 @@ func (r *OpenAIRouter) learningInputCostMultiplier(model string, usage responseU
 	if !ok || pricing.PromptPer1M <= 0 {
 		return 0
 	}
-	cached := clampCachedPromptTokensInt(usage.promptTokens, usage.cachedPromptTokens)
-	uncached := usage.promptTokens - cached
-	actualPromptCost := float64(uncached)*pricing.PromptPer1M +
-		float64(cached)*pricing.CachedInputPer1M
-	fullPromptCost := float64(usage.promptTokens) * pricing.PromptPer1M
-	if fullPromptCost <= 0 {
-		return 0
-	}
-	return clamp01(actualPromptCost / fullPromptCost)
+	return clamp01(modelpricing.InputCostMultiplier(modelPricingUsage(usage), modelPricingRates(pricing)))
 }
 
 func (rt *routerLearningRuntime) recordModelTelemetry(

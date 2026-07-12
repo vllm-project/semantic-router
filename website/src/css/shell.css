@@ -5,10 +5,10 @@
   right: 0;
   height: var(--site-header-height);
   min-height: var(--site-header-height);
-  border-bottom: 1px solid var(--site-border);
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(18px);
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
+  border-bottom: 1px solid #27272a;
+  background: rgba(5, 5, 5, 0.97);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
 }
 
 .main-wrapper {
@@ -36,7 +36,7 @@
 }
 
 .navbar__title {
-  color: var(--site-text-strong);
+  color: #fafafa;
   font-size: 1.08rem;
   font-weight: 500;
   letter-spacing: 0;
@@ -67,17 +67,15 @@
   margin: 0;
 }
 
-@media (min-width: 1320px) {
+@media (min-width: 1100px) {
   .navbar__items--left,
   .navbar__items--right {
     gap: 0.18rem;
-    padding: 0.26rem;
-    border: 1px solid var(--site-border);
-    border-radius: 999px;
-    background: var(--site-surface-glass);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.72),
-      0 10px 24px rgba(15, 23, 42, 0.04);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .navbar__items--right {
@@ -85,7 +83,10 @@
   }
 }
 
-.navbar__link,
+.navbar__link {
+  color: #d4d4d8;
+}
+
 .dropdown__link,
 .menu__link {
   color: var(--site-text);
@@ -110,7 +111,7 @@
   min-height: 2.3rem;
   padding: 0.58rem 0.82rem;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: 0;
   font-size: 0.73rem;
   font-weight: 550;
   line-height: 1;
@@ -124,9 +125,10 @@
 .navbar__item.dropdown > .navbar__link:hover,
 .navbar__item.dropdown.dropdown--show > .navbar__link,
 .navbar__item.dropdown > .navbar__link.navbar__link--active {
-  background: var(--site-text);
-  color: var(--site-bg);
-  border-color: var(--site-text);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: inset 0 -2px #e31b23;
 }
 
 .navbar__item.navbar__link.nav-utility,
@@ -146,14 +148,15 @@
 .navbar__item.navbar__link.nav-utility:focus-visible,
 .navbar__items--right > .navbar__item.navbar__link.nav-utility:hover,
 .navbar__items--right > .navbar__item.navbar__link.nav-utility:focus-visible {
-  background: var(--site-text);
-  color: var(--site-bg);
-  border-color: var(--site-text);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: inset 0 -2px #e31b23;
 }
 
-html[data-route-kind='home'] .nav-docs-only,
-html[data-route-kind='page'] .nav-docs-only,
-html[data-route-kind='blog'] .nav-docs-only {
+html[data-route-kind="home"] .nav-docs-only,
+html[data-route-kind="page"] .nav-docs-only,
+html[data-route-kind="blog"] .nav-docs-only {
   display: none;
 }
 
@@ -181,9 +184,9 @@ html[data-route-kind='blog'] .nav-docs-only {
 }
 
 .footer {
-  border-top: 1px solid var(--site-border);
+  border-top: 1px solid #27272a;
   padding: 4rem 0 2rem;
-  background: transparent;
+  background: #050505;
 }
 
 .footer__links {
@@ -195,7 +198,7 @@ html[data-route-kind='blog'] .nav-docs-only {
 
 .footer__title {
   margin-bottom: 1rem;
-  color: var(--site-muted-bright);
+  color: #a1a1aa;
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.18em;
@@ -204,7 +207,7 @@ html[data-route-kind='blog'] .nav-docs-only {
 .footer__link-item {
   display: inline-block;
   margin-bottom: 0.85rem;
-  color: var(--site-text-strong);
+  color: #f4f4f5;
   opacity: 0.72;
   transition: opacity 180ms ease;
 }
@@ -216,8 +219,8 @@ html[data-route-kind='blog'] .nav-docs-only {
 .footer__bottom {
   margin-top: 3rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--site-border);
-  color: var(--site-muted);
+  border-top: 1px solid #27272a;
+  color: #71717a;
   font-size: 0.74rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -249,7 +252,7 @@ html[data-route-kind='blog'] .nav-docs-only {
   color: var(--site-text);
 }
 
-@media (max-width: 1319px) {
+@media (max-width: 1099px) {
   :root {
     --site-header-height: 4.25rem;
   }
@@ -274,11 +277,11 @@ html[data-route-kind='blog'] .nav-docs-only {
     width: 2.4rem;
     height: 2.4rem;
     margin-right: 0.2rem;
-    border: 1px solid var(--site-border);
-    border-radius: 999px;
-    color: var(--site-text-strong);
-    background: rgba(255, 255, 255, 0.78);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    border: 1px solid #3f3f46;
+    border-radius: 4px;
+    color: #fafafa;
+    background: #18181b;
+    box-shadow: none;
     transition:
       background 180ms ease,
       border-color 180ms ease,
@@ -286,9 +289,9 @@ html[data-route-kind='blog'] .nav-docs-only {
   }
 
   .navbar__toggle:hover {
-    border-color: var(--site-border-strong);
-    background: var(--site-text);
-    color: var(--site-bg);
+    border-color: #e31b23;
+    background: #27272a;
+    color: #ffffff;
   }
 
   .navbar__toggle svg {
@@ -321,20 +324,20 @@ html[data-route-kind='blog'] .nav-docs-only {
   }
 
   .navbar-sidebar__backdrop {
-    background: rgba(15, 23, 42, 0.34);
+    background: rgba(0, 0, 0, 0.62);
     backdrop-filter: blur(4px);
   }
 
   .navbar-sidebar {
     width: var(--ifm-navbar-sidebar-width);
-    border-right: 1px solid var(--site-border);
-    background: rgba(255, 255, 255, 0.98);
-    box-shadow: 20px 0 44px rgba(15, 23, 42, 0.12);
+    border-right: 1px solid #27272a;
+    background: #09090b;
+    box-shadow: 20px 0 44px rgba(0, 0, 0, 0.36);
   }
 
   .navbar-sidebar__brand {
     height: var(--site-header-height);
-    border-bottom: 1px solid var(--site-border);
+    border-bottom: 1px solid #27272a;
     box-shadow: none;
   }
 
@@ -350,11 +353,17 @@ html[data-route-kind='blog'] .nav-docs-only {
   }
 
   .navbar-sidebar .menu__link {
-    color: var(--site-text-strong);
+    color: #e4e4e7;
     font-size: 0.86rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;
+  }
+
+  .navbar-sidebar .menu__link:hover,
+  .navbar-sidebar .menu__link--active {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ffffff;
   }
 
   .footer__links {
@@ -368,7 +377,7 @@ html[data-route-kind='blog'] .nav-docs-only {
   }
 }
 
-@media (min-width: 640px) and (max-width: 1319px) {
+@media (min-width: 640px) and (max-width: 1099px) {
   :root {
     --ifm-navbar-sidebar-width: 24rem;
   }

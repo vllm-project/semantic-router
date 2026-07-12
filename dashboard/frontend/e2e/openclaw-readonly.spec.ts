@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mockAuthenticatedSession } from './support/auth';
+import { openComposerAddMenu } from './support/playground';
 
 const setupState = {
   setupMode: false,
@@ -124,6 +125,22 @@ async function mockReadonlyCommon(page: Page) {
   await page.route('**/api/mcp/tools', async route => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tools: [] }) });
   });
+
+  await page.route('**/api/router/v1/models*', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        object: 'list',
+        data: [{
+          id: 'vllm-sr/auto',
+          object: 'model',
+          owned_by: 'vllm-semantic-router',
+          description: 'Intelligent Router for Mixture-of-Models',
+        }],
+      }),
+    });
+  });
 }
 
 async function mockReadonlyOpenClaw(page: Page) {
@@ -155,10 +172,19 @@ async function mockReadonlyOpenClaw(page: Page) {
 }
 
 async function enableHireClaw(page: Page) {
-  const toggle = page.getByRole('button', { name: 'Enable HireClaw' });
+  const menu = await openComposerAddMenu(page);
+  const toggle = menu.getByRole('menuitemcheckbox', { name: 'Enable HireClaw' });
   await expect(toggle).toBeVisible();
   await toggle.click();
-  await expect(page.getByRole('button', { name: /Open ClawRoom view|Exit ClawRoom view/i })).toBeVisible();
+  await expect(menu.getByRole('menuitemcheckbox', { name: /Open ClawRoom view|Exit ClawRoom view/i })).toBeVisible();
+  await page.keyboard.press('Escape');
+}
+
+async function enterClawRoom(page: Page) {
+  const menu = await openComposerAddMenu(page);
+  const toggle = menu.getByRole('menuitemcheckbox', { name: 'Open ClawRoom view' });
+  await expect(toggle).toBeEnabled();
+  await toggle.click();
 }
 
 test.describe('Readonly OpenClaw', () => {
@@ -202,7 +228,7 @@ test.describe('Readonly OpenClaw', () => {
 
     await page.goto('/playground');
     await enableHireClaw(page);
-    await page.getByRole('button', { name: 'Open ClawRoom view' }).click();
+    await enterClawRoom(page);
 
     await expect(page.getByRole('button', { name: 'New room' })).toBeDisabled();
     await page.getByRole('button', { name: 'Open sidebar' }).click();
@@ -253,7 +279,7 @@ test.describe('Readonly OpenClaw', () => {
 
     await page.goto('/playground');
     await enableHireClaw(page);
-    await page.getByRole('button', { name: 'Open ClawRoom view' }).click();
+    await enterClawRoom(page);
 
     const header = page.getByTestId('claw-room-header');
     const transcript = page.getByTestId('claw-room-transcript');
@@ -297,12 +323,12 @@ test.describe('Readonly OpenClaw', () => {
     expect(userBox!.width).toBeLessThan(transcriptBox!.width * 0.8);
   });
 
-  test('room view opens the lower-left account dialog over the full page', async ({ page }) => {
+  test('room view opens the lower-left account dropdown over the full page', async ({ page }) => {
     await mockReadonlyOpenClaw(page);
 
     await page.goto('/playground');
     await enableHireClaw(page);
-    await page.getByRole('button', { name: 'Open ClawRoom view' }).click();
+    await enterClawRoom(page);
 
     const accountButton = page.getByTestId('playground-account-control');
     await expect(accountButton).toBeVisible();
@@ -327,33 +353,31 @@ test.describe('Readonly OpenClaw', () => {
     expect(Math.abs(overlayBox!.width - viewport!.width)).toBeLessThan(4);
     expect(Math.abs(overlayBox!.height - viewport!.height)).toBeLessThan(4);
 
-    const dialogCenterX = dialogBox!.x + dialogBox!.width / 2;
-    const dialogCenterY = dialogBox!.y + dialogBox!.height / 2;
-
-    expect(Math.abs(dialogCenterX - viewport!.width / 2)).toBeLessThan(100);
-    expect(Math.abs(dialogCenterY - viewport!.height / 2)).toBeLessThan(120);
+    expect(dialogBox!.x).toBeLessThan(120);
+    expect(Math.abs(dialogBox!.y + dialogBox!.height - viewport!.height)).toBeLessThan(40);
+    expect(dialogBox!.width).toBeLessThanOrEqual(400);
   });
 
-  test('openclaw page stays browsable but disables management and embedded dashboard entry', async ({ page }) => {
+  test('openclaw page stays browsable while hiding management and embedded dashboard entry', async ({ page }) => {
     await mockReadonlyOpenClaw(page);
 
     await page.goto('/clawos');
 
-    await page.getByRole('button', { name: /Claw Team/ }).click();
-    await expect(page.getByRole('button', { name: 'New Team' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Edit' }).first()).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Delete' }).first()).toBeDisabled();
+    await page.getByRole('tab', { name: /Claw Team/ }).click();
+    await expect(page.getByRole('button', { name: 'New Team' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Delete' })).toHaveCount(0);
 
-    await page.getByRole('button', { name: /Claw Worker/ }).click();
-    await expect(page.getByRole('button', { name: 'New Worker' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Edit' }).first()).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Delete' }).first()).toBeDisabled();
+    await page.getByRole('tab', { name: /Claw Worker/ }).click();
+    await expect(page.getByRole('button', { name: 'New Worker' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Delete' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Status' }).first()).toBeEnabled();
 
-    await page.getByRole('button', { name: /Claw Dashboard/ }).click();
-    await expect(page.getByRole('button', { name: 'Dashboard', exact: true })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Stop' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Remove' })).toBeDisabled();
+    await page.getByRole('tab', { name: /Claw Dashboard/ }).click();
+    await expect(page.getByRole('button', { name: 'Dashboard', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Stop' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Remove' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Refresh Status' })).toBeEnabled();
     await expect(page.locator('iframe[title*="OpenClaw Control UI"]')).toHaveCount(0);
   });

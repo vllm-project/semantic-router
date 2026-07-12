@@ -84,6 +84,11 @@ const (
 	// Example values: "deepseek-v31", "phi4", "gpt-4"
 	VSRSelectedModel = "x-vsr-selected-model"
 
+	// VSRSelectedAlgorithm indicates the model-selection algorithm used after
+	// the routing decision matched. Example values: "static", "elo", "knn",
+	// "router_dc", "fusion", "remom", "workflows".
+	VSRSelectedAlgorithm = "x-vsr-selected-algorithm"
+
 	// VSRSessionPhase indicates the Router Learning protection phase.
 	// Example values: "user_turn", "tool_loop", "provider_state"
 	VSRSessionPhase = "x-vsr-session-phase"

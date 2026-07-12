@@ -366,10 +366,10 @@ const EntityListView: React.FC<EntityListViewProps> = ({
     string,
     { title: string; icon: React.FC<{ className?: string }>; color: string }
   > = {
-    model: { title: "Models", icon: ModelIcon, color: "rgb(251, 191, 36)" },
-    signal: { title: "Signals", icon: SignalIcon, color: "rgb(118, 185, 0)" },
-    route: { title: "Routes", icon: RouteIcon, color: "rgb(96, 165, 250)" },
-    plugin: { title: "Plugins", icon: PluginIcon, color: "rgb(168, 130, 255)" },
+    model: { title: "Models", icon: ModelIcon, color: "rgb(212, 212, 216)" },
+    signal: { title: "Signals", icon: SignalIcon, color: "rgb(161, 161, 170)" },
+    route: { title: "Routes", icon: RouteIcon, color: "rgb(244, 244, 245)" },
+    plugin: { title: "Plugins", icon: PluginIcon, color: "rgb(113, 113, 122)" },
   };
   const meta = META[kind];
   if (!meta) return null;

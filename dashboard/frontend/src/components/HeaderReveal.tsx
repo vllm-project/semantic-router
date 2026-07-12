@@ -10,11 +10,7 @@ interface HeaderRevealProps {
 
 // Header metadata for display
 const HEADER_INFO: Record<string, { label: string; description: string }> = {
-  // Response contract (v0.4 keystone) headers (#2203)
-  'x-vsr-schema-version': {
-    label: 'Schema Version',
-    description: 'Response header contract revision',
-  },
+  // Response outcome. The schema version is intentionally not user-facing.
   'x-vsr-response-path': {
     label: 'Response Path',
     description: 'How the response was produced (upstream, cache, fast_response, looper, ...)',
@@ -106,6 +102,10 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Selected Model',
     description: 'The model chosen by the router',
   },
+  'x-vsr-selected-algorithm': {
+    label: 'Algorithm',
+    description: 'The model-selection algorithm used for this route',
+  },
   'x-vsr-selected-modality': {
     label: 'Selected Modality',
     description: 'The modality chosen by the router',
@@ -186,18 +186,25 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
 }
 
 const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRevealProps) => {
-  const [isVisible, setIsVisible] = useState(true)
+  const [phase, setPhase] = useState<'visible' | 'exiting' | 'complete'>('visible')
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsVisible(false)
-      setTimeout(() => onComplete?.(), 300) // Wait for fade out animation
+    let completionTimer: ReturnType<typeof setTimeout> | undefined
+    const displayTimer = setTimeout(() => {
+      setPhase('exiting')
+      completionTimer = setTimeout(() => {
+        setPhase('complete')
+        onComplete?.()
+      }, 300)
     }, displayDuration)
 
-    return () => clearTimeout(timer)
+    return () => {
+      clearTimeout(displayTimer)
+      if (completionTimer) clearTimeout(completionTimer)
+    }
   }, [displayDuration, onComplete])
 
-  if (!isVisible) {
+  if (phase === 'complete') {
     return null
   }
 
@@ -205,17 +212,28 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
 
   // Group headers by category based on the comments in HEADER_INFO
   const groupedHeaders = {
-    // Response contract (keystone) headers: schema-version + response-path
-    response: displayHeaders.filter(
-      ([key]) => key === 'x-vsr-schema-version' || key === 'x-vsr-response-path',
-    ),
+    // Response outcome: internal response-contract versions stay hidden.
+    response: displayHeaders.filter(([key]) => key === 'x-vsr-response-path'),
     // Signal headers: all x-vsr-matched-*
     signals: displayHeaders.filter(([key]) => key.startsWith('x-vsr-matched-')),
     // Decision headers: selected-decision
     decision: displayHeaders.filter(([key]) => key === 'x-vsr-selected-decision'),
-    // Model selection headers: selected-model
+    // Prefer the generic route-selection algorithm and retain the looper header
+    // as a compatibility fallback for older router responses.
+    algorithm: displayHeaders.filter(([key]) =>
+      displayHeaders.some(
+        ([candidate, value]) => candidate === 'x-vsr-selected-algorithm' && value.trim() !== '',
+      )
+        ? key === 'x-vsr-selected-algorithm'
+        : key === 'x-vsr-looper-algorithm',
+    ),
+    // Model selection headers: selected and final model path.
     model: displayHeaders.filter(
-      ([key]) => key === 'x-vsr-selected-model' || key === 'x-vsr-selected-modality',
+      ([key]) =>
+        key === 'x-vsr-selected-model' ||
+        key === 'x-vsr-selected-modality' ||
+        key === 'x-vsr-looper-model' ||
+        key === 'x-vsr-looper-models-used',
     ),
     // Router Learning headers: bounded primary adaptation summary
     learning: displayHeaders.filter(([key]) => key.startsWith('x-vsr-learning')),
@@ -228,8 +246,14 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
         key === 'x-vsr-context-token-count' ||
         key === 'x-vsr-response-warnings',
     ),
-    // Looper headers: all x-vsr-looper-*
-    looper: displayHeaders.filter(([key]) => key.startsWith('x-vsr-looper-')),
+    // Remaining multi-model execution details.
+    looper: displayHeaders.filter(
+      ([key]) =>
+        key.startsWith('x-vsr-looper-') &&
+        key !== 'x-vsr-looper-algorithm' &&
+        key !== 'x-vsr-looper-model' &&
+        key !== 'x-vsr-looper-models-used',
+    ),
     // Retention directive headers: all x-vsr-retention-*
     retention: displayHeaders.filter(([key]) => key.startsWith('x-vsr-retention-')),
   }
@@ -261,17 +285,27 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
   }
 
   return (
-    <div className={`${styles.overlay} ${!isVisible ? styles.fadeOut : ''}`}>
+    <div
+      className={`${styles.overlay} ${phase === 'exiting' ? styles.fadeOut : ''}`}
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      aria-label="Semantic Router decision path"
+    >
       <div className={styles.container}>
-        <div className={styles.title}>Router Decision</div>
+        <div className={styles.title}>Routing this request</div>
         <div className={styles.sections}>
-          {renderSection('RESPONSE', groupedHeaders.response, true)}
-          {renderSection('MODEL', groupedHeaders.model, true)}
-          {renderSection('DECISION', groupedHeaders.decision, true)}
+          <div className={styles.pathLabel}>DECISION PATH</div>
+          <div className={styles.decisionPath}>
+            {renderSection('SIGNAL', groupedHeaders.signals, true)}
+            {renderSection('DECISION', groupedHeaders.decision, true)}
+            {renderSection('ALGORITHM', groupedHeaders.algorithm, true)}
+            {renderSection('MODEL', groupedHeaders.model, true)}
+            {renderSection('RESPONSE PATH', groupedHeaders.response, true)}
+          </div>
           {renderSection('LEARNING', groupedHeaders.learning)}
-          {renderSection('SIGNALS', groupedHeaders.signals)}
           {renderSection('PLUGIN', groupedHeaders.plugin)}
-          {renderSection('LOOPER', groupedHeaders.looper)}
+          {renderSection('EXECUTION', groupedHeaders.looper)}
           {renderSection('RETENTION', groupedHeaders.retention)}
         </div>
         <div className={styles.hint}>Response will appear shortly...</div>

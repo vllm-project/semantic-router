@@ -29,8 +29,8 @@ function buildOpenClawEndpoint(origin?: string): string {
 /**
  * 获取所有 MCP 服务器状态
  */
-export async function getServers(): Promise<MCPServerState[]> {
-  const response = await fetch(`${API_BASE}/servers`)
+export async function getServers(signal?: AbortSignal): Promise<MCPServerState[]> {
+  const response = await fetch(`${API_BASE}/servers`, { signal })
   if (!response.ok) {
     throw new Error(`Failed to get servers: ${response.statusText}`)
   }
@@ -47,10 +47,10 @@ export async function ensureOpenClawServerConnected(origin?: string): Promise<MC
   const servers = await getServers()
 
   let server = servers.find(
-    s =>
+    (s) =>
       s.config.id === OPENCLAW_MCP_SERVER_ID ||
       s.config.connection?.url === endpointURL ||
-      s.config.name === OPENCLAW_MCP_SERVER_NAME
+      s.config.name === OPENCLAW_MCP_SERVER_NAME,
   )
 
   if (!server) {
@@ -74,10 +74,10 @@ export async function ensureOpenClawServerConnected(origin?: string): Promise<MC
 
     const refreshedServers = await getServers()
     server = refreshedServers.find(
-      s =>
+      (s) =>
         s.config.id === OPENCLAW_MCP_SERVER_ID ||
         s.config.connection?.url === endpointURL ||
-        s.config.name === OPENCLAW_MCP_SERVER_NAME
+        s.config.name === OPENCLAW_MCP_SERVER_NAME,
     )
   }
 
@@ -95,11 +95,15 @@ export async function ensureOpenClawServerConnected(origin?: string): Promise<MC
 /**
  * 创建 MCP 服务器配置
  */
-export async function createServer(config: Omit<MCPServerConfig, 'id'> & { id?: string }): Promise<MCPServerConfig> {
+export async function createServer(
+  config: Omit<MCPServerConfig, 'id'> & { id?: string },
+  signal?: AbortSignal,
+): Promise<MCPServerConfig> {
   const response = await fetch(`${API_BASE}/servers`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config),
+    signal,
   })
   if (!response.ok) {
     const error = await response.text()
@@ -111,11 +115,16 @@ export async function createServer(config: Omit<MCPServerConfig, 'id'> & { id?: 
 /**
  * 更新 MCP 服务器配置
  */
-export async function updateServer(id: string, config: Partial<MCPServerConfig>): Promise<MCPServerConfig> {
-  const response = await fetch(`${API_BASE}/servers/${id}`, {
+export async function updateServer(
+  id: string,
+  config: Partial<MCPServerConfig>,
+  signal?: AbortSignal,
+): Promise<MCPServerConfig> {
+  const response = await fetch(`${API_BASE}/servers/${encodeURIComponent(id)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...config, id }),
+    signal,
   })
   if (!response.ok) {
     const error = await response.text()
@@ -127,9 +136,10 @@ export async function updateServer(id: string, config: Partial<MCPServerConfig>)
 /**
  * 删除 MCP 服务器配置
  */
-export async function deleteServer(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/servers/${id}`, {
+export async function deleteServer(id: string, signal?: AbortSignal): Promise<void> {
+  const response = await fetch(`${API_BASE}/servers/${encodeURIComponent(id)}`, {
     method: 'DELETE',
+    signal,
   })
   if (!response.ok) {
     const error = await response.text()
@@ -140,9 +150,10 @@ export async function deleteServer(id: string): Promise<void> {
 /**
  * 连接到 MCP 服务器
  */
-export async function connectServer(id: string): Promise<MCPServerState> {
-  const response = await fetch(`${API_BASE}/servers/${id}/connect`, {
+export async function connectServer(id: string, signal?: AbortSignal): Promise<MCPServerState> {
+  const response = await fetch(`${API_BASE}/servers/${encodeURIComponent(id)}/connect`, {
     method: 'POST',
+    signal,
   })
   if (!response.ok) {
     const error = await response.text()
@@ -154,9 +165,10 @@ export async function connectServer(id: string): Promise<MCPServerState> {
 /**
  * 断开与 MCP 服务器的连接
  */
-export async function disconnectServer(id: string): Promise<MCPServerState> {
-  const response = await fetch(`${API_BASE}/servers/${id}/disconnect`, {
+export async function disconnectServer(id: string, signal?: AbortSignal): Promise<MCPServerState> {
+  const response = await fetch(`${API_BASE}/servers/${encodeURIComponent(id)}/disconnect`, {
     method: 'POST',
+    signal,
   })
   if (!response.ok) {
     const error = await response.text()
@@ -168,8 +180,8 @@ export async function disconnectServer(id: string): Promise<MCPServerState> {
 /**
  * 获取 MCP 服务器状态
  */
-export async function getServerStatus(id: string): Promise<MCPServerState> {
-  const response = await fetch(`${API_BASE}/servers/${id}/status`)
+export async function getServerStatus(id: string, signal?: AbortSignal): Promise<MCPServerState> {
+  const response = await fetch(`${API_BASE}/servers/${encodeURIComponent(id)}/status`, { signal })
   if (!response.ok) {
     throw new Error(`Failed to get server status: ${response.statusText}`)
   }
@@ -179,11 +191,15 @@ export async function getServerStatus(id: string): Promise<MCPServerState> {
 /**
  * 测试 MCP 服务器连接
  */
-export async function testConnection(config: MCPServerConfig): Promise<MCPTestConnectionResponse> {
+export async function testConnection(
+  config: MCPServerConfig,
+  signal?: AbortSignal,
+): Promise<MCPTestConnectionResponse> {
   const response = await fetch(`${API_BASE}/servers/test`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config),
+    signal,
   })
   if (!response.ok) {
     throw new Error(`Failed to test connection: ${response.statusText}`)
@@ -194,8 +210,8 @@ export async function testConnection(config: MCPServerConfig): Promise<MCPTestCo
 /**
  * 获取所有可用的 MCP 工具
  */
-export async function getTools(): Promise<MCPTool[]> {
-  const response = await fetch(`${API_BASE}/tools`)
+export async function getTools(signal?: AbortSignal): Promise<MCPTool[]> {
+  const response = await fetch(`${API_BASE}/tools`, { signal })
   if (!response.ok) {
     throw new Error(`Failed to get tools: ${response.statusText}`)
   }
@@ -209,7 +225,7 @@ export async function getTools(): Promise<MCPTool[]> {
 export async function executeTool(
   serverId: string,
   toolName: string,
-  args: unknown
+  args: unknown,
 ): Promise<MCPToolResult> {
   const response = await fetch(`${API_BASE}/tools/execute`, {
     method: 'POST',
@@ -234,13 +250,13 @@ export async function* executeToolStreaming(
   serverId: string,
   toolName: string,
   args: unknown,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): AsyncGenerator<MCPStreamChunk, MCPToolResult, unknown> {
   const response = await fetch(`${API_BASE}/tools/execute/stream`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Accept': 'text/event-stream',
+      Accept: 'text/event-stream',
     },
     body: JSON.stringify({
       server_id: serverId,

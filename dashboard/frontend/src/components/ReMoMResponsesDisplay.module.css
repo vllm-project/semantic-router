@@ -26,7 +26,7 @@
   margin-left: auto;
   padding: 0.125rem 0.5rem;
   background: var(--color-primary);
-  color: white;
+  color: #09090a;
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 500;
@@ -211,4 +211,3 @@
   margin: 0.75em 0 0.5em 0;
   font-weight: 600;
 }
-
