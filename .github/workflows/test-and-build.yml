@@ -225,8 +225,10 @@ jobs:
           SKIP_VALKEY_TESTS: false
           VALKEY_HOST: localhost
           VALKEY_PORT: 6380
-          # HF_TOKEN is required for downloading gated models (e.g., embeddinggemma-300m)
-          # For PRs from forks, this will be empty and gated models will gracefully skip
+          # HF_TOKEN is required for downloading gated models (e.g., embeddinggemma-300m).
+          # For PRs from forks it is empty: gated models still gracefully skip, but
+          # public-repo transient failures (429/404/network) now surface instead of
+          # being masked as gated skips.
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
 
