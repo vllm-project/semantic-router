@@ -3,6 +3,8 @@
 package apiserver
 
 import (
+	"errors"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -103,6 +105,47 @@ func TestValidateEmbeddingRequestAcceptsUppercaseDataURIScheme(t *testing.T) {
 
 	if _, _, ok := validateEmbeddingRequest(req, nil); !ok {
 		t.Fatalf("expected uppercase-scheme data URI to be accepted")
+	}
+}
+
+func TestBuildEmbeddingResultsWrapsImageEncodeFailure(t *testing.T) {
+	// A validated safe data URI whose bytes are not a decodable image fails at the
+	// FFI; buildEmbeddingResults must tag it as an imageEncodeError so the handler
+	// maps it to 400 instead of 500.
+	orig := multiModalEncodeImage
+	defer func() { multiModalEncodeImage = orig }()
+	multiModalEncodeImage = func(string, int) (*candle_binding.MultiModalEmbeddingOutput, error) {
+		return nil, errors.New("failed to decode image")
+	}
+
+	req := EmbeddingRequest{
+		Images:    []string{"data:image/png;base64,aGVsbG8="},
+		Dimension: defaultEmbeddingDimension,
+	}
+	_, _, err := buildEmbeddingResults(req)
+	if err == nil {
+		t.Fatalf("expected an error from a failing image encode")
+	}
+	var imgErr *imageEncodeError
+	if !errors.As(err, &imgErr) {
+		t.Fatalf("expected imageEncodeError, got %T: %v", err, err)
+	}
+	if imgErr.index != 0 {
+		t.Fatalf("expected image index 0, got %d", imgErr.index)
+	}
+}
+
+func TestClassifyEmbeddingErrorMapsImageEncodeFailureTo400(t *testing.T) {
+	status, code, _ := classifyEmbeddingError(&imageEncodeError{index: 2, err: errors.New("bad image")})
+	if status != http.StatusBadRequest || code != "INVALID_IMAGE" {
+		t.Fatalf("expected 400 INVALID_IMAGE, got %d %q", status, code)
+	}
+}
+
+func TestClassifyEmbeddingErrorMapsInternalFailureTo500(t *testing.T) {
+	status, code, _ := classifyEmbeddingError(errors.New("model not loaded"))
+	if status != http.StatusInternalServerError || code != "EMBEDDING_GENERATION_FAILED" {
+		t.Fatalf("expected 500 EMBEDDING_GENERATION_FAILED, got %d %q", status, code)
 	}
 }
 
