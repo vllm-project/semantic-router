@@ -21,7 +21,6 @@ import (
 
 // MilvusCache provides a scalable semantic cache implementation using Milvus vector database
 type MilvusCache struct {
-	SimilarityTracker   // embedded — provides LastSimilarity()
 	client              client.Client
 	config              *config.MilvusConfig
 	collectionName      string

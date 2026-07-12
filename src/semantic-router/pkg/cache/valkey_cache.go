@@ -21,7 +21,6 @@ import (
 
 // ValkeyCache provides a scalable semantic cache implementation using Valkey with vector search
 type ValkeyCache struct {
-	SimilarityTracker   // embedded — provides LastSimilarity()
 	client              *glide.Client
 	config              *routerconfig.ValkeyConfig
 	indexName           string
@@ -488,8 +487,8 @@ func (c *ValkeyCache) addEntry(id string, requestID string, model string, query 
 }
 
 // FindSimilar searches for semantically similar cached requests
-func (c *ValkeyCache) FindSimilar(model string, query string) ([]byte, bool, error) {
-	return c.FindSimilarWithThreshold(model, query, c.similarityThreshold)
+func (c *ValkeyCache) FindSimilar(ctx context.Context, model string, query string) (LookupResult, error) {
+	return c.FindSimilarWithThreshold(ctx, model, query, c.similarityThreshold)
 }
 
 // buildKNNSearchCmd constructs the FT.SEARCH command for a KNN vector similarity query.
@@ -513,20 +512,21 @@ func (c *ValkeyCache) recordCacheMiss(status string, elapsed time.Duration) {
 }
 
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
-func (c *ValkeyCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
+func (c *ValkeyCache) FindSimilarWithThreshold(ctx context.Context, model string, query string, threshold float32) (LookupResult, error) {
 	start := time.Now()
 
 	if !c.enabled {
-		return nil, false, nil
+		return LookupResult{}, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
 	queryEmbedding, err := c.getEmbedding(query)
 	if err != nil {
 		metrics.RecordCacheOperation("valkey", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
+		return LookupResult{}, fmt.Errorf("failed to generate embedding: %w", err)
 	}
-
-	ctx := context.Background()
 
 	embeddingBytes := floatsToBytes(queryEmbedding)
 	searchCmd := c.buildKNNSearchCmd(embeddingBytes)
@@ -535,17 +535,16 @@ func (c *ValkeyCache) FindSimilarWithThreshold(model string, query string, thres
 	if err != nil {
 		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: search failed: %v", err)
 		c.recordCacheMiss("error", time.Since(start))
-		return nil, false, nil
+		return LookupResult{}, nil
 	}
 
 	match := parseBestMatch(searchResult)
 	if match == nil {
 		c.recordCacheMiss("miss", time.Since(start))
-		return nil, false, nil
+		return LookupResult{}, nil
 	}
 
 	similarity := distanceToSimilarity(c.config.Index.VectorField.MetricType, match.distance)
-	c.StoreSimilarity(similarity)
 
 	if similarity < threshold {
 		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: cache miss - similarity %.4f below threshold %.4f",
@@ -558,13 +557,13 @@ func (c *ValkeyCache) FindSimilarWithThreshold(model string, query string, thres
 			"index":           c.indexName,
 		})
 		c.recordCacheMiss("miss", time.Since(start))
-		return nil, false, nil
+		return LookupResult{Similarity: similarity}, nil
 	}
 
 	responseBody := extractResponseBody(match)
 	if responseBody == nil {
 		c.recordCacheMiss("error", time.Since(start))
-		return nil, false, nil
+		return LookupResult{Similarity: similarity}, nil
 	}
 
 	atomic.AddInt64(&c.hitCount, 1)
@@ -578,7 +577,7 @@ func (c *ValkeyCache) FindSimilarWithThreshold(model string, query string, thres
 		"index":      c.indexName,
 	})
 	metrics.RecordCacheOperation("valkey", "find_similar", "hit", time.Since(start).Seconds())
-	return responseBody, true, nil
+	return LookupResult{Body: responseBody, Found: true, Similarity: similarity}, nil
 }
 
 // Close releases all resources held by the cache

@@ -23,7 +23,6 @@ import (
 
 // RedisCache provides a scalable semantic cache implementation using Redis with vector search
 type RedisCache struct {
-	SimilarityTracker   // embedded — provides LastSimilarity()
 	client              *redis.Client
 	config              *config.RedisConfig
 	indexName           string
@@ -589,8 +588,8 @@ func (c *RedisCache) addEntry(id string, requestID string, model string, query s
 }
 
 // FindSimilar searches for semantically similar cached requests
-func (c *RedisCache) FindSimilar(model string, query string) ([]byte, bool, error) {
-	return c.FindSimilarWithThreshold(model, query, c.similarityThreshold)
+func (c *RedisCache) FindSimilar(ctx context.Context, model string, query string) (LookupResult, error) {
+	return c.FindSimilarWithThreshold(ctx, model, query, c.similarityThreshold)
 }
 
 // distanceToSimilarity converts a Redis vector distance to a similarity score [0, 1]
@@ -641,20 +640,22 @@ func (c *RedisCache) extractSearchResult(bestDoc redis.Document) (float32, []byt
 }
 
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
-func (c *RedisCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
+func (c *RedisCache) FindSimilarWithThreshold(ctx context.Context, model string, query string, threshold float32) (LookupResult, error) {
 	start := time.Now()
 
 	if !c.enabled {
-		return nil, false, nil
+		return LookupResult{}, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
 	queryEmbedding, err := c.getEmbedding(query)
 	if err != nil {
 		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
+		return LookupResult{}, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
-	ctx := context.Background()
 	embeddingBytes := floatsToBytes(queryEmbedding)
 
 	// "*=>" prefix required by Redis DIALECT 2 (without it: "Syntax error at offset 0").
@@ -678,20 +679,18 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	if err != nil {
 		logging.Infof("RedisCache.FindSimilarWithThreshold: search failed: %v", err)
 		c.recordCacheMiss("error", time.Since(start))
-		return nil, false, nil
+		return LookupResult{}, nil
 	}
 
 	if searchResult.Total == 0 {
 		c.recordCacheMiss("miss", time.Since(start))
-		return nil, false, nil
+		return LookupResult{}, nil
 	}
 
 	similarity, responseBody, ok := c.extractSearchResult(searchResult.Docs[0])
-	// Store similarity for callers (e.g., x-vsr-cache-similarity response header)
-	c.StoreSimilarity(similarity)
 	if !ok {
 		c.recordCacheMiss("error", time.Since(start))
-		return nil, false, nil
+		return LookupResult{Similarity: similarity}, nil
 	}
 
 	logging.Infof("Similarity=%.4f, threshold=%.4f (metric=%s)",
@@ -706,7 +705,7 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 			"index":           c.indexName,
 		})
 		c.recordCacheMiss("miss", time.Since(start))
-		return nil, false, nil
+		return LookupResult{Similarity: similarity}, nil
 	}
 
 	atomic.AddInt64(&c.hitCount, 1)
@@ -718,7 +717,7 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 		"index":      c.indexName,
 	})
 	metrics.RecordCacheOperation("redis", "find_similar", "hit", time.Since(start).Seconds())
-	return responseBody, true, nil
+	return LookupResult{Body: responseBody, Found: true, Similarity: similarity}, nil
 }
 
 // Close releases all resources held by the cache

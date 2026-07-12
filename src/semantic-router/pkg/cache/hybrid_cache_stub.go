@@ -10,8 +10,7 @@ import (
 
 // HybridCache combines in-memory HNSW index with external Milvus storage
 type HybridCache struct {
-	SimilarityTracker // embedded — provides LastSimilarity()
-	enabled           bool
+	enabled bool
 }
 
 // HybridCacheOptions contains configuration for the hybrid cache
@@ -61,13 +60,13 @@ func (h *HybridCache) AddEntriesBatch(entries []CacheEntry) error {
 }
 
 // FindSimilar searches for semantically similar cached requests
-func (h *HybridCache) FindSimilar(model string, query string) ([]byte, bool, error) {
-	return nil, false, nil
+func (h *HybridCache) FindSimilar(_ context.Context, model string, query string) (LookupResult, error) {
+	return LookupResult{}, nil
 }
 
 // FindSimilarWithThreshold searches for semantically similar cached requests with custom threshold
-func (h *HybridCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
-	return nil, false, nil
+func (h *HybridCache) FindSimilarWithThreshold(_ context.Context, model string, query string, threshold float32) (LookupResult, error) {
+	return LookupResult{}, nil
 }
 
 // RebuildFromMilvus rebuilds the in-memory HNSW index

@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"testing"
 
 	"github.com/openai/openai-go"
@@ -62,20 +63,19 @@ func (m *mockStreamingCache) AddEntry(
 	return m.addEntryErr
 }
 
-func (m *mockStreamingCache) FindSimilar(_ string, _ string) ([]byte, bool, error) {
-	return nil, false, nil
+func (m *mockStreamingCache) FindSimilar(_ context.Context, _ string, _ string) (cache.LookupResult, error) {
+	return cache.LookupResult{}, nil
 }
 
 func (m *mockStreamingCache) FindSimilarWithThreshold(
+	_ context.Context,
 	_ string,
 	_ string,
 	_ float32,
-) ([]byte, bool, error) {
+) (cache.LookupResult, error) {
 	m.findSimilarCalled = true
-	return nil, false, nil
+	return cache.LookupResult{}, nil
 }
-
-func (m *mockStreamingCache) LastSimilarity() float32 { return 0 }
 
 func (m *mockStreamingCache) Close() error { return nil }
 

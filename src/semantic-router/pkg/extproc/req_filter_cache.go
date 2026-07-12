@@ -126,8 +126,13 @@ func (r *OpenAIRouter) performCacheLookup(
 	spanCtx, span := tracing.StartPluginSpan(ctx.TraceContext, "semantic-cache", categoryName)
 
 	startTime := time.Now()
-	cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(requestModel, cacheQuery, threshold)
+	// Similarity is carried on the returned LookupResult, not read from
+	// backend-owned state after the call — this prevents a concurrent lookup
+	// on the same backend from leaking its score into this request (#2473).
+	lookupResult, cacheErr := r.Cache.FindSimilarWithThreshold(spanCtx, requestModel, cacheQuery, threshold)
 	lookupTime := time.Since(startTime).Milliseconds()
+	cachedResponse := lookupResult.Body
+	found := lookupResult.Found
 
 	logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)
 
@@ -144,7 +149,7 @@ func (r *OpenAIRouter) performCacheLookup(
 		tracing.EndPluginSpan(span, "error", lookupTime, "lookup_failed")
 	} else if found {
 		ctx.VSRCacheHit = true
-		ctx.VSRCacheSimilarity = r.Cache.LastSimilarity()
+		ctx.VSRCacheSimilarity = lookupResult.Similarity
 
 		if categoryName != "" {
 			ctx.VSRSelectedDecisionName = categoryName
@@ -170,7 +175,7 @@ func (r *OpenAIRouter) performCacheLookup(
 		ctx.TraceContext = spanCtx
 		return response, true
 	} else {
-		ctx.VSRCacheSimilarity = r.Cache.LastSimilarity()
+		ctx.VSRCacheSimilarity = lookupResult.Similarity
 		metrics.RecordCachePluginMiss(categoryName, "semantic-cache")
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_miss")
 	}
