@@ -40,7 +40,7 @@ const homepageMetaTitle = translate({
 const homepageMetaDescription = translate({
   id: 'homepage.meta.description',
   message:
-    'Building Mixture-of-Models: The Next-Generation Model Architecture for Heterogeneous LLM Inference. Make signals and preferences executable.',
+    'We believe Mixture-of-Models is the next-generation model architecture for heterogeneous LLM inference. vLLM Semantic Router makes it executable.',
 })
 const homepageSocialTitle = translate({
   id: 'homepage.meta.socialTitle',
@@ -265,7 +265,7 @@ function DitherHero(): JSX.Element {
                 description={(
                   <span className={styles.heroDescriptionText}>
                     <Translate id="homepage.hero.description">
-                      Turn signals and preferences into personalized model paths
+                      Turn signals and preferences into executable model paths
                       across heterogeneous LLMs.
                     </Translate>
                   </span>

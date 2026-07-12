@@ -384,7 +384,7 @@
     "message": "Mixture-of-Models。"
   },
   "homepage.hero.description": {
-    "message": "将信号与偏好转化为跨异构 LLM 的个性化模型路径。"
+    "message": "将信号与偏好转化为跨异构 LLM 的可执行模型路径。"
   },
   "homepage.hero.primaryCta": {
     "message": "体验 Playground"
@@ -2396,7 +2396,7 @@
     "message": "用于 LLM 推理优化的 Workload-Router-Pool 架构，以 vLLM Semantic Router 愿景论文的完整 PDF 阅读器形式呈现。"
   },
   "homepage.meta.description": {
-    "message": "构建 Mixture-of-Models：面向异构 LLM 推理的下一代模型架构。vLLM Semantic Router 将信号与偏好转化为可执行的模型路径。"
+    "message": "我们相信，Mixture-of-Models 是面向异构 LLM 推理的下一代模型架构。vLLM Semantic Router 让这一架构可执行。"
   },
   "homepage.meta.title": {
     "message": "构建你的 Mixture-of-Models"

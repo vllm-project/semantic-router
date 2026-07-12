@@ -5,7 +5,7 @@
   border-bottom: 1px solid var(--site-border);
   background:
     linear-gradient(180deg, rgba(15, 23, 42, 0.018), transparent 42%),
-    linear-gradient(180deg, #ffffff 0%, var(--site-bg-alt) 100%);
+    var(--site-bg-alt);
 }
 
 .teamSection::before {

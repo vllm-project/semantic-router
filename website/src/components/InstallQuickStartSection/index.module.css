@@ -1,6 +1,7 @@
 .section {
   padding: 5rem 0;
   border-bottom: 1px solid var(--site-border);
+  background: var(--site-bg-alt);
 }
 
 .heading {

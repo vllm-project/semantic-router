@@ -100,7 +100,7 @@ test.describe('Public and transition surfaces on short screens', () => {
     ).toBeVisible()
     await expect(
       page.getByText(
-        'Compose heterogeneous LLMs into personalized model paths.',
+        'Turn signals and preferences into executable model paths across heterogeneous LLMs.',
       ),
     ).toBeVisible()
     const exploreDocs = page.getByRole('button', { name: 'Explore the Docs' })

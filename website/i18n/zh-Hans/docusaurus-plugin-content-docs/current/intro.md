@@ -9,9 +9,9 @@ translation:
 
 # vLLM Semantic Router
 
-**构建 Mixture-of-Models：面向异构 LLM 推理的下一代模型架构。**
+**我们相信，Mixture-of-Models 是面向异构 LLM 推理的下一代模型架构。**
 
-**vLLM Semantic Router** 将信号与偏好转化为可执行的模型路径。
+**正因如此，我们构建了 vLLM Semantic Router**——将信号与偏好转化为面向每位用户、每个产品与每类工作负载的可执行模型路径。
 
 项目位于客户端与模型后端之间，以 Envoy External Processor（`ext_proc`）形式运行，将路由从零散的应用逻辑提升为**可观测、可配置**的多模型系统控制面。
 
