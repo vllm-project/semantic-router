@@ -113,6 +113,23 @@
   filter: brightness(1.08);
 }
 
+.editorHelp {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.pluginConfigurationGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  padding: 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #101012;
+}
+
 .viewStack {
   display: flex;
   flex-direction: column;
@@ -195,6 +212,7 @@
 @media (max-width: 760px) {
   .editorGridConditions,
   .editorGridTwo,
+  .pluginConfigurationGrid,
   .viewMeta {
     grid-template-columns: 1fr;
   }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -34,13 +35,51 @@ func adminUsersCollectionHandler(svc *Service) http.HandlerFunc {
 }
 
 func handleAdminUsersList(w http.ResponseWriter, r *http.Request, svc *Service) {
-	users, err := svc.store.ListUsers(r.Context(), r.URL.Query().Get("status"), 100, 0)
+	page := positiveQueryInt(r, "page", 1, 1_000_000)
+	limit := positiveQueryInt(r, "limit", 100, 200)
+	options := UserListOptions{
+		Status: r.URL.Query().Get("status"),
+		Query:  r.URL.Query().Get("q"),
+		Sort:   r.URL.Query().Get("sort"),
+		Order:  r.URL.Query().Get("order"),
+		Limit:  limit,
+		Offset: (page - 1) * limit,
+	}
+	users, err := svc.store.ListUsers(r.Context(), options)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	total, err := svc.store.CountFilteredUsers(r.Context(), options)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	stats, err := svc.store.UserDirectoryStats(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	respondJSON(w, ListUsersResponse{Users: users})
+	respondJSON(w, ListUsersResponse{
+		Users:      users,
+		Total:      total,
+		Page:       page,
+		Limit:      limit,
+		Active:     stats.Active,
+		Privileged: stats.Privileged,
+	})
+}
+
+func positiveQueryInt(r *http.Request, key string, fallback, maximum int) int {
+	value, err := strconv.Atoi(r.URL.Query().Get(key))
+	if err != nil || value < 1 {
+		return fallback
+	}
+	if value > maximum {
+		return maximum
+	}
+	return value
 }
 
 func handleAdminUsersCreate(w http.ResponseWriter, r *http.Request, svc *Service, ac AuthContext) {

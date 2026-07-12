@@ -1,7 +1,7 @@
 {
   "name": "vLLM Semantic Router",
   "short_name": "vLLM-SR",
-  "description": "Manage your AI-powered Intelligent Router",
+  "description": "Building Mixture-of-Models for heterogeneous LLM inference.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",

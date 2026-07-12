@@ -18,8 +18,8 @@
   min-width: 7rem;
   padding: 0.75rem 0.9rem;
   border: 1px solid var(--color-border);
-  border-radius: 0.9rem;
-  background: color-mix(in srgb, var(--color-bg-elevated) 82%, transparent);
+  border-radius: 6px;
+  background: #18181b;
 }
 
 .summaryLabel {
@@ -45,6 +45,103 @@
   line-height: 1.5;
 }
 
+.inventoryToolbar {
+  display: grid;
+  grid-template-columns: minmax(16rem, 1fr) auto auto auto;
+  align-items: end;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #101012;
+}
+
+.searchField input,
+.selectField select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #18181b;
+  color: var(--color-text);
+  font: inherit;
+}
+
+.searchField input {
+  padding: 0.65rem 0.8rem;
+}
+
+.selectField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 9rem;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.selectField select {
+  padding: 0.55rem 2rem 0.55rem 0.7rem;
+  text-transform: none;
+}
+
+.resultCount {
+  align-self: center;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.clearFilters {
+  display: block;
+  margin: 0.75rem auto 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #18181b;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+}
+
+.pagination button {
+  min-height: 38px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #18181b;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .previewGrid,
 .fullGrid {
   display: grid;
@@ -67,8 +164,8 @@
   min-width: 0;
   padding: 1.05rem 1.1rem;
   border: 1px solid var(--color-border);
-  border-radius: 1rem;
-  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  border-radius: 8px;
+  background: #101012;
   text-align: left;
   overflow: hidden;
 }
@@ -83,32 +180,24 @@
 
 .cardInteractive:hover {
   border-color: var(--color-border-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
 }
 
 .cardReady {
-  border-color: color-mix(in srgb, rgba(134, 239, 172, 0.48) 34%, var(--color-border));
-  background: color-mix(in srgb, var(--color-surface) 94%, #102113 6%);
+  border-color: rgba(255, 255, 255, 0.13);
+  background: #101012;
 }
 
 .previewCard.cardReady {
-  background:
-    radial-gradient(circle at top right, rgba(143, 148, 156, 0.2), transparent 42%),
-    radial-gradient(circle at bottom left, rgba(34, 197, 94, 0.14), transparent 40%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(12, 32, 18, 0.12)),
-    color-mix(in srgb, var(--color-surface) 93%, #102113 7%);
+  background: #101012;
 }
 
 .detailCard.cardReady {
-  background:
-    linear-gradient(180deg, rgba(143, 148, 156, 0.05), rgba(16, 33, 19, 0.02)),
-    color-mix(in srgb, var(--color-surface) 95%, #101c12 5%);
+  background: #101012;
 }
 
 .cardWarm {
-  border-color: rgba(245, 158, 11, 0.22);
-  background: linear-gradient(180deg, rgba(245, 158, 11, 0.08), rgba(245, 158, 11, 0.03));
+  border-color: var(--color-border);
+  background: #101012;
 }
 
 .cardMuted {
@@ -126,7 +215,7 @@
   position: absolute;
   inset: 0 0 auto;
   height: 1px;
-  background: linear-gradient(90deg, rgba(190, 242, 100, 0.46), rgba(34, 197, 94, 0.14));
+  background: rgba(228, 228, 231, 0.28);
 }
 
 .detailCard {
@@ -145,9 +234,9 @@
   display: inline-flex;
   align-items: center;
   padding: 0.34rem 0.62rem;
-  border-radius: 999px;
-  background: rgba(143, 148, 156, 0.18);
-  color: #dcfce7;
+  border-radius: 6px;
+  background: #18181b;
+  color: #e4e4e7;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -208,7 +297,7 @@
   display: inline-flex;
   align-items: center;
   padding: 0.28rem 0.58rem;
-  border-radius: 999px;
+  border-radius: 6px;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -216,8 +305,9 @@
 }
 
 .stateReady {
-  background: rgba(34, 197, 94, 0.1);
-  color: #86efac;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.07);
+  color: #d4d4d8;
 }
 
 .stateDownloading {
@@ -245,8 +335,8 @@
   display: inline-flex;
   align-items: center;
   padding: 0.34rem 0.58rem;
-  border-radius: 999px;
-  background: rgba(143, 148, 156, 0.14);
+  border-radius: 6px;
+  background: #18181b;
   color: #e4e4e7;
   font-size: 0.74rem;
   line-height: 1;
@@ -262,8 +352,8 @@
   min-width: 0;
   padding: 0.9rem 1rem;
   border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
-  border-radius: 0.95rem;
-  background: rgba(255, 255, 255, 0.025);
+  border-radius: 6px;
+  background: #18181b;
 }
 
 .detailSectionTitle {
@@ -356,7 +446,7 @@
 .empty {
   padding: 1rem;
   border: 1px dashed var(--color-border);
-  border-radius: 1rem;
+  border-radius: 8px;
   color: var(--color-text-muted);
   font-size: 0.92rem;
   text-align: center;
@@ -386,6 +476,10 @@
   .detailSections {
     grid-template-columns: 1fr;
   }
+
+  .inventoryToolbar {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 720px) {
@@ -407,5 +501,13 @@
   .previewTopRow,
   .detailFooter {
     flex-wrap: wrap;
+  }
+
+  .inventoryToolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .resultCount {
+    justify-self: start;
   }
 }

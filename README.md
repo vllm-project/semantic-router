@@ -2,7 +2,7 @@
 
 <img src="website/static/img/artworks/vllm-sr-logo.dark.png" alt="vLLM Semantic Router" width="50%"/>
 
-<p><strong>The Open-Source Runtime for Mixture-of-Models</strong></p>
+<p><strong>Building Mixture-of-Models: The Next-Generation Model Architecture for Heterogeneous LLM Inference</strong></p>
 
 <p>
   <a href="https://vllm-semantic-router.com">Documentation</a> |
@@ -18,16 +18,16 @@
 
 ## About
 
-**Mixture-of-Models** is a next-generation model architecture shaped by preference.
+**Mixture-of-Models** is the next-generation model architecture for heterogeneous LLM inference.
 
-**vLLM Semantic Router** is its open-source runtime.
+**vLLM Semantic Router** turns signals and preferences into executable model paths for every user, product, and workload.
 
-| Dimension | Fragmented today | With vLLM SR |
+| Dimension | Today's landscape | With vLLM SR |
 | --- | --- | --- |
-| **Models** | Closed frontier, open, domain-specialized, and edge models excel at different work. | Route one—or coordinate many. |
-| **Compute** | New and legacy GPUs, accelerators, edge devices, and cloud capacity coexist. | Route across configured model endpoints on heterogeneous compute. |
-| **Location** | Inference spans edge, private data centers, and cloud. | Route across locations within privacy and data boundaries. |
-| **Preference** | "Best" varies by user, product, and workload. | Let preference shape every model path. |
+| **Models** | Frontier, open, specialized, and edge models excel at different work. | Compose them into personalized model paths. |
+| **Compute** | GPUs, accelerators, edge devices, and cloud capacity coexist. | Route across heterogeneous compute. |
+| **Location** | Inference spans edge, private data centers, and cloud. | Respect privacy and data boundaries. |
+| **Preference** | "Best" varies by user, product, and workload. | Make those preferences executable. |
 
 [Explore how it works →](https://vllm-semantic-router.com/docs/)
 
