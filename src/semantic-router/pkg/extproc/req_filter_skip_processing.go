@@ -18,6 +18,8 @@ package extproc
 
 import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 func (r *OpenAIRouter) skipProcessingEnabled() bool {
@@ -33,6 +35,18 @@ func newContinueRequestBodyResponse() *ext_proc.ProcessingResponse {
 			RequestBody: &ext_proc.BodyResponse{
 				Response: &ext_proc.CommonResponse{
 					Status: ext_proc.CommonResponse_CONTINUE,
+					// Skip-processing bypasses routing entirely, so there is no
+					// backend profile to opt into forward_authorization_header.
+					// Strip the caller's credential (and the internal looper
+					// carrier) so an opted-out request can never leak a caller
+					// Authorization to whatever backend Envoy routes it to.
+					// See issue #2375.
+					HeaderMutation: &ext_proc.HeaderMutation{
+						RemoveHeaders: []string{
+							forwardedAuthorizationHeaderName,
+							headers.VSRInboundAuthorization,
+						},
+					},
 				},
 			},
 		},

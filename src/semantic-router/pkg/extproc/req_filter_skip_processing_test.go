@@ -17,6 +17,7 @@ limitations under the License.
 package extproc
 
 import (
+	"slices"
 	"testing"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -243,11 +244,45 @@ func TestHandleRequestBodyDispatchSkipProcessingShortCircuits(t *testing.T) {
 	if response.GetRequestBody().Response.GetBodyMutation() != nil {
 		t.Fatal("expected no body mutation when skipping processing")
 	}
-	if response.GetRequestBody().Response.GetHeaderMutation() != nil {
-		t.Fatal("expected no header mutation when skipping processing")
+	// Skip processing must still strip the caller credential (issue #2375): it
+	// bypasses routing, so there is no backend opt-in that could authorize
+	// forwarding the caller Authorization to the downstream.
+	mutation := response.GetRequestBody().Response.GetHeaderMutation()
+	if mutation == nil {
+		t.Fatal("expected a header mutation stripping the caller credential when skipping processing")
+	}
+	removeHeaders := mutation.GetRemoveHeaders()
+	if !slices.Contains(removeHeaders, forwardedAuthorizationHeaderName) {
+		t.Fatalf("expected skip processing to strip %q, got remove_headers=%v", forwardedAuthorizationHeaderName, removeHeaders)
+	}
+	if !slices.Contains(removeHeaders, headers.VSRInboundAuthorization) {
+		t.Fatalf("expected skip processing to strip %q, got remove_headers=%v", headers.VSRInboundAuthorization, removeHeaders)
 	}
 	if ctx.StreamedBody != nil {
 		t.Fatal("expected no streamed body handler to be allocated when skipping processing")
+	}
+}
+
+// TestSkipProcessingResponseStripsCallerAuthorization proves the skip-processing
+// passthrough still removes the caller credential (and the internal carrier),
+// since skip bypasses routing and has no backend opt-in (issue #2375).
+func TestSkipProcessingResponseStripsCallerAuthorization(t *testing.T) {
+	resp := newContinueRequestBodyResponse()
+	if resp == nil {
+		t.Fatal("expected a continue response")
+	}
+
+	mutation := resp.GetRequestBody().GetResponse().GetHeaderMutation()
+	if mutation == nil {
+		t.Fatal("skip continue response must carry a header mutation")
+	}
+
+	removeHeaders := mutation.GetRemoveHeaders()
+	if !slices.Contains(removeHeaders, forwardedAuthorizationHeaderName) {
+		t.Fatalf("skip processing must strip %q, got remove_headers=%v", forwardedAuthorizationHeaderName, removeHeaders)
+	}
+	if !slices.Contains(removeHeaders, headers.VSRInboundAuthorization) {
+		t.Fatalf("skip processing must strip %q, got remove_headers=%v", headers.VSRInboundAuthorization, removeHeaders)
 	}
 }
 
