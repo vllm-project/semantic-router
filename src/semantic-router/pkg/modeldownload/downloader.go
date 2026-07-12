@@ -31,6 +31,26 @@ func (w *tailWriter) Write(p []byte) (int, error) {
 
 func (w *tailWriter) String() string { return string(w.buf) }
 
+// errorContextBytes bounds how much captured CLI output we interpolate into a
+// returned error. The full capture can be up to maxCaptureBytes of progress
+// output; the operator only needs the trailing cause (the 429/404/dial line),
+// so we keep a short tail.
+const errorContextBytes = 2 * 1024
+
+// tailForError returns a bounded, trimmed tail of captured CLI output suitable
+// for interpolating into a returned error, or "" when there is nothing useful to
+// surface (so a bare "exit status 1" stays clean).
+func tailForError(captured string) string {
+	trimmed := strings.TrimSpace(captured)
+	if trimmed == "" {
+		return ""
+	}
+	if len(trimmed) > errorContextBytes {
+		trimmed = trimmed[len(trimmed)-errorContextBytes:]
+	}
+	return "\n" + trimmed
+}
+
 // hfCommand stores the detected HuggingFace CLI command ("hf" or "huggingface-cli")
 var hfCommand string
 
@@ -59,10 +79,10 @@ func DownloadModel(spec ModelSpec, config DownloadConfig) error {
 // gated behind HuggingFace authentication, as opposed to a transient or public-repo
 // failure (rate limit, network error) or a missing/typo'd repo that must fail loudly.
 //
-// cliOutput is the captured stdout/stderr from the HF CLI. The CLI writes its real
-// error text there rather than returning it in err (which is usually just
-// "exit status 1"), so classification must inspect the captured output, not err
-// alone. The presence or absence of an HF_TOKEN is deliberately NOT consulted: an
+// cliOutput is the captured stderr from the HF CLI (stdout is streamed through
+// untouched). The CLI writes its real error text to stderr rather than returning
+// it in err (which is usually just "exit status 1"), so classification must
+// inspect the captured output, not err alone. The presence or absence of an HF_TOKEN is deliberately NOT consulted: an
 // invalid repo id, a rate limit, and a gated repo are all indistinguishable by token
 // state, and HuggingFace returns 429 for several of them regardless of token.
 func IsGatedModelError(err error, cliOutput string, repoID string) bool {
@@ -72,30 +92,44 @@ func IsGatedModelError(err error, cliOutput string, repoID string) bool {
 
 	haystack := strings.ToLower(err.Error() + "\n" + cliOutput)
 
-	// Auth/gated patterns the HF CLI emits for repos that require access approval.
+	// Access-approval anchors the HF CLI / huggingface_hub emit for gated repos.
+	// Status codes are anchored to their surrounding phrase ("403 forbidden", not
+	// bare "403") so progress bytes like "403M/896M" and proxy/CDN denials on
+	// PUBLIC repos are not misread as gated.
 	// Note: 404 / "repository not found" is intentionally absent — a missing or
 	// mistyped repo is a real error that must surface, not a graceful gated skip.
-	gatedPatterns := []string{
+	gatedAnchors := []string{
+		"gatedrepoerror",
 		"gated",
 		"restricted",
 		"awaiting a review",
 		"must be authenticated",
 		"access to model",
 		"access to this repo",
-		"unauthorized",
 		"authentication required",
-		"401",
-		"403",
+		// The Rust `hf` CLI emits this exact phrasing for gated repos
+		// (e.g. google/embeddinggemma-300m) instead of an HTTP status line.
+		"access denied",
+		"requires approval",
+		"401 client error",
+		"401 unauthorized",
+		"403 forbidden",
+		"you are trying to access a gated repo",
 	}
-	for _, p := range gatedPatterns {
+	for _, p := range gatedAnchors {
 		if strings.Contains(haystack, p) {
 			return true
 		}
 	}
 
-	// Fallback for when the CLI emits nothing classifiable (e.g. only
-	// "exit status 1" with no captured output): a small allowlist of model
-	// families that are known to be gated on HuggingFace.
+	// Tri-state fallback: if the CLI emitted output but nothing matched an auth
+	// anchor, the failure is NOT gated (public-repo/transient) and must surface.
+	// Only consult the known-gated repo allowlist when there is no captured
+	// output to classify on (e.g. a bare "exit status 1").
+	if strings.TrimSpace(cliOutput) != "" {
+		return false
+	}
+
 	repoIDLower := strings.ToLower(repoID)
 	for _, gatedName := range []string{"embeddinggemma", "gemma"} {
 		if strings.Contains(repoIDLower, gatedName) {
@@ -157,7 +191,7 @@ func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
 			logging.Warnf("   To download gated models, set HF_TOKEN environment variable")
 			return fmt.Errorf("%w: %s", ErrGatedModelSkipped, spec.RepoID)
 		}
-		return fmt.Errorf("failed to download model %s: %w", spec.RepoID, err)
+		return fmt.Errorf("failed to download model %s: %w%s", spec.RepoID, err, tailForError(captured.String()))
 	}
 
 	logging.Infof("Successfully downloaded model: %s", spec.LocalPath)
