@@ -357,6 +357,11 @@ const (
 	// Value: "true"
 	VSRLooperRequest = "x-vsr-looper-request"
 
+	// VSRLooperSecret authenticates an internal looper request. Its value is a
+	// runtime-owned credential (process-random or deployment-shared) and must
+	// never be serialized into router configuration or logged.
+	VSRLooperSecret = "x-vsr-looper-secret" // #nosec G101 -- public header name, not a credential
+
 	// VSRLooperIteration indicates the current iteration number in the looper loop.
 	// Value: "1", "2", "3", etc.
 	VSRLooperIteration = "x-vsr-looper-iteration"

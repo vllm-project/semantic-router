@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -58,6 +59,36 @@ func TestSessionStoreMissingSessionIsInactive(t *testing.T) {
 	}
 	if active {
 		t.Fatalf("missing session should be inactive")
+	}
+}
+
+func TestCreateSessionRejectsMissingIdentifiers(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestAuthService(t)
+	now := time.Now().Unix()
+	for _, test := range []struct {
+		name      string
+		sessionID string
+		userID    string
+	}{
+		{name: "empty session", sessionID: "", userID: "user-id"},
+		{name: "blank session", sessionID: "   ", userID: "user-id"},
+		{name: "empty user", sessionID: "session-id", userID: ""},
+		{name: "blank user", sessionID: "session-id", userID: "\t"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := svc.store.CreateSession(
+				context.Background(),
+				test.sessionID,
+				test.userID,
+				now,
+				now+60,
+			)
+			if err == nil || !strings.Contains(err.Error(), "required") {
+				t.Fatalf("CreateSession() error = %v, want safe required-field error", err)
+			}
+		})
 	}
 }
 
@@ -129,7 +160,10 @@ func TestNewStorePrunesInactiveSessionsOnOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
-	svc := NewService(initialStore, "test-secret", 1)
+	svc, err := NewService(initialStore, testJWTSecret, 1)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
 	user := newTestUser(t, svc, "startup-prune@example.com", RoleRead, "active")
 	oldCutoff := time.Now().Add(-inactiveAuthSessionRetention - time.Hour)
 	if err := svc.store.CreateSession(context.Background(), "old-expired", user.ID, oldCutoff.Add(-time.Hour).Unix(), oldCutoff.Unix()); err != nil {

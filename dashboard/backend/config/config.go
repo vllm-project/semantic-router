@@ -2,10 +2,16 @@ package config
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
+)
+
+const (
+	minimumJWTExpiryHours = 1
+	maximumJWTExpiryHours = 7 * 24
 )
 
 // Config holds all application configuration
@@ -17,6 +23,7 @@ type Config struct {
 	BootstrapAdminEmail    string
 	BootstrapAdminPassword string
 	BootstrapAdminName     string
+	PasswordBlocklistPath  string
 	StaticDir              string
 	ConfigFile             string
 	AbsConfigPath          string
@@ -87,16 +94,18 @@ type authFlags struct {
 	bootstrapEmail    *string
 	bootstrapPassword *string
 	bootstrapName     *string
+	passwordBlocklist *string
 }
 
 func bindAuthFlags() authFlags {
 	return authFlags{
 		dbPath:            flag.String("auth-db", env("DASHBOARD_AUTH_DB_PATH", "./data/auth.db"), "auth database path"),
-		jwtSecret:         flag.String("auth-jwt-secret", env("DASHBOARD_JWT_SECRET", ""), "JWT signing secret"),
-		jwtTTL:            flag.String("auth-jwt-expiry-hours", env("DASHBOARD_JWT_EXPIRY_HOURS", "12"), "JWT expiry in hours"),
+		jwtSecret:         flag.String("auth-jwt-secret", env("DASHBOARD_JWT_SECRET", ""), "JWT signing secret (at least 32 bytes; generate with: openssl rand -base64 32)"),
+		jwtTTL:            flag.String("auth-jwt-expiry-hours", env("DASHBOARD_JWT_EXPIRY_HOURS", "12"), "JWT expiry in hours (1-168)"),
 		bootstrapEmail:    flag.String("bootstrap-admin-email", env("DASHBOARD_ADMIN_EMAIL", ""), "bootstrap admin email"),
 		bootstrapPassword: flag.String("bootstrap-admin-password", env("DASHBOARD_ADMIN_PASSWORD", ""), "bootstrap admin password"),
 		bootstrapName:     flag.String("bootstrap-admin-name", env("DASHBOARD_ADMIN_NAME", ""), "bootstrap admin name"),
+		passwordBlocklist: flag.String("password-blocklist", env("DASHBOARD_PASSWORD_BLOCKLIST_PATH", ""), "newline-delimited local password blocklist path"),
 	}
 }
 
@@ -190,10 +199,18 @@ func applyAuthConfig(cfg *Config, flags authFlags) error {
 	cfg.BootstrapAdminEmail = *flags.bootstrapEmail
 	cfg.BootstrapAdminPassword = *flags.bootstrapPassword
 	cfg.BootstrapAdminName = *flags.bootstrapName
+	cfg.PasswordBlocklistPath = *flags.passwordBlocklist
 
 	ttl, err := strconv.Atoi(*flags.jwtTTL)
 	if err != nil {
 		return err
+	}
+	if ttl < minimumJWTExpiryHours || ttl > maximumJWTExpiryHours {
+		return fmt.Errorf(
+			"JWT expiry must be between %d and %d hours",
+			minimumJWTExpiryHours,
+			maximumJWTExpiryHours,
+		)
 	}
 	cfg.JWTExpiryHours = ttl
 	return nil

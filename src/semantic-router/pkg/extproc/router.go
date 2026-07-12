@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -62,6 +63,7 @@ type OpenAIRouter struct {
 	routerLearningMu      sync.Mutex
 	routerLearningRuntime *routerLearningRuntime
 	lookupTableCancel     func()
+	looperAuthenticator   *looper.RequestAuthenticator
 }
 
 // Close releases background resources held by the router (e.g. lookup table

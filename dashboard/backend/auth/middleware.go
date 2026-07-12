@@ -20,10 +20,11 @@ const (
 
 // AuthContext contains authenticated user metadata.
 type AuthContext struct {
-	UserID string
-	Email  string
-	Role   string
-	Perms  map[string]bool
+	UserID    string
+	SessionID string
+	Email     string
+	Role      string
+	Perms     map[string]bool
 }
 
 func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
@@ -59,10 +60,11 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), authContextKey, AuthContext{
-				UserID: user.ID,
-				Email:  user.Email,
-				Role:   user.Role,
-				Perms:  perms,
+				UserID:    user.ID,
+				SessionID: claims.ID,
+				Email:     user.Email,
+				Role:      user.Role,
+				Perms:     perms,
 			})
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -93,6 +95,11 @@ func ServiceUnavailableGuard() func(http.Handler) http.Handler {
 
 func RequiredPermission(method, path string) string {
 	path = strings.TrimSpace(strings.ToLower(path))
+	if path == "/api/auth/password" || path == "/api/auth/password/" {
+		// Every authenticated active user may change their own password. The
+		// handler derives the target user from AuthContext and never from JSON.
+		return ""
+	}
 	for _, resolver := range []func(string, string) (string, bool){
 		adminPermission,
 		settingsPermission,
@@ -333,7 +340,7 @@ func AuditMiddleware(store *Store, action, resource string, next http.HandlerFun
 		if ok {
 			uid = ac.UserID
 		}
-		_ = store.AddAuditLog(r.Context(), AuditLog{
+		err := store.AddAuditLog(r.Context(), AuditLog{
 			UserID:     uid,
 			Action:     action,
 			Resource:   resource,
@@ -344,6 +351,7 @@ func AuditMiddleware(store *Store, action, resource string, next http.HandlerFun
 			StatusCode: rw.statusCodeOr200(),
 			CreatedAt:  time.Now().Unix(),
 		})
+		reportAuditPersistenceError(err)
 	}
 }
 

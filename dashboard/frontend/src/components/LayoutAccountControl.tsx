@@ -1,6 +1,7 @@
 import React, { useId } from 'react'
 import { createPortal } from 'react-dom'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
+import LayoutAccountSecurityLink from './LayoutAccountSecurityLink'
 import {
   formatAccountRole,
   getAccountInitials,
@@ -167,6 +168,7 @@ const LayoutAccountControl: React.FC<LayoutAccountControlProps> = ({
                 </div>
 
                 <div className={styles.footer}>
+                  <LayoutAccountSecurityLink onSelect={onClose} />
                   <button type="button" className={styles.logoutButton} onClick={onLogout}>
                     Logout
                   </button>

@@ -22,6 +22,7 @@ func TestRequiresAuthentication(t *testing.T) {
 		{path: "/api/auth/bootstrap/can-register", expected: false},
 		{path: "/api/setup/state", expected: false},
 		{path: "/api/auth/me", expected: true},
+		{path: "/api/auth/password", expected: true},
 		{path: "/api/status", expected: true},
 		{path: "/embedded/grafana/", expected: true},
 		{path: "/embedded/wizmap/", expected: true},
@@ -171,6 +172,7 @@ func TestRequiredPermission(t *testing.T) {
 		expected string
 	}{
 		{method: http.MethodGet, path: "/api/admin/users", expected: PermUsersView},
+		{method: http.MethodPost, path: "/api/auth/password", expected: ""},
 		{method: http.MethodPatch, path: "/api/admin/users/user-1", expected: PermUsersManage},
 		{method: http.MethodGet, path: "/api/admin/audit-logs", expected: PermUsersManage},
 		{method: http.MethodGet, path: "/api/status", expected: PermLogsRead},

@@ -241,8 +241,9 @@ type RequestContext struct {
 	RouterReplayRecorder     *routerreplay.Recorder           // The recorder instance for this decision
 
 	// Looper context
-	LooperRequest   bool // True if this request is from looper (internal request, skip plugins)
-	LooperIteration int  // The iteration number if this is a looper request
+	LooperRequest   bool   // True if this request is from looper (internal request, skip plugins)
+	LooperDecision  string // Authenticated decision name for the internal request
+	LooperIteration int    // The iteration number if this is a looper request
 
 	// SkipProcessing indicates the client (or an upstream filter such as Envoy AI
 	// Gateway) requested a full passthrough via the x-vsr-skip-processing header.

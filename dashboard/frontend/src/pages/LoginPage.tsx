@@ -33,6 +33,64 @@ type BootstrapStep = {
   description: string;
 };
 
+type LoginPasswordInputProps = {
+  id: string;
+  name: string;
+  autoComplete: "current-password" | "new-password";
+  label: string;
+  value: string;
+  placeholder: string;
+  visible: boolean;
+  visibilityContext: string;
+  onChange: (value: string) => void;
+  onToggleVisibility: () => void;
+  autoFocus?: boolean;
+};
+
+export const LoginPasswordInput: React.FC<LoginPasswordInputProps> = ({
+  id,
+  name,
+  autoComplete,
+  label,
+  value,
+  placeholder,
+  visible,
+  visibilityContext,
+  onChange,
+  onToggleVisibility,
+  autoFocus = false,
+}) => (
+  <div className={styles.inputBlock}>
+    <label className={styles.label} htmlFor={id}>
+      {label}
+    </label>
+    <div className={styles.passwordInputShell}>
+      <input
+        id={id}
+        className={`${styles.input} ${styles.passwordInput}`}
+        type={visible ? "text" : "password"}
+        name={name}
+        autoComplete={autoComplete}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        required
+      />
+      <button
+        className={styles.passwordVisibilityButton}
+        type="button"
+        aria-label={`${visible ? "Hide" : "Show"} ${visibilityContext} password`}
+        aria-controls={id}
+        aria-pressed={visible}
+        onClick={onToggleVisibility}
+      >
+        {visible ? "Hide" : "Show"}
+      </button>
+    </div>
+  </div>
+);
+
 const BOOTSTRAP_STEPS: BootstrapStep[] = [
   {
     key: "name",
@@ -69,11 +127,14 @@ const LoginPage: React.FC = () => {
 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [loginPasswordVisible, setLoginPasswordVisible] = useState(false);
   const [bootstrapForm, setBootstrapForm] = useState<BootstrapFormState>({
     name: "",
     email: "",
     password: "",
   });
+  const [bootstrapPasswordVisible, setBootstrapPasswordVisible] =
+    useState(false);
 
   const [bootstrapStatus, setBootstrapStatus] =
     useState<BootstrapStatus>("checking");
@@ -139,6 +200,7 @@ const LoginPage: React.FC = () => {
 
   const onSubmitLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setLoginPasswordVisible(false);
     setError("");
     setPending(true);
     try {
@@ -165,6 +227,7 @@ const LoginPage: React.FC = () => {
       return;
     }
 
+    setBootstrapPasswordVisible(false);
     if (!validateBootstrapStep()) {
       return;
     }
@@ -186,6 +249,10 @@ const LoginPage: React.FC = () => {
         if (response.status === 409) {
           setBootstrapStatus("disabled");
           setLoginEmail(bootstrapForm.email.trim());
+          setLoginPassword("");
+          setLoginPasswordVisible(false);
+          setBootstrapForm((current) => ({ ...current, password: "" }));
+          setBootstrapPasswordVisible(false);
           throw new Error(
             "The first admin is already registered. Sign in to continue.",
           );
@@ -392,31 +459,38 @@ const LoginPage: React.FC = () => {
 
               {currentStep.key === "password" ? (
                 <div className={styles.finalStage}>
-                  <div className={styles.inputBlock}>
-                    <label
-                      className={styles.label}
-                      htmlFor="bootstrap-password"
-                    >
-                      Password
-                    </label>
-                    <input
-                      id="bootstrap-password"
-                      className={styles.input}
-                      type="password"
-                      name="new-password"
-                      autoComplete="new-password"
-                      value={bootstrapForm.password}
-                      onChange={(event) =>
-                        setBootstrapForm((current) => ({
-                          ...current,
-                          password: event.target.value,
-                        }))
-                      }
-                      placeholder="Choose a strong password"
-                      autoFocus
-                      required
-                    />
-                  </div>
+                  {/* Keep the account identity in the password step so browser
+                      password managers can associate a generated credential
+                      with the username in this multi-step bootstrap flow. */}
+                  <input
+                    id="bootstrap-username"
+                    type="email"
+                    name="username"
+                    autoComplete="username"
+                    value={bootstrapForm.email}
+                    readOnly
+                    hidden
+                  />
+                  <LoginPasswordInput
+                    id="new-password"
+                    name="new-password"
+                    autoComplete="new-password"
+                    label="Password"
+                    value={bootstrapForm.password}
+                    placeholder="Choose a strong password"
+                    visible={bootstrapPasswordVisible}
+                    visibilityContext="first administrator"
+                    onChange={(password) =>
+                      setBootstrapForm((current) => ({
+                        ...current,
+                        password,
+                      }))
+                    }
+                    onToggleVisibility={() =>
+                      setBootstrapPasswordVisible((current) => !current)
+                    }
+                    autoFocus
+                  />
 
                   <div className={styles.summaryCard}>
                     <span className={styles.summaryLabel}>
@@ -441,6 +515,7 @@ const LoginPage: React.FC = () => {
                     type="button"
                     onClick={() => {
                       setError("");
+                      setBootstrapPasswordVisible(false);
                       setBootstrapStepIndex((current) =>
                         Math.max(0, current - 1),
                       );
@@ -504,22 +579,20 @@ const LoginPage: React.FC = () => {
                 />
               </div>
 
-              <div className={styles.inputBlock}>
-                <label className={styles.label} htmlFor="login-password">
-                  Password
-                </label>
-                <input
-                  id="login-password"
-                  className={styles.input}
-                  type="password"
-                  name="password"
-                  autoComplete="current-password"
-                  value={loginPassword}
-                  onChange={(event) => setLoginPassword(event.target.value)}
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
+              <LoginPasswordInput
+                id="current-password"
+                name="password"
+                autoComplete="current-password"
+                label="Password"
+                value={loginPassword}
+                placeholder="••••••••"
+                visible={loginPasswordVisible}
+                visibilityContext="sign-in"
+                onChange={setLoginPassword}
+                onToggleVisibility={() =>
+                  setLoginPasswordVisible((current) => !current)
+                }
+              />
 
               {error ? <div className={styles.error}>{error}</div> : null}
 

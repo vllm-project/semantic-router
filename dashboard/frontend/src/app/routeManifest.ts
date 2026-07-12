@@ -1,4 +1,5 @@
 export type ShellRoutePage =
+  | 'account-security'
   | 'builder'
   | 'clawos'
   | 'dashboard'
@@ -31,6 +32,7 @@ export interface RedirectRouteDefinition {
 }
 
 export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
+  { path: '/account/security', page: 'account-security' },
   { path: '/dashboard', page: 'dashboard' },
   { path: '/monitoring', page: 'monitoring' },
   {
@@ -62,6 +64,5 @@ export const redirectRouteDefinitions: readonly RedirectRouteDefinition[] = [
   { path: '/openclaw', to: '/clawos' },
 ]
 
-export const fallbackRouteTarget = (setupMode: boolean): string => (
+export const fallbackRouteTarget = (setupMode: boolean): string =>
   setupMode ? '/setup' : '/dashboard'
-)

@@ -46,6 +46,12 @@ func NewBaseLooper(cfg *config.LooperConfig) *BaseLooper {
 	}
 }
 
+func (l *BaseLooper) setRequestAuthenticator(authenticator *RequestAuthenticator) {
+	if l != nil && l.client != nil {
+		l.client.setRequestAuthenticator(authenticator)
+	}
+}
+
 // Execute calls all models sequentially and aggregates the responses
 func (l *BaseLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
 	if len(req.ModelRefs) == 0 {

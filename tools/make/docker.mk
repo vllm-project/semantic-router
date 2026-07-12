@@ -366,7 +366,8 @@ vllm-sr-dev:
 	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_RUNTIME_CONTAINERS) 2>/dev/null || echo "  No runtime containers to remove"
 	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_SIM_CONTAINER) 2>/dev/null || echo "  No simulator container to remove"
 	@echo ""
-	@if [ "$(SKIP_ROUTER_IMAGE_EFFECTIVE)" = "1" ]; then \
+	@set -e; \
+	if [ "$(SKIP_ROUTER_IMAGE_EFFECTIVE)" = "1" ]; then \
 		echo "2. Reusing existing vLLM-SR router Docker image (SKIP_ROUTER_IMAGE=1)"; \
 		echo "   Only use this when the local router image already includes your latest code changes."; \
 		echo ""; \
@@ -384,7 +385,8 @@ vllm-sr-dev:
 		echo "Router image built: $(VLLM_SR_IMAGE)"; \
 		echo ""; \
 	fi
-	@if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
+	@set -e; \
+	if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
 		echo "3. Ensuring official Envoy image is available..."; \
 		echo "  Image: $(VLLM_SR_ENVOY_IMAGE)"; \
 		echo ""; \

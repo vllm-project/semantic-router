@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"log"
 )
 
 type AuditLog struct {
@@ -28,6 +29,14 @@ func (s *Store) AddAuditLog(ctx context.Context, logRow AuditLog) error {
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		nilOrString(logRow.UserID), logRow.Action, logRow.Resource, logRow.Method, logRow.Path, logRow.IP, logRow.UserAgent, logRow.StatusCode, createdAt, logRow.ExtraJSON)
 	return err
+}
+
+func reportAuditPersistenceError(err error) {
+	if err != nil {
+		// Do not include request, identity, event, or database details: this
+		// warning exists only to keep a durable-audit failure observable.
+		log.Print("WARNING: authentication audit event could not be persisted")
+	}
 }
 
 func (s *Store) ListAuditLogs(ctx context.Context, userID, action, resource string, limit, offset int) ([]AuditLog, error) {

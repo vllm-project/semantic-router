@@ -31,6 +31,24 @@ func sendLocalChatCompletion(
 	prompt string,
 	timeout time.Duration,
 ) (*localChatCompletionResponse, error) {
+	return sendLocalChatCompletionWithHeaders(
+		ctx,
+		localPort,
+		model,
+		prompt,
+		timeout,
+		nil,
+	)
+}
+
+func sendLocalChatCompletionWithHeaders(
+	ctx context.Context,
+	localPort string,
+	model string,
+	prompt string,
+	timeout time.Duration,
+	requestHeaders http.Header,
+) (*localChatCompletionResponse, error) {
 	requestBody := map[string]interface{}{
 		"model": model,
 		"messages": []map[string]string{
@@ -47,6 +65,11 @@ func sendLocalChatCompletion(
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	for name, values := range requestHeaders {
+		for _, value := range values {
+			req.Header.Add(name, value)
+		}
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-vsr-debug", "true")

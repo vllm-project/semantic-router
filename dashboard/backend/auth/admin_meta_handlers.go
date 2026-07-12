@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"encoding/json"
+	"database/sql"
 	"errors"
 	"net/http"
 )
@@ -90,26 +90,29 @@ func adminUserPasswordHandler(svc *Service) http.HandlerFunc {
 			UserID   string `json:"userId"`
 			Password string `json:"password"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid body", http.StatusBadRequest)
+		if err := decodeAuthJSON(w, r, &req); err != nil {
+			writeAuthDecodeError(w, err)
 			return
 		}
 		if req.UserID == "" || req.Password == "" {
 			http.Error(w, "userId and password are required", http.StatusBadRequest)
 			return
 		}
-		if _, err := svc.store.GetUserByID(r.Context(), req.UserID); err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
-			return
-		}
-
-		hash, err := svc.HashPassword(req.Password)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if err := svc.store.UpdatePassword(r.Context(), req.UserID, hash); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		if err := svc.resetPasswordAuthorized(
+			r.Context(),
+			usersManageAuthorization(ac),
+			req.UserID,
+			req.Password,
+		); err != nil {
+			switch {
+			case errors.Is(err, sql.ErrNoRows):
+				http.Error(w, "user not found", http.StatusNotFound)
+			case errors.Is(err, ErrAuthorizationChanged):
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			case writePasswordPolicyError(w, err):
+			default:
+				http.Error(w, "password reset failed", http.StatusInternalServerError)
+			}
 			return
 		}
 

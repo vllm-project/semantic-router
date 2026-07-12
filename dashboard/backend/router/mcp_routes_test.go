@@ -195,7 +195,7 @@ func startDashboardServer(t *testing.T) string {
 	cfg := &config.Config{
 		Port:                   strconv.Itoa(port),
 		AuthDBPath:             filepath.Join(tempDir, "auth.db"),
-		JWTSecret:              "test-secret",
+		JWTSecret:              "0123456789abcdef0123456789abcdef",
 		JWTExpiryHours:         1,
 		BootstrapAdminEmail:    "admin@example.com",
 		BootstrapAdminPassword: "secret-password",
@@ -215,7 +215,10 @@ func startDashboardServer(t *testing.T) string {
 		MLPipelineEnabled:      false,
 	}
 
-	dashboard := Setup(cfg)
+	dashboard, err := Setup(cfg)
+	if err != nil {
+		t.Fatalf("Setup() error = %v", err)
+	}
 	server := &http.Server{
 		Handler:           dashboard.Handler,
 		ReadHeaderTimeout: 5 * time.Second,

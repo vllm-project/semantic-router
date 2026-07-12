@@ -38,7 +38,9 @@ func canRegister(t *testing.T, svc *Service) bool {
 func postRegister(svc *Service, email string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 	body := fmt.Sprintf(`{"email":%q,"password":"secret-password","name":"Admin"}`, email)
-	bootstrapRegisterHandler(svc)(rec, httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap/register", strings.NewReader(body)))
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap/register", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	bootstrapRegisterHandler(svc)(rec, req)
 	return rec
 }
 
@@ -49,9 +51,9 @@ func trackHashCalls(t *testing.T) *int {
 	t.Helper()
 	calls := 0
 	orig := hashBootstrapPassword
-	hashBootstrapPassword = func(svc *Service, password string) (string, error) {
+	hashBootstrapPassword = func(svc *Service, email, password string) (string, error) {
 		calls++
-		return orig(svc, password)
+		return orig(svc, email, password)
 	}
 	t.Cleanup(func() { hashBootstrapPassword = orig })
 	return &calls

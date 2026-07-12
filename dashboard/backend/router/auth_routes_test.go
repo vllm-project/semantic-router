@@ -3,7 +3,11 @@ package router
 import (
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 )
 
 // When the auth service fails to initialize (authSvc == nil), wrapWithAuth must
@@ -69,4 +73,50 @@ func TestWrapWithAuthFailsClosedWhenAuthUnavailable(t *testing.T) {
 			t.Fatalf("admin route status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
 		}
 	})
+}
+
+func TestSetupAuthRoutesFailsClosedForInvalidPasswordBlocklist(t *testing.T) {
+	t.Parallel()
+
+	mux := http.NewServeMux()
+	cfg := &config.Config{
+		AuthDBPath:            filepath.Join(t.TempDir(), "auth.db"),
+		PasswordBlocklistPath: filepath.Join(t.TempDir(), "missing-password-blocklist.txt"),
+	}
+	svc, err := setupAuthRoutes(mux, cfg)
+	if svc != nil {
+		t.Fatal("setupAuthRoutes() returned a service for an invalid blocklist")
+	}
+	if err == nil {
+		t.Fatal("setupAuthRoutes() accepted an invalid blocklist")
+	}
+	server, setupErr := Setup(cfg)
+	if server != nil || setupErr == nil {
+		t.Fatalf("Setup() = (%#v, %v), want blocklist startup failure", server, setupErr)
+	}
+}
+
+func TestSetupAuthRoutesFailsClosedForWeakConfiguredJWTSecret(t *testing.T) {
+	t.Parallel()
+
+	mux := http.NewServeMux()
+	cfg := &config.Config{
+		AuthDBPath: filepath.Join(t.TempDir(), "auth.db"),
+		JWTSecret:  "too-short",
+	}
+	svc, err := setupAuthRoutes(mux, cfg)
+	if svc != nil {
+		t.Fatal("setupAuthRoutes() returned a service for a weak JWT secret")
+	}
+	if err == nil {
+		t.Fatal("setupAuthRoutes() accepted a weak JWT secret")
+	}
+	if strings.Contains(err.Error(), cfg.JWTSecret) {
+		t.Fatalf("setup error exposed configured JWT secret: %q", err)
+	}
+
+	server, setupErr := Setup(cfg)
+	if server != nil || setupErr == nil {
+		t.Fatalf("Setup() = (%#v, %v), want startup failure", server, setupErr)
+	}
 }

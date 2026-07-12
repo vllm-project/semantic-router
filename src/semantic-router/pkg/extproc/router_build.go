@@ -7,6 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -52,10 +53,15 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		return nil, err
 	}
 
+	looperAuthenticator, err := newLooperRequestAuthenticatorFromEnvironment()
+	if err != nil {
+		return nil, fmt.Errorf("initialize looper request authentication: %w", err)
+	}
 	router, err := buildOpenAIRouterFromConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
+	router.looperAuthenticator = looperAuthenticator
 
 	config.Replace(cfg)
 	logLoadedRouterConfig(configPath, cfg)
@@ -65,6 +71,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 func newOpenAIRouterForServer(
 	configPath string,
 	runtimeRegistry *routerruntime.Registry,
+	looperAuthenticator *looper.RequestAuthenticator,
 ) (*OpenAIRouter, error) {
 	cfg, publishGlobal, err := resolveInitialRouterConfig(configPath, runtimeRegistry)
 	if err != nil {
@@ -75,6 +82,7 @@ func newOpenAIRouterForServer(
 	if err != nil {
 		return nil, err
 	}
+	router.looperAuthenticator = looperAuthenticator
 
 	if publishGlobal {
 		config.Replace(cfg)

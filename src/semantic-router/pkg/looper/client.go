@@ -29,28 +29,72 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // Client handles HTTP requests to OpenAI-compatible endpoints
 type Client struct {
-	httpClient   *http.Client
-	endpoint     string
-	headers      map[string]string
-	decisionName string // Decision name to pass in looper requests
-	fusionDepth  int    // Recursion guard for Fusion requests
+	httpClient           *http.Client
+	endpoint             string
+	headers              map[string]string
+	decisionName         string // Decision name to pass in looper requests
+	fusionDepth          int    // Recursion guard for Fusion requests
+	requestAuthenticator *RequestAuthenticator
+}
+
+// looperHTTPTransport is intentionally shared across Looper clients so model
+// fan-out and successive requests retain the standard library's connection
+// pooling behavior. It is a private clone: disabling proxy discovery here must
+// never mutate http.DefaultTransport for unrelated outbound clients.
+var looperHTTPTransport = newLooperHTTPTransport()
+
+func newLooperHTTPTransport() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	// The Looper endpoint is an exact privileged reentry boundary. Ambient
+	// HTTP_PROXY/HTTPS_PROXY settings must not receive model credentials,
+	// request content, or the replayable internal Looper credential.
+	transport.Proxy = nil
+	return transport
 }
 
 // NewClient creates a new looper HTTP client
 func NewClient(cfg *config.LooperConfig) *Client {
 	c := &Client{
 		httpClient: &http.Client{
-			Timeout: time.Duration(cfg.GetTimeout()) * time.Second,
+			Timeout:   time.Duration(cfg.GetTimeout()) * time.Second,
+			Transport: looperHTTPTransport,
+			// The configured endpoint is an exact privileged reentry boundary.
+			// Following redirects could replay model credentials, request content,
+			// and the internal Looper credential to a different origin.
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
 		},
 		endpoint: cfg.Endpoint,
-		headers:  cfg.Headers,
+		headers:  sanitizeConfiguredHeaders(cfg.Headers),
 	}
 	return c
+}
+
+func sanitizeConfiguredHeaders(configured map[string]string) map[string]string {
+	if len(configured) == 0 {
+		return nil
+	}
+	sanitized := make(map[string]string, len(configured))
+	for name, value := range configured {
+		if isReservedLooperHeader(name) {
+			continue
+		}
+		sanitized[name] = value
+	}
+	return sanitized
+}
+
+func isReservedLooperHeader(name string) bool {
+	lowerName := strings.ToLower(name)
+	return strings.HasPrefix(lowerName, "x-vsr-looper-") ||
+		lowerName == headers.VSRFusionDepth
 }
 
 // SetDecisionName sets the decision name for this client
@@ -61,6 +105,10 @@ func (c *Client) SetDecisionName(name string) {
 // SetFusionDepth sets the Fusion recursion depth marker for internal requests.
 func (c *Client) SetFusionDepth(depth int) {
 	c.fusionDepth = depth
+}
+
+func (c *Client) setRequestAuthenticator(authenticator *RequestAuthenticator) {
+	c.requestAuthenticator = authenticator
 }
 
 // resolveEndpoint returns the configured looper endpoint.
@@ -136,7 +184,8 @@ type LogprobsConfig struct {
 
 // CallModel sends a request to the configured endpoint with a specific model
 // Parameters:
-//   - iteration: 1-based iteration number for tracking
+//   - iteration: 1-based iteration number for tracking; 0 omits the metadata
+//     for auxiliary calls that are not part of the main iteration sequence
 //   - logprobsCfg: controls whether to enable logprobs and top_logprobs (nil = disabled)
 //   - accessKey: optional API key for Authorization header (Bearer token)
 func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewParams, modelName string, streaming bool, iteration int, logprobsCfg *LogprobsConfig, accessKey string) (*ModelResponse, error) {
@@ -199,16 +248,22 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 
 	// Add looper identification headers
 	// These allow extproc to identify looper requests and lookup decision configuration
-	httpReq.Header.Set("x-vsr-looper-request", "true")
-	httpReq.Header.Set("x-vsr-looper-iteration", fmt.Sprintf("%d", iteration))
+	httpReq.Header.Set(headers.VSRLooperRequest, "true")
+	if iteration > 0 {
+		httpReq.Header.Set(headers.VSRLooperIteration, fmt.Sprintf("%d", iteration))
+	}
 	if c.fusionDepth > 0 {
-		httpReq.Header.Set("x-vsr-fusion-depth", fmt.Sprintf("%d", c.fusionDepth))
+		httpReq.Header.Set(headers.VSRFusionDepth, fmt.Sprintf("%d", c.fusionDepth))
 	}
 
 	// Add decision name header for extproc to lookup decision configuration
 	if c.decisionName != "" {
-		httpReq.Header.Set("x-vsr-looper-decision", c.decisionName)
+		httpReq.Header.Set(headers.VSRLooperDecision, c.decisionName)
 	}
+	// Apply the runtime-owned credential last so configured headers cannot
+	// override it. NewClient without an authenticator keeps the historical
+	// marker metadata but is not trusted by extproc.
+	c.requestAuthenticator.Apply(httpReq.Header)
 
 	// Execute request
 	resp, err := c.httpClient.Do(httpReq)

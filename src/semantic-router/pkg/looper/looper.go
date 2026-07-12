@@ -107,6 +107,14 @@ type Looper interface {
 	Execute(ctx context.Context, req *Request) (*Response, error)
 }
 
+// authenticatedLooper is the internal factory contract. Keeping the
+// authenticator setter in this private interface makes every factory branch
+// prove at compile time that it can receive internal-request credentials.
+type authenticatedLooper interface {
+	Looper
+	setRequestAuthenticator(*RequestAuthenticator)
+}
+
 // Factory creates a Looper instance based on the algorithm type
 func Factory(cfg *config.LooperConfig, algorithmType string) Looper {
 	return FactoryWithSelectionRegistry(cfg, algorithmType, nil)
@@ -119,6 +127,14 @@ func FactoryWithSelectionRegistry(
 	algorithmType string,
 	selectorRegistry *selection.Registry,
 ) Looper {
+	return newLooperWithSelectionRegistry(cfg, algorithmType, selectorRegistry)
+}
+
+func newLooperWithSelectionRegistry(
+	cfg *config.LooperConfig,
+	algorithmType string,
+	selectorRegistry *selection.Registry,
+) authenticatedLooper {
 	switch algorithmType {
 	case "confidence":
 		return NewConfidenceLooper(cfg)
@@ -136,4 +152,17 @@ func FactoryWithSelectionRegistry(
 		// Default to simple looper that just calls models sequentially
 		return NewBaseLooper(cfg)
 	}
+}
+
+// FactoryWithSelectionRegistryAndAuthenticator creates a Looper whose internal
+// model calls carry a runtime-owned authentication token.
+func FactoryWithSelectionRegistryAndAuthenticator(
+	cfg *config.LooperConfig,
+	algorithmType string,
+	selectorRegistry *selection.Registry,
+	authenticator *RequestAuthenticator,
+) Looper {
+	result := newLooperWithSelectionRegistry(cfg, algorithmType, selectorRegistry)
+	result.setRequestAuthenticator(authenticator)
+	return result
 }

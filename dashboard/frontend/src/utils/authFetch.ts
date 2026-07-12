@@ -28,6 +28,14 @@ type PatchedWindow = Window & {
   __vsrAuthWindowOpenWrapped?: boolean
 }
 
+interface UnauthorizedEventDetail {
+  requestRevision: number
+}
+
+// A process-local revision lets a late 401 identify the session that issued
+// its request without copying the bearer token into a global DOM event.
+let authSessionRevision = 0
+
 function getRequestUrl(input: RequestInfo | URL): URL | null {
   if (typeof window === 'undefined') {
     return null
@@ -156,8 +164,13 @@ export function getStoredAuthToken(): string | null {
       window.localStorage.removeItem(STORAGE_KEY)
       clearSessionCookie()
     }
+    authSessionRevision += 1
   }
   return token
+}
+
+export function getAuthSessionRevision(): number {
+  return authSessionRevision
 }
 
 export function storeAuthToken(token: string): string | null {
@@ -171,8 +184,12 @@ export function storeAuthToken(token: string): string | null {
     return null
   }
 
+  const previous = window.localStorage.getItem(STORAGE_KEY)
   window.localStorage.setItem(STORAGE_KEY, next)
   document.cookie = buildSessionCookie(next)
+  if (previous !== next) {
+    authSessionRevision += 1
+  }
   return next
 }
 
@@ -183,6 +200,7 @@ export function clearStoredAuthToken(): void {
 
   window.localStorage.removeItem(STORAGE_KEY)
   clearSessionCookie()
+  authSessionRevision += 1
 }
 
 function buildSessionCookie(token: string): string {
@@ -195,12 +213,29 @@ function clearSessionCookie(): void {
   document.cookie = `${COOKIE_NAME}=; ${COOKIE_PATH}; ${COOKIE_SAME_SITE}; Max-Age=0${secure}`
 }
 
-export function notifyUnauthorized(): void {
+export function notifyUnauthorized(requestRevision: number = getAuthSessionRevision()): void {
   if (typeof window === 'undefined') {
     return
   }
 
-  window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT))
+  window.dispatchEvent(
+    new CustomEvent<UnauthorizedEventDetail>(UNAUTHORIZED_EVENT, {
+      detail: { requestRevision },
+    }),
+  )
+}
+
+export function shouldClearSessionForUnauthorized(currentRevision: number, event: Event): boolean {
+  const detail = (event as CustomEvent<unknown>).detail
+  if (!detail || typeof detail !== 'object' || !('requestRevision' in detail)) {
+    return false
+  }
+
+  const requestRevision = (detail as UnauthorizedEventDetail).requestRevision
+  if (!Number.isSafeInteger(requestRevision) || requestRevision < 0) {
+    return false
+  }
+  return requestRevision === currentRevision
 }
 
 export function withAuthQuery(path: string): string {
@@ -230,7 +265,9 @@ export function installAuthenticatedFetch(): void {
   const wrappedFetch: WrappedFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = getRequestUrl(input)
     const token = getStoredAuthToken()
-    const shouldAttachAuth = Boolean(token) && isProtectedPath(url)
+    const requestRevision = getAuthSessionRevision()
+    const protectedRequest = isProtectedPath(url)
+    const shouldAttachAuth = Boolean(token) && protectedRequest
     const headers = input instanceof Request ? new Headers(input.headers) : new Headers()
     new Headers(init?.headers).forEach((value, key) => {
       headers.set(key, value)
@@ -241,8 +278,8 @@ export function installAuthenticatedFetch(): void {
     }
 
     const response = await originalFetch(input, { ...init, headers })
-    if (shouldAttachAuth && response.status === 401) {
-      notifyUnauthorized()
+    if (protectedRequest && response.status === 401) {
+      notifyUnauthorized(requestRevision)
     }
 
     return response
@@ -269,10 +306,7 @@ function installAuthenticatedWindowOpen(): void {
 
   const originalOpen = window.open.bind(window)
   window.open = ((url?: string | URL, target?: string, features?: string) => {
-    const nextUrl =
-      typeof url === 'string' || url instanceof URL
-        ? toProtectedUrlString(url)
-        : url
+    const nextUrl = typeof url === 'string' || url instanceof URL ? toProtectedUrlString(url) : url
 
     return originalOpen(nextUrl as string | undefined, target, features)
   }) as typeof window.open

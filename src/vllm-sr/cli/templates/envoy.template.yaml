@@ -33,6 +33,7 @@ static_resources:
               - "x-vsr-looper-secret"
               - "x-vsr-looper-decision"
               - "x-vsr-looper-iteration"
+              - "x-vsr-fusion-depth"
               - "x-authz-user-id"
               - "x-authz-user-groups"
               routes:

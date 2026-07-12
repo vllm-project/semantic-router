@@ -38,6 +38,8 @@ from cli.utils import get_logger
 
 log = get_logger(__name__)
 
+_ROUTER_ONLY_ENV_NAMES = frozenset({"VLLM_SR_LOOPER_SHARED_SECRET"})
+
 
 def container_start_vllm_sr(
     config_file,
@@ -107,6 +109,12 @@ def container_start_vllm_sr(
         stack_layout=stack_layout,
     )
 
+    return _start_runtime_containers(runtime, container_specs, common_env)
+
+
+def _start_runtime_containers(runtime, container_specs, common_env):
+    """Start the resolved runtime services and roll back partial startup."""
+
     log.info(f"Starting vLLM Semantic Router runtime with {runtime}...")
     started_containers = []
     stdout_chunks = []
@@ -114,9 +122,16 @@ def container_start_vllm_sr(
 
     for service_name, container_name, cmd in container_specs:
         log.info(f"Starting {service_name} container: {container_name}")
-        log.debug(f"Container command: {' '.join(cmd)}")
+        log.debug(f"Container command: {' '.join(_redact_container_command(cmd))}")
+        run_env = _service_process_env(service_name, common_env)
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+                **({"env": run_env} if run_env is not None else {}),
+            )
         except subprocess.CalledProcessError as exc:
             if exc.stdout:
                 stdout_chunks.append(exc.stdout)
@@ -131,6 +146,22 @@ def container_start_vllm_sr(
             stderr_chunks.append(result.stderr)
 
     return (0, "\n".join(stdout_chunks), "\n".join(stderr_chunks))
+
+
+def _service_process_env(service_name, common_env):
+    """Return host-side environment additions for one runtime service."""
+    if service_name != "router":
+        return None
+
+    router_only_env = {
+        name: common_env[name] for name in _ROUTER_ONLY_ENV_NAMES if name in common_env
+    }
+    if not router_only_env:
+        return None
+
+    process_env = os.environ.copy()
+    process_env.update(router_only_env)
+    return process_env
 
 
 def _build_common_runtime_env(
@@ -285,6 +316,7 @@ def _build_router_runtime_command(
         nofile_limit=nofile_limit,
         network_name=runtime_network_name,
         env_vars=common_env,
+        inherited_env_names=_ROUTER_ONLY_ENV_NAMES,
         mount_specs=_runtime_mount_specs(runtime_paths, include_models=True),
         port_mappings=[
             (stack_layout.router_port, 50051),
@@ -390,7 +422,11 @@ def _build_dashboard_runtime_env(
     listener_port: int,
     stack_layout: RuntimeStackLayout,
 ):
-    dashboard_env = dict(common_env)
+    dashboard_env = {
+        name: value
+        for name, value in common_env.items()
+        if name not in _ROUTER_ONLY_ENV_NAMES
+    }
     dashboard_env.setdefault(
         "TARGET_ROUTER_API_URL", stack_layout.router_api_service_url
     )
@@ -417,6 +453,23 @@ def _build_dashboard_runtime_env(
         "OPENCLAW_MODEL_GATEWAY_CONTAINER_NAME", stack_layout.envoy_container_name
     )
     return dashboard_env
+
+
+def _redact_container_command(cmd: list[str]) -> list[str]:
+    """Return a log-safe command while preserving the executable argv."""
+    from cli.commands.runtime_support import (  # noqa: PLC0415
+        PASSTHROUGH_ENV_RULES,
+    )
+
+    sensitive_names = {name for name, masked in PASSTHROUGH_ENV_RULES if masked}
+    redacted = list(cmd)
+    for index, value in enumerate(redacted):
+        if index == 0 or redacted[index - 1] not in {"-e", "--env"}:
+            continue
+        name, separator, _ = value.partition("=")
+        if separator and name in sensitive_names:
+            redacted[index] = f"{name}=***"
+    return redacted
 
 
 def _resolve_platform(env_vars):
@@ -560,6 +613,7 @@ def _build_service_run_command(
     enable_amd_gpu: bool = False,
     enable_nvidia_gpu: bool = False,
     start_immediately: bool = True,
+    inherited_env_names: frozenset[str] = frozenset(),
 ):
     cmd = build_base_run_command(
         runtime,
@@ -575,7 +629,7 @@ def _build_service_run_command(
     append_mount_specs(cmd, mount_specs)
     append_port_mappings(cmd, port_mappings)
     cmd.extend(["--entrypoint", entrypoint])
-    append_env_vars(cmd, env_vars)
+    append_env_vars(cmd, env_vars, inherit_from_process=inherited_env_names)
     cmd.append(image)
     cmd.extend(command_args)
     return cmd

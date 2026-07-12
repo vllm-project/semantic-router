@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { loadDashboardPage, preloadDashboardRoute, resetDashboardRouteLoader } from './routeLoaders'
+import {
+  loadAccountSecurityPage,
+  loadDashboardPage,
+  preloadDashboardRoute,
+  resetDashboardRouteLoader,
+} from './routeLoaders'
 
 describe('route preloading', () => {
   it('ignores paths outside the dashboard route registry', () => {
@@ -25,5 +30,11 @@ describe('route preloading', () => {
 
     expect(retried).toBeDefined()
     expect(retried).not.toBe(first)
+  })
+
+  it('preloads the account security route through its focused page boundary', () => {
+    resetDashboardRouteLoader(loadAccountSecurityPage)
+
+    expect(preloadDashboardRoute('/account/security')).toBeDefined()
   })
 })

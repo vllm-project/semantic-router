@@ -22,7 +22,11 @@ func newTestAuthService(t *testing.T) *Service {
 		_ = store.Close()
 	})
 
-	return NewService(store, "test-secret", 1)
+	svc, err := NewService(store, testJWTSecret, 1)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	return svc
 }
 
 func newTestUser(t *testing.T, svc *Service, email, role, status string) *User {
@@ -64,6 +68,7 @@ func TestAuthenticateRequestUsesCurrentDatabaseState(t *testing.T) {
 
 		svc := newTestAuthService(t)
 		user := newTestUser(t, svc, "admin@example.com", "admin", "active")
+		newTestUser(t, svc, "backup-admin@example.com", RoleAdmin, defaultUserStatusActive)
 		if _, err := svc.store.UpdateUserRoleOrStatus(context.Background(), user.ID, RoleRead, ""); err != nil {
 			t.Fatalf("UpdateUserRoleOrStatus() error = %v", err)
 		}
@@ -85,6 +90,7 @@ func TestAuthenticateRequestUsesCurrentDatabaseState(t *testing.T) {
 
 		svc := newTestAuthService(t)
 		user := newTestUser(t, svc, "inactive@example.com", "admin", "active")
+		newTestUser(t, svc, "active-admin@example.com", RoleAdmin, defaultUserStatusActive)
 		if _, err := svc.store.UpdateUserRoleOrStatus(context.Background(), user.ID, "", "inactive"); err != nil {
 			t.Fatalf("UpdateUserRoleOrStatus() error = %v", err)
 		}

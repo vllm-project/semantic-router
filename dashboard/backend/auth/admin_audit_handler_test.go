@@ -14,6 +14,7 @@ func TestAdminAuditLogsHandlerReturnsFilteredPage(t *testing.T) {
 
 	svc := newTestAuthService(t)
 	ctx := context.Background()
+	seedAuditFixtureUsers(t, svc.store, "admin-a", "admin-b")
 	fixtures := []AuditLog{
 		{UserID: "admin-a", Action: "user.create", Resource: "users", Method: "POST", Path: "/api/admin/users", StatusCode: 201, CreatedAt: 1_704_067_200},
 		{UserID: "admin-a", Action: "user.update", Resource: "users/user-b", Method: "PATCH", Path: "/api/admin/users/user-b", StatusCode: 204, CreatedAt: 1_704_153_600},
@@ -57,6 +58,7 @@ func TestAdminAuditLogsHandlerPreservesLegacyArrayResponse(t *testing.T) {
 
 	svc := newTestAuthService(t)
 	ctx := context.Background()
+	seedAuditFixtureUsers(t, svc.store, "filler", "admin-a", "admin-b")
 	for index := 0; index < 27; index++ {
 		if err := svc.store.AddAuditLog(ctx, AuditLog{
 			UserID:    "filler",

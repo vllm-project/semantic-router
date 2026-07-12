@@ -17,11 +17,13 @@ def _split_runtime_topology(monkeypatch):
     monkeypatch.setenv("VLLM_SR_TOPOLOGY", "split")
 
 
-def _capture_run_commands(monkeypatch):
+def _capture_run_commands(monkeypatch, process_envs=None):
     captured = []
 
-    def fake_run(cmd, capture_output, text, check):
+    def fake_run(cmd, capture_output, text, check, **kwargs):
         captured.append(cmd)
+        if process_envs is not None:
+            process_envs.append(kwargs.get("env"))
         return SimpleNamespace(stdout="container-id\n", stderr="")
 
     monkeypatch.setattr(container_start.subprocess, "run", fake_run)
@@ -94,6 +96,65 @@ def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
     assert "VLLM_SR_ENVOY_CONFIG_PATH=/app/.vllm-sr/envoy.yaml" in dashboard_cmd
     assert "ENVOY_EXTPROC_ADDRESS=vllm-sr-router-container" in dashboard_cmd
     assert "ENVOY_ROUTER_API_ADDRESS=vllm-sr-router-container" in dashboard_cmd
+
+
+def test_looper_shared_secret_is_router_only_and_redacted(
+    tmp_path, monkeypatch, caplog
+):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+    )
+    shared_secret = "0123456789abcdef" * 4
+
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        container_start,
+        "get_runtime_images",
+        lambda **kwargs: {
+            "router": "router-image:latest",
+            "envoy": "envoy-image:latest",
+            "dashboard": "dashboard-image:latest",
+        },
+    )
+    process_envs = []
+    captured = _capture_run_commands(monkeypatch, process_envs)
+    _stub_valid_container_cli(monkeypatch, tmp_path)
+
+    with caplog.at_level("DEBUG"):
+        rc, _, _ = container_cli.container_start_vllm_sr(
+            str(config_path),
+            {"VLLM_SR_LOOPER_SHARED_SECRET": shared_secret},
+            [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+            network_name="vllm-sr-network",
+            openclaw_network_name="vllm-sr-network",
+            minimal=False,
+        )
+
+    assert rc == 0
+    router_cmd = _find_container_run_cmd(captured, "vllm-sr-router-container")
+    envoy_cmd = _find_container_run_cmd(captured, "vllm-sr-envoy-container")
+    dashboard_cmd = _find_container_run_cmd(captured, "vllm-sr-dashboard-container")
+    assignment = f"VLLM_SR_LOOPER_SHARED_SECRET={shared_secret}"
+    assert assignment not in router_cmd
+    assert "VLLM_SR_LOOPER_SHARED_SECRET" in router_cmd
+    assert assignment not in envoy_cmd
+    assert "VLLM_SR_LOOPER_SHARED_SECRET" not in envoy_cmd
+    assert assignment not in dashboard_cmd
+    assert "VLLM_SR_LOOPER_SHARED_SECRET" not in dashboard_cmd
+    router_process_env = process_envs[captured.index(router_cmd)]
+    assert router_process_env["VLLM_SR_LOOPER_SHARED_SECRET"] == shared_secret
+    assert all(
+        process_env is None or process_env.get("VLLM_SR_LOOPER_SHARED_SECRET") is None
+        for index, process_env in enumerate(process_envs)
+        if index != captured.index(router_cmd)
+    )
+    assert shared_secret not in caplog.text
+    redacted_router_cmd = " ".join(
+        container_start._redact_container_command(router_cmd)
+    )
+    assert shared_secret not in redacted_router_cmd
+    assert "-e VLLM_SR_LOOPER_SHARED_SECRET" in redacted_router_cmd
 
 
 def test_container_start_vllm_sr_uses_role_specific_runtime_images(
@@ -325,14 +386,16 @@ def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(monkeypatch
     monkeypatch.setattr(
         core,
         "provision_storage_backends",
-        lambda config, network_name, stack_layout, **_kwargs: provisioned.update(
-            {
-                "config": config,
-                "network_name": network_name,
-                "stack_layout": stack_layout,
-            }
-        )
-        or set(),
+        lambda config, network_name, stack_layout, **_kwargs: (
+            provisioned.update(
+                {
+                    "config": config,
+                    "network_name": network_name,
+                    "stack_layout": stack_layout,
+                }
+            )
+            or set()
+        ),
     )
     monkeypatch.setattr(
         runtime_lifecycle,

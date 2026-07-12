@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 import yaml
@@ -41,6 +42,7 @@ log = get_logger(__name__)
 RUNTIME_CONFIG_PATH_ENV = "VLLM_SR_RUNTIME_CONFIG_PATH"
 SOURCE_CONFIG_PATH_ENV = "VLLM_SR_SOURCE_CONFIG_PATH"
 RUNTIME_ALGORITHM_OVERRIDE_ENV = "VLLM_SR_ALGORITHM_OVERRIDE"
+LOOPER_SHARED_SECRET_ENV = "VLLM_SR_LOOPER_SHARED_SECRET"
 
 PASSTHROUGH_ENV_RULES = (
     ("HF_ENDPOINT", False),
@@ -51,6 +53,7 @@ PASSTHROUGH_ENV_RULES = (
     ("ANTHROPIC_API_KEY", True),
     ("OPENAI_API_KEY", True),
     ("OPENROUTER_API_KEY", True),
+    (LOOPER_SHARED_SECRET_ENV, True),
     ("OPENCLAW_BASE_IMAGE", False),
     ("SR_LOG_LEVEL", False),
     ("SR_LOG_ENCODING", False),
@@ -101,6 +104,13 @@ def append_passthrough_env_vars(env_vars: dict[str, str]) -> None:
         value = os.environ.get(name)
         if value is None:
             continue
+        if (
+            name == LOOPER_SHARED_SECRET_ENV
+            and re.fullmatch(r"[0-9a-fA-F]{64}", value) is None
+        ):
+            raise ValueError(
+                f"{LOOPER_SHARED_SECRET_ENV} must be exactly 64 hexadecimal characters"
+            )
         env_vars[name] = value
         logged_value = "***" if masked else value
         log.info(f"Passing environment variable: {name}={logged_value}")

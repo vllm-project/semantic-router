@@ -9,6 +9,7 @@ from agent_doc_validation import (
     validate_agent_harness_layers,
     validate_support_files,
 )
+from agent_make_validation import validate_agent_make_contracts
 from agent_resolution import resolve_primary_skill
 from agent_skill_validation import validate_skill_registry
 from agent_support import (
@@ -208,6 +209,7 @@ def collect_validation_errors() -> list[str]:
     validate_skill_registry(repo_manifest, task_matrix, skill_registry, errors)
     validate_routing_fixtures(errors)
     validate_discovery_bridge(errors)
+    validate_agent_make_contracts(REPO_ROOT, errors)
     return errors
 
 

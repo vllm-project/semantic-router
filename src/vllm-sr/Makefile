@@ -334,7 +334,7 @@ rebuild-and-test: install
 		mkdir -p /tmp/static /tmp/data; \
 		printf '<!doctype html><title>ok</title>' > /tmp/static/index.html; \
 		printf 'version: v0.3\nlisteners:\n  - name: http\n    address: 0.0.0.0\n    port: 8899\n' > /tmp/config.yaml; \
-		/usr/local/bin/dashboard-backend -port=8700 -static=/tmp/static -config=/tmp/config.yaml -auth-db /tmp/data/auth.db -auth-jwt-secret test-secret >/tmp/dashboard.log 2>&1 & \
+		/usr/local/bin/dashboard-backend -port=8700 -static=/tmp/static -config=/tmp/config.yaml -auth-db /tmp/data/auth.db -auth-jwt-secret 0123456789abcdef0123456789abcdef >/tmp/dashboard.log 2>&1 & \
 		pid=\$$!; \
 		for i in 1 2 3 4 5; do \
 			if curl -fsS http://127.0.0.1:8700/api/auth/bootstrap/can-register >/tmp/auth.json 2>/dev/null; then break; fi; \

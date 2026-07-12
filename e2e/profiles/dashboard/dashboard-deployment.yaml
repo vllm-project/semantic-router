@@ -78,7 +78,7 @@ spec:
             - name: EVALUATION_DB_PATH
               value: /tmp/vllm-sr-dashboard/evaluations.db
             - name: DASHBOARD_JWT_SECRET
-              value: dashboard-e2e-jwt-secret
+              value: dashboard-e2e-only-jwt-secret-0123456789abcdef
             - name: DASHBOARD_ADMIN_EMAIL
               value: e2e-dashboard-admin@example.com
             - name: DASHBOARD_ADMIN_PASSWORD

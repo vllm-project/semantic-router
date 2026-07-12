@@ -3,9 +3,17 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/router"
+)
+
+const (
+	dashboardReadHeaderTimeout = 10 * time.Second
+	dashboardReadTimeout       = 2 * time.Minute
+	dashboardIdleTimeout       = 2 * time.Minute
+	dashboardMaxHeaderBytes    = 64 * 1024
 )
 
 func main() {
@@ -18,7 +26,10 @@ func main() {
 	log.Printf("Config file path: %s", cfg.AbsConfigPath)
 
 	// Setup routes
-	srv := router.Setup(cfg)
+	srv, err := router.Setup(cfg)
+	if err != nil {
+		log.Fatalf("Failed to setup dashboard: %v", err)
+	}
 
 	// Log configuration
 	addr := ":" + cfg.Port
@@ -46,11 +57,25 @@ func main() {
 	}
 
 	// Start server
-	serveErr := http.ListenAndServe(addr, srv.Handler)
+	httpServer := newDashboardHTTPServer(addr, srv.Handler)
+	serveErr := httpServer.ListenAndServe()
 	if closeErr := srv.Close(); closeErr != nil {
 		log.Printf("Warning: dashboard store shutdown: %v", closeErr)
 	}
 	if serveErr != nil {
 		log.Fatalf("server error: %v", serveErr)
+	}
+}
+
+func newDashboardHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: dashboardReadHeaderTimeout,
+		ReadTimeout:       dashboardReadTimeout,
+		IdleTimeout:       dashboardIdleTimeout,
+		MaxHeaderBytes:    dashboardMaxHeaderBytes,
+		// WriteTimeout remains zero because the dashboard serves intentional
+		// WebSocket/SSE streams. Those transports enforce their own deadlines.
 	}
 }

@@ -249,7 +249,7 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	modelName string,
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
-	decisionName := ctx.Headers[headers.VSRLooperDecision]
+	decisionName := ctx.LooperDecision
 	decision, fallback := r.resolveLooperDecision(modelName, decisionName, ctx)
 	if fallback != nil {
 		return fallback, nil

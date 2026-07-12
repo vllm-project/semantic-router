@@ -216,6 +216,7 @@
 }
 
 .closeButton:focus-visible,
+.securityLink:focus-visible,
 .logoutButton:focus-visible {
   outline: 2px solid var(--focus-ring, rgba(255, 255, 255, 0.72));
   outline-offset: 2px;
@@ -332,8 +333,31 @@
 }
 
 .footer {
+  display: grid;
+  gap: 0.6rem;
   padding: 0.85rem 1.1rem 1rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.securityLink {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 0 0.75rem;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.78rem;
+  font-weight: 680;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+}
+
+.securityLink:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .logoutButton {

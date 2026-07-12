@@ -40,6 +40,91 @@ Run `make helm-safety-validate HELM_REPO_UPDATE=false` from the repository root
 to validate the schema plus the multi-replica local-state safety guards against
 the locked chart dependencies.
 
+## Credential-aware rollbacks
+
+The `vllm-sr` Kubernetes deploy path always gives all router replicas one
+release-scoped 256-bit Looper key. When the environment does not explicitly set
+`VLLM_SR_LOOPER_SHARED_SECRET`, the CLI generates the first key with a
+cryptographically secure RNG and reuses only that key from the current
+CLI-managed Secret on later deploys. An explicit 64-hex-character value rotates
+it. Other omitted credentials are never inherited from an older generation.
+The immutable Secret is sent through `kubectl` standard input and its values do
+not enter command arguments, logs, Helm values, or rendered manifests.
+
+The CLI retains the Secrets referenced by the ten Helm revisions kept for the
+release. Before rolling back, confirm that the target revision is still listed
+and that every referenced Secret exists:
+
+```bash
+helm history RELEASE --namespace NAMESPACE --max 10
+helm get manifest RELEASE --namespace NAMESPACE --revision REVISION
+kubectl get secret SECRET --namespace NAMESPACE
+```
+
+Retention covers Secret references in container environment sources, image
+pull credentials, projected volumes, CSI volumes, and the Kubernetes legacy
+volume sources. An unknown or structurally malformed Deployment source makes
+the scan fail closed and skips deletion. If cleanup after uninstall is only
+partially successful, `vllm-sr stop --target k8s` exits nonzero; a retry removes
+release-labelled generations only after Helm proves the release is absent and
+the current Deployment reference scan succeeds.
+
+The namespace-global legacy Secret `vllm-sr-env-secrets` is not owned by any
+one release, so the CLI never deletes it automatically, including during a
+successful stop or cleanup retry. A scan of current Deployments cannot prove
+that another release's retained Helm revision will not need that Secret for a
+future rollback. If the legacy Secret is to be retired, an operator must first
+audit both of these namespace-wide surfaces manually:
+
+1. every live Pod and workload controller, including custom or operator-managed
+   workloads, for an exact reference to `vllm-sr-env-secrets`; and
+2. every retained revision of every Helm release, including retained history
+   for uninstalled releases, using `helm list --all`, `helm history`, and
+   `helm get manifest`.
+
+Delete the legacy Secret only after both audits show no reference. Retaining an
+unused legacy Secret is safer than invalidating another release's rollback.
+
+Every CLI-created revision persists the `Recreate` strategy, so normal Helm
+rollbacks between those revisions do not overlap old- and new-key router pods.
+A rollback that crosses into an older revision created before this protection
+existed requires router downtime. Delete the exact release router Deployment,
+wait until its pods are gone, and then roll back:
+
+```bash
+kubectl delete deployment --namespace NAMESPACE \
+  --selector app.kubernetes.io/instance=RELEASE,app.kubernetes.io/component=router \
+  --wait=true
+kubectl wait --namespace NAMESPACE --for=delete pod \
+  --selector app.kubernetes.io/instance=RELEASE,app.kubernetes.io/component=router \
+  --timeout=10m
+helm rollback RELEASE REVISION --namespace NAMESPACE --wait --timeout 10m
+```
+
+Deleting the Deployment, rather than scaling it to zero, also prevents an HPA
+from recreating router pods during the credential transition. Do not proceed if
+the target revision or its referenced Secret is no longer retained.
+
+## Password blocklist updates
+
+The dashboard reads the configured password blocklist once during process
+startup. Kubernetes may refresh an existing ConfigMap volume in place, but that
+does not update the in-memory policy. After changing the selected ConfigMap key,
+restart the dashboard Deployment and wait for it to become ready before relying
+on the new corpus:
+
+```bash
+kubectl rollout restart deployment --namespace NAMESPACE \
+  --selector app.kubernetes.io/instance=RELEASE,app.kubernetes.io/component=dashboard
+kubectl rollout status deployment --namespace NAMESPACE \
+  --selector app.kubernetes.io/instance=RELEASE,app.kubernetes.io/component=dashboard \
+  --timeout=10m
+```
+
+Startup fails closed when the configured object, key, or file is unavailable or
+invalid. Test a newly blocked value through the password-change policy before
+considering the corpus update complete.
+
 ## Values
 
 | Key | Type | Default | Description |
@@ -135,6 +220,9 @@ the locked chart dependencies.
 | dashboard.jwtSecret | object | `{"existingSecret":"","existingSecretKey":"jwt-secret"}` | JWT signing secret for dashboard auth sessions. Point this at a Secret you manage (ideally an ExternalSecret) so the signing key is stable. If you leave it unset, the dashboard binary falls back to generating a random secret on every pod start, which invalidates all login sessions on each restart (rolling update, chart bump, or node move forces a re-login). A zero-config install still works (the random fallback is a valid signing key, you can log in and use the dashboard); you just lose existing sessions whenever the pod restarts, so leaving it unset is fine for demos but set this for any deployment where sessions need to survive restarts. |
 | dashboard.jwtSecret.existingSecret | string | `""` | Name of an existing Secret holding the JWT signing key. When set, the dashboard reads DASHBOARD_JWT_SECRET from it via secretKeyRef. When empty, no env is injected and the binary uses its per-start random fallback. |
 | dashboard.jwtSecret.existingSecretKey | string | `"jwt-secret"` | Key within existingSecret holding the JWT signing secret. |
+| dashboard.passwordBlocklist | object | `{"existingConfigMap":"","key":"passwords.txt"}` | Optional existing ConfigMap source for a newline-delimited password blocklist. The corpus is not stored in Helm values or a Secret. |
+| dashboard.passwordBlocklist.existingConfigMap | string | `""` | Name of an existing ConfigMap containing the blocklist. When empty, the dashboard uses its built-in password policy and no volume or env var is rendered. |
+| dashboard.passwordBlocklist.key | string | `"passwords.txt"` | ConfigMap key mounted read-only as `/etc/vllm-sr/password-blocklist/passwords.txt`. |
 | dashboard.persistence.accessMode | string | `"ReadWriteOnce"` | Access mode for the dashboard-local state PVC |
 | dashboard.persistence.annotations | object | `{}` | Annotations for the dashboard-local state PVC |
 | dashboard.persistence.enabled | bool | `false` | Persist dashboard-local SQLite state for auth/session/workflow data. This is restart-safe for one dashboard replica, not a shared HA session store. |

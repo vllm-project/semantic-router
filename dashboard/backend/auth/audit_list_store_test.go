@@ -16,6 +16,7 @@ func TestQueryAuditLogsSupportsEnterpriseFiltersPagingAndSafeSort(t *testing.T) 
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	ctx := context.Background()
+	seedAuditFixtureUsers(t, store, "user-a", "user-b", "user-c")
 
 	fixtures := []AuditLog{
 		{UserID: "user-a", Action: "user.create", Resource: "users", Method: "POST", Path: "/api/admin/users", IP: "10.0.0.1", UserAgent: "console", StatusCode: 201, CreatedAt: 1_704_067_200},
@@ -117,6 +118,7 @@ func TestListAuditLogsRetainsLegacyStoreContract(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	ctx := context.Background()
+	seedAuditFixtureUsers(t, store, "legacy-user")
 	addErr := store.AddAuditLog(ctx, AuditLog{UserID: "legacy-user", Action: "user.update", Resource: "users", StatusCode: 200})
 	if addErr != nil {
 		t.Fatalf("AddAuditLog() error = %v", addErr)

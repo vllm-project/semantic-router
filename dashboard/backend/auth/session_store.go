@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 )
@@ -29,7 +30,7 @@ func (s *Store) CreateSession(ctx context.Context, sessionID, userID string, iss
 	sessionID = strings.TrimSpace(sessionID)
 	userID = strings.TrimSpace(userID)
 	if sessionID == "" || userID == "" {
-		return nil
+		return errors.New("session id and user id are required")
 	}
 
 	_, err := s.db.ExecContext(ctx, `

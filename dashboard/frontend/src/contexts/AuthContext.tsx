@@ -1,16 +1,27 @@
-import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react'
+import React, {
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from 'react'
 import {
   clearStoredAuthToken,
+  getAuthSessionRevision,
   getStoredAuthToken,
   installAuthenticatedFetch,
   normalizeAuthToken,
   notifyUnauthorized,
+  shouldClearSessionForUnauthorized,
   storeAuthToken,
   UNAUTHORIZED_EVENT,
 } from '../utils/authFetch'
 import {
+  changePasswordAndRotateSession,
   fetchCurrentAuthUser,
   hasAuthenticatedSession,
+  readAuthResponseError,
   type AuthUser,
 } from './authSession'
 
@@ -20,26 +31,13 @@ interface AuthContextValue {
   isLoading: boolean
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<void>
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>
   setSession: (token: string, user?: AuthUser | null) => void
   logout: () => void
   refreshSession: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
-
-const readErrorMessage = async (response: Response): Promise<string> => {
-  const body = await response.text()
-  if (!body) {
-    return `HTTP ${response.status}: ${response.statusText}`
-  }
-
-  try {
-    const payload = JSON.parse(body) as { message?: string; error?: string }
-    return payload.message ?? payload.error ?? body
-  } catch {
-    return body
-  }
-}
 
 installAuthenticatedFetch()
 
@@ -60,21 +58,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(storedToken ? (nextUser ?? null) : null)
   }, [])
 
+  const changePassword = useCallback(
+    (currentPassword: string, newPassword: string) =>
+      changePasswordAndRotateSession(currentPassword, newPassword, setSession, user),
+    [setSession, user],
+  )
+
   const refreshSession = useCallback(async () => {
+    const requestRevision = getAuthSessionRevision()
     setIsLoading(true)
     try {
       const result = await fetchCurrentAuthUser()
       if (result.clearLocalToken) {
-        clearSession()
+        notifyUnauthorized(requestRevision)
         return
       }
       setUser(result.user)
     } catch {
-      notifyUnauthorized()
+      notifyUnauthorized(requestRevision)
     } finally {
       setIsLoading(false)
     }
-  }, [clearSession])
+  }, [])
 
   useEffect(() => {
     if (token) {
@@ -90,7 +95,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [refreshSession])
 
   useEffect(() => {
-    const handleUnauthorized = () => {
+    const handleUnauthorized = (event: Event) => {
+      if (!shouldClearSessionForUnauthorized(getAuthSessionRevision(), event)) {
+        return
+      }
       clearSession()
       setIsLoading(false)
     }
@@ -109,7 +117,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       })
 
       if (!response.ok) {
-        throw new Error(await readErrorMessage(response))
+        throw new Error(await readAuthResponseError(response))
       }
 
       const payload = (await response.json()) as { token: string; user?: AuthUser }
@@ -138,6 +146,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isLoading,
         isAuthenticated: hasAuthenticatedSession(token, user),
         login,
+        changePassword,
         setSession,
         logout,
         refreshSession,

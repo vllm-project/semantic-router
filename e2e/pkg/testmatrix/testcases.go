@@ -29,6 +29,8 @@ var BaselineRouterContract = []string{
 	"anthropic-passthrough-openai-regression",
 	// Retention directive response-header contract (issue #2009)
 	"retention-directive",
+	// Internal Looper request authentication and bypass regression (issue #1443)
+	"looper-secret-forgery",
 	// Session observability
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",

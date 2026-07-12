@@ -123,15 +123,35 @@ vllm-sr stop --target k8s
 vllm-sr chat --base-url http://localhost:8080 "hello"
 ```
 
-**Credential handling:** Sensitive environment variables (`HF_TOKEN`, `OPENAI_API_KEY`,
-`ANTHROPIC_API_KEY`) are automatically stored in a Kubernetes Secret
-(`vllm-sr-env-secrets`) and mounted via `envFrom`. They never appear as
-plain-text values in Helm overrides or the Deployment spec. Non-sensitive
-variables (`HF_ENDPOINT`, `HF_HOME`, etc.) are passed as standard `env`
-entries.
+**Credential handling:** The CLI writes sensitive environment variables
+(`HF_TOKEN`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and the Looper shared key)
+to a release-scoped, immutable Kubernetes Secret through `kubectl` standard
+input. Credential values never enter command arguments, logs, Helm values, or
+the Deployment manifest. Non-sensitive variables (`HF_ENDPOINT`, `HF_HOME`,
+etc.) remain ordinary `env` entries.
 
-The secret is created before `helm upgrade --install` and cleaned up by
-`vllm-sr stop --target k8s`.
+Every CLI-managed Kubernetes release gets one 256-bit Looper key shared by all
+router replicas. If `VLLM_SR_LOOPER_SHARED_SECRET` is unset, the first deploy
+generates it with a cryptographically secure RNG and later deploys reuse only
+that key from the currently referenced CLI-managed Secret. Other omitted API
+keys are not carried forward. Set exactly 64 hexadecimal characters to rotate
+the Looper key explicitly. Router revisions use `Recreate` so two credential
+generations never overlap.
+
+The Secret is created before atomic `helm upgrade --install`. Secrets needed by
+the ten retained Helm revisions remain available for rollback; unreferenced
+generations are garbage-collected, and `vllm-sr stop --target k8s` removes the
+release-owned generations after a successful uninstall. An unverifiable or
+partial cleanup makes `stop` fail after the remaining best-effort deletions. A
+retry removes release-labelled generations only after Helm proves the release
+is absent and Kubernetes proves the generation has no live router reference.
+The historical namespace-global `vllm-sr-env-secrets` Secret is never deleted
+automatically because it may still be required by another release's retained
+Helm revision. An operator may remove it only after manually auditing every
+live workload and every retained revision of every Helm release in the
+namespace; a current Deployment scan alone is not sufficient. See the
+[chart rollback guidance](../../deploy/helm/semantic-router/README.md#credential-aware-rollbacks)
+for the complete retirement checklist.
 
 If you start in an empty directory, `vllm-sr serve` bootstraps a minimal workspace and opens the dashboard in setup mode. Configure your first model there, then activate routing.
 

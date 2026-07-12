@@ -54,10 +54,15 @@ def translate_config_to_helm_values(
 
     _translate_config_section(user_config, values)
     _translate_observability(enable_observability, values)
-    _translate_env_vars(env_vars, values, secret_name=env_secret_name)
 
     if profile_values:
         values = _deep_merge(profile_values, values)
+
+    # Profiles may already declare operator-managed env/envFrom entries. Add
+    # the CLI-owned runtime environment after the merge so those references are
+    # preserved and the release-scoped credential Secret is appended exactly
+    # once instead of replacing the profile list.
+    _translate_env_vars(env_vars, values, secret_name=env_secret_name)
 
     return values
 

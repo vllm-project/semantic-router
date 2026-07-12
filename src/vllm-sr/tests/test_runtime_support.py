@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 import yaml
 from cli.bootstrap import build_bootstrap_config
 from cli.commands.runtime_support import (
@@ -65,6 +66,37 @@ def test_append_passthrough_env_vars_includes_router_logging_settings(monkeypatc
 
     assert env_vars["SR_LOG_LEVEL"] == "debug"
     assert env_vars["SR_LOG_ENCODING"] == "console"
+
+
+def test_append_passthrough_env_vars_masks_looper_shared_secret(monkeypatch, caplog):
+    shared_secret = "0123456789abcdef" * 4
+    monkeypatch.setenv("VLLM_SR_LOOPER_SHARED_SECRET", shared_secret)
+
+    env_vars: dict[str, str] = {}
+    with caplog.at_level("INFO", logger="cli.commands.runtime_support"):
+        append_passthrough_env_vars(env_vars)
+
+    assert env_vars["VLLM_SR_LOOPER_SHARED_SECRET"] == shared_secret
+    assert shared_secret not in caplog.text
+    assert "VLLM_SR_LOOPER_SHARED_SECRET=***" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "invalid_secret",
+    ["", "too-short", "g" * 64],
+    ids=["empty", "wrong-length", "non-hexadecimal"],
+)
+def test_append_passthrough_env_vars_rejects_invalid_looper_shared_secret(
+    monkeypatch, invalid_secret
+):
+    monkeypatch.setenv("VLLM_SR_LOOPER_SHARED_SECRET", invalid_secret)
+
+    with pytest.raises(ValueError) as exc_info:
+        append_passthrough_env_vars({})
+
+    assert "must be exactly 64 hexadecimal characters" in str(exc_info.value)
+    if invalid_secret:
+        assert invalid_secret not in str(exc_info.value)
 
 
 def test_resolve_effective_config_path_enables_amd_gpu_by_default(

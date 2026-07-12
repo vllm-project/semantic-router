@@ -2,6 +2,8 @@ package extproc
 
 import (
 	"encoding/json"
+	"net/http"
+	"strings"
 	"testing"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -9,7 +11,9 @@ import (
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 )
 
 type requestHeaderTestCase struct {
@@ -149,7 +153,13 @@ func assertRequestHeaderResponse(
 }
 
 func TestHandleRequestHeadersSetsLooperAndStreamingFlags(t *testing.T) {
-	router := &OpenAIRouter{}
+	authenticator, err := looper.NewRequestAuthenticator()
+	if err != nil {
+		t.Fatalf("NewRequestAuthenticator() error = %v", err)
+	}
+	internalHeaders := make(http.Header)
+	authenticator.Apply(internalHeaders)
+	router := &OpenAIRouter{looperAuthenticator: authenticator}
 	requestHeaders := &ext_proc.ProcessingRequest_RequestHeaders{
 		RequestHeaders: &ext_proc.HttpHeaders{
 			Headers: &core.HeaderMap{
@@ -157,7 +167,8 @@ func TestHandleRequestHeadersSetsLooperAndStreamingFlags(t *testing.T) {
 					{Key: ":method", Value: "POST"},
 					{Key: ":path", Value: "/v1/chat/completions"},
 					{Key: "accept", Value: "text/event-stream"},
-					{Key: "x-vsr-looper-request", Value: "true"},
+					{Key: strings.ToUpper(headers.VSRLooperRequest), Value: internalHeaders.Get(headers.VSRLooperRequest)},
+					{Key: "X-Vsr-Looper-Secret", Value: internalHeaders.Get(headers.VSRLooperSecret)},
 					{Key: "x-request-id", Value: "req-123"},
 				},
 			},
@@ -172,6 +183,12 @@ func TestHandleRequestHeadersSetsLooperAndStreamingFlags(t *testing.T) {
 	if response.GetRequestHeaders() == nil {
 		t.Fatal("expected continue request headers response")
 	}
+	mutation := response.GetRequestHeaders().Response.GetHeaderMutation()
+	for _, name := range looperInternalRequestHeaders {
+		if !containsHeaderName(mutation.GetRemoveHeaders(), name) {
+			t.Fatalf("internal header %q was not removed before upstream", name)
+		}
+	}
 	if !ctx.ExpectStreamingResponse {
 		t.Fatal("expected streaming expectation to be detected")
 	}
@@ -180,6 +197,199 @@ func TestHandleRequestHeadersSetsLooperAndStreamingFlags(t *testing.T) {
 	}
 	if ctx.RequestID != "req-123" {
 		t.Fatalf("expected request ID to be captured, got %q", ctx.RequestID)
+	}
+	if _, ok := ctx.Headers[headers.VSRLooperRequest]; ok {
+		t.Fatal("internal looper marker was retained in request context")
+	}
+	if _, ok := ctx.Headers[headers.VSRLooperSecret]; ok {
+		t.Fatal("internal looper secret was retained in request context")
+	}
+}
+
+func TestRequestTraceHeadersExcludeLooperCredentialsAndMetadata(t *testing.T) {
+	requestHeaders := &ext_proc.ProcessingRequest_RequestHeaders{
+		RequestHeaders: &ext_proc.HttpHeaders{
+			Headers: &core.HeaderMap{Headers: []*core.HeaderValue{
+				{Key: "traceparent", Value: "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01"},
+				{Key: headers.VSRLooperRequest, Value: "true"},
+				{Key: headers.VSRLooperSecret, Value: "secret-canary"},
+				{Key: headers.VSRLooperDecision, Value: "decision-canary"},
+				{Key: headers.VSRLooperIteration, Value: "1"},
+				{Key: headers.VSRFusionDepth, Value: "1"},
+				{Key: "x-vsr-looper-extension", Value: "reserved-canary"},
+			}},
+		},
+	}
+
+	got := requestTraceHeaders(requestHeaders)
+	if got["traceparent"] == "" {
+		t.Fatal("ordinary trace context header was dropped")
+	}
+	for _, name := range looperInternalRequestHeaders {
+		if _, ok := got[name]; ok {
+			t.Fatalf("internal header %q entered trace extraction", name)
+		}
+	}
+	if _, ok := got["x-vsr-looper-extension"]; ok {
+		t.Fatal("reserved looper namespace header entered trace extraction")
+	}
+}
+
+func containsHeaderName(names []string, want string) bool {
+	for _, name := range names {
+		if name == want {
+			return true
+		}
+	}
+	return false
+}
+
+type unauthenticatedLooperMarkerCase struct {
+	name            string
+	secret          string
+	duplicateSecret bool
+}
+
+func TestHandleRequestHeadersRejectsUnauthenticatedLooperMarkers(t *testing.T) {
+	authenticator, err := looper.NewRequestAuthenticator()
+	if err != nil {
+		t.Fatalf("NewRequestAuthenticator() error = %v", err)
+	}
+	validHeaders := make(http.Header)
+	authenticator.Apply(validHeaders)
+
+	otherAuthenticator, err := looper.NewRequestAuthenticator()
+	if err != nil {
+		t.Fatalf("NewRequestAuthenticator() other error = %v", err)
+	}
+	otherHeaders := make(http.Header)
+	otherAuthenticator.Apply(otherHeaders)
+
+	tests := []unauthenticatedLooperMarkerCase{
+		{name: "missing secret"},
+		{name: "wrong secret", secret: "forged"},
+		{name: "different process token", secret: otherHeaders.Get(headers.VSRLooperSecret)},
+		{name: "duplicate secret", secret: validHeaders.Get(headers.VSRLooperSecret), duplicateSecret: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assertUnauthenticatedLooperMarkerRejected(t, authenticator, test)
+		})
+	}
+}
+
+func assertUnauthenticatedLooperMarkerRejected(
+	t *testing.T,
+	authenticator *looper.RequestAuthenticator,
+	test unauthenticatedLooperMarkerCase,
+) {
+	t.Helper()
+	values := []*core.HeaderValue{
+		{Key: ":method", Value: "POST"},
+		{Key: ":path", Value: "/v1/chat/completions"},
+		{Key: headers.VSRLooperRequest, Value: "true"},
+	}
+	if test.secret != "" {
+		values = append(values, &core.HeaderValue{
+			Key: headers.VSRLooperSecret, Value: test.secret,
+		})
+	}
+	if test.duplicateSecret {
+		values = append(values, &core.HeaderValue{
+			Key: headers.VSRLooperSecret, Value: test.secret,
+		})
+	}
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	response, err := (&OpenAIRouter{
+		looperAuthenticator: authenticator,
+	}).handleRequestHeaders(&ext_proc.ProcessingRequest_RequestHeaders{
+		RequestHeaders: &ext_proc.HttpHeaders{
+			Headers: &core.HeaderMap{Headers: values},
+		},
+	}, ctx)
+	if err != nil {
+		t.Fatalf("handleRequestHeaders() error = %v", err)
+	}
+	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_Forbidden {
+		t.Fatalf("status = %s, want Forbidden", got)
+	}
+	if test.secret != "" && strings.Contains(
+		string(response.GetImmediateResponse().GetBody()),
+		test.secret,
+	) {
+		t.Fatal("error response exposed the supplied looper secret")
+	}
+	if ctx.LooperRequest {
+		t.Fatal("unauthenticated marker was accepted as an internal request")
+	}
+	if _, ok := ctx.Headers[headers.VSRLooperSecret]; ok {
+		t.Fatal("invalid looper secret was retained in request context")
+	}
+}
+
+func TestHandleRequestHeadersRejectsReservedLooperNamespaceHeader(t *testing.T) {
+	authenticator, err := looper.NewRequestAuthenticator()
+	if err != nil {
+		t.Fatalf("NewRequestAuthenticator() error = %v", err)
+	}
+	validHeaders := make(http.Header)
+	authenticator.Apply(validHeaders)
+
+	tests := []struct {
+		name           string
+		includeAuth    bool
+		reservedHeader string
+	}{
+		{
+			name:           "ancillary header without authentication",
+			reservedHeader: "x-vsr-looper-extension",
+		},
+		{
+			name:           "unknown header with otherwise valid authentication",
+			includeAuth:    true,
+			reservedHeader: "x-vsr-looper-future-metadata",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			values := []*core.HeaderValue{
+				{Key: ":method", Value: "POST"},
+				{Key: ":path", Value: "/v1/chat/completions"},
+				{Key: test.reservedHeader, Value: "reserved"},
+			}
+			if test.includeAuth {
+				values = append(values,
+					&core.HeaderValue{
+						Key: headers.VSRLooperRequest, Value: validHeaders.Get(headers.VSRLooperRequest),
+					},
+					&core.HeaderValue{
+						Key: headers.VSRLooperSecret, Value: validHeaders.Get(headers.VSRLooperSecret),
+					},
+				)
+			}
+
+			ctx := &RequestContext{Headers: make(map[string]string)}
+			response, err := (&OpenAIRouter{
+				looperAuthenticator: authenticator,
+			}).handleRequestHeaders(&ext_proc.ProcessingRequest_RequestHeaders{
+				RequestHeaders: &ext_proc.HttpHeaders{
+					Headers: &core.HeaderMap{Headers: values},
+				},
+			}, ctx)
+			if err != nil {
+				t.Fatalf("handleRequestHeaders() error = %v", err)
+			}
+			if got := response.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_Forbidden {
+				t.Fatalf("status = %s, want Forbidden", got)
+			}
+			if ctx.LooperRequest {
+				t.Fatal("request with an unknown reserved header was trusted")
+			}
+			if _, ok := ctx.Headers[test.reservedHeader]; ok {
+				t.Fatal("reserved looper namespace header was retained in request context")
+			}
+		})
 	}
 }
 

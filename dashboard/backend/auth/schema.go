@@ -134,6 +134,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   password_hash TEXT NOT NULL,
+  auth_generation INTEGER NOT NULL DEFAULT 0 CHECK(auth_generation >= 0),
   role TEXT NOT NULL DEFAULT 'read',
   status TEXT NOT NULL DEFAULT 'active',
   created_at INTEGER NOT NULL,

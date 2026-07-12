@@ -1,21 +1,8 @@
 package auth
 
 import (
-	"context"
 	"sort"
 )
-
-func userHasPermission(ctx context.Context, svc *Service, userID, role, status, permission string) (bool, error) {
-	if status != defaultUserStatusActive {
-		return false, nil
-	}
-
-	perms, err := svc.store.GetEffectivePermissions(ctx, role, userID)
-	if err != nil {
-		return false, err
-	}
-	return perms[permission], nil
-}
 
 func cloneSessionUser(user *User, perms map[string]bool) *User {
 	if user == nil {
