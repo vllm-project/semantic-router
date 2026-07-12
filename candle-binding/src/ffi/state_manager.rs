@@ -10,7 +10,7 @@ use crate::classifiers::unified::DualPathUnifiedClassifier;
 use crate::core::similarity::BertSimilarity;
 use crate::model_architectures::traditional::bert::TraditionalBertClassifier;
 
-use crate::registry::REGISTRY;
+use crate::registry::get_registry();
 
 /// System state for the global state manager
 #[derive(Debug, Clone, PartialEq)]
@@ -69,7 +69,7 @@ impl GlobalStateManager {
             .map_err(|e| format!("Failed to update system state: {}", e))? =
             SystemState::Initializing;
 
-        REGISTRY.register("unified_classifier", classifier)?;
+        get_registry().register("unified_classifier", classifier)?;
 
         // Update system state to ready
         *self
@@ -82,7 +82,7 @@ impl GlobalStateManager {
 
     /// Get the unified classifier
     pub fn get_unified_classifier(&self) -> Option<Arc<DualPathUnifiedClassifier>> {
-        REGISTRY.get::<DualPathUnifiedClassifier>("unified_classifier")
+        get_registry().get::<DualPathUnifiedClassifier>("unified_classifier")
     }
 
     /// Check if unified classifier is initialized
@@ -94,12 +94,12 @@ impl GlobalStateManager {
 
     /// Initialize the parallel LoRA engine
     pub fn init_parallel_lora_engine(&self, engine: ParallelLoRAEngine) -> Result<(), String> {
-        REGISTRY.register("parallel_lora_engine", engine)
+        get_registry().register("parallel_lora_engine", engine)
     }
 
     /// Get the parallel LoRA engine
     pub fn get_parallel_lora_engine(&self) -> Option<Arc<ParallelLoRAEngine>> {
-        REGISTRY.get::<ParallelLoRAEngine>("parallel_lora_engine")
+        get_registry().get::<ParallelLoRAEngine>("parallel_lora_engine")
     }
 
     /// Initialize the LoRA token classifier
@@ -107,24 +107,24 @@ impl GlobalStateManager {
         &self,
         classifier: LoRATokenClassifier,
     ) -> Result<(), String> {
-        REGISTRY.register("lora_token_classifier", classifier)
+        get_registry().register("lora_token_classifier", classifier)
     }
 
     /// Get the LoRA token classifier
     pub fn get_lora_token_classifier(&self) -> Option<Arc<LoRATokenClassifier>> {
-        REGISTRY.get::<LoRATokenClassifier>("lora_token_classifier")
+        get_registry().get::<LoRATokenClassifier>("lora_token_classifier")
     }
 
     // Similarity Engine Management
 
     /// Initialize the BERT similarity engine
     pub fn init_bert_similarity(&self, similarity: BertSimilarity) -> Result<(), String> {
-        REGISTRY.register("bert_similarity", similarity)
+        get_registry().register("bert_similarity", similarity)
     }
 
     /// Get the BERT similarity engine
     pub fn get_bert_similarity(&self) -> Option<Arc<BertSimilarity>> {
-        REGISTRY.get::<BertSimilarity>("bert_similarity")
+        get_registry().get::<BertSimilarity>("bert_similarity")
     }
 
     // Legacy Classifier Management
@@ -134,7 +134,7 @@ impl GlobalStateManager {
         &self,
         classifier: TraditionalBertClassifier,
     ) -> Result<(), String> {
-        REGISTRY.register("legacy_bert", classifier)
+        get_registry().register("legacy_bert", classifier)
     }
 
     /// Initialize a legacy BERT PII classifier
@@ -142,7 +142,7 @@ impl GlobalStateManager {
         &self,
         classifier: TraditionalBertClassifier,
     ) -> Result<(), String> {
-        REGISTRY.register("legacy_bert_pii", classifier)
+        get_registry().register("legacy_bert_pii", classifier)
     }
 
     /// Initialize a legacy BERT jailbreak classifier
@@ -150,13 +150,13 @@ impl GlobalStateManager {
         &self,
         classifier: TraditionalBertClassifier,
     ) -> Result<(), String> {
-        REGISTRY.register("legacy_bert_jailbreak", classifier)
+        get_registry().register("legacy_bert_jailbreak", classifier)
     }
 
     /// Get a legacy classifier by name
     pub fn get_legacy_classifier(&self, name: &str) -> Option<Arc<TraditionalBertClassifier>> {
         let key = format!("legacy_{}", name);
-        REGISTRY.get::<TraditionalBertClassifier>(&key)
+        get_registry().get::<TraditionalBertClassifier>(&key)
     }
 
     // System State Management
@@ -194,13 +194,13 @@ impl GlobalStateManager {
         }
 
         // Clear all components
-        let _ = REGISTRY.unregister("unified_classifier");
-        let _ = REGISTRY.unregister("parallel_lora_engine");
-        let _ = REGISTRY.unregister("lora_token_classifier");
-        let _ = REGISTRY.unregister("bert_similarity");
-        let _ = REGISTRY.unregister("legacy_bert");
-        let _ = REGISTRY.unregister("legacy_bert_pii");
-        let _ = REGISTRY.unregister("legacy_bert_jailbreak");
+        let _ = get_registry().unregister("unified_classifier");
+        let _ = get_registry().unregister("parallel_lora_engine");
+        let _ = get_registry().unregister("lora_token_classifier");
+        let _ = get_registry().unregister("bert_similarity");
+        let _ = get_registry().unregister("legacy_bert");
+        let _ = get_registry().unregister("legacy_bert_pii");
+        let _ = get_registry().unregister("legacy_bert_jailbreak");
 
         // Update system state
         if let Ok(mut state) = self.system_state.write() {

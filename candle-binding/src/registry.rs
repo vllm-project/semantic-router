@@ -32,4 +32,8 @@ impl ModelRegistry {
     }
 }
 
-pub static REGISTRY: LazyLock<ModelRegistry> = LazyLock::new(ModelRegistry::new);
+static REGISTRY_ONCE: std::sync::OnceLock<ModelRegistry> = std::sync::OnceLock::new();
+
+pub fn get_registry() -> &'static ModelRegistry {
+    REGISTRY_ONCE.get_or_init(ModelRegistry::new)
+}
