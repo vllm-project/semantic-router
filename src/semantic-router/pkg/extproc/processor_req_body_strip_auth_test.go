@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -151,7 +150,7 @@ func TestBuildRouteHeaderStateForwardOptInStillReceivesCredential(t *testing.T) 
 	headerMap := headerValuesByName(state.setHeaders)
 	assert.Equal(t, callerAuthCanary, headerMap["Authorization"],
 		"forward opt-in must still deliver the caller credential verbatim")
-	assert.True(t, strings.Contains(headerMap["Authorization"], "caller-virtual-key-canary"))
+	assert.Contains(t, headerMap["Authorization"], "caller-virtual-key-canary")
 }
 
 // TestRouterReplayRecordExcludesCallerAuthorization is the Replay canary: a
