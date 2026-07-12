@@ -6,6 +6,7 @@ describe('dashboard social metadata', () => {
     const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8')
     const image = readFileSync(
       new URL('../../public/vllm-sr-logo.social.png', import.meta.url),
+      'utf8',
     )
 
     expect(html).toContain('property="og:site_name" content="vLLM Semantic Router"')
@@ -16,7 +17,7 @@ describe('dashboard social metadata', () => {
     expect(html).toMatch(
       /name="twitter:image"\s+content="https:\/\/play\.vllm-semantic-router\.com\/vllm-sr-logo\.social\.png"/,
     )
-    expect(image.subarray(1, 4).toString('ascii')).toBe('PNG')
-    expect(image.byteLength).toBeGreaterThan(100_000)
+    expect(image.slice(1, 4)).toBe('PNG')
+    expect(image.length).toBeGreaterThan(100_000)
   })
 })

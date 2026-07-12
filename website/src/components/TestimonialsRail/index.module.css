@@ -73,7 +73,7 @@
   padding: clamp(1.5rem, 3vw, 2.5rem);
   border: 1px solid var(--site-border);
   background: var(--site-bg);
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.035);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
   transition:
     border-color 180ms ease,
     box-shadow 180ms ease,
@@ -83,7 +83,7 @@
 .card:hover,
 .card:focus-within {
   border-color: var(--site-border-strong);
-  box-shadow: 0 22px 48px rgba(15, 23, 42, 0.075);
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.28);
   transform: translateY(-2px);
 }
 

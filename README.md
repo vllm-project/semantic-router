@@ -22,12 +22,12 @@
 
 **That is why we built vLLM Semantic Router**—to turn signals and preferences into executable model paths for every user, product, and workload.
 
-| Dimension | Today's landscape | With vLLM SR |
+| Dimension | Fragmented today | With vLLM SR |
 | --- | --- | --- |
-| **Models** | Frontier, open, specialized, and edge models excel at different work. | Compose them into personalized model paths. |
-| **Compute** | GPUs, accelerators, edge devices, and cloud capacity coexist. | Route across heterogeneous compute. |
-| **Location** | Inference spans edge, private data centers, and cloud. | Respect privacy and data boundaries. |
-| **Preference** | "Best" varies by user, product, and workload. | Make those preferences executable. |
+| **Models** | Models specialize in different work. | Compose personalized model paths. |
+| **Compute** | GPUs, accelerators, edge, and cloud coexist. | Route across heterogeneous compute. |
+| **Location** | Inference spans edge, private, and cloud. | Keep data within its boundaries. |
+| **Preference** | "Best" changes by user and workload. | Make every preference executable. |
 
 [Explore how it works →](https://vllm-semantic-router.com/docs/)
 

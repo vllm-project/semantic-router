@@ -3,6 +3,7 @@ import {
   mockAuthenticatedAppShell,
   mockAuthenticatedSession,
 } from "./support/auth";
+import { openComposerAddMenu } from "./support/playground";
 
 const baseSetupState = {
   setupMode: false,
@@ -581,7 +582,7 @@ test.describe("Dashboard auth flow", () => {
     ]);
     await expect(page).toHaveURL(/\/status$/, { timeout: 12000 });
     await expect(
-      page.getByRole("heading", { name: "System Status", exact: true }),
+      page.getByRole("heading", { name: "System status", exact: true }),
     ).toBeVisible();
   });
 
@@ -747,18 +748,19 @@ test.describe("Dashboard auth flow", () => {
     await expect(page.getByRole("link", { name: "Users" })).toHaveCount(0);
 
     await page.goto("/playground");
+    const composerMenu = await openComposerAddMenu(page);
     await expect(
-      page.getByRole("button", { name: /Enable HireClaw|Disable HireClaw/i }),
+      composerMenu.getByRole("menuitemcheckbox", { name: /Enable HireClaw|Disable HireClaw/i }),
     ).toBeEnabled();
     await expect(
-      page.getByRole("button", {
+      composerMenu.getByRole("menuitemcheckbox", {
         name: /Open ClawRoom view|Exit ClawRoom view/i,
       }),
     ).toHaveCount(0);
 
-    await page.getByRole("button", { name: /Enable HireClaw/i }).click();
+    await composerMenu.getByRole("menuitemcheckbox", { name: /Enable HireClaw/i }).click();
     await expect(
-      page.getByRole("button", {
+      composerMenu.getByRole("menuitemcheckbox", {
         name: /Open ClawRoom view|Exit ClawRoom view/i,
       }),
     ).toBeEnabled();

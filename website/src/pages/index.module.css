@@ -1,8 +1,56 @@
 .page {
+  --site-bg: #050505;
+  --site-bg-alt: #09090a;
+  --site-surface: #101012;
+  --site-surface-alt: #151518;
+  --site-surface-raised: #1b1b1f;
+  --site-surface-soft: rgba(255, 255, 255, 0.035);
+  --site-surface-glass: rgba(16, 16, 18, 0.82);
+  --site-text: #f5f5f7;
+  --site-text-strong: #ffffff;
+  --site-muted: #777780;
+  --site-muted-bright: #b6b6bd;
+  --site-border: rgba(255, 255, 255, 0.085);
+  --site-border-strong: rgba(255, 255, 255, 0.17);
+  --site-accent: #30a2ff;
+  --site-accent-strong: #75c5ff;
+  --site-accent-soft: rgba(48, 162, 255, 0.14);
+  --site-shadow-soft: 0 18px 42px rgba(0, 0, 0, 0.22);
+  --site-shadow: 0 24px 64px rgba(0, 0, 0, 0.3);
+  --site-shadow-raised: 0 28px 70px rgba(0, 0, 0, 0.36);
   display: grid;
   gap: 0;
   overflow-x: clip;
+  background: #030303;
+  color: var(--site-text);
+  color-scheme: dark;
+}
+
+.bandBlack,
+.bandGraphite,
+.bandRaised {
+  min-width: 0;
   background: var(--site-bg);
+}
+
+.bandBlack {
+  --site-bg: #050505;
+  --site-surface: #101012;
+  --site-surface-alt: #151518;
+}
+
+.bandGraphite {
+  --site-bg: #09090a;
+  --site-surface: #111113;
+  --site-surface-alt: #18181b;
+  --site-surface-raised: #202024;
+}
+
+.bandRaised {
+  --site-bg: #0d0d0f;
+  --site-surface: #131316;
+  --site-surface-alt: #1a1a1e;
+  --site-surface-raised: #222227;
 }
 
 .heroStage {
@@ -568,6 +616,132 @@
   letter-spacing: 0.035em;
 }
 
+.architectureMatrix {
+  overflow: hidden;
+  border-top: 1px solid var(--site-border-strong);
+  border-bottom: 1px solid var(--site-border-strong);
+  background: #0d0d0f;
+}
+
+.matrixHeader,
+.matrixRow {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.22fr) minmax(0, 0.39fr) minmax(0, 0.39fr);
+}
+
+.matrixHeader {
+  min-height: 3.1rem;
+  align-items: center;
+  border-bottom: 1px solid var(--site-border-strong);
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--site-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.matrixHeader span,
+.matrixDimension,
+.matrixFragmented,
+.matrixUnified {
+  min-width: 0;
+  padding: 1rem clamp(1rem, 2vw, 1.65rem);
+}
+
+.matrixHeader span + span,
+.matrixFragmented,
+.matrixUnified {
+  border-left: 1px solid var(--site-border);
+}
+
+.matrixHeader span:last-child {
+  color: var(--site-accent-strong);
+}
+
+.matrixRow {
+  min-height: 7.75rem;
+  border-bottom: 1px solid var(--site-border);
+}
+
+.matrixRow:last-child {
+  border-bottom: 0;
+}
+
+.matrixDimension,
+.matrixFragmented,
+.matrixUnified {
+  display: flex;
+  align-items: center;
+}
+
+.matrixDimension {
+  gap: 0.9rem;
+}
+
+.matrixDimension > span {
+  flex: 0 0 auto;
+  color: var(--site-accent-strong);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.matrixDimension > span::after {
+  content: '';
+  display: inline-block;
+  width: 1.5rem;
+  height: 1px;
+  margin-left: 0.55rem;
+  vertical-align: middle;
+  background: rgba(48, 162, 255, 0.52);
+}
+
+.matrixDimension strong {
+  color: var(--site-text-strong);
+  font-size: clamp(1.05rem, 1.65vw, 1.35rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.matrixFragmented p,
+.matrixUnified p {
+  margin: 0;
+  font-size: clamp(0.94rem, 1.3vw, 1.08rem);
+  line-height: 1.5;
+}
+
+.matrixFragmented p {
+  color: var(--site-muted);
+}
+
+.matrixUnified {
+  position: relative;
+  background: linear-gradient(90deg, rgba(48, 162, 255, 0.1), rgba(48, 162, 255, 0.025));
+}
+
+.matrixUnified::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -1px;
+  width: 2px;
+  background: linear-gradient(180deg, transparent, var(--site-accent), transparent);
+  opacity: 0.75;
+}
+
+.matrixUnified p {
+  color: var(--site-text-strong);
+  font-weight: 560;
+}
+
+.matrixMobileLabel {
+  display: none;
+}
+
 .capabilityStats {
   padding-top: 0.25rem;
 }
@@ -659,9 +833,9 @@
   align-items: flex-start;
   padding: 1.4rem;
   background:
-    radial-gradient(circle at top, rgba(15, 23, 42, 0.06), transparent 34%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.022), transparent 42%),
-    rgba(255, 255, 255, 0.9);
+    radial-gradient(circle at top, rgba(48, 162, 255, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 42%),
+    var(--site-surface);
 }
 
 .encoderPipelineFrame::before {
@@ -669,8 +843,8 @@
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, rgba(15, 23, 42, 0.05) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.05) 1px, transparent 1px);
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
   background-size: 38px 38px;
   mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), transparent 96%);
 }
@@ -932,6 +1106,53 @@
 
   .capabilitySummary .capabilityCta {
     justify-self: start;
+  }
+
+  .matrixHeader {
+    display: none;
+  }
+
+  .architectureMatrix {
+    display: grid;
+    gap: 0.75rem;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .matrixRow {
+    grid-template-columns: 1fr;
+    min-height: 0;
+    border: 1px solid var(--site-border);
+    background: #0d0d0f;
+  }
+
+  .matrixDimension,
+  .matrixFragmented,
+  .matrixUnified {
+    padding: 1rem 1.05rem;
+  }
+
+  .matrixFragmented,
+  .matrixUnified {
+    display: grid;
+    gap: 0.45rem;
+    border-top: 1px solid var(--site-border);
+    border-left: 0;
+  }
+
+  .matrixMobileLabel {
+    display: block;
+    color: var(--site-muted);
+    font-family: var(--ifm-font-family-monospace);
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+  }
+
+  .matrixUnified .matrixMobileLabel {
+    color: var(--site-accent-strong);
   }
 
   .architectureRail {

@@ -73,7 +73,7 @@
   padding: 1.15rem;
   border: 1px solid var(--site-border);
   background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.02), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 36%),
     var(--site-surface-alt);
   transition:
     border-color 180ms ease,
@@ -109,7 +109,7 @@
   width: fit-content;
   padding: 0.18rem 0.46rem;
   border: 1px solid var(--site-border);
-  background: rgba(15, 23, 42, 0.045);
+  background: rgba(255, 255, 255, 0.045);
   color: var(--site-muted-bright);
   font-size: 0.62rem;
   font-weight: 600;
@@ -119,16 +119,16 @@
 }
 
 .steering {
-  background: rgba(15, 23, 42, 0.08);
+  background: rgba(48, 162, 255, 0.12);
   color: var(--site-text);
 }
 
 .committer {
-  background: rgba(15, 23, 42, 0.05);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .contributor {
-  background: rgba(15, 23, 42, 0.035);
+  background: rgba(255, 255, 255, 0.035);
 }
 
 .memberName {

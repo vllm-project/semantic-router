@@ -1680,8 +1680,8 @@
 [data-theme='dark'] .agentLoopReturnArrow,
 .transformerArrow,
 [data-theme='dark'] .transformerArrow {
-  color: rgba(15, 23, 42, 0.78);
-  text-shadow: 0 0 0.01px rgba(15, 23, 42, 0.45);
+  color: var(--site-muted-bright);
+  text-shadow: 0 0 12px rgba(48, 162, 255, 0.18);
 }
 
 .entropyLabelActive,
@@ -1706,8 +1706,8 @@
 [data-theme='dark'] .transformerExitLane,
 .transformerEntropyTrack,
 [data-theme='dark'] .transformerEntropyTrack {
-  border-color: rgba(15, 23, 42, 0.18);
-  background: rgba(15, 23, 42, 0.035);
+  border-color: var(--site-border-strong);
+  background: rgba(255, 255, 255, 0.028);
 }
 
 .figureCanvas,

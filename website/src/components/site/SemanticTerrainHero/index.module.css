@@ -1,0 +1,493 @@
+.stage {
+  --terrain-model-gap: 2.5rem;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-rows: minmax(36rem, 1fr) auto;
+  min-height: calc(100vh - var(--site-header-height));
+  min-height: calc(100svh - var(--site-header-height));
+  overflow: hidden;
+  background: #030303;
+  color: #fafafa;
+}
+
+.terrain {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  background: #030303;
+  color: #a1a1aa;
+  font-family: var(--ifm-font-family-monospace);
+  pointer-events: none;
+  user-select: none;
+}
+
+.terrainCanvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  opacity: 0.74;
+  pointer-events: auto;
+  touch-action: pan-y;
+}
+
+.terrainCanvas[data-dragging='true'] {
+  cursor: grabbing;
+}
+
+.terrainHud,
+.terrainLegend {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  text-transform: uppercase;
+}
+
+.terrainHud {
+  top: 1.5rem;
+  left: 1.5rem;
+  display: grid;
+  gap: 0.45rem;
+  color: #71717a;
+  font-size: 0.625rem;
+  letter-spacing: 0.1em;
+}
+
+.terrainHud div {
+  display: grid;
+  grid-template-columns: 5.5rem auto;
+  gap: 1rem;
+}
+
+.terrainHud span {
+  color: #fafafa;
+}
+
+.terrainLegend {
+  right: 1.5rem;
+  bottom: 7.8rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.terrainLegendItem {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: #71717a;
+  font-size: 0.56rem;
+  letter-spacing: 0.05em;
+}
+
+.terrainLegendItem > span {
+  width: 0.5rem;
+  height: 0.5rem;
+}
+
+.terrainLegendItem strong {
+  font-weight: 500;
+}
+
+.terrainCrosshair {
+  position: absolute;
+  top: 48%;
+  left: 70%;
+  width: 2.5rem;
+  height: 2.5rem;
+  transform: translate(-50%, -50%);
+  mix-blend-mode: difference;
+}
+
+.terrainCrosshair::before,
+.terrainCrosshair::after {
+  content: '';
+  position: absolute;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.terrainCrosshair::before {
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.terrainCrosshair::after {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+}
+
+.hero {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  min-height: 0;
+  align-items: center;
+  padding: clamp(5rem, 9vh, 7.5rem) 0 clamp(4rem, 7vh, 6rem);
+  pointer-events: none;
+}
+
+.heroScrim {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background:
+    radial-gradient(circle at 31% 52%, rgba(3, 3, 3, 0.95) 0, rgba(3, 3, 3, 0.76) 28%, transparent 58%),
+    linear-gradient(90deg, rgba(3, 3, 3, 0.82), rgba(3, 3, 3, 0.18) 68%, rgba(3, 3, 3, 0.38));
+  pointer-events: none;
+}
+
+.copy {
+  display: grid;
+  width: min(100%, 54rem);
+  gap: 1.25rem;
+  justify-items: start;
+  pointer-events: auto;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #f4f4f5;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.brand img {
+  width: 1.7rem;
+  height: 1.7rem;
+  object-fit: contain;
+}
+
+.systemLabel {
+  margin: 0.8rem 0 0;
+  color: #a1a1aa;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.copy h1 {
+  display: grid;
+  gap: 0.04em;
+  max-width: 12ch;
+  margin: 0;
+  color: #fafafa;
+  font-size: clamp(3.4rem, 7.25vw, 7.25rem);
+  font-weight: 420;
+  letter-spacing: -0.062em;
+  line-height: 0.86;
+}
+
+.copy h1 span {
+  display: block;
+  white-space: nowrap;
+}
+
+.copy h1 .accent {
+  color: #30a2ff;
+  font-weight: 720;
+}
+
+.description {
+  max-width: 36rem;
+  margin: 0.65rem 0 0;
+  color: #b2b2b8;
+  font-size: clamp(1rem, 1.3vw, 1.18rem);
+  font-weight: 480;
+  line-height: 1.6;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.actions .primaryCta,
+.actions .secondaryCta {
+  min-width: 13rem;
+  min-height: 3.15rem;
+  border-radius: 0.25rem;
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.actions .primaryCta {
+  border-color: #30a2ff;
+  background: #30a2ff;
+  color: #030303;
+  box-shadow: 0 16px 36px rgba(48, 162, 255, 0.22);
+}
+
+.actions .primaryCta:hover {
+  border-color: #75c5ff;
+  background: #75c5ff;
+  color: #030303;
+}
+
+.actions .secondaryCta {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(3, 3, 3, 0.64);
+  color: #fafafa;
+  box-shadow: none;
+}
+
+.actions .secondaryCta:hover {
+  border-color: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.modelBand {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.9rem 0 1.15rem;
+  background: linear-gradient(180deg, rgba(3, 3, 3, 0.16), rgba(3, 3, 3, 0.94) 38%);
+}
+
+.modelBandLabel {
+  justify-self: center;
+  color: #71717a;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.58rem;
+  font-weight: 650;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.modelViewport {
+  overflow: hidden;
+  width: 100%;
+  padding: 0 1.5rem;
+  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+}
+
+.modelTrack,
+.modelSequence {
+  display: flex;
+  width: max-content;
+  min-width: max-content;
+  align-items: center;
+  gap: var(--terrain-model-gap);
+}
+
+.modelTrack {
+  animation: terrain-model-scroll 105s linear infinite;
+  will-change: transform;
+}
+
+.modelBand:hover .modelTrack {
+  animation-play-state: paused;
+}
+
+.model {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.75rem;
+  color: #a1a1aa;
+  white-space: nowrap;
+}
+
+.model svg {
+  width: 1.75rem;
+  height: 1.75rem;
+  opacity: 0.82;
+}
+
+.model strong {
+  color: #b8b8be;
+  font-size: 1rem;
+  font-weight: 570;
+  letter-spacing: -0.01em;
+}
+
+@keyframes terrain-model-scroll {
+  to {
+    transform: translate3d(calc(-50% - (var(--terrain-model-gap) / 2)), 0, 0);
+  }
+}
+
+@media (max-width: 996px) {
+  .stage {
+    grid-template-rows: minmax(32rem, 1fr) auto;
+  }
+
+  .terrainLegend {
+    display: none;
+  }
+
+  .terrainCrosshair {
+    left: 76%;
+  }
+
+  .hero {
+    padding: 5rem 0 3.5rem;
+  }
+
+  .copy {
+    width: min(100%, 46rem);
+  }
+}
+
+@media (max-width: 640px) {
+  .stage {
+    --terrain-model-gap: 1.6rem;
+    grid-template-rows: minmax(31rem, 1fr) auto;
+  }
+
+  .terrainCanvas {
+    opacity: 0.58;
+    pointer-events: none;
+  }
+
+  .terrainHud {
+    top: 1rem;
+    left: 1rem;
+    opacity: 0.75;
+  }
+
+  .terrainHud div:nth-child(2),
+  .terrainHud div:nth-child(3) {
+    display: none;
+  }
+
+  .terrainCrosshair {
+    top: 22%;
+    left: 82%;
+  }
+
+  .hero {
+    align-items: end;
+    padding: 5.2rem 0 2.4rem;
+  }
+
+  .heroScrim {
+    background:
+      linear-gradient(180deg, transparent, rgba(3, 3, 3, 0.64) 28%, rgba(3, 3, 3, 0.96) 68%),
+      radial-gradient(circle at 40% 60%, rgba(3, 3, 3, 0.84), transparent 72%);
+  }
+
+  .copy {
+    gap: 0.9rem;
+  }
+
+  .brand {
+    font-size: 0.65rem;
+  }
+
+  .systemLabel {
+    max-width: 26rem;
+    margin-top: 0.4rem;
+    font-size: 0.58rem;
+  }
+
+  .copy h1 {
+    font-size: clamp(2.45rem, 10.2vw, 3.2rem);
+    line-height: 0.88;
+  }
+
+  .description {
+    max-width: 29rem;
+    font-size: 0.95rem;
+  }
+
+  .actions {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  .actions .primaryCta,
+  .actions .secondaryCta {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .modelBand {
+    padding-bottom: 0.95rem;
+  }
+
+  .modelViewport {
+    padding: 0 0.75rem;
+  }
+
+  .model svg {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .model strong {
+    font-size: 0.86rem;
+  }
+}
+
+@media (max-height: 800px) and (min-width: 641px) {
+  .stage {
+    grid-template-rows: minmax(29rem, 1fr) auto;
+  }
+
+  .hero {
+    padding-top: 3rem;
+    padding-bottom: 2rem;
+  }
+
+  .copy {
+    gap: 0.8rem;
+  }
+
+  .copy h1 {
+    font-size: clamp(3.35rem, 6.2vw, 5.25rem);
+  }
+
+  .systemLabel {
+    margin-top: 0;
+  }
+
+  .description,
+  .actions {
+    margin-top: 0.25rem;
+  }
+
+  .modelBand {
+    gap: 0.45rem;
+    padding-top: 0.55rem;
+    padding-bottom: 0.7rem;
+  }
+
+  .model svg {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .model strong {
+    font-size: 0.86rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modelTrack {
+    animation: none;
+  }
+}

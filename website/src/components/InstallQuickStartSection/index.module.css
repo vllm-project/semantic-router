@@ -80,6 +80,9 @@
 
 .command {
   display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--site-text);
   font-family: var(--ifm-font-family-monospace);
   font-size: clamp(1rem, 1.85vw, 1.42rem);

@@ -377,6 +377,9 @@
   "homepage.hero.label": {
     "message": "面向异构 LLM 推理"
   },
+  "homepage.hero.systemLabel": {
+    "message": "面向异构 LLM 推理的系统级智能"
+  },
   "homepage.hero.line1": {
     "message": "构建你的"
   },
@@ -423,55 +426,58 @@
     "message": "架构"
   },
   "homepage.capabilities.heading": {
-    "message": "汇聚每个模型的最佳能力。"
+    "message": "统一异构推理。"
   },
   "homepage.capabilities.description": {
-    "message": "将前沿、开源、专用与边缘模型组合成一套可执行架构——由信号、偏好与策略共同塑造。"
+    "message": "在四个维度上统一碎片化的模型生态。"
   },
   "homepage.capabilities.axis.models": {
-    "message": "模型集群"
+    "message": "模型"
   },
   "homepage.capabilities.axis.compute": {
-    "message": "运行时"
+    "message": "算力"
   },
   "homepage.capabilities.axis.location": {
     "message": "位置"
   },
   "homepage.capabilities.axis.preference": {
-    "message": "偏好层"
+    "message": "偏好"
   },
   "homepage.capabilities.table.dimension": {
-    "message": "架构层"
+    "message": "维度"
   },
   "homepage.capabilities.table.reality": {
-    "message": "输入"
+    "message": "当下的碎片化"
   },
   "homepage.capabilities.table.value": {
-    "message": "输出"
+    "message": "使用 vLLM SR"
+  },
+  "homepage.capabilities.table.aria": {
+    "message": "碎片化推理与 vLLM Semantic Router 的对比"
   },
   "homepage.capabilities.models.reality": {
-    "message": "前沿 · 开源 · 专用 · 边缘"
+    "message": "不同模型擅长不同任务。"
   },
   "homepage.capabilities.models.value": {
-    "message": "异构 LLM"
+    "message": "组合个性化模型路径。"
   },
   "homepage.capabilities.compute.reality": {
-    "message": "路由 · 级联 · 融合"
+    "message": "GPU、加速器、边缘与云端算力并存。"
   },
   "homepage.capabilities.compute.value": {
-    "message": "可执行模型路径"
+    "message": "跨异构算力完成路由。"
   },
   "homepage.capabilities.location.reality": {
-    "message": "边缘 · 私有云 · 公有云"
+    "message": "推理横跨边缘、私有环境与云端。"
   },
   "homepage.capabilities.location.value": {
-    "message": "跨位置模型路径"
+    "message": "让数据始终留在边界之内。"
   },
   "homepage.capabilities.preference.reality": {
-    "message": "偏好 · 策略 · 上下文"
+    "message": "“最佳”因用户与负载而变化。"
   },
   "homepage.capabilities.preference.value": {
-    "message": "信号塑造模型路径"
+    "message": "让每一种偏好都可执行。"
   },
   "homepage.capabilities.docsCta": {
     "message": "了解工作原理"
