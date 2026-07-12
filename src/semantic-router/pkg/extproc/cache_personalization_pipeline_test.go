@@ -28,12 +28,13 @@ type spyCache struct {
 
 func (s *spyCache) IsEnabled() bool                                            { return true }
 func (s *spyCache) CheckConnection() error                                     { return nil }
-func (s *spyCache) LastSimilarity() float32                                    { return 0 }
 func (s *spyCache) Close() error                                               { return nil }
 func (s *spyCache) GetStats() cache.CacheStats                                 { return cache.CacheStats{} }
 func (s *spyCache) UpdateWithResponse(string, []byte, int) error               { return nil }
 func (s *spyCache) AddEntry(string, string, string, []byte, []byte, int) error { return nil }
-func (s *spyCache) FindSimilar(string, string) ([]byte, bool, error)           { return nil, false, nil }
+func (s *spyCache) FindSimilar(context.Context, string, string) (cache.LookupResult, error) {
+	return cache.LookupResult{}, nil
+}
 
 func (s *spyCache) AddPendingRequest(_ string, _ string, query string, _ []byte, _ int) error {
 	s.pendingAdded = true
@@ -41,13 +42,13 @@ func (s *spyCache) AddPendingRequest(_ string, _ string, query string, _ []byte,
 	return nil
 }
 
-func (s *spyCache) FindSimilarWithThreshold(_ string, query string, _ float32) ([]byte, bool, error) {
+func (s *spyCache) FindSimilarWithThreshold(_ context.Context, _ string, query string, _ float32) (cache.LookupResult, error) {
 	s.findCalled = true
 	s.findQuery = query
 	if s.shouldHit {
-		return s.hitResponse, true, nil
+		return cache.LookupResult{Body: s.hitResponse, Found: true}, nil
 	}
-	return nil, false, nil
+	return cache.LookupResult{}, nil
 }
 
 func makeOpenAIRequestBody(model, content string) []byte {

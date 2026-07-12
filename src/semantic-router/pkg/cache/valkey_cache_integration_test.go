@@ -166,7 +166,7 @@ func TestValkeyCacheIntegration_FindSimilar(t *testing.T) {
 		time.Sleep(time.Duration(200*(i+1)) * time.Millisecond)
 
 		// Test FindSimilar with exact same query
-		foundResponse, hit, err = cache.FindSimilar(model, query)
+		foundResponse, hit, err = findSimilar(cache, model, query)
 		require.NoError(t, err, "FindSimilar should not error")
 
 		if hit {
@@ -198,7 +198,7 @@ func TestValkeyCacheIntegration_FindSimilarWithThreshold(t *testing.T) {
 
 	// Test with very similar query
 	similarQuery := "Explain neural networks"
-	foundResponse, hit, err := cache.FindSimilarWithThreshold(model, similarQuery, 0.95)
+	foundResponse, hit, err := findSimilarWithThreshold(cache, model, similarQuery, 0.95)
 	assert.NoError(t, err, "FindSimilarWithThreshold should not error")
 
 	if hit {
@@ -207,7 +207,7 @@ func TestValkeyCacheIntegration_FindSimilarWithThreshold(t *testing.T) {
 
 	// Test with very different query (should miss)
 	differentQuery := "What is the weather today?"
-	foundResponse, hit, err = cache.FindSimilarWithThreshold(model, differentQuery, 0.95)
+	foundResponse, hit, err = findSimilarWithThreshold(cache, model, differentQuery, 0.95)
 	assert.NoError(t, err, "FindSimilarWithThreshold should not error even on miss")
 
 	if !hit {
@@ -279,7 +279,7 @@ func TestValkeyCacheIntegration_UpdateWithResponse(t *testing.T) {
 		}
 		time.Sleep(time.Duration(200*(i+1)) * time.Millisecond)
 
-		foundResponse, hit, err = cache.FindSimilar(model, query)
+		foundResponse, hit, err = findSimilar(cache, model, query)
 		require.NoError(t, err)
 
 		if hit {
@@ -334,7 +334,7 @@ func TestValkeyCacheIntegration_UpdateWithResponseSpecialChars(t *testing.T) {
 
 			// Verify the updated entry is searchable
 			time.Sleep(300 * time.Millisecond)
-			foundResponse, hit, err := cache.FindSimilar("gpt-4", tc.query)
+			foundResponse, hit, err := findSimilar(cache, "gpt-4", tc.query)
 			assert.NoError(t, err)
 			if hit {
 				assert.Contains(t, string(foundResponse), tc.requestID, "Response should match the request ID")
@@ -450,7 +450,7 @@ func TestValkeyCacheIntegration_DisabledCache(t *testing.T) {
 	err = cache.AddPendingRequest("req_2", "gpt-4", "test", []byte("{}"), 300)
 	assert.NoError(t, err, "AddPendingRequest should not error when disabled")
 
-	_, hit, err := cache.FindSimilar("gpt-4", "test")
+	_, hit, err := findSimilar(cache, "gpt-4", "test")
 	assert.NoError(t, err, "FindSimilar should not error when disabled")
 	assert.False(t, hit, "FindSimilar should return false when disabled")
 
@@ -515,7 +515,7 @@ func TestValkeyCacheIntegration_FLATIndexType(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	response, hit, err := cache.FindSimilar("gpt-4", "test flat index")
+	response, hit, err := findSimilar(cache, "gpt-4", "test flat index")
 	assert.NoError(t, err, "FindSimilar should work with FLAT index")
 	if hit {
 		assert.NotNil(t, response, "Response should be found")
@@ -543,7 +543,7 @@ func TestValkeyCacheIntegration_ConcurrentOperations(t *testing.T) {
 					errChan <- err
 				}
 
-				_, _, err = cache.FindSimilar("gpt-4", query)
+				_, _, err = findSimilar(cache, "gpt-4", query)
 				if err != nil {
 					errChan <- err
 				}
@@ -605,15 +605,15 @@ func TestValkeyCacheIntegration_MultipleEntries(t *testing.T) {
 	// conversion regression reports all three queries rather than aborting on
 	// the first one.
 	for i, entry := range entries {
-		foundResponse, hit, err := cache.FindSimilar("gpt-4", entry.query)
+		lookupResult, err := cache.FindSimilar(context.Background(), "gpt-4", entry.query)
 		if !assert.NoError(t, err, "FindSimilar should not error for %s", entry.query) {
 			continue
 		}
-		if !assert.True(t, hit, "repeating %q verbatim must hit (similarity=%.4f, threshold=0.8)",
-			entry.query, cache.LastSimilarity()) {
+		if !assert.True(t, lookupResult.Found, "repeating %q verbatim must hit (similarity=%.4f, threshold=0.8)",
+			entry.query, lookupResult.Similarity) {
 			continue
 		}
-		assert.JSONEq(t, storedResponses[i], string(foundResponse))
+		assert.JSONEq(t, storedResponses[i], string(lookupResult.Body))
 	}
 }
 
@@ -677,11 +677,11 @@ func TestValkeyCacheIntegration_L2MetricType(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	response, hit, err := cache.FindSimilar("gpt-4", "test L2 metric")
+	lookupResult, err := cache.FindSimilar(context.Background(), "gpt-4", "test L2 metric")
 	require.NoError(t, err, "FindSimilar should work with L2 metric")
-	require.True(t, hit, "repeating the cached query verbatim must hit (similarity=%.4f, threshold=0.5)",
-		cache.LastSimilarity())
-	assert.JSONEq(t, `{"result":"L2"}`, string(response))
+	require.True(t, lookupResult.Found, "repeating the cached query verbatim must hit (similarity=%.4f, threshold=0.5)",
+		lookupResult.Similarity)
+	assert.JSONEq(t, `{"result":"L2"}`, string(lookupResult.Body))
 }
 
 func TestValkeyCacheIntegration_IPMetricType(t *testing.T) {
@@ -692,9 +692,9 @@ func TestValkeyCacheIntegration_IPMetricType(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	response, hit, err := cache.FindSimilar("gpt-4", "test IP metric")
+	lookupResult, err := cache.FindSimilar(context.Background(), "gpt-4", "test IP metric")
 	require.NoError(t, err, "FindSimilar should work with IP metric")
-	require.True(t, hit, "repeating the cached query verbatim must hit (similarity=%.4f, threshold=0.5)",
-		cache.LastSimilarity())
-	assert.JSONEq(t, `{"result":"IP"}`, string(response))
+	require.True(t, lookupResult.Found, "repeating the cached query verbatim must hit (similarity=%.4f, threshold=0.5)",
+		lookupResult.Similarity)
+	assert.JSONEq(t, `{"result":"IP"}`, string(lookupResult.Body))
 }

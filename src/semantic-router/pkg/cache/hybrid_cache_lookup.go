@@ -19,26 +19,27 @@ type candidateWithID struct {
 }
 
 // FindSimilar searches for semantically similar cached requests.
-func (h *HybridCache) FindSimilar(model string, query string) ([]byte, bool, error) {
-	return h.findSimilar(model, query, h.similarityThreshold, "find_similar", "HybridCache.FindSimilar")
+func (h *HybridCache) FindSimilar(ctx context.Context, model string, query string) (LookupResult, error) {
+	return h.findSimilar(ctx, model, query, h.similarityThreshold, "find_similar", "HybridCache.FindSimilar")
 }
 
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold.
-func (h *HybridCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
-	return h.findSimilar(model, query, threshold, "find_similar_threshold", "HybridCache.FindSimilarWithThreshold")
+func (h *HybridCache) FindSimilarWithThreshold(ctx context.Context, model string, query string, threshold float32) (LookupResult, error) {
+	return h.findSimilar(ctx, model, query, threshold, "find_similar_threshold", "HybridCache.FindSimilarWithThreshold")
 }
 
 func (h *HybridCache) findSimilar(
+	ctx context.Context,
 	model string,
 	query string,
 	threshold float32,
 	metricOp string,
 	logPrefix string,
-) ([]byte, bool, error) {
+) (LookupResult, error) {
 	start := time.Now()
 
 	if !h.enabled {
-		return nil, false, nil
+		return LookupResult{}, nil
 	}
 
 	logging.Debugf("%s: searching for model='%s', query=%s, threshold=%.3f",
@@ -47,43 +48,44 @@ func (h *HybridCache) findSimilar(
 	queryEmbedding, err := h.generateEmbedding(query)
 	if err != nil {
 		metrics.RecordCacheOperation("hybrid", metricOp, "error", time.Since(start).Seconds())
-		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
+		return LookupResult{}, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
 	candidatesWithIDs, totalCandidates := h.searchCandidates(queryEmbedding, threshold)
 	if len(candidatesWithIDs) == 0 {
 		h.recordLookupMiss(start, metricOp, logPrefix, threshold, model, totalCandidates, 0)
-		return nil, false, nil
+		return LookupResult{}, nil
 	}
 
 	logging.Debugf("%s: HNSW returned %d candidates, %d above threshold",
 		logPrefix, totalCandidates, len(candidatesWithIDs))
 
-	responseBody, candidate, found := h.fetchResponseFromCandidates(logPrefix, model, candidatesWithIDs)
+	responseBody, candidate, found := h.fetchResponseFromCandidates(ctx, logPrefix, model, candidatesWithIDs)
 	if found {
-		h.StoreSimilarity(candidate.similarity)
 		h.recordLookupHit(start, metricOp, threshold, model, candidate)
-		return responseBody, true, nil
+		return LookupResult{Body: responseBody, Found: true, Similarity: candidate.similarity}, nil
 	}
 
 	// The global HNSW graph may return a nearest neighbor from another model
 	// partition. Milvus owns the exact model filter, so fall back to its
 	// partitioned vector search instead of returning or silently accepting the
 	// wrong candidate.
-	responseBody, found, err = h.milvusCache.FindSimilarWithThreshold(model, query, threshold)
+	lookupResult, err := h.milvusCache.FindSimilarWithThreshold(ctx, model, query, threshold)
 	if err != nil {
 		metrics.RecordCacheOperation("hybrid", metricOp, "error", time.Since(start).Seconds())
-		return nil, false, err
+		return LookupResult{}, err
 	}
-	if found {
-		candidate = candidateWithID{similarity: h.milvusCache.LastSimilarity()}
-		h.StoreSimilarity(candidate.similarity)
+	if lookupResult.Found {
+		candidate = candidateWithID{similarity: lookupResult.Similarity}
 		h.recordLookupHit(start, metricOp, threshold, model, candidate)
-		return responseBody, true, nil
+		return lookupResult, nil
 	}
 
 	h.recordLookupMiss(start, metricOp, logPrefix, threshold, model, totalCandidates, len(candidatesWithIDs))
-	return nil, false, nil
+	// Best HNSW candidate was above threshold but Milvus fetch failed;
+	// surface its score as the per-request best so callers can distinguish this
+	// "found in index, unfetchable" miss from a no-candidate miss.
+	return LookupResult{Similarity: candidatesWithIDs[0].similarity}, nil
 }
 
 func (h *HybridCache) searchCandidates(queryEmbedding []float32, threshold float32) ([]candidateWithID, int) {
@@ -114,11 +116,15 @@ func (h *HybridCache) candidatesAboveThresholdLocked(candidates []searchResult, 
 }
 
 func (h *HybridCache) fetchResponseFromCandidates(
+	parent context.Context,
 	logPrefix string,
 	model string,
 	candidates []candidateWithID,
 ) ([]byte, candidateWithID, bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
 	defer cancel()
 
 	for _, candidate := range candidates {

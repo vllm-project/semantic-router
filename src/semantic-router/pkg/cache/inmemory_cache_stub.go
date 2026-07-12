@@ -2,10 +2,11 @@
 
 package cache
 
+import "context"
+
 // InMemoryCache provides high-performance in-memory semantic caching
 type InMemoryCache struct {
-	SimilarityTracker // embedded — provides LastSimilarity()
-	enabled           bool
+	enabled bool
 }
 
 // InMemoryCacheOptions contains configuration for the in-memory cache
@@ -49,20 +50,13 @@ func (c *InMemoryCache) AddEntry(requestID string, model string, query string, r
 }
 
 // FindSimilar searches for semantically similar cached requests
-func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, error) {
-	if !c.enabled {
-		return nil, false, nil
-	}
-	// Always return miss for mock unless we want to simulate hits
-	return nil, false, nil
+func (c *InMemoryCache) FindSimilar(_ context.Context, model string, query string) (LookupResult, error) {
+	return LookupResult{}, nil
 }
 
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
-func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
-	if !c.enabled {
-		return nil, false, nil
-	}
-	return nil, false, nil
+func (c *InMemoryCache) FindSimilarWithThreshold(_ context.Context, model string, query string, threshold float32) (LookupResult, error) {
+	return LookupResult{}, nil
 }
 
 // Close releases all resources
