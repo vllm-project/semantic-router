@@ -1,6 +1,6 @@
 .container {
-  --layout-header-height: 80px;
-  --layout-shell-gutter: clamp(1.5rem, 3.5vw, 4.5rem);
+  --layout-header-height: var(--app-header-height);
+  --layout-shell-gutter: var(--app-shell-gutter);
 
   display: flex;
   flex-direction: column;
@@ -441,11 +441,6 @@ button.navLink {
 }
 
 @media (max-width: 1023px) {
-  .container {
-    --layout-header-height: 56px;
-    --layout-shell-gutter: 1rem;
-  }
-
   .headerContent {
     display: flex;
     justify-content: space-between;
