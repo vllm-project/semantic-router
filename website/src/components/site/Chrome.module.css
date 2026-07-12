@@ -66,6 +66,24 @@
   color: var(--site-bg);
 }
 
+[data-theme='dark'] .pill {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 12px 28px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme='dark'] .pillMuted {
+  border-color: var(--site-border-strong);
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--site-muted-bright);
+}
+
+[data-theme='dark'] .pillMuted:hover {
+  border-color: var(--site-accent);
+  background: rgba(48, 162, 255, 0.12);
+  color: var(--site-text-strong);
+}
+
 .pageIntro {
   display: grid;
   gap: 1.25rem;

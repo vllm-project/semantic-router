@@ -33,93 +33,13 @@
   overflow: hidden;
 }
 
-.routingStatus {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 48px;
-  padding: 0.62rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(7, 8, 9, 0.72);
-  backdrop-filter: blur(18px) saturate(120%);
-  -webkit-backdrop-filter: blur(18px) saturate(120%);
-}
-
-.routingStatusIdentity {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  gap: 0.58rem;
-}
-
-.routingStatusMark {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: #f4f4f5;
-  box-shadow: 0 0 0 4px rgba(244, 244, 245, 0.08);
-}
-
-.routingStatusTitle {
-  color: #f8f8f8;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.routingStatusDivider {
-  width: 1px;
-  height: 14px;
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.routingStatusLabel {
-  color: rgba(255, 255, 255, 0.52);
-  font-size: 0.74rem;
-  letter-spacing: 0.03em;
-}
-
-.routingStatusModel {
-  max-width: 44%;
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.68);
-  font-size: 0.72rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.routingStatusRetry {
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.82);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.72rem;
-  padding: 0.36rem 0.58rem;
-}
-
-.routingStatusRetry:hover {
-  border-color: rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-}
-
 .playgroundSidebarShell {
   display: flex;
   flex: 0 0 auto;
   min-height: 0;
   height: 100%;
-  background:
-    linear-gradient(180deg, rgba(40, 44, 52, 0.38) 0%, rgba(19, 21, 27, 0.62) 100%);
+  background: #09090a;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    inset -1px 0 0 rgba(255, 255, 255, 0.03),
-    18px 0 40px rgba(0, 0, 0, 0.18);
-  backdrop-filter: blur(18px) saturate(132%);
-  -webkit-backdrop-filter: blur(18px) saturate(132%);
 }
 
 .playgroundSidebarRail {
@@ -137,17 +57,20 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.025);
+  background: #101012;
   color: rgba(255, 255, 255, 0.86);
   cursor: pointer;
-  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .playgroundSidebarRailButton:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.06);
+  background: #18181b;
   border-color: rgba(255, 255, 255, 0.16);
   color: #ffffff;
 }
@@ -162,9 +85,10 @@
 }
 
 .playgroundSidebarRailButtonActive {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.18);
+  background: #18181b;
+  border-color: rgba(227, 27, 35, 0.4);
   color: #ffffff;
+  box-shadow: inset 3px 0 0 var(--brand-amd);
 }
 
 .playgroundSidebarRailDivider {
@@ -186,15 +110,11 @@
   opacity: 0;
   overflow: hidden;
   pointer-events: none;
-  transition: width 180ms ease, opacity 140ms ease;
-  background:
-    linear-gradient(180deg, rgba(46, 50, 58, 0.5) 0%, rgba(21, 23, 29, 0.76) 100%);
+  transition:
+    width 180ms ease,
+    opacity 140ms ease;
+  background: #101012;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    inset 1px 0 0 rgba(255, 255, 255, 0.03),
-    20px 0 44px rgba(0, 0, 0, 0.24);
-  backdrop-filter: blur(18px) saturate(130%);
-  -webkit-backdrop-filter: blur(18px) saturate(130%);
 }
 
 .playgroundSidebarPanelVisible {
@@ -415,7 +335,7 @@
   gap: 0.5rem;
   align-items: flex-start;
   padding: 0.62rem 0.7rem;
-  border-radius: 14px;
+  border-radius: 6px;
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
@@ -423,14 +343,14 @@
 }
 
 .sidebarItem:hover {
-  background-color: rgba(255, 255, 255, 0.045);
+  background-color: #18181b;
   border-color: rgba(255, 255, 255, 0.06);
 }
 
 .sidebarItemActive {
-  background-color: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: none;
+  background-color: #18181b;
+  border-color: rgba(227, 27, 35, 0.36);
+  box-shadow: inset 3px 0 0 var(--brand-amd);
 }
 
 .sidebarItemText {
@@ -483,7 +403,7 @@
 
 .sidebarEmpty {
   padding: 0.75rem;
-  border-radius: 14px;
+  border-radius: 6px;
   border: 1px dashed rgba(255, 255, 255, 0.12);
   color: rgba(255, 255, 255, 0.58);
   font-size: 0.82rem;
@@ -676,6 +596,30 @@ body.playground-fullscreen .container {
 
 .errorDismiss:hover {
   opacity: 0.7;
+}
+
+.errorAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  margin-left: auto;
+  padding: 0 0.7rem;
+  color: var(--color-danger);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.32);
+  border-radius: 6px;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.errorAction:hover {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.52);
 }
 
 .messagesContainer {
@@ -2471,32 +2415,6 @@ body.playground-fullscreen .container {
     top: 0;
     bottom: 0;
     z-index: 6;
-    box-shadow: 20px 0 44px rgba(0, 0, 0, 0.28);
-  }
-}
-
-@media (max-width: 600px) {
-  .routingStatus {
-    min-height: 52px;
-    padding: 0.55rem 0.68rem;
-  }
-
-  .routingStatusIdentity {
-    gap: 0.42rem;
-  }
-
-  .routingStatusTitle {
-    font-size: 0.68rem;
-    white-space: nowrap;
-  }
-
-  .routingStatusDivider,
-  .routingStatusLabel {
-    display: none;
-  }
-
-  .routingStatusModel {
-    max-width: 42%;
-    font-size: 0.65rem;
+    box-shadow: none;
   }
 }

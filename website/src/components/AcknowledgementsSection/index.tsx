@@ -26,14 +26,16 @@ const AcknowledgementsSection: React.FC = () => {
         <div className={styles.header}>
           <div>
             <SectionLabel>
-              <Translate id="acknowledgements.label">Open-source ecosystem</Translate>
+              <Translate id="acknowledgements.label">Ecosystem</Translate>
             </SectionLabel>
             <h2 className={styles.title}>
-              <Translate id="acknowledgements.title">Acknowledgements</Translate>
+              <Translate id="acknowledgements.title">Built with open source.</Translate>
             </h2>
           </div>
           <p className={styles.subtitle}>
-            <Translate id="acknowledgements.subtitle">vLLM Semantic Router is made possible by the open-source ecosystem.</Translate>
+            <Translate id="acknowledgements.subtitle">
+              The libraries and platforms beneath vLLM Semantic Router.
+            </Translate>
           </p>
         </div>
 

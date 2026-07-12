@@ -40,7 +40,21 @@ export interface KnowledgeBaseGroupDraft {
 export interface KnowledgeBaseLabelDraft {
   name: string
   description: string
-  exemplars: string
+  exemplars: string[]
+}
+
+function normalizeLabelExemplars(value: readonly string[], labelName: string): string[] {
+  if (value.some((item) => !item.trim())) {
+    throw new Error(`Label "${labelName}" exemplars cannot contain empty values.`)
+  }
+  const normalized = value.map((item) => item.trim())
+  if (normalized.length === 0) {
+    throw new Error(`Label "${labelName}" needs at least one exemplar.`)
+  }
+  if (new Set(normalized.map((item) => item.toLocaleLowerCase())).size !== normalized.length) {
+    throw new Error(`Label "${labelName}" exemplars must be unique.`)
+  }
+  return normalized
 }
 
 export function renameGroupInDraft(
@@ -53,7 +67,7 @@ export function renameGroupInDraft(
     ...draft,
     groups: draft.groups.map((group) =>
       group.name === originalName
-        ? { name: nextName, labels: nextGroup.labels.join(', ') }
+        ? { name: nextName, labels: [...nextGroup.labels] }
         : group
     ),
     metrics: draft.metrics.map((metric) => ({
@@ -74,7 +88,7 @@ export function addGroupToDraft(
       ...draft.groups,
       {
         name: nextGroup.name.trim(),
-        labels: nextGroup.labels.join(', '),
+        labels: [...nextGroup.labels],
       },
     ],
   }
@@ -96,6 +110,7 @@ export function renameLabelInDraft(
   nextLabel: KnowledgeBaseLabelDraft
 ): TaxonomyClassifierDraft {
   const nextName = nextLabel.name.trim()
+  const exemplars = normalizeLabelExemplars(nextLabel.exemplars, nextName)
   return {
     ...draft,
     labels: draft.labels.map((label) =>
@@ -103,21 +118,16 @@ export function renameLabelInDraft(
         ? {
             name: nextName,
             description: nextLabel.description.trim(),
-            exemplars: nextLabel.exemplars
-              .split('\n')
-              .map((item) => item.trim())
-              .filter(Boolean),
+            exemplars,
           }
         : label
     ),
     groups: draft.groups.map((group) => ({
       ...group,
       labels: group.labels
-        .split(',')
         .map((item) => item.trim())
         .filter(Boolean)
-        .map((item) => (item === originalName ? nextName : item))
-        .join(', '),
+        .map((item) => (item === originalName ? nextName : item)),
     })),
     label_thresholds: draft.label_thresholds.map((entry) =>
       entry.label === originalName ? { ...entry, label: nextName } : entry
@@ -129,17 +139,16 @@ export function addLabelToDraft(
   draft: TaxonomyClassifierDraft,
   nextLabel: KnowledgeBaseLabelDraft
 ): TaxonomyClassifierDraft {
+  const nextName = nextLabel.name.trim()
+  const exemplars = normalizeLabelExemplars(nextLabel.exemplars, nextName)
   return {
     ...draft,
     labels: [
       ...draft.labels,
       {
-        name: nextLabel.name.trim(),
+        name: nextName,
         description: nextLabel.description.trim(),
-        exemplars: nextLabel.exemplars
-          .split('\n')
-          .map((item) => item.trim())
-          .filter(Boolean),
+        exemplars,
       },
     ],
   }
@@ -155,10 +164,8 @@ export function removeLabelFromDraft(
     groups: draft.groups.map((group) => ({
       ...group,
       labels: group.labels
-        .split(',')
         .map((item) => item.trim())
-        .filter((item) => item && item !== labelName)
-        .join(', '),
+        .filter((item) => item && item !== labelName),
     })),
     label_thresholds: draft.label_thresholds.filter((entry) => entry.label !== labelName),
   }
@@ -177,7 +184,12 @@ export function buildKnowledgeBaseRows(
       return (
         knowledgeBase.name.toLowerCase().includes(normalizedQuery) ||
         (knowledgeBase.description ?? '').toLowerCase().includes(normalizedQuery) ||
-        knowledgeBase.source.path.toLowerCase().includes(normalizedQuery)
+        knowledgeBase.source.path.toLowerCase().includes(normalizedQuery) ||
+        knowledgeBase.labels.some((label) =>
+          label.name.toLowerCase().includes(normalizedQuery)
+          || label.exemplars.some((exemplar) => exemplar.toLowerCase().includes(normalizedQuery))
+        ) ||
+        Object.keys(knowledgeBase.groups ?? {}).some((group) => group.toLowerCase().includes(normalizedQuery))
       )
     })
     .map((knowledgeBase) => ({
@@ -231,7 +243,8 @@ export function buildLabelRows(
       }
       return (
         label.name.toLowerCase().includes(normalizedQuery) ||
-        (label.description ?? '').toLowerCase().includes(normalizedQuery)
+        (label.description ?? '').toLowerCase().includes(normalizedQuery) ||
+        label.exemplars.some((exemplar) => exemplar.toLowerCase().includes(normalizedQuery))
       )
     })
     .map((label) => ({

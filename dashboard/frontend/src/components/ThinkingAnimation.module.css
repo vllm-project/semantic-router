@@ -1,20 +1,97 @@
 .overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background:
-    radial-gradient(circle at center, rgba(255, 255, 255, 0.055), transparent 26rem),
-    rgba(5, 5, 5, 0.94);
-  backdrop-filter: blur(28px) saturate(108%);
-  -webkit-backdrop-filter: blur(28px) saturate(108%);
+  inset: 0;
   z-index: 10001;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 78% 68%, rgba(227, 27, 35, 0.055), transparent 26rem),
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.045), transparent 34rem),
+    rgba(3, 3, 3, 0.94);
+  backdrop-filter: blur(40px) saturate(108%);
+  -webkit-backdrop-filter: blur(40px) saturate(108%);
   pointer-events: none;
   animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(1rem, 2.4vh, 2rem);
+  width: 100%;
+  max-height: 100dvh;
+  padding: clamp(0.75rem, 3vw, 2rem);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(20, minmax(0, 1fr));
+  gap: clamp(0.28rem, 0.7vw, 0.55rem);
+  width: min(820px, 100%);
+  padding: clamp(1rem, 3vw, 2rem);
+}
+
+.char {
+  color: rgba(245, 245, 247, 0.88);
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-size: clamp(0.86rem, 1.35vw, 1.125rem);
+  font-weight: 420;
+  line-height: 1;
+  text-align: center;
+  user-select: none;
+  animation-name: flicker;
+  animation-timing-function: steps(2, end);
+  animation-iteration-count: infinite;
+}
+
+.signalChar {
+  color: var(--brand-amd);
+  text-shadow: 0 0 18px rgba(227, 27, 35, 0.38);
+}
+
+.statusText {
+  color: rgba(245, 245, 247, 0.9);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Roboto', sans-serif;
+  font-size: 1rem;
+  font-weight: 470;
+  letter-spacing: -0.01em;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.thinkingContent {
+  width: min(800px, 100%);
+  max-height: min(30vh, 400px);
+  overflow-y: auto;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.thinkingLabel {
+  margin-bottom: 0.75rem;
+  color: #f5f5f7;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Roboto', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.thinkingText {
+  margin: 0;
+  color: rgba(245, 245, 247, 0.8);
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 @keyframes fadeIn {
@@ -26,191 +103,75 @@
   }
 }
 
-.container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.4rem;
-  width: min(720px, calc(100% - 2rem));
-  padding: clamp(1.4rem, 4vw, 2.4rem);
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  border-radius: 18px;
-  background: rgba(16, 16, 18, 0.76);
-  box-shadow: 0 36px 96px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+@keyframes flicker {
+  0%,
+  100% {
+    opacity: 0.28;
+  }
+  48% {
+    opacity: 0.92;
+  }
+  62% {
+    opacity: 0.48;
+  }
 }
 
-.routeHeader {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  width: 100%;
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.52;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
-.routeEyebrow {
-  flex: 0 0 auto;
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 0.72rem;
-  font-weight: 720;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.routeTrack {
-  position: relative;
-  flex: 1;
-  height: 1px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.routeTrackProgress {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 32%;
-  background: linear-gradient(90deg, transparent, #ffffff, transparent);
-  animation: routeProgress 1.5s ease-in-out infinite;
-}
-
-.routeStages {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.7rem;
-  width: 100%;
-}
-
-.routeStage {
-  display: grid;
-  gap: 0.45rem;
-  min-width: 0;
-  padding: 0.9rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.035);
-  color: rgba(255, 255, 255, 0.62);
-  font-size: 0.78rem;
-  animation: stagePulse 1.3s ease-in-out infinite;
-}
-
-.routeStageIndex {
-  color: var(--brand-amd);
-  font-family: var(--font-mono);
-  font-size: 0.67rem;
-  font-weight: 700;
-}
-
-.statusText {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Roboto', sans-serif;
-  font-size: 0.88rem;
-  font-weight: 560;
-  color: rgba(255, 255, 255, 0.7);
-  letter-spacing: 0.01em;
-}
-
-@keyframes routeProgress {
-  from { transform: translateX(-110%); }
-  to { transform: translateX(330%); }
-}
-
-@keyframes stagePulse {
-  0%, 65%, 100% { border-color: rgba(255, 255, 255, 0.08); }
-  32% { border-color: rgba(255, 255, 255, 0.24); }
-}
-
-/* Dark mode support */
-:global([data-theme='dark']) .overlay {
-  background-color: rgba(0, 0, 0, 0.95);
-}
-
-:global([data-theme='dark']) .statusText {
-  color: #f5f5f7;
-}
-
-/* Thinking process display */
-.thinkingContent {
-  max-width: 800px;
-  width: 100%;
-  max-height: 400px;
-  overflow-y: auto;
-  margin-top: 0.2rem;
-  padding: 1.5rem;
-  background-color: rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.thinkingLabel {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Roboto', sans-serif;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #f5f5f7;
-  margin-bottom: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.thinkingText {
-  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
-  font-size: 0.875rem;
-  line-height: 1.6;
-  color: #f5f5f7;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  margin: 0;
-  opacity: 0.8;
-}
-
-/* Dark mode for thinking content */
-:global([data-theme='dark']) .thinkingContent {
-  background-color: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-:global([data-theme='dark']) .thinkingLabel {
-  color: #f5f5f7;
-}
-
-:global([data-theme='dark']) .thinkingText {
-  color: #f5f5f7;
-}
-
-/* Mobile Responsive */
 @media (max-width: 768px) {
   .container {
-    gap: 1.5rem;
+    gap: 1rem;
     padding: 0.75rem;
   }
 
-  .routeStages {
-    grid-template-columns: 1fr;
+  .grid {
+    grid-template-columns: repeat(15, minmax(0, 1fr));
+    gap: 0.35rem;
+    padding: 1.25rem 0.75rem;
+  }
+
+  .char {
+    font-size: 0.875rem;
   }
 
   .statusText {
+    padding: 0 1rem;
     font-size: 0.875rem;
     text-align: center;
-    padding: 0 1rem;
   }
 
   .thinkingContent {
-    max-width: 100%;
-    max-height: 300px;
+    max-height: 28vh;
     padding: 1rem;
-    margin-top: 1rem;
   }
 
-  .thinkingLabel {
+  .thinkingLabel,
+  .thinkingText {
     font-size: 0.75rem;
   }
 
   .thinkingText {
-    font-size: 0.75rem;
     line-height: 1.5;
   }
 }
 
 @media (max-width: 480px) {
-  .container {
-    gap: 1rem;
-    padding: 0.5rem;
+  .grid {
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+    gap: 0.25rem;
+    padding: 0.75rem 0.35rem;
+  }
+
+  .char {
+    font-size: 0.75rem;
   }
 
   .statusText {
@@ -218,15 +179,20 @@
   }
 
   .thinkingContent {
-    max-height: 250px;
+    max-height: 25vh;
     padding: 0.875rem;
   }
 
-  .thinkingLabel {
-    font-size: 0.6875rem;
-  }
-
+  .thinkingLabel,
   .thinkingText {
     font-size: 0.6875rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .char,
+  .statusText {
+    animation: none;
   }
 }

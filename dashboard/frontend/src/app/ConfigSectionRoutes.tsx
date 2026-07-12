@@ -1,23 +1,18 @@
-import React, { Suspense, lazy, useEffect } from 'react'
+import React, { useEffect } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import type { KnowledgeBaseView } from '../pages/TaxonomyPage'
 import AppShellLayout from './AppShellLayout'
 import type { ConfigSection } from '../components/ConfigNav'
-import RouteLoadingFallback from './RouteLoadingFallback'
-
-const ConfigPage = lazy(() => import('../pages/ConfigPage'))
-const TaxonomyPage = lazy(() => import('../pages/TaxonomyPage'))
-
-const renderPage = (element: React.ReactElement) => (
-  <Suspense fallback={<RouteLoadingFallback />}>
-    {element}
-  </Suspense>
-)
+import RecoverableLazyRoute from './RecoverableLazyRoute'
+import { loadConfigPage, loadTaxonomyPage } from './routeLoaders'
+import { useAuth } from '../contexts/AuthContext'
+import { canAccessDashboardPath } from '../utils/accessControl'
 
 export const ConfigSectionRoute: React.FC<{
   configSection: ConfigSection
   setConfigSection: (section: ConfigSection) => void
 }> = ({ configSection, setConfigSection }) => {
+  const { user } = useAuth()
   const { section } = useParams<{ section: string }>()
   const normalized = section?.toLowerCase() ?? ''
   const redirectToKnowledgeBases =
@@ -57,9 +52,17 @@ export const ConfigSectionRoute: React.FC<{
     return <Navigate to="/knowledge-bases/bases" replace />
   }
 
+  if (!canAccessDashboardPath(user, normalized ? `/config/${normalized}` : '/config')) {
+    return <Navigate to="/dashboard" replace />
+  }
+
   return (
     <AppShellLayout configSection={configSection} setConfigSection={setConfigSection}>
-      {renderPage(<ConfigPage activeSection={configSection} />)}
+      <RecoverableLazyRoute
+        loader={loadConfigPage}
+        routeLabel="Configuration"
+        componentProps={{ activeSection: configSection }}
+      />
     </AppShellLayout>
   )
 }
@@ -68,6 +71,7 @@ export const KnowledgeBaseRoute: React.FC<{
   configSection: ConfigSection
   setConfigSection: (section: ConfigSection) => void
 }> = ({ configSection, setConfigSection }) => {
+  const { user } = useAuth()
   const { view } = useParams<{ view: string }>()
   const normalized = (view?.toLowerCase() ?? 'bases') as KnowledgeBaseView
   const activeView: KnowledgeBaseView = ['bases', 'groups', 'labels'].includes(normalized)
@@ -78,9 +82,17 @@ export const KnowledgeBaseRoute: React.FC<{
     return <Navigate to={`/knowledge-bases/${activeView}`} replace />
   }
 
+  if (!canAccessDashboardPath(user, `/knowledge-bases/${activeView}`)) {
+    return <Navigate to="/dashboard" replace />
+  }
+
   return (
     <AppShellLayout configSection={configSection} setConfigSection={setConfigSection}>
-      {renderPage(<TaxonomyPage activeView={activeView} />)}
+      <RecoverableLazyRoute
+        loader={loadTaxonomyPage}
+        routeLabel="Knowledge bases"
+        componentProps={{ activeView }}
+      />
     </AppShellLayout>
   )
 }

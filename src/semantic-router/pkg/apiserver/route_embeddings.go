@@ -11,11 +11,15 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
 const (
 	defaultEmbeddingDimension = 768
 	defaultEmbeddingPriority  = 0.5
+	// maxImagesPerRequest bounds images per request; each is a full SigLIP
+	// forward pass and the body-size cap alone admits very many minimal images.
+	maxImagesPerRequest = 8
 )
 
 // handleEmbeddings handles embedding generation requests
@@ -32,7 +36,7 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 		return
 	}
 
-	avgProcessingTime := float64(totalProcessingTime) / float64(len(req.Texts))
+	avgProcessingTime := averageEmbeddingProcessingTime(totalProcessingTime, req)
 	response := EmbeddingResponse{
 		Embeddings:            results,
 		TotalCount:            len(results),
@@ -67,6 +71,14 @@ func (s *ClassificationAPIServer) parseEmbeddingRequest(w http.ResponseWriter, r
 	return req, true
 }
 
+func averageEmbeddingProcessingTime(totalProcessingTime int64, req EmbeddingRequest) float64 {
+	inputCount := len(req.Texts) + len(req.Images)
+	if inputCount == 0 {
+		return 0
+	}
+	return float64(totalProcessingTime) / float64(inputCount)
+}
+
 func applyEmbeddingDefaults(req *EmbeddingRequest) {
 	if req.Model == "" {
 		req.Model = "auto"
@@ -81,8 +93,11 @@ func applyEmbeddingDefaults(req *EmbeddingRequest) {
 }
 
 func validateEmbeddingRequest(req EmbeddingRequest, mmbertLayers []int) (string, string, bool) {
-	if len(req.Texts) == 0 {
-		return "INVALID_INPUT", "texts array cannot be empty", false
+	if len(req.Texts) == 0 && len(req.Images) == 0 {
+		return "INVALID_INPUT", "at least one of texts or images must be provided", false
+	}
+	if code, message, ok := validateEmbeddingImages(req.Images); !ok {
+		return code, message, false
 	}
 	if !isValidDimension(req.Dimension) {
 		return "INVALID_DIMENSION", fmt.Sprintf("dimension must be one of: 64, 128, 256, 512, 768, 1024 (got %d)", req.Dimension), false
@@ -96,8 +111,25 @@ func validateEmbeddingRequest(req EmbeddingRequest, mmbertLayers []int) (string,
 	return "", "", true
 }
 
+// validateEmbeddingImages enforces the image-input contract: a bounded count of
+// safe inline base64 image data URIs whose payloads decode.
+func validateEmbeddingImages(images []string) (string, string, bool) {
+	if len(images) > maxImagesPerRequest {
+		return "INVALID_INPUT", fmt.Sprintf("at most %d images may be provided per request (got %d)", maxImagesPerRequest, len(images)), false
+	}
+	for i, image := range images {
+		if !imageurl.IsSafeImageDataURL(image) {
+			return "INVALID_IMAGE", fmt.Sprintf("images[%d] must be an inline base64 image data URI (data:image/<type>;base64,...)", i), false
+		}
+		if _, ok := imageurl.DecodeBase64(image); !ok {
+			return "INVALID_IMAGE", fmt.Sprintf("images[%d] is not valid base64-encoded image data", i), false
+		}
+	}
+	return "", "", true
+}
+
 func buildEmbeddingResults(req EmbeddingRequest) ([]EmbeddingResult, int64, error) {
-	results := make([]EmbeddingResult, 0, len(req.Texts))
+	results := make([]EmbeddingResult, 0, len(req.Texts)+len(req.Images))
 	var totalProcessingTime int64
 
 	for _, text := range req.Texts {
@@ -112,6 +144,30 @@ func buildEmbeddingResults(req EmbeddingRequest) ([]EmbeddingResult, int64, erro
 			Embedding:        output.Embedding,
 			Dimension:        len(output.Embedding),
 			ModelUsed:        output.ModelType,
+			ProcessingTimeMs: processingTime,
+		})
+
+		totalProcessingTime += processingTime
+	}
+
+	for _, image := range req.Images {
+		// Canonicalize so the FFI's case-sensitive ";base64," scan finds the
+		// payload boundary (validation already guaranteed a safe data URI).
+		encodeInput := image
+		if canonical, ok := imageurl.CanonicalDataURL(image); ok {
+			encodeInput = canonical
+		}
+		output, err := candle_binding.MultiModalEncodeImageFromBase64(encodeInput, req.Dimension)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		processingTime := int64(output.ProcessingTimeMs)
+		results = append(results, EmbeddingResult{
+			Modality:         output.Modality,
+			Embedding:        output.Embedding,
+			Dimension:        len(output.Embedding),
+			ModelUsed:        "multi-modal-embed",
 			ProcessingTimeMs: processingTime,
 		})
 

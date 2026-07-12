@@ -80,7 +80,7 @@ const ServiceNotConfigured: React.FC<ServiceNotConfiguredProps> = ({
             </a>
           )}
           {onRetry && (
-            <button onClick={onRetry} className={styles.retryButton}>
+            <button type="button" onClick={onRetry} className={styles.retryButton}>
               <svg
                 className={styles.retryIcon}
                 viewBox="0 0 24 24"

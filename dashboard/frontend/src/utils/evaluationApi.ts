@@ -27,15 +27,17 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 // List all evaluation tasks
-export async function listTasks(status?: string): Promise<EvaluationTask[]> {
-  const url = status ? `${API_BASE}/tasks?status=${status}` : `${API_BASE}/tasks`;
-  const response = await fetch(url);
+export async function listTasks(status?: string, signal?: AbortSignal): Promise<EvaluationTask[]> {
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  const query = params.toString();
+  const response = await fetch(`${API_BASE}/tasks${query ? `?${query}` : ''}`, { signal });
   return handleResponse<EvaluationTask[]>(response);
 }
 
 // Get a specific task by ID
-export async function getTask(taskId: string): Promise<EvaluationTask> {
-  const response = await fetch(`${API_BASE}/tasks/${taskId}`);
+export async function getTask(taskId: string, signal?: AbortSignal): Promise<EvaluationTask> {
+  const response = await fetch(`${API_BASE}/tasks/${encodeURIComponent(taskId)}`, { signal });
   return handleResponse<EvaluationTask>(response);
 }
 
@@ -79,8 +81,8 @@ export async function cancelTask(taskId: string): Promise<{ status: string }> {
 }
 
 // Get results for a completed task
-export async function getResults(taskId: string): Promise<TaskResults> {
-  const response = await fetch(`${API_BASE}/results/${taskId}`);
+export async function getResults(taskId: string, signal?: AbortSignal): Promise<TaskResults> {
+  const response = await fetch(`${API_BASE}/results/${encodeURIComponent(taskId)}`, { signal });
   return handleResponse<TaskResults>(response);
 }
 
@@ -95,8 +97,8 @@ export async function exportResults(taskId: string, format: 'json' | 'csv' = 'js
 }
 
 // Get available datasets grouped by dimension
-export async function getDatasets(): Promise<Record<string, DatasetInfo[]>> {
-  const response = await fetch(`${API_BASE}/datasets`);
+export async function getDatasets(signal?: AbortSignal): Promise<Record<string, DatasetInfo[]>> {
+  const response = await fetch(`${API_BASE}/datasets`, { signal });
   return handleResponse<Record<string, DatasetInfo[]>>(response);
 }
 
@@ -111,13 +113,14 @@ export function subscribeToProgress(
   taskId: string,
   onProgress: (update: ProgressUpdate) => void,
   onComplete: () => void,
-  onError: (error: Error) => void
+  onError: (error: Error) => void,
+  onConnected?: () => void,
 ): () => void {
   const eventSource = new EventSource(`${API_BASE}/stream/${taskId}`);
   let closed = false;
 
   eventSource.addEventListener('connected', () => {
-    console.log(`Connected to progress stream for task ${taskId}`);
+    onConnected?.();
   });
 
   eventSource.addEventListener('progress', (event) => {

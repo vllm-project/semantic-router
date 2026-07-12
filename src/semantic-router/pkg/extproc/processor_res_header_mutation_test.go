@@ -56,6 +56,7 @@ func TestBuildResponseHeaderMutation_EmitsZeroDecisionConfidence(t *testing.T) {
 		Headers:                       map[string]string{headers.VSRDebug: "true"},
 		VSRSelectedDecisionName:       "agentic_routing",
 		VSRSelectedDecisionConfidence: 0,
+		VSRSelectionMethod:            "router_dc",
 		VSRSelectedModel:              "qwen-small",
 		VSRContextTokenCount:          42,
 		VSRLearningPolicies: testLearningPolicies(
@@ -72,6 +73,7 @@ func TestBuildResponseHeaderMutation_EmitsZeroDecisionConfidence(t *testing.T) {
 
 	assert.Equal(t, "agentic_routing", headerMap[headers.VSRSelectedDecision])
 	assert.Equal(t, "0.0000", headerMap[headers.VSRSelectedConfidence])
+	assert.Equal(t, "router_dc", headerMap[headers.VSRSelectedAlgorithm])
 	assert.Equal(t, "qwen-small", headerMap[headers.VSRSelectedModel])
 	assert.Equal(t, "provider_state", headerMap[headers.VSRSessionPhase])
 	assert.Equal(t, "42", headerMap[headers.VSRContextTokenCount])

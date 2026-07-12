@@ -1,9 +1,5 @@
-import React, { Suspense, lazy, useState } from 'react'
-import {
-  BrowserRouter,
-  Route,
-  Routes,
-} from 'react-router-dom'
+import React, { useState } from 'react'
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import type { ConfigSection } from '../components/ConfigNav'
 import { useAuth } from '../contexts/AuthContext'
 import { useSetup } from '../contexts/SetupContext'
@@ -12,17 +8,9 @@ import { canAccessMLSetup } from '../utils/accessControl'
 import AuthGate from './AuthGate'
 import AuthenticatedShell from './AuthenticatedShell'
 import { renderAuthenticatedAppRoutes } from './AuthenticatedAppRoutes'
-import RouteLoadingFallback from './RouteLoadingFallback'
+import RecoverableLazyRoute from './RecoverableLazyRoute'
 import SetupStatusPage from './SetupStatusPage'
-
-const LandingPage = lazy(() => import('../pages/LandingPage'))
-const LoginPage = lazy(() => import('../pages/LoginPage'))
-
-const renderLazyRoute = (element: React.ReactElement) => (
-  <Suspense fallback={<RouteLoadingFallback />}>
-    {element}
-  </Suspense>
-)
+import { loadLandingPage, loadLoginPage } from './routeLoaders'
 
 const AppRouter: React.FC = () => {
   const { setupState, isLoading, error, refreshSetupState } = useSetup()
@@ -62,8 +50,14 @@ const AppRouter: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={renderLazyRoute(<LandingPage />)} />
-        <Route path="/login" element={renderLazyRoute(<LoginPage />)} />
+        <Route
+          path="/"
+          element={<RecoverableLazyRoute loader={loadLandingPage} routeLabel="Landing page" />}
+        />
+        <Route
+          path="/login"
+          element={<RecoverableLazyRoute loader={loadLoginPage} routeLabel="Login" />}
+        />
         <Route path="/auth/transition" element={<AuthTransitionPage />} />
 
         <Route element={<AuthGate />}>
@@ -72,6 +66,7 @@ const AppRouter: React.FC = () => {
               configSection,
               setConfigSection,
               canUseMLSetup,
+              user,
               setupMode,
             })}
           </Route>
