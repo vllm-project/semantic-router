@@ -20,6 +20,7 @@ import InstallQuickStartSection from '@site/src/components/InstallQuickStartSect
 import PaperFigureShowcase from '@site/src/components/PaperFigureShowcase'
 import ResearchPaperCarousel from '@site/src/components/ResearchPaperCarousel'
 import TeamCarousel from '@site/src/components/TeamCarousel'
+import TestimonialsRail from '@site/src/components/TestimonialsRail'
 import { researchPapers } from '@site/src/data/researchContent'
 import { SITE_SOCIAL_PREVIEW_IMAGE_PATH } from '@site/src/data/socialPreview'
 import TransformerPipelineAnimation from '@site/src/components/TransformerPipelineAnimation'
@@ -332,7 +333,7 @@ function DitherHero(): JSX.Element {
                           className={styles.heroModelChipIcon}
                           aria-hidden="true"
                         >
-                          <Icon size={20} className={styles.heroModelGlyph} />
+                          <Icon size={28} className={styles.heroModelGlyph} />
                         </span>
                         <span className={styles.heroModelChipLabel}>
                           {label}
@@ -360,13 +361,11 @@ function CapabilitySection(): JSX.Element {
         <div className={styles.capabilityFrame}>
           <header className={styles.capabilityHeading}>
             <SectionLabel className={styles.capabilityLabel}>
-              <Translate id="homepage.capabilities.label">
-                Why Mixture-of-Models
-              </Translate>
+              <Translate id="homepage.capabilities.label">Architecture</Translate>
             </SectionLabel>
             <h2 id="mixture-architecture-title">
               <Translate id="homepage.capabilities.heading">
-                Many models. One architecture.
+                Compose the best of every model.
               </Translate>
             </h2>
           </header>
@@ -374,8 +373,9 @@ function CapabilitySection(): JSX.Element {
           <div className={styles.capabilitySummary}>
             <p>
               <Translate id="homepage.capabilities.description">
-                Models, compute, and preferences become executable paths for
-                every request.
+                Frontier, open, specialized, and edge models become one
+                executable architecture—shaped by signals, preferences, and
+                policy.
               </Translate>
             </p>
             <PillLink className={styles.capabilityCta} to="/docs/intro">
@@ -413,17 +413,17 @@ function CapabilitySection(): JSX.Element {
               </div>
               <span className={styles.stageLabel}>
                 <Translate id="homepage.capabilities.axis.preference">
-                  Composition
+                  Preference layer
                 </Translate>
               </span>
               <strong>
                 <Translate id="homepage.capabilities.preference.value">
-                  Your Mixture-of-Models
+                  Signals shape the path
                 </Translate>
               </strong>
               <span className={styles.stageDetail}>
                 <Translate id="homepage.capabilities.preference.reality">
-                  User · Product · Workload
+                  Preference · Policy · Context
                 </Translate>
               </span>
             </li>
@@ -449,6 +449,10 @@ function CapabilitySection(): JSX.Element {
               </span>
             </li>
           </ol>
+
+          <div className={styles.capabilityStats}>
+            <StatStrip items={heroStats} />
+          </div>
         </div>
       </div>
     </section>
@@ -462,19 +466,19 @@ function EncoderIntelligenceSection(): JSX.Element {
         <div className={styles.sectionHeading}>
           <SectionLabel>
             <Translate id="homepage.aiTech.label">
-              Built on Encoder Models
+              Signal intelligence
             </Translate>
           </SectionLabel>
           <div>
             <h2>
               <Translate id="homepage.aiTech.title">
-                Encoder-Based Intelligence
+                Intelligence before generation.
               </Translate>
             </h2>
             <p>
               <Translate id="homepage.aiTech.description">
-                Purpose-built encoders read intent, rank relevance, and classify
-                modality before generation begins.
+                Purpose-built encoders extract intent, context, safety, and
+                modality before a generative model is selected.
               </Translate>
             </p>
           </div>
@@ -555,52 +559,36 @@ function EncoderIntelligenceSection(): JSX.Element {
   )
 }
 
-function ClosingBands(): JSX.Element {
+function FinalCtaSection(): JSX.Element {
   return (
-    <section className={styles.closingBands}>
+    <section className={styles.finalCtaSection}>
       <div className="site-shell-container">
-        <div className={styles.bandGrid}>
-          <div className={styles.band}>
+        <div className={styles.finalCtaFrame}>
+          <div className={styles.finalCtaCopy}>
             <SectionLabel>
-              <Translate id="homepage.band.docs.label">Documentation</Translate>
+              <Translate id="homepage.finalCta.label">Start building</Translate>
             </SectionLabel>
-            <h3>
-              <Translate id="homepage.band.docs.title">
-                Architecture, written to be used.
+            <h2>
+              <Translate id="homepage.finalCta.title">
+                Compose your Mixture-of-Models.
               </Translate>
-            </h3>
+            </h2>
             <p>
-              <Translate id="homepage.band.docs.text">
-                Install, configure, train, and operate from one dense
-                documentation graph.
+              <Translate id="homepage.finalCta.description">
+                Shape every model path with signals, preferences, and policy.
               </Translate>
             </p>
-            <PillLink to="/docs/intro">
-              <Translate id="homepage.band.docs.cta">Docs index</Translate>
-            </PillLink>
           </div>
-
-          <div className={styles.band}>
-            <SectionLabel>
-              <Translate id="homepage.band.community.label">
-                Community
-              </Translate>
-            </SectionLabel>
-            <h3>
-              <Translate id="homepage.band.community.title">
-                Research and builders in one loop.
-              </Translate>
-            </h3>
-            <p>
-              <Translate id="homepage.band.community.text">
-                Papers, working groups, and contributors evolve the same system
-                in public.
-              </Translate>
-            </p>
-            <PillLink to="/community/team" muted>
-              <Translate id="homepage.band.community.cta">
-                Community routes
-              </Translate>
+          <div className={styles.finalCtaActions}>
+            <PillLink
+              href="https://play.vllm-semantic-router.com/"
+              rel="noreferrer"
+              target="_blank"
+            >
+              <Translate id="homepage.finalCta.playground">Try the Playground</Translate>
+            </PillLink>
+            <PillLink to="/docs/intro" muted>
+              <Translate id="homepage.finalCta.docs">Explore the Docs</Translate>
             </PillLink>
           </div>
         </div>
@@ -667,20 +655,14 @@ export default function Home(): JSX.Element {
         <DitherHero />
 
         <CapabilitySection />
-
-        <section className={styles.statsSection}>
-          <div className="site-shell-container">
-            <StatStrip items={heroStats} />
-          </div>
-        </section>
-
-        <InstallQuickStartSection />
-        <ResearchPaperCarousel />
+        <TestimonialsRail />
         <PaperFigureShowcase />
         <EncoderIntelligenceSection />
+        <InstallQuickStartSection />
+        <ResearchPaperCarousel />
         <TeamCarousel />
         <AcknowledgementsSection />
-        <ClosingBands />
+        <FinalCtaSection />
       </main>
     </Layout>
   )

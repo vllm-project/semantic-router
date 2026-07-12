@@ -420,13 +420,13 @@
     "message": "{count} 篇研究论文，覆盖路由、系统、安全与多模态。"
   },
   "homepage.capabilities.label": {
-    "message": "为什么需要 Mixture-of-Models"
+    "message": "架构"
   },
   "homepage.capabilities.heading": {
-    "message": "多模型，一套架构。"
+    "message": "汇聚每个模型的最佳能力。"
   },
   "homepage.capabilities.description": {
-    "message": "让模型、算力与偏好成为每一次请求的可执行路径。"
+    "message": "将前沿、开源、专用与边缘模型组合成一套可执行架构——由信号、偏好与策略共同塑造。"
   },
   "homepage.capabilities.axis.models": {
     "message": "模型集群"
@@ -438,7 +438,7 @@
     "message": "位置"
   },
   "homepage.capabilities.axis.preference": {
-    "message": "组合"
+    "message": "偏好层"
   },
   "homepage.capabilities.table.dimension": {
     "message": "架构层"
@@ -468,10 +468,10 @@
     "message": "跨位置模型路径"
   },
   "homepage.capabilities.preference.reality": {
-    "message": "用户 · 产品 · 工作负载"
+    "message": "偏好 · 策略 · 上下文"
   },
   "homepage.capabilities.preference.value": {
-    "message": "你的 Mixture-of-Models"
+    "message": "信号塑造模型路径"
   },
   "homepage.capabilities.docsCta": {
     "message": "了解工作原理"
@@ -513,13 +513,13 @@
     "message": "拓扑、路由、控制面与运行反馈都能在同一个控制台里观测和操作。"
   },
   "homepage.aiTech.label": {
-    "message": "编码器模型驱动"
+    "message": "信号智能"
   },
   "homepage.aiTech.title": {
-    "message": "先理解，再生成"
+    "message": "生成之前，先理解。"
   },
   "homepage.aiTech.description": {
-    "message": "专门训练的编码器先读懂意图、排序相关性、识别模态，再把结果交给生成模型。"
+    "message": "专用编码器在选择生成模型之前，先提取意图、上下文、安全与模态信号。"
   },
   "homepage.aiTech.leadLabel": {
     "message": "信号入口面"
@@ -660,10 +660,10 @@
     "message": "路由蓝图"
   },
   "homepage.paperFigures.title": {
-    "message": "系统如何工作"
+    "message": "从信号到模型路径。"
   },
   "homepage.paperFigures.description": {
-    "message": "通过交互式演示理解信号提取、投影协调、决策逻辑与模型路由行为。"
+    "message": "探索架构如何提取信号、组合决策并执行选定的模型路径。"
   },
   "homepage.paperFigures.figure1.title": {
     "message": "香农映射"
@@ -2439,34 +2439,58 @@
     "message": "贡献者"
   },
   "teamCarousel.title": {
-    "message": "谁在把这套系统做成现实"
+    "message": "在开放协作中构建。"
   },
   "teamCarousel.subtitle": {
-    "message": "从研究到基础设施，这个项目由一群持续交付的人共同推进。"
+    "message": "来自研究、基础设施与模型系统的维护者，共同塑造这个项目。"
   },
   "teamCarousel.label": {
-    "message": "治理"
+    "message": "社区"
   },
   "teamCarousel.footer": {
-    "message": "指导委员会成员与提交者共同覆盖研究、基础设施和开源协作。"
+    "message": "认识把 Mixture-of-Models 变成共享基础设施的构建者。"
   },
   "teamCarousel.viewAll": {
     "message": "查看团队名单"
   },
   "acknowledgements.label": {
-    "message": "开源生态"
+    "message": "生态"
   },
   "acknowledgements.title": {
-    "message": "致谢"
+    "message": "由开源共同构建。"
   },
   "acknowledgements.subtitle": {
-    "message": "vLLM Semantic Router 站在开源生态之上，也持续回馈开源。"
+    "message": "支撑 vLLM Semantic Router 的开源库与平台。"
   },
   "acknowledgements.projectMeta": {
     "message": "基础依赖"
   },
   "acknowledgements.projectLink": {
     "message": "查看项目"
+  },
+  "homepage.testimonials.label": {
+    "message": "行业声音"
+  },
+  "homepage.testimonials.title": {
+    "message": "下一代模型架构正在形成。"
+  },
+  "homepage.testimonials.source": {
+    "message": "来源"
+  },
+  "homepage.finalCta.label": {
+    "message": "开始构建"
+  },
+  "homepage.finalCta.title": {
+    "message": "组合你的 Mixture-of-Models。"
+  },
+  "homepage.finalCta.description": {
+    "message": "用信号、偏好与策略塑造每一条模型路径。"
+  },
+  "homepage.finalCta.playground": {
+    "message": "体验 Playground"
+  },
+  "homepage.finalCta.docs": {
+    "message": "浏览文档"
   },
   "community.contributors.pageTitle": {
     "message": "贡献者排行榜"

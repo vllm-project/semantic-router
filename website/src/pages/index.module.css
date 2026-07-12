@@ -14,7 +14,7 @@
   min-height: calc(100svh - var(--site-header-height));
   padding: clamp(2.25rem, 5vh, 4rem) 0 0;
   border-bottom: 0;
-  background: linear-gradient(180deg, var(--site-bg) 0%, var(--site-bg) 76%, var(--site-bg-alt) 100%);
+  background: var(--site-bg);
 }
 
 .hero {
@@ -212,10 +212,10 @@
   position: relative;
   overflow: hidden;
   display: grid;
-  gap: 0.8rem;
+  gap: 0.9rem;
   width: 100%;
   margin: 0;
-  padding: 0.9rem 0 1.1rem;
+  padding: 1rem 0 1.35rem;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -224,12 +224,7 @@
 }
 
 .heroModelBand::before {
-  content: '';
-  position: absolute;
-  inset: -1rem 0;
-  pointer-events: none;
-  background: radial-gradient(ellipse at center, var(--site-accent-soft), transparent 68%);
-  opacity: 0.42;
+  content: none;
 }
 
 .heroModelBandHeader {
@@ -258,7 +253,7 @@
 }
 
 .heroModelBandViewport {
-  --hero-model-gap: 1.55rem;
+  --hero-model-gap: 2.35rem;
   position: relative;
   z-index: 1;
   display: flex;
@@ -279,7 +274,7 @@
   min-width: max-content;
   flex-wrap: nowrap;
   will-change: transform;
-  animation: heroModelBandScroll 72s linear infinite;
+  animation: heroModelBandScroll 96s linear infinite;
 }
 
 .heroModelBandSequence {
@@ -298,8 +293,8 @@
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 0.78rem;
-  min-height: 2.7rem;
+  gap: 0.84rem;
+  min-height: 3.1rem;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -321,20 +316,20 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.35rem;
-  height: 1.35rem;
+  width: 1.75rem;
+  height: 1.75rem;
   color: rgba(17, 17, 17, 0.66);
 }
 
 .heroModelGlyph {
-  width: 1.35rem;
-  height: 1.35rem;
+  width: 1.75rem;
+  height: 1.75rem;
   opacity: 0.9;
 }
 
 .heroModelChipLabel {
-  font-size: 1rem;
-  font-weight: 580;
+  font-size: 1.1rem;
+  font-weight: 600;
   letter-spacing: -0.012em;
 }
 
@@ -366,10 +361,6 @@
   box-shadow: none;
 }
 
-[data-theme='dark'] .heroModelBand::before {
-  background: radial-gradient(ellipse at center, var(--site-accent-soft), transparent 68%);
-}
-
 [data-theme='dark'] .heroModelChip {
   color: rgba(255, 255, 255, 0.88);
 }
@@ -378,60 +369,33 @@
   color: rgba(255, 255, 255, 0.62);
 }
 
-.statsSection,
 .capabilitySection,
 .encoderSection,
-.closingBands {
-  border-bottom: 1px solid var(--site-border);
-}
-
-.statsSection {
-  padding: 1.4rem 0 3rem;
-  background: var(--site-bg);
+.finalCtaSection {
+  border-bottom: 0;
 }
 
 .capabilitySection {
   position: relative;
   overflow: hidden;
-  padding: clamp(5rem, 8vw, 7.5rem) 0;
-  background: var(--site-bg-alt);
+  padding: clamp(4.5rem, 7vw, 6.5rem) 0;
+  background: var(--site-bg);
   color: var(--site-text);
 }
 
 .capabilitySection::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 84% 18%, var(--site-accent-soft), transparent 30%),
-    linear-gradient(90deg, rgba(15, 23, 42, 0.025) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.025) 1px, transparent 1px);
-  background-size: auto, 48px 48px, 48px 48px;
-  mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent);
-  opacity: 0.72;
+  content: none;
 }
 
 .encoderSection {
   position: relative;
   overflow: hidden;
   padding: 5rem 0;
-  background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.018), transparent 42%),
-    var(--site-bg);
+  background: var(--site-bg);
 }
 
 .encoderSection::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 18% 18%, rgba(15, 23, 42, 0.045), transparent 30%),
-    linear-gradient(90deg, rgba(15, 23, 42, 0.024) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.024) 1px, transparent 1px);
-  background-size: auto, 36px 36px, 36px 36px;
-  opacity: 0.3;
+  content: none;
 }
 
 .sectionHeading {
@@ -459,6 +423,10 @@
   z-index: 1;
   display: grid;
   gap: clamp(1.75rem, 3.5vw, 3rem);
+  padding: clamp(1.5rem, 3.4vw, 3rem);
+  border: 1px solid var(--site-border);
+  border-radius: clamp(1.25rem, 2vw, 1.75rem);
+  background: var(--site-surface-alt);
 }
 
 .capabilityHeading {
@@ -527,6 +495,7 @@
   border-top: 1px solid var(--site-border-strong);
   border-bottom: 1px solid var(--site-border-strong);
   list-style: none;
+  background: var(--site-surface);
 }
 
 .architectureRail::before {
@@ -597,6 +566,10 @@
   font-size: 0.72rem;
   line-height: 1.5;
   letter-spacing: 0.035em;
+}
+
+.capabilityStats {
+  padding-top: 0.25rem;
 }
 
 .encoderShowcase {
@@ -767,44 +740,58 @@
   font-size: 0.95rem;
 }
 
-.closingBands {
-  padding: 4rem 0 0;
-  border-bottom: 0;
-  background: var(--site-bg-alt);
+.finalCtaSection {
+  padding: 1rem 0 5rem;
+  background: var(--site-bg);
 }
 
-.bandGrid {
+.finalCtaFrame {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 2rem;
+  padding: clamp(1.6rem, 4vw, 3.25rem);
+  border: 1px solid var(--site-border-strong);
+  border-radius: 1.5rem;
+  background:
+    linear-gradient(130deg, rgba(48, 162, 255, 0.11), transparent 42%),
+    var(--site-surface-alt);
+}
+
+.finalCtaCopy {
+  display: grid;
   gap: 1rem;
 }
 
-.band {
-  display: grid;
-  gap: 1rem;
-  min-height: 20rem;
-  padding: 1.5rem;
-  border: 1px solid var(--site-border);
-  background: var(--site-surface);
+.finalCtaCopy h2 {
+  max-width: 13ch;
+  margin: 0;
+  color: var(--site-text-strong);
+  font-size: clamp(2.35rem, 5vw, 4.65rem);
+  font-weight: 450;
+  line-height: 0.94;
+  letter-spacing: -0.05em;
 }
 
-.band h3 {
-  max-width: 16ch;
+.finalCtaCopy p {
+  max-width: 36rem;
   margin: 0;
-  font-size: clamp(1.9rem, 4vw, 3rem);
-  line-height: 0.98;
+  color: var(--site-muted-bright);
+  font-size: 1.05rem;
 }
 
-.band p {
-  max-width: 32rem;
-  margin: 0;
+.finalCtaActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
 }
 
 @media (max-width: 996px) {
   .heroGrid,
   .sectionHeading,
   .encoderShowcase,
-  .bandGrid {
+  .finalCtaFrame {
     grid-template-columns: 1fr;
   }
 
@@ -887,19 +874,29 @@
   }
 
   .heroModelBandViewport {
-    --hero-model-gap: 1rem;
+    --hero-model-gap: 1.45rem;
     padding: 0 1rem;
     -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
     mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
   }
 
   .heroModelBandTrack {
-    animation-duration: 72s;
+    animation-duration: 96s;
   }
 
   .heroModelChip {
-    gap: 0.62rem;
-    min-height: 2.28rem;
+    gap: 0.7rem;
+    min-height: 2.65rem;
+  }
+
+  .heroModelChipIcon,
+  .heroModelGlyph {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .heroModelChipLabel {
+    font-size: 1rem;
   }
 
   .heroManifesto {
@@ -938,18 +935,32 @@
   }
 
   .architectureRail {
-    grid-template-columns: 1fr;
+    display: flex;
+    overflow-x: auto;
+    gap: 0.75rem;
+    padding-bottom: 0.75rem;
+    border: 0;
+    background: transparent;
+    scroll-padding-inline: 0.1rem;
+    scroll-snap-type: x proximity;
+  }
+
+  .architectureRail::before {
+    content: none;
   }
 
   .architectureStage {
-    min-height: 10.5rem;
-    padding: 1.45rem 0.25rem 1.6rem;
-    border-top: 1px solid var(--site-border);
-    border-left: 0;
+    flex: 0 0 min(18rem, calc(100vw - 5rem));
+    min-width: min(18rem, calc(100vw - 5rem));
+    min-height: 10rem;
+    padding: 1.45rem 1.15rem 1.6rem;
+    border: 1px solid var(--site-border);
+    background: var(--site-surface);
+    scroll-snap-align: start;
   }
 
   .architectureStage:first-child {
-    border-top: 0;
+    border: 1px solid var(--site-border);
   }
 
   .stageDetail {
@@ -957,20 +968,34 @@
   }
 
   .encoderCardGrid {
-    grid-template-columns: 1fr;
+    display: flex;
+    overflow-x: auto;
+    gap: 0.8rem;
+    padding-bottom: 0.75rem;
+    scroll-padding-inline: 0.1rem;
+    scroll-snap-type: x proximity;
   }
 
-  .encoderCard,
   .encoderSpotlightCard {
     min-height: auto;
     grid-template-columns: 1fr;
   }
 
-  .band,
+  .encoderCardGrid .encoderCard {
+    flex: 0 0 min(18rem, calc(100vw - 3rem));
+    min-width: min(18rem, calc(100vw - 3rem));
+    min-height: 15rem;
+    scroll-snap-align: start;
+  }
+
   .encoderLead,
   .encoderPipelineFrame,
   .encoderCard {
     padding: 1.15rem;
+  }
+
+  .finalCtaActions {
+    justify-content: flex-start;
   }
 }
 
