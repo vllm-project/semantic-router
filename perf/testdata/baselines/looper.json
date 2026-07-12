@@ -1,0 +1,26 @@
+{
+  "version": "v1.0.0",
+  "git_commit": "0613c716c91b7590e67ca8ad8580f625750f32d2",
+  "git_branch": "2371-looper-bench",
+  "timestamp": "2026-07-12T08:26:57Z",
+  "benchmarks": {
+    "BenchmarkBase_SplitIntoChunks": {"iterations": 50136, "ns_per_op": 22383, "bytes_per_op": 8881, "allocs_per_op": 34},
+    "BenchmarkBase_ParseTaggedToolCall": {"iterations": 592346, "ns_per_op": 2408, "bytes_per_op": 448, "allocs_per_op": 11},
+    "BenchmarkBase_RewriteTaggedToolCallResponse": {"iterations": 75625, "ns_per_op": 18977, "bytes_per_op": 4422, "allocs_per_op": 88},
+    "BenchmarkFusion_ResolveExecutionConfig": {"iterations": 4253276, "ns_per_op": 314.6, "bytes_per_op": 96, "allocs_per_op": 2},
+    "BenchmarkFusion_FormatPanelResponses": {"iterations": 539772, "ns_per_op": 1918, "bytes_per_op": 608, "allocs_per_op": 12},
+    "BenchmarkFusion_BuildAnalysisPrompt": {"iterations": 992694, "ns_per_op": 3290, "bytes_per_op": 1282, "allocs_per_op": 15},
+    "BenchmarkFusion_BuildFinalPrompt": {"iterations": 217570, "ns_per_op": 5941, "bytes_per_op": 2010, "allocs_per_op": 19},
+    "BenchmarkFusion_ParseAnalysis": {"iterations": 206175, "ns_per_op": 5983, "bytes_per_op": 1280, "allocs_per_op": 19},
+    "BenchmarkReMoM_DistributeByWeight": {"iterations": 47846, "ns_per_op": 26498, "bytes_per_op": 6544, "allocs_per_op": 9},
+    "BenchmarkReMoM_DistributeEqually": {"iterations": 45723, "ns_per_op": 22336, "bytes_per_op": 5760, "allocs_per_op": 2},
+    "BenchmarkReMoM_DistributeRoundRobin": {"iterations": 3533323, "ns_per_op": 370.3, "bytes_per_op": 384, "allocs_per_op": 1},
+    "BenchmarkReMoM_DistributeFirstOnly": {"iterations": 7030155, "ns_per_op": 246.9, "bytes_per_op": 384, "allocs_per_op": 1},
+    "BenchmarkReMoM_ShuffleModelCalls": {"iterations": 69901, "ns_per_op": 17162, "bytes_per_op": 5376, "allocs_per_op": 1},
+    "BenchmarkReMoM_DistributeCallsToModels": {"iterations": 57680, "ns_per_op": 19740, "bytes_per_op": 6544, "allocs_per_op": 9},
+    "BenchmarkFlow_ResolveExecutionConfig": {"iterations": 5131681, "ns_per_op": 245.6, "bytes_per_op": 240, "allocs_per_op": 1},
+    "BenchmarkFlow_BuildStaticPlan": {"iterations": 614008, "ns_per_op": 1661, "bytes_per_op": 1552, "allocs_per_op": 15},
+    "BenchmarkFlow_FormatStepResults": {"iterations": 601178, "ns_per_op": 1864, "bytes_per_op": 1257, "allocs_per_op": 30},
+    "BenchmarkFlow_BuildFinalPrompt": {"iterations": 448263, "ns_per_op": 4575, "bytes_per_op": 2847, "allocs_per_op": 34}
+  }
+}
