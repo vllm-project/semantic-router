@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock, LazyLock};
+use std::sync::{Arc, RwLock};
 
 // Central model registry to replace role-specific OnceLock sprawl
 pub struct ModelRegistry {

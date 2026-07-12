@@ -1,7 +1,7 @@
 //! Global State Manager
 
 use std::collections::HashMap;
-use std::sync::{Arc, LazyLock, Mutex, RwLock};
+use std::sync::{Arc, OnceLock, Mutex, RwLock};
 
 // Import all necessary types
 use crate::classifiers::lora::parallel_engine::ParallelLoRAEngine;
@@ -233,7 +233,11 @@ pub struct GlobalStateStats {
 }
 
 // Global singleton instance using LazyLock
-static GLOBAL_STATE_MANAGER: LazyLock<GlobalStateManager> = LazyLock::new(GlobalStateManager::new);
+static GLOBAL_STATE_MANAGER: OnceLock<GlobalStateManager> = OnceLock::new();
+
+fn get_global_state_manager() -> &'static GlobalStateManager {
+    GLOBAL_STATE_MANAGER.get_or_init(GlobalStateManager::new)
+}
 
 /// Convenience functions for backward compatibility
 

@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 use std::ffi::c_char;
-use std::sync::{Arc, LazyLock, Mutex, RwLock};
+use std::sync::{Arc, OnceLock, Mutex, RwLock};
 
 /// Memory allocation tracking for double-free protection
 #[derive(Debug, Clone)]
@@ -49,14 +49,22 @@ pub struct MemorySafetyResult {
 
 // Global memory tracker for dual-path safety using LazyLock
 // These are lazily initialized mutable global state for runtime memory tracking
-static MEMORY_TRACKER: LazyLock<Arc<RwLock<HashMap<usize, AllocationTracker>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(HashMap::new())));
-static DOUBLE_FREE_PROTECTION: LazyLock<Arc<Mutex<HashMap<usize, bool>>>> =
-    LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
-static LORA_MEMORY_POOL: LazyLock<Arc<Mutex<LoRAMemoryPool>>> =
-    LazyLock::new(|| Arc::new(Mutex::new(LoRAMemoryPool::new())));
-static PATH_SWITCH_GUARD: LazyLock<Arc<RwLock<PathSwitchState>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(PathSwitchState::new())));
+static MEMORY_TRACKER: OnceLock<Arc<RwLock<HashMap<usize, AllocationTracker>>>> = OnceLock::new();
+fn get_memory_tracker() -> &'static Arc<RwLock<HashMap<usize, AllocationTracker>>> {
+    MEMORY_TRACKER.get_or_init(|| Arc::new(RwLock::new(HashMap::new())))
+}
+static DOUBLE_FREE_PROTECTION: OnceLock<Arc<Mutex<HashMap<usize, bool>>>> = OnceLock::new();
+fn get_double_free_protection() -> &'static Arc<Mutex<HashMap<usize, bool>>> {
+    DOUBLE_FREE_PROTECTION.get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
+}
+static LORA_MEMORY_POOL: OnceLock<Arc<Mutex<LoRAMemoryPool>>> = OnceLock::new();
+fn get_lora_memory_pool() -> &'static Arc<Mutex<LoRAMemoryPool>> {
+    LORA_MEMORY_POOL.get_or_init(|| Arc::new(Mutex::new(LoRAMemoryPool::new())))
+}
+static PATH_SWITCH_GUARD: OnceLock<Arc<RwLock<PathSwitchState>>> = OnceLock::new();
+fn get_path_switch_guard() -> &'static Arc<RwLock<PathSwitchState>> {
+    PATH_SWITCH_GUARD.get_or_init(|| Arc::new(RwLock::new(PathSwitchState::new())))
+}
 
 /// LoRA-specific memory pool for high-performance allocations
 #[derive(Debug)]
@@ -237,12 +245,12 @@ pub fn track_allocation(
     };
 
     // Add to memory tracker
-    if let Ok(mut memory_map) = MEMORY_TRACKER.write() {
+    if let Ok(mut memory_map) = get_memory_tracker().write() {
         memory_map.insert(ptr_addr, tracker);
     }
 
     // Mark as allocated for double-free protection
-    if let Ok(mut protection_map) = DOUBLE_FREE_PROTECTION.lock() {
+    if let Ok(mut protection_map) = get_double_free_protection().lock() {
         protection_map.insert(ptr_addr, true);
     }
 }
@@ -252,7 +260,7 @@ pub fn safe_deallocation(ptr: *mut u8) -> bool {
     let ptr_addr = ptr as usize;
 
     // Check if switching is in progress
-    if let Ok(mut switch_state) = PATH_SWITCH_GUARD.write() {
+    if let Ok(mut switch_state) = get_path_switch_guard().write() {
         if switch_state.switching_in_progress {
             switch_state.defer_deallocation(ptr);
             return true;
@@ -260,7 +268,7 @@ pub fn safe_deallocation(ptr: *mut u8) -> bool {
     }
 
     // Check double-free protection
-    if let Ok(mut protection_map) = DOUBLE_FREE_PROTECTION.lock() {
+    if let Ok(mut protection_map) = get_double_free_protection().lock() {
         if let Some(&is_allocated) = protection_map.get(&ptr_addr) {
             if !is_allocated {
                 // Double-free attempt detected!
@@ -276,7 +284,7 @@ pub fn safe_deallocation(ptr: *mut u8) -> bool {
     }
 
     // Remove from memory tracker
-    if let Ok(mut memory_map) = MEMORY_TRACKER.write() {
+    if let Ok(mut memory_map) = get_memory_tracker().write() {
         memory_map.remove(&ptr_addr);
     }
 
@@ -291,7 +299,7 @@ fn unsafe_deallocation(ptr: *mut u8) {
         let ptr_addr = ptr as usize;
         unsafe {
             // Determine allocation type and deallocate appropriately
-            if let Ok(memory_map) = MEMORY_TRACKER.read() {
+            if let Ok(memory_map) = get_memory_tracker().read() {
                 if let Some(tracker) = memory_map.get(&ptr_addr) {
                     match tracker.allocation_type {
                         AllocationType::CString => {
@@ -316,7 +324,7 @@ fn unsafe_deallocation(ptr: *mut u8) {
 
 /// Begin safe path switch
 pub fn begin_path_switch(new_path: PathType) -> bool {
-    if let Ok(mut switch_state) = PATH_SWITCH_GUARD.write() {
+    if let Ok(mut switch_state) = get_path_switch_guard().write() {
         switch_state.begin_switch(new_path)
     } else {
         false
@@ -325,14 +333,14 @@ pub fn begin_path_switch(new_path: PathType) -> bool {
 
 /// Complete safe path switch
 pub fn complete_path_switch() {
-    if let Ok(mut switch_state) = PATH_SWITCH_GUARD.write() {
+    if let Ok(mut switch_state) = get_path_switch_guard().write() {
         switch_state.complete_switch();
     }
 }
 
 /// Get LoRA memory pool statistics
 pub fn get_lora_memory_stats() -> LoRAMemoryStats {
-    if let Ok(pool) = LORA_MEMORY_POOL.lock() {
+    if let Ok(pool) = get_lora_memory_pool().lock() {
         pool.get_stats()
     } else {
         LoRAMemoryStats {
@@ -356,7 +364,7 @@ pub fn perform_memory_safety_check() -> MemorySafetyResult {
     };
 
     // Check for memory leaks
-    if let Ok(memory_map) = MEMORY_TRACKER.read() {
+    if let Ok(memory_map) = get_memory_tracker().read() {
         result.leaked_allocations = memory_map.len();
 
         if result.leaked_allocations > 0 {
@@ -383,7 +391,7 @@ pub fn perform_memory_safety_check() -> MemorySafetyResult {
     }
 
     // Check double-free protection status
-    if let Ok(protection_map) = DOUBLE_FREE_PROTECTION.lock() {
+    if let Ok(protection_map) = get_double_free_protection().lock() {
         let freed_count = protection_map.values().filter(|&&freed| !freed).count();
         if freed_count > protection_map.len() / 2 {
             result.warnings.push(format!(
@@ -394,7 +402,7 @@ pub fn perform_memory_safety_check() -> MemorySafetyResult {
     }
 
     // Check path switching state
-    if let Ok(switch_state) = PATH_SWITCH_GUARD.read() {
+    if let Ok(switch_state) = get_path_switch_guard().read() {
         if switch_state.switching_in_progress {
             result
                 .warnings
@@ -417,15 +425,15 @@ pub fn perform_memory_safety_check() -> MemorySafetyResult {
 
 /// Clean up all memory tracking (for shutdown)
 pub fn cleanup_memory_tracking() {
-    if let Ok(mut memory_map) = MEMORY_TRACKER.write() {
+    if let Ok(mut memory_map) = get_memory_tracker().write() {
         memory_map.clear();
     }
 
-    if let Ok(mut protection_map) = DOUBLE_FREE_PROTECTION.lock() {
+    if let Ok(mut protection_map) = get_double_free_protection().lock() {
         protection_map.clear();
     }
 
-    if let Ok(mut pool) = LORA_MEMORY_POOL.lock() {
+    if let Ok(mut pool) = get_lora_memory_pool().lock() {
         pool.cleanup();
     }
 }
