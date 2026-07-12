@@ -98,7 +98,11 @@ test.describe('Users page', () => {
     await createUserButton.click()
 
     const dialog = page.getByRole('dialog', { name: 'Create user' })
-    await expect(dialog.getByLabel('Email')).toBeFocused()
+    const emailInput = dialog.getByLabel('Email')
+    const passwordInput = dialog.getByLabel('Password')
+    await expect(emailInput).toBeFocused()
+    await expect(emailInput).toHaveAttribute('autocomplete', 'username')
+    await expect(passwordInput).toHaveAttribute('autocomplete', 'new-password')
     expect(await page.evaluate(() => document.body.style.overflow)).toBe('hidden')
     await expect(dialog.getByText('Permissions', { exact: true })).toBeVisible()
     await expect(dialog.getByText('config.read')).toBeVisible()

@@ -396,6 +396,39 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByRole('button', { name: 'Guide' })).toHaveCount(0);
   });
 
+  test('keeps guide actions anchored while step copy changes', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 500 });
+    await page.evaluate(() => {
+      window.localStorage.setItem('vllm-sr.onboarding.status', 'pending');
+      window.localStorage.setItem('vllm-sr.onboarding.step', '0');
+    });
+    await page.goto('/playground', { waitUntil: 'domcontentloaded' });
+
+    const actions = page.getByTestId('onboarding-guide-actions');
+    const body = page.getByTestId('onboarding-guide-body');
+    await expect(actions).toBeVisible();
+    await expect(body).toBeVisible();
+
+    const initialActionsBox = await actions.boundingBox();
+    expect(initialActionsBox).not.toBeNull();
+
+    for (let index = 0; index < 3; index += 1) {
+      await page.getByRole('button', { name: 'Next' }).click();
+      const nextActionsBox = await actions.boundingBox();
+      expect(nextActionsBox).not.toBeNull();
+      expect(Math.abs((nextActionsBox?.y ?? 0) - (initialActionsBox?.y ?? 0))).toBeLessThan(2);
+    }
+
+    const viewport = page.viewportSize();
+    const finalActionsBox = await actions.boundingBox();
+    expect(viewport).not.toBeNull();
+    expect(finalActionsBox).not.toBeNull();
+    expect((finalActionsBox?.y ?? 0) + (finalActionsBox?.height ?? 0)).toBeLessThanOrEqual(
+      viewport?.height ?? 0,
+    );
+    await expect(body).toHaveCSS('overflow-y', 'auto');
+  });
+
   test('can type message', async ({ page }) => {
     const input = page.getByPlaceholder('Ask me anything...');
     await input.fill('Hello, this is a test message');

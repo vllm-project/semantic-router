@@ -1,7 +1,7 @@
 {
   "name": "vLLM Semantic Router",
   "short_name": "vLLM-SR",
-  "description": "vLLM Semantic Router makes Mixture-of-Models executable for heterogeneous LLM inference.",
+  "description": "Building Mixture-of-Models: The Next-Generation Model Architecture for Heterogeneous LLM Inference.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",

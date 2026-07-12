@@ -117,9 +117,18 @@ test.describe("Dashboard auth flow", () => {
 
     await page.goto("/login");
     const continueButton = page.getByRole("button", { name: "Continue" });
+    const emailInput = page.getByLabel("Email");
+    const passwordInput = page.getByLabel("Password");
     await continueButton.scrollIntoViewIfNeeded();
-    await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
-    await expect(page.getByPlaceholder("••••••••")).toBeVisible();
+    await expect(emailInput).toBeVisible();
+    await expect(emailInput).toHaveAttribute("name", "email");
+    await expect(emailInput).toHaveAttribute("autocomplete", "username");
+    await expect(passwordInput).toBeVisible();
+    await expect(passwordInput).toHaveAttribute("name", "password");
+    await expect(passwordInput).toHaveAttribute(
+      "autocomplete",
+      "current-password",
+    );
     await expect(continueButton).toBeVisible();
   });
 
@@ -428,7 +437,9 @@ test.describe("Dashboard auth flow", () => {
         name: "Choose the administrator email.",
       }),
     ).toBeVisible();
-    await page.getByLabel("Admin email").fill("ada@example.com");
+    const bootstrapEmail = page.getByLabel("Admin email");
+    await expect(bootstrapEmail).toHaveAttribute("autocomplete", "username");
+    await bootstrapEmail.fill("ada@example.com");
     await page.getByRole("button", { name: "Next" }).click();
 
     await expect(
@@ -436,7 +447,12 @@ test.describe("Dashboard auth flow", () => {
         name: "Secure the workspace.",
       }),
     ).toBeVisible();
-    await page.getByLabel("Password").fill("future-password");
+    const bootstrapPassword = page.getByLabel("Password");
+    await expect(bootstrapPassword).toHaveAttribute(
+      "autocomplete",
+      "new-password",
+    );
+    await bootstrapPassword.fill("future-password");
     await Promise.all([
       page.waitForURL(/\/auth\/transition\?to=%2Fsetup$/),
       page.getByText(transitionCopyPattern).waitFor({ state: "visible" }),
