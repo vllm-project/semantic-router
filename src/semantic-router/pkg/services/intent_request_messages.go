@@ -176,8 +176,11 @@ func extractIntentConversationHistory(messages []IntentMessage) intentConversati
 }
 
 // extractIntentMessageImageURL returns the first safe inline base64 image data
-// URI from a message's content parts, mirroring the ExtProc request path. Only
-// data URIs are accepted (HTTP(S) URLs are rejected to prevent SSRF).
+// URI (canonicalized) from a message's content parts. Only data URIs are
+// accepted; HTTP(S) URLs are rejected to prevent SSRF. This shares the same
+// imageurl gate as the ExtProc request path but is not a full behavioral mirror
+// of it (e.g. the ExtProc path fills the first safe image once across all user
+// turns, whereas this HTTP path resolves per turn).
 func extractIntentMessageImageURL(raw json.RawMessage) string {
 	raw = bytesTrimSpace(raw)
 	if len(raw) == 0 || string(raw) == "null" {
@@ -202,8 +205,13 @@ func firstSafeImageURL(parts []intentMessageContentPart) string {
 		if part.ImageURL == nil {
 			continue
 		}
-		if url := strings.TrimSpace(part.ImageURL.URL); imageurl.IsSafeImageDataURL(url) {
-			return url
+		// Return the canonical form (lowercased scheme/MIME/";base64," marker,
+		// payload preserved) rather than the raw URI. The classifier backend that
+		// ultimately consumes this scans for ";base64," case-sensitively, so an
+		// accepted uppercase-scheme data URI would otherwise yield no image signal
+		// on the classify/eval path even though the gate admitted it.
+		if canonical, ok := imageurl.CanonicalDataURL(strings.TrimSpace(part.ImageURL.URL)); ok {
+			return canonical
 		}
 	}
 	return ""
