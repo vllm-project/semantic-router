@@ -136,6 +136,23 @@
   text-wrap: pretty;
 }
 
+.readOnlyNotice {
+  margin: 0 0 1.1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--color-text-secondary);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.readOnlyNotice strong,
+.readOnlyNotice code {
+  color: var(--color-text);
+}
+
 /* Tabs */
 .tabsBar {
   display: flex;
@@ -205,6 +222,11 @@
   width: 100%;
   max-width: none;
   margin: 0 auto;
+}
+
+.tabContentShell:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 4px;
 }
 
 .tabContentShell > * {
@@ -2105,6 +2127,371 @@
   background: var(--color-bg-secondary);
 }
 
+/* Enterprise catalog and request states */
+.entityToolbarActionsTop {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.enterpriseCatalogControls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) repeat(2, minmax(150px, 210px));
+  gap: 0.7rem;
+  padding: 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.025), transparent), var(--color-bg-secondary);
+}
+
+.enterpriseSearchField,
+.enterpriseSelectField,
+.enterpriseTeamFilter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.enterpriseSearchField input,
+.enterpriseSelectField select,
+.enterpriseTeamFilter select {
+  width: 100%;
+  min-height: 38px;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #111113;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.enterpriseSearchField input:focus,
+.enterpriseSelectField select:focus,
+.enterpriseTeamFilter select:focus {
+  outline: none;
+  border-color: rgba(237, 28, 36, 0.72);
+  box-shadow: 0 0 0 2px rgba(237, 28, 36, 0.16);
+}
+
+.enterpriseTeamFilter {
+  width: min(100%, 220px);
+  margin: 0.75rem 0;
+}
+
+.enterpriseCatalogMeta,
+.enterprisePagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--color-text-secondary);
+  font-size: 0.74rem;
+}
+
+.enterpriseCatalogMeta {
+  padding: 0.55rem 0.1rem 0.25rem;
+}
+
+.enterpriseCatalogMeta strong {
+  color: var(--color-text);
+}
+
+.enterprisePagination {
+  padding: 0.55rem 0.1rem 0;
+}
+
+.enterprisePageRange {
+  white-space: nowrap;
+}
+
+.enterprisePageButtons {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.enterprisePageButtons button,
+.enterpriseNoticeActions button {
+  min-width: 32px;
+  min-height: 30px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #111113;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.enterprisePageButtons button:hover:not(:disabled),
+.enterpriseNoticeActions button:hover:not(:disabled) {
+  border-color: rgba(237, 28, 36, 0.65);
+  background: rgba(237, 28, 36, 0.1);
+}
+
+.enterprisePageButtons button:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.enterpriseRequestNotice {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid;
+  border-radius: var(--radius-md);
+  background: #151517;
+  color: var(--color-text);
+}
+
+.enterpriseRequestNotice strong {
+  font-size: 0.84rem;
+}
+
+.enterpriseRequestNotice p {
+  margin: 0.2rem 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.enterpriseRequestNotice_error {
+  border-color: rgba(237, 28, 36, 0.48);
+  box-shadow: inset 3px 0 #ed1c24;
+}
+
+.enterpriseRequestNotice_warning {
+  border-color: rgba(180, 184, 191, 0.42);
+  box-shadow: inset 3px 0 #8f949c;
+}
+
+.enterpriseNoticeActions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.enterpriseNoticeActions button {
+  padding: 0.35rem 0.7rem;
+}
+
+.confirmInlineError,
+.containerErrorCell {
+  color: #ff686e;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.confirmInlineError {
+  margin-top: 0.7rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(237, 28, 36, 0.42);
+  border-radius: var(--radius-md);
+  background: rgba(237, 28, 36, 0.08);
+}
+
+.warningAlert {
+  border-color: rgba(143, 148, 156, 0.5);
+  background: rgba(143, 148, 156, 0.1);
+  color: var(--color-text-secondary);
+}
+
+/* Structured worker skills and deploy summary */
+.skillCatalogControls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px);
+  gap: 0.7rem;
+  margin-bottom: 0.75rem;
+}
+
+.visuallyHiddenControl {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skillSelectionCount,
+.summaryMuted {
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+}
+
+.skillSelectionCount {
+  margin-top: 0.75rem;
+}
+
+.successActions {
+  display: flex;
+  justify-content: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.commandReference {
+  margin-top: 1rem;
+  text-align: left;
+}
+
+.commandDisclosure {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.commandDisclosureIcon {
+  display: inline-block;
+  transition: transform 160ms ease;
+}
+
+.commandDisclosureIconOpen {
+  display: inline-block;
+  transform: rotate(90deg);
+  transition: transform 160ms ease;
+}
+
+/* Runtime surfaces: green is reserved for semantic health. */
+.semanticStatusText {
+  color: #40d77d;
+}
+
+.healthBadge_healthy {
+  background: rgba(34, 197, 94, 0.14);
+  color: #40d77d;
+  border: 1px solid rgba(34, 197, 94, 0.28);
+}
+
+.healthBadge_starting {
+  background: rgba(143, 148, 156, 0.12);
+  color: #c9cbd0;
+  border: 1px solid rgba(143, 148, 156, 0.3);
+}
+
+.healthBadge_stopped {
+  background: rgba(237, 28, 36, 0.11);
+  color: #ff686e;
+  border: 1px solid rgba(237, 28, 36, 0.28);
+}
+
+.breakdownBar_semantic {
+  background: #22c55e;
+}
+
+.breakdownBar_neutral {
+  background: #8f949c;
+}
+
+.breakdownBar_danger {
+  background: #ed1c24;
+}
+
+.embeddedFailure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.8rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
+}
+
+.embeddedContainerMeta,
+.inlineLoading {
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+}
+
+.inlineLoading {
+  padding: 0.5rem 0;
+}
+
+.containerTableWrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
+}
+
+.containerTableWrap .containerTable {
+  margin-bottom: 0;
+  min-width: 900px;
+}
+
+.containerErrorCell {
+  text-align: center;
+}
+
+/* AMD alignment: graphite neutrals with red for interactions and actions. */
+.tabActive {
+  color: #ff4f56;
+  border-bottom-color: #ed1c24;
+}
+
+.btnPrimary,
+.btnSuccess {
+  background: #ed1c24;
+  color: #fff;
+}
+
+.btnPrimary:hover:not(:disabled),
+.btnSuccess:hover:not(:disabled) {
+  background: #c9141b;
+  opacity: 1;
+}
+
+.stepActive .stepCircle,
+.stepCompleted .stepCircle {
+  border-color: #ed1c24;
+  background: #ed1c24;
+  color: #fff;
+}
+
+.stepCompleted .stepLabel {
+  color: #ff686e;
+}
+
+.stepConnectorActive {
+  background: #ed1c24;
+}
+
+.toggleOptionSelected,
+.skillCardSelected {
+  border-color: rgba(237, 28, 36, 0.75);
+  background: rgba(237, 28, 36, 0.07);
+  color: #ff686e;
+}
+
+.skillCardSelected:focus-within {
+  box-shadow: 0 0 0 2px rgba(237, 28, 36, 0.18);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .container {
@@ -2301,6 +2688,27 @@
 
   .actionsLeft,
   .actionsRight {
+    width: 100%;
+  }
+
+  .enterpriseCatalogControls,
+  .skillCatalogControls {
+    grid-template-columns: 1fr;
+  }
+
+  .enterpriseCatalogMeta,
+  .enterprisePagination,
+  .enterpriseRequestNotice {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .enterprisePageButtons,
+  .enterpriseNoticeActions {
+    justify-content: flex-end;
+  }
+
+  .enterpriseTeamFilter {
     width: 100%;
   }
 }

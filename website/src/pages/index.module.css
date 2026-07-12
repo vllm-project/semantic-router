@@ -392,10 +392,9 @@
 .capabilitySection {
   position: relative;
   overflow: hidden;
-  padding: 5rem 0;
-  background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.018), transparent 38%),
-    var(--site-bg);
+  padding: clamp(5rem, 8vw, 7.5rem) 0;
+  background: #050505;
+  color: #fff;
 }
 
 .capabilitySection::before {
@@ -404,11 +403,12 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 15% 18%, rgba(15, 23, 42, 0.045), transparent 30%),
-    linear-gradient(90deg, rgba(15, 23, 42, 0.025) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.025) 1px, transparent 1px);
-  background-size: auto, 32px 32px, 32px 32px;
-  opacity: 0.28;
+    linear-gradient(112deg, transparent 0 72%, rgba(237, 28, 36, 0.09) 72% 72.35%, transparent 72.35%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: auto, 48px 48px, 48px 48px;
+  mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent);
+  opacity: 0.44;
 }
 
 .encoderSection {
@@ -457,103 +457,145 @@
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 1.15rem;
+  gap: clamp(1.75rem, 3.5vw, 3rem);
 }
 
-.comparisonHeading {
+.capabilityHeading {
   display: grid;
-  grid-template-columns: minmax(220px, 0.32fr) minmax(0, 0.68fr);
+  gap: 1.25rem;
+}
+
+.capabilityLabel {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.capabilityLabel::after {
+  color: #ed1c24;
+}
+
+.capabilityHeading h2 {
+  max-width: none;
+  margin: 0;
+  color: #fff;
+  font-size: clamp(2.8rem, 5.25vw, 5.1rem);
+  font-weight: 400;
+  line-height: 0.92;
+  letter-spacing: -0.055em;
+  white-space: nowrap;
+}
+
+.capabilitySummary {
+  display: grid;
+  grid-template-columns: minmax(0, 42rem) auto;
   align-items: end;
+  justify-content: space-between;
   gap: 2rem;
-  margin-bottom: 0.35rem;
 }
 
-.comparisonHeading h2 {
-  max-width: 17ch;
+.capabilitySummary p {
+  max-width: 42rem;
   margin: 0;
-  font-size: clamp(2.4rem, 5vw, 4.35rem);
-  line-height: 0.96;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: clamp(1.05rem, 1.5vw, 1.28rem);
+  line-height: 1.55;
+  letter-spacing: -0.015em;
 }
 
-.comparisonTableWrap {
-  overflow-x: auto;
-  border: 1px solid rgba(15, 23, 42, 0.14);
-  border-radius: 1.45rem;
-  background: var(--site-surface);
-  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.055);
+.capabilitySummary .capabilityCta {
+  flex: 0 0 auto;
+  border-color: rgba(255, 255, 255, 0.28);
+  background: transparent;
+  color: #fff;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
-.comparisonTable {
-  display: table;
+.capabilitySummary .capabilityCta:hover {
+  border-color: #fff;
+  background: #fff;
+  color: #050505;
+  box-shadow: none;
+}
+
+.architectureRail {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.22);
+  list-style: none;
+}
+
+.architectureRail::before {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  top: -1px;
+  left: 0;
   width: 100%;
-  margin: 0;
-  border-collapse: collapse;
-  table-layout: fixed;
+  height: 2px;
+  background: linear-gradient(90deg, #ed1c24, rgba(237, 28, 36, 0.18));
 }
 
-.comparisonTable th,
-.comparisonTable td {
-  padding: 1.35rem 1.45rem;
-  border: 0;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.1);
-  text-align: left;
-  vertical-align: top;
+.architectureStage {
+  display: grid;
+  min-width: 0;
+  min-height: 13.5rem;
+  align-content: start;
+  gap: 0.72rem;
+  padding: 1.8rem clamp(1.35rem, 2.4vw, 2.35rem) 2rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.16);
 }
 
-.comparisonTable thead th {
-  background: rgba(15, 23, 42, 0.035);
-  color: var(--site-muted-bright);
+.architectureStage:first-child {
+  border-left: 0;
+}
+
+.stageMarker {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.6rem;
+  color: #ed1c24;
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.11em;
+  letter-spacing: 0.12em;
+}
+
+.stageMarker::after {
+  content: '';
+  width: 2.25rem;
+  height: 1px;
+  background: rgba(237, 28, 36, 0.52);
+}
+
+.stageLabel {
+  color: rgba(255, 255, 255, 0.52);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
-.comparisonTable thead th:first-child {
-  width: 18%;
+.architectureStage strong {
+  color: #fff;
+  font-size: clamp(1.35rem, 2.25vw, 2.15rem);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
 }
 
-.comparisonTable thead th:nth-child(2),
-.comparisonTable thead th:nth-child(3) {
-  width: 41%;
-}
-
-.comparisonTable tbody th {
-  color: var(--site-text-strong);
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.comparisonTable tbody td {
-  color: var(--site-muted-bright);
-  font-size: 1rem;
-  line-height: 1.58;
-}
-
-.comparisonTable tbody tr:last-child > * {
-  border-bottom: 0;
-}
-
-.comparisonTable tbody tr:last-child {
-  background: linear-gradient(90deg, rgba(48, 162, 255, 0.025), rgba(48, 162, 255, 0.08));
-}
-
-.comparisonTable tbody tr:last-child .comparisonDimension {
-  color: #167fce;
-}
-
-.comparisonTable tbody .comparisonValue {
-  background: rgba(48, 162, 255, 0.035);
-  color: var(--site-text-strong);
-  font-weight: 600;
-}
-
-.comparisonCta {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 0.25rem;
+.stageDetail {
+  margin-top: auto;
+  color: rgba(255, 255, 255, 0.62);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  letter-spacing: 0.035em;
 }
 
 .encoderShowcase {
@@ -760,8 +802,7 @@
   .heroGrid,
   .sectionHeading,
   .encoderShowcase,
-  .bandGrid,
-  .comparisonHeading {
+  .bandGrid {
     grid-template-columns: 1fr;
   }
 
@@ -772,10 +813,6 @@
   .heroStage {
     min-height: auto;
     padding: 3rem 0 2rem;
-  }
-
-  .comparisonHeading h2 {
-    max-width: 18ch;
   }
 
   .encoderLeadStack {
@@ -883,25 +920,38 @@
     padding: 3.5rem 0;
   }
 
-  .comparisonTable th,
-  .comparisonTable td {
-    padding: 0.88rem 0.72rem;
-    overflow-wrap: anywhere;
+  .capabilityHeading h2 {
+    font-size: clamp(2.4rem, 7vw, 3.1rem);
+    white-space: normal;
   }
 
-  .comparisonTable thead th:first-child {
-    width: 22%;
+  .capabilitySummary {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 1.25rem;
   }
 
-  .comparisonTable thead th:nth-child(2),
-  .comparisonTable thead th:nth-child(3) {
-    width: 39%;
+  .capabilitySummary .capabilityCta {
+    justify-self: start;
   }
 
-  .comparisonTable tbody th,
-  .comparisonTable tbody td {
-    font-size: 0.86rem;
-    line-height: 1.48;
+  .architectureRail {
+    grid-template-columns: 1fr;
+  }
+
+  .architectureStage {
+    min-height: 10.5rem;
+    padding: 1.45rem 0.25rem 1.6rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.16);
+    border-left: 0;
+  }
+
+  .architectureStage:first-child {
+    border-top: 0;
+  }
+
+  .stageDetail {
+    margin-top: 0.35rem;
   }
 
   .encoderCardGrid {
@@ -923,27 +973,16 @@
 }
 
 @media (max-width: 640px) {
-  .comparisonHeading h2 {
-    font-size: clamp(2.05rem, 10vw, 2.65rem);
+  .capabilityHeading h2 {
+    font-size: clamp(2.15rem, 10vw, 2.75rem);
+    line-height: 0.98;
   }
 
-  .comparisonTable th,
-  .comparisonTable td {
-    padding: 0.72rem 0.5rem;
+  .capabilitySummary p {
+    font-size: 1rem;
   }
 
-  .comparisonTable thead th {
-    font-size: 0.6rem;
-    letter-spacing: 0.06em;
-  }
-
-  .comparisonTable tbody th,
-  .comparisonTable tbody td {
-    font-size: 0.78rem;
-  }
-
-  .comparisonCta,
-  .comparisonCta :global(a) {
+  .capabilitySummary .capabilityCta {
     width: 100%;
   }
 }

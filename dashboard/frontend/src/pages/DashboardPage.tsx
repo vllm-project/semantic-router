@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import RouterModelInventory from '../components/RouterModelInventory'
 import { useAuth } from '../contexts/AuthContext'
@@ -20,6 +20,7 @@ import {
   countSignals,
 } from './dashboardPageStats'
 import { buildDecisionPreviewRows, buildSignalBreakdownRows } from './dashboardPageOverview'
+import { createVisibilityAwareRequest } from './visibilityAwareRequest'
 import styles from './DashboardPage.module.css'
 
 const DashboardPage: React.FC = () => {
@@ -32,32 +33,33 @@ const DashboardPage: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const configTickRef = useRef(0)
 
   const fetchStatus = useCallback(async () => {
-    try {
-      const statusRes = await fetch('/api/status')
-      if (statusRes.ok) {
-        setStatus(await statusRes.json())
-      }
-    } catch {
-      // Ignore transient polling errors.
+    const statusRes = await fetch('/api/status')
+    if (statusRes.ok) {
+      setStatus(await statusRes.json())
     }
   }, [])
+
+  const fetchConfig = useCallback(async () => {
+    const configResult = await fetch('/api/router/config/all')
+    if (configResult.ok) {
+      setConfig(await configResult.json())
+      setLastUpdated(new Date())
+      setError(null)
+    }
+  }, [])
+
+  const statusRequest = useMemo(() => createVisibilityAwareRequest(fetchStatus), [fetchStatus])
+  const configRequest = useMemo(() => createVisibilityAwareRequest(fetchConfig), [fetchConfig])
 
   const fetchAll = useCallback(async (manual = false) => {
     if (manual) setRefreshing(true)
     try {
-      const [cfgRes, statusRes] = await Promise.all([
-        fetch('/api/router/config/all'),
-        fetch('/api/status'),
+      await Promise.all([
+        configRequest.run({ allowHidden: true }),
+        statusRequest.run({ allowHidden: true }),
       ])
-      if (cfgRes.ok) {
-        setConfig(await cfgRes.json())
-      }
-      if (statusRes.ok) {
-        setStatus(await statusRes.json())
-      }
       setLastUpdated(new Date())
       setError(null)
     } catch (err) {
@@ -66,27 +68,41 @@ const DashboardPage: React.FC = () => {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [])
+  }, [configRequest, statusRequest])
 
   useEffect(() => {
-    fetchAll()
-    const statusInterval = setInterval(fetchStatus, 10000)
-    const configInterval = setInterval(() => {
-      configTickRef.current += 1
-      if (configTickRef.current % 3 === 0) {
-        fetchAll()
-      } else {
-        fetchStatus()
-      }
-    }, 10000)
-    const onConfigDeployed = () => fetchAll()
-    window.addEventListener('config-deployed', onConfigDeployed)
-    return () => {
-      clearInterval(statusInterval)
-      clearInterval(configInterval)
-      window.removeEventListener('config-deployed', onConfigDeployed)
+    const pollStatus = () => {
+      void statusRequest.run().catch(() => {
+        // Ignore transient status polling errors.
+      })
     }
-  }, [fetchAll, fetchStatus])
+    const pollConfig = () => {
+      void configRequest.run().catch((pollError) => {
+        setError(pollError instanceof Error ? pollError.message : 'Failed to refresh dashboard config')
+      })
+    }
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        pollStatus()
+        pollConfig()
+      }
+    }
+    const onConfigDeployed = () => {
+      void fetchAll()
+    }
+
+    void fetchAll()
+    const statusInterval = window.setInterval(pollStatus, 10000)
+    const configInterval = window.setInterval(pollConfig, 30000)
+    window.addEventListener('config-deployed', onConfigDeployed)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.clearInterval(statusInterval)
+      window.clearInterval(configInterval)
+      window.removeEventListener('config-deployed', onConfigDeployed)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [configRequest, fetchAll, statusRequest])
 
   const signalStats = useMemo(() => (config ? countSignals(config) : { total: 0, byType: {} }), [config])
   const decisionCount = useMemo(() => (config ? countDecisions(config) : 0), [config])
@@ -133,8 +149,10 @@ const DashboardPage: React.FC = () => {
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
-          <h1 className={styles.title}>Dashboard</h1>
-          <p className={styles.subtitle}>Routing health, policy coverage, and model readiness</p>
+          <h1 className={styles.title}>Building Mixture-of-Models</h1>
+          <p className={styles.subtitle}>
+            The next-generation model architecture for heterogeneous LLM inference.
+          </p>
         </div>
         <div className={styles.headerActions}>
           {lastUpdated && (

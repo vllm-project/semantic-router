@@ -88,6 +88,22 @@
   color: var(--text-primary);
 }
 
+.readOnlyNotice {
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-left: 3px solid var(--brand-amd);
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.readOnlyNotice strong,
+.readOnlyNotice code {
+  color: var(--text-primary);
+}
+
 .section {
   min-width: 0;
   overflow: hidden;
@@ -204,6 +220,7 @@
 }
 
 .field label,
+.fieldLabel,
 .subjects legend {
   display: block;
   margin-bottom: 0.35rem;
@@ -236,6 +253,15 @@
 .input:focus {
   border-color: rgba(255, 255, 255, 0.38);
   box-shadow: 0 0 0 3px rgba(245, 245, 247, 0.08);
+}
+
+.input:read-only,
+.input:disabled {
+  cursor: default;
+  border-color: var(--border-subtle);
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text-secondary);
+  opacity: 1;
 }
 
 .removeButton {

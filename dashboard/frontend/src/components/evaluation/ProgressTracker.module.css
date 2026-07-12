@@ -15,6 +15,36 @@
   color: var(--color-text-secondary, #999);
 }
 
+.loadError {
+  display: flex;
+  min-height: 260px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+}
+
+.loadError h3 {
+  margin: 0 0 0.35rem;
+  color: var(--color-danger, #ef4444);
+}
+
+.loadError p {
+  margin: 0;
+  color: var(--color-text-secondary, #999);
+}
+
+.loadError button {
+  margin-top: 1rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--color-danger, #ef4444);
+  border-radius: var(--radius-md, 0.375rem);
+  background: transparent;
+  color: var(--color-danger, #ef4444);
+  cursor: pointer;
+}
+
 .spinner {
   width: 32px;
   height: 32px;

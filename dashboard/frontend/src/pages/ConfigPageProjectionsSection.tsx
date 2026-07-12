@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import styles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
+import ConfirmDialog from '../components/ConfirmDialog'
 import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
 import type { FieldConfig } from '../components/EditModal'
@@ -15,6 +16,24 @@ import type {
   ProjectionScoreInput,
 } from './configPageSupport'
 import { cloneConfigData } from './configPageCanonicalization'
+import {
+  assertProjectionCalibration,
+  assertProjectionInputs,
+  assertProjectionMappingOutputCount,
+  assertProjectionMembers,
+  assertProjectionOutputs,
+  assertProjectionPartitionSettings,
+  normalizeProjectionCalibration,
+  normalizeProjectionInputs,
+  normalizeProjectionMembers,
+  normalizeProjectionOutputs,
+} from './configPageProjectionFormSupport'
+import {
+  ProjectionCalibrationEditor,
+  ProjectionInputsEditor,
+  ProjectionMembersEditor,
+  ProjectionOutputsEditor,
+} from './configPageProjectionStructuredEditors'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 
 interface ConfigPageProjectionsSectionProps {
@@ -47,25 +66,15 @@ interface ProjectionMappingFormState {
   outputs: ProjectionMappingOutput[]
 }
 
+type ProjectionDeleteTarget =
+  | { kind: 'partition'; name: string }
+  | { kind: 'score'; name: string }
+  | { kind: 'mapping'; name: string }
+
 const EMPTY_PROJECTIONS: ConfigProjections = { partitions: [], scores: [], mappings: [] }
 const EMPTY_PARTITIONS: ProjectionPartition[] = []
 const EMPTY_SCORES: ProjectionScore[] = []
 const EMPTY_MAPPINGS: ProjectionMapping[] = []
-
-const toPrettyJSON = (value: unknown) => (
-  <pre
-    style={{
-      margin: 0,
-      whiteSpace: 'pre-wrap',
-      wordBreak: 'break-word',
-      fontSize: '0.8125rem',
-      lineHeight: 1.5,
-      fontFamily: 'var(--font-mono)',
-    }}
-  >
-    {JSON.stringify(value, null, 2)}
-  </pre>
-)
 
 const cloneProjections = (cfg: ConfigData): ConfigProjections => ({
   partitions: [...(cfg.projections?.partitions || [])],
@@ -83,17 +92,6 @@ const ensureProjectionConfig = (cfg: ConfigData) => {
   return cfg.projections
 }
 
-const parseJSONField = <T,>(value: unknown, label: string): T => {
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value) as T
-    } catch {
-      throw new Error(`${label} must be valid JSON`)
-    }
-  }
-  return value as T
-}
-
 export default function ConfigPageProjectionsSection({
   config,
   isReadonly,
@@ -102,6 +100,9 @@ export default function ConfigPageProjectionsSection({
   openViewModal,
 }: ConfigPageProjectionsSectionProps) {
   const [search, setSearch] = useState('')
+  const [projectionPendingDelete, setProjectionPendingDelete] = useState<ProjectionDeleteTarget | null>(null)
+  const [projectionDeletePending, setProjectionDeletePending] = useState(false)
+  const [projectionDeleteError, setProjectionDeleteError] = useState<string | null>(null)
   const projections = useMemo<ConfigProjections>(
     () => config?.projections || EMPTY_PROJECTIONS,
     [config?.projections]
@@ -166,10 +167,12 @@ export default function ConfigPageProjectionsSection({
     {
       name: 'members',
       label: 'Members',
-      type: 'json',
+      type: 'custom',
       required: true,
-      description: 'JSON string array of declared domain or embedding signal names.',
-      placeholder: '["law", "business", "other"]',
+      description: 'Declared domain or embedding signals coordinated by this partition.',
+      customRender: (value, onChange) => (
+        <ProjectionMembersEditor value={value} onChange={onChange} />
+      ),
     },
     {
       name: 'temperature',
@@ -198,12 +201,13 @@ export default function ConfigPageProjectionsSection({
     {
       name: 'inputs',
       label: 'Inputs',
-      type: 'json',
+      type: 'custom',
       required: true,
       description:
-        'JSON array of { type, name, weight, value_source?, match?, miss? } objects. Supported value_source: "binary" (default), "confidence", "raw". Use type "projection" with value_source "score" to reference earlier projection scores, or value_source "confidence" to reference mapping output confidences.',
-      placeholder:
-        '[{"type":"embedding","name":"technical_support","weight":0.18,"value_source":"confidence"}]',
+        'Weighted signal, knowledge-base metric, or earlier projection contributions.',
+      customRender: (value, onChange) => (
+        <ProjectionInputsEditor value={value} onChange={onChange} />
+      ),
     },
   ]
 
@@ -222,22 +226,26 @@ export default function ConfigPageProjectionsSection({
       label: 'Method',
       type: 'select',
       required: true,
-      options: ['threshold_bands'],
+      options: ['threshold_bands', 'multi_emit'],
     },
     {
       name: 'calibration',
       label: 'Calibration',
-      type: 'json',
-      description: 'Optional JSON object like {"method":"sigmoid_distance","slope":6}.',
-      placeholder: '{"method":"sigmoid_distance","slope":6}',
+      type: 'custom',
+      description: 'Optional confidence calibration applied to output bands.',
+      customRender: (value, onChange) => (
+        <ProjectionCalibrationEditor value={value} onChange={onChange} />
+      ),
     },
     {
       name: 'outputs',
       label: 'Outputs',
-      type: 'json',
+      type: 'custom',
       required: true,
-      description: 'JSON array of { name, lt?, lte?, gt?, gte? } threshold objects.',
-      placeholder: '[{"name":"support_fast","lt":0.25},{"name":"support_escalated","gte":0.25}]',
+      description: 'Named routing bands and their lower or upper threshold bounds.',
+      customRender: (value, onChange) => (
+        <ProjectionOutputsEditor value={value} onChange={onChange} />
+      ),
     },
   ]
 
@@ -260,12 +268,16 @@ export default function ConfigPageProjectionsSection({
       },
       partitionFields,
       async (data) => {
+        const members = normalizeProjectionMembers(data.members)
+        const defaultMember = data.default?.trim() ?? ''
+        assertProjectionMembers(members, defaultMember)
+        assertProjectionPartitionSettings(data.semantics, data.temperature)
         const nextPartition: ProjectionPartition = {
           name: data.name.trim(),
           semantics: data.semantics,
-          members: parseJSONField<string[]>(data.members, 'Members'),
+          members,
           temperature: data.temperature,
-          default: data.default?.trim() ?? '',
+          default: defaultMember,
         }
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
@@ -288,12 +300,16 @@ export default function ConfigPageProjectionsSection({
       },
       partitionFields,
       async (data) => {
+        const members = normalizeProjectionMembers(data.members)
+        const defaultMember = data.default?.trim() ?? ''
+        assertProjectionMembers(members, defaultMember)
+        assertProjectionPartitionSettings(data.semantics, data.temperature)
         const nextPartition: ProjectionPartition = {
           name: data.name.trim(),
           semantics: data.semantics,
-          members: parseJSONField<string[]>(data.members, 'Members'),
+          members,
           temperature: data.temperature,
-          default: data.default?.trim() ?? '',
+          default: defaultMember,
         }
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
@@ -305,12 +321,9 @@ export default function ConfigPageProjectionsSection({
     )
   }
 
-  const handleDeletePartition = async (partition: ProjectionPartition) => {
-    if (!window.confirm(`Delete projection partition "${partition.name}"?`)) return
-    await withClonedConfig((next) => {
-      const projectionConfig = ensureProjectionConfig(next)
-      projectionConfig.partitions = cloneProjections(next).partitions?.filter((entry) => entry.name !== partition.name)
-    })
+  const handleDeletePartition = (partition: ProjectionPartition) => {
+    setProjectionDeleteError(null)
+    setProjectionPendingDelete({ kind: 'partition', name: partition.name })
   }
 
   const handleViewPartition = (partition: ProjectionPartition) => {
@@ -322,7 +335,11 @@ export default function ConfigPageProjectionsSection({
           { label: 'Semantics', value: partition.semantics },
           { label: 'Temperature', value: partition.temperature ?? 'N/A' },
           { label: 'Default', value: partition.default || 'N/A' },
-          { label: 'Members', value: toPrettyJSON(partition.members || []), fullWidth: true },
+          {
+            label: 'Members',
+            value: <ProjectionMembersEditor value={partition.members || []} readOnly />,
+            fullWidth: true,
+          },
         ],
       },
     ]
@@ -339,10 +356,12 @@ export default function ConfigPageProjectionsSection({
       },
       scoreFields,
       async (data) => {
+        const inputs = normalizeProjectionInputs(data.inputs)
+        assertProjectionInputs(inputs)
         const nextScore: ProjectionScore = {
           name: data.name.trim(),
           method: data.method,
-          inputs: parseJSONField<ProjectionScoreInput[]>(data.inputs, 'Inputs'),
+          inputs,
         }
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
@@ -363,10 +382,12 @@ export default function ConfigPageProjectionsSection({
       },
       scoreFields,
       async (data) => {
+        const inputs = normalizeProjectionInputs(data.inputs)
+        assertProjectionInputs(inputs)
         const nextScore: ProjectionScore = {
           name: data.name.trim(),
           method: data.method,
-          inputs: parseJSONField<ProjectionScoreInput[]>(data.inputs, 'Inputs'),
+          inputs,
         }
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
@@ -378,12 +399,9 @@ export default function ConfigPageProjectionsSection({
     )
   }
 
-  const handleDeleteScore = async (score: ProjectionScore) => {
-    if (!window.confirm(`Delete projection score "${score.name}"?`)) return
-    await withClonedConfig((next) => {
-      const projectionConfig = ensureProjectionConfig(next)
-      projectionConfig.scores = cloneProjections(next).scores?.filter((entry) => entry.name !== score.name)
-    })
+  const handleDeleteScore = (score: ProjectionScore) => {
+    setProjectionDeleteError(null)
+    setProjectionPendingDelete({ kind: 'score', name: score.name })
   }
 
   const handleViewScore = (score: ProjectionScore) => {
@@ -393,7 +411,11 @@ export default function ConfigPageProjectionsSection({
         fields: [
           { label: 'Name', value: score.name },
           { label: 'Method', value: score.method },
-          { label: 'Inputs', value: toPrettyJSON(score.inputs || []), fullWidth: true },
+          {
+            label: 'Inputs',
+            value: <ProjectionInputsEditor value={score.inputs || []} readOnly />,
+            fullWidth: true,
+          },
         ],
       },
     ]
@@ -412,16 +434,17 @@ export default function ConfigPageProjectionsSection({
       },
       mappingFields,
       async (data) => {
-        const calibration = parseJSONField<ProjectionMapping['calibration'] | string | undefined>(
-          data.calibration,
-          'Calibration'
-        )
+        const calibration = normalizeProjectionCalibration(data.calibration)
+        const outputs = normalizeProjectionOutputs(data.outputs)
+        assertProjectionCalibration(calibration)
+        assertProjectionOutputs(outputs)
+        assertProjectionMappingOutputCount(data.method, outputs)
         const nextMapping: ProjectionMapping = {
           name: data.name.trim(),
           source: data.source,
           method: data.method,
-          calibration: typeof calibration === 'string' ? undefined : calibration,
-          outputs: parseJSONField<ProjectionMappingOutput[]>(data.outputs, 'Outputs'),
+          calibration,
+          outputs,
         }
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
@@ -444,16 +467,17 @@ export default function ConfigPageProjectionsSection({
       },
       mappingFields,
       async (data) => {
-        const calibration = parseJSONField<ProjectionMapping['calibration'] | string | undefined>(
-          data.calibration,
-          'Calibration'
-        )
+        const calibration = normalizeProjectionCalibration(data.calibration)
+        const outputs = normalizeProjectionOutputs(data.outputs)
+        assertProjectionCalibration(calibration)
+        assertProjectionOutputs(outputs)
+        assertProjectionMappingOutputCount(data.method, outputs)
         const nextMapping: ProjectionMapping = {
           name: data.name.trim(),
           source: data.source,
           method: data.method,
-          calibration: typeof calibration === 'string' ? undefined : calibration,
-          outputs: parseJSONField<ProjectionMappingOutput[]>(data.outputs, 'Outputs'),
+          calibration,
+          outputs,
         }
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
@@ -465,12 +489,39 @@ export default function ConfigPageProjectionsSection({
     )
   }
 
-  const handleDeleteMapping = async (mapping: ProjectionMapping) => {
-    if (!window.confirm(`Delete projection mapping "${mapping.name}"?`)) return
-    await withClonedConfig((next) => {
-      const projectionConfig = ensureProjectionConfig(next)
-      projectionConfig.mappings = cloneProjections(next).mappings?.filter((entry) => entry.name !== mapping.name)
-    })
+  const handleDeleteMapping = (mapping: ProjectionMapping) => {
+    setProjectionDeleteError(null)
+    setProjectionPendingDelete({ kind: 'mapping', name: mapping.name })
+  }
+
+  const confirmDeleteProjection = async () => {
+    if (!projectionPendingDelete) return
+    if (!config) {
+      setProjectionDeleteError('No active configuration is available.')
+      return
+    }
+
+    setProjectionDeletePending(true)
+    setProjectionDeleteError(null)
+    try {
+      const target = projectionPendingDelete
+      await withClonedConfig((next) => {
+        const projectionConfig = ensureProjectionConfig(next)
+        const cloned = cloneProjections(next)
+        if (target.kind === 'partition') {
+          projectionConfig.partitions = cloned.partitions?.filter((entry) => entry.name !== target.name)
+        } else if (target.kind === 'score') {
+          projectionConfig.scores = cloned.scores?.filter((entry) => entry.name !== target.name)
+        } else {
+          projectionConfig.mappings = cloned.mappings?.filter((entry) => entry.name !== target.name)
+        }
+      })
+      setProjectionPendingDelete(null)
+    } catch (error) {
+      setProjectionDeleteError(error instanceof Error ? error.message : 'Failed to delete projection.')
+    } finally {
+      setProjectionDeletePending(false)
+    }
   }
 
   const handleViewMapping = (mapping: ProjectionMapping) => {
@@ -481,8 +532,18 @@ export default function ConfigPageProjectionsSection({
           { label: 'Name', value: mapping.name },
           { label: 'Source', value: mapping.source },
           { label: 'Method', value: mapping.method },
-          { label: 'Calibration', value: mapping.calibration ? toPrettyJSON(mapping.calibration) : 'N/A', fullWidth: true },
-          { label: 'Outputs', value: toPrettyJSON(mapping.outputs || []), fullWidth: true },
+          {
+            label: 'Calibration',
+            value: mapping.calibration
+              ? <ProjectionCalibrationEditor value={mapping.calibration} readOnly />
+              : 'N/A',
+            fullWidth: true,
+          },
+          {
+            label: 'Outputs',
+            value: <ProjectionOutputsEditor value={mapping.outputs || []} readOnly />,
+            fullWidth: true,
+          },
         ],
       },
     ]
@@ -611,7 +672,7 @@ export default function ConfigPageProjectionsSection({
         </p>
         <TableHeader
           title="Projection Surfaces"
-          count={partitions.length + scores.length + mappings.length}
+          count={filteredPartitions.length + filteredScores.length + filteredMappings.length}
           searchPlaceholder="Search partitions, scores, or mappings..."
           searchValue={search}
           onSearchChange={setSearch}
@@ -636,6 +697,12 @@ export default function ConfigPageProjectionsSection({
             onDelete={handleDeletePartition}
             emptyMessage="No projection partitions configured."
             readonly={isReadonly}
+            pagination={{
+              pageSize: 25,
+              pageSizeOptions: [25, 50, 100],
+              itemLabel: 'partitions',
+              resetKey: search,
+            }}
           />
         </section>
 
@@ -657,6 +724,12 @@ export default function ConfigPageProjectionsSection({
             onDelete={handleDeleteScore}
             emptyMessage="No projection scores configured."
             readonly={isReadonly}
+            pagination={{
+              pageSize: 25,
+              pageSizeOptions: [25, 50, 100],
+              itemLabel: 'scores',
+              resetKey: search,
+            }}
           />
         </section>
 
@@ -678,9 +751,31 @@ export default function ConfigPageProjectionsSection({
             onDelete={handleDeleteMapping}
             emptyMessage="No projection mappings configured."
             readonly={isReadonly}
+            pagination={{
+              pageSize: 25,
+              pageSizeOptions: [25, 50, 100],
+              itemLabel: 'mappings',
+              resetKey: search,
+            }}
           />
         </section>
       </div>
+
+      <ConfirmDialog
+        isOpen={projectionPendingDelete !== null}
+        title={`Delete projection ${projectionPendingDelete?.kind || ''} “${projectionPendingDelete?.name || ''}”?`}
+        description="Remove this projection surface from the active routing configuration. Any dependent projection or decision references must be updated separately."
+        eyebrow="Destructive configuration change"
+        confirmLabel={`Delete ${projectionPendingDelete?.kind || 'projection'}`}
+        pending={projectionDeletePending}
+        details={projectionDeleteError ? <span role="alert">{projectionDeleteError}</span> : undefined}
+        onCancel={() => {
+          if (projectionDeletePending) return
+          setProjectionPendingDelete(null)
+          setProjectionDeleteError(null)
+        }}
+        onConfirm={confirmDeleteProjection}
+      />
     </ConfigPageManagerLayout>
   )
 }

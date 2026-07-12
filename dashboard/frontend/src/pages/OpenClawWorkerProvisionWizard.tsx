@@ -1,6 +1,12 @@
-import React, { useEffect, useState } from 'react'
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import styles from './OpenClawPage.module.css'
 import { CANONICAL_AUTO_MODEL } from '../utils/routerModelSelection'
+import {
+  createLatestOpenClawRequest,
+  fetchOpenClawJSON,
+  getOpenClawErrorMessage,
+  type LatestOpenClawRequest,
+} from '../utils/openClawRequestSupport'
 import {
   deriveModelBaseUrlFromRouterConfig,
   getInitialModelBaseUrl,
@@ -11,6 +17,8 @@ import {
   type SkillTemplate,
   type TeamProfile,
 } from './OpenClawPageSupport'
+import { OpenClawRequestNotice } from './OpenClawRequestNotice'
+import { OpenClawWorkerDeployStep as DeployStep } from './OpenClawWorkerDeployStep'
 
 export const WorkerProvisionWizard: React.FC<{
   teams: TeamProfile[]
@@ -18,9 +26,14 @@ export const WorkerProvisionWizard: React.FC<{
   onSwitchToTeam: () => void
   onSwitchToStatus: () => void
   onCreated?: () => void
-}> = ({ teams, onProvisioned, onSwitchToTeam, onSwitchToStatus, onCreated }) => {
+  onBusyChange?: (busy: boolean) => void
+}> = ({ teams, onProvisioned, onSwitchToTeam, onSwitchToStatus, onCreated, onBusyChange }) => {
   const [currentStep, setCurrentStep] = useState(0)
   const [skills, setSkills] = useState<SkillTemplate[]>([])
+  const [skillsLoading, setSkillsLoading] = useState(true)
+  const [skillsError, setSkillsError] = useState('')
+  const [routerDiscoveryError, setRouterDiscoveryError] = useState('')
+  const [portDiscoveryError, setPortDiscoveryError] = useState('')
   const [selectedSkills, setSelectedSkills] = useState<string[]>([])
   const [selectedTeamId, setSelectedTeamId] = useState('')
   const [identity, setIdentity] = useState<IdentityConfig>({
@@ -47,35 +60,91 @@ export const WorkerProvisionWizard: React.FC<{
   const [provisionResult, setProvisionResult] = useState<ProvisionResponse | null>(null)
   const [provisionLoading, setProvisionLoading] = useState(false)
   const [provisionError, setProvisionError] = useState('')
+  const routerRequestRef = useRef<LatestOpenClawRequest | null>(null)
+  const skillsRequestRef = useRef<LatestOpenClawRequest | null>(null)
+  const portRequestRef = useRef<LatestOpenClawRequest | null>(null)
+  const provisionRequestRef = useRef<LatestOpenClawRequest | null>(null)
+  if (!routerRequestRef.current) routerRequestRef.current = createLatestOpenClawRequest()
+  if (!skillsRequestRef.current) skillsRequestRef.current = createLatestOpenClawRequest()
+  if (!portRequestRef.current) portRequestRef.current = createLatestOpenClawRequest()
+  if (!provisionRequestRef.current) provisionRequestRef.current = createLatestOpenClawRequest()
+
+  const loadRouterConfig = async () => {
+    await routerRequestRef.current?.run(
+      (signal) => fetchOpenClawJSON<unknown>('/api/router/config/all', {}, signal),
+      {
+        onStart: () => setRouterDiscoveryError(''),
+        onSuccess: (data) => {
+          const discoveredModelBaseUrl = deriveModelBaseUrlFromRouterConfig(data)
+          if (!discoveredModelBaseUrl) return
+          setContainer((prev) => {
+            if (prev.modelBaseUrl.trim() && prev.modelBaseUrl !== getInitialModelBaseUrl()) {
+              return prev
+            }
+            return { ...prev, modelBaseUrl: discoveredModelBaseUrl }
+          })
+        },
+        onError: (error) => {
+          setRouterDiscoveryError(
+            getOpenClawErrorMessage(error, 'Could not discover the Semantic Router endpoint.'),
+          )
+        },
+      },
+    )
+  }
+
+  const loadSkills = async () => {
+    await skillsRequestRef.current?.run(
+      (signal) => fetchOpenClawJSON<SkillTemplate[]>('/api/openclaw/skills', {}, signal),
+      {
+        onStart: () => {
+          setSkillsLoading(true)
+          setSkillsError('')
+        },
+        onSuccess: (data) => setSkills(Array.isArray(data) ? data : []),
+        onError: (error) => {
+          setSkillsError(getOpenClawErrorMessage(error, 'Could not load the skill catalog.'))
+        },
+        onFinish: () => setSkillsLoading(false),
+      },
+    )
+  }
+
+  const loadNextPort = async () => {
+    await portRequestRef.current?.run(
+      (signal) => fetchOpenClawJSON<{ port?: number }>('/api/openclaw/next-port', {}, signal),
+      {
+        onStart: () => setPortDiscoveryError(''),
+        onSuccess: (data) => {
+          if (!data.port) return
+          setContainer((prev) =>
+            prev.gatewayPort === 0 ? { ...prev, gatewayPort: data.port || 0 } : prev,
+          )
+        },
+        onError: (error) => {
+          setPortDiscoveryError(
+            getOpenClawErrorMessage(error, 'Could not reserve the next gateway port.'),
+          )
+        },
+      },
+    )
+  }
 
   useEffect(() => {
-    fetch('/api/router/config/all')
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
-        const discoveredModelBaseUrl = deriveModelBaseUrlFromRouterConfig(data)
-        if (!discoveredModelBaseUrl) return
-        setContainer(prev => {
-          if (prev.modelBaseUrl.trim() && prev.modelBaseUrl !== getInitialModelBaseUrl()) {
-            return prev
-          }
-          return { ...prev, modelBaseUrl: discoveredModelBaseUrl }
-        })
-      })
-      .catch(() => {})
-
-    fetch('/api/openclaw/skills')
-      .then(r => r.json())
-      .then(data => setSkills(data))
-      .catch(() => {})
-    fetch('/api/openclaw/next-port')
-      .then(r => r.json())
-      .then(d => {
-        if (d.port) setContainer(prev => prev.gatewayPort === 0 ? { ...prev, gatewayPort: d.port } : prev)
-      })
-      .catch(() => {})
+    void Promise.all([loadRouterConfig(), loadSkills(), loadNextPort()])
+    return () => {
+      routerRequestRef.current?.cancel()
+      skillsRequestRef.current?.cancel()
+      portRequestRef.current?.cancel()
+      provisionRequestRef.current?.cancel()
+    }
   }, [])
 
-  const selectedTeam = teams.find(team => team.id === selectedTeamId) || null
+  useEffect(() => {
+    onBusyChange?.(provisionLoading)
+  }, [onBusyChange, provisionLoading])
+
+  const selectedTeam = teams.find((team) => team.id === selectedTeamId) || null
 
   useEffect(() => {
     if (!selectedTeamId && teams.length > 0) {
@@ -84,15 +153,13 @@ export const WorkerProvisionWizard: React.FC<{
   }, [teams, selectedTeamId])
 
   useEffect(() => {
-    if (selectedTeamId && !teams.some(team => team.id === selectedTeamId)) {
+    if (selectedTeamId && !teams.some((team) => team.id === selectedTeamId)) {
       setSelectedTeamId(teams[0]?.id || '')
     }
   }, [teams, selectedTeamId])
 
   const toggleSkill = (id: string) => {
-    setSelectedSkills(prev =>
-      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
-    )
+    setSelectedSkills((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]))
   }
 
   const handleProvision = async () => {
@@ -100,28 +167,38 @@ export const WorkerProvisionWizard: React.FC<{
       setProvisionError('Team selection is required before provisioning.')
       return
     }
-    setProvisionLoading(true)
-    setProvisionError('')
-    setProvisionResult(null)
-    try {
-      const res = await fetch('/api/openclaw/workers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teamId: selectedTeamId, identity, skills: selectedSkills, container }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setProvisionError(data.error || 'Provisioning failed')
-      } else {
-        setProvisionResult(data)
-        onProvisioned()
-        onCreated?.()
-      }
-    } catch (e) {
-      setProvisionError(String(e))
-    } finally {
-      setProvisionLoading(false)
-    }
+    await provisionRequestRef.current?.run(
+      (signal) =>
+        fetchOpenClawJSON<ProvisionResponse>(
+          '/api/openclaw/workers',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              teamId: selectedTeamId,
+              identity,
+              skills: selectedSkills,
+              container,
+            }),
+          },
+          signal,
+        ),
+      {
+        onStart: () => {
+          setProvisionLoading(true)
+          setProvisionError('')
+          setProvisionResult(null)
+        },
+        onSuccess: (data) => {
+          setProvisionResult(data)
+          onProvisioned()
+        },
+        onError: (error) => {
+          setProvisionError(getOpenClawErrorMessage(error, 'Provisioning failed.'))
+        },
+        onFinish: () => setProvisionLoading(false),
+      },
+    )
   }
 
   const goToStep = (step: number) => {
@@ -134,15 +211,28 @@ export const WorkerProvisionWizard: React.FC<{
         {PROVISION_STEPS.map((step, idx) => (
           <React.Fragment key={step.key}>
             {idx > 0 && (
-              <div className={`${styles.stepConnector} ${idx <= currentStep ? styles.stepConnectorActive : ''}`} />
+              <div
+                className={`${styles.stepConnector} ${idx <= currentStep ? styles.stepConnectorActive : ''}`}
+              />
             )}
             <button
+              type="button"
               className={`${styles.stepItem} ${idx === currentStep ? styles.stepActive : ''} ${idx < currentStep ? styles.stepCompleted : ''}`}
               onClick={() => goToStep(idx)}
+              aria-current={idx === currentStep ? 'step' : undefined}
             >
               <div className={styles.stepCircle}>
                 {idx < currentStep ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                 ) : (
@@ -155,17 +245,38 @@ export const WorkerProvisionWizard: React.FC<{
         ))}
       </div>
 
-      {provisionError && (
-        <div className={styles.errorAlert}>
-          <span>{provisionError}</span>
-          <button onClick={() => setProvisionError('')} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '1rem' }}>
-            &times;
-          </button>
-        </div>
-      )}
+      {provisionError ? (
+        <OpenClawRequestNotice
+          title="Worker provisioning failed"
+          message={provisionError}
+          retryLabel="Retry provisioning"
+          onRetry={() => void handleProvision()}
+          onDismiss={() => setProvisionError('')}
+        />
+      ) : null}
+
+      {routerDiscoveryError ? (
+        <OpenClawRequestNotice
+          title="Router endpoint discovery failed"
+          message={routerDiscoveryError}
+          tone="warning"
+          retryLabel="Retry discovery"
+          onRetry={() => void loadRouterConfig()}
+        />
+      ) : null}
+
+      {portDiscoveryError ? (
+        <OpenClawRequestNotice
+          title="Gateway port discovery failed"
+          message={portDiscoveryError}
+          tone="warning"
+          retryLabel="Retry port lookup"
+          onRetry={() => void loadNextPort()}
+        />
+      ) : null}
 
       {teams.length === 0 && (
-        <div className={styles.errorAlert} style={{ background: 'rgba(234, 179, 8, 0.1)', borderColor: 'rgba(234, 179, 8, 0.35)', color: '#eab308' }}>
+        <div className={`${styles.errorAlert} ${styles.warningAlert}`}>
           <span>No team available. Create a team first, then come back to provision.</span>
           <button className={styles.btnSmall} onClick={onSwitchToTeam} type="button">
             Open Team Tab
@@ -183,13 +294,17 @@ export const WorkerProvisionWizard: React.FC<{
           onSwitchToTeam={onSwitchToTeam}
         />
       )}
-      {currentStep === 1 && <SkillsStep skills={skills} selectedSkills={selectedSkills} toggleSkill={toggleSkill} />}
-      {currentStep === 2 && (
-        <ConfigStep
-          container={container}
-          setContainer={setContainer}
+      {currentStep === 1 && (
+        <SkillsStep
+          skills={skills}
+          skillsLoading={skillsLoading}
+          skillsError={skillsError}
+          selectedSkills={selectedSkills}
+          toggleSkill={toggleSkill}
+          onRetry={() => void loadSkills()}
         />
       )}
+      {currentStep === 2 && <ConfigStep container={container} setContainer={setContainer} />}
       {currentStep === 3 && (
         <DeployStep
           identity={identity}
@@ -202,13 +317,18 @@ export const WorkerProvisionWizard: React.FC<{
           provisionLoading={provisionLoading}
           provisionResult={provisionResult}
           onSwitchToStatus={onSwitchToStatus}
+          onDone={onCreated}
         />
       )}
 
       <div className={styles.actions}>
         <div className={styles.actionsLeft}>
           {currentStep > 0 && (
-            <button className={styles.btnSecondary} onClick={() => goToStep(currentStep - 1)}>
+            <button
+              type="button"
+              className={styles.btnSecondary}
+              onClick={() => goToStep(currentStep - 1)}
+            >
               Back
             </button>
           )}
@@ -216,6 +336,7 @@ export const WorkerProvisionWizard: React.FC<{
         <div className={styles.actionsRight}>
           {currentStep < 3 && (
             <button
+              type="button"
               className={styles.btnPrimary}
               onClick={() => goToStep(currentStep + 1)}
               disabled={currentStep === 0 && !selectedTeamId}
@@ -238,14 +359,14 @@ const IdentityStep: React.FC<{
   onSwitchToTeam: () => void
 }> = ({ identity, setIdentity, teams, selectedTeamId, setSelectedTeamId, onSwitchToTeam }) => {
   const update = (field: keyof IdentityConfig, value: string) =>
-    setIdentity(prev => ({ ...prev, [field]: value }))
+    setIdentity((prev) => ({ ...prev, [field]: value }))
 
   return (
     <div className={styles.stepContent}>
       <h2 className={styles.stepTitle}>Step 1: Agent Identity</h2>
       <p className={styles.stepDescription}>
-        Define who your OpenClaw agent is — its name, personality, principles, and boundaries.
-        These files form the agent&apos;s core identity (SOUL.md, IDENTITY.md).
+        Define who your OpenClaw agent is — its name, personality, principles, and boundaries. These
+        files form the agent&apos;s core identity (SOUL.md, IDENTITY.md).
       </p>
 
       <div className={styles.sectionTitle}>Team Selection (Required)</div>
@@ -255,10 +376,10 @@ const IdentityStep: React.FC<{
           <select
             className={styles.selectInput}
             value={selectedTeamId}
-            onChange={e => setSelectedTeamId(e.target.value)}
+            onChange={(e) => setSelectedTeamId(e.target.value)}
           >
             <option value="">Select a team...</option>
-            {teams.map(team => (
+            {teams.map((team) => (
               <option key={team.id} value={team.id}>
                 {team.name}
               </option>
@@ -277,87 +398,201 @@ const IdentityStep: React.FC<{
       <div className={styles.formRowThree}>
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Agent Name</label>
-          <input className={styles.textInput} value={identity.name} onChange={e => update('name', e.target.value)} placeholder="Atlas" />
+          <input
+            className={styles.textInput}
+            value={identity.name}
+            onChange={(e) => update('name', e.target.value)}
+            placeholder="Atlas"
+          />
         </div>
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Emoji</label>
-          <input className={styles.textInput} value={identity.emoji} onChange={e => update('emoji', e.target.value)} placeholder={'\u{1F531}'} />
+          <input
+            className={styles.textInput}
+            value={identity.emoji}
+            onChange={(e) => update('emoji', e.target.value)}
+            placeholder={'\u{1F531}'}
+          />
         </div>
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Vibe</label>
-          <input className={styles.textInput} value={identity.vibe} onChange={e => update('vibe', e.target.value)} placeholder="Calm, precise, opinionated" />
+          <input
+            className={styles.textInput}
+            value={identity.vibe}
+            onChange={(e) => update('vibe', e.target.value)}
+            placeholder="Calm, precise, opinionated"
+          />
         </div>
       </div>
 
       <div className={styles.formGroup}>
         <label className={styles.formLabel}>Role / Creature</label>
-        <input className={styles.textInput} value={identity.role} onChange={e => update('role', e.target.value)} placeholder="AI operations engineer" />
-        <div className={styles.formHint}>What kind of creature is your agent? SRE, architect, assistant, mentor...</div>
+        <input
+          className={styles.textInput}
+          value={identity.role}
+          onChange={(e) => update('role', e.target.value)}
+          placeholder="AI operations engineer"
+        />
+        <div className={styles.formHint}>
+          What kind of creature is your agent? SRE, architect, assistant, mentor...
+        </div>
       </div>
 
       <div className={styles.formGroup}>
         <label className={styles.formLabel}>Core Principles (SOUL.md)</label>
-        <textarea className={styles.textArea} value={identity.principles} onChange={e => update('principles', e.target.value)} rows={6} placeholder="Your agent's core truths and principles..." />
-        <div className={styles.formHint}>Markdown supported. Define the agent&apos;s operating principles and values.</div>
+        <textarea
+          className={styles.textArea}
+          value={identity.principles}
+          onChange={(e) => update('principles', e.target.value)}
+          rows={6}
+          placeholder="Your agent's core truths and principles..."
+        />
+        <div className={styles.formHint}>
+          Markdown supported. Define the agent&apos;s operating principles and values.
+        </div>
       </div>
 
       <div className={styles.formGroup}>
         <label className={styles.formLabel}>Boundaries</label>
-        <textarea className={styles.textArea} value={identity.boundaries} onChange={e => update('boundaries', e.target.value)} rows={4} placeholder="- Don't run destructive commands without approval..." />
-        <div className={styles.formHint}>What should the agent never do? Safety guardrails and limits.</div>
+        <textarea
+          className={styles.textArea}
+          value={identity.boundaries}
+          onChange={(e) => update('boundaries', e.target.value)}
+          rows={4}
+          placeholder="- Don't run destructive commands without approval..."
+        />
+        <div className={styles.formHint}>
+          What should the agent never do? Safety guardrails and limits.
+        </div>
       </div>
     </div>
   )
 }
 
-const SkillsStep: React.FC<{
+export const SkillsStep: React.FC<{
   skills: SkillTemplate[]
+  skillsLoading: boolean
+  skillsError: string
   selectedSkills: string[]
   toggleSkill: (id: string) => void
-}> = ({ skills, selectedSkills, toggleSkill }) => (
-  <div className={styles.stepContent}>
-    <h2 className={styles.stepTitle}>Step 2: Select Skills</h2>
-    <p className={styles.stepDescription}>
-      Skills give your agent specialized abilities. Each skill is a SKILL.md file that defines
-      a structured workflow. Selected skills are auto-discovered at startup.
-    </p>
+  onRetry: () => void
+}> = ({ skills, skillsLoading, skillsError, selectedSkills, toggleSkill, onRetry }) => {
+  const [search, setSearch] = useState('')
+  const [category, setCategory] = useState('all')
+  const deferredSearch = useDeferredValue(search)
+  const categories = useMemo(
+    () => [...new Set(skills.map((skill) => skill.category).filter(Boolean))].sort(),
+    [skills],
+  )
+  const visibleSkills = useMemo(() => {
+    const query = deferredSearch.trim().toLowerCase()
+    return skills.filter((skill) => {
+      if (category !== 'all' && skill.category !== category) return false
+      if (!query) return true
+      return [skill.id, skill.name, skill.description, skill.category].some((value) =>
+        value.toLowerCase().includes(query),
+      )
+    })
+  }, [category, deferredSearch, skills])
 
-    <div className={styles.skillGrid}>
-      {skills.map(skill => (
-        <div
-          key={skill.id}
-          className={`${styles.skillCard} ${selectedSkills.includes(skill.id) ? styles.skillCardSelected : ''}`}
-          onClick={() => toggleSkill(skill.id)}
-        >
-          <div className={styles.skillCardHeader}>
-            <span className={styles.skillCardEmoji}>{skill.emoji}</span>
-            <span className={styles.skillCardName}>{skill.name}</span>
-            <span className={styles.skillCardCategory}>{skill.category}</span>
-          </div>
-          <div className={styles.skillCardDesc}>{skill.description}</div>
+  return (
+    <div className={styles.stepContent}>
+      <h2 className={styles.stepTitle}>Step 2: Select Skills</h2>
+      <p className={styles.stepDescription}>
+        Skills give your agent specialized abilities. Selected workflows are installed as a
+        structured skill set and discovered at startup.
+      </p>
+
+      {skillsError ? (
+        <OpenClawRequestNotice
+          title="Skill catalog is unavailable"
+          message={skillsError}
+          onRetry={onRetry}
+        />
+      ) : null}
+
+      <div className={styles.skillCatalogControls}>
+        <label>
+          <span>Search skills</span>
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Name, category, or capability"
+          />
+        </label>
+        <label>
+          <span>Category</span>
+          <select value={category} onChange={(event) => setCategory(event.target.value)}>
+            <option value="all">All categories</option>
+            {categories.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {skillsLoading && skills.length === 0 ? (
+        <div className={styles.loading} role="status">
+          Loading skill catalog…
         </div>
-      ))}
-    </div>
+      ) : visibleSkills.length === 0 ? (
+        <div className={styles.emptyState}>
+          <div className={styles.emptyStateText}>
+            {skills.length === 0
+              ? 'No skills are available.'
+              : 'No skills match the current filters.'}
+          </div>
+        </div>
+      ) : (
+        <div className={styles.skillGrid} role="group" aria-label="Worker skills">
+          {visibleSkills.map((skill) => {
+            const selected = selectedSkills.includes(skill.id)
+            return (
+              <label
+                key={skill.id}
+                className={`${styles.skillCard} ${selected ? styles.skillCardSelected : ''}`}
+              >
+                <input
+                  type="checkbox"
+                  className={styles.visuallyHiddenControl}
+                  checked={selected}
+                  onChange={() => toggleSkill(skill.id)}
+                />
+                <span className={styles.skillCardHeader}>
+                  <span className={styles.skillCardEmoji}>{skill.emoji}</span>
+                  <span className={styles.skillCardName}>{skill.name}</span>
+                  <span className={styles.skillCardCategory}>{skill.category}</span>
+                </span>
+                <span className={styles.skillCardDesc}>{skill.description}</span>
+              </label>
+            )
+          })}
+        </div>
+      )}
 
-    <div style={{ marginTop: '1rem', fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
-      {selectedSkills.length} skill{selectedSkills.length !== 1 ? 's' : ''} selected
+      <div className={styles.skillSelectionCount} aria-live="polite">
+        {selectedSkills.length} skill{selectedSkills.length === 1 ? '' : 's'} selected
+      </div>
     </div>
-  </div>
-)
+  )
+}
 
 const ConfigStep: React.FC<{
   container: ContainerConfig
   setContainer: React.Dispatch<React.SetStateAction<ContainerConfig>>
 }> = ({ container, setContainer }) => {
   const update = (field: keyof ContainerConfig, value: string | number | boolean) =>
-    setContainer(prev => ({ ...prev, [field]: value }))
+    setContainer((prev) => ({ ...prev, [field]: value }))
 
   return (
     <div className={styles.stepContent}>
       <h2 className={styles.stepTitle}>Step 3: Container & Model Configuration</h2>
       <p className={styles.stepDescription}>
-        Configure how OpenClaw connects to Semantic Router for model routing and memory,
-        and set container parameters.
+        Configure how OpenClaw connects to Semantic Router for model routing and memory, and set
+        container parameters.
       </p>
 
       <div className={styles.sectionTitle}>Container</div>
@@ -365,28 +600,49 @@ const ConfigStep: React.FC<{
       <div className={styles.formRow}>
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Gateway Port</label>
-          <input className={styles.numberInput} type="number" value={container.gatewayPort} onChange={e => update('gatewayPort', parseInt(e.target.value) || 0)} />
+          <input
+            className={styles.numberInput}
+            type="number"
+            value={container.gatewayPort}
+            onChange={(e) => update('gatewayPort', parseInt(e.target.value) || 0)}
+          />
           <div className={styles.formHint}>Auto-assigned if 0 or conflicting</div>
         </div>
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Base Image</label>
-          <input className={styles.textInput} value={container.baseImage} onChange={e => update('baseImage', e.target.value)} />
+          <input
+            className={styles.textInput}
+            value={container.baseImage}
+            onChange={(e) => update('baseImage', e.target.value)}
+          />
         </div>
       </div>
 
       <div className={styles.formRow}>
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Auth Token</label>
-          <input className={styles.textInput} value={container.authToken} onChange={e => update('authToken', e.target.value)} placeholder="Auto-generated if empty" />
+          <input
+            className={styles.textInput}
+            value={container.authToken}
+            onChange={(e) => update('authToken', e.target.value)}
+            placeholder="Auto-generated if empty"
+          />
           <div className={styles.formHint}>Leave blank to auto-generate</div>
         </div>
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Network Mode</label>
-          <select className={styles.selectInput} value={container.networkMode} onChange={e => update('networkMode', e.target.value)}>
+          <select
+            className={styles.selectInput}
+            value={container.networkMode}
+            onChange={(e) => update('networkMode', e.target.value)}
+          >
             <option value="bridge">bridge (recommended – backend picks best network)</option>
             <option value="host">host</option>
           </select>
-          <div className={styles.formHint}>In containerized deployments the backend overrides "bridge" with the shared network for DNS resolution</div>
+          <div className={styles.formHint}>
+            In containerized deployments the backend overrides "bridge" with the shared network for
+            DNS resolution
+          </div>
         </div>
       </div>
 
@@ -395,12 +651,22 @@ const ConfigStep: React.FC<{
       <div className={styles.formRow}>
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Model Base URL</label>
-          <input className={styles.textInput} value={container.modelBaseUrl} onChange={e => update('modelBaseUrl', e.target.value)} />
-          <div className={styles.formHint}>Auto-discovered from router listeners in current config; editable if needed</div>
+          <input
+            className={styles.textInput}
+            value={container.modelBaseUrl}
+            onChange={(e) => update('modelBaseUrl', e.target.value)}
+          />
+          <div className={styles.formHint}>
+            Auto-discovered from router listeners in current config; editable if needed
+          </div>
         </div>
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Model Name</label>
-          <input className={styles.textInput} value={container.modelName} onChange={e => update('modelName', e.target.value)} />
+          <input
+            className={styles.textInput}
+            value={container.modelName}
+            onChange={(e) => update('modelName', e.target.value)}
+          />
           <div className={styles.formHint}>&quot;auto&quot; for SR confidence routing</div>
         </div>
       </div>
@@ -411,10 +677,18 @@ const ConfigStep: React.FC<{
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Memory Backend</label>
           <div className={styles.toggle}>
-            <button className={`${styles.toggleOption} ${container.memoryBackend === 'remote' ? styles.toggleOptionSelected : ''}`} onClick={() => update('memoryBackend', 'remote')}>
+            <button
+              type="button"
+              className={`${styles.toggleOption} ${container.memoryBackend === 'remote' ? styles.toggleOptionSelected : ''}`}
+              onClick={() => update('memoryBackend', 'remote')}
+            >
               Remote Embeddings
             </button>
-            <button className={`${styles.toggleOption} ${container.memoryBackend === 'local' ? styles.toggleOptionSelected : ''}`} onClick={() => update('memoryBackend', 'local')}>
+            <button
+              type="button"
+              className={`${styles.toggleOption} ${container.memoryBackend === 'local' ? styles.toggleOptionSelected : ''}`}
+              onClick={() => update('memoryBackend', 'local')}
+            >
               Built-in (Recommended)
             </button>
           </div>
@@ -424,8 +698,15 @@ const ConfigStep: React.FC<{
       {container.memoryBackend === 'remote' && (
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Embedding Base URL (Optional)</label>
-          <input className={styles.textInput} value={container.memoryBaseUrl} onChange={e => update('memoryBaseUrl', e.target.value)} placeholder="https://your-openai-compatible-endpoint/v1" />
-          <div className={styles.formHint}>Used for agents.defaults.memorySearch.remote.baseUrl</div>
+          <input
+            className={styles.textInput}
+            value={container.memoryBaseUrl}
+            onChange={(e) => update('memoryBaseUrl', e.target.value)}
+            placeholder="https://your-openai-compatible-endpoint/v1"
+          />
+          <div className={styles.formHint}>
+            Used for agents.defaults.memorySearch.remote.baseUrl
+          </div>
         </div>
       )}
 
@@ -434,170 +715,25 @@ const ConfigStep: React.FC<{
       <div className={styles.formGroup}>
         <label className={styles.formLabel}>Browser (Playwright)</label>
         <div className={styles.toggle}>
-          <button className={`${styles.toggleOption} ${container.browserEnabled ? styles.toggleOptionSelected : ''}`} onClick={() => update('browserEnabled', true)}>
+          <button
+            type="button"
+            className={`${styles.toggleOption} ${container.browserEnabled ? styles.toggleOptionSelected : ''}`}
+            onClick={() => update('browserEnabled', true)}
+          >
             Enabled
           </button>
-          <button className={`${styles.toggleOption} ${!container.browserEnabled ? styles.toggleOptionSelected : ''}`} onClick={() => update('browserEnabled', false)}>
+          <button
+            type="button"
+            className={`${styles.toggleOption} ${!container.browserEnabled ? styles.toggleOptionSelected : ''}`}
+            onClick={() => update('browserEnabled', false)}
+          >
             Disabled
           </button>
         </div>
-        <div className={styles.formHint}>Enable headless browser for web browsing and CUA tasks</div>
-      </div>
-    </div>
-  )
-}
-
-const DeployStep: React.FC<{
-  identity: IdentityConfig
-  selectedSkills: string[]
-  skills: SkillTemplate[]
-  container: ContainerConfig
-  selectedTeam: TeamProfile | null
-  teamMissing: boolean
-  onProvision: () => void
-  provisionLoading: boolean
-  provisionResult: ProvisionResponse | null
-  onSwitchToStatus: () => void
-}> = ({ identity, selectedSkills, skills, container, selectedTeam, teamMissing, onProvision, provisionLoading, provisionResult, onSwitchToStatus }) => {
-  const [copied, setCopied] = useState('')
-  const [showCommands, setShowCommands] = useState(false)
-
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(label)
-      setTimeout(() => setCopied(''), 2000)
-    })
-  }
-
-  const selectedSkillNames = skills.filter(s => selectedSkills.includes(s.id))
-
-  return (
-    <div className={styles.stepContent}>
-      <h2 className={styles.stepTitle}>Step 4: Review & Deploy</h2>
-      <p className={styles.stepDescription}>
-        Review your configuration, then provision and start the OpenClaw container.
-      </p>
-
-      {teamMissing && (
-        <div className={styles.errorAlert} style={{ background: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.35)', color: '#ef4444' }}>
-          <span>Team selection is required before deployment.</span>
-        </div>
-      )}
-
-      <div className={styles.summaryGrid}>
-        <div className={styles.summaryCard}>
-          <div className={styles.summaryCardTitle}>Identity</div>
-          <div className={styles.summaryCardContent}>
-            <strong>{identity.emoji} {identity.name || '(unnamed)'}</strong><br />
-            {identity.role || '(no role)'}<br />
-            <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.8rem' }}>{identity.vibe}</span>
-          </div>
-        </div>
-        <div className={styles.summaryCard}>
-          <div className={styles.summaryCardTitle}>Team</div>
-          <div className={styles.summaryCardContent}>
-            <strong>{selectedTeam?.name || '(not selected)'}</strong><br />
-            {(selectedTeam?.role || 'No role set')}<br />
-            <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.8rem' }}>{selectedTeam?.vibe || 'No vibe set'}</span>
-          </div>
-        </div>
-        <div className={styles.summaryCard}>
-          <div className={styles.summaryCardTitle}>Skills ({selectedSkills.length})</div>
-          <div className={styles.summarySkillList}>
-            {selectedSkillNames.map(s => (
-              <span key={s.id} className={styles.summarySkillBadge}>{s.emoji} {s.name}</span>
-            ))}
-            {selectedSkills.length === 0 && <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.8rem' }}>No skills selected</span>}
-          </div>
-        </div>
-        <div className={styles.summaryCard}>
-          <div className={styles.summaryCardTitle}>Container</div>
-          <div className={styles.summaryCardContent}>
-            <strong>Auto-generated by backend</strong> :{container.gatewayPort || 'auto'}<br />
-            Image: {container.baseImage}<br />
-            Network: {container.networkMode}
-          </div>
-        </div>
-        <div className={styles.summaryCard}>
-          <div className={styles.summaryCardTitle}>Model & Memory</div>
-          <div className={styles.summaryCardContent}>
-            Model: {container.modelName} via SR<br />
-            Memory: {container.memoryBackend === 'remote' ? `Remote embeddings${container.memoryBaseUrl ? ` (${container.memoryBaseUrl})` : ''}` : 'Built-in'}<br />
-            Browser: {container.browserEnabled ? 'Enabled' : 'Disabled'}
-          </div>
+        <div className={styles.formHint}>
+          Enable headless browser for web browsing and CUA tasks
         </div>
       </div>
-
-      {!provisionResult && (
-        <button className={styles.btnSuccess} onClick={onProvision} disabled={provisionLoading || teamMissing}>
-          {provisionLoading ? 'Provisioning & starting container...' : 'Provision & Start'}
-        </button>
-      )}
-
-      {provisionResult?.success && (
-        <div className={styles.successCard}>
-          <div className={styles.successIcon}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" /><polyline points="16 8 10 16 7 13" />
-            </svg>
-          </div>
-          <div className={styles.successTitle}>Container Started</div>
-          <div className={styles.successMessage}>
-            {provisionResult.message}
-            {provisionResult.containerId && (
-              <><br /><code style={{ fontSize: '0.75rem' }}>{provisionResult.containerId.slice(0, 12)}</code></>
-            )}
-          </div>
-
-          <button className={styles.btnPrimary} onClick={onSwitchToStatus} style={{ marginBottom: '1rem' }}>
-            Go to Claw Dashboard
-          </button>
-
-          <div style={{ textAlign: 'left' }}>
-            <button
-              onClick={() => setShowCommands(!showCommands)}
-              style={{
-                background: 'none', border: 'none', color: 'var(--color-text-secondary)',
-                fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                style={{ transform: showCommands ? 'rotate(90deg)' : 'rotate(0)', transition: 'transform 0.2s' }}>
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-              Docker commands reference
-            </button>
-
-            {showCommands && (
-              <>
-                {provisionResult.dockerCmd && (
-                  <div className={styles.codePreview}>
-                    <div className={styles.codePreviewHeader}>
-                      <span className={styles.codePreviewLabel}>Docker Run Command</span>
-                      <button className={styles.codePreviewCopy} onClick={() => copyToClipboard(provisionResult.dockerCmd, 'docker')}>
-                        {copied === 'docker' ? 'Copied!' : 'Copy'}
-                      </button>
-                    </div>
-                    <pre className={styles.codePreviewContent}>{provisionResult.dockerCmd}</pre>
-                  </div>
-                )}
-
-                {provisionResult.composeYaml && (
-                  <div className={styles.codePreview}>
-                    <div className={styles.codePreviewHeader}>
-                      <span className={styles.codePreviewLabel}>Docker Compose YAML</span>
-                      <button className={styles.codePreviewCopy} onClick={() => copyToClipboard(provisionResult.composeYaml, 'compose')}>
-                        {copied === 'compose' ? 'Copied!' : 'Copy'}
-                      </button>
-                    </div>
-                    <pre className={styles.codePreviewContent}>{provisionResult.composeYaml}</pre>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

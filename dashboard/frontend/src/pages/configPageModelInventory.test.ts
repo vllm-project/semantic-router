@@ -109,7 +109,22 @@ describe('model inventory filtering', () => {
     expect(() => validateNewModelName('  local/model-001  ', models)).toThrow(/already exists/i)
     expect(validateNewModelName('  local/new-model  ', models)).toBe('local/new-model')
     expect(() => validateModelStructuredFields({ backend_refs: '{broken json' })).toThrow(/json array/i)
+    expect(() => validateModelStructuredFields({ backend_refs: [{}] })).toThrow(/endpoint or base url/i)
+    expect(() => validateModelStructuredFields({ backend_refs: [{ endpoint: 'localhost:8000', protocol: 'grpc' }] })).toThrow(/http or https/i)
+    expect(() => validateModelStructuredFields({ backend_refs: [{ endpoint: 'localhost:8000', extra_headers: { valid: 1 } }] })).toThrow(/text key\/value pairs/i)
+    expect(() => validateModelStructuredFields({ tags: 'premium,fast' })).toThrow(/list of text values/i)
+    expect(() => validateModelStructuredFields({ capabilities: 'tools,vision' })).toThrow(/list of text values/i)
+    expect(() => validateModelStructuredFields({ loras: [{ description: 'missing name' }] })).toThrow(/requires a name/i)
+    expect(() => validateModelStructuredFields({ external_model_ids: { openai: '' } })).toThrow(/non-empty provider\/model id pairs/i)
+    expect(() => validateModelStructuredFields({ pricing: { prompt_per_1m: -1 } })).toThrow(/zero or greater/i)
     expect(() => validateModelStructuredFields({ pricing: [] })).toThrow(/json object/i)
-    expect(() => validateModelStructuredFields({ backend_refs: [], pricing: {} })).not.toThrow()
+    expect(() => validateModelStructuredFields({
+      backend_refs: [{ endpoint: 'localhost:8000', protocol: 'http', weight: 1, extra_headers: { 'X-Tenant': 'demo' } }],
+      capabilities: ['tools', 'vision'],
+      loras: [{ name: 'code-expert', description: 'Code specialization' }],
+      external_model_ids: { openai: 'gpt-4.1' },
+      tags: ['premium', 'fast'],
+      pricing: { currency: 'USD', prompt_per_1m: 0.5 },
+    })).not.toThrow()
   })
 })

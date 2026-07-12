@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import ConfirmDialog from '../components/ConfirmDialog'
 import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
 import FleetSimSurfaceLayout from './FleetSimSurfaceLayout'
@@ -23,6 +24,7 @@ import {
   formatNumber,
   formatTraceFormat,
 } from './fleetSimPageSupport'
+import { matchesFleetSimSearch } from './fleetSimListSupport'
 
 type BuiltinWorkloadWithStats = BuiltinWorkload & {
   statsSummary?: string
@@ -37,6 +39,8 @@ export default function FleetSimWorkloadsPage() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [tracePendingDelete, setTracePendingDelete] = useState<TraceInfo | null>(null)
+  const [deletePending, setDeletePending] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const load = async () => {
@@ -87,18 +91,23 @@ export default function FleetSimWorkloadsPage() {
     await handleUpload(file)
   }
 
-  const handleDeleteTrace = async (trace: TraceInfo) => {
+  const handleDeleteTrace = async () => {
+    if (!tracePendingDelete) return
     try {
-      await deleteTrace(trace.id)
-      if (selectedTrace?.id === trace.id) {
+      setDeletePending(true)
+      await deleteTrace(tracePendingDelete.id)
+      if (selectedTrace?.id === tracePendingDelete.id) {
         setSelectedTrace(null)
         setSelectedSample(null)
       }
-      setMessage(`Deleted ${trace.name}`)
+      setMessage(`Deleted ${tracePendingDelete.name}`)
       setError('')
-      await load()
+      setTraces((current) => current.filter((trace) => trace.id !== tracePendingDelete.id))
+      setTracePendingDelete(null)
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete trace')
+    } finally {
+      setDeletePending(false)
     }
   }
 
@@ -144,8 +153,18 @@ export default function FleetSimWorkloadsPage() {
     },
   ]
 
-  const filteredTraces = traces.filter((trace) =>
-    trace.name.toLowerCase().includes(search.toLowerCase()) || trace.format.includes(search.toLowerCase())
+  const filteredTraces = useMemo(
+    () =>
+      traces.filter((trace) =>
+        matchesFleetSimSearch(search, [
+          trace.id,
+          trace.name,
+          trace.format,
+          formatTraceFormat(trace.format),
+          trace.n_requests,
+        ]),
+      ),
+    [search, traces],
   )
 
   return (
@@ -251,7 +270,8 @@ export default function FleetSimWorkloadsPage() {
           data={filteredTraces}
           keyExtractor={(row) => row.id}
           onView={(row) => void handleViewTrace(row)}
-          onDelete={(row) => void handleDeleteTrace(row)}
+          onDelete={setTracePendingDelete}
+          pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], itemLabel: 'traces', resetKey: search }}
           emptyMessage="No uploaded traces yet."
         />
         <p className={styles.inlineHint} style={{ marginTop: '0.9rem' }}>
@@ -262,6 +282,17 @@ export default function FleetSimWorkloadsPage() {
         trace={selectedTrace}
         sample={selectedSample}
         onClose={handleClosePreview}
+      />
+      <ConfirmDialog
+        isOpen={Boolean(tracePendingDelete)}
+        title="Delete uploaded trace?"
+        description="This removes the trace from the workspace and from future run selection."
+        details={tracePendingDelete ? `${tracePendingDelete.name} · ${formatNumber(tracePendingDelete.n_requests)} requests` : undefined}
+        confirmLabel="Delete trace"
+        pending={deletePending}
+        tone="danger"
+        onCancel={() => setTracePendingDelete(null)}
+        onConfirm={handleDeleteTrace}
       />
     </FleetSimSurfaceLayout>
   )
