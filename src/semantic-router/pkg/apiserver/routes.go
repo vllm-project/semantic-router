@@ -89,7 +89,7 @@ func apiRoutes() []apiRoute {
 		{EndpointMetadata: EndpointMetadata{Path: "/api/v1/eval", Method: "POST", Description: "Evaluate all configured signals regardless of decision usage"}, Handler: (*ClassificationAPIServer).handleEvalClassification, RequestBody: jsonBody()},
 		{EndpointMetadata: EndpointMetadata{Path: "/api/v1/nli", Method: "POST", Description: "Natural language inference classification for premise and hypothesis pairs"}, Handler: (*ClassificationAPIServer).handleNLIClassification, RequestBody: jsonBody()},
 
-		{EndpointMetadata: EndpointMetadata{Path: "/api/v1/embeddings", Method: "POST", Description: "Generate text embeddings"}, Handler: (*ClassificationAPIServer).handleEmbeddings, RequestBody: jsonBody()},
+		{EndpointMetadata: EndpointMetadata{Path: "/api/v1/embeddings", Method: "POST", Description: "Generate text and image embeddings"}, Handler: (*ClassificationAPIServer).handleEmbeddings, RequestBody: jsonBody()},
 		{EndpointMetadata: EndpointMetadata{Path: "/api/v1/similarity", Method: "POST", Description: "Calculate pairwise text similarity"}, Handler: (*ClassificationAPIServer).handleSimilarity, RequestBody: jsonBody()},
 		{EndpointMetadata: EndpointMetadata{Path: "/api/v1/similarity/batch", Method: "POST", Description: "Calculate batch text-similarity matches"}, Handler: (*ClassificationAPIServer).handleBatchSimilarity, RequestBody: jsonBody()},
 
