@@ -28,7 +28,7 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 	// This guarantees no chunk accumulation, model detection, or buffered
 	// pipeline runs for opted-out requests, regardless of streamed_body_mode.
 	if ctx.SkipProcessing {
-		return newContinueRequestBodyResponse(), nil
+		return r.newContinueRequestBodyResponse(), nil
 	}
 
 	eos := v.RequestBody.GetEndOfStream()

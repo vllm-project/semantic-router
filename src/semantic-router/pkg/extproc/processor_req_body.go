@@ -38,7 +38,7 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		logging.ComponentDebugEvent("extproc", "skip_processing_request_body", map[string]interface{}{
 			"request_id": ctx.RequestID,
 		})
-		return newContinueRequestBodyResponse(), nil
+		return r.newContinueRequestBodyResponse(), nil
 	}
 
 	requestBody, earlyResponse := r.translateResponseAPIRequest(ctx.OriginalRequestBody, ctx)

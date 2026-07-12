@@ -29,23 +29,27 @@ func (r *OpenAIRouter) skipProcessingEnabled() bool {
 	return r.Config.SkipProcessing.IsEnabled()
 }
 
-func newContinueRequestBodyResponse() *ext_proc.ProcessingResponse {
+func (r *OpenAIRouter) newContinueRequestBodyResponse() *ext_proc.ProcessingResponse {
+	// Skip-processing bypasses routing entirely, so there is no backend profile
+	// to opt into forward_authorization_header. Strip the caller's Authorization,
+	// the internal looper carrier, and every ext_authz-injected per-user key (the
+	// same set the routing path removes via CredentialResolver.HeadersToStrip) so
+	// an opted-out request can never leak a caller credential to whatever backend
+	// Envoy routes it to. See issue #2375.
+	removeHeaders := []string{
+		forwardedAuthorizationHeaderName,
+		headers.VSRInboundAuthorization,
+	}
+	if r != nil && r.CredentialResolver != nil {
+		removeHeaders = append(removeHeaders, r.CredentialResolver.HeadersToStrip()...)
+	}
 	return &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestBody{
 			RequestBody: &ext_proc.BodyResponse{
 				Response: &ext_proc.CommonResponse{
 					Status: ext_proc.CommonResponse_CONTINUE,
-					// Skip-processing bypasses routing entirely, so there is no
-					// backend profile to opt into forward_authorization_header.
-					// Strip the caller's credential (and the internal looper
-					// carrier) so an opted-out request can never leak a caller
-					// Authorization to whatever backend Envoy routes it to.
-					// See issue #2375.
 					HeaderMutation: &ext_proc.HeaderMutation{
-						RemoveHeaders: []string{
-							forwardedAuthorizationHeaderName,
-							headers.VSRInboundAuthorization,
-						},
+						RemoveHeaders: removeHeaders,
 					},
 				},
 			},

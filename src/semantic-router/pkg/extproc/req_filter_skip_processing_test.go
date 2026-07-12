@@ -264,10 +264,17 @@ func TestHandleRequestBodyDispatchSkipProcessingShortCircuits(t *testing.T) {
 }
 
 // TestSkipProcessingResponseStripsCallerAuthorization proves the skip-processing
-// passthrough still removes the caller credential (and the internal carrier),
-// since skip bypasses routing and has no backend opt-in (issue #2375).
+// passthrough removes the caller credential, the internal carrier, AND the
+// ext_authz-injected per-user keys (the same set the routing path strips), since
+// skip bypasses routing and has no backend opt-in (issue #2375).
 func TestSkipProcessingResponseStripsCallerAuthorization(t *testing.T) {
-	resp := newContinueRequestBodyResponse()
+	cfg := &config.RouterConfig{}
+	router := &OpenAIRouter{
+		Config:             cfg,
+		CredentialResolver: newTestCredentialResolver(cfg),
+	}
+
+	resp := router.newContinueRequestBodyResponse()
 	if resp == nil {
 		t.Fatal("expected a continue response")
 	}
@@ -283,6 +290,13 @@ func TestSkipProcessingResponseStripsCallerAuthorization(t *testing.T) {
 	}
 	if !slices.Contains(removeHeaders, headers.VSRInboundAuthorization) {
 		t.Fatalf("skip processing must strip %q, got remove_headers=%v", headers.VSRInboundAuthorization, removeHeaders)
+	}
+	// The ext_authz-injected per-user provider keys must be stripped too, so a
+	// header-injection auth deployment cannot leak them on the skip branch.
+	for _, injected := range []string{headers.UserOpenAIKey, headers.UserAnthropicKey} {
+		if !slices.Contains(removeHeaders, injected) {
+			t.Fatalf("skip processing must strip injected key %q, got remove_headers=%v", injected, removeHeaders)
+		}
 	}
 }
 
