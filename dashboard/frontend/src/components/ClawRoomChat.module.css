@@ -59,8 +59,7 @@
   border-top: none;
   border-bottom: none;
   border-left: none;
-  background:
-    linear-gradient(180deg, rgba(46, 50, 58, 0.5) 0%, rgba(21, 23, 29, 0.76) 100%);
+  background: linear-gradient(180deg, rgba(46, 50, 58, 0.5) 0%, rgba(21, 23, 29, 0.76) 100%);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -149,15 +148,21 @@
   gap: 0.45rem;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.02) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.045) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
   color: #ffffff;
   padding: 0.82rem 0.86rem;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 16px 36px rgba(0, 0, 0, 0.14);
   cursor: pointer;
-  transition: background-color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .teamDetailsButton:hover:not(:disabled) {
@@ -455,8 +460,13 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 .teamDetailsOverlay {
@@ -480,8 +490,7 @@
   overflow: hidden;
   border-radius: 24px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background:
-    linear-gradient(180deg, rgba(44, 48, 56, 0.72) 0%, rgba(17, 19, 24, 0.88) 100%);
+  background: linear-gradient(180deg, rgba(44, 48, 56, 0.72) 0%, rgba(17, 19, 24, 0.88) 100%);
   box-shadow:
     0 28px 80px rgba(0, 0, 0, 0.46),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
@@ -527,7 +536,10 @@
   background: rgba(255, 255, 255, 0.06);
   color: #ffffff;
   cursor: pointer;
-  transition: background-color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .teamDetailsCloseButton {
@@ -1085,6 +1097,31 @@
   min-width: 0;
 }
 
+.transcriptHistoryControl {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 0.5rem 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.transcriptHistoryControl button {
+  min-height: 36px;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: #18181b;
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.transcriptHistoryControl button:hover {
+  border-color: #ef4444;
+}
+
 .messageRowAgent {
   justify-content: flex-start;
 }
@@ -1265,7 +1302,12 @@
   align-items: center;
   padding: 1.2rem 1rem 1rem;
   border-top: none;
-  background: linear-gradient(180deg, rgba(7, 8, 10, 0) 0%, rgba(7, 8, 10, 0.72) 38%, rgba(7, 8, 10, 0.94) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(7, 8, 10, 0) 0%,
+    rgba(7, 8, 10, 0.72) 38%,
+    rgba(7, 8, 10, 0.94) 100%
+  );
   position: relative;
   isolation: isolate;
 }
@@ -1291,7 +1333,7 @@
   box-shadow:
     0 8px 18px rgba(0, 0, 0, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .inputShell:focus-within {
@@ -1601,6 +1643,146 @@
   text-align: center;
 }
 
+/* Bounded room catalog */
+.roomCatalogControls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  background: rgba(9, 9, 11, 0.28);
+}
+
+.roomCatalogControls label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.roomCatalogControls input,
+.roomCatalogControls select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  background: rgba(7, 7, 9, 0.72);
+  color: #fff;
+  padding: 0.42rem 0.52rem;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.roomCatalogControls input:focus,
+.roomCatalogControls select:focus {
+  outline: none;
+  border-color: rgba(237, 28, 36, 0.7);
+  box-shadow: 0 0 0 2px rgba(237, 28, 36, 0.16);
+}
+
+.roomCatalogSelects {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.roomCatalogMeta,
+.roomPagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.68rem;
+}
+
+.roomCatalogError {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid rgba(237, 28, 36, 0.42);
+  border-left: 3px solid #ed1c24;
+  border-radius: 10px;
+  background: rgba(237, 28, 36, 0.08);
+  color: #ff858a;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.roomCatalogError button,
+.roomPagination button {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(9, 9, 11, 0.72);
+  color: #fff;
+  cursor: pointer;
+}
+
+.roomCatalogError button {
+  padding: 0.25rem 0.45rem;
+}
+
+.roomPagination > div {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.roomPagination button {
+  width: 28px;
+  height: 28px;
+}
+
+.roomPagination button:hover:not(:disabled),
+.roomCatalogError button:hover {
+  border-color: rgba(237, 28, 36, 0.68);
+  background: rgba(237, 28, 36, 0.12);
+}
+
+.roomPagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.36;
+}
+
+.roomSelectButton {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.14rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.roomItemActive {
+  border-color: rgba(237, 28, 36, 0.42);
+  background: linear-gradient(90deg, rgba(237, 28, 36, 0.14), rgba(255, 255, 255, 0.035));
+}
+
+.roomList {
+  max-height: none;
+  overflow: visible;
+}
+
+.roomDeleteButton {
+  opacity: 0.42;
+}
+
 @media (max-width: 1080px) {
   .layout {
     flex-direction: column;
@@ -1619,7 +1801,7 @@
   }
 
   .roomList {
-    max-height: 170px;
+    max-height: none;
   }
 
   .teamDetailsDialog {

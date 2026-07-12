@@ -91,6 +91,14 @@ jobs:
           export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release
           make perf-bench-quick 2>&1 | tee reports/bench-output.txt
 
+      - name: Run Looper benchmarks
+        id: looper
+        if: always() # report Looper status even if the component step failed
+        run: |
+          set -o pipefail
+          export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release
+          make perf-bench-looper 2>&1 | tee -a reports/bench-output.txt
+
       - name: Parse benchmark results
         id: parse
         if: always()
@@ -107,15 +115,15 @@ jobs:
           # at least one result line is present, and did not run otherwise.
           suite_status() {
             local prefix="$1"
-            if grep -q "^--- FAIL: ${prefix}" reports/bench-output.txt 2>/dev/null; then
+            if grep -qE "^--- FAIL: ${prefix}" reports/bench-output.txt 2>/dev/null; then
               echo "❌"
-            elif grep -q "^${prefix}" reports/bench-output.txt 2>/dev/null; then
+            elif grep -qE "^${prefix}" reports/bench-output.txt 2>/dev/null; then
               echo "✅"
             else
               echo "⚠️ not run"
             fi
           }
-          if [ "${{ steps.bench.outcome }}" = "success" ]; then
+          if [ "${{ steps.bench.outcome }}" = "success" ] && [ "${{ steps.looper.outcome }}" = "success" ]; then
             headline="Component benchmarks completed successfully."
           else
             headline="❌ Component benchmarks **FAILED** — see the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
@@ -129,6 +137,7 @@ jobs:
           - Classification benchmarks: $(suite_status BenchmarkClassify)
           - Decision engine benchmarks: $(suite_status BenchmarkEvaluate)
           - Cache benchmarks: $(suite_status BenchmarkCache)
+          - Looper family benchmarks: $(suite_status "Benchmark(ReMoM|Fusion|Flow|Base)")
 
           ### Details
           See attached benchmark artifacts for detailed results and profiles.

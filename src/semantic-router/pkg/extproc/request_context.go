@@ -87,6 +87,13 @@ type RequestContext struct {
 	StreamingComplete  bool                            // True when [DONE] marker received
 	StreamingAborted   bool                            // True if stream ended abnormally (EOF, cancel, timeout)
 
+	// Response API streaming translation state. When /v1/responses is backed by
+	// an upstream Chat Completions stream, these fields track the outbound
+	// Responses API event envelope emitted to the client.
+	ResponseAPIStreamStarted   bool
+	ResponseAPIStreamItemID    string
+	ResponseAPIStreamCreatedAt int64
+
 	// UpstreamStatusCode is the HTTP status the upstream returned, captured at
 	// the response-header phase. Zero means the status was never observed for
 	// this request (e.g. response headers not processed). The cache-write path

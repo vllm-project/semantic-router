@@ -1,0 +1,395 @@
+.editor,
+.nestedEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.nestedEditor {
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.018);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.rows,
+.objectList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.stringRow,
+.keyValueRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.625rem;
+}
+
+.keyValueRow {
+  grid-template-columns: minmax(8rem, 0.75fr) minmax(10rem, 1.25fr) 36px;
+}
+
+.inputStack {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0.625rem 0.7rem;
+  color: var(--text-primary);
+  font: 0.8125rem/1.35 var(--font-mono);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.input:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.input:focus {
+  outline: none;
+  background: #1d1d21;
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 0 3px rgba(245, 245, 247, 0.09);
+}
+
+.input[aria-invalid='true'] {
+  border-color: rgba(248, 113, 113, 0.72);
+}
+
+.input:disabled,
+.input:read-only {
+  color: var(--text-secondary);
+  cursor: default;
+  opacity: 0.8;
+}
+
+.miniLabel {
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  font-weight: 720;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.required {
+  color: #f87171;
+}
+
+.helpText {
+  margin: -0.15rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.inlineError {
+  color: #fca5a5;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.addButton,
+.addButtonSmall,
+.secondaryButton,
+.removeButton,
+.iconRemoveButton {
+  min-height: 36px;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 680;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.addButton,
+.addButtonSmall {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  align-self: flex-start;
+  padding: 0.55rem 0.8rem;
+  color: var(--text-primary);
+  border-style: dashed;
+}
+
+.addButtonSmall {
+  min-height: 32px;
+  padding: 0.4rem 0.65rem;
+}
+
+.secondaryButton,
+.removeButton {
+  padding: 0.45rem 0.7rem;
+}
+
+.iconRemoveButton {
+  width: 36px;
+  padding: 0;
+  margin-top: 1.15rem;
+  font-size: 1rem;
+}
+
+.addButton:hover:not(:disabled),
+.addButtonSmall:hover:not(:disabled),
+.secondaryButton:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border-strong);
+}
+
+.removeButton:hover:not(:disabled),
+.iconRemoveButton:hover:not(:disabled) {
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(248, 113, 113, 0.32);
+}
+
+.addButton:disabled,
+.addButtonSmall:disabled,
+.secondaryButton:disabled,
+.removeButton:disabled,
+.iconRemoveButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.empty,
+.emptyCompact {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.empty {
+  padding: 1rem;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.012);
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.chipList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0.3rem 0.55rem;
+  color: var(--text-secondary);
+  font: 0.75rem/1 var(--font-mono);
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+}
+
+.keyValueReadOnly {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.keyValueReadOnlyRow {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.45fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.keyValueReadOnlyRow:last-child {
+  border-bottom: 0;
+}
+
+.keyValueReadOnlyRow dt,
+.keyValueReadOnlyRow dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font: 0.75rem/1.45 var(--font-mono);
+}
+
+.keyValueReadOnlyRow dt {
+  color: var(--text-muted);
+}
+
+.keyValueReadOnlyRow dd {
+  color: var(--text-secondary);
+}
+
+.objectCard {
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.018);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.objectCardInvalid {
+  border-color: rgba(248, 113, 113, 0.32);
+}
+
+.objectCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 62px;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.016);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.objectCardHeading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.itemIndex {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  color: var(--text-muted);
+  font: 0.7rem/1 var(--font-mono);
+  background: #0b0b0c;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.objectCardHeading h4,
+.objectCardHeading p {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.objectCardHeading h4 {
+  color: var(--text-primary);
+  font-size: 0.86rem;
+  font-weight: 720;
+}
+
+.objectCardHeading p {
+  margin-top: 0.18rem;
+  color: var(--text-muted);
+  font: 0.72rem/1.35 var(--font-mono);
+}
+
+.cardActions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.objectGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+  padding: 1rem;
+}
+
+.objectField,
+.objectFieldWide {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.objectFieldWide {
+  grid-column: 1 / -1;
+}
+
+.validationList {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0.55rem 1rem 0.55rem 2rem;
+  color: #fca5a5;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  background: rgba(239, 68, 68, 0.055);
+  border-bottom: 1px solid rgba(248, 113, 113, 0.16);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 680px) {
+  .keyValueRow,
+  .objectGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .iconRemoveButton {
+    width: 100%;
+    margin-top: 0;
+  }
+
+  .objectCardHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cardActions {
+    width: 100%;
+  }
+
+  .cardActions > button {
+    flex: 1;
+  }
+
+  .objectFieldWide {
+    grid-column: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input,
+  .addButton,
+  .addButtonSmall,
+  .secondaryButton,
+  .removeButton,
+  .iconRemoveButton {
+    transition: none;
+  }
+}

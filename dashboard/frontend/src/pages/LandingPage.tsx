@@ -1,5 +1,11 @@
 import React, { Suspense, lazy } from 'react'
 import { useNavigate } from 'react-router-dom'
+import {
+  DASHBOARD_COLOR_BENDS_MOTION,
+  DASHBOARD_MOTION_COLORS,
+} from '../components/dashboardMotionTheme'
+import PublicFooter from '../components/PublicFooter'
+import PublicHeader from '../components/PublicHeader'
 import styles from './LandingPage.module.css'
 
 const ColorBends = lazy(() => import('../components/ColorBends'))
@@ -8,63 +14,77 @@ const LandingPage: React.FC = () => {
   const navigate = useNavigate()
   return (
     <div className={styles.container}>
-      <div className={styles.backgroundEffect}>
+      <div className={styles.backgroundEffect} data-testid="landing-motion-background">
         <Suspense fallback={null}>
           <ColorBends
-            colors={['#f5f5f7', '#e31b23', '#5f636a']}
-            rotation={138}
-            speed={0.08}
-            scale={1}
-            frequency={1}
-            warpStrength={0.55}
-            mouseInfluence={0.35}
-            parallax={0.22}
-            noise={0.04}
+            colors={DASHBOARD_MOTION_COLORS}
+            {...DASHBOARD_COLOR_BENDS_MOTION}
             transparent
-            autoRotate={0.22}
           />
         </Suspense>
       </div>
 
-      {/* Main Content - Centered */}
+      <PublicHeader />
+
       <main className={styles.mainContent}>
-        <div className={styles.heroSection}>
-          <div className={styles.heroBadge}>
-            <img src="/vllm.png" alt="vLLM Logo" className={styles.badgeLogo} />
-            <span>Powered by vLLM Semantic Router</span>
-          </div>
+        <section className={styles.heroSection}>
+          <div className={styles.heroBadge}>The next-generation model architecture</div>
 
           <h1 className={styles.title}>
-            <span>Extract signals</span>
-            <span className={styles.titleAccent}>Compose decisions.</span>
-            <span>Route the best model.</span>
+            <span className={styles.titleAccent}>Build your</span>
+            <span>Mixture-of-Models.</span>
           </h1>
 
           <p className={styles.subtitle}>
-            The System Level Intelligence for <span className={styles.highlight}>Mixture-of-Modality</span>{' '}
-            Models.
-          </p>
-
-          <p className={styles.deployTargets}>
-            Cloud · Data Center · Edge
+            Turn signals and preferences into executable model paths across heterogeneous LLMs.
           </p>
 
           <div className={styles.ctaGroup}>
-            <button
-              className={styles.primaryButton}
-              onClick={() => navigate('/login')}
-            >
-              Get Started
+            <button className={styles.primaryButton} onClick={() => navigate('/login')}>
+              Enter Dashboard
             </button>
             <button
               className={styles.secondaryButton}
-              onClick={() => window.open('https://vllm-semantic-router.com', '_blank', 'noopener,noreferrer')}
+              onClick={() =>
+                window.open(
+                  'https://vllm-semantic-router.com/docs/intro/',
+                  '_blank',
+                  'noopener,noreferrer',
+                )
+              }
             >
-              Learn More
+              Explore the Docs
             </button>
           </div>
-        </div>
+        </section>
+
+        <section className={styles.routingSection} aria-labelledby="routing-section-title">
+          <div className={styles.sectionHeading}>
+            <span>Preference-driven routing</span>
+            <h2 id="routing-section-title">Every request. A personalized model path.</h2>
+          </div>
+
+          <div className={styles.routingGrid}>
+            <article className={styles.routingStep}>
+              <span className={styles.stepIndex}>01</span>
+              <h3>Understand every request</h3>
+              <p>Capture intent, context, safety, modality, and feedback.</p>
+            </article>
+            <article className={styles.routingStep}>
+              <span className={styles.stepIndex}>02</span>
+              <h3>Make preference executable</h3>
+              <p>Apply user, product, and workload preferences as policy.</p>
+            </article>
+            <article className={styles.routingStep}>
+              <span className={styles.stepIndex}>03</span>
+              <h3>Compose the model path</h3>
+              <p>Route, cascade, or fuse across heterogeneous LLMs.</p>
+            </article>
+          </div>
+        </section>
       </main>
+
+      <PublicFooter />
     </div>
   )
 }

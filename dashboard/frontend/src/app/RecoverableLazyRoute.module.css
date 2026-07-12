@@ -1,0 +1,141 @@
+.surface {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: min(70vh, 680px);
+  padding: clamp(1rem, 4vw, 3rem);
+  color: #f5f5f7;
+  background: #09090a;
+}
+
+.panel {
+  position: relative;
+  width: min(620px, 100%);
+  padding: clamp(1.25rem, 3vw, 2rem);
+  background: #111113;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.48);
+}
+
+.panel::before {
+  position: absolute;
+  top: 0;
+  left: 1.5rem;
+  width: 3rem;
+  height: 2px;
+  background: var(--brand-amd);
+  content: '';
+}
+
+.eyebrow {
+  color: rgba(255, 255, 255, 0.48);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 720;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0.65rem 0 0;
+  color: #f7f7f8;
+  font-size: clamp(1.55rem, 3vw, 2.25rem);
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+}
+
+.description {
+  max-width: 50rem;
+  margin: 0.85rem 0 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1.35rem;
+}
+
+.primaryButton,
+.secondaryButton {
+  min-height: 42px;
+  padding: 0 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 680;
+  border-radius: 6px;
+}
+
+.primaryButton {
+  color: #09090a;
+  background: #f4f4f5;
+  border: 1px solid #f4f4f5;
+}
+
+.secondaryButton {
+  color: rgba(255, 255, 255, 0.8);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.primaryButton:hover {
+  background: #ffffff;
+}
+
+.secondaryButton:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible,
+.details summary:focus-visible {
+  outline: 2px solid var(--focus-ring, rgba(255, 255, 255, 0.72));
+  outline-offset: 2px;
+}
+
+.details {
+  margin-top: 1rem;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.74rem;
+}
+
+.details summary {
+  width: fit-content;
+  cursor: pointer;
+}
+
+.details code {
+  display: block;
+  max-height: 8rem;
+  margin-top: 0.65rem;
+  padding: 0.7rem;
+  overflow: auto;
+  color: rgba(255, 255, 255, 0.66);
+  font: 0.7rem/1.5 var(--font-mono);
+  background: #09090a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 520px) {
+  .surface {
+    min-height: calc(100dvh - 56px);
+    align-items: flex-start;
+    padding: 0.75rem;
+  }
+
+  .panel {
+    padding: 1.25rem;
+  }
+
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}

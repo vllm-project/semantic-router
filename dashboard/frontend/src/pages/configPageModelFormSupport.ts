@@ -1,8 +1,23 @@
 import type {
   BackendRefEntry,
   ConfigData,
+  LoRAAdapter,
   ModelPricing,
 } from './configPageSupport'
+
+export function normalizeModelLoras(value: unknown): LoRAAdapter[] {
+  if (!Array.isArray(value)) return []
+
+  return value
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry))
+    .map((entry) => ({
+      name: typeof entry.name === 'string' ? entry.name.trim() : '',
+      description: typeof entry.description === 'string' && entry.description.trim()
+        ? entry.description.trim()
+        : undefined,
+    }))
+    .filter((entry) => entry.name)
+}
 
 export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
   if (!Array.isArray(value)) return []
@@ -40,8 +55,8 @@ export function normalizeModelStringMap(value: unknown): Record<string, string> 
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
 
   const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, item]) => typeof item === 'string' && item.trim())
-    .map(([key, item]) => [key, item as string])
+    .filter(([key, item]) => key.trim() && typeof item === 'string' && item.trim())
+    .map(([key, item]) => [key.trim(), (item as string).trim()])
   return entries.length > 0 ? Object.fromEntries(entries) : undefined
 }
 
@@ -52,6 +67,12 @@ export function normalizeModelPricing(value: unknown): ModelPricing | undefined 
   const normalized: ModelPricing = {}
   if (typeof pricing.currency === 'string' && pricing.currency.trim()) normalized.currency = pricing.currency.trim()
   if (typeof pricing.prompt_per_1m === 'number' && Number.isFinite(pricing.prompt_per_1m)) normalized.prompt_per_1m = pricing.prompt_per_1m
+  if (typeof pricing.cached_input_per_1m === 'number' && Number.isFinite(pricing.cached_input_per_1m)) {
+    normalized.cached_input_per_1m = pricing.cached_input_per_1m
+  }
+  if (typeof pricing.cache_write_per_1m === 'number' && Number.isFinite(pricing.cache_write_per_1m)) {
+    normalized.cache_write_per_1m = pricing.cache_write_per_1m
+  }
   if (typeof pricing.completion_per_1m === 'number' && Number.isFinite(pricing.completion_per_1m)) normalized.completion_per_1m = pricing.completion_per_1m
   return Object.keys(normalized).length > 0 ? normalized : undefined
 }

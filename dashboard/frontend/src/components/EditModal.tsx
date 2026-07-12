@@ -1,4 +1,7 @@
-import React, { useEffect, useId, useRef, useState } from 'react'
+import React, { useEffect, useId, useState } from 'react'
+
+import useAccessibleDialog from '../hooks/useAccessibleDialog'
+import ConfirmDialog from './ConfirmDialog'
 import styles from './EditModal.module.css'
 
 export type EditFormData = Record<string, unknown>
@@ -16,19 +19,10 @@ interface EditModalProps {
   mode?: 'edit' | 'add'
 }
 
-const focusableSelector = [
-  'a[href]',
-  'button:not([disabled])',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(',')
-
 export interface FieldConfig<TForm extends object = EditFormData> {
   name: string
   label: string
-  type: 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'textarea' | 'json' | 'percentage' | 'custom'
+  type: 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'textarea' | 'percentage' | 'custom'
   required?: boolean
   options?: string[]
   placeholder?: string
@@ -50,10 +44,27 @@ const EditModal: React.FC<EditModalProps> = ({
   mode = 'edit'
 }) => {
   const [formData, setFormData] = useState<EditFormData>({})
+  const [initialFormData, setInitialFormData] = useState<EditFormData>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showDiscardConfirmation, setShowDiscardConfirmation] = useState(false)
   const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
+  const isDirty = JSON.stringify(formData) !== JSON.stringify(initialFormData)
+
+  const requestClose = () => {
+    if (saving) return
+    if (isDirty) {
+      setShowDiscardConfirmation(true)
+      return
+    }
+    onClose()
+  }
+
+  const dialogRef = useAccessibleDialog<HTMLDivElement>({
+    isOpen,
+    onClose: requestClose,
+    dismissible: !saving,
+  })
 
   const readField = (fieldName: string): unknown => formData[fieldName]
   const readString = (fieldName: string): string => {
@@ -89,65 +100,11 @@ const EditModal: React.FC<EditModalProps> = ({
         }
       })
       setFormData(convertedData)
+      setInitialFormData(convertedData)
       setError(null)
+      setShowDiscardConfirmation(false)
     }
   }, [isOpen, data, fields])
-
-  useEffect(() => {
-    if (!isOpen) return
-
-    const previouslyFocused = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null
-    const previousBodyOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-
-    const frame = window.requestAnimationFrame(() => {
-      const firstControl = dialogRef.current?.querySelector<HTMLElement>(focusableSelector)
-      ;(firstControl ?? dialogRef.current)?.focus()
-    })
-
-    return () => {
-      window.cancelAnimationFrame(frame)
-      document.body.style.overflow = previousBodyOverflow
-      previouslyFocused?.focus()
-    }
-  }, [isOpen])
-
-  const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      onClose()
-      return
-    }
-
-    if (event.key !== 'Tab' || !dialogRef.current) return
-
-    const controls = Array.from(
-      dialogRef.current.querySelectorAll<HTMLElement>(focusableSelector),
-    ).filter((element) => element.getAttribute('aria-hidden') !== 'true')
-
-    if (controls.length === 0) {
-      event.preventDefault()
-      dialogRef.current.focus()
-      return
-    }
-
-    const firstControl = controls[0]
-    const lastControl = controls[controls.length - 1]
-    const activeElement = document.activeElement
-
-    if (
-      event.shiftKey
-      && (activeElement === firstControl || !dialogRef.current.contains(activeElement))
-    ) {
-      event.preventDefault()
-      lastControl.focus()
-    } else if (!event.shiftKey && activeElement === lastControl) {
-      event.preventDefault()
-      firstControl.focus()
-    }
-  }
 
   const handleChange = (fieldName: string, value: unknown) => {
     setFormData((prev) => ({
@@ -190,32 +147,38 @@ const EditModal: React.FC<EditModalProps> = ({
   if (!isOpen) return null
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
+    <>
       <div
-        ref={dialogRef}
-        className={styles.modal}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleDialogKeyDown}
-        onClick={(e) => e.stopPropagation()}
+        className={styles.overlay}
+        role="presentation"
+        onMouseDown={saving ? undefined : requestClose}
       >
-        <div className={styles.header}>
-          <h2 id={titleId} className={styles.title}>{title}</h2>
-          <button
-            className={styles.closeButton}
-            type="button"
-            aria-label="Close editor"
-            onClick={onClose}
-          >
-            ×
-          </button>
-        </div>
+        <div
+          ref={dialogRef}
+          className={styles.modal}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          aria-busy={saving}
+          tabIndex={-1}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <div className={styles.header}>
+            <h2 id={titleId} className={styles.title}>{title}</h2>
+            <button
+              className={styles.closeButton}
+              type="button"
+              aria-label="Close editor"
+              onClick={requestClose}
+              disabled={saving}
+            >
+              ×
+            </button>
+          </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>
           {error && (
-            <div className={styles.error}>
+            <div className={styles.error} role="alert">
               {error}
             </div>
           )}
@@ -371,30 +334,6 @@ const EditModal: React.FC<EditModalProps> = ({
                   />
                 )}
 
-                {field.type === 'json' && (
-                  <textarea
-                    id={fieldId}
-                    className={styles.textarea}
-                    value={
-                      typeof readField(field.name) === 'object' && readField(field.name) !== null
-                        ? JSON.stringify(readField(field.name), null, 2)
-                        : readString(field.name)
-                    }
-                    onChange={(e) => {
-                      try {
-                        const parsed = JSON.parse(e.target.value)
-                        handleChange(field.name, parsed)
-                      } catch {
-                        handleChange(field.name, e.target.value)
-                      }
-                    }}
-                    placeholder={field.placeholder}
-                    required={field.required}
-                    rows={6}
-                    aria-describedby={field.description ? descriptionId : undefined}
-                  />
-                )}
-
                 {field.type === 'custom' && field.customRender && (
                   <div
                     role="group"
@@ -413,7 +352,7 @@ const EditModal: React.FC<EditModalProps> = ({
             <button
               type="button"
               className={styles.cancelButton}
-              onClick={onClose}
+              onClick={requestClose}
               disabled={saving}
             >
               Cancel
@@ -426,9 +365,24 @@ const EditModal: React.FC<EditModalProps> = ({
               {saving ? 'Saving...' : mode === 'add' ? 'Add' : 'Save'}
             </button>
           </div>
-        </form>
+          </form>
+        </div>
       </div>
-    </div>
+
+      <ConfirmDialog
+        isOpen={showDiscardConfirmation}
+        title="Discard unsaved changes?"
+        description="Your edits have not been saved. Closing the editor will lose them."
+        eyebrow="Unsaved changes"
+        confirmLabel="Discard changes"
+        tone="warning"
+        onCancel={() => setShowDiscardConfirmation(false)}
+        onConfirm={() => {
+          setShowDiscardConfirmation(false)
+          onClose()
+        }}
+      />
+    </>
   )
 }
 

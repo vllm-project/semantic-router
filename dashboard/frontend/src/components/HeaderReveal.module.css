@@ -93,6 +93,96 @@
   width: 100%;
 }
 
+.pathLabel {
+  color: rgba(255, 255, 255, 0.44);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-align: center;
+}
+
+.decisionPath {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: 100%;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.decisionPath .section {
+  position: relative;
+  min-width: 0;
+  padding: 1rem 0.75rem 1.1rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.decisionPath .section:first-child {
+  border-left: 0;
+}
+
+.decisionPath .section:not(:last-child)::after {
+  position: absolute;
+  top: 50%;
+  right: -0.28rem;
+  z-index: 1;
+  width: 0.5rem;
+  height: 0.5rem;
+  content: '';
+  background: #111;
+  border-top: 1px solid #e31b23;
+  border-right: 1px solid #e31b23;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.decisionPath .sectionTitle {
+  padding: 0;
+  color: #e31b23;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.13em;
+  text-align: left;
+}
+
+.decisionPath .sectionItems {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.decisionPath .headerItem,
+.decisionPath .headerItemPrimary {
+  align-items: flex-start;
+  padding: 0;
+  text-align: left;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.decisionPath .headerItem:hover,
+.decisionPath .headerItemPrimary:hover {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.decisionPath .headerLabel {
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 0.58rem;
+}
+
+.decisionPath .headerValue,
+.decisionPath .headerItemPrimary .headerValue {
+  width: 100%;
+  overflow: hidden;
+  color: #fff;
+  font-size: clamp(0.78rem, 1.2vw, 0.96rem);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .section {
   display: flex;
   flex-direction: column;
@@ -303,6 +393,24 @@
     gap: 1rem;
   }
 
+  .decisionPath {
+    grid-template-columns: 1fr;
+  }
+
+  .decisionPath .section {
+    padding: 0.75rem 0.2rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    border-left: 0;
+  }
+
+  .decisionPath .section:first-child {
+    border-top: 0;
+  }
+
+  .decisionPath .section::after {
+    display: none;
+  }
+
   .section {
     gap: 0.5rem;
   }
@@ -436,5 +544,18 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .overlay.fadeOut,
+  .container,
+  .headerItem,
+  .hint {
+    animation: none;
+  }
 
+  .headerItem,
+  .headerItemPrimary {
+    transition: none;
+  }
+}
 

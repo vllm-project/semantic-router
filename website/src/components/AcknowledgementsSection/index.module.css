@@ -2,21 +2,12 @@
   position: relative;
   overflow: hidden;
   padding: 5rem 0;
-  border-bottom: 1px solid var(--site-border);
-  background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.018), transparent 42%),
-    linear-gradient(180deg, #ffffff 0%, var(--site-bg-alt) 100%);
+  border-bottom: 0;
+  background: var(--site-bg);
 }
 
 .section::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 18% 18%, rgba(15, 23, 42, 0.045), transparent 28%),
-    radial-gradient(circle at 82% 70%, rgba(15, 23, 42, 0.03), transparent 26%);
-  opacity: 0.32;
+  content: none;
 }
 
 .header {
@@ -61,7 +52,8 @@
   min-height: 13rem;
   padding: 1.15rem;
   border: 1px solid var(--site-border);
-  background: var(--site-surface);
+  border-radius: 1rem;
+  background: var(--site-surface-alt);
   color: inherit;
   text-decoration: none;
   transition:
@@ -151,13 +143,20 @@
   }
 
   .projectsGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    overflow-x: auto;
     gap: 0.8rem;
+    padding-bottom: 0.75rem;
+    scroll-padding-inline: 0.1rem;
+    scroll-snap-type: x proximity;
   }
 
   .projectCard {
+    flex: 0 0 min(15rem, calc(100vw - 3rem));
+    min-width: min(15rem, calc(100vw - 3rem));
     min-height: 11rem;
     padding: 1rem;
+    scroll-snap-align: start;
   }
 
   .projectLogoWrapper {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import FleetSimSurfaceLayout from './FleetSimSurfaceLayout'
 import styles from './FleetSimPage.module.css'
 import { FLEET_SIM_API_PREFIX, listFleets, listJobs, listTraces, listWorkloads, type FleetConfig, type FleetSimJob, type TraceInfo, type BuiltinWorkload } from '../utils/fleetSimApi'
@@ -17,6 +17,7 @@ import {
   JobStatusBadge,
   renderJobResultSummary,
 } from './fleetSimPageSupport'
+import { createVisibilityAwareRequest } from './visibilityAwareRequest'
 
 type PlanningAssetItem =
   | {
@@ -46,41 +47,58 @@ export default function FleetSimOverviewPage() {
   const [fleets, setFleets] = useState<FleetConfig[]>([])
   const [traces, setTraces] = useState<TraceInfo[]>([])
   const [jobs, setJobs] = useState<FleetSimJob[]>([])
-  const [error, setError] = useState('')
+  const [assetsError, setAssetsError] = useState('')
+  const [jobsError, setJobsError] = useState('')
 
-  useEffect(() => {
-    let cancelled = false
-
-    const load = async () => {
-      try {
-        const [workloadsData, fleetsData, tracesData, jobsData] = await Promise.all([
-          listWorkloads(),
-          listFleets(),
-          listTraces(),
-          listJobs(),
-        ])
-        if (cancelled) return
-        setWorkloads(workloadsData)
-        setFleets(fleetsData)
-        setTraces(tracesData)
-        setJobs(jobsData)
-        setError('')
-      } catch (loadError) {
-        if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Failed to load simulator overview')
-      }
-    }
-
-    void load()
-    const intervalID = window.setInterval(() => {
-      void load()
-    }, 10000)
-
-    return () => {
-      cancelled = true
-      window.clearInterval(intervalID)
+  const loadAssets = useCallback(async () => {
+    try {
+      const [workloadsData, fleetsData, tracesData] = await Promise.all([
+        listWorkloads(),
+        listFleets(),
+        listTraces(),
+      ])
+      setWorkloads(workloadsData)
+      setFleets(fleetsData)
+      setTraces(tracesData)
+      setAssetsError('')
+    } catch (loadError) {
+      setAssetsError(loadError instanceof Error ? loadError.message : 'Failed to load simulator assets')
     }
   }, [])
 
+  const loadJobs = useCallback(async () => {
+    try {
+      setJobs(await listJobs())
+      setJobsError('')
+    } catch (loadError) {
+      setJobsError(loadError instanceof Error ? loadError.message : 'Failed to load simulator runs')
+    }
+  }, [])
+
+  const assetsRequest = useMemo(() => createVisibilityAwareRequest(loadAssets), [loadAssets])
+  const jobsRequest = useMemo(() => createVisibilityAwareRequest(loadJobs), [loadJobs])
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        void jobsRequest.run()
+      }
+    }
+
+    void assetsRequest.run({ allowHidden: true })
+    void jobsRequest.run({ allowHidden: true })
+    const intervalID = window.setInterval(() => {
+      void jobsRequest.run()
+    }, 10000)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      window.clearInterval(intervalID)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [assetsRequest, jobsRequest])
+
+  const error = assetsError || jobsError
   const finishedJobs = jobs.filter((job) => job.status === 'done')
   const latestJob = [...jobs].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]
   const annualSpend = fleets.reduce((sum, fleet) => sum + fleet.estimated_annual_cost_kusd, 0)

@@ -157,6 +157,68 @@ export function validateModelStructuredFields(data: Record<string, unknown>): vo
     }
   }
 
+  const stringListFields = [
+    ['tags', 'Tags'],
+    ['capabilities', 'Capabilities'],
+  ] as const
+  for (const [field, label] of stringListFields) {
+    const value = data[field]
+    if (value !== undefined && (
+      !Array.isArray(value)
+      || value.some((item) => typeof item !== 'string')
+    )) {
+      throw new Error(`${label} must be a list of text values.`)
+    }
+  }
+
+  if (Array.isArray(data.loras)) {
+    data.loras.forEach((value, index) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new Error(`LoRA adapter ${index + 1} must be a structured object.`)
+      }
+      const lora = value as Record<string, unknown>
+      if (typeof lora.name !== 'string' || !lora.name.trim()) {
+        throw new Error(`LoRA adapter ${index + 1} requires a name.`)
+      }
+      if (lora.description !== undefined && typeof lora.description !== 'string') {
+        throw new Error(`LoRA adapter ${index + 1} description must be text.`)
+      }
+    })
+  }
+
+  if (Array.isArray(data.backend_refs)) {
+    data.backend_refs.forEach((value, index) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new Error(`Provider backend ${index + 1} must be a structured object.`)
+      }
+
+      const backend = value as Record<string, unknown>
+      const endpoint = typeof backend.endpoint === 'string' ? backend.endpoint.trim() : ''
+      const baseUrl = typeof backend.base_url === 'string' ? backend.base_url.trim() : ''
+      if (!endpoint && !baseUrl) {
+        throw new Error(`Provider backend ${index + 1} requires an endpoint or base URL.`)
+      }
+      if (backend.protocol !== undefined && backend.protocol !== 'http' && backend.protocol !== 'https') {
+        throw new Error(`Provider backend ${index + 1} protocol must be HTTP or HTTPS.`)
+      }
+      if (backend.weight !== undefined && (
+        typeof backend.weight !== 'number'
+        || !Number.isFinite(backend.weight)
+        || backend.weight < 0
+      )) {
+        throw new Error(`Provider backend ${index + 1} weight must be zero or greater.`)
+      }
+      if (backend.extra_headers !== undefined && (
+        !backend.extra_headers
+        || typeof backend.extra_headers !== 'object'
+        || Array.isArray(backend.extra_headers)
+        || Object.values(backend.extra_headers).some((headerValue) => typeof headerValue !== 'string')
+      )) {
+        throw new Error(`Provider backend ${index + 1} extra headers must contain text key/value pairs.`)
+      }
+    })
+  }
+
   const objectFields = [
     ['external_model_ids', 'External Model IDs'],
     ['pricing', 'Pricing'],
@@ -165,6 +227,32 @@ export function validateModelStructuredFields(data: Record<string, unknown>): vo
     const value = data[field]
     if (value !== undefined && (!value || typeof value !== 'object' || Array.isArray(value))) {
       throw new Error(`${label} must be a JSON object.`)
+    }
+  }
+
+  if (data.external_model_ids && typeof data.external_model_ids === 'object' && !Array.isArray(data.external_model_ids)) {
+    for (const [provider, modelId] of Object.entries(data.external_model_ids)) {
+      if (!provider.trim() || typeof modelId !== 'string' || !modelId.trim()) {
+        throw new Error('External Model IDs must contain non-empty provider/model ID pairs.')
+      }
+    }
+  }
+
+  if (data.pricing && typeof data.pricing === 'object' && !Array.isArray(data.pricing)) {
+    const pricing = data.pricing as Record<string, unknown>
+    if (pricing.currency !== undefined && typeof pricing.currency !== 'string') {
+      throw new Error('Pricing currency must be text.')
+    }
+    const rateFields = ['prompt_per_1m', 'cached_input_per_1m', 'cache_write_per_1m', 'completion_per_1m']
+    for (const field of rateFields) {
+      const value = pricing[field]
+      if (value !== undefined && (
+        typeof value !== 'number'
+        || !Number.isFinite(value)
+        || value < 0
+      )) {
+        throw new Error(`Pricing ${field} must be zero or greater.`)
+      }
     }
   }
 }
