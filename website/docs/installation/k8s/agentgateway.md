@@ -165,7 +165,10 @@ Install the Semantic Router in the `agentgateway-system` namespace so the agentg
 helm install semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
   --version v0.0.0-latest \
   --namespace agentgateway-system \
-  -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/agentgateway/semantic-router-values/values.yaml
+  -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/agentgateway/semantic-router-values/values.yaml \
+  --set config.global.router.streamed_body.enabled=true \
+  --set config.global.router.streamed_body.max_bytes=10485760 \
+  --set config.global.router.streamed_body.timeout_sec=30
 
 kubectl wait --for=condition=Available deployment/semantic-router \
   -n agentgateway-system \
@@ -247,15 +250,14 @@ EOF
 
 The bundled agentgateway example explicitly opts into full-duplex streamed request
 bodies. This is an example-specific choice; other proxy defaults and examples
-may continue to use buffered request bodies. The accompanying Semantic Router
-values enable `global.router.streamed_body`, allowing the router to accumulate
-request chunks and process the complete body at end-of-stream.
+may continue to use buffered request bodies. The Semantic Router Helm command
+above explicitly enables `global.router.streamed_body`, allowing the router to
+accumulate request chunks and process the complete body at end-of-stream.
 
 agentgateway does not support `Streamed` mode; `FullDuplexStreamed` is its
 streaming option. The deployable policy is in
 `deploy/kubernetes/agentgateway/extproc-policy.yaml`, with the matching router
-configuration in
-`deploy/kubernetes/agentgateway/semantic-router-values/values.yaml`. See
+configuration passed through the Helm command in Step 5. See
 [Streamed ExtProc and immediate responses](./streamed-extproc.md) for protocol
 behavior and the verification checklist.
 

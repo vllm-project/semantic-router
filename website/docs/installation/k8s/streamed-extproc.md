@@ -95,9 +95,10 @@ agentgateway uses the Gateway API `AgentgatewayPolicy` abstraction rather than r
 
 Buffered request bodies remain common in proxy defaults and other deployment
 examples. The bundled agentgateway example opts into streaming explicitly in
-`deploy/kubernetes/agentgateway/extproc-policy.yaml`; its paired
-`semantic-router-values/values.yaml` enables `global.router.streamed_body`.
-Use both settings together when adopting that example.
+`deploy/kubernetes/agentgateway/extproc-policy.yaml`; the Helm command in the
+[agentgateway installation guide](./agentgateway.md) explicitly enables
+`global.router.streamed_body`. Use both settings together when adopting that
+example.
 
 ```yaml
 apiVersion: agentgateway.dev/v1alpha1

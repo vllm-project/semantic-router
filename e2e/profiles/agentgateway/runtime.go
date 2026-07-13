@@ -69,6 +69,9 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 		"image.repository": "ghcr.io/vllm-project/semantic-router/extproc",
 		"image.tag":        opts.ImageTag,
 		"image.pullPolicy": "Never",
+		"config.global.router.streamed_body.enabled":     "true",
+		"config.global.router.streamed_body.max_bytes":   "10485760",
+		"config.global.router.streamed_body.timeout_sec": "30",
 	}
 	if err := deployer.Install(ctx, release); err != nil {
 		return fmt.Errorf("install semantic-router: %w", err)

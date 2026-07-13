@@ -353,12 +353,6 @@ config:
   global:
     router:
       strategy: priority
-      streamed_body:
-        enabled: true
-        # Example guardrails matching e2e/profiles/streaming/values.yaml.
-        # Tune for the deployment; zero disables the corresponding guard.
-        max_bytes: 10485760
-        timeout_sec: 30
     services:
       response_api:
         enabled: true
