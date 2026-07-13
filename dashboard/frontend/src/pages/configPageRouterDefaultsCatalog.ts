@@ -52,7 +52,7 @@ export const OPTIONAL_ROUTER_KEYS: RouterSystemKey[] = []
 export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   router_core: {
     config_source: 'file',
-    auto_model_name: 'MoM',
+    auto_model_name: 'vllm-sr/auto',
     auto_model_names: ['vllm-sr/auto', 'auto', 'MoM'],
     include_config_models_in_list: false,
     clear_route_cache: true,
@@ -227,8 +227,8 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
         insecure: true,
       },
       sampling: {
-        type: 'always_on',
-        rate: 1.0,
+        type: 'probabilistic',
+        rate: 0.1,
       },
       resource: {
         service_name: 'vllm-sr',

@@ -63,14 +63,31 @@ func fetchStartupStatusFromAPI(routerAPIURL string) *startupstatus.State {
 
 func runtimeStatusFromState(state *startupstatus.State) *RouterRuntimeStatus {
 	return &RouterRuntimeStatus{
-		Phase:            state.Phase,
-		Ready:            state.Ready,
-		Message:          state.Message,
-		DownloadingModel: state.DownloadingModel,
-		PendingModels:    state.PendingModels,
-		ReadyModels:      state.ReadyModels,
-		TotalModels:      state.TotalModels,
+		Phase:             state.Phase,
+		Ready:             state.Ready,
+		Message:           state.Message,
+		DownloadingModel:  state.DownloadingModel,
+		PendingModels:     state.PendingModels,
+		ReadyModels:       state.ReadyModels,
+		TotalModels:       state.TotalModels,
+		EmbeddingProvider: cloneStartupEmbeddingProviderStatus(state.EmbeddingProvider),
 	}
+}
+
+func cloneStartupEmbeddingProviderStatus(status *startupstatus.EmbeddingProviderStatus) *startupstatus.EmbeddingProviderStatus {
+	if status == nil {
+		return nil
+	}
+	clone := *status
+	if status.APIKeyEnvSet != nil {
+		value := *status.APIKeyEnvSet
+		clone.APIKeyEnvSet = &value
+	}
+	if status.Healthy != nil {
+		value := *status.Healthy
+		clone.Healthy = &value
+	}
+	return &clone
 }
 
 func loadRouterRuntimeState(runtimePath string) (*startupstatus.State, error) {

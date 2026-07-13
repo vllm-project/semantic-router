@@ -20,12 +20,27 @@ func (r *OpenAIRouter) handleStreamingResponseBody(
 	recordStreamingTTFT(ctx)
 	ensureStreamingState(ctx)
 
-	chunk := string(responseBody)
-	ctx.HasStreamingChunks = true
+	responseAPIStream := isResponseAPIRequest(ctx)
+	parseBody := responseBody
+	if responseAPIStream {
+		frames, remainder := reassembleSSEFrames(ctx.PendingSSEBytes, responseBody)
+		ctx.PendingSSEBytes = remainder
+		parseBody = frames
+	}
+
+	chunk := string(parseBody)
+	if len(parseBody) > 0 {
+		ctx.HasStreamingChunks = true
+	}
 	r.parseStreamingChunk(chunk, ctx)
 
 	if strings.Contains(chunk, "data: [DONE]") {
 		r.finalizeStreamingResponse(ctx)
+	}
+
+	if responseAPIStream {
+		bodyMutation := r.buildResponseAPIStreamingBodyMutation(parseBody, ctx)
+		return buildResponseBodyContinueResponse(bodyMutation, responseAPIStreamingHeaderMutation())
 	}
 
 	return buildResponseBodyContinueResponse(nil, nil)

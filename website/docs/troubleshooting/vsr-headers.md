@@ -6,7 +6,7 @@ This page documents the public `x-vsr-*` headers emitted by vLLM Semantic Router
 
 The router splits headers across two surfaces:
 
-- **Default surface** — rides on every non-cache-hit response: the keystone headers (`x-vsr-schema-version`, `x-vsr-response-path`), the final routing facts (`x-vsr-selected-decision`, `x-vsr-selected-confidence`, `x-vsr-selected-model`) and the `x-vsr-replay-id` entry point. The client/upstream protocol markers ride here only on cross-protocol handling, and `x-vsr-protocol-warnings` only when warnings exist.
+- **Default surface** — rides on every non-cache-hit response: the keystone headers (`x-vsr-schema-version`, `x-vsr-response-path`), the final routing facts (`x-vsr-selected-decision`, `x-vsr-selected-confidence`, `x-vsr-selected-algorithm`, `x-vsr-selected-model`) and the `x-vsr-replay-id` entry point. The client/upstream protocol markers ride here only on cross-protocol handling, and `x-vsr-protocol-warnings` only when warnings exist.
 - **Debug surface** — the intermediate decision/classification details, the matched-signal headers, the tool-selection observability headers and the retention directive headers (`x-vsr-retention-*`) are demoted off the default surface (#2205). They are emitted inline only when the request sets `x-vsr-debug: true`, and remain recoverable from the replay record via `x-vsr-replay-id`. The retention directive's runtime effects (cache write skip, TTL override, model-switch stay) are applied internally and unaffected by the header demotion.
 
 Decision and matched-signal headers additionally require all of the following:
@@ -51,6 +51,7 @@ The final routing facts ride on the default surface; the intermediate details (i
 | ------ | ------- | ----------- | ------- |
 | `x-vsr-selected-decision` | default | Final decision selected by the decision engine. | `formal_math_proof` |
 | `x-vsr-selected-confidence` | default | Confidence score for the selected decision. | `0.9100` |
+| `x-vsr-selected-algorithm` | default | Model-selection algorithm used after the decision matched. | `router_dc` |
 | `x-vsr-selected-model` | default | Logical model alias selected by the router. | `qwen/qwen3.5-rocm` |
 | `x-vsr-selected-category` | debug | Domain/category classifier result when domain routing runs. | `math` |
 | `x-vsr-selected-reasoning` | debug | Reasoning mode selected for the request. | `on` |
@@ -126,6 +127,7 @@ x-vsr-schema-version: 2
 x-vsr-response-path: upstream
 x-vsr-selected-decision: critical_event_tool_session_route
 x-vsr-selected-confidence: 1.0000
+x-vsr-selected-algorithm: static
 x-vsr-selected-model: anthropic/claude-opus-4.6
 x-vsr-replay-id: replay_01J...
 ```
@@ -139,6 +141,7 @@ x-vsr-schema-version: 2
 x-vsr-response-path: upstream
 x-vsr-selected-decision: critical_event_tool_session_route
 x-vsr-selected-confidence: 1.0000
+x-vsr-selected-algorithm: static
 x-vsr-selected-model: anthropic/claude-opus-4.6
 x-vsr-session-phase: tool_loop
 x-vsr-matched-conversation: active_tool_use

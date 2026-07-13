@@ -148,6 +148,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		"",
 		nil,
 		classification.ConversationFacts{},
+		input.imageURL,
 	)
 
 	// Evaluate decision with engine (if decisions are configured)

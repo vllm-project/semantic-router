@@ -170,6 +170,15 @@ global:
           service_name: vllm-semantic-router
           service_version: v0.1.0
           deployment_environment: development
+      metrics:
+        enabled: true
+        windowed_metrics:
+          enabled: true
+          time_windows: [1m, 5m, 15m, 1h]
+          update_interval: 30s
+          model_metrics: true
+          queue_depth_estimation: true
+          max_models: 50
   stores:
     semantic_cache:
       enabled: true

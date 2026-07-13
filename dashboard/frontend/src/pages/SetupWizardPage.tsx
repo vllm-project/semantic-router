@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import ColorBends from "../components/ColorBends";
 import { useReadonly } from "../contexts/ReadonlyContext";
 import { useSetup } from "../contexts/SetupContext";
 import { markOnboardingPending } from "../utils/onboarding";
@@ -15,10 +14,11 @@ import {
   SetupWizardStepper,
 } from "./SetupWizardPanels";
 import { ReviewActivatePanel } from "./SetupWizardReviewPanel";
+import SetupWizardBackground from "./SetupWizardBackground";
 import {
   buildSetupConfig,
-  countConfigSignals,
   createModelDraft,
+  createSetupRequestGuard,
   createSetupConfigCounts,
   DEFAULT_REMOTE_SETUP_CONFIG_URL,
   fetchPresetDelta,
@@ -26,12 +26,18 @@ import {
   getStepOneErrors,
   maskSecrets,
   PROVIDER_OPTIONS,
+  removeSetupModel,
+  restoreSetupModel,
+  summarizeSetupConfig,
   type ImportedSetupConfig,
   type ModelDraft,
+  type PresetCatalogState,
   type PresetDelta,
   type PresetInfo,
+  type PresetRequestState,
   type ProviderKind,
   type RemoteImportState,
+  type RemovedModelSnapshot,
   type SetupActivationState,
   type SetupRoutingMode,
   type SetupStep,
@@ -59,7 +65,14 @@ const SetupWizardPage: React.FC = () => {
   const [importedRemoteConfig, setImportedRemoteConfig] =
     useState<ImportedSetupConfig | null>(null);
   const [presets, setPresets] = useState<PresetInfo[]>([]);
+  const [presetCatalogState, setPresetCatalogState] =
+    useState<PresetCatalogState>("loading");
+  const [presetCatalogError, setPresetCatalogError] = useState<string | null>(
+    null,
+  );
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+  const [presetRequestState, setPresetRequestState] =
+    useState<PresetRequestState>("idle");
   const [presetDelta, setPresetDelta] = useState<PresetDelta | null>(null);
   const [presetImportedConfig, setPresetImportedConfig] =
     useState<ImportedSetupConfig | null>(null);
@@ -78,12 +91,51 @@ const SetupWizardPage: React.FC = () => {
   const [activationState, setActivationState] =
     useState<SetupActivationState>("idle");
   const [activationError, setActivationError] = useState<string | null>(null);
+  const [removedModel, setRemovedModel] =
+    useState<RemovedModelSnapshot | null>(null);
+  const presetCatalogGuardRef = useRef(createSetupRequestGuard());
+  const presetRequestGuardRef = useRef(createSetupRequestGuard());
+  const remoteImportGuardRef = useRef(createSetupRequestGuard());
+  const validationGuardRef = useRef(createSetupRequestGuard());
+
+  const loadPresets = useCallback(async () => {
+    const generation = presetCatalogGuardRef.current.begin();
+    setPresetCatalogState("loading");
+    setPresetCatalogError(null);
+
+    try {
+      const nextPresets = await fetchPresets();
+      if (!presetCatalogGuardRef.current.isCurrent(generation)) {
+        return;
+      }
+      setPresets(nextPresets);
+      setPresetCatalogState("ready");
+    } catch (err) {
+      if (!presetCatalogGuardRef.current.isCurrent(generation)) {
+        return;
+      }
+      setPresets([]);
+      setPresetCatalogState("error");
+      setPresetCatalogError(
+        err instanceof Error ? err.message : "Failed to load starter architectures.",
+      );
+    }
+  }, []);
 
   useEffect(() => {
-    fetchPresets()
-      .then(setPresets)
-      .catch(() => setPresets([]));
-  }, []);
+    const requestGuard = presetCatalogGuardRef.current;
+    void loadPresets();
+    return () => requestGuard.invalidate();
+  }, [loadPresets]);
+
+  useEffect(
+    () => () => {
+      presetRequestGuardRef.current.invalidate();
+      remoteImportGuardRef.current.invalidate();
+      validationGuardRef.current.invalidate();
+    },
+    [],
+  );
 
   useEffect(() => {
     if (models.length === 0) {
@@ -104,12 +156,19 @@ const SetupWizardPage: React.FC = () => {
   const shouldShowStepOneIssues = stepOneAttempted && hasStepOneIssues;
 
   const resetReviewState = () => {
+    validationGuardRef.current.invalidate();
     setValidationState("idle");
     setValidationError(null);
     setValidatedConfig(null);
     setValidatedCounts(createSetupConfigCounts());
     setActivationState("idle");
     setActivationError(null);
+  };
+
+  const invalidatePresetDraft = () => {
+    presetRequestGuardRef.current.invalidate();
+    setPresetRequestState("idle");
+    setPresetError(null);
     setPresetDelta(null);
     setPresetImportedConfig(null);
   };
@@ -125,17 +184,7 @@ const SetupWizardPage: React.FC = () => {
     }
   }
 
-  const scratchCounts = createSetupConfigCounts({
-    models: models.length,
-    decisions: Array.isArray(scratchConfig?.decisions)
-      ? scratchConfig.decisions.length
-      : 0,
-    signals: countConfigSignals(scratchConfig?.signals),
-    canActivate:
-      models.length > 0 &&
-      Array.isArray(scratchConfig?.decisions) &&
-      scratchConfig.decisions.length > 0,
-  });
+  const scratchCounts = summarizeSetupConfig(scratchConfig);
 
   const selectedPreset = presets.find((p) => p.id === selectedPresetId) ?? null;
   const currentRouteLabel =
@@ -160,27 +209,17 @@ const SetupWizardPage: React.FC = () => {
   const previewSource = maskSecrets(validatedConfig ?? draftConfig);
   const validationSignature = draftConfig ? JSON.stringify(draftConfig) : "";
 
-  useEffect(() => {
-    if (currentStep !== 2 || !validationSignature) {
-      return;
-    }
-
-    let cancelled = false;
-    // Scratch configs are rebuilt on every render, so key auto-validation off a
-    // stable serialized payload instead of object identity.
-    const validationPayload = JSON.parse(validationSignature) as Record<
-      string,
-      unknown
-    >;
-
-    const runValidation = async () => {
+  const runValidation = useCallback(
+    async (validationPayload: Record<string, unknown>) => {
+      const generation = validationGuardRef.current.begin();
       setValidationState("validating");
       setValidationError(null);
+      setActivationState("idle");
       setActivationError(null);
 
       try {
         const result = await validateSetupConfig(validationPayload);
-        if (cancelled) {
+        if (!validationGuardRef.current.isCurrent(generation)) {
           return;
         }
 
@@ -192,8 +231,11 @@ const SetupWizardPage: React.FC = () => {
           canActivate: result.canActivate,
         });
         setValidationState(result.valid ? "valid" : "error");
+        if (!result.valid) {
+          setValidationError("The generated config needs fixes before activation.");
+        }
       } catch (err) {
-        if (cancelled) {
+        if (!validationGuardRef.current.isCurrent(generation)) {
           return;
         }
 
@@ -204,17 +246,34 @@ const SetupWizardPage: React.FC = () => {
           err instanceof Error ? err.message : "Setup validation failed.",
         );
       }
-    };
+    },
+    [],
+  );
 
-    void runValidation();
+  useEffect(() => {
+    if (currentStep !== 2 || !validationSignature) {
+      return;
+    }
+
+    // Scratch configs are rebuilt on every render, so key auto-validation off a
+    // stable serialized payload instead of object identity.
+    const validationPayload = JSON.parse(validationSignature) as Record<
+      string,
+      unknown
+    >;
+    const requestGuard = validationGuardRef.current;
+
+    void runValidation(validationPayload);
 
     return () => {
-      cancelled = true;
+      requestGuard.invalidate();
     };
-  }, [currentStep, validationSignature]);
+  }, [currentStep, runValidation, validationSignature]);
 
   const addModel = () => {
     setModels((prev) => [...prev, createModelDraft(prev.length + 1, prev)]);
+    setRemovedModel(null);
+    invalidatePresetDraft();
     resetReviewState();
   };
 
@@ -243,55 +302,81 @@ const SetupWizardPage: React.FC = () => {
       }),
     );
 
+    setRemovedModel(null);
+    invalidatePresetDraft();
     resetReviewState();
   };
 
   const removeModel = (id: string) => {
-    setModels((prev) => prev.filter((model) => model.id !== id));
+    const result = removeSetupModel(models, id, defaultModelId);
+    if (!result.removed) {
+      return;
+    }
+
+    setModels(result.models);
+    setDefaultModelId(result.defaultModelId);
+    setRemovedModel(result.removed);
+    invalidatePresetDraft();
+    resetReviewState();
+  };
+
+  const undoRemoveModel = () => {
+    if (!removedModel) {
+      return;
+    }
+
+    const restored = restoreSetupModel(models, removedModel, defaultModelId);
+    setModels(restored.models);
+    setDefaultModelId(restored.defaultModelId);
+    setRemovedModel(null);
+    invalidatePresetDraft();
+    resetReviewState();
+  };
+
+  const selectDefaultModel = (id: string) => {
+    setDefaultModelId(id);
+    setRemovedModel(null);
     resetReviewState();
   };
 
   const isStep2Blocked = () => {
     if (routingMode === "remote" && !importedRemoteConfig) {
-      setRemoteImportError("Import a remote config before continuing.");
+      setRemoteImportError(
+        remoteImportState === "importing"
+          ? "Wait for the remote config import to finish."
+          : "Import a remote config before continuing.",
+      );
       return true;
     }
     if (routingMode === "preset" && !presetImportedConfig) {
-      setPresetError("Select a mode and import its config before continuing.");
+      setPresetError(
+        presetRequestState === "loading" || presetRequestState === "importing"
+          ? "Wait for the selected preset to finish preparing."
+          : "Prepare the selected preset before continuing.",
+      );
       return true;
     }
     return false;
   };
 
-  const goToStep = (step: SetupStep) => {
+  const goToStep = (step: SetupStep): boolean => {
     if (step > 0 && (hasStepOneIssues || scratchBuildError)) {
       setStepOneAttempted(true);
-      return;
+      return false;
     }
 
     if (step === 2 && isStep2Blocked()) {
-      return;
+      return false;
     }
 
     setCurrentStep(step);
+    return true;
   };
 
   const handleNext = () => {
-    if (currentStep === 0) {
-      if (hasStepOneIssues || scratchBuildError) {
-        setStepOneAttempted(true);
-        return;
-      }
-
-      setCurrentStep(1);
-      return;
+    if (currentStep < 2) {
+      goToStep((currentStep + 1) as SetupStep);
     }
-
-    if (currentStep === 1 && isStep2Blocked()) {
-      return;
-    }
-
-    setCurrentStep((prev) => (prev === 2 ? prev : ((prev + 1) as SetupStep)));
   };
 
   const handleBack = () => {
@@ -303,33 +388,16 @@ const SetupWizardPage: React.FC = () => {
       return;
     }
 
-    setValidationState("validating");
-    setValidationError(null);
-
-    try {
-      const result = await validateSetupConfig(draftConfig);
-      setValidatedConfig(result.config ?? draftConfig);
-      setValidatedCounts({
-        models: result.models,
-        decisions: result.decisions,
-        signals: result.signals,
-        canActivate: result.canActivate,
-      });
-      setValidationState(result.valid ? "valid" : "error");
-    } catch (err) {
-      setValidatedConfig(null);
-      setValidatedCounts(createSetupConfigCounts());
-      setValidationState("error");
-      setValidationError(
-        err instanceof Error ? err.message : "Setup validation failed.",
-      );
-    }
+    await runValidation(draftConfig);
   };
 
   const handleSelectPreset = async (presetId: string) => {
+    const generation = presetRequestGuardRef.current.begin();
     setSelectedPresetId(presetId);
     setPresetDelta(null);
     setPresetImportedConfig(null);
+    setPresetRequestState("loading");
+    setPresetError(null);
     resetReviewState();
 
     const userModelNames = models
@@ -337,23 +405,55 @@ const SetupWizardPage: React.FC = () => {
       .filter((n) => n.length > 0);
     try {
       const delta = await fetchPresetDelta(presetId, userModelNames);
+      if (!presetRequestGuardRef.current.isCurrent(generation)) {
+        return;
+      }
       setPresetDelta(delta);
+      setPresetRequestState("ready");
+      setPresetError(null);
 
       if (delta.ready) {
-        const result = await importRemoteSetupConfig(delta.recipe_url);
-        setPresetImportedConfig({
-          config: result.config,
-          sourceUrl: result.sourceUrl,
-          counts: createSetupConfigCounts({
-            models: result.models,
-            decisions: result.decisions,
-            signals: result.signals,
-            canActivate: result.canActivate,
-          }),
-        });
+        setPresetRequestState("importing");
+        try {
+          const result = await importRemoteSetupConfig(delta.recipe_url);
+          if (!presetRequestGuardRef.current.isCurrent(generation)) {
+            return;
+          }
+          setPresetImportedConfig({
+            config: result.config,
+            sourceUrl: result.sourceUrl,
+            counts: createSetupConfigCounts({
+              models: result.models,
+              decisions: result.decisions,
+              signals: result.signals,
+              canActivate: result.canActivate,
+            }),
+          });
+          setPresetRequestState("imported");
+          setPresetError(null);
+        } catch (err) {
+          if (!presetRequestGuardRef.current.isCurrent(generation)) {
+            return;
+          }
+          setPresetImportedConfig(null);
+          setPresetRequestState("error");
+          setPresetError(
+            err instanceof Error ? err.message : "Preset import failed.",
+          );
+        }
       }
-    } catch {
+    } catch (err) {
+      if (!presetRequestGuardRef.current.isCurrent(generation)) {
+        return;
+      }
       setPresetDelta(null);
+      setPresetImportedConfig(null);
+      setPresetRequestState("error");
+      setPresetError(
+        err instanceof Error
+          ? err.message
+          : "Failed to check the selected starter architecture.",
+      );
     }
   };
 
@@ -361,9 +461,15 @@ const SetupWizardPage: React.FC = () => {
     if (!presetDelta) {
       return;
     }
+    const generation = presetRequestGuardRef.current.begin();
+    setPresetRequestState("importing");
+    setPresetError(null);
     resetReviewState();
     try {
       const result = await importRemoteSetupConfig(presetDelta.recipe_url);
+      if (!presetRequestGuardRef.current.isCurrent(generation)) {
+        return;
+      }
       setPresetImportedConfig({
         config: result.config,
         sourceUrl: result.sourceUrl,
@@ -374,8 +480,17 @@ const SetupWizardPage: React.FC = () => {
           canActivate: result.canActivate,
         }),
       });
-    } catch {
+      setPresetRequestState("imported");
+      setPresetError(null);
+    } catch (err) {
+      if (!presetRequestGuardRef.current.isCurrent(generation)) {
+        return;
+      }
       setPresetImportedConfig(null);
+      setPresetRequestState("error");
+      setPresetError(
+        err instanceof Error ? err.message : "Preset import failed.",
+      );
     }
   };
 
@@ -387,12 +502,16 @@ const SetupWizardPage: React.FC = () => {
       return;
     }
 
+    const generation = remoteImportGuardRef.current.begin();
     setRemoteImportState("importing");
     setRemoteImportError(null);
     resetReviewState();
 
     try {
       const result = await importRemoteSetupConfig(trimmedUrl);
+      if (!remoteImportGuardRef.current.isCurrent(generation)) {
+        return;
+      }
       setImportedRemoteConfig({
         config: result.config,
         sourceUrl: result.sourceUrl,
@@ -405,13 +524,63 @@ const SetupWizardPage: React.FC = () => {
       });
       setRemoteConfigUrl(result.sourceUrl);
       setRemoteImportState("imported");
+      setRemoteImportError(null);
     } catch (err) {
+      if (!remoteImportGuardRef.current.isCurrent(generation)) {
+        return;
+      }
       setImportedRemoteConfig(null);
       setRemoteImportState("error");
       setRemoteImportError(
         err instanceof Error ? err.message : "Remote import failed.",
       );
     }
+  };
+
+  const handleSelectRoutingMode = (mode: SetupRoutingMode) => {
+    setRoutingMode(mode);
+    setRemoteImportError(null);
+    setPresetError(null);
+    resetReviewState();
+
+    if (mode !== "remote") {
+      remoteImportGuardRef.current.invalidate();
+      if (remoteImportState === "importing") {
+        setRemoteImportState(importedRemoteConfig ? "imported" : "idle");
+      }
+    }
+
+    if (mode !== "preset") {
+      presetRequestGuardRef.current.invalidate();
+      if (
+        presetRequestState === "loading" ||
+        presetRequestState === "importing"
+      ) {
+        setPresetRequestState(
+          presetImportedConfig ? "imported" : presetDelta ? "ready" : "idle",
+        );
+      }
+    }
+  };
+
+  const handleRemoteConfigUrlChange = (value: string) => {
+    remoteImportGuardRef.current.invalidate();
+    setRemoteConfigUrl(value);
+    setRemoteImportError(null);
+    if (
+      importedRemoteConfig &&
+      value.trim() !== importedRemoteConfig.sourceUrl
+    ) {
+      setImportedRemoteConfig(null);
+    }
+    if (
+      remoteImportState === "error" ||
+      remoteImportState === "importing" ||
+      (importedRemoteConfig && value.trim() !== importedRemoteConfig.sourceUrl)
+    ) {
+      setRemoteImportState("idle");
+    }
+    resetReviewState();
   };
 
   const handleActivate = async () => {
@@ -438,43 +607,34 @@ const SetupWizardPage: React.FC = () => {
 
   return (
     <div className={styles.page}>
-      <div className={styles.backgroundEffect}>
-        <ColorBends
-          colors={["#76b900", "#00b4d8", "#ffffff"]}
-          rotation={20}
-          speed={0.2}
-          scale={1}
-          frequency={1}
-          warpStrength={1}
-          mouseInfluence={1}
-          parallax={0.5}
-          noise={0.08}
-          transparent
-          autoRotate={0.8}
-        />
-      </div>
+      <SetupWizardBackground />
 
       <div className={styles.content}>
         <div className={styles.hero}>
           <div className={styles.heroHeader}>
-            <div className={styles.heroBadge}>First-run setup</div>
+            <div className={styles.heroBadge}>Mixture-of-Models setup</div>
           </div>
           <div className={styles.heroTitleRow}>
             <div className={styles.heroLogoWrap} aria-hidden="true">
               <img className={styles.heroLogo} src="/vllm.png" alt="" />
             </div>
             <h1 className={styles.heroTitle}>
-              Configure a model first. Routing can follow.
+              Build your first Mixture-of-Models.
             </h1>
           </div>
           <p className={styles.heroDescription}>
-            Extract signals. Compose decisions. Route the best model.
+            Connect heterogeneous LLMs, then compose how they route and work together.
           </p>
         </div>
 
         <SetupWizardStepper currentStep={currentStep} onGoToStep={goToStep} />
 
-        <div className={styles.panel}>
+        <div
+          id={`setup-step-${currentStep}-panel`}
+          className={styles.panel}
+          role="region"
+          aria-labelledby={`setup-step-${currentStep}-button`}
+        >
           {currentStep === 0 && (
             <ModelStepPanel
               currentRouteLabel={currentRouteLabel}
@@ -484,10 +644,12 @@ const SetupWizardPage: React.FC = () => {
               stepOneErrors={stepOneErrors}
               stepOneAttempted={stepOneAttempted}
               draftBuildError={scratchBuildError}
+              removedModel={removedModel?.model ?? null}
               onAddModel={addModel}
               onUpdateModel={updateModel}
               onRemoveModel={removeModel}
-              onSelectDefaultModel={setDefaultModelId}
+              onUndoRemoveModel={undoRemoveModel}
+              onSelectDefaultModel={selectDefaultModel}
             />
           )}
           {currentStep === 1 && (
@@ -500,35 +662,19 @@ const SetupWizardPage: React.FC = () => {
               importedConfig={importedRemoteConfig}
               counts={generatedCounts}
               presets={presets}
+              presetCatalogState={presetCatalogState}
+              presetCatalogError={presetCatalogError}
               selectedPresetId={selectedPresetId}
+              presetRequestState={presetRequestState}
               presetDelta={presetDelta}
               presetImportedConfig={presetImportedConfig}
               presetError={presetError}
-              onSelectRoutingMode={(mode) => {
-                setRoutingMode(mode);
-                setRemoteImportError(null);
-                setPresetError(null);
-                resetReviewState();
-              }}
-              onChangeRemoteConfigUrl={(value) => {
-                setRemoteConfigUrl(value);
-                setRemoteImportError(null);
-                if (
-                  importedRemoteConfig &&
-                  value.trim() !== importedRemoteConfig.sourceUrl
-                ) {
-                  setImportedRemoteConfig(null);
-                  setRemoteImportState("idle");
-                  resetReviewState();
-                  return;
-                }
-                if (remoteImportState === "error") {
-                  setRemoteImportState("idle");
-                }
-              }}
+              onSelectRoutingMode={handleSelectRoutingMode}
+              onChangeRemoteConfigUrl={handleRemoteConfigUrlChange}
               onImportRemoteConfig={() => void handleImportRemote()}
               onSelectPreset={(id) => void handleSelectPreset(id)}
               onImportPresetConfig={() => void handleImportPresetConfig()}
+              onRetryPresets={() => void loadPresets()}
             />
           )}
           {currentStep === 2 && (
@@ -537,6 +683,7 @@ const SetupWizardPage: React.FC = () => {
               listenerPort={setupState?.listenerPort}
               validationState={validationState}
               validationError={validationError}
+              activationState={activationState}
               activationError={activationError}
               validatedCounts={validatedCounts}
               modelsCount={generatedCounts.models}
@@ -552,19 +699,29 @@ const SetupWizardPage: React.FC = () => {
           <div className={styles.footer}>
             <div className={styles.footerActions}>
               {currentStep > 0 && (
-                <button className={styles.secondaryButton} onClick={handleBack}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={handleBack}
+                >
                   Back
                 </button>
               )}
               {currentStep < 2 && (
-                <button className={styles.primaryButton} onClick={handleNext}>
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={handleNext}
+                >
                   Next
                 </button>
               )}
               {currentStep === 2 && (
                 <button
+                  type="button"
                   className={styles.primaryButton}
                   onClick={() => void handleActivate()}
+                  aria-busy={activationState === "activating"}
                   disabled={
                     validationState !== "valid" ||
                     !validatedCounts.canActivate ||

@@ -36,6 +36,7 @@ type Signal struct {
 type UsageCost struct {
 	PromptTokens       *int     `json:"prompt_tokens,omitempty"`
 	CachedPromptTokens *int     `json:"cached_prompt_tokens,omitempty"`
+	CacheWriteTokens   *int     `json:"cache_write_tokens,omitempty"`
 	CompletionTokens   *int     `json:"completion_tokens,omitempty"`
 	TotalTokens        *int     `json:"total_tokens,omitempty"`
 	ActualCost         *float64 `json:"actual_cost,omitempty"`
@@ -216,6 +217,7 @@ type Record struct {
 	// Usage & Cost
 	PromptTokens       *int     `json:"prompt_tokens,omitempty"`
 	CachedPromptTokens *int     `json:"cached_prompt_tokens,omitempty"`
+	CacheWriteTokens   *int     `json:"cache_write_tokens,omitempty"`
 	CompletionTokens   *int     `json:"completion_tokens,omitempty"`
 	TotalTokens        *int     `json:"total_tokens,omitempty"`
 	ActualCost         *float64 `json:"actual_cost,omitempty"`
@@ -387,6 +389,7 @@ func cloneRecord(record Record) Record {
 	cloned.HallucinationSpans = cloneStringSlice(record.HallucinationSpans)
 	cloned.PromptTokens = cloneIntPtr(record.PromptTokens)
 	cloned.CachedPromptTokens = cloneIntPtr(record.CachedPromptTokens)
+	cloned.CacheWriteTokens = cloneIntPtr(record.CacheWriteTokens)
 	cloned.CompletionTokens = cloneIntPtr(record.CompletionTokens)
 	cloned.TotalTokens = cloneIntPtr(record.TotalTokens)
 	cloned.ActualCost = cloneFloat64Ptr(record.ActualCost)

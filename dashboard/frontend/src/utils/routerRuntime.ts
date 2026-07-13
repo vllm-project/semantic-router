@@ -6,6 +6,19 @@ export interface RouterRuntimeStatus {
   pending_models?: string[]
   ready_models?: number
   total_models?: number
+  embedding_provider?: EmbeddingProviderRuntimeStatus
+}
+
+export interface EmbeddingProviderRuntimeStatus {
+  mode?: string
+  backend?: string
+  model?: string
+  dimension?: number
+  api_key_env?: string
+  api_key_env_set?: boolean
+  healthy?: boolean
+  last_probe_error?: string
+  last_checked_at?: string
 }
 
 export interface ServiceStatus {

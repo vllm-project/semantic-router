@@ -76,35 +76,68 @@ jobs:
         run: |
           pip install -U "huggingface_hub[cli]" hf_transfer
 
-      # Models are now automatically downloaded by the router at startup
-      # No need to pre-download models - the router will download them on first run
+      # The router downloads models at startup, but the component benchmarks
+      # initialize classifiers and embedding models directly, so the minimal
+      # benchmark model set must be pre-downloaded. Populates the "Cache Models"
+      # cache above; the cache key rotates when tools/make/models.mk changes.
+      - name: Download benchmark models
+        run: make download-models-perf
 
       - name: Run component benchmarks
+        id: bench
         run: |
+          set -o pipefail
           mkdir -p reports
-          export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release
+          export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release
           make perf-bench-quick 2>&1 | tee reports/bench-output.txt
+
+      - name: Run Looper benchmarks
+        id: looper
+        if: always() # report Looper status even if the component step failed
+        run: |
+          set -o pipefail
+          export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release
+          make perf-bench-looper 2>&1 | tee -a reports/bench-output.txt
 
       - name: Parse benchmark results
         id: parse
+        if: always()
         continue-on-error: true
         run: |
-          # Extract benchmark results
-          # This is a simplified parser - a real implementation would be more robust
-          echo "benchmarks_completed=true" >> $GITHUB_OUTPUT
+          echo "benchmarks_completed=${{ steps.bench.outcome == 'success' }}" >> $GITHUB_OUTPUT
 
       - name: Generate performance summary
         id: summary
+        if: always()
         run: |
-          cat > reports/summary.md <<'EOF'
+          # Per-suite status derived from actual benchmark output:
+          # a suite failed if any of its benchmarks printed "--- FAIL:", passed if
+          # at least one result line is present, and did not run otherwise.
+          suite_status() {
+            local prefix="$1"
+            if grep -qE "^--- FAIL: ${prefix}" reports/bench-output.txt 2>/dev/null; then
+              echo "❌"
+            elif grep -qE "^${prefix}" reports/bench-output.txt 2>/dev/null; then
+              echo "✅"
+            else
+              echo "⚠️ not run"
+            fi
+          }
+          if [ "${{ steps.bench.outcome }}" = "success" ] && [ "${{ steps.looper.outcome }}" = "success" ]; then
+            headline="Component benchmarks completed successfully."
+          else
+            headline="❌ Component benchmarks **FAILED** — see the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+          fi
+          cat > reports/summary.md <<EOF
           ## Performance Benchmark Results
 
-          Component benchmarks completed successfully.
+          ${headline}
 
           ### Summary
-          - Classification benchmarks: ✅
-          - Decision engine benchmarks: ✅
-          - Cache benchmarks: ✅
+          - Classification benchmarks: $(suite_status BenchmarkClassify)
+          - Decision engine benchmarks: $(suite_status BenchmarkEvaluate)
+          - Cache benchmarks: $(suite_status BenchmarkCache)
+          - Looper family benchmarks: $(suite_status "Benchmark(ReMoM|Fusion|Flow|Base)")
 
           ### Details
           See attached benchmark artifacts for detailed results and profiles.
@@ -114,7 +147,7 @@ jobs:
           EOF
 
       - name: Comment PR with results
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         continue-on-error: true # May fail for PRs from forks due to GitHub security restrictions
         uses: actions/github-script@v7
         with:

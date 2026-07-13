@@ -293,9 +293,41 @@ func initializeRuntimeDependencies(
 	if err != nil {
 		failStartup(writer, "Failed to initialize runtime dependencies: %v", err)
 	}
+	writeStartupState(writer, startupstatus.State{
+		Phase:             "initializing_models",
+		Ready:             false,
+		Message:           "Runtime dependencies initialized. Starting router services...",
+		EmbeddingProvider: startupEmbeddingProviderStatus(embeddingState),
+	}, "Failed to write runtime dependency startup status")
 
 	initializeVectorStoreIfEnabled(cfg, shutdownHooks, runtimeRegistry)
 	return embeddingState
+}
+
+func startupEmbeddingProviderStatus(state modelruntime.EmbeddingRuntimeState) *startupstatus.EmbeddingProviderStatus {
+	provider := state.EmbeddingProvider
+	if provider == nil {
+		return nil
+	}
+	return &startupstatus.EmbeddingProviderStatus{
+		Mode:           provider.Mode,
+		Backend:        provider.Backend,
+		Model:          provider.Model,
+		Dimension:      provider.Dimension,
+		APIKeyEnv:      provider.APIKeyEnv,
+		APIKeyEnvSet:   cloneBoolPtr(provider.APIKeyEnvSet),
+		Healthy:        cloneBoolPtr(provider.Healthy),
+		LastProbeError: provider.LastProbeError,
+		LastCheckedAt:  provider.LastCheckedAt,
+	}
+}
+
+func cloneBoolPtr(value *bool) *bool {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
 }
 
 func logRuntimeLifecycleEvent(event modelruntime.Event) {
@@ -409,11 +441,12 @@ func startAPIServerIfEnabled(opts runtimeOptions, runtimeRegistry *routerruntime
 	}()
 }
 
-func markRouterReady(writer startupstatus.StatusWriter) {
+func markRouterReady(writer startupstatus.StatusWriter, embeddingProvider *startupstatus.EmbeddingProviderStatus) {
 	writeStartupState(writer, startupstatus.State{
-		Phase:   "ready",
-		Ready:   true,
-		Message: "Router models are ready. Starting router services...",
+		Phase:             "ready",
+		Ready:             true,
+		Message:           "Router models are ready. Starting router services...",
+		EmbeddingProvider: embeddingProvider,
 	}, "Failed to write ready startup status")
 }
 
