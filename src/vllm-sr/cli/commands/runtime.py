@@ -211,8 +211,10 @@ def _execute_serve(
     default=None,
     help="Platform for GPU deployments: 'amd' enables ROCm passthrough, "
     "'nvidia' enables NVIDIA GPU passthrough (--gpus all). "
-    "When set to amd, serve defaults to the ROCm image and GPU defaults for router internal models "
-    "unless --image or VLLM_SR_IMAGE is provided.",
+    "When set to amd or nvidia, serve defaults to the matching GPU image "
+    "(ROCm / CUDA) and flips use_cpu to false for router internal models under "
+    "global.model_catalog, unless --image or VLLM_SR_IMAGE is provided. "
+    "Set VLLM_SR_<PLATFORM>_PRESERVE_CPU=1 to keep CPU settings.",
 )
 @click.option(
     "--algorithm",
