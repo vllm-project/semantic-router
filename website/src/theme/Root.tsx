@@ -49,7 +49,7 @@ function resolveRouteState(pathname: string): { pageKey: string, routeKind: stri
 
 export default function RootWrapper(props: React.ComponentProps<typeof Root>): React.ReactElement {
   const location = useLocation()
-  const base = 'https://vllm-semantic-router.com'
+  const base = 'https://vllm-sr.ai'
   const pathname = normalizePath(location.pathname || '/')
   const localeNeutralPath = stripLocalePrefix(pathname)
   const canonicalUrl = toAbsoluteUrl(base, pathname)

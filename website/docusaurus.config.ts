@@ -7,7 +7,7 @@ import rehypeKatex from 'rehype-katex'
 
 const lightCodeTheme = themes.github
 const darkCodeTheme = themes.vsDark
-const siteUrl = 'https://vllm-semantic-router.com'
+const siteUrl = 'https://vllm-sr.ai'
 const siteDefaultDescription
   = 'We believe Mixture-of-Models is the next-generation model architecture for heterogeneous LLM inference. vLLM Semantic Router makes it executable.'
 const siteSocialTitle
@@ -188,11 +188,10 @@ const config: Config = {
       { name: 'ICBM', content: '37.7749, -122.4194' },
     ],
     navbar: {
-      title: 'vLLM-SR',
       logo: {
         alt: 'vLLM Semantic Router Logo',
-        src: 'img/vllm.png',
-        srcDark: 'img/vllm.png',
+        src: 'img/vllm-sr-logo.white.png',
+        srcDark: 'img/vllm-sr-logo.white.png',
       },
       items: [
         {
@@ -388,7 +387,7 @@ const config: Config = {
         'applicationCategory': 'AIInfrastructure',
         'operatingSystem': 'Cross-platform',
         'description': siteDefaultDescription,
-        'url': 'https://vllm-semantic-router.com',
+        'url': 'https://vllm-sr.ai',
         'publisher': {
           '@type': 'Organization',
           'name': 'vLLM Semantic Router Team',

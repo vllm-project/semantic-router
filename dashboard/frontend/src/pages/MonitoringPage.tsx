@@ -9,7 +9,7 @@ const GRAFANA_SERVICE: ServiceConfig = {
   envVar: 'TARGET_GRAFANA_URL',
   description:
     'Connect Grafana to inspect routing health, latency, throughput, and model activity.',
-  docsUrl: 'https://vllm-semantic-router.com/docs/tutorials/observability/dashboard',
+  docsUrl: 'https://vllm-sr.ai/docs/tutorials/observability/dashboard',
   exampleValue: 'http://localhost:3000',
 }
 

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import clsx from 'clsx'
 import Translate, { translate } from '@docusaurus/Translate'
 import Link from '@docusaurus/Link'
+import useBaseUrl from '@docusaurus/useBaseUrl'
 import Claude from '@lobehub/icons/es/Claude/components/Mono'
 import DeepSeek from '@lobehub/icons/es/DeepSeek/components/Mono'
 import Gemini from '@lobehub/icons/es/Gemini/components/Mono'
@@ -464,6 +465,7 @@ function RoutingAnimation({
 export default function IntegrationArchitecture(): JSX.Element {
   const [activeQueryIndex, setActiveQueryIndex] = useState(0)
   const [layout, setLayout] = useState<RouteLayout | null>(null)
+  const logoSrc = useBaseUrl('/img/vllm-sr-logo.white.png')
   const diagramRef = useRef<HTMLDivElement | null>(null)
   const decisionEngineRef = useRef<HTMLLIElement | null>(null)
   const modelRowRefs = useRef<Record<string, HTMLLIElement | null>>({})
@@ -588,9 +590,9 @@ export default function IntegrationArchitecture(): JSX.Element {
                 activeQueryIndex={activeQueryIndex}
               />
               <div className={`${styles.routerHub} ${styles.routerHubActive}`}>
-                <span className={styles.hubBadge}>
-                  <Translate id="homepage.integration.hub">vLLM Semantic Router</Translate>
-                </span>
+                <div className={styles.hubBrand}>
+                  <img src={logoSrc} alt="vLLM Semantic Router" />
+                </div>
                 <ul className={styles.hubModules}>
                   {extprocRouterModules.map((module, index) => (
                     <li

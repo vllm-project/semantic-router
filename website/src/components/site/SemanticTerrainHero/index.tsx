@@ -31,7 +31,7 @@ const heroModelLogos = [
 ]
 
 export default function SemanticTerrainHero(): JSX.Element {
-  const logoSrc = useBaseUrl('/img/vllm.png')
+  const logoSrc = useBaseUrl('/img/vllm-sr-logo.white.png')
   const modelCopies = [0, 1]
   const modelRepeats = [0, 1, 2]
 
@@ -44,26 +44,16 @@ export default function SemanticTerrainHero(): JSX.Element {
         <div className="site-shell-container">
           <div className={styles.copy}>
             <div className={styles.brand}>
-              <img src={logoSrc} alt="" aria-hidden="true" />
-              <span className={styles.brandWordmark}>
-                <Translate id="homepage.hero.brand">vLLM Semantic Router</Translate>
-              </span>
+              <img src={logoSrc} alt="vLLM Semantic Router" />
             </div>
-
-            <p className={styles.systemLabel}>
-              <Translate id="homepage.hero.systemLabel">
-                The next-generation model architecture
-              </Translate>
-            </p>
 
             <h1>
               <span className={styles.accent}>
                 <Translate id="homepage.hero.line1">Build your</Translate>
               </span>
-              {' '}
-              <span className={styles.headlineLine}>
+              <span>
                 <Translate id="homepage.hero.line2">
-                  Mixture-of-Models.
+                  Mixture-of-Models
                 </Translate>
               </span>
             </h1>
@@ -77,16 +67,13 @@ export default function SemanticTerrainHero(): JSX.Element {
             <div className={styles.actions}>
               <PillLink
                 className={styles.primaryCta}
-                href="https://play.vllm-semantic-router.com/"
+                href="https://app.vllm-sr.ai/playground"
                 rel="noreferrer"
                 target="_blank"
               >
                 <Translate id="homepage.hero.primaryCta">
                   Try the Playground
                 </Translate>
-                <span aria-hidden="true" className={styles.ctaArrow}>
-                  →
-                </span>
               </PillLink>
               <PillLink
                 className={styles.secondaryCta}
@@ -100,6 +87,7 @@ export default function SemanticTerrainHero(): JSX.Element {
             </div>
           </div>
         </div>
+
       </header>
 
       <section
