@@ -242,8 +242,8 @@ def apply_platform_gpu_defaults(
     For AMD (ROCm) and NVIDIA (CUDA) platforms, rewrite router internal model
     `use_cpu` flags to false by default so `--platform amd` / `--platform nvidia`
     run local signal models on the platform GPU. Set
-    VLLM_SR_<PLATFORM>_PRESERVE_CPU=1/true/yes/on or
-    VLLM_SR_<PLATFORM>_FORCE_GPU=0/false/no/off (e.g. VLLM_SR_NVIDIA_PRESERVE_CPU)
+    VLLM_SR_<PLATFORM>_PRESERVE_CPU=1/true/yes/on (e.g. VLLM_SR_NVIDIA_PRESERVE_CPU)
+    or VLLM_SR_<PLATFORM>_FORCE_GPU=0/false/no/off
     to preserve CPU settings when the router does not have dedicated GPU headroom.
     """
     resolved_platform = _resolve_gpu_default_platform(platform)
