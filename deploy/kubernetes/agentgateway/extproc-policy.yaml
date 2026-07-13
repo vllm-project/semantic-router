@@ -9,6 +9,8 @@ spec:
     kind: Gateway
     name: agentgateway-proxy
   traffic:
+    # Agentgateway's ExtProc contract is fail-closed by default. The current
+    # AgentgatewayPolicy CRD does not expose an ExtProc failure-mode override.
     extProc:
       backendRef:
         name: semantic-router

@@ -113,6 +113,66 @@ spec:
       request: 60s
       backendRequest: 60s
 ---
+# Route markers make the selected route observable to the security regression
+# test.  The exact hostname wins over the hostname-agnostic AIGatewayRoute
+# above, while the route rules still consume the same x-selected-model signal.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: selected-model-security
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: semantic-router
+  hostnames:
+  - selected-model-security.test
+  rules:
+  - matches:
+    - headers:
+      - type: Exact
+        name: x-selected-model
+        value: codellama-7b
+    filters:
+    - type: ResponseHeaderModifier
+      responseHeaderModifier:
+        set:
+        - name: x-e2e-selected-model-route
+          value: codellama-7b
+    backendRefs:
+    - group: ""
+      kind: Service
+      name: mock-llm-service
+      port: 8000
+  - matches:
+    - headers:
+      - type: Exact
+        name: x-selected-model
+        value: mistral-7b
+    filters:
+    - type: ResponseHeaderModifier
+      responseHeaderModifier:
+        set:
+        - name: x-e2e-selected-model-route
+          value: mistral-7b
+    backendRefs:
+    - group: ""
+      kind: Service
+      name: mock-llm-service
+      port: 8000
+  - filters:
+    - type: ResponseHeaderModifier
+      responseHeaderModifier:
+        set:
+        - name: x-e2e-selected-model-route
+          value: default
+    backendRefs:
+    - group: ""
+      kind: Service
+      name: mock-llm-service
+      port: 8000
+---
 # EnvoyPatchPolicy to add ExtProc filter for semantic-router
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyPatchPolicy
@@ -129,6 +189,7 @@ spec:
         name: semantic-router-extproc
         typedConfig:
           '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+          failure_mode_allow: false
           allow_mode_override: true
           grpcService:
             envoyGrpc:
@@ -168,4 +229,105 @@ spec:
     group: gateway.networking.k8s.io
     kind: Gateway
     name: semantic-router
+  type: JSONPatch
+---
+# An isolated data plane with an intentionally unavailable ExtProc endpoint.
+# This makes the failure-mode contract executable without disrupting the live
+# semantic-router deployment or other tests running against the main Gateway.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: semantic-router-extproc-outage
+  namespace: default
+spec:
+  gatewayClassName: semantic-router
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+  infrastructure:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: semantic-router
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: selected-model-security-outage
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: semantic-router-extproc-outage
+  hostnames:
+  - selected-model-security-outage.test
+  rules:
+  - filters:
+    - type: ResponseHeaderModifier
+      responseHeaderModifier:
+        set:
+        - name: x-e2e-extproc-route
+          value: backend-reached
+    backendRefs:
+    - group: ""
+      kind: Service
+      name: mock-llm-service
+      port: 8000
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyPatchPolicy
+metadata:
+  name: semantic-router-extproc-outage
+  namespace: default
+spec:
+  jsonPatches:
+  - name: default/semantic-router-extproc-outage/http
+    operation:
+      op: add
+      path: /default_filter_chain/filters/0/typed_config/http_filters/0
+      value:
+        name: semantic-router-extproc-outage
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+          failure_mode_allow: false
+          grpcService:
+            envoyGrpc:
+              authority: semantic-router.vllm-semantic-router-system:1
+              clusterName: semantic-router-unavailable
+            timeout: 1s
+          message_timeout: 1s
+          processing_mode:
+            request_body_mode: BUFFERED
+            request_header_mode: SEND
+            request_trailer_mode: SKIP
+            response_body_mode: NONE
+            response_header_mode: SKIP
+            response_trailer_mode: SKIP
+    type: type.googleapis.com/envoy.config.listener.v3.Listener
+  - name: semantic-router-unavailable
+    operation:
+      op: add
+      path: ''
+      value:
+        connect_timeout: 1s
+        http2_protocol_options: {}
+        lb_policy: ROUND_ROBIN
+        load_assignment:
+          cluster_name: semantic-router-unavailable
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: semantic-router.vllm-semantic-router-system.svc.cluster.local
+                    port_value: 1
+        name: semantic-router-unavailable
+        type: STRICT_DNS
+    type: type.googleapis.com/envoy.config.cluster.v3.Cluster
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: semantic-router-extproc-outage
   type: JSONPatch

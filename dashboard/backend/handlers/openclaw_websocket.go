@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 )
 
 // WebSocket message types for ClawRoom.
@@ -67,12 +69,18 @@ type WSClient struct {
 	closeMu  sync.Mutex
 }
 
+type wsEnqueueResult uint8
+
+const (
+	wsEnqueueSent wsEnqueueResult = iota
+	wsEnqueueClosed
+	wsEnqueueFull
+)
+
 var wsUpgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for now
-	},
+	CheckOrigin:     auth.ValidWebSocketOrigin,
 }
 
 func wsOutboundFromLastRoomEvent(roomID string, event clawRoomStreamEvent) (WSOutboundMessage, bool) {
@@ -100,10 +108,11 @@ func (h *OpenClawHandler) replayLastRoomEventToClient(client *WSClient, roomID s
 	if !ok {
 		return
 	}
-	select {
-	case client.send <- replay:
-	default:
+	switch client.enqueue(replay) {
+	case wsEnqueueFull:
 		log.Printf("openclaw: WS client %s buffer full, skipping room replay", client.clientID)
+	case wsEnqueueClosed:
+		return
 	}
 }
 
@@ -145,9 +154,12 @@ func (h *OpenClawHandler) handleRoomWebSocket(w http.ResponseWriter, r *http.Req
 	log.Printf("openclaw: WebSocket client %s connected to room %s", clientID, roomID)
 
 	// Send connected message
-	client.send <- WSOutboundMessage{
+	if client.enqueue(WSOutboundMessage{
 		Type:   WSTypeConnected,
 		RoomID: roomID,
+	}) != wsEnqueueSent {
+		client.close()
+		return
 	}
 	h.replayLastRoomEventToClient(client, roomID)
 
@@ -225,7 +237,7 @@ func (c *WSClient) readPump() {
 func (c *WSClient) handleMessage(msg WSInboundMessage) {
 	switch msg.Type {
 	case WSTypePing:
-		c.send <- WSOutboundMessage{Type: WSTypePong}
+		_ = c.enqueue(WSOutboundMessage{Type: WSTypePong})
 
 	case WSTypeSendMessage:
 		c.handleSendMessage(msg)
@@ -361,9 +373,27 @@ func (h *OpenClawHandler) appendRoomMessageWS(roomID string, message ClawRoomMes
 
 // sendError sends an error message to the client
 func (c *WSClient) sendError(errMsg string) {
-	c.send <- WSOutboundMessage{
+	_ = c.enqueue(WSOutboundMessage{
 		Type:  WSTypeError,
 		Error: errMsg,
+	})
+}
+
+// enqueue is the only producer-side access to send. Holding closeMu through the
+// non-blocking send makes channel closure and every producer mutually exclusive.
+func (c *WSClient) enqueue(message WSOutboundMessage) wsEnqueueResult {
+	c.closeMu.Lock()
+	defer c.closeMu.Unlock()
+
+	if c.closed {
+		return wsEnqueueClosed
+	}
+
+	select {
+	case c.send <- message:
+		return wsEnqueueSent
+	default:
+		return wsEnqueueFull
 	}
 }
 

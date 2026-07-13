@@ -14,16 +14,14 @@ import (
 func newContrastivePreferenceClassifier(
 	rules []config.PreferenceRule,
 	resolvedLocalCfg config.PreferenceModelConfig,
-	providers ...embedding.Provider,
+	backend string,
+	provider embedding.Provider,
 ) (*PreferenceClassifier, error) {
-	var provider embedding.Provider
-	if len(providers) > 0 {
-		provider = providers[0]
-	}
-	contrastive, err := NewContrastivePreferenceClassifierWithConfig(
+	contrastive, err := newContrastivePreferenceClassifierWithBackendAndConfig(
 		rules,
 		resolvedLocalCfg.EmbeddingModel,
 		resolvedLocalCfg.PrototypeScoring,
+		backend,
 		provider,
 	)
 	if err != nil {

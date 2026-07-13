@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/browsersecurity"
 )
 
 type contextKey string
@@ -20,12 +22,21 @@ const (
 
 // AuthContext contains authenticated user metadata.
 type AuthContext struct {
-	UserID    string
-	SessionID string
-	Email     string
-	Role      string
-	Perms     map[string]bool
+	UserID           string
+	SessionID        string
+	Email            string
+	Role             string
+	Perms            map[string]bool
+	CredentialSource CredentialSource
 }
+
+type CredentialSource string
+
+const (
+	CredentialSourceBearer CredentialSource = "bearer"
+	CredentialSourceCookie CredentialSource = "cookie"
+	CredentialSourceQuery  CredentialSource = "query"
+)
 
 func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -34,41 +45,78 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			token := extractAccessToken(r)
+			protectedWriter := newProtectedResponseWriter(w)
+			// Enforce before authentication failures and after a header-only
+			// handler returns. The writer also enforces at every commit boundary.
+			protectedWriter.enforceCachePolicy()
+			defer protectedWriter.enforceCachePolicy()
+			if IsWebSocketUpgradeRequest(r) && !ValidWebSocketOrigin(r) {
+				http.Error(protectedWriter, "Forbidden", http.StatusForbidden)
+				return
+			}
+			token, credentialSource := extractAccessTokenWithSource(r)
 			if token == "" {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				http.Error(protectedWriter, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			if !validUnsafeRequestOrigin(r, credentialSource) {
+				http.Error(protectedWriter, "Forbidden", http.StatusForbidden)
 				return
 			}
 
 			claims, err := service.ParseToken(token)
 			if err != nil {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				http.Error(protectedWriter, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
 
 			user, perms, err := service.ResolveSessionUser(r.Context(), claims)
 			if err != nil {
 				log.Printf("permission load failed for user %s: %v", claims.UserID, err)
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				http.Error(protectedWriter, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
 
 			required := RequiredPermission(r.Method, r.URL.Path)
 			if required != "" && !perms[required] {
-				http.Error(w, "Forbidden", http.StatusForbidden)
+				http.Error(protectedWriter, "Forbidden", http.StatusForbidden)
 				return
 			}
 
 			ctx := context.WithValue(r.Context(), authContextKey, AuthContext{
-				UserID:    user.ID,
-				SessionID: claims.ID,
-				Email:     user.Email,
-				Role:      user.Role,
-				Perms:     perms,
+				UserID:           user.ID,
+				SessionID:        claims.ID,
+				Email:            user.Email,
+				Role:             user.Role,
+				Perms:            perms,
+				CredentialSource: credentialSource,
 			})
-			next.ServeHTTP(w, r.WithContext(ctx))
+			next.ServeHTTP(protectedWriter, r.WithContext(ctx))
 		})
 	}
+}
+
+func validUnsafeRequestOrigin(r *http.Request, credentialSource CredentialSource) bool {
+	switch r.Method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	}
+
+	if len(r.Header.Values("Origin")) > 0 {
+		return browsersecurity.ValidOrigin(r)
+	}
+	fetchSiteValues := r.Header.Values("Sec-Fetch-Site")
+	if len(fetchSiteValues) > 1 {
+		return false
+	}
+	if len(fetchSiteValues) == 1 {
+		return strings.EqualFold(strings.TrimSpace(fetchSiteValues[0]), "same-origin")
+	}
+
+	// Non-browser API clients can continue using bearer authentication without
+	// browser Origin metadata. Cookie/query credentials require same-origin
+	// browser evidence on every unsafe method.
+	return credentialSource == CredentialSourceBearer
 }
 
 // ServiceUnavailableGuard returns middleware that fails closed when the auth
@@ -85,12 +133,21 @@ func ServiceUnavailableGuard() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if requiresAuthentication(r.URL.Path) {
+				setProtectedResponseCachePolicy(w)
 				http.Error(w, "Authentication service is not configured", http.StatusServiceUnavailable)
 				return
 			}
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// setProtectedResponseCachePolicy prevents browser and intermediary caches
+// from retaining cookie-authenticated control-plane data or authentication
+// failures. Public static assets keep their handler-specific cache policy.
+func setProtectedResponseCachePolicy(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
 }
 
 func RequiredPermission(method, path string) string {
@@ -370,17 +427,25 @@ func extractBearer(raw string) string {
 }
 
 func extractAccessToken(r *http.Request) string {
+	token, _ := extractAccessTokenWithSource(r)
+	return token
+}
+
+func extractAccessTokenWithSource(r *http.Request) (string, CredentialSource) {
 	if token := extractBearer(r.Header.Get("Authorization")); token != "" {
-		return token
+		return token, CredentialSourceBearer
 	}
 
 	if cookie, err := r.Cookie(authSessionCookieName); err == nil {
 		if token := normalizeAccessToken(cookie.Value); token != "" {
-			return token
+			return token, CredentialSourceCookie
 		}
 	}
 
-	return normalizeAccessToken(r.URL.Query().Get("authToken"))
+	if token := normalizeAccessToken(r.URL.Query().Get("authToken")); token != "" {
+		return token, CredentialSourceQuery
+	}
+	return "", ""
 }
 
 func normalizeAccessToken(raw string) string {
@@ -400,15 +465,19 @@ func requiresAuthentication(path string) bool {
 	path = strings.TrimSpace(strings.ToLower(path))
 
 	switch {
-	case strings.HasPrefix(path, "/api/auth/login"):
+	case path == "/api/auth/login" || path == "/api/auth/login/":
 		return false
-	case strings.HasPrefix(path, "/api/auth/logout"):
+	case path == "/api/auth/logout" || path == "/api/auth/logout/":
 		return false
-	case strings.HasPrefix(path, "/api/auth/bootstrap/"):
+	case path == "/api/auth/bootstrap/can-register":
 		return false
-	case strings.HasPrefix(path, "/api/auth/me"):
-		return true
-	case strings.HasPrefix(path, "/api/setup/state"):
+	case path == "/api/auth/bootstrap/can-register/":
+		return false
+	case path == "/api/auth/bootstrap/register":
+		return false
+	case path == "/api/auth/bootstrap/register/":
+		return false
+	case path == "/api/setup/state":
 		return false
 	case strings.HasPrefix(path, "/embedded/wizmap/assets/"):
 		return false

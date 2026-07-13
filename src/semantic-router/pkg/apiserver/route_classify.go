@@ -9,12 +9,14 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
 // writeClassificationError maps a classification service error to an HTTP
-// status code: empty/whitespace input is a client error (400 INVALID_INPUT);
+// status code: empty/whitespace input is a client error (400 INVALID_INPUT),
+// malformed inline image data is a client error (400 INVALID_IMAGE), and
 // anything else is treated as an internal error (500 CLASSIFICATION_ERROR).
 // This keeps the classify endpoints aligned with their documented OpenAPI
 // contract ({200, 400}) and with sibling endpoints (combined/batch/embeddings).
@@ -23,7 +25,20 @@ func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
 		return
 	}
-	s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
+	if errors.Is(err, services.ErrInvalidImageInput) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Pragma", "no-cache")
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_IMAGE", "image input must contain a decodable JPEG or PNG image within the supported limits")
+		return
+	}
+	if errors.Is(err, classification.ErrTextSignalEvaluation) || errors.Is(err, classification.ErrImageSignalEvaluation) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Retry-After", "1")
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CLASSIFICATION_ERROR", "classification temporarily unavailable")
+		return
+	}
+	s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", "classification failed")
 }
 
 // handleIntentClassification handles intent classification requests
@@ -33,6 +48,11 @@ func (s *ClassificationAPIServer) handleIntentClassification(w http.ResponseWrit
 		s.writeJSONRequestError(w, err)
 		return
 	}
+	release, admitted := s.admitIntentClassificationNative(w, r.Context(), req)
+	if !admitted {
+		return
+	}
+	defer release()
 
 	// Use signal-driven classification (always uses signal-driven architecture)
 	response, err := s.classificationSvc.ClassifyIntent(req)
@@ -61,6 +81,11 @@ func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter
 	if r.URL.Query().Get("trace") == "true" {
 		req.Options.Trace = true
 	}
+	release, admitted := s.admitIntentClassificationNative(w, r.Context(), req)
+	if !admitted {
+		return
+	}
+	defer release()
 
 	response, err := s.classificationSvc.ClassifyIntentForEval(req)
 	if err != nil {
@@ -164,6 +189,16 @@ func (s *ClassificationAPIServer) parseBatchClassificationRequest(w http.Respons
 	if len(req.Texts) == 0 {
 		metrics.RecordBatchClassificationError("unified", "empty_texts")
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "texts array cannot be empty")
+		return BatchClassificationRequest{}, false
+	}
+	if len(req.Texts) > s.effectiveBatchClassificationMaxBatchSize() {
+		metrics.RecordBatchClassificationError("unified", "batch_too_large")
+		s.writeErrorResponse(
+			w,
+			http.StatusRequestEntityTooLarge,
+			"BATCH_INPUT_TOO_LARGE",
+			"texts array exceeds the maximum batch size",
+		)
 		return BatchClassificationRequest{}, false
 	}
 

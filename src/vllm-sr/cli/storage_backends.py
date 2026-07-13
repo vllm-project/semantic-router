@@ -32,6 +32,7 @@ def start_storage_backends(
     stack_layout: RuntimeStackLayout,
     *,
     state_root_dir: str | None = None,
+    bind_address: str | None = None,
 ) -> set[str]:
     """Start Docker containers for the required storage backends.
 
@@ -47,13 +48,23 @@ def start_storage_backends(
 
     if "redis" in required_backends:
         _start_backend(
-            "Redis", lambda: container_start_redis(network_name, stack_layout)
+            "Redis",
+            lambda: container_start_redis(
+                network_name,
+                stack_layout,
+                **_optional_bind_address(bind_address),
+            ),
         )
         started.add("redis")
 
     if "postgres" in required_backends:
         _start_backend(
-            "Postgres", lambda: container_start_postgres(network_name, stack_layout)
+            "Postgres",
+            lambda: container_start_postgres(
+                network_name,
+                stack_layout,
+                **_optional_bind_address(bind_address),
+            ),
         )
         started.add("postgres")
 
@@ -64,6 +75,7 @@ def start_storage_backends(
                 network_name,
                 stack_layout,
                 state_root_dir=state_root_dir,
+                **_optional_bind_address(bind_address),
             ),
         )
         started.add("milvus")
@@ -77,6 +89,7 @@ def provision_storage_backends(
     stack_layout: RuntimeStackLayout,
     *,
     state_root_dir: str | None = None,
+    bind_address: str | None = None,
 ) -> set[str]:
     """Detect which storage backends the config requires and start them."""
     required = detect_required_backends(config, stack_layout)
@@ -85,6 +98,7 @@ def provision_storage_backends(
         network_name,
         stack_layout,
         state_root_dir=state_root_dir,
+        bind_address=bind_address,
     )
 
 
@@ -94,3 +108,9 @@ def _start_backend(name: str, starter) -> None:
         log.error(f"Failed to start {name}: {stderr}")
         raise SystemExit(1)
     log.info(f"{name} started successfully")
+
+
+def _optional_bind_address(bind_address: str | None) -> dict[str, str]:
+    if bind_address is None:
+        return {}
+    return {"bind_address": bind_address}

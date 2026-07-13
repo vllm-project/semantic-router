@@ -61,6 +61,7 @@ spec:
         name: semantic-router-extproc
         typedConfig:
           '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+          failureModeAllow: false
           allowModeOverride: true
           grpcService:
             envoyGrpc:
@@ -80,7 +81,10 @@ spec:
 The important fields are:
 
 - `requestBodyMode: STREAMED` so request chunks are sent to ExtProc;
-- `allowModeOverride: true` so Semantic Router can request per-route response-body processing changes when needed;
+- `failureModeAllow: false` so an unavailable processor blocks the request
+  instead of bypassing routing;
+- `allowModeOverride: true` so Semantic Router can request per-route
+  response-body processing changes when needed; and
 - `messageTimeout` and `grpcService.timeout` large enough for classification and body accumulation.
 
 A complete Kubernetes example is available in `deploy/kubernetes/streaming/aigw-resources/gwapi-resources.yaml`.
@@ -101,6 +105,7 @@ spec:
     kind: Gateway
     name: agentgateway-proxy
   traffic:
+    # AgentgatewayPolicy ExtProc is fail-closed by default.
     extProc:
       backendRef:
         name: semantic-router
@@ -113,6 +118,10 @@ spec:
         responseBodyMode: Buffered
         allowModeOverride: true
 ```
+
+The current Kubernetes `AgentgatewayPolicy` ExtProc schema does not expose a
+failure-mode override. If the processor is unavailable, agentgateway returns
+an error instead of bypassing semantic routing.
 
 agentgateway does not support a separate `Streamed` request-body mode. Use `FullDuplexStreamed` for streamed request bodies and enable `global.router.streamed_body` in Semantic Router.
 

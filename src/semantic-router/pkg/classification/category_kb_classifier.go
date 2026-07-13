@@ -38,15 +38,15 @@ type KBClassifyResult struct {
 
 // KnowledgeBaseClassifier performs exemplar-based KB classification.
 type KnowledgeBaseClassifier struct {
-	rule        config.KnowledgeBaseConfig
-	definition  config.KnowledgeBaseDefinition
-	labels      map[string]*kbLabelData
-	modelType   string
-	baseDir     string
-	preloadOnce sync.Once
-	preloadErr  error
-	preloaded   bool
-	provider    embedding.Provider
+	rule       config.KnowledgeBaseConfig
+	definition config.KnowledgeBaseDefinition
+	labels     map[string]*kbLabelData
+	modelType  string
+	backend    string
+	baseDir    string
+	preloadMu  sync.Mutex
+	preloaded  bool
+	provider   embedding.Provider
 }
 
 func NewKnowledgeBaseClassifier(rule config.KnowledgeBaseConfig, modelType string, baseDir string) (*KnowledgeBaseClassifier, error) {
@@ -54,11 +54,16 @@ func NewKnowledgeBaseClassifier(rule config.KnowledgeBaseConfig, modelType strin
 }
 
 func NewKnowledgeBaseClassifierWithProvider(rule config.KnowledgeBaseConfig, modelType string, baseDir string, provider embedding.Provider) (*KnowledgeBaseClassifier, error) {
+	return newKnowledgeBaseClassifierWithBackend(rule, modelType, baseDir, "", provider)
+}
+
+func newKnowledgeBaseClassifierWithBackend(rule config.KnowledgeBaseConfig, modelType string, baseDir string, backend string, provider embedding.Provider) (*KnowledgeBaseClassifier, error) {
 	rule = rule.WithDefaults()
 	c := &KnowledgeBaseClassifier{
 		rule:      rule,
 		labels:    make(map[string]*kbLabelData),
 		modelType: modelType,
+		backend:   normalizeTextEmbeddingBackend(backend),
 		baseDir:   baseDir,
 		provider:  provider,
 	}
@@ -79,28 +84,22 @@ func NewKnowledgeBaseClassifierWithProvider(rule config.KnowledgeBaseConfig, mod
 }
 
 func (c *KnowledgeBaseClassifier) currentBackend() string {
-	if c.provider != nil {
-		return c.provider.Backend()
-	}
-	return embeddingBackendOverride()
+	return effectiveTextEmbeddingBackend(c.backend, c.provider)
 }
 
 func (c *KnowledgeBaseClassifier) shouldDeferPreload() bool {
 	backend := c.currentBackend()
-	return backend == "" || backend == "candle" || c.provider != nil
+	return backend == config.EmbeddingBackendCandle || backend == config.EmbeddingBackendOpenAICompatible
 }
 
 func (c *KnowledgeBaseClassifier) ensureEmbeddingsPreloaded() error {
+	c.preloadMu.Lock()
+	defer c.preloadMu.Unlock()
+
 	if c.preloaded {
 		return nil
 	}
-	c.preloadOnce.Do(func() {
-		c.preloadErr = c.preloadEmbeddings()
-		if c.preloadErr == nil {
-			c.preloaded = true
-		}
-	})
-	return c.preloadErr
+	return c.preloadEmbeddings()
 }
 
 func (c *KnowledgeBaseClassifier) loadDefinition() error {

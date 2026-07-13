@@ -70,40 +70,40 @@ func (s *Store) updateUserRoleOrStatus(
 	expected *userStateExpectation,
 	authorization *mutationAuthorization,
 ) (*User, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
+	tx, beginErr := s.db.BeginTx(ctx, nil)
+	if beginErr != nil {
+		return nil, beginErr
 	}
 	defer func() { _ = tx.Rollback() }()
-	if err := requireMutationAuthorizationTx(ctx, tx, authorization); err != nil {
-		return nil, err
+	if authorizationErr := requireMutationAuthorizationTx(ctx, tx, authorization); authorizationErr != nil {
+		return nil, authorizationErr
 	}
 
-	current, err := getUserForMutationTx(ctx, tx, userID)
-	if err != nil {
-		return nil, userMutationReadError(err, expected != nil)
+	current, readErr := getUserForMutationTx(ctx, tx, userID)
+	if readErr != nil {
+		return nil, userMutationReadError(readErr, expected != nil)
 	}
 	if expected != nil &&
 		(current.Role != expected.role || current.Status != expected.status) {
 		return nil, ErrUserStateChanged
 	}
 
-	nextRole, nextStatus, err := normalizeStoredUserMutation(current, role, status)
-	if err != nil {
-		return nil, err
+	nextRole, nextStatus, normalizeErr := normalizeStoredUserMutation(current, role, status)
+	if normalizeErr != nil {
+		return nil, normalizeErr
 	}
-	if err := requireRemainingUserManagerTx(
+	if managerErr := requireRemainingUserManagerTx(
 		ctx,
 		tx,
 		current,
 		nextRole,
 		nextStatus,
-	); err != nil {
-		return nil, err
+	); managerErr != nil {
+		return nil, managerErr
 	}
 
 	updatedAt := nowUnix()
-	result, err := tx.ExecContext(
+	result, execErr := tx.ExecContext(
 		ctx,
 		`UPDATE users
 		 SET role = ?,
@@ -119,12 +119,12 @@ func (s *Store) updateUserRoleOrStatus(
 		current.Role,
 		current.Status,
 	)
-	if err != nil {
-		return nil, err
+	if execErr != nil {
+		return nil, execErr
 	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return nil, err
+	affected, rowsErr := result.RowsAffected()
+	if rowsErr != nil {
+		return nil, rowsErr
 	}
 	if affected != 1 {
 		return nil, ErrUserStateChanged
@@ -134,17 +134,17 @@ func (s *Store) updateUserRoleOrStatus(
 	// mask. A concurrent login either commits first and is revoked here or loses
 	// its active-status compare-and-swap.
 	if nextStatus != defaultUserStatusActive {
-		if err := revokeUserSessionsTx(ctx, tx, userID, updatedAt); err != nil {
-			return nil, err
+		if revokeErr := revokeUserSessionsTx(ctx, tx, userID, updatedAt); revokeErr != nil {
+			return nil, revokeErr
 		}
 	}
 
-	updated, err := getUserForMutationTx(ctx, tx, userID)
-	if err != nil {
-		return nil, err
+	updated, readErr := getUserForMutationTx(ctx, tx, userID)
+	if readErr != nil {
+		return nil, readErr
 	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
+	if commitErr := tx.Commit(); commitErr != nil {
+		return nil, commitErr
 	}
 	return updated, nil
 }
@@ -187,46 +187,46 @@ func (s *Store) deleteUser(
 	expected *userStateExpectation,
 	authorization *mutationAuthorization,
 ) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
+	tx, beginErr := s.db.BeginTx(ctx, nil)
+	if beginErr != nil {
+		return beginErr
 	}
 	defer func() { _ = tx.Rollback() }()
-	if err := requireMutationAuthorizationTx(ctx, tx, authorization); err != nil {
-		return err
+	if authorizationErr := requireMutationAuthorizationTx(ctx, tx, authorization); authorizationErr != nil {
+		return authorizationErr
 	}
 
-	current, err := getUserForMutationTx(ctx, tx, userID)
-	if err != nil {
-		return userMutationReadError(err, expected != nil)
+	current, readErr := getUserForMutationTx(ctx, tx, userID)
+	if readErr != nil {
+		return userMutationReadError(readErr, expected != nil)
 	}
 	if expected != nil &&
 		(current.Role != expected.role || current.Status != expected.status) {
 		return ErrUserStateChanged
 	}
-	if err := requireRemainingUserManagerTx(
+	if managerErr := requireRemainingUserManagerTx(
 		ctx,
 		tx,
 		current,
 		current.Role,
 		"inactive",
-	); err != nil {
-		return err
+	); managerErr != nil {
+		return managerErr
 	}
 
-	result, err := tx.ExecContext(
+	result, execErr := tx.ExecContext(
 		ctx,
 		`DELETE FROM users WHERE id = ? AND role = ? AND status = ?`,
 		userID,
 		current.Role,
 		current.Status,
 	)
-	if err != nil {
-		return err
+	if execErr != nil {
+		return execErr
 	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
+	affected, rowsErr := result.RowsAffected()
+	if rowsErr != nil {
+		return rowsErr
 	}
 	if affected != 1 {
 		return ErrUserStateChanged

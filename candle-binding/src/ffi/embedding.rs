@@ -7,8 +7,14 @@ use crate::classifiers::unified::{DualPathUnifiedClassifier, EmbeddingRequiremen
 use crate::ffi::types::{
     BatchSimilarityResult, EmbeddingResult, EmbeddingSimilarityResult, SimilarityMatch,
 };
+use crate::model_architectures::embedding::tokenizer_contract::{
+    encode_embedding_batch_checked, encode_embedding_checked, prepare_embedding_tokenizer,
+    EmbeddingTokenError,
+};
 use crate::model_architectures::ModelType;
 use std::ffi::{c_char, CStr};
+
+use super::image_input::{decode_resize_to_chw_f32, MAX_MULTIMODAL_IMAGE_ENCODED_BYTES};
 
 //Import embedding models and model factory
 use crate::model_architectures::config::{DualPathConfig, EmbeddingConfig};
@@ -27,6 +33,62 @@ enum PaddingSide {
     /// Right padding (Gemma)
     Right,
 }
+
+#[derive(Clone, Copy, Debug)]
+struct BatchEmbeddingSpec<'a> {
+    target_dim: Option<usize>,
+    max_tokens: usize,
+    model_name: &'a str,
+    pad_token_id: u32,
+    pad_side: PaddingSide,
+}
+
+const QWEN3_EMBEDDING_CONTEXT: usize = 32_768;
+const MMBERT_EMBEDDING_CONTEXT: usize = 32_768;
+const GEMMA_EMBEDDING_CONTEXT: usize = 2_048;
+const MULTIMODAL_TEXT_CONTEXT: usize = 512;
+
+type GeneratedEmbedding = (Vec<f32>, usize);
+
+const EMBEDDING_INPUT_TOO_LONG_STATUS: i32 = -3;
+
+#[derive(Debug)]
+enum EmbeddingGenerationError {
+    Token(EmbeddingTokenError),
+    Internal(String),
+}
+
+impl EmbeddingGenerationError {
+    fn status(&self) -> i32 {
+        match self {
+            Self::Token(error) if error.is_input_too_long() => EMBEDDING_INPUT_TOO_LONG_STATUS,
+            _ => -1,
+        }
+    }
+}
+
+impl std::fmt::Display for EmbeddingGenerationError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Token(error) => error.fmt(formatter),
+            Self::Internal(detail) => formatter.write_str(detail),
+        }
+    }
+}
+
+impl From<EmbeddingTokenError> for EmbeddingGenerationError {
+    fn from(error: EmbeddingTokenError) -> Self {
+        Self::Token(error)
+    }
+}
+
+impl From<String> for EmbeddingGenerationError {
+    fn from(detail: String) -> Self {
+        Self::Internal(detail)
+    }
+}
+
+type EmbeddingGenerationResult<T> = Result<T, EmbeddingGenerationError>;
 
 /// Global singleton for ModelFactory
 pub(crate) static GLOBAL_MODEL_FACTORY: OnceLock<ModelFactory> = OnceLock::new();
@@ -106,9 +168,11 @@ fn get_multimodal_refs() -> Option<(&'static MultiModalEmbeddingModel, &'static 
 fn generate_embedding_internal<'a, F, G>(
     text: &str,
     target_dim: Option<usize>,
+    max_tokens: usize,
+    model_name: &str,
     get_tokenizer: G,
     forward_fn: F,
-) -> Result<Vec<f32>, String>
+) -> EmbeddingGenerationResult<GeneratedEmbedding>
 where
     F: Fn(Vec<u32>, Vec<u32>) -> Result<candle_core::Tensor, String>,
     G: Fn() -> Option<&'a tokenizers::Tokenizer>,
@@ -117,9 +181,8 @@ where
     let tokenizer = get_tokenizer().ok_or_else(|| "Tokenizer not available".to_string())?;
 
     // Tokenize single text
-    let encoding = tokenizer
-        .encode(text, true)
-        .map_err(|e| format!("Tokenization failed: {:?}", e))?;
+    let encoding = encode_embedding_checked(tokenizer, text, max_tokens, model_name)?;
+    let sequence_length = encoding.get_ids().len();
 
     let token_ids: Vec<u32> = encoding.get_ids().to_vec();
     let attention_mask: Vec<u32> = encoding.get_attention_mask().to_vec();
@@ -137,7 +200,10 @@ where
         .to_vec1::<f32>()
         .map_err(|e| format!("Failed to convert embedding to vec: {:?}", e))?;
 
-    Ok(truncate_embedding_to_dimension(embedding_vec, target_dim))
+    Ok((
+        truncate_embedding_to_dimension(embedding_vec, target_dim),
+        sequence_length,
+    ))
 }
 
 /// Generic internal helper for batch embedding generation
@@ -146,27 +212,24 @@ where
 /// Model-specific logic (tokenizer retrieval and forward pass) is handled via closures.
 fn generate_embeddings_batch_internal<'a, F, G>(
     texts: &[&str],
-    target_dim: Option<usize>,
-    pad_token_id: u32,
-    pad_side: PaddingSide,
+    spec: BatchEmbeddingSpec<'_>,
     get_tokenizer: G,
     forward_fn: F,
-) -> Result<Vec<Vec<f32>>, String>
+) -> EmbeddingGenerationResult<Vec<Vec<f32>>>
 where
     F: Fn(Vec<u32>, Vec<u32>, usize, usize) -> Result<candle_core::Tensor, String>,
     G: Fn() -> Option<&'a tokenizers::Tokenizer>,
 {
     if texts.is_empty() {
-        return Err("Empty text list".to_string());
+        return Err("Empty text list".to_string().into());
     }
 
     // Get tokenizer
     let tokenizer = get_tokenizer().ok_or_else(|| "Tokenizer not available".to_string())?;
 
     // Batch tokenize all texts
-    let encodings = tokenizer
-        .encode_batch(texts.to_vec(), true)
-        .map_err(|e| format!("Batch tokenization failed: {:?}", e))?;
+    let encodings =
+        encode_embedding_batch_checked(tokenizer, texts, spec.max_tokens, spec.model_name)?;
 
     // Find max sequence length for padding
     let max_len = encodings
@@ -185,10 +248,10 @@ where
 
         // Pad to max_len based on padding side
         let pad_len = max_len - token_ids.len();
-        let (padded_ids, padded_mask) = match pad_side {
+        let (padded_ids, padded_mask) = match spec.pad_side {
             PaddingSide::Left => {
                 // Left padding
-                let mut padded_ids = vec![pad_token_id; pad_len];
+                let mut padded_ids = vec![spec.pad_token_id; pad_len];
                 padded_ids.extend(token_ids);
 
                 let mut padded_mask = vec![0u32; pad_len];
@@ -199,7 +262,7 @@ where
             PaddingSide::Right => {
                 // Right padding
                 let mut padded_ids = token_ids.clone();
-                padded_ids.extend(vec![pad_token_id; pad_len]);
+                padded_ids.extend(vec![spec.pad_token_id; pad_len]);
 
                 let mut padded_mask = attention_mask.clone();
                 padded_mask.extend(vec![0u32; pad_len]);
@@ -226,7 +289,7 @@ where
         .to_vec2::<f32>()
         .map_err(|e| format!("Failed to convert embeddings to vec: {:?}", e))?;
 
-    let target_dim = if let Some(dim) = target_dim {
+    let target_dim = if let Some(dim) = spec.target_dim {
         let embedding_dim = embeddings_data.first().map_or(0, Vec::len);
         if dim > embedding_dim {
             eprintln!(
@@ -562,7 +625,7 @@ fn generate_qwen3_embeddings_batch(
     factory: &ModelFactory,
     texts: &[&str],
     target_dim: Option<usize>,
-) -> Result<Vec<Vec<f32>>, String> {
+) -> EmbeddingGenerationResult<Vec<Vec<f32>>> {
     use candle_core::Tensor;
 
     // Qwen3-specific configuration
@@ -572,9 +635,13 @@ fn generate_qwen3_embeddings_batch(
     // Use the generic internal function
     generate_embeddings_batch_internal(
         texts,
-        target_dim,
-        QWEN3_PAD_TOKEN_ID,
-        pad_side,
+        BatchEmbeddingSpec {
+            target_dim,
+            max_tokens: QWEN3_EMBEDDING_CONTEXT,
+            model_name: "Qwen3",
+            pad_token_id: QWEN3_PAD_TOKEN_ID,
+            pad_side,
+        },
         || factory.get_qwen3_tokenizer(),
         |flat_ids, flat_mask, batch_size, max_len| {
             // Get model
@@ -601,13 +668,15 @@ fn generate_qwen3_embedding(
     factory: &ModelFactory,
     text: &str,
     target_dim: Option<usize>,
-) -> Result<Vec<f32>, String> {
+) -> EmbeddingGenerationResult<GeneratedEmbedding> {
     use candle_core::Tensor;
 
     // Use the generic internal function
     generate_embedding_internal(
         text,
         target_dim,
+        QWEN3_EMBEDDING_CONTEXT,
+        "Qwen3",
         || factory.get_qwen3_tokenizer(),
         |token_ids, attention_mask| {
             // Get model
@@ -642,7 +711,7 @@ fn generate_gemma_embeddings_batch(
     factory: &ModelFactory,
     texts: &[&str],
     target_dim: Option<usize>,
-) -> Result<Vec<Vec<f32>>, String> {
+) -> EmbeddingGenerationResult<Vec<Vec<f32>>> {
     use candle_core::Tensor;
 
     // Gemma-specific configuration
@@ -652,9 +721,13 @@ fn generate_gemma_embeddings_batch(
     // Use the generic internal function
     generate_embeddings_batch_internal(
         texts,
-        target_dim,
-        GEMMA_PAD_TOKEN_ID,
-        pad_side,
+        BatchEmbeddingSpec {
+            target_dim,
+            max_tokens: GEMMA_EMBEDDING_CONTEXT,
+            model_name: "Gemma",
+            pad_token_id: GEMMA_PAD_TOKEN_ID,
+            pad_side,
+        },
         || factory.get_gemma_tokenizer(),
         |flat_ids, flat_mask, batch_size, max_len| {
             // Get model
@@ -682,13 +755,15 @@ fn generate_gemma_embedding(
     factory: &ModelFactory,
     text: &str,
     target_dim: Option<usize>,
-) -> Result<Vec<f32>, String> {
+) -> EmbeddingGenerationResult<GeneratedEmbedding> {
     use candle_core::Tensor;
 
     // Use the generic internal function
     generate_embedding_internal(
         text,
         target_dim,
+        GEMMA_EMBEDDING_CONTEXT,
+        "Gemma",
         || factory.get_gemma_tokenizer(),
         |token_ids, attention_mask| {
             // Get model
@@ -723,7 +798,7 @@ fn generate_mmbert_embedding(
     text: &str,
     target_layer: Option<usize>,
     target_dim: Option<usize>,
-) -> Result<Vec<f32>, String> {
+) -> EmbeddingGenerationResult<GeneratedEmbedding> {
     use candle_core::Tensor;
 
     let model = factory
@@ -735,9 +810,7 @@ fn generate_mmbert_embedding(
         .ok_or_else(|| "mmBERT tokenizer not available".to_string())?;
 
     // Tokenize
-    let encoding = tokenizer
-        .encode(text, true)
-        .map_err(|e| format!("Tokenization failed: {:?}", e))?;
+    let encoding = encode_embedding_checked(tokenizer, text, MMBERT_EMBEDDING_CONTEXT, "mmBERT")?;
 
     let token_ids: Vec<u32> = encoding.get_ids().to_vec();
     let attention_mask: Vec<u32> = encoding.get_attention_mask().to_vec();
@@ -761,11 +834,12 @@ fn generate_mmbert_embedding(
         .map_err(|e| format!("mmBERT forward failed: {:?}", e))?;
 
     // Convert to Vec<f32>
-    embedding
+    let embedding = embedding
         .squeeze(0)
         .map_err(|e| format!("Failed to squeeze: {:?}", e))?
         .to_vec1::<f32>()
-        .map_err(|e| format!("Failed to convert to vec: {:?}", e))
+        .map_err(|e| format!("Failed to convert to vec: {:?}", e))?;
+    Ok((embedding, seq_len))
 }
 
 /// Generate embeddings for multiple texts in a single batch (mmBERT)
@@ -774,24 +848,38 @@ fn generate_mmbert_embeddings_batch(
     texts: &[&str],
     target_layer: Option<usize>,
     target_dim: Option<usize>,
-) -> Result<Vec<Vec<f32>>, String> {
-    let model = factory
-        .get_mmbert_model()
-        .ok_or_else(|| "mmBERT model not available".to_string())?;
+) -> EmbeddingGenerationResult<Vec<Vec<f32>>> {
+    use candle_core::Tensor;
 
-    let tokenizer = factory
-        .get_mmbert_tokenizer()
-        .ok_or_else(|| "mmBERT tokenizer not available".to_string())?;
-
-    // Batch encode
-    let embeddings = model
-        .encode_batch_with_matryoshka(tokenizer, texts, 8192, target_layer, target_dim)
-        .map_err(|e| format!("mmBERT batch encoding failed: {:?}", e))?;
-
-    // Convert to Vec<Vec<f32>>
-    embeddings
-        .to_vec2::<f32>()
-        .map_err(|e| format!("Failed to convert embeddings: {:?}", e))
+    generate_embeddings_batch_internal(
+        texts,
+        BatchEmbeddingSpec {
+            target_dim: None,
+            max_tokens: MMBERT_EMBEDDING_CONTEXT,
+            model_name: "mmBERT",
+            pad_token_id: 0,
+            pad_side: PaddingSide::Right,
+        },
+        || factory.get_mmbert_tokenizer(),
+        |flat_ids, flat_mask, batch_size, max_len| {
+            let model = factory
+                .get_mmbert_model()
+                .ok_or_else(|| "mmBERT model not available".to_string())?;
+            let device = model.device();
+            let input_ids = Tensor::from_vec(flat_ids, (batch_size, max_len), device)
+                .map_err(|error| format!("Failed to create mmBERT input tensor: {error:?}"))?;
+            let attention_mask = Tensor::from_vec(flat_mask, (batch_size, max_len), device)
+                .map_err(|error| format!("Failed to create mmBERT mask tensor: {error:?}"))?;
+            model
+                .embedding_forward_with_matryoshka(
+                    &input_ids,
+                    Some(&attention_mask),
+                    target_layer,
+                    target_dim,
+                )
+                .map_err(|error| format!("mmBERT batch forward failed: {error:?}"))
+        },
+    )
 }
 
 /// Internal helper to generate text embedding via the multi-modal model
@@ -800,15 +888,14 @@ fn generate_multimodal_text_embedding(
     text: &str,
     target_layer: Option<usize>,
     target_dim: Option<usize>,
-) -> Result<Vec<f32>, String> {
+) -> EmbeddingGenerationResult<GeneratedEmbedding> {
     use candle_core::Tensor;
 
     let (model, tokenizer) =
         get_multimodal_refs().ok_or_else(|| "Multi-modal model not available".to_string())?;
 
-    let encoding = tokenizer
-        .encode(text, true)
-        .map_err(|e| format!("Tokenization failed: {:?}", e))?;
+    let encoding =
+        encode_embedding_checked(tokenizer, text, MULTIMODAL_TEXT_CONTEXT, "multimodal")?;
 
     let token_ids: Vec<u32> = encoding.get_ids().to_vec();
     let attention_mask: Vec<u32> = encoding.get_attention_mask().to_vec();
@@ -829,11 +916,12 @@ fn generate_multimodal_text_embedding(
         )
         .map_err(|e| format!("Multi-modal text encoding failed: {:?}", e))?;
 
-    embedding
+    let embedding = embedding
         .squeeze(0)
         .map_err(|e| format!("Failed to squeeze: {:?}", e))?
         .to_vec1::<f32>()
-        .map_err(|e| format!("Failed to convert to vec: {:?}", e))
+        .map_err(|e| format!("Failed to convert to vec: {:?}", e))?;
+    Ok((embedding, seq_len))
 }
 
 /// Generate text embeddings for multiple texts in a single batch (multi-modal)
@@ -842,17 +930,37 @@ fn generate_multimodal_text_embeddings_batch(
     texts: &[&str],
     target_layer: Option<usize>,
     target_dim: Option<usize>,
-) -> Result<Vec<Vec<f32>>, String> {
-    let (model, tokenizer) =
-        get_multimodal_refs().ok_or_else(|| "Multi-modal model not available".to_string())?;
+) -> EmbeddingGenerationResult<Vec<Vec<f32>>> {
+    use candle_core::Tensor;
 
-    let embeddings = model
-        .encode_text_batch_with_matryoshka(tokenizer, texts, 512, target_layer, target_dim)
-        .map_err(|e| format!("Multi-modal batch encoding failed: {:?}", e))?;
-
-    embeddings
-        .to_vec2::<f32>()
-        .map_err(|e| format!("Failed to convert embeddings: {:?}", e))
+    generate_embeddings_batch_internal(
+        texts,
+        BatchEmbeddingSpec {
+            target_dim: None,
+            max_tokens: MULTIMODAL_TEXT_CONTEXT,
+            model_name: "multimodal",
+            pad_token_id: 0,
+            pad_side: PaddingSide::Right,
+        },
+        || get_multimodal_refs().map(|(_, tokenizer)| tokenizer),
+        |flat_ids, flat_mask, batch_size, max_len| {
+            let (model, _) = get_multimodal_refs()
+                .ok_or_else(|| "Multi-modal model not available".to_string())?;
+            let device = model.device();
+            let input_ids = Tensor::from_vec(flat_ids, (batch_size, max_len), device)
+                .map_err(|error| format!("Failed to create multimodal input tensor: {error:?}"))?;
+            let attention_mask = Tensor::from_vec(flat_mask, (batch_size, max_len), device)
+                .map_err(|error| format!("Failed to create multimodal mask tensor: {error:?}"))?;
+            model
+                .encode_text_with_matryoshka(
+                    &input_ids,
+                    Some(&attention_mask),
+                    target_layer,
+                    target_dim,
+                )
+                .map_err(|error| format!("Multi-modal batch forward failed: {error:?}"))
+        },
+    )
 }
 
 /// Get embedding with automatic model selection (smart routing)
@@ -867,7 +975,7 @@ fn generate_multimodal_text_embeddings_batch(
 /// - `result` must be a valid pointer to EmbeddingResult
 ///
 /// # Returns
-/// 0 on success, -1 on error
+/// 0 on success, -3 when the selected tokenizer context is exceeded, -1 on internal error
 #[no_mangle]
 pub extern "C" fn get_embedding_smart(
     text: *const c_char,
@@ -889,7 +997,7 @@ pub extern "C" fn get_embedding_smart(
 /// - `result` must be a valid pointer to EmbeddingResult
 ///
 /// # Returns
-/// 0 on success, -1 on error
+/// 0 on success, -3 when the selected tokenizer context is exceeded, -1 on internal error
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_embedding_with_dim(
@@ -915,9 +1023,14 @@ pub extern "C" fn get_embedding_with_dim(
         }
     };
 
-    // Create requirements for routing
+    // This estimate is used only for model routing. The selected model's
+    // untruncated tokenizer enforces the real context limit before Tensor creation.
+    let routing_sequence_estimate = text_str
+        .split_whitespace()
+        .count()
+        .min(QWEN3_EMBEDDING_CONTEXT);
     let requirements = EmbeddingRequirements {
-        sequence_length: text_str.split_whitespace().count(),
+        sequence_length: routing_sequence_estimate,
         quality_priority,
         latency_priority,
         target_dimension: if target_dim > 0 {
@@ -1043,7 +1156,7 @@ pub extern "C" fn get_embedding_with_dim(
 /// - `result`: Output pointer for embedding result
 ///
 /// # Returns
-/// 0 on success, -1 on error
+/// 0 on success, -3 when the selected tokenizer context is exceeded, -1 on internal error
 #[no_mangle]
 pub extern "C" fn get_embedding_with_model_type(
     text: *const c_char,
@@ -1071,7 +1184,7 @@ pub extern "C" fn get_embedding_with_model_type(
 /// - `result`: Output pointer for embedding result
 ///
 /// # Returns
-/// 0 on success, -1 on error
+/// 0 on success, -3 when the selected tokenizer context is exceeded, -1 on internal error
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_embedding_2d_matryoshka(
@@ -1172,7 +1285,7 @@ pub extern "C" fn get_embedding_2d_matryoshka(
     };
 
     match embedding_result {
-        Ok(embedding_vec) => {
+        Ok((embedding_vec, sequence_length)) => {
             let length = embedding_vec.len() as i32;
             let data = Box::into_raw(embedding_vec.into_boxed_slice()) as *mut f32;
             let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
@@ -1192,7 +1305,7 @@ pub extern "C" fn get_embedding_2d_matryoshka(
                     length,
                     error: false,
                     model_type: model_type_id,
-                    sequence_length: text_str.split_whitespace().count() as i32,
+                    sequence_length: sequence_length as i32,
                     processing_time_ms,
                 };
             }
@@ -1204,9 +1317,32 @@ pub extern "C" fn get_embedding_2d_matryoshka(
             unsafe {
                 (*result) = create_error_result();
             }
-            -1
+            e.status()
         }
     }
+}
+
+fn generate_manual_similarity_embeddings(
+    factory: &ModelFactory,
+    text1: &str,
+    text2: &str,
+    model_type: &str,
+    target_dimension: Option<usize>,
+) -> EmbeddingGenerationResult<(Vec<f32>, Vec<f32>, i32)> {
+    let (embedding1, embedding2, model_id) = if model_type == "qwen3" {
+        (
+            generate_qwen3_embedding(factory, text1, target_dimension)?.0,
+            generate_qwen3_embedding(factory, text2, target_dimension)?.0,
+            0,
+        )
+    } else {
+        (
+            generate_gemma_embedding(factory, text1, target_dimension)?.0,
+            generate_gemma_embedding(factory, text2, target_dimension)?.0,
+            1,
+        )
+    };
+    Ok((embedding1, embedding2, model_id))
 }
 
 /// Calculate cosine similarity between two texts using embeddings
@@ -1224,7 +1360,7 @@ pub extern "C" fn get_embedding_2d_matryoshka(
 /// - `result`: Output pointer for similarity result
 ///
 /// # Returns
-/// 0 on success, -1 on error
+/// 0 on success, -3 when either tokenizer context is exceeded, -1 on internal error
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn calculate_embedding_similarity(
@@ -1329,7 +1465,7 @@ pub extern "C" fn calculate_embedding_similarity(
             unsafe {
                 (*result) = EmbeddingSimilarityResult::default();
             }
-            return -1;
+            return if status1 != 0 { status1 } else { -1 };
         }
 
         let mut emb_result2 = EmbeddingResult::default();
@@ -1353,7 +1489,7 @@ pub extern "C" fn calculate_embedding_similarity(
             unsafe {
                 (*result) = EmbeddingSimilarityResult::default();
             }
-            return -1;
+            return if status2 != 0 { status2 } else { -1 };
         }
 
         // Convert to Vec
@@ -1372,47 +1508,20 @@ pub extern "C" fn calculate_embedding_similarity(
 
         (emb1, emb2, model_id)
     } else {
-        // Manual mode: directly use specified model
-
-        let (emb1, emb2, model_id) = if model_type_str == "qwen3" {
-            let emb1 = generate_qwen3_embedding(factory, text1_str, target_dimension)
-                .map_err(|e| {
-                    eprintln!("Error generating Qwen3 embedding for text1: {}", e);
-                    e
-                })
-                .ok();
-            let emb2 = generate_qwen3_embedding(factory, text2_str, target_dimension)
-                .map_err(|e| {
-                    eprintln!("Error generating Qwen3 embedding for text2: {}", e);
-                    e
-                })
-                .ok();
-            (emb1, emb2, 0)
-        } else {
-            // "gemma"
-            let emb1 = generate_gemma_embedding(factory, text1_str, target_dimension)
-                .map_err(|e| {
-                    eprintln!("Error generating Gemma embedding for text1: {}", e);
-                    e
-                })
-                .ok();
-            let emb2 = generate_gemma_embedding(factory, text2_str, target_dimension)
-                .map_err(|e| {
-                    eprintln!("Error generating Gemma embedding for text2: {}", e);
-                    e
-                })
-                .ok();
-            (emb1, emb2, 1)
-        };
-
-        match (emb1, emb2) {
-            (Some(e1), Some(e2)) => (e1, e2, model_id),
-            _ => {
-                eprintln!("Error: failed to generate embeddings");
+        match generate_manual_similarity_embeddings(
+            factory,
+            text1_str,
+            text2_str,
+            model_type_str,
+            target_dimension,
+        ) {
+            Ok(embeddings) => embeddings,
+            Err(error) => {
+                eprintln!("Error: failed to generate similarity embeddings: {error}");
                 unsafe {
                     (*result) = EmbeddingSimilarityResult::default();
                 }
-                return -1;
+                return error.status();
             }
         }
     };
@@ -1479,7 +1588,7 @@ pub extern "C" fn calculate_embedding_similarity(
 /// - `result`: Output pointer for batch similarity result
 ///
 /// # Returns
-/// 0 on success, -1 on error
+/// 0 on success, -3 when any tokenizer context is exceeded, -1 on internal error
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn calculate_similarity_batch(
@@ -1616,7 +1725,7 @@ pub extern "C" fn calculate_similarity_batch(
                 unsafe {
                     (*result) = BatchSimilarityResult::default();
                 }
-                return -1;
+                return e.status();
             }
         }
     } else {
@@ -1627,7 +1736,7 @@ pub extern "C" fn calculate_similarity_batch(
                 unsafe {
                     (*result) = BatchSimilarityResult::default();
                 }
-                return -1;
+                return e.status();
             }
         }
     };
@@ -1811,7 +1920,11 @@ pub extern "C" fn get_embedding_models_info(
         models_vec.push(EmbeddingModelInfo {
             model_name: model_name.into_raw(),
             is_loaded: qwen3_loaded,
-            max_sequence_length: if qwen3_loaded { 32768 } else { 0 },
+            max_sequence_length: if qwen3_loaded {
+                QWEN3_EMBEDDING_CONTEXT as i32
+            } else {
+                0
+            },
             default_dimension: if qwen3_loaded { 1024 } else { 0 },
             model_path: model_path.into_raw(),
         });
@@ -1829,7 +1942,11 @@ pub extern "C" fn get_embedding_models_info(
         models_vec.push(EmbeddingModelInfo {
             model_name: model_name.into_raw(),
             is_loaded: gemma_loaded,
-            max_sequence_length: if gemma_loaded { 8192 } else { 0 },
+            max_sequence_length: if gemma_loaded {
+                GEMMA_EMBEDDING_CONTEXT as i32
+            } else {
+                0
+            },
             default_dimension: if gemma_loaded { 768 } else { 0 },
             model_path: model_path.into_raw(),
         });
@@ -1974,8 +2091,13 @@ pub extern "C" fn init_embedding_models_batched(
 
     // Load tokenizer
     let tokenizer_path = format!("{}/tokenizer.json", model_path);
-    let tokenizer = match Tokenizer::from_file(&tokenizer_path) {
-        Ok(t) => t,
+    let tokenizer = match Tokenizer::from_file(&tokenizer_path)
+        .map_err(|error| format!("failed to load tokenizer: {error:?}"))
+        .and_then(|tokenizer| {
+            prepare_embedding_tokenizer(tokenizer, "Qwen3 batched")
+                .map_err(|error| error.to_string())
+        }) {
+        Ok(tokenizer) => tokenizer,
         Err(e) => {
             eprintln!(
                 "ERROR: Failed to load tokenizer from {}: {:?}",
@@ -2036,7 +2158,7 @@ pub extern "C" fn init_embedding_models_batched(
 /// - `result` must be a valid pointer to EmbeddingResult
 ///
 /// # Returns
-/// 0 on success, -1 on error
+/// 0 on success, -3 when the tokenizer context is exceeded, -1 on internal error
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_embedding_batched(
@@ -2116,21 +2238,25 @@ pub extern "C" fn get_embedding_batched(
             }
         };
 
-        // Tokenize
-        let encodings = match tokenizer_guard.encode_batch(vec![text_str.to_string()], true) {
-            Ok(e) => e,
+        let encoding = match encode_embedding_checked(
+            &tokenizer_guard,
+            text_str,
+            QWEN3_EMBEDDING_CONTEXT,
+            "Qwen3 batched",
+        ) {
+            Ok(encoding) => encoding,
             Err(e) => {
                 eprintln!("Error: tokenization failed: {}", e);
                 unsafe {
                     (*result) = create_error_result();
                 }
-                return -1;
+                return EmbeddingGenerationError::from(e).status();
             }
         };
 
-        let ids: Vec<u32> = encodings[0].get_ids().to_vec();
-        let mask: Vec<u32> = encodings[0].get_attention_mask().to_vec();
-        let seq_len = encodings[0].len();
+        let ids: Vec<u32> = encoding.get_ids().to_vec();
+        let mask: Vec<u32> = encoding.get_attention_mask().to_vec();
+        let seq_len = encoding.len();
 
         // Tokenizer lock released here - can now process concurrently!
         (ids, mask, seq_len)
@@ -2260,8 +2386,12 @@ pub extern "C" fn init_multimodal_embedding_model(
         }
     };
     let tokenizer_path = format!("{}/tokenizer.json", path);
-    let tokenizer = match Tokenizer::from_file(&tokenizer_path) {
-        Ok(t) => t,
+    let tokenizer = match Tokenizer::from_file(&tokenizer_path)
+        .map_err(|error| format!("failed to load tokenizer: {error:?}"))
+        .and_then(|tokenizer| {
+            prepare_embedding_tokenizer(tokenizer, "multimodal").map_err(|error| error.to_string())
+        }) {
+        Ok(tokenizer) => tokenizer,
         Err(e) => {
             eprintln!(
                 "ERROR: Failed to load multi-modal tokenizer from {}: {:?}",
@@ -2290,7 +2420,7 @@ pub extern "C" fn init_multimodal_embedding_model(
 /// - `result`: Output pointer for embedding result
 ///
 /// # Returns
-/// 0 on success, -1 on error
+/// 0 on success, -3 when the tokenizer context is exceeded, -1 on internal error
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn multimodal_encode_text(
@@ -2335,15 +2465,20 @@ pub extern "C" fn multimodal_encode_text(
         None
     };
 
-    // Tokenize
-    let encoding = match tokenizer.encode(text_str, true) {
+    // Tokenize without tokenizer-configured truncation, then enforce context.
+    let encoding = match encode_embedding_checked(
+        tokenizer,
+        text_str,
+        MULTIMODAL_TEXT_CONTEXT,
+        "multimodal",
+    ) {
         Ok(e) => e,
         Err(e) => {
             eprintln!("Error: tokenization failed: {:?}", e);
             unsafe {
                 (*result) = MultiModalEmbeddingResult::default();
             }
-            return -1;
+            return EmbeddingGenerationError::from(e).status();
         }
     };
 
@@ -2417,74 +2552,6 @@ pub extern "C" fn multimodal_encode_text(
     0
 }
 
-/// Decode JPEG/PNG image bytes, resize to `(target_w, target_h)`, and convert
-/// to CHW float32 pixels in `[0, 1]`. Returns `Err(String)` with a human-readable
-/// cause on decode failure or dimension overflow.
-///
-/// Filter: `image::imageops::FilterType::CatmullRom` (cubic B-spline, B=0, C=0.5),
-/// applied via `image::imageops::resize` which is support-window-weighted -
-/// approximates PIL's `Image.BICUBIC` resampling with similar antialias
-/// behavior on downscale. Empirical equivalence against PIL bicubic+antialias=True
-/// is validated end-to-end in `docs/probe-2026-05-25-image-drift-isolation/`
-/// (cosine >= 0.999 vs PyTorch reference across a 20-image corpus).
-///
-/// Known limitations: RGBA inputs have alpha discarded via `to_rgb8` (not
-/// composited against any background; PIL's `convert("RGB")` composites against
-/// black, so RGBA inputs with non-trivial transparency will differ slightly from
-/// PIL). EXIF orientation is not auto-applied (matches PIL default; callers that
-/// need orientation must transpose before calling). For the SigLIP-base / mmes
-/// inference path used by this crate, neither matters: training data and
-/// reference inference both use opaque JPEG/PNG without orientation metadata
-/// applied.
-fn decode_resize_to_chw_f32(
-    bytes: &[u8],
-    target_w: u32,
-    target_h: u32,
-) -> Result<Vec<f32>, String> {
-    let w = target_w as usize;
-    let h = target_h as usize;
-    let n_pixels = w
-        .checked_mul(h)
-        .and_then(|n| n.checked_mul(3))
-        .ok_or_else(|| {
-            format!(
-                "target dimensions overflow usize: {}x{}x3",
-                target_w, target_h
-            )
-        })?;
-
-    let img = image::load_from_memory(bytes)
-        .map_err(|e| format!("image decode failed: {:?}", e))?
-        .to_rgb8();
-    let resized = image::imageops::resize(
-        &img,
-        target_w,
-        target_h,
-        image::imageops::FilterType::CatmullRom,
-    );
-
-    // `image::imageops::resize` returns an interleaved HWC u8 buffer
-    // (`ImageBuffer<Rgb<u8>, Vec<u8>>`). Transpose to planar CHW float32
-    // in [0, 1] so the downstream `Tensor::from_slice(.., (1, 3, h, w), ..)`
-    // call gets the layout it expects.
-    let raw = resized.as_raw();
-    debug_assert_eq!(
-        raw.len(),
-        n_pixels,
-        "resize produced unexpected pixel count"
-    );
-    let mut pixels = vec![0f32; n_pixels];
-    let plane = h * w;
-    let inv = 1.0f32 / 255.0;
-    for i in 0..plane {
-        let base = i * 3;
-        pixels[i] = raw[base] as f32 * inv;
-        pixels[plane + i] = raw[base + 1] as f32 * inv;
-        pixels[2 * plane + i] = raw[base + 2] as f32 * inv;
-    }
-    Ok(pixels)
-}
-
 /// Encode image bytes: decode + resize (Catmull-Rom cubic, support-weighted) +
 /// forward.
 ///
@@ -2506,7 +2573,10 @@ fn decode_resize_to_chw_f32(
 /// - `result`: Output pointer for embedding result
 ///
 /// # Returns
-/// 0 on success, -1 on error
+/// - `0` on success
+/// - `-2` when the raw image input is empty, oversized, or cannot be decoded
+/// - `-1` for internal failures (invalid output pointer, unavailable model,
+///   tensor construction, model forward pass, or result conversion)
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn multimodal_encode_image_from_bytes(
@@ -2517,21 +2587,22 @@ pub extern "C" fn multimodal_encode_image_from_bytes(
 ) -> i32 {
     use crate::ffi::types::MultiModalEmbeddingResult;
 
-    if bytes_ptr.is_null() || result.is_null() || bytes_len == 0 {
-        eprintln!("Error: null/empty input to multimodal_encode_image_from_bytes");
+    if result.is_null() {
+        eprintln!("Error: null result pointer in multimodal_encode_image_from_bytes");
         return -1;
     }
+    unsafe {
+        (*result) = MultiModalEmbeddingResult::default();
+    }
 
-    let (model, _tokenizer) = match get_multimodal_refs() {
-        Some(refs) => refs,
-        None => {
-            eprintln!("Error: Multi-modal model not loaded");
-            unsafe {
-                (*result) = MultiModalEmbeddingResult::default();
-            }
-            return -1;
-        }
-    };
+    if bytes_ptr.is_null() || bytes_len == 0 {
+        eprintln!("Error: null/empty input to multimodal_encode_image_from_bytes");
+        return -2;
+    }
+    if bytes_len > MAX_MULTIMODAL_IMAGE_ENCODED_BYTES {
+        eprintln!("Error: encoded image exceeds {MAX_MULTIMODAL_IMAGE_ENCODED_BYTES} bytes");
+        return -2;
+    }
 
     let start_time = std::time::Instant::now();
     let bytes = unsafe { std::slice::from_raw_parts(bytes_ptr, bytes_len) };
@@ -2542,9 +2613,17 @@ pub extern "C" fn multimodal_encode_image_from_bytes(
         Ok(p) => p,
         Err(e) => {
             eprintln!("Error: {}", e);
-            unsafe {
-                (*result) = MultiModalEmbeddingResult::default();
-            }
+            return -2;
+        }
+    };
+
+    // Decode before looking up the model so malformed client input is always
+    // classified as invalid input, even when the service has not initialized
+    // the multimodal model yet.
+    let (model, _tokenizer) = match get_multimodal_refs() {
+        Some(refs) => refs,
+        None => {
+            eprintln!("Error: Multi-modal model not loaded");
             return -1;
         }
     };
@@ -2556,9 +2635,6 @@ pub extern "C" fn multimodal_encode_image_from_bytes(
         Ok(t) => t,
         Err(e) => {
             eprintln!("Error: pixel tensor creation failed: {:?}", e);
-            unsafe {
-                (*result) = MultiModalEmbeddingResult::default();
-            }
             return -1;
         }
     };
@@ -2573,9 +2649,6 @@ pub extern "C" fn multimodal_encode_image_from_bytes(
         Ok(emb) => emb,
         Err(e) => {
             eprintln!("Error: image encoding failed: {:?}", e);
-            unsafe {
-                (*result) = MultiModalEmbeddingResult::default();
-            }
             return -1;
         }
     };
@@ -2584,9 +2657,6 @@ pub extern "C" fn multimodal_encode_image_from_bytes(
         Ok(v) => v,
         Err(e) => {
             eprintln!("Error: embedding conversion failed: {:?}", e);
-            unsafe {
-                (*result) = MultiModalEmbeddingResult::default();
-            }
             return -1;
         }
     };
@@ -2840,98 +2910,152 @@ pub extern "C" fn shutdown_embedding_batched() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use image::{ImageBuffer, ImageFormat, Rgb};
-    use std::io::Cursor;
+    use crate::ffi::image_input::{
+        test_support::{make_png_with_declared_dimensions, make_test_png},
+        MAX_MULTIMODAL_IMAGE_DIMENSION, MAX_MULTIMODAL_IMAGE_ENCODED_BYTES,
+        MAX_MULTIMODAL_IMAGE_PIXELS,
+    };
+    use crate::model_architectures::embedding::tokenizer_contract::validate_embedding_token_count;
 
-    /// Encode a solid-color RGB image as PNG bytes for use as a test fixture.
-    fn make_test_png(width: u32, height: u32, r: u8, g: u8, b: u8) -> Vec<u8> {
-        let img: ImageBuffer<Rgb<u8>, Vec<u8>> =
-            ImageBuffer::from_fn(width, height, |_, _| Rgb([r, g, b]));
-        let mut bytes = Vec::new();
-        image::DynamicImage::ImageRgb8(img)
-            .write_to(&mut Cursor::new(&mut bytes), ImageFormat::Png)
-            .expect("failed to encode test PNG");
-        bytes
+    #[test]
+    fn embedding_token_context_boundaries_are_fail_closed() {
+        for (model, limit) in [
+            ("Qwen3", QWEN3_EMBEDDING_CONTEXT),
+            ("mmBERT", MMBERT_EMBEDDING_CONTEXT),
+            ("Gemma", GEMMA_EMBEDDING_CONTEXT),
+            ("multimodal", MULTIMODAL_TEXT_CONTEXT),
+        ] {
+            assert!(validate_embedding_token_count(limit, limit, model).is_ok());
+            let error = validate_embedding_token_count(limit + 1, limit, model).unwrap_err();
+            assert!(error.is_input_too_long());
+            assert_eq!(
+                EmbeddingGenerationError::from(error).status(),
+                EMBEDDING_INPUT_TOO_LONG_STATUS
+            );
+        }
+        let empty = validate_embedding_token_count(0, QWEN3_EMBEDDING_CONTEXT, "Qwen3")
+            .expect_err("zero tokens must fail");
+        assert!(!empty.is_input_too_long());
+        assert_eq!(EmbeddingGenerationError::from(empty).status(), -1);
     }
 
     #[test]
-    fn decode_resize_to_chw_f32_produces_chw_layout_in_unit_range() {
-        // Use distinct R/G/B values so plane means and first-pixel checks both
-        // detect channel-order regressions (a G/B swap on a solid-red input
-        // would pass; on (255, 128, 64) it can't).
-        let bytes = make_test_png(4, 4, 255, 128, 64);
-        let pixels = decode_resize_to_chw_f32(&bytes, 8, 8)
-            .expect("decode_resize_to_chw_f32 should succeed on a valid PNG");
-
-        let n = 8 * 8;
-        assert_eq!(pixels.len(), 3 * n, "expected 3 channels x 8 x 8 floats");
-        assert!(
-            pixels.iter().all(|v| (0.0..=1.0).contains(v)),
-            "all pixel values should be in [0, 1]"
-        );
-
-        // CHW layout: plane 0 = R, plane 1 = G, plane 2 = B. Distinct channel
-        // values mean any swap would shift the per-plane means.
-        let r_mean: f32 = pixels[0..n].iter().sum::<f32>() / n as f32;
-        let g_mean: f32 = pixels[n..2 * n].iter().sum::<f32>() / n as f32;
-        let b_mean: f32 = pixels[2 * n..3 * n].iter().sum::<f32>() / n as f32;
-        assert!(
-            (r_mean - 1.0).abs() < 0.05,
-            "R plane mean = {} should be ~1.0",
-            r_mean
-        );
-        assert!(
-            (g_mean - 128.0 / 255.0).abs() < 0.05,
-            "G plane mean = {} should be ~0.502",
-            g_mean
-        );
-        assert!(
-            (b_mean - 64.0 / 255.0).abs() < 0.05,
-            "B plane mean = {} should be ~0.251",
-            b_mean
-        );
-
-        // First-pixel direct check - catches HWC vs CHW transposition that
-        // aggregate means could mask on certain shuffle patterns.
-        assert!(
-            (pixels[0] - 1.0).abs() < 0.05,
-            "first R pixel = {} should be ~1.0",
-            pixels[0]
-        );
-        assert!(
-            (pixels[n] - 128.0 / 255.0).abs() < 0.05,
-            "first G pixel = {} should be ~0.502",
-            pixels[n]
-        );
-        assert!(
-            (pixels[2 * n] - 64.0 / 255.0).abs() < 0.05,
-            "first B pixel = {} should be ~0.251",
-            pixels[2 * n]
-        );
-    }
-
-    #[test]
-    fn decode_resize_to_chw_f32_rejects_invalid_bytes() {
+    fn multimodal_image_bytes_reports_invalid_input_before_model_lookup() {
         let garbage = b"not a real image file";
-        let result = decode_resize_to_chw_f32(garbage, 8, 8);
-        assert!(result.is_err(), "decoder should reject garbage bytes");
-        assert!(
-            result.unwrap_err().contains("image decode failed"),
-            "error should mention decode failure"
-        );
+        let mut result = crate::ffi::types::MultiModalEmbeddingResult::default();
+
+        let status =
+            multimodal_encode_image_from_bytes(garbage.as_ptr(), garbage.len(), 0, &mut result);
+
+        assert_eq!(status, -2, "undecodable bytes must be invalid input");
+        assert!(result.error);
+        assert!(result.data.is_null());
+        assert_eq!(result.length, 0);
     }
 
     #[test]
-    fn decode_resize_to_chw_f32_overflow_guard_on_huge_dims() {
-        let bytes = make_test_png(2, 2, 128, 128, 128);
-        let result = decode_resize_to_chw_f32(&bytes, u32::MAX, u32::MAX);
-        assert!(
-            result.is_err(),
-            "u32::MAX x u32::MAX dimensions should be rejected"
+    fn multimodal_image_bytes_rejects_truncated_png_before_model_lookup() {
+        let mut truncated = make_test_png(2, 2, [1, 2, 3]);
+        truncated.truncate(truncated.len() - 8);
+        let mut result = crate::ffi::types::MultiModalEmbeddingResult::default();
+
+        let status =
+            multimodal_encode_image_from_bytes(truncated.as_ptr(), truncated.len(), 0, &mut result);
+
+        assert_eq!(status, -2, "truncated PNG must be invalid input");
+        assert!(result.error);
+        assert!(result.data.is_null());
+    }
+
+    #[test]
+    fn multimodal_image_bytes_rejects_gif_and_webp_before_model_lookup() {
+        let inputs: [(&str, &[u8]); 2] = [
+            ("GIF", b"GIF89a\x01\x00\x01\x00"),
+            ("WebP", b"RIFF\x04\x00\x00\x00WEBP"),
+        ];
+
+        for (format, bytes) in inputs {
+            let mut result = crate::ffi::types::MultiModalEmbeddingResult::default();
+            let status =
+                multimodal_encode_image_from_bytes(bytes.as_ptr(), bytes.len(), 0, &mut result);
+
+            assert_eq!(status, -2, "{format} must be rejected as invalid input");
+            assert!(result.error);
+            assert!(result.data.is_null());
+        }
+    }
+
+    #[test]
+    fn multimodal_image_bytes_rejects_oversized_dimensions_before_model_lookup() {
+        let oversized = make_png_with_declared_dimensions(MAX_MULTIMODAL_IMAGE_DIMENSION + 1, 1);
+        let mut result = crate::ffi::types::MultiModalEmbeddingResult::default();
+
+        let status =
+            multimodal_encode_image_from_bytes(oversized.as_ptr(), oversized.len(), 0, &mut result);
+
+        assert_eq!(status, -2, "oversized dimensions must be invalid input");
+        assert!(result.error);
+        assert!(result.data.is_null());
+    }
+
+    #[test]
+    fn multimodal_image_bytes_rejects_oversized_pixel_area_before_model_lookup() {
+        let side = (MAX_MULTIMODAL_IMAGE_PIXELS as f64).sqrt() as u32 + 1;
+        assert!(side <= MAX_MULTIMODAL_IMAGE_DIMENSION);
+        let oversized = make_png_with_declared_dimensions(side, side);
+        let mut result = crate::ffi::types::MultiModalEmbeddingResult::default();
+
+        let status =
+            multimodal_encode_image_from_bytes(oversized.as_ptr(), oversized.len(), 0, &mut result);
+
+        assert_eq!(status, -2, "oversized pixel area must be invalid input");
+        assert!(result.error);
+        assert!(result.data.is_null());
+    }
+
+    #[test]
+    fn multimodal_image_bytes_rejects_oversized_encoded_input_before_reading_it() {
+        let one_byte = 0_u8;
+        let mut result = crate::ffi::types::MultiModalEmbeddingResult::default();
+
+        let status = multimodal_encode_image_from_bytes(
+            &one_byte,
+            MAX_MULTIMODAL_IMAGE_ENCODED_BYTES + 1,
+            0,
+            &mut result,
         );
+
+        assert_eq!(status, -2, "oversized encoded bytes must be invalid input");
+        assert!(result.error);
+        assert!(result.data.is_null());
+    }
+
+    #[test]
+    fn multimodal_image_bytes_reports_unavailable_model_as_internal() {
         assert!(
-            result.unwrap_err().contains("overflow"),
-            "error should mention overflow"
+            get_multimodal_refs().is_none(),
+            "this contract test requires no multimodal model fixture"
         );
+        let valid = make_test_png(1, 1, [1, 2, 3]);
+        let mut result = crate::ffi::types::MultiModalEmbeddingResult::default();
+
+        let status =
+            multimodal_encode_image_from_bytes(valid.as_ptr(), valid.len(), 0, &mut result);
+
+        assert_eq!(status, -1, "an unavailable model is an internal failure");
+        assert!(result.error);
+        assert!(result.data.is_null());
+    }
+
+    #[test]
+    fn multimodal_image_bytes_reports_empty_input_separately_from_internal_errors() {
+        let mut result = crate::ffi::types::MultiModalEmbeddingResult::default();
+
+        let empty_status = multimodal_encode_image_from_bytes(std::ptr::null(), 0, 0, &mut result);
+        let null_result_status =
+            multimodal_encode_image_from_bytes(std::ptr::null(), 0, 0, std::ptr::null_mut());
+
+        assert_eq!(empty_status, -2, "empty image bytes are invalid input");
+        assert_eq!(null_result_status, -1, "a null output pointer is internal");
     }
 }

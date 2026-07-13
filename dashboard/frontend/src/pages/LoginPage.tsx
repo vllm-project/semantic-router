@@ -1,6 +1,7 @@
 import React, { FormEvent, useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { COOKIE_AUTH_RESPONSE_HEADERS } from "../contexts/authSession";
 import { useSetup } from "../contexts/SetupContext";
 import ColorBends from "../components/ColorBends";
 import {
@@ -120,7 +121,7 @@ const BOOTSTRAP_STEPS: BootstrapStep[] = [
 
 const LoginPage: React.FC = () => {
   const { setupState, isLoading: setupLoading, refreshSetupState } = useSetup();
-  const { isAuthenticated, isLoading, login, setSession } = useAuth();
+  const { isAuthenticated, isLoading, login, establishSession } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as LocationState | null)?.from ?? null;
@@ -237,7 +238,13 @@ const LoginPage: React.FC = () => {
     try {
       const response = await fetch("/api/auth/bootstrap/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        cache: "no-store",
+        redirect: "error",
+        headers: {
+          "Content-Type": "application/json",
+          ...COOKIE_AUTH_RESPONSE_HEADERS,
+        },
         body: JSON.stringify({
           email: bootstrapForm.email.trim(),
           password: bootstrapForm.password,
@@ -260,10 +267,9 @@ const LoginPage: React.FC = () => {
         throw new Error(message || `Request failed: ${response.status}`);
       }
       const payload = (await response.json()) as {
-        token: string;
         user?: { id: string; email: string; name: string; role?: string };
       };
-      setSession(payload.token, payload.user ?? null);
+      await establishSession(payload.user ?? null);
       await navigateAfterAuth(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Register failed.");

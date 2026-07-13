@@ -4,6 +4,7 @@ package apiserver
 
 import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelinventory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
@@ -20,6 +21,7 @@ type ClassificationAPIServer struct {
 	memoryStore           memory.Store
 	knowledgeBaseMapCache *knowledgeBaseMapCache
 	startupStateLoader    func() *startupstatus.State
+	embeddingAdmission    *embedding.ProcessAdmission
 }
 
 type (

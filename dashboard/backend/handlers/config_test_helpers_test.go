@@ -1,10 +1,36 @@
 package handlers
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+func useMissingManagedDockerCLI(t *testing.T) {
+	t.Helper()
+	useDockerInspectFailureCLI(t, "Error: No such object: test-managed-container")
+}
+
+func useUnknownManagedDockerCLI(t *testing.T) {
+	t.Helper()
+	useDockerInspectFailureCLI(t, "Cannot connect to the Docker daemon")
+}
+
+func useDockerInspectFailureCLI(t *testing.T, inspectError string) {
+	t.Helper()
+	previous := managedContainerStatusProbe
+	managedContainerStatusProbe = func(context.Context, string) ([]byte, error) {
+		return nil, &dockerStatusProbeError{
+			err:    errors.New("docker inspect failed"),
+			stderr: []byte(inspectError),
+		}
+	}
+	t.Cleanup(func() {
+		managedContainerStatusProbe = previous
+	})
+}
 
 // createValidTestConfig creates a minimal canonical v0.3 config file for testing.
 func createValidTestConfig(t *testing.T, dir string) string {

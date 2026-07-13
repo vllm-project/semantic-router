@@ -86,7 +86,14 @@ def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
     )
 
     assert rc == 0
+    router_cmd = _find_container_run_cmd(captured, "vllm-sr-router-container")
+    envoy_cmd = _find_container_run_cmd(captured, "vllm-sr-envoy-container")
     dashboard_cmd = _find_container_run_cmd(captured, "vllm-sr-dashboard-container")
+    assert "127.0.0.1:50051:50051" in router_cmd
+    assert "127.0.0.1:9190:9190" in router_cmd
+    assert "127.0.0.1:8080:8080" in router_cmd
+    assert "127.0.0.1:8700:8700" in dashboard_cmd
+    assert "0.0.0.0:8899:8899" in envoy_cmd
     assert "TARGET_ROUTER_API_URL=http://vllm-sr-router-container:8080" in dashboard_cmd
     assert (
         "TARGET_ROUTER_METRICS_URL=http://vllm-sr-router-container:9190/metrics"
@@ -625,11 +632,11 @@ def test_container_start_vllm_sr_applies_custom_stack_name_and_port_offset(
         captured, "audit-a-vllm-sr-dashboard-container"
     )
     assert "OPENCLAW_DEFAULT_NETWORK_MODE=audit-a-vllm-sr-network" in dashboard_cmd
-    assert "9099:8899" in envoy_cmd
-    assert "50251:50051" in router_cmd
-    assert "9390:9190" in router_cmd
-    assert "8900:8700" in dashboard_cmd
-    assert "8280:8080" in router_cmd
+    assert "0.0.0.0:9099:8899" in envoy_cmd
+    assert "127.0.0.1:50251:50051" in router_cmd
+    assert "127.0.0.1:9390:9190" in router_cmd
+    assert "127.0.0.1:8900:8700" in dashboard_cmd
+    assert "127.0.0.1:8280:8080" in router_cmd
 
 
 def test_container_start_vllm_sr_propagates_stack_name_to_dashboard(

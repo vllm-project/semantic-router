@@ -1,10 +1,10 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -105,11 +105,20 @@ func loadRouterRuntimeState(runtimePath string) (*startupstatus.State, error) {
 	return startupstatus.Load(fallbackPath)
 }
 
-func getContainerLogsTailForContainer(containerName string, lines int) string {
+func getContainerLogsTailForContainerWithContext(parent context.Context, containerName string, lines int) string {
 	// #nosec G204 -- containerName is repository-managed and lines is converted from int.
 	tailArg := strconv.Itoa(lines)
-	cmd := exec.Command("docker", "logs", "--tail", tailArg, containerName)
-	output, err := cmd.CombinedOutput()
+	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
+	defer cancel()
+	output, err := runBoundedCommand(
+		ctx,
+		"docker",
+		4*1024*1024,
+		"logs",
+		"--tail",
+		tailArg,
+		containerName,
+	)
 	if err != nil {
 		return ""
 	}

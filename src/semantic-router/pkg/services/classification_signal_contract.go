@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
@@ -37,6 +38,12 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 		classification.ConversationFacts{},
 		input.imageURL,
 	)
+	if evaluationErr := signals.EvaluationError(); evaluationErr != nil {
+		if errors.Is(evaluationErr, classification.ErrInvalidImageSignalInput) {
+			return nil, ErrInvalidImageInput
+		}
+		return nil, evaluationErr
+	}
 
 	var decisionResult *decision.DecisionResult
 	var traces []decision.DecisionTrace

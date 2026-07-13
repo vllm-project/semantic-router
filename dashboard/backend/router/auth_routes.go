@@ -82,6 +82,10 @@ func registerAuthMethodRoute(
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Pragma", "no-cache")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
+		if r.URL.Path != path && r.URL.Path != path+"/" {
+			http.NotFound(w, r)
+			return
+		}
 		if r.Method != method {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return

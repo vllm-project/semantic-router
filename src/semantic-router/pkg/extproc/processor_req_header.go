@@ -26,7 +26,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	span := startRequestHeaderSpan(v, ctx)
 	defer span.End()
 
-	method, path, looperAuthenticationFailed := captureRequestHeaders(
+	method, path, looperAuthenticationFailed, clientRoutingHeaderRemoved := captureRequestHeaders(
 		v,
 		ctx,
 		r.looperAuthenticator,
@@ -56,7 +56,10 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// also short-circuit in the no-op path.
 	if ctx.SkipProcessing {
 		detectStreamingExpectation(ctx)
-		return newContinueRequestHeadersResponse(buildInternalHeaderRemovalMutation()), nil
+		return newContinueRequestHeadersResponse(
+			buildRequestHeaderSanitizationMutation(),
+			clientRoutingHeaderRemoved,
+		), nil
 	}
 
 	if replayResp := r.handleRouterReplayAPI(method, path); replayResp != nil {
@@ -73,7 +76,10 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if validationResp := r.validateRequestHeaders(method, path); validationResp != nil {
 		return validationResp, nil
 	}
-	return newContinueRequestHeadersResponse(buildIdentityEncodingRequestMutation()), nil
+	return newContinueRequestHeadersResponse(
+		buildIdentityEncodingRequestMutation(),
+		clientRoutingHeaderRemoved,
+	), nil
 }
 
 func startRequestHeaderSpan(
@@ -98,12 +104,21 @@ func captureRequestHeaders(
 	ctx *RequestContext,
 	looperAuthenticator *looper.RequestAuthenticator,
 	skipProcessingGateEnabled bool,
-) (string, string, bool) {
+) (string, string, bool, bool) {
 	requestHeaders := v.RequestHeaders.Headers
 	var looperMetadata looperRequestMetadata
+	clientRoutingHeaderRemoved := false
 	for _, header := range requestHeaders.Headers {
-		headerValue := extractHeaderValue(header)
 		lowerKey := strings.ToLower(header.Key)
+		// x-selected-model is an internal output of the router, never client
+		// input. Drop every case variant and duplicate before generic context is
+		// populated; the response mutation removes it from Envoy's live request.
+		if isClientReservedRoutingHeader(lowerKey) {
+			clientRoutingHeaderRemoved = true
+			continue
+		}
+
+		headerValue := extractHeaderValue(header)
 		// Internal Looper metadata is consumed only at this trust boundary. Do
 		// not retain it in generic request headers, where provider, replay, or
 		// diagnostic code could accidentally reuse or expose it.
@@ -143,7 +158,7 @@ func captureRequestHeaders(
 		"skip_processing": ctx.SkipProcessing,
 	})
 
-	return method, path, looperAuthenticationFailed
+	return method, path, looperAuthenticationFailed, clientRoutingHeaderRemoved
 }
 
 func setRequestHeaderSpanAttributes(
@@ -201,7 +216,7 @@ func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
 				Value: "identity",
 			},
 		}},
-		RemoveHeaders: append([]string(nil), looperInternalRequestHeaders...),
+		RemoveHeaders: requestHeaderSanitizationRemoveList(),
 	}
 }
 
@@ -307,17 +322,21 @@ func capturePassThroughHeaders(ctx *RequestContext) {
 	}
 }
 
-func newContinueRequestHeadersResponse(headerMutation ...*ext_proc.HeaderMutation) *ext_proc.ProcessingResponse {
-	var mutation *ext_proc.HeaderMutation
-	if len(headerMutation) > 0 {
-		mutation = headerMutation[0]
-	}
+func newContinueRequestHeadersResponse(
+	mutation *ext_proc.HeaderMutation,
+	clearRouteCache bool,
+) *ext_proc.ProcessingResponse {
 	return &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestHeaders{
 			RequestHeaders: &ext_proc.HeadersResponse{
 				Response: &ext_proc.CommonResponse{
-					Status:         ext_proc.CommonResponse_CONTINUE,
-					HeaderMutation: mutation,
+					Status: ext_proc.CommonResponse_CONTINUE,
+					// Removing a client-supplied routing header is ineffective if
+					// Envoy retains the route selected from that header. When capture
+					// observed one, this clear is mandatory for both normal and
+					// skip-processing paths.
+					ClearRouteCache: clearRouteCache,
+					HeaderMutation:  mutation,
 				},
 			},
 		},

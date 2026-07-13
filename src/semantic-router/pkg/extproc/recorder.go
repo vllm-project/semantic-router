@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"time"
 
-	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -80,16 +79,6 @@ func (r *OpenAIRouter) trackVSRDecision(ctx *RequestContext, categoryName string
 		ctx.VSRReasoningMode = "on"
 	} else {
 		ctx.VSRReasoningMode = "off"
-	}
-}
-
-// setClearRouteCache sets the ClearRouteCache flag on the response
-func (r *OpenAIRouter) setClearRouteCache(response *ext_proc.ProcessingResponse) {
-	if response.GetRequestBody() != nil && response.GetRequestBody().GetResponse() != nil {
-		response.GetRequestBody().GetResponse().ClearRouteCache = true
-		logging.ComponentDebugEvent("extproc", "route_cache_clear_enabled", map[string]interface{}{
-			"feature": "clear_route_cache",
-		})
 	}
 }
 

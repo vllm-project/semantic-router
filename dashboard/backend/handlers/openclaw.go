@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -410,36 +411,36 @@ func (h *OpenClawHandler) ensureImageAvailable(image string) error {
 	return fmt.Errorf("failed to pull OpenClaw image %q: %s", image, trimmed)
 }
 
-func (h *OpenClawHandler) containerCommand(args ...string) (*exec.Cmd, error) {
+func (h *OpenClawHandler) runContainerCommand(args ...string) (containerCommandOutput, error) {
 	runtimeBin, err := detectContainerRuntime()
 	if err != nil {
-		return nil, err
+		return containerCommandOutput{}, err
 	}
-	return exec.Command(runtimeBin, args...), nil // #nosec G204
+	timeout := 30 * time.Second
+	if len(args) > 0 && args[0] == "pull" {
+		timeout = 10 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return runBoundedCommandSplit(ctx, runtimeBin, 8*1024*1024, args...)
 }
 
 func (h *OpenClawHandler) containerOutput(args ...string) ([]byte, error) {
-	cmd, err := h.containerCommand(args...)
-	if err != nil {
-		return nil, err
-	}
-	return cmd.Output()
+	output, err := h.runContainerCommand(args...)
+	return output.stdout, err
 }
 
 func (h *OpenClawHandler) containerCombinedOutput(args ...string) ([]byte, error) {
-	cmd, err := h.containerCommand(args...)
-	if err != nil {
-		return nil, err
-	}
-	return cmd.CombinedOutput()
+	output, err := h.runContainerCommand(args...)
+	combined := make([]byte, 0, len(output.stdout)+len(output.stderr))
+	combined = append(combined, output.stdout...)
+	combined = append(combined, output.stderr...)
+	return combined, err
 }
 
 func (h *OpenClawHandler) containerRun(args ...string) error {
-	cmd, err := h.containerCommand(args...)
-	if err != nil {
-		return err
-	}
-	return cmd.Run()
+	_, err := h.runContainerCommand(args...)
+	return err
 }
 
 // containerDataDir returns the per-container data directory.

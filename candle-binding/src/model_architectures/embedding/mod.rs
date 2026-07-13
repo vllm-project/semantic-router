@@ -27,6 +27,9 @@
 // Pooling module - shared pooling implementations
 pub mod pooling;
 
+// Shared fail-closed tokenizer contract for embedding paths.
+pub(crate) mod tokenizer_contract;
+
 // Qwen3-Embedding model
 pub mod qwen3_embedding;
 

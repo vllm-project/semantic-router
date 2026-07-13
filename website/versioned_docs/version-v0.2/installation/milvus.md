@@ -258,8 +258,8 @@ EOF
 ```bash
 # Auth credentials
 kubectl create secret generic milvus-auth -n vllm-semantic-router-system \
-  --from-literal=username="YOUR_USERNAME" \
-  --from-literal=password="YOUR_PASSWORD"
+  --from-literal=username="${MILVUS_AUTH_USER:?set MILVUS_AUTH_USER}" \
+  --from-literal=password="${MILVUS_AUTH_SECRET:?set MILVUS_AUTH_SECRET}"
 
 # TLS certificates
 kubectl create secret generic milvus-tls -n vllm-semantic-router-system \

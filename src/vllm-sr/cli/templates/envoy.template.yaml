@@ -157,6 +157,9 @@ static_resources:
                 response_header_mode: "SEND"
                 request_body_mode: "BUFFERED"
                 response_body_mode: "BUFFERED"
+              # Routing depends on headers emitted by ExtProc. Keep this
+              # explicit so generated configs cannot regress to fail-open.
+              failure_mode_allow: false
               message_timeout: {{ listener.timeout | default('1200s') }}
           - name: envoy.filters.http.router
             typed_config:

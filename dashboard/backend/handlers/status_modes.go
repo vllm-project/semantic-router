@@ -1,14 +1,17 @@
 package handlers
 
-import "path/filepath"
+import (
+	"context"
+	"path/filepath"
+)
 
-func detectSystemStatus(routerAPIURL, configDir string) SystemStatus {
+func detectSystemStatusWithContext(ctx context.Context, routerAPIURL, configDir string) SystemStatus {
 	runtimePath := filepath.Join(configDir, ".vllm-sr", "router-runtime.json")
 	if isRunningInContainer() {
-		return collectInContainerStatus(runtimePath, routerAPIURL)
+		return collectInContainerStatusWithContext(ctx, runtimePath, routerAPIURL)
 	}
 
-	return collectHostStatus(runtimePath, routerAPIURL)
+	return collectHostStatusWithContext(ctx, runtimePath, routerAPIURL)
 }
 
 func baseSystemStatus() SystemStatus {

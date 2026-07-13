@@ -111,7 +111,6 @@ func TestConcurrentManagerMutationsKeepOneActiveManager(t *testing.T) {
 			var ready sync.WaitGroup
 			ready.Add(2)
 			for _, user := range []*User{first, second} {
-				user := user
 				go func() {
 					ready.Done()
 					<-start

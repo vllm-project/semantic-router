@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 
 import EmbeddedServicePage from '../components/EmbeddedServicePage'
 import type { ServiceConfig } from '../components/ServiceNotConfigured'
-import { withAuthQuery } from '../utils/authFetch'
 
 const GRAFANA_SERVICE: ServiceConfig = {
   name: 'Grafana',
@@ -30,8 +29,7 @@ export default function MonitoringPage() {
   }, [])
 
   const src = useMemo(
-    () =>
-      withAuthQuery(`/embedded/grafana/goto/llm-router-metrics?orgId=1&theme=${theme}&refresh=30s`),
+    () => `/embedded/grafana/goto/llm-router-metrics?orgId=1&theme=${theme}&refresh=30s`,
     [theme],
   )
 

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -408,6 +407,7 @@ global:
 }
 
 func TestSetupActivateHandler(t *testing.T) {
+	useMissingManagedDockerCLI(t)
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
 
@@ -462,6 +462,39 @@ func TestSetupActivateHandler(t *testing.T) {
 
 	if info, err := os.Stat(filepath.Join(tempDir, ".vllm-sr")); err != nil || !info.IsDir() {
 		t.Fatalf(".vllm-sr output directory should exist after activation: %v", err)
+	}
+}
+
+func TestSetupActivateHandlerRestoresBootstrapConfigWhenRuntimeProbeFails(t *testing.T) {
+	useUnknownManagedDockerCLI(t)
+	tempDir := t.TempDir()
+	configPath := createBootstrapSetupConfig(t, tempDir)
+	before, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read bootstrap config: %v", err)
+	}
+
+	body, err := json.Marshal(SetupConfigRequest{Config: mustJSONRaw(t, createValidSetupPatch())})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	SetupActivateHandler(configPath, false, tempDir)(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500: %s", w.Code, w.Body.String())
+	}
+	after, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read restored config: %v", err)
+	}
+	if !bytes.Equal(after, before) {
+		t.Fatalf("bootstrap config changed after failed activation\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+	if !strings.Contains(w.Body.String(), "failed to restore previous config") {
+		t.Fatalf("runtime rollback uncertainty was not surfaced: %s", w.Body.String())
 	}
 }
 
@@ -545,11 +578,7 @@ func TestSetupActivateHandlerRefreshesSplitEnvoyConfigBeforeStartingCreatedConta
 
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", runtimeConfigPath)
 	t.Setenv("VLLM_SR_ENVOY_CONFIG_PATH", envoyConfigPath)
-	pythonBinary := "python3"
-	if _, err := exec.LookPath(pythonBinary); err != nil {
-		pythonBinary = "python"
-	}
-	t.Setenv("VLLM_SR_PYTHON_BIN", pythonBinary)
+	t.Setenv("VLLM_SR_PYTHON_BIN", testRuntimeSyncPythonBinary(t))
 	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)
@@ -590,5 +619,92 @@ func TestSetupActivateHandlerRefreshesSplitEnvoyConfigBeforeStartingCreatedConta
 	}
 	if !strings.Contains(envoyConfigText, "test_model_cluster") {
 		t.Fatalf("expected refreshed envoy config to include activated model cluster, got:\n%s", envoyConfigText)
+	}
+}
+
+func TestSetupActivateHandlerRestoresPreviousRuntimeGenerationAfterRestartFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createBootstrapSetupConfig(t, tempDir)
+	before, readErr := os.ReadFile(configPath)
+	if readErr != nil {
+		t.Fatalf("read bootstrap config: %v", readErr)
+	}
+	fakeDocker := writeFakeLifecycleDockerCLI(t)
+
+	routerContainer := "lane-a-vllm-sr-router-container"
+	envoyContainer := "lane-a-vllm-sr-envoy-container"
+	t.Setenv("PATH", filepath.Dir(fakeDocker.path)+":"+os.Getenv("PATH"))
+	t.Setenv(routerContainerNameEnv, routerContainer)
+	t.Setenv(envoyContainerNameEnv, envoyContainer)
+	t.Setenv(dashboardContainerNameEnv, "lane-a-vllm-sr-dashboard-container")
+	t.Setenv("TEST_DOCKER_LOG_FILE", fakeDocker.logPath)
+	t.Setenv("TEST_ROUTER_CONTAINER", routerContainer)
+	t.Setenv("TEST_ROUTER_STATUS_FILE", fakeDocker.routerStatusPath)
+	t.Setenv("TEST_ENVOY_CONTAINER", envoyContainer)
+	t.Setenv("TEST_ENVOY_STATUS_FILE", fakeDocker.envoyStatusPath)
+	t.Setenv("TEST_DOCKER_FAIL_CONTAINER", envoyContainer)
+	t.Setenv("TEST_DOCKER_FAIL_MODE", "once")
+	t.Setenv("TEST_DOCKER_FAIL_MARKER", filepath.Join(tempDir, "envoy-failed-once"))
+
+	if err := os.WriteFile(fakeDocker.routerStatusPath, []byte("created\n"), 0o644); err != nil {
+		t.Fatalf("seed router status: %v", err)
+	}
+	if err := os.WriteFile(fakeDocker.envoyStatusPath, []byte("created\n"), 0o644); err != nil {
+		t.Fatalf("seed Envoy status: %v", err)
+	}
+
+	runtimeDir := filepath.Join(tempDir, ".vllm-sr")
+	if err := os.MkdirAll(runtimeDir, 0o755); err != nil {
+		t.Fatalf("create runtime dir: %v", err)
+	}
+	runtimeConfigPath := filepath.Join(runtimeDir, "runtime-config.yaml")
+	envoyConfigPath := filepath.Join(runtimeDir, "envoy.yaml")
+	if err := os.WriteFile(envoyConfigPath, []byte("# previous setup Envoy generation\n"), 0o644); err != nil {
+		t.Fatalf("seed previous Envoy config: %v", err)
+	}
+	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", runtimeConfigPath)
+	t.Setenv("VLLM_SR_ENVOY_CONFIG_PATH", envoyConfigPath)
+	t.Setenv("VLLM_SR_PYTHON_BIN", testRuntimeSyncPythonBinary(t))
+	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	t.Setenv("VLLM_SR_CLI_PATH", filepath.Join(repoRoot, "src", "vllm-sr"))
+
+	body, err := json.Marshal(SetupConfigRequest{Config: mustJSONRaw(t, createValidSetupPatch())})
+	if err != nil {
+		t.Fatalf("marshal setup request: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	SetupActivateHandler(configPath, false, tempDir)(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500 after injected restart failure: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "previous config restored") {
+		t.Fatalf("successful compensation was not reported: %s", w.Body.String())
+	}
+	after, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read restored source config: %v", err)
+	}
+	if !bytes.Equal(after, before) {
+		t.Fatalf("source config was not restored\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+	envoyData, err := os.ReadFile(envoyConfigPath)
+	if err != nil {
+		t.Fatalf("read compensated Envoy config: %v", err)
+	}
+	if strings.Contains(string(envoyData), "test_model_cluster") || strings.Contains(string(envoyData), "host.docker.internal") {
+		t.Fatalf("Envoy config still contains candidate generation:\n%s", envoyData)
+	}
+	logData, err := os.ReadFile(fakeDocker.logPath)
+	if err != nil {
+		t.Fatalf("read lifecycle log: %v", err)
+	}
+	logText := string(logData)
+	if !strings.Contains(logText, "restart "+routerContainer) || strings.Count(logText, "start "+envoyContainer) < 2 {
+		t.Fatalf("previous generation was not restarted after compensation: %s", logText)
 	}
 }

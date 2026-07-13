@@ -284,6 +284,9 @@ config:
     model_catalog:
       kbs: []
     router:
+      # The selected-model trust boundary must remain effective when optional
+      # auxiliary route-cache invalidation is disabled.
+      clear_route_cache: false
       model_selection:
         enabled: true
         ml:

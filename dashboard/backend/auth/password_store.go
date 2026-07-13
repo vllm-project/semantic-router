@@ -158,9 +158,9 @@ func (s *Store) updatePasswordAndRevokeSessions(
 	userID string,
 	newHash string,
 ) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
+	tx, beginErr := s.db.BeginTx(ctx, nil)
+	if beginErr != nil {
+		return beginErr
 	}
 	defer func() { _ = tx.Rollback() }()
 	if err := requireMutationAuthorizationTx(ctx, tx, authorization); err != nil {
@@ -201,19 +201,6 @@ func revokeUserSessionsTx(ctx context.Context, tx *sql.Tx, userID string, revoke
 		 WHERE user_id = ?`,
 		revokedAt,
 		userID,
-	)
-	return err
-}
-
-func insertIssuedSessionTx(ctx context.Context, tx *sql.Tx, userID string, issued *issuedToken) error {
-	_, err := tx.ExecContext(
-		ctx,
-		`INSERT INTO auth_sessions(id, user_id, issued_at, expires_at)
-		 VALUES (?, ?, ?, ?)`,
-		issued.sessionID,
-		userID,
-		issued.issuedAt.Unix(),
-		issued.expiresAt.Unix(),
 	)
 	return err
 }

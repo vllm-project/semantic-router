@@ -11,7 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/jsonunicode"
 )
 
 const maxAuthJSONBodyBytes int64 = 16 * 1024
@@ -38,7 +39,7 @@ func decodeAuthJSON(w http.ResponseWriter, r *http.Request, destination any) err
 		}
 		return errAuthInvalidJSON
 	}
-	if !validAuthJSONUnicode(rawBody) {
+	if !jsonunicode.Valid(rawBody) {
 		return errAuthInvalidUnicode
 	}
 
@@ -59,82 +60,6 @@ func decodeAuthJSON(w http.ResponseWriter, r *http.Request, destination any) err
 		return errAuthInvalidJSON
 	}
 	return nil
-}
-
-// validAuthJSONUnicode closes two lossy behaviors in encoding/json: invalid
-// UTF-8 bytes and unpaired UTF-16 surrogate escapes are otherwise replaced by
-// U+FFFD without an error. Distinct raw passwords could then collapse to the
-// same normalized credential before hashing.
-func validAuthJSONUnicode(raw []byte) bool {
-	if !utf8.Valid(raw) {
-		return false
-	}
-
-	inString := false
-	for i := 0; i < len(raw); {
-		if !inString {
-			if raw[i] == '"' {
-				inString = true
-			}
-			i++
-			continue
-		}
-
-		switch raw[i] {
-		case '"':
-			inString = false
-			i++
-		case '\\':
-			if i+1 >= len(raw) {
-				return false
-			}
-			if raw[i+1] != 'u' {
-				i += 2
-				continue
-			}
-			codeUnit, ok := decodeJSONUnicodeEscape(raw, i)
-			if !ok {
-				return false
-			}
-			switch {
-			case codeUnit >= 0xD800 && codeUnit <= 0xDBFF:
-				low, ok := decodeJSONUnicodeEscape(raw, i+6)
-				if !ok || low < 0xDC00 || low > 0xDFFF {
-					return false
-				}
-				i += 12
-			case codeUnit >= 0xDC00 && codeUnit <= 0xDFFF:
-				return false
-			default:
-				i += 6
-			}
-		default:
-			i++
-		}
-	}
-	return true
-}
-
-func decodeJSONUnicodeEscape(raw []byte, slashIndex int) (uint16, bool) {
-	if slashIndex < 0 || slashIndex+6 > len(raw) ||
-		raw[slashIndex] != '\\' || raw[slashIndex+1] != 'u' {
-		return 0, false
-	}
-	var value uint16
-	for _, digit := range raw[slashIndex+2 : slashIndex+6] {
-		value <<= 4
-		switch {
-		case digit >= '0' && digit <= '9':
-			value |= uint16(digit - '0')
-		case digit >= 'a' && digit <= 'f':
-			value |= uint16(digit-'a') + 10
-		case digit >= 'A' && digit <= 'F':
-			value |= uint16(digit-'A') + 10
-		default:
-			return 0, false
-		}
-	}
-	return value, true
 }
 
 func writeAuthDecodeError(w http.ResponseWriter, err error) {

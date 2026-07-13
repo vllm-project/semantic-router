@@ -30,6 +30,16 @@ from cli.consts import (
     CONTAINER_RUNTIME_ENV,
     SUPPORTED_CONTAINER_RUNTIMES,
 )
+from cli.dashboard_auth_runtime import (
+    DASHBOARD_ADMIN_EMAIL_ENV,
+    DASHBOARD_ADMIN_NAME_ENV,
+    DASHBOARD_ADMIN_PASSWORD_ENV,
+    DASHBOARD_ALLOW_OPEN_BOOTSTRAP_ENV,
+    DASHBOARD_AUTH_ENV_NAMES,
+    DASHBOARD_JWT_EXPIRY_HOURS_ENV,
+    DASHBOARD_JWT_SECRET_ENV,
+    DASHBOARD_PASSWORD_BLOCKLIST_PATH_ENV,
+)
 from cli.runtime_stack import resolve_runtime_stack
 from cli.service_defaults import (
     inject_local_service_runtime_defaults,
@@ -54,6 +64,13 @@ PASSTHROUGH_ENV_RULES = (
     ("OPENAI_API_KEY", True),
     ("OPENROUTER_API_KEY", True),
     (LOOPER_SHARED_SECRET_ENV, True),
+    (DASHBOARD_JWT_SECRET_ENV, True),
+    (DASHBOARD_JWT_EXPIRY_HOURS_ENV, False),
+    (DASHBOARD_ADMIN_EMAIL_ENV, False),
+    (DASHBOARD_ADMIN_PASSWORD_ENV, True),
+    (DASHBOARD_ADMIN_NAME_ENV, False),
+    (DASHBOARD_PASSWORD_BLOCKLIST_PATH_ENV, False),
+    (DASHBOARD_ALLOW_OPEN_BOOTSTRAP_ENV, False),
     ("OPENCLAW_BASE_IMAGE", False),
     ("SR_LOG_LEVEL", False),
     ("SR_LOG_ENCODING", False),
@@ -98,9 +115,13 @@ def validate_setup_mode_flags(setup_mode: bool, minimal: bool, readonly: bool) -
         )
 
 
-def append_passthrough_env_vars(env_vars: dict[str, str]) -> None:
+def append_passthrough_env_vars(
+    env_vars: dict[str, str], *, include_dashboard_auth: bool = True
+) -> None:
     """Pass selected host environment variables into the container runtime."""
     for name, masked in PASSTHROUGH_ENV_RULES:
+        if name in DASHBOARD_AUTH_ENV_NAMES and not include_dashboard_auth:
+            continue
         value = os.environ.get(name)
         if value is None:
             continue

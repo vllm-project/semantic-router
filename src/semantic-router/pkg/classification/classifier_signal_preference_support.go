@@ -43,6 +43,9 @@ func (c *Classifier) evaluatePreferenceSignal(results *SignalResults, mu *sync.M
 			return
 		}
 		logging.Errorf("preference rule evaluation failed: %v", err)
+		mu.Lock()
+		results.recordTextEvaluationError(err)
+		mu.Unlock()
 		return
 	}
 	if preferenceResult == nil || preferenceName == "" || !c.hasConfiguredPreferenceRule(preferenceName) {

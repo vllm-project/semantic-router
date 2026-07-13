@@ -9,6 +9,7 @@ import (
 
 const minimumJWTSecretBytes = 32
 
+// #nosec G101 -- this is public operator guidance, not a credential.
 const jwtSecretGenerationAdvice = "use a CSPRNG, for example: openssl rand -base64 32"
 
 func validateConfiguredJWTSecret(secret string) error {

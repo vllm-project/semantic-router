@@ -103,14 +103,14 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 ) (requestDecisionState, *ext_proc.ProcessingResponse) {
 	populatePinnedSessionFromHeaders(ctx)
 	history := signalConversationHistoryFromFastExtract(fast)
-	decisionName, _, reasoningDecision, selectedModel, authzErr := r.performDecisionEvaluation(
+	decisionName, _, reasoningDecision, selectedModel, evaluationErr := r.performDecisionEvaluation(
 		originalModel,
 		history,
 		ctx,
 	)
-	if authzErr != nil {
-		logging.Errorf("[Request Body] Authz evaluation failed: %v", authzErr)
-		return requestDecisionState{}, r.createErrorResponse(403, authzErr.Error())
+	if evaluationErr != nil {
+		logging.Errorf("[Request Body] signal evaluation failed: %v", evaluationErr)
+		return requestDecisionState{}, r.classificationEvaluationErrorResponse(evaluationErr)
 	}
 
 	metrics.RecordModelRequest(selectedModel)

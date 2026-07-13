@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -922,6 +923,78 @@ func TestErrorHandling(t *testing.T) {
 		}
 		if len(embedding) == 0 {
 			t.Error("Empty string should still produce embedding")
+		}
+	})
+
+	t.Run("MultiModalInvalidImageInputClassification", func(t *testing.T) {
+		tests := []struct {
+			name string
+			call func() error
+		}{
+			{
+				name: "nil bytes",
+				call: func() error {
+					_, err := MultiModalEncodeImageFromBytes(nil, 0)
+					return err
+				},
+			},
+			{
+				name: "empty bytes",
+				call: func() error {
+					_, err := MultiModalEncodeImageFromBytes([]byte{}, 0)
+					return err
+				},
+			},
+			{
+				name: "empty base64",
+				call: func() error {
+					_, err := MultiModalEncodeImageFromBase64("", 0)
+					return err
+				},
+			},
+			{
+				name: "malformed base64",
+				call: func() error {
+					_, err := MultiModalEncodeImageFromBase64("not-valid-base64!!!", 0)
+					return err
+				},
+			},
+			{
+				name: "undecodable raw bytes",
+				call: func() error {
+					_, err := MultiModalEncodeImageFromBytes([]byte("not an image"), 0)
+					return err
+				},
+			},
+			{
+				name: "oversized raw bytes",
+				call: func() error {
+					_, err := MultiModalEncodeImageFromBytes(make([]byte, MaxMultiModalImageEncodedBytes+1), 0)
+					return err
+				},
+			},
+			{
+				name: "oversized decoded base64",
+				call: func() error {
+					payload := base64.StdEncoding.EncodeToString(make([]byte, MaxMultiModalImageEncodedBytes+1))
+					_, err := MultiModalEncodeImageFromBase64(payload, 0)
+					return err
+				},
+			},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				err := tc.call()
+				if !errors.Is(err, ErrInvalidImageInput) {
+					t.Fatalf("expected ErrInvalidImageInput, got %v", err)
+				}
+			})
+		}
+
+		internalErr := multiModalImageStatusError(-1)
+		if errors.Is(internalErr, ErrInvalidImageInput) {
+			t.Fatalf("internal status must not wrap ErrInvalidImageInput: %v", internalErr)
 		}
 	})
 }

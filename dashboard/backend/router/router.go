@@ -91,7 +91,7 @@ func Setup(cfg *config.Config) (*Server, error) {
 	// Static frontend must be registered last.
 	mux.Handle("/", handlers.StaticFileServer(cfg.StaticDir))
 	return &Server{
-		Handler:    wrapWithAuth(mux, authSvc),
+		Handler:    withBrowserSecurityHeaders(wrapWithAuth(mux, authSvc)),
 		auth:       authSvc,
 		workflow:   wf,
 		projection: cp,

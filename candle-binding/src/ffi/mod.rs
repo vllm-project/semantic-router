@@ -7,6 +7,7 @@ pub mod classify; //  classification functions
 pub mod embedding; //  embedding functions
 pub mod generative_classifier; // Qwen3 LoRA generative classifier
 pub mod generative_guard; // Qwen3Guard safety classifier
+mod image_input; // bounded JPEG/PNG decoding for multimodal embeddings
 pub mod init; //  initialization functions
 pub mod memory; //  memory management functions
 pub mod mlp; // MLP selector for model selection (GPU-accelerated)

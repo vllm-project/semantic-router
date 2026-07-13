@@ -1,39 +1,16 @@
-const STORAGE_KEY = 'vsr_auth_token'
-const COOKIE_NAME = 'vsr_session'
-const COOKIE_PATH = 'Path=/'
-const COOKIE_SAME_SITE = 'SameSite=Lax'
-const AUTH_QUERY_PARAM = 'authToken'
+const LEGACY_STORAGE_KEY = ['vsr', 'auth', 'token'].join('_')
 const UNAUTHORIZED_EVENT = 'vsr-auth-unauthorized'
-const MAX_AUTH_TOKEN_LENGTH = 8192
-const UNSAFE_AUTH_TOKEN_CHARS = /[\s;]/
 
 type WrappedFetch = typeof window.fetch & {
-  __vsrAuthWrapped?: boolean
-}
-
-type WrappedWebSocket = typeof window.WebSocket & {
-  __vsrAuthWrapped?: boolean
-}
-
-type WrappedEventSource = typeof window.EventSource & {
-  __vsrAuthWrapped?: boolean
-}
-
-type PatchedIframePrototype = HTMLIFrameElement & {
-  __vsrAuthSrcWrapped?: boolean
-  __vsrAuthSetAttributeWrapped?: boolean
-}
-
-type PatchedWindow = Window & {
-  __vsrAuthWindowOpenWrapped?: boolean
+  __vsrAuthObserved?: boolean
 }
 
 interface UnauthorizedEventDetail {
   requestRevision: number
 }
 
-// A process-local revision lets a late 401 identify the session that issued
-// its request without copying the bearer token into a global DOM event.
+// The revision contains no credential material. It only prevents a late 401
+// from an old request from clearing a newer cookie-backed session.
 let authSessionRevision = 0
 
 function getRequestUrl(input: RequestInfo | URL): URL | null {
@@ -62,20 +39,7 @@ function hasCompatibleOrigin(url: URL | null): boolean {
   }
 
   const current = new URL(window.location.origin)
-  const compatibleProtocols = new Set([current.protocol])
-
-  if (current.protocol === 'http:') {
-    compatibleProtocols.add('ws:')
-  }
-  if (current.protocol === 'https:') {
-    compatibleProtocols.add('wss:')
-  }
-
-  if (url.host !== current.host) {
-    return false
-  }
-
-  return compatibleProtocols.has(url.protocol)
+  return url.protocol === current.protocol && url.host === current.host
 }
 
 function isProtectedPath(url: URL | null): boolean {
@@ -86,131 +50,25 @@ function isProtectedPath(url: URL | null): boolean {
   return url.pathname.startsWith('/api/') || url.pathname.startsWith('/embedded/')
 }
 
-function withToken(url: URL | null): URL | null {
-  if (!url) {
-    return null
-  }
-
-  const token = getStoredAuthToken()
-  if (!token || !isProtectedPath(url)) {
-    return url
-  }
-
-  const next = new URL(url.toString())
-  next.searchParams.set(AUTH_QUERY_PARAM, token)
-  return next
-}
-
-function toProtectedUrlString(input: string | URL): string {
+function clearLegacyStoredCredential(): void {
   if (typeof window === 'undefined') {
-    return typeof input === 'string' ? input : input.toString()
+    return
   }
-
-  const url = input instanceof URL ? input : new URL(input, window.location.origin)
-  return withToken(url)?.toString() ?? url.toString()
-}
-
-function patchProtectedResourceUrl(value: string): string {
-  if (typeof window === 'undefined') {
-    return value
-  }
-
   try {
-    return toProtectedUrlString(value)
+    window.localStorage?.removeItem(LEGACY_STORAGE_KEY)
   } catch {
-    return value
+    // Storage can be disabled by browser policy. Cookie authentication must
+    // still initialize when the legacy storage area is unavailable.
   }
-}
-
-export function normalizeAuthToken(token: string | null | undefined): string | null {
-  if (typeof token !== 'string') {
-    return null
-  }
-
-  const next = token.trim()
-  if (
-    !next ||
-    next.length > MAX_AUTH_TOKEN_LENGTH ||
-    UNSAFE_AUTH_TOKEN_CHARS.test(next) ||
-    hasControlCharacter(next)
-  ) {
-    return null
-  }
-
-  return next
-}
-
-function hasControlCharacter(value: string): boolean {
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index)
-    if (code < 32 || code === 127) {
-      return true
-    }
-  }
-  return false
-}
-
-export function getStoredAuthToken(): string | null {
-  if (typeof window === 'undefined') {
-    return null
-  }
-
-  const raw = window.localStorage.getItem(STORAGE_KEY)
-  const token = normalizeAuthToken(raw)
-  if (raw !== null && token !== raw) {
-    if (token) {
-      window.localStorage.setItem(STORAGE_KEY, token)
-    } else {
-      window.localStorage.removeItem(STORAGE_KEY)
-      clearSessionCookie()
-    }
-    authSessionRevision += 1
-  }
-  return token
 }
 
 export function getAuthSessionRevision(): number {
   return authSessionRevision
 }
 
-export function storeAuthToken(token: string): string | null {
-  if (typeof window === 'undefined') {
-    return null
-  }
-
-  const next = normalizeAuthToken(token)
-  if (!next) {
-    clearStoredAuthToken()
-    return null
-  }
-
-  const previous = window.localStorage.getItem(STORAGE_KEY)
-  window.localStorage.setItem(STORAGE_KEY, next)
-  document.cookie = buildSessionCookie(next)
-  if (previous !== next) {
-    authSessionRevision += 1
-  }
-  return next
-}
-
-export function clearStoredAuthToken(): void {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  window.localStorage.removeItem(STORAGE_KEY)
-  clearSessionCookie()
+export function markAuthSessionChanged(): number {
   authSessionRevision += 1
-}
-
-function buildSessionCookie(token: string): string {
-  const secure = window.location.protocol === 'https:' ? '; Secure' : ''
-  return `${COOKIE_NAME}=${token}; ${COOKIE_PATH}; ${COOKIE_SAME_SITE}${secure}`
-}
-
-function clearSessionCookie(): void {
-  const secure = window.location.protocol === 'https:' ? '; Secure' : ''
-  document.cookie = `${COOKIE_NAME}=; ${COOKIE_PATH}; ${COOKIE_SAME_SITE}; Max-Age=0${secure}`
+  return authSessionRevision
 }
 
 export function notifyUnauthorized(requestRevision: number = getAuthSessionRevision()): void {
@@ -238,162 +96,33 @@ export function shouldClearSessionForUnauthorized(currentRevision: number, event
   return requestRevision === currentRevision
 }
 
-export function withAuthQuery(path: string): string {
-  if (typeof window === 'undefined') {
-    return path
-  }
-
-  const url = withToken(new URL(path, window.location.origin))
-  if (!url) {
-    return path
-  }
-
-  return `${url.pathname}${url.search}${url.hash}`
-}
-
+// Browser authentication is cookie-only. This wrapper observes protected 401s
+// but deliberately leaves request headers and URLs untouched.
 export function installAuthenticatedFetch(): void {
   if (typeof window === 'undefined' || typeof window.fetch !== 'function') {
     return
   }
 
+  clearLegacyStoredCredential()
+
   const currentFetch = window.fetch as WrappedFetch
-  if (currentFetch.__vsrAuthWrapped) {
+  if (currentFetch.__vsrAuthObserved) {
     return
   }
 
   const originalFetch = window.fetch.bind(window)
   const wrappedFetch: WrappedFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = getRequestUrl(input)
-    const token = getStoredAuthToken()
+    const protectedRequest = isProtectedPath(getRequestUrl(input))
     const requestRevision = getAuthSessionRevision()
-    const protectedRequest = isProtectedPath(url)
-    const shouldAttachAuth = Boolean(token) && protectedRequest
-    const headers = input instanceof Request ? new Headers(input.headers) : new Headers()
-    new Headers(init?.headers).forEach((value, key) => {
-      headers.set(key, value)
-    })
-
-    if (shouldAttachAuth && token && !headers.has('Authorization')) {
-      headers.set('Authorization', `Bearer ${token}`)
-    }
-
-    const response = await originalFetch(input, { ...init, headers })
+    const response = await originalFetch(input, init)
     if (protectedRequest && response.status === 401) {
       notifyUnauthorized(requestRevision)
     }
-
     return response
   }) as WrappedFetch
 
-  wrappedFetch.__vsrAuthWrapped = true
+  wrappedFetch.__vsrAuthObserved = true
   window.fetch = wrappedFetch
-
-  installAuthenticatedBrowserTransports()
 }
 
-function installAuthenticatedBrowserTransports(): void {
-  installAuthenticatedWindowOpen()
-  installAuthenticatedWebSocket()
-  installAuthenticatedEventSource()
-  installAuthenticatedIframe()
-}
-
-function installAuthenticatedWindowOpen(): void {
-  const patchedWindow = window as PatchedWindow
-  if (patchedWindow.__vsrAuthWindowOpenWrapped) {
-    return
-  }
-
-  const originalOpen = window.open.bind(window)
-  window.open = ((url?: string | URL, target?: string, features?: string) => {
-    const nextUrl = typeof url === 'string' || url instanceof URL ? toProtectedUrlString(url) : url
-
-    return originalOpen(nextUrl as string | undefined, target, features)
-  }) as typeof window.open
-
-  patchedWindow.__vsrAuthWindowOpenWrapped = true
-}
-
-function installAuthenticatedWebSocket(): void {
-  if (typeof window.WebSocket !== 'function') {
-    return
-  }
-
-  const CurrentWebSocket = window.WebSocket as WrappedWebSocket
-  if (CurrentWebSocket.__vsrAuthWrapped) {
-    return
-  }
-
-  const OriginalWebSocket = window.WebSocket
-  const WrappedConstructor = function (
-    this: WebSocket,
-    url: string | URL,
-    protocols?: string | string[],
-  ) {
-    const nextUrl = toProtectedUrlString(url)
-    return protocols === undefined
-      ? new OriginalWebSocket(nextUrl)
-      : new OriginalWebSocket(nextUrl, protocols)
-  } as unknown as WrappedWebSocket
-
-  Object.assign(WrappedConstructor, OriginalWebSocket, { __vsrAuthWrapped: true })
-  WrappedConstructor.prototype = OriginalWebSocket.prototype
-  window.WebSocket = WrappedConstructor
-}
-
-function installAuthenticatedEventSource(): void {
-  if (typeof window.EventSource !== 'function') {
-    return
-  }
-
-  const CurrentEventSource = window.EventSource as WrappedEventSource
-  if (CurrentEventSource.__vsrAuthWrapped) {
-    return
-  }
-
-  const OriginalEventSource = window.EventSource
-  const WrappedConstructor = function (
-    this: EventSource,
-    url: string | URL,
-    eventSourceInitDict?: EventSourceInit,
-  ) {
-    return new OriginalEventSource(toProtectedUrlString(url), eventSourceInitDict)
-  } as unknown as WrappedEventSource
-
-  Object.assign(WrappedConstructor, OriginalEventSource, { __vsrAuthWrapped: true })
-  WrappedConstructor.prototype = OriginalEventSource.prototype
-  window.EventSource = WrappedConstructor
-}
-
-function installAuthenticatedIframe(): void {
-  const iframePrototype = window.HTMLIFrameElement?.prototype as PatchedIframePrototype | undefined
-  if (!iframePrototype) {
-    return
-  }
-
-  const srcDescriptor = Object.getOwnPropertyDescriptor(iframePrototype, 'src')
-  if (srcDescriptor?.set && !iframePrototype.__vsrAuthSrcWrapped) {
-    Object.defineProperty(iframePrototype, 'src', {
-      ...srcDescriptor,
-      set(value: string) {
-        srcDescriptor.set?.call(this, patchProtectedResourceUrl(value))
-      },
-    })
-    iframePrototype.__vsrAuthSrcWrapped = true
-  }
-
-  if (!iframePrototype.__vsrAuthSetAttributeWrapped) {
-    const originalSetAttribute = iframePrototype.setAttribute
-    iframePrototype.setAttribute = function (name: string, value: string) {
-      if (name.toLowerCase() === 'src') {
-        originalSetAttribute.call(this, name, patchProtectedResourceUrl(value))
-        return
-      }
-
-      originalSetAttribute.call(this, name, value)
-    }
-    iframePrototype.__vsrAuthSetAttributeWrapped = true
-  }
-}
-
-export { AUTH_QUERY_PARAM, STORAGE_KEY, UNAUTHORIZED_EVENT }
+export { LEGACY_STORAGE_KEY, UNAUTHORIZED_EVENT }

@@ -1,5 +1,3 @@
-import { normalizeAuthToken } from '../utils/authFetch'
-
 export interface AuthUser {
   id: string
   email: string
@@ -10,17 +8,24 @@ export interface AuthUser {
 
 export interface AuthSessionRefreshResult {
   user: AuthUser | null
-  clearLocalToken: boolean
+  unauthorized: boolean
 }
 
-export type AuthSessionWriter = (token: string, user?: AuthUser | null) => void
+export type AuthSessionWriter = (user: AuthUser) => void | Promise<void>
+
+// Maintained browser clients explicitly request an HttpOnly-cookie-only auth
+// response. API clients that omit this header retain the bearer-token response
+// contract for backwards compatibility.
+export const COOKIE_AUTH_RESPONSE_HEADERS: Readonly<Record<string, string>> = Object.freeze({
+  'X-VSR-Auth-Mode': 'cookie',
+})
 
 const MIN_EXACT_PASSWORD_REDACTION_LENGTH = 8
 export const SAFE_PASSWORD_CHANGE_ERROR =
   'Password change was rejected. Review the password requirements and try again.'
 
-export function hasAuthenticatedSession(token: string | null, user: AuthUser | null): boolean {
-  return Boolean(token || user)
+export function hasAuthenticatedSession(user: AuthUser | null): boolean {
+  return Boolean(user)
 }
 
 export async function fetchCurrentAuthUser(
@@ -29,15 +34,15 @@ export async function fetchCurrentAuthUser(
   const response = await fetcher('/api/auth/me', { credentials: 'same-origin' })
 
   if (response.status === 401) {
-    return { user: null, clearLocalToken: true }
+    return { user: null, unauthorized: true }
   }
 
   if (!response.ok) {
-    return { user: null, clearLocalToken: false }
+    return { user: null, unauthorized: false }
   }
 
   const payload = (await response.json()) as { user?: AuthUser | null }
-  return { user: payload?.user ?? null, clearLocalToken: false }
+  return { user: payload?.user ?? null, unauthorized: false }
 }
 
 export async function readAuthResponseError(response: Response): Promise<string> {
@@ -96,6 +101,7 @@ export async function changePasswordAndRotateSession(
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
+      ...COOKIE_AUTH_RESPONSE_HEADERS,
     },
     body: JSON.stringify({ currentPassword, newPassword }),
   })
@@ -105,13 +111,11 @@ export async function changePasswordAndRotateSession(
     throw new Error(redactSubmittedPasswords(message, [currentPassword, newPassword]))
   }
 
-  const payload = (await response.json()) as { token?: unknown; user?: AuthUser | null }
-  const nextToken = normalizeAuthToken(
-    typeof payload.token === 'string' ? payload.token : undefined,
-  )
-  if (!nextToken) {
-    throw new Error('Password change response did not include a valid session token')
+  const payload = (await response.json()) as { user?: AuthUser | null }
+  const nextUser = payload.user ?? fallbackUser
+  if (!nextUser) {
+    throw new Error('Password change response did not include an authenticated user')
   }
 
-  writeSession(nextToken, payload.user ?? fallbackUser)
+  await writeSession(nextUser)
 }

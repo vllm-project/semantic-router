@@ -81,7 +81,11 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 		}
 
 		if err := propagateConfigToRuntime(configPath, configDir); err != nil {
-			if restoreErr := restorePreviousRuntimeConfig(configPath, configDir, existingData); restoreErr != nil {
+			if restoreErr := restorePreviousRuntimeConfig(
+				configPath,
+				configDir,
+				existingConfigFileSnapshot(existingData),
+			); restoreErr != nil {
 				http.Error(w, fmt.Sprintf("Failed to apply config to runtime: %v. Failed to restore previous config: %v", err, restoreErr), http.StatusInternalServerError)
 				return
 			}

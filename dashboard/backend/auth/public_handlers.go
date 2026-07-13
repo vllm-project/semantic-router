@@ -45,6 +45,11 @@ func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		cookieOnly, modeErr := cookieOnlyAuthResponse(r)
+		if modeErr != nil {
+			http.Error(w, modeErr.Error(), http.StatusBadRequest)
+			return
+		}
 
 		if !svc.OpenBootstrapEnabled() {
 			http.Error(w, "open bootstrap is disabled; provision an admin via DASHBOARD_ADMIN_* or set DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true to enable web-form bootstrap", http.StatusForbidden)
@@ -122,7 +127,7 @@ func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 
 		setAuthSessionCookie(w, r, token, svc.ttlDuration)
 		writeAudit(r, svc, "user.bootstrap", "/api/auth/bootstrap/register", "")
-		respondJSON(w, LoginResponse{Token: token, User: cloneSessionUser(user, perms)})
+		respondJSON(w, loginResponse(token, cloneSessionUser(user, perms), cookieOnly))
 	}
 }
 
@@ -131,6 +136,11 @@ func loginHandler(svc *Service) http.HandlerFunc {
 		setAuthNoStoreHeaders(w)
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		cookieOnly, modeErr := cookieOnlyAuthResponse(r)
+		if modeErr != nil {
+			http.Error(w, modeErr.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -166,7 +176,7 @@ func loginHandler(svc *Service) http.HandlerFunc {
 		}
 
 		setAuthSessionCookie(w, r, token, svc.ttlDuration)
-		respondJSON(w, LoginResponse{Token: token, User: cloneSessionUser(user, perms)})
+		respondJSON(w, loginResponse(token, cloneSessionUser(user, perms), cookieOnly))
 	}
 }
 
@@ -189,6 +199,9 @@ func meHandler(svc *Service) http.HandlerFunc {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
+		if ac.CredentialSource == CredentialSourceCookie {
+			reissueSessionCookie(w, r, svc)
+		}
 
 		respondJSON(w, map[string]any{"user": cloneSessionUser(user, ac.Perms)})
 	}
@@ -199,6 +212,11 @@ func changePasswordHandler(svc *Service) http.HandlerFunc {
 		setAuthNoStoreHeaders(w)
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		cookieOnly, modeErr := cookieOnlyAuthResponse(r)
+		if modeErr != nil {
+			http.Error(w, modeErr.Error(), http.StatusBadRequest)
 			return
 		}
 		ac, ok := AuthFromContext(r)
@@ -244,6 +262,6 @@ func changePasswordHandler(svc *Service) http.HandlerFunc {
 
 		setAuthSessionCookie(w, r, token, svc.ttlDuration)
 		writeAudit(r, svc, "user.password.self", "/api/auth/password", ac.UserID)
-		respondJSON(w, LoginResponse{Token: token, User: cloneSessionUser(user, ac.Perms)})
+		respondJSON(w, loginResponse(token, cloneSessionUser(user, ac.Perms), cookieOnly))
 	}
 }

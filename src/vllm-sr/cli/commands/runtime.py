@@ -102,8 +102,11 @@ def _execute_serve(
 
     validate_setup_mode_flags(setup_mode, minimal, readonly)
 
+    resolved_target = resolve_target(target)
     env_vars: dict[str, str] = {}
-    append_passthrough_env_vars(env_vars)
+    append_passthrough_env_vars(
+        env_vars, include_dashboard_auth=resolved_target != "k8s" and not minimal
+    )
     apply_runtime_mode_env_vars(
         env_vars,
         minimal,
@@ -120,7 +123,7 @@ def _execute_serve(
     configure_runtime_override_env_vars(env_vars, config_path, effective_config_path)
 
     backend = _build_backend(
-        target,
+        resolved_target,
         namespace=namespace,
         context=context,
         profile=profile,

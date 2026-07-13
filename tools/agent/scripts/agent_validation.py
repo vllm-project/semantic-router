@@ -23,9 +23,26 @@ from agent_support import (
     load_yaml,
     validate_glob,
 )
+from public_docs_security import scan_public_documentation
 
 VALID_LOOP_MODES = {"lightweight", "completion"}
 VALID_EXECUTION_PLAN_POLICIES = {"none", "long_horizon", "always"}
+
+
+def validate_public_documentation(errors: list[str]) -> None:
+    readme_path = REPO_ROOT / "README.md"
+    if not readme_path.exists():
+        errors.append("Missing public README.md")
+        return
+
+    for finding in scan_public_documentation(REPO_ROOT):
+        location = f"{finding.path}:{finding.identity_line}"
+        if finding.password_line != finding.identity_line:
+            location += f",{finding.password_line}"
+        errors.append(
+            f"Public documentation credential pair detected at {location}; "
+            "remove it or use explicit non-secret placeholders"
+        )
 
 
 def validate_supported_envs(
@@ -210,6 +227,7 @@ def collect_validation_errors() -> list[str]:
     validate_routing_fixtures(errors)
     validate_discovery_bridge(errors)
     validate_agent_make_contracts(REPO_ROOT, errors)
+    validate_public_documentation(errors)
     return errors
 
 

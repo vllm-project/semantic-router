@@ -626,7 +626,7 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 	}
 	ensureHeaderRemoved(commonResponse.HeaderMutation, "content-length")
 	setHeaderValue(commonResponse.HeaderMutation, "content-length", fmt.Sprintf("%d", len(modifiedBody)))
-	if r.shouldClearRouteCache() {
+	if r.shouldClearRouteCacheForAuxiliaryMutation() {
 		commonResponse.ClearRouteCache = true
 		logging.Debugf("Setting ClearRouteCache=true (feature enabled) in updateRequestWithTools")
 	}

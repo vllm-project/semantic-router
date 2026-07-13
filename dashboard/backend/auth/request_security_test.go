@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/jsonunicode"
 )
 
 func TestAuthJSONDecoderEnforcesMediaTypeShapeAndBodyLimit(t *testing.T) {
@@ -93,8 +95,8 @@ func TestValidAuthJSONUnicodeAcceptsSurrogatePairsAndLiteralReplacementCharacter
 		[]byte(`{"value":"�"}`),
 		[]byte(`{"value":"\ufffd"}`),
 	} {
-		if !validAuthJSONUnicode(body) {
-			t.Fatalf("validAuthJSONUnicode(%q) = false, want true", body)
+		if !jsonunicode.Valid(body) {
+			t.Fatalf("jsonunicode.Valid(%q) = false, want true", body)
 		}
 	}
 }
@@ -128,6 +130,42 @@ func TestLoginRequestSourceDisablesSharedIngressBuckets(t *testing.T) {
 			req.Header.Set("X-Forwarded-For", "203.0.113.99")
 			if got := loginRequestSource(req); got != "" {
 				t.Fatalf("loginRequestSource() = %q, want disabled bucket", got)
+			}
+		})
+	}
+}
+
+func TestValidUnsafeRequestOriginProtectsCookieSessions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		source      CredentialSource
+		origin      string
+		fetchSite   string
+		wantAllowed bool
+	}{
+		{name: "same origin", source: CredentialSourceCookie, origin: "https://dashboard.example.com", wantAllowed: true},
+		{name: "same-site sibling", source: CredentialSourceCookie, origin: "https://evil.example.com", wantAllowed: false},
+		{name: "fetch metadata fallback", source: CredentialSourceCookie, fetchSite: "same-origin", wantAllowed: true},
+		{name: "same-site fetch metadata", source: CredentialSourceCookie, fetchSite: "same-site", wantAllowed: false},
+		{name: "cookie without browser evidence", source: CredentialSourceCookie, wantAllowed: false},
+		{name: "query without browser evidence", source: CredentialSourceQuery, wantAllowed: false},
+		{name: "non-browser bearer", source: CredentialSourceBearer, wantAllowed: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			req := httptest.NewRequest(http.MethodPost, "http://dashboard.example.com/api/settings", nil)
+			req.Header.Set("X-Forwarded-Proto", "https")
+			if test.origin != "" {
+				req.Header.Set("Origin", test.origin)
+			}
+			if test.fetchSite != "" {
+				req.Header.Set("Sec-Fetch-Site", test.fetchSite)
+			}
+			if got := validUnsafeRequestOrigin(req, test.source); got != test.wantAllowed {
+				t.Fatalf("validUnsafeRequestOrigin() = %v, want %v", got, test.wantAllowed)
 			}
 		})
 	}

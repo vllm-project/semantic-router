@@ -180,36 +180,39 @@ func SetupActivateHandler(configPath string, readonlyMode bool, configDir string
 			http.Error(w, fmt.Sprintf("Failed to convert config to YAML: %v", err), http.StatusInternalServerError)
 			return
 		}
+		previousData, err := os.ReadFile(configPath)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to read current config: %v", err), http.StatusInternalServerError)
+			return
+		}
+		previous := existingConfigFileSnapshot(previousData)
 
 		if backupErr := backupCurrentConfig(configPath, configDir); backupErr != nil {
 			log.Printf("Warning: failed to back up current config before setup activation: %v", backupErr)
 		}
 
-		tmpConfigFile := configPath + ".tmp"
-		if writeErr := os.WriteFile(tmpConfigFile, yamlData, 0o644); writeErr != nil {
+		if writeErr := writeConfigAtomically(configPath, yamlData); writeErr != nil {
 			http.Error(w, fmt.Sprintf("Failed to write config: %v", writeErr), http.StatusInternalServerError)
 			return
 		}
-		if renameErr := os.Rename(tmpConfigFile, configPath); renameErr != nil {
-			if fallbackWriteErr := os.WriteFile(configPath, yamlData, 0o644); fallbackWriteErr != nil {
-				http.Error(w, fmt.Sprintf("Failed to write config: %v", fallbackWriteErr), http.StatusInternalServerError)
-				return
-			}
-		}
 
 		if _, parseErr := routerconfig.Parse(configPath); parseErr != nil {
-			http.Error(w, fmt.Sprintf("Failed to validate activated config: %v", parseErr), http.StatusInternalServerError)
+			restoreErr := restoreConfigFileSnapshot(configPath, previous)
+			http.Error(w, formatSetupActivationFailure("Failed to validate activated config", parseErr, restoreErr), http.StatusInternalServerError)
 			return
 		}
 
 		effectiveConfigPath, err := syncRuntimeConfigForCurrentRuntime(configPath)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to sync runtime config: %v", err), http.StatusInternalServerError)
+			restoreErr := restoreSetupRuntimeAfterFailure(configPath, previous)
+			http.Error(w, formatSetupActivationFailure("Failed to sync runtime config", err, restoreErr), http.StatusInternalServerError)
 			return
 		}
 
 		if err := restartSetupRuntimeServices(configPath, effectiveConfigPath); err != nil {
-			log.Printf("Warning: failed to restart router/envoy after activation: %v", err)
+			restoreErr := restoreSetupRuntimeAfterFailure(configPath, previous)
+			http.Error(w, formatSetupActivationFailure("Failed to restart router/envoy after activation", err, restoreErr), http.StatusInternalServerError)
+			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -584,8 +587,15 @@ func restartSetupRuntimeServices(configPath string, effectiveConfigPath string) 
 		return restartSetupManagedServices(effectiveConfigPath)
 	}
 
-	if getDockerContainerStatus(managedContainerNameForService("router")) == "not found" &&
-		getDockerContainerStatus(managedContainerNameForService("envoy")) == "not found" {
+	routerStatus := getDockerContainerStatus(managedContainerNameForService("router"))
+	if routerStatus == "unknown" {
+		return fmt.Errorf("managed router status probe is unavailable")
+	}
+	envoyStatus := getDockerContainerStatus(managedContainerNameForService("envoy"))
+	if envoyStatus == "unknown" {
+		return fmt.Errorf("managed Envoy status probe is unavailable")
+	}
+	if routerStatus == "not found" && envoyStatus == "not found" {
 		return nil
 	}
 

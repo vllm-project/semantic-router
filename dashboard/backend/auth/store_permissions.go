@@ -70,9 +70,7 @@ func authDatabaseFilesystemPath(dsn string) (string, bool, error) {
 	if queryValues.Get("mode") == "memory" {
 		return "", false, nil
 	}
-	if strings.HasPrefix(rawPath, "file:") {
-		rawPath = strings.TrimPrefix(rawPath, "file:")
-	}
+	rawPath = strings.TrimPrefix(rawPath, "file:")
 	unescaped, err := url.PathUnescape(rawPath)
 	if err != nil {
 		return "", false, fmt.Errorf("parse auth database path: %w", err)

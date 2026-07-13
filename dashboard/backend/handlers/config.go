@@ -129,7 +129,7 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			return
 		}
 
-		if err := applyWrittenConfig(configPath, configDir, existingData, true); err != nil {
+		if err := applyWrittenConfig(configPath, configDir, existingConfigFileSnapshot(existingData), true); err != nil {
 			http.Error(w, formatRuntimeApplyError("Failed to apply config to runtime", err), http.StatusInternalServerError)
 			return
 		}
@@ -218,7 +218,7 @@ func UpdateRouterDefaultsHandler(configDir string, readonlyMode bool) http.Handl
 			return
 		}
 
-		if err := applyWrittenConfig(configPath, configDir, existingData, false); err != nil {
+		if err := applyWrittenConfig(configPath, configDir, existingConfigFileSnapshot(existingData), true); err != nil {
 			http.Error(w, formatRuntimeApplyError("Failed to apply config to runtime", err), http.StatusInternalServerError)
 			return
 		}

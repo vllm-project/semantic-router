@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -32,6 +33,7 @@ type OpenAIRouter struct {
 	CategoryDescriptions  []string
 	Classifier            *classification.Classifier
 	ClassificationService *services.ClassificationService
+	embeddingAdmission    *embedding.ProcessAdmission
 	Cache                 cache.CacheBackend
 	ToolsDatabase         *tools.ToolsDatabase
 	ToolsRegistry         *tools.Registry // retriever strategy registry
@@ -181,8 +183,10 @@ func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_
 	return r.createJSONResponseWithBody(statusCode, jsonData, headers.ResponsePathError)
 }
 
-// shouldClearRouteCache checks if route cache should be cleared.
-func (r *OpenAIRouter) shouldClearRouteCache() bool {
+// shouldClearRouteCacheForAuxiliaryMutation reports whether optional
+// non-routing body mutations should invalidate Envoy's route cache. Trusted
+// selected-model transitions are mandatory and do not consult this setting.
+func (r *OpenAIRouter) shouldClearRouteCacheForAuxiliaryMutation() bool {
 	return r.Config.ClearRouteCache
 }
 

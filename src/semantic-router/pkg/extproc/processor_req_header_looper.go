@@ -146,9 +146,3 @@ func parseOptionalPositiveLooperMetadata(
 	}
 	return parsed, true
 }
-
-func buildInternalHeaderRemovalMutation() *ext_proc.HeaderMutation {
-	return &ext_proc.HeaderMutation{
-		RemoveHeaders: append([]string(nil), looperInternalRequestHeaders...),
-	}
-}

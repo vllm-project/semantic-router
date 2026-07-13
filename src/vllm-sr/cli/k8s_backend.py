@@ -15,6 +15,7 @@ from cli.config_translator import (
     translate_config_to_helm_values,
     write_helm_values_file,
 )
+from cli.dashboard_auth_runtime import without_dashboard_auth_env
 from cli.k8s_secret_history import (
     deployment_secret_refs,
     read_helm_retained_secret_refs,
@@ -77,6 +78,7 @@ class K8sBackend:
         enable_observability: bool = True,
         **kwargs: Any,
     ) -> None:
+        env_vars = without_dashboard_auth_env(env_vars)
         self._require_tool("helm")
         self._require_tool("kubectl")
 

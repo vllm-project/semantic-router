@@ -10,6 +10,10 @@ from cli.consts import (
     PLATFORM_AMD,
     PLATFORM_NVIDIA,
 )
+from cli.container_host_ports import (
+    HostPortPublicationPlan,
+    build_host_port_publication_plan,
+)
 from cli.container_images import (
     _normalize_platform,
     get_runtime_images,
@@ -30,6 +34,13 @@ from cli.container_services import (
     container_remove_container,
     container_status,
     container_stop_container,
+)
+from cli.dashboard_auth_runtime import (
+    DASHBOARD_AUTH_ENV_NAMES,
+    DISABLED_DASHBOARD_AUTH_PLAN,
+    DashboardAuthRuntimePlan,
+    build_dashboard_auth_runtime_plan,
+    without_dashboard_auth_env,
 )
 from cli.parser import parse_user_config
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
@@ -57,6 +68,8 @@ def container_start_vllm_sr(
     stack_layout: RuntimeStackLayout | None = None,
     state_root_dir: str | None = None,
     runtime_config_file: str | None = None,
+    host_port_plan: HostPortPublicationPlan | None = None,
+    dashboard_auth_plan: DashboardAuthRuntimePlan | None = None,
 ):
     """
     Start vLLM Semantic Router container.
@@ -68,6 +81,16 @@ def container_start_vllm_sr(
     env_vars = dict(env_vars or {})
     stack_layout = stack_layout or resolve_runtime_stack()
     resolve_runtime_topology(topology)
+    host_port_plan = host_port_plan or build_host_port_publication_plan(
+        stack_layout, listeners
+    )
+    if minimal:
+        dashboard_auth_plan = DISABLED_DASHBOARD_AUTH_PLAN
+    else:
+        dashboard_auth_plan = dashboard_auth_plan or build_dashboard_auth_runtime_plan(
+            env_vars, dashboard_enabled=True
+        )
+    env_vars = without_dashboard_auth_env(env_vars)
 
     normalized_platform = _resolve_platform(env_vars)
     nofile_limit = _resolve_nofile_limit()
@@ -101,18 +124,26 @@ def container_start_vllm_sr(
         nofile_limit=nofile_limit,
         runtime_network_name=runtime_network_name,
         common_env=common_env,
-        listeners=listeners,
         minimal=minimal,
         config_dir=config_dir,
         runtime_paths=runtime_paths,
         openclaw_network_name=openclaw_network_name,
         stack_layout=stack_layout,
+        host_port_plan=host_port_plan,
+        dashboard_auth_plan=dashboard_auth_plan,
     )
 
-    return _start_runtime_containers(runtime, container_specs, common_env)
+    return _start_runtime_containers(
+        runtime, container_specs, common_env, dashboard_auth_plan
+    )
 
 
-def _start_runtime_containers(runtime, container_specs, common_env):
+def _start_runtime_containers(
+    runtime,
+    container_specs,
+    common_env,
+    dashboard_auth_plan: DashboardAuthRuntimePlan,
+):
     """Start the resolved runtime services and roll back partial startup."""
 
     log.info(f"Starting vLLM Semantic Router runtime with {runtime}...")
@@ -123,7 +154,7 @@ def _start_runtime_containers(runtime, container_specs, common_env):
     for service_name, container_name, cmd in container_specs:
         log.info(f"Starting {service_name} container: {container_name}")
         log.debug(f"Container command: {' '.join(_redact_container_command(cmd))}")
-        run_env = _service_process_env(service_name, common_env)
+        run_env = _service_process_env(service_name, common_env, dashboard_auth_plan)
         try:
             result = subprocess.run(
                 cmd,
@@ -148,19 +179,25 @@ def _start_runtime_containers(runtime, container_specs, common_env):
     return (0, "\n".join(stdout_chunks), "\n".join(stderr_chunks))
 
 
-def _service_process_env(service_name, common_env):
+def _service_process_env(
+    service_name: str,
+    common_env: dict[str, str],
+    dashboard_auth_plan: DashboardAuthRuntimePlan,
+) -> dict[str, str]:
     """Return host-side environment additions for one runtime service."""
-    if service_name != "router":
-        return None
-
-    router_only_env = {
-        name: common_env[name] for name in _ROUTER_ONLY_ENV_NAMES if name in common_env
-    }
-    if not router_only_env:
-        return None
-
     process_env = os.environ.copy()
-    process_env.update(router_only_env)
+    for name in DASHBOARD_AUTH_ENV_NAMES | _ROUTER_ONLY_ENV_NAMES:
+        process_env.pop(name, None)
+    if service_name == "router":
+        process_env.update(
+            {
+                name: common_env[name]
+                for name in _ROUTER_ONLY_ENV_NAMES
+                if name in common_env
+            }
+        )
+    elif service_name == "dashboard":
+        process_env.update(dashboard_auth_plan.secret_process_env)
     return process_env
 
 
@@ -200,12 +237,13 @@ def _resolve_container_specs(
     nofile_limit: int,
     runtime_network_name: str,
     common_env: dict[str, str],
-    listeners,
     minimal: bool,
     config_dir: str,
     runtime_paths: dict[str, str],
     openclaw_network_name: str | None,
     stack_layout: RuntimeStackLayout,
+    host_port_plan: HostPortPublicationPlan,
+    dashboard_auth_plan: DashboardAuthRuntimePlan,
 ):
     runtime_images = get_runtime_images(
         image=image,
@@ -223,12 +261,13 @@ def _resolve_container_specs(
         runtime_network_name=runtime_network_name,
         normalized_platform=normalized_platform,
         common_env=common_env,
-        listeners=listeners,
         minimal=minimal,
         config_dir=config_dir,
         runtime_paths=runtime_paths,
         openclaw_network_name=openclaw_network_name,
         stack_layout=stack_layout,
+        host_port_plan=host_port_plan,
+        dashboard_auth_plan=dashboard_auth_plan,
     )
 
 
@@ -240,14 +279,15 @@ def _runtime_container_specs(
     runtime_network_name: str,
     normalized_platform: str,
     common_env: dict[str, str],
-    listeners,
     minimal: bool,
     config_dir: str,
     runtime_paths: dict[str, str],
     openclaw_network_name: str | None,
     stack_layout: RuntimeStackLayout,
+    host_port_plan: HostPortPublicationPlan,
+    dashboard_auth_plan: DashboardAuthRuntimePlan,
 ):
-    listener_port = _primary_listener_port(listeners)
+    listener_port = host_port_plan.primary_listener_port
     setup_mode = str(common_env.get("VLLM_SR_SETUP_MODE", "")).lower() == "true"
     router_cmd = _build_router_runtime_command(
         runtime=runtime,
@@ -259,6 +299,7 @@ def _runtime_container_specs(
         runtime_paths=runtime_paths,
         setup_mode=setup_mode,
         stack_layout=stack_layout,
+        internal_bind_address=host_port_plan.internal_bind_address,
     )
     envoy_cmd = _build_envoy_runtime_command(
         runtime=runtime,
@@ -266,7 +307,7 @@ def _runtime_container_specs(
         nofile_limit=nofile_limit,
         runtime_network_name=runtime_network_name,
         common_env=common_env,
-        listeners=listeners,
+        listener_publications=host_port_plan.listeners,
         runtime_paths=runtime_paths,
         setup_mode=setup_mode,
         stack_layout=stack_layout,
@@ -291,6 +332,8 @@ def _runtime_container_specs(
         openclaw_network_name=openclaw_network_name,
         runtime_paths=runtime_paths,
         stack_layout=stack_layout,
+        internal_bind_address=host_port_plan.internal_bind_address,
+        dashboard_auth_plan=dashboard_auth_plan,
     )
     specs.append(("dashboard", stack_layout.dashboard_container_name, dashboard_cmd))
 
@@ -308,6 +351,7 @@ def _build_router_runtime_command(
     runtime_paths: dict[str, str],
     setup_mode: bool,
     stack_layout: RuntimeStackLayout,
+    internal_bind_address: str,
 ):
     return _build_service_run_command(
         runtime=runtime,
@@ -319,9 +363,9 @@ def _build_router_runtime_command(
         inherited_env_names=_ROUTER_ONLY_ENV_NAMES,
         mount_specs=_runtime_mount_specs(runtime_paths, include_models=True),
         port_mappings=[
-            (stack_layout.router_port, 50051),
-            (stack_layout.metrics_port, 9190),
-            (stack_layout.api_port, 8080),
+            (internal_bind_address, stack_layout.router_port, 50051),
+            (internal_bind_address, stack_layout.metrics_port, 9190),
+            (internal_bind_address, stack_layout.api_port, 8080),
         ],
         entrypoint="/app/start-router.sh",
         command_args=[
@@ -341,7 +385,7 @@ def _build_envoy_runtime_command(
     nofile_limit: int,
     runtime_network_name: str,
     common_env: dict[str, str],
-    listeners,
+    listener_publications,
     runtime_paths: dict[str, str],
     setup_mode: bool,
     stack_layout: RuntimeStackLayout,
@@ -357,9 +401,12 @@ def _build_envoy_runtime_command(
             f"{runtime_paths['envoy_config_path']}:/etc/envoy/envoy.yaml:z",
         ],
         port_mappings=[
-            (listener["port"] + stack_layout.port_offset, listener["port"])
-            for listener in listeners
-            if listener.get("port")
+            (
+                publication.bind_address,
+                publication.host_port,
+                publication.container_port,
+            )
+            for publication in listener_publications
         ],
         entrypoint="/usr/local/bin/envoy",
         command_args=[
@@ -384,6 +431,8 @@ def _build_dashboard_runtime_command(
     openclaw_network_name: str | None,
     runtime_paths: dict[str, str],
     stack_layout: RuntimeStackLayout,
+    internal_bind_address: str,
+    dashboard_auth_plan: DashboardAuthRuntimePlan,
 ):
     dashboard_env = _build_dashboard_runtime_env(
         common_env=common_env,
@@ -393,6 +442,8 @@ def _build_dashboard_runtime_command(
     dashboard_mount_specs = _runtime_mount_specs(
         runtime_paths, include_dashboard_data=True
     )
+    dashboard_env.update(dashboard_auth_plan.container_env)
+    dashboard_mount_specs.extend(dashboard_auth_plan.mount_specs)
     configure_openclaw_support(
         dashboard_mount_specs,
         dashboard_env,
@@ -410,9 +461,10 @@ def _build_dashboard_runtime_command(
         network_name=runtime_network_name,
         env_vars=dashboard_env,
         mount_specs=dashboard_mount_specs,
-        port_mappings=[(stack_layout.dashboard_port, 8700)],
+        port_mappings=[(internal_bind_address, stack_layout.dashboard_port, 8700)],
         entrypoint="/app/start-dashboard.sh",
         command_args=["/app/config.yaml"],
+        inherited_env_names=dashboard_auth_plan.inherited_secret_names,
     )
 
 
@@ -563,14 +615,6 @@ def _runtime_mount_specs(
     return mounts
 
 
-def _primary_listener_port(listeners):
-    for listener in listeners:
-        port = listener.get("port")
-        if port:
-            return port
-    return 8888
-
-
 def _render_split_envoy_config(
     config_path: str,
     output_path: str,
@@ -581,8 +625,11 @@ def _render_split_envoy_config(
     os.environ["ENVOY_EXTPROC_ADDRESS"] = stack_layout.router_container_name
     os.environ["ENVOY_ROUTER_API_ADDRESS"] = stack_layout.router_container_name
     try:
+        split_config = parse_user_config(config_path).model_copy(deep=True)
+        for listener in split_config.listeners:
+            listener.address = "0.0.0.0"
         generate_envoy_config_from_user_config(
-            parse_user_config(config_path),
+            split_config,
             output_path,
         )
         log.info(f"Rendered split Envoy config: {output_path}")
@@ -607,7 +654,7 @@ def _build_service_run_command(
     network_name: str,
     env_vars: dict[str, str],
     mount_specs: list[str],
-    port_mappings: list[tuple[int, int]],
+    port_mappings: list[tuple[str, int, int]],
     entrypoint: str,
     command_args: list[str],
     enable_amd_gpu: bool = False,

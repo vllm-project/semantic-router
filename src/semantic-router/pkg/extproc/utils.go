@@ -9,7 +9,6 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
 // sendResponse sends a response with proper error handling and logging.
@@ -185,17 +184,6 @@ func statusCodeToEnum(statusCode int) typev3.StatusCode {
 		return code
 	}
 	return typev3.StatusCode_OK
-}
-
-// isSafeImageDataURL returns true only for inline base64-encoded image data URIs
-// with an allowlisted MIME type (e.g. "data:image/png;base64,...").
-// HTTP(S) URLs, non-image data URIs, and file paths are rejected to prevent
-// SSRF, local file access, and decode errors on non-image payloads.
-//
-// The implementation lives in the shared imageurl package so the ExtProc path
-// and the HTTP classification API enforce an identical gate.
-func isSafeImageDataURL(url string) bool {
-	return imageurl.IsSafeImageDataURL(url)
 }
 
 // rewriteRequestModel rewrites the model field in the request body JSON.

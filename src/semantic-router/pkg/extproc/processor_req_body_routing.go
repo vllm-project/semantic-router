@@ -188,7 +188,7 @@ func (r *OpenAIRouter) createRoutingResponse(
 	}
 	r.applyDecisionHeaderMutations(state, ctx)
 
-	return buildRequestBodyContinueResponse(state, bodyMutation, false)
+	return buildRequestBodyContinueResponse(state, bodyMutation)
 }
 
 // createSpecifiedModelResponse creates a response for specified-model routing.
@@ -233,7 +233,7 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(
 	}
 
 	bodyMutation := r.buildSpecifiedModelBodyMutation(model, upstreamModel, needsBodyMutation || pathMutatesBody, state, ctx)
-	return buildRequestBodyContinueResponse(state, bodyMutation, false)
+	return buildRequestBodyContinueResponse(state, bodyMutation)
 }
 
 func (r *OpenAIRouter) buildRouteHeaderState(
@@ -507,14 +507,16 @@ func getBodyMutationSource(ctx *RequestContext) []byte {
 func buildRequestBodyContinueResponse(
 	state *routeHeaderState,
 	bodyMutation *ext_proc.BodyMutation,
-	clearRouteCache bool,
 ) *ext_proc.ProcessingResponse {
 	return &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestBody{
 			RequestBody: &ext_proc.BodyResponse{
 				Response: &ext_proc.CommonResponse{
-					Status:          ext_proc.CommonResponse_CONTINUE,
-					ClearRouteCache: clearRouteCache,
+					Status: ext_proc.CommonResponse_CONTINUE,
+					// Every caller of this routing response has emitted the trusted
+					// x-selected-model header. Recompute the route unconditionally;
+					// the optional router config cannot weaken header provenance.
+					ClearRouteCache: true,
 					HeaderMutation: &ext_proc.HeaderMutation{
 						SetHeaders:    state.setHeaders,
 						RemoveHeaders: state.removeHeaders,

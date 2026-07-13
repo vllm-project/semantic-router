@@ -1364,6 +1364,8 @@ global:
       - auto
       - exhaustive-reference
     include_config_models_in_list: true
+    # Optional auxiliary mutations only. Selected-model trust transitions
+    # always clear Envoy's route cache regardless of this setting.
     clear_route_cache: false
     streamed_body:
       enabled: true

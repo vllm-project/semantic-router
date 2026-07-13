@@ -24,6 +24,32 @@ func TestEmbeddingRuntimeTasksUseOnlyRemoteProviderWhenConfigured(t *testing.T) 
 	}
 }
 
+func TestEmbeddingRuntimeTasksRemoteConfigWithCandleOverrideUsesLocalTask(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", config.EmbeddingBackendCandle)
+	t.Setenv("EMBEDDING_MODEL_TYPE_OVERRIDE", "mmbert")
+	cfg := remoteEmbeddingRuntimeConfig("http://embedding-service:8000/v1")
+	paths := resolveEmbeddingPaths(cfg)
+
+	_, tasks, _ := embeddingRuntimeTasks(cfg, "test", paths)
+	if len(tasks) != 1 || tasks[0].Name != "router.embedding.unified_factory" {
+		t.Fatalf("local override tasks = %+v, want only router.embedding.unified_factory", tasks)
+	}
+}
+
+func TestPrepareRouterRuntimeOpenVINOOverrideDoesNotClaimReadyOrProbeRemote(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", config.EmbeddingBackendOpenVINO)
+	t.Setenv("EMBEDDING_MODEL_TYPE_OVERRIDE", "mmbert")
+	cfg := remoteEmbeddingRuntimeConfig("http://must-not-be-contacted.invalid/v1")
+
+	state, err := PrepareRouterRuntime(context.Background(), cfg, PrepareRouterRuntimeOptions{Component: "test"})
+	if err != nil {
+		t.Fatalf("PrepareRouterRuntime: %v", err)
+	}
+	if state.AnyReady || state.ToolsReady || state.EmbeddingProvider != nil {
+		t.Fatalf("OpenVINO handoff state = %+v, want explicitly not-ready without remote provider", state)
+	}
+}
+
 func TestPrepareRouterRuntimeProbesRemoteEmbeddingProvider(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeRuntimeEmbeddingResponse(t, w, []float64{0.1, 0.2})

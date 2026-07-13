@@ -3,13 +3,40 @@
 package apiserver
 
 import (
+	"bytes"
+	"encoding/base64"
 	"errors"
+	"fmt"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"image/png"
 	"net/http"
 	"strings"
 	"testing"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 )
+
+func mustEmbeddingImageDataURI(t *testing.T, mime string) string {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	img.Set(0, 0, color.RGBA{R: 32, G: 128, B: 255, A: 255})
+	var encoded bytes.Buffer
+	var err error
+	switch mime {
+	case "image/png":
+		err = png.Encode(&encoded, img)
+	case "image/jpeg":
+		err = jpeg.Encode(&encoded, img, &jpeg.Options{Quality: 90})
+	default:
+		t.Fatalf("unsupported test MIME %q", mime)
+	}
+	if err != nil {
+		t.Fatalf("encode %s fixture: %v", mime, err)
+	}
+	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(encoded.Bytes())
+}
 
 func TestBuildBatchSimilarityMatchesRejectsInvalidNativeIndex(t *testing.T) {
 	result := &candle_binding.BatchSimilarityOutput{
@@ -55,7 +82,7 @@ func TestValidateEmbeddingRequestRequiresTextsOrImages(t *testing.T) {
 
 func TestValidateEmbeddingRequestAcceptsImagesOnly(t *testing.T) {
 	req := EmbeddingRequest{
-		Images:    []string{"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"},
+		Images:    []string{mustEmbeddingImageDataURI(t, "image/png")},
 		Dimension: defaultEmbeddingDimension,
 	}
 
@@ -98,13 +125,56 @@ func TestValidateEmbeddingRequestAcceptsUppercaseDataURIScheme(t *testing.T) {
 	// "DATA:IMAGE/PNG;BASE64,..." passes the safety gate; it must also pass
 	// decode-validation so it is not accepted here only to 500 at the FFI, whose
 	// marker scan is case-sensitive (CanonicalDataURL normalizes it downstream).
+	pngURI := mustEmbeddingImageDataURI(t, "image/png")
 	req := EmbeddingRequest{
-		Images:    []string{"DATA:IMAGE/PNG;BASE64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"},
+		Images:    []string{strings.Replace(pngURI, "data:image/png;base64,", "DATA:IMAGE/PNG;BASE64,", 1)},
 		Dimension: defaultEmbeddingDimension,
 	}
 
 	if _, _, ok := validateEmbeddingRequest(req, nil); !ok {
 		t.Fatalf("expected uppercase-scheme data URI to be accepted")
+	}
+}
+
+func TestValidateEmbeddingRequestRejectsDecodedBytesThatAreNotDeclaredImage(t *testing.T) {
+	pngURI := mustEmbeddingImageDataURI(t, "image/png")
+	tests := []struct {
+		name  string
+		image string
+	}{
+		{name: "valid base64 non-image", image: "data:image/png;base64,aGVsbG8="},
+		{name: "MIME format mismatch", image: strings.Replace(pngURI, "image/png", "image/jpeg", 1)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			code, message, ok := validateEmbeddingRequest(EmbeddingRequest{
+				Images:    []string{tt.image},
+				Dimension: defaultEmbeddingDimension,
+			}, nil)
+			if ok || code != "INVALID_IMAGE" || !strings.Contains(message, "decodable JPEG or PNG") {
+				t.Fatalf("unexpected validation result ok=%v code=%q message=%q", ok, code, message)
+			}
+		})
+	}
+}
+
+func TestValidateEmbeddingRequestRejectsImageFormatsUnsupportedByEmbeddingDecoder(t *testing.T) {
+	for _, mime := range []string{"image/gif", "image/webp"} {
+		t.Run(mime, func(t *testing.T) {
+			req := EmbeddingRequest{
+				Images:    []string{"data:" + mime + ";base64,AAAA"},
+				Dimension: defaultEmbeddingDimension,
+			}
+
+			code, message, ok := validateEmbeddingRequest(req, nil)
+			if ok {
+				t.Fatalf("expected %s to be rejected before reaching the JPEG/PNG-only decoder", mime)
+			}
+			if code != "INVALID_IMAGE" || !strings.Contains(message, "JPEG or PNG") {
+				t.Fatalf("unexpected validation error %q: %q", code, message)
+			}
+		})
 	}
 }
 
@@ -115,7 +185,7 @@ func TestBuildEmbeddingResultsWrapsImageEncodeFailure(t *testing.T) {
 	orig := multiModalEncodeImage
 	defer func() { multiModalEncodeImage = orig }()
 	multiModalEncodeImage = func(string, int) (*candle_binding.MultiModalEmbeddingOutput, error) {
-		return nil, errors.New("failed to decode image")
+		return nil, fmt.Errorf("decoder rejected payload: %w", candle_binding.ErrInvalidImageInput)
 	}
 
 	req := EmbeddingRequest{
@@ -135,24 +205,60 @@ func TestBuildEmbeddingResultsWrapsImageEncodeFailure(t *testing.T) {
 	}
 }
 
+func TestBuildEmbeddingResultsKeepsInternalImageEncodeFailureAs500(t *testing.T) {
+	orig := multiModalEncodeImage
+	defer func() { multiModalEncodeImage = orig }()
+	internalErr := errors.New("model is not initialized: private detail")
+	multiModalEncodeImage = func(string, int) (*candle_binding.MultiModalEmbeddingOutput, error) {
+		return nil, internalErr
+	}
+
+	req := EmbeddingRequest{
+		Images:    []string{"data:image/png;base64,aGVsbG8="},
+		Dimension: defaultEmbeddingDimension,
+	}
+	_, _, err := buildEmbeddingResults(req)
+	if err == nil {
+		t.Fatal("expected an internal image encode error")
+	}
+	var imgErr *imageEncodeError
+	if errors.As(err, &imgErr) {
+		t.Fatalf("internal error must not be wrapped as imageEncodeError: %v", err)
+	}
+	if !errors.Is(err, internalErr) {
+		t.Fatalf("expected internal cause to remain available to server code: %v", err)
+	}
+
+	status, code, message := classifyEmbeddingError(err)
+	if status != http.StatusInternalServerError || code != "EMBEDDING_GENERATION_FAILED" {
+		t.Fatalf("expected 500 EMBEDDING_GENERATION_FAILED, got %d %q", status, code)
+	}
+	if message != "failed to generate embedding" || strings.Contains(message, "private detail") {
+		t.Fatalf("500 response exposed internal error detail: %q", message)
+	}
+}
+
 func TestClassifyEmbeddingErrorMapsImageEncodeFailureTo400(t *testing.T) {
-	status, code, _ := classifyEmbeddingError(&imageEncodeError{index: 2, err: errors.New("bad image")})
+	status, code, _ := classifyEmbeddingError(&imageEncodeError{index: 2, err: candle_binding.ErrInvalidImageInput})
 	if status != http.StatusBadRequest || code != "INVALID_IMAGE" {
 		t.Fatalf("expected 400 INVALID_IMAGE, got %d %q", status, code)
 	}
 }
 
 func TestClassifyEmbeddingErrorMapsInternalFailureTo500(t *testing.T) {
-	status, code, _ := classifyEmbeddingError(errors.New("model not loaded"))
+	status, code, message := classifyEmbeddingError(errors.New("model not loaded"))
 	if status != http.StatusInternalServerError || code != "EMBEDDING_GENERATION_FAILED" {
 		t.Fatalf("expected 500 EMBEDDING_GENERATION_FAILED, got %d %q", status, code)
+	}
+	if message != "failed to generate embedding" {
+		t.Fatalf("expected fixed client-safe 500 message, got %q", message)
 	}
 }
 
 func TestValidateEmbeddingRequestRejectsTooManyImages(t *testing.T) {
 	images := make([]string, maxImagesPerRequest+1)
 	for i := range images {
-		images[i] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+		images[i] = mustEmbeddingImageDataURI(t, "image/png")
 	}
 	req := EmbeddingRequest{Images: images, Dimension: defaultEmbeddingDimension}
 
@@ -160,7 +266,7 @@ func TestValidateEmbeddingRequestRejectsTooManyImages(t *testing.T) {
 	if ok {
 		t.Fatalf("expected more than %d images to be rejected", maxImagesPerRequest)
 	}
-	if code != "INVALID_INPUT" {
+	if code != embeddingInputTooLargeCode {
 		t.Fatalf("unexpected validation error code %q", code)
 	}
 }
@@ -168,7 +274,7 @@ func TestValidateEmbeddingRequestRejectsTooManyImages(t *testing.T) {
 func TestAverageEmbeddingProcessingTimeUsesInputCount(t *testing.T) {
 	req := EmbeddingRequest{
 		Texts:  []string{"first", "second"},
-		Images: []string{"data:image/png;base64,iVBORw0KGgo="},
+		Images: []string{mustEmbeddingImageDataURI(t, "image/png")},
 	}
 
 	got := averageEmbeddingProcessingTime(90, req)

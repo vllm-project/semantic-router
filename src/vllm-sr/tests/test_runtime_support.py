@@ -81,6 +81,45 @@ def test_append_passthrough_env_vars_masks_looper_shared_secret(monkeypatch, cap
     assert "VLLM_SR_LOOPER_SHARED_SECRET=***" in caplog.text
 
 
+def test_append_passthrough_env_vars_collects_dashboard_auth_and_masks_secrets(
+    monkeypatch, caplog
+):
+    values = {
+        "DASHBOARD_JWT_SECRET": "jwt-secret-value",
+        "DASHBOARD_JWT_EXPIRY_HOURS": "12",
+        "DASHBOARD_ADMIN_EMAIL": "admin@example.com",
+        "DASHBOARD_ADMIN_PASSWORD": "admin-password-value",
+        "DASHBOARD_ADMIN_NAME": "Local Admin",
+        "DASHBOARD_PASSWORD_BLOCKLIST_PATH": "/tmp/password-blocklist.txt",
+        "DASHBOARD_ALLOW_OPEN_BOOTSTRAP": "false",
+    }
+    for name, value in values.items():
+        monkeypatch.setenv(name, value)
+
+    env_vars: dict[str, str] = {}
+    with caplog.at_level("INFO", logger="cli.commands.runtime_support"):
+        append_passthrough_env_vars(env_vars)
+
+    assert {name: env_vars[name] for name in values} == values
+    assert "jwt-secret-value" not in caplog.text
+    assert "admin-password-value" not in caplog.text
+    assert "DASHBOARD_JWT_SECRET=***" in caplog.text
+    assert "DASHBOARD_ADMIN_PASSWORD=***" in caplog.text
+
+
+def test_append_passthrough_env_vars_excludes_dashboard_auth_for_nonlocal_target(
+    monkeypatch,
+):
+    monkeypatch.setenv("DASHBOARD_JWT_SECRET", "jwt-secret-value")
+    monkeypatch.setenv("DASHBOARD_ADMIN_EMAIL", "admin@example.com")
+
+    env_vars: dict[str, str] = {}
+    append_passthrough_env_vars(env_vars, include_dashboard_auth=False)
+
+    assert "DASHBOARD_JWT_SECRET" not in env_vars
+    assert "DASHBOARD_ADMIN_EMAIL" not in env_vars
+
+
 @pytest.mark.parametrize(
     "invalid_secret",
     ["", "too-short", "g" * 64],

@@ -65,13 +65,6 @@ export async function mockAuthenticatedSession(
   page: Page,
   { token = 'test-auth-token', user = defaultUser }: BootstrapOptions = {},
 ): Promise<{ token: string; user: SessionUser }> {
-  await page.addInitScript(
-    ({ storedToken }) => {
-      window.localStorage.setItem('vsr_auth_token', storedToken)
-    },
-    { storedToken: token },
-  )
-
   await page.route('**/api/auth/me', async (route) => {
     await route.fulfill({
       status: 200,

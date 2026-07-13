@@ -229,6 +229,7 @@ spec:
     kind: Gateway
     name: agentgateway-proxy
   traffic:
+    # AgentgatewayPolicy ExtProc is fail-closed by default.
     extProc:
       backendRef:
         name: semantic-router
@@ -242,6 +243,11 @@ spec:
         allowModeOverride: true
 EOF
 ```
+
+The current Kubernetes `AgentgatewayPolicy` ExtProc schema does not expose a
+failure-mode override. Its contract is fail closed: if Semantic Router is
+unavailable, the gateway returns an error instead of continuing with an
+untrusted routing header. Restore the processor before retrying traffic.
 
 The demo uses buffered request bodies to match the existing Envoy AI Gateway and Istio examples. For large prompts, use `requestBodyMode: FullDuplexStreamed` together with a Semantic Router configuration that enables streamed body handling. agentgateway does not support `Streamed` mode; `FullDuplexStreamed` is the only streaming option. See [Streamed ExtProc and immediate responses](./streamed-extproc.md) for the full configuration, immediate-response behavior, and verification checklist.
 

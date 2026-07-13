@@ -77,8 +77,9 @@ attach the final non-sensitive closure receipts.
 - Public artifacts must not contain credentials, private host details, local
   paths, or tool attribution.
 - Treat issue creation and comments as reviewed apply steps.
-- Keep this pull request focused on the audit and one proof-of-fix; follow-up
-  implementations use their own affected-file reports and gates.
+- Keep this pull request focused on the audit, its Looper proof, and bounded
+  high-confidence containment required by final-main or deployment review;
+  broader implementations use their own affected-file reports and gates.
 - A failed gate is an iteration point, not a handoff point.
 
 ## Related Docs

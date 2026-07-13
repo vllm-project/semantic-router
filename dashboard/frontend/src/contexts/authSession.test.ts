@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   changePasswordAndRotateSession,
+  COOKIE_AUTH_RESPONSE_HEADERS,
   fetchCurrentAuthUser,
   hasAuthenticatedSession,
   SAFE_PASSWORD_CHANGE_ERROR,
@@ -20,16 +21,20 @@ function response(status: number, body?: unknown): Response {
 }
 
 describe('authSession', () => {
-  it('treats cookie-backed users as authenticated even without a local token', () => {
+  it('uses the explicit maintained-browser cookie response contract', () => {
+    expect(COOKIE_AUTH_RESPONSE_HEADERS).toEqual({ 'X-VSR-Auth-Mode': 'cookie' })
+    expect(Object.isFrozen(COOKIE_AUTH_RESPONSE_HEADERS)).toBe(true)
+  })
+
+  it('treats a server-resolved cookie-backed user as authenticated', () => {
     const user: AuthUser = {
       id: 'user-1',
       email: 'user@example.test',
       name: 'User One',
     }
 
-    expect(hasAuthenticatedSession(null, user)).toBe(true)
-    expect(hasAuthenticatedSession('token', null)).toBe(true)
-    expect(hasAuthenticatedSession(null, null)).toBe(false)
+    expect(hasAuthenticatedSession(user)).toBe(true)
+    expect(hasAuthenticatedSession(null)).toBe(false)
   })
 
   it('refreshes the current user through the server session cookie path', async () => {
@@ -51,7 +56,7 @@ describe('authSession', () => {
         email: 'user@example.test',
         name: 'User One',
       },
-      clearLocalToken: false,
+      unauthorized: false,
     })
     expect(calls).toEqual([
       {
@@ -61,21 +66,20 @@ describe('authSession', () => {
     ])
   })
 
-  it('marks local token state stale when the server session is unauthorized', async () => {
+  it('marks the cookie-backed session unauthorized when the server rejects it', async () => {
     const fetcher: typeof fetch = async () => response(401)
 
     await expect(fetchCurrentAuthUser(fetcher)).resolves.toEqual({
       user: null,
-      clearLocalToken: true,
+      unauthorized: true,
     })
   })
 
-  it('posts only the password-change payload and rotates the local session from the response', async () => {
+  it('posts only the password-change payload and adopts the cookie-backed user', async () => {
     const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = []
     const fetcher: typeof fetch = async (input, init) => {
       calls.push({ input, init })
       return response(200, {
-        token: 'rotated.session.token',
         user: {
           id: 'user-1',
           email: 'user@example.test',
@@ -104,6 +108,7 @@ describe('authSession', () => {
           headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
+            'X-VSR-Auth-Mode': 'cookie',
           },
           body: JSON.stringify({
             currentPassword: 'old-password-value',
@@ -112,7 +117,7 @@ describe('authSession', () => {
         },
       },
     ])
-    expect(writeSession).toHaveBeenCalledWith('rotated.session.token', {
+    expect(writeSession).toHaveBeenCalledWith({
       id: 'user-1',
       email: 'user@example.test',
       name: 'User One',
@@ -191,7 +196,7 @@ describe('authSession', () => {
       email: 'user@example.test',
       name: 'User One',
     }
-    const fetcher: typeof fetch = async () => response(200, { token: 'rotated.session.token' })
+    const fetcher: typeof fetch = async () => response(200, {})
     const writeSession = vi.fn()
 
     await changePasswordAndRotateSession(
@@ -202,6 +207,6 @@ describe('authSession', () => {
       fetcher,
     )
 
-    expect(writeSession).toHaveBeenCalledWith('rotated.session.token', existingUser)
+    expect(writeSession).toHaveBeenCalledWith(existingUser)
   })
 })

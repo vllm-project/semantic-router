@@ -39,6 +39,9 @@ func TestExtractContentFastAnthropic_StringContentAndSystem(t *testing.T) {
 	if len(got.NonUserMessages) != 1 || got.NonUserMessages[0] != "you are helpful" {
 		t.Fatalf("non-user messages: got %+v", got.NonUserMessages)
 	}
+	if got.ImagePartPresent || got.InvalidImagePart {
+		t.Fatalf("pure text request unexpectedly carried image state: %+v", got)
+	}
 }
 
 func TestExtractContentFastAnthropic_ArraySystem(t *testing.T) {
@@ -148,6 +151,9 @@ func TestExtractContentFastAnthropic_ImageURLNotSurfaced(t *testing.T) {
 	}
 	if got.FirstImageURL != "" {
 		t.Fatalf("expected empty image url for non-base64 source, got %q", got.FirstImageURL)
+	}
+	if !got.ImagePartPresent || got.InvalidImagePart || len(got.InlineImageURLs) != 0 {
+		t.Fatalf("valid remote image source state = %+v", got)
 	}
 }
 

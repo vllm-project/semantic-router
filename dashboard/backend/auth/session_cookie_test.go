@@ -109,7 +109,12 @@ func TestLogoutHandlerClearsSessionCookie(t *testing.T) {
 
 	svc := newTestAuthService(t)
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"https://dashboard.example.com/api/auth/logout",
+		nil,
+	)
+	req.Header.Set("Origin", "https://dashboard.example.com")
 	req.Header.Set("X-Forwarded-Proto", "https")
 	logoutHandler(svc).ServeHTTP(recorder, req)
 
@@ -146,8 +151,9 @@ func TestLogoutHandlerRevokesSessionToken(t *testing.T) {
 	}
 
 	logoutRecorder := httptest.NewRecorder()
-	logoutReq := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	logoutReq := httptest.NewRequest(http.MethodPost, "https://dashboard.example.com/api/auth/logout", nil)
 	logoutReq.AddCookie(&http.Cookie{Name: authSessionCookieName, Value: token})
+	logoutReq.Header.Set("Origin", "https://dashboard.example.com")
 	logoutHandler(svc).ServeHTTP(logoutRecorder, logoutReq)
 	if logoutRecorder.Code != http.StatusOK {
 		t.Fatalf("logout status = %d, want %d", logoutRecorder.Code, http.StatusOK)
@@ -163,5 +169,111 @@ func TestLogoutHandlerRevokesSessionToken(t *testing.T) {
 
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestLogoutHandlerRequiresSameOriginForCookieSession(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestAuthService(t)
+	user := newTestUser(t, svc, "logout-csrf@example.com", RoleRead, "active")
+
+	for _, test := range []struct {
+		name       string
+		origin     string
+		fetchSite  string
+		wantStatus int
+	}{
+		{name: "same origin", origin: "https://dashboard.example.com", wantStatus: http.StatusOK},
+		{name: "same-site sibling", origin: "https://evil.example.com", wantStatus: http.StatusForbidden},
+		{name: "same-origin fetch metadata", fetchSite: "same-origin", wantStatus: http.StatusOK},
+		{name: "missing browser evidence", wantStatus: http.StatusForbidden},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			requestToken, issueErr := svc.issueToken(user)
+			if issueErr != nil {
+				t.Fatalf("issueToken() error = %v", issueErr)
+			}
+			req := httptest.NewRequest(http.MethodPost, "https://dashboard.example.com/api/auth/logout", nil)
+			req.AddCookie(&http.Cookie{Name: authSessionCookieName, Value: requestToken})
+			if test.origin != "" {
+				req.Header.Set("Origin", test.origin)
+			}
+			if test.fetchSite != "" {
+				req.Header.Set("Sec-Fetch-Site", test.fetchSite)
+			}
+			recorder := httptest.NewRecorder()
+			logoutHandler(svc).ServeHTTP(recorder, req)
+			if recorder.Code != test.wantStatus {
+				t.Fatalf("status = %d, want %d", recorder.Code, test.wantStatus)
+			}
+		})
+	}
+}
+
+func TestLogoutHandlerAllowsMetadataFreeBearerClient(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestAuthService(t)
+	user := newTestUser(t, svc, "logout-api@example.com", RoleRead, "active")
+	token, err := svc.issueToken(user)
+	if err != nil {
+		t.Fatalf("issueToken() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	recorder := httptest.NewRecorder()
+	logoutHandler(svc).ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+}
+
+func TestLogoutHandlerRejectsCredentialFreeCrossSiteRequest(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestAuthService(t)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"https://dashboard.example.com/api/auth/logout",
+		nil,
+	)
+	req.Header.Set("Origin", "https://evil.example.com")
+	recorder := httptest.NewRecorder()
+
+	logoutHandler(svc).ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+	if got := recorder.Header().Values("Set-Cookie"); len(got) != 0 {
+		t.Fatalf("cross-site logout emitted Set-Cookie: %#v", got)
+	}
+}
+
+func TestRequestUsesHTTPSUsesOriginalForwardedProtoHop(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name      string
+		values    []string
+		wantHTTPS bool
+	}{
+		{name: "direct HTTPS proxy", values: []string{"https"}, wantHTTPS: true},
+		{name: "HTTPS client then HTTP internal hop", values: []string{"https, http"}, wantHTTPS: true},
+		{name: "HTTP client then HTTPS internal hop", values: []string{"http, https"}, wantHTTPS: false},
+		{name: "repeated proxy fields use first field", values: []string{"https", "http"}, wantHTTPS: true},
+		{name: "malformed first hop", values: []string{"ftp, https"}, wantHTTPS: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "http://dashboard.example.com/", nil)
+			for _, value := range test.values {
+				req.Header.Add("X-Forwarded-Proto", value)
+			}
+			if got := requestUsesHTTPS(req); got != test.wantHTTPS {
+				t.Fatalf("requestUsesHTTPS() = %v, want %v", got, test.wantHTTPS)
+			}
+		})
 	}
 }

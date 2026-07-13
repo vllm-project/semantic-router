@@ -7,6 +7,7 @@ package candle_binding
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -451,6 +452,24 @@ extern void candle_mlp_free_string(char* ptr);
 */
 import "C"
 
+// ErrInvalidImageInput identifies image data that cannot be decoded by the
+// multimodal image pipeline. Callers should use errors.Is rather than matching
+// error strings. Model, device, tensor, and inference failures do not wrap this
+// sentinel.
+var ErrInvalidImageInput = errors.New("invalid image input")
+
+// MaxMultiModalImageEncodedBytes is the largest encoded JPEG/PNG payload the
+// multimodal image pipeline will accept, regardless of whether bytes arrive
+// directly, through base64, from disk, or from a trusted URL.
+const MaxMultiModalImageEncodedBytes = 20 * 1024 * 1024
+
+func multiModalImageStatusError(status int) error {
+	if status == -2 {
+		return fmt.Errorf("%w: image bytes could not be decoded", ErrInvalidImageInput)
+	}
+	return fmt.Errorf("multi-modal image encoding from bytes failed (status %d)", status)
+}
+
 var (
 	initOnce                              sync.Once
 	initErr                               error
@@ -727,7 +746,7 @@ func GetEmbeddingSmart(text string, qualityPriority, latencyPriority float32) ([
 
 	// Check status code (0 = success, 1 = error)
 	if status != 0 {
-		return nil, fmt.Errorf("failed to generate smart embedding (status: %d)", status)
+		return nil, embeddingStatusError("failed to generate smart embedding", int(status))
 	}
 
 	// Check error flag
@@ -819,9 +838,12 @@ func GetEmbeddingBatched(text string, modelType string, targetDim int) (*Embeddi
 		&result,
 	)
 
-	// Check status code (0 = success, -1 = error)
-	if status != 0 || result.error {
-		return nil, fmt.Errorf("failed to generate batched embedding (status: %d)", status)
+	// Check status code (0 = success, -3 = input too long, -1 = internal error)
+	if status != 0 {
+		return nil, embeddingStatusError("failed to generate batched embedding", int(status))
+	}
+	if result.error {
+		return nil, fmt.Errorf("failed to generate batched embedding")
 	}
 
 	// Convert C array to Go slice
@@ -1017,7 +1039,10 @@ func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutpu
 	var result C.MultiModalEmbeddingResult
 	status := C.multimodal_encode_text(cText, C.int(targetDim), &result)
 
-	if int(status) != 0 || bool(result.error) {
+	if int(status) != 0 {
+		return nil, embeddingStatusError("multi-modal text encoding failed", int(status))
+	}
+	if bool(result.error) {
 		return nil, fmt.Errorf("multi-modal text encoding failed")
 	}
 
@@ -1152,7 +1177,10 @@ func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) 
 //   - error if decoding or encoding fails
 func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiModalEmbeddingOutput, error) {
 	if len(imageBytes) == 0 {
-		return nil, fmt.Errorf("imageBytes cannot be empty")
+		return nil, fmt.Errorf("%w: imageBytes cannot be empty", ErrInvalidImageInput)
+	}
+	if len(imageBytes) > MaxMultiModalImageEncodedBytes {
+		return nil, fmt.Errorf("%w: image payload exceeds %d bytes", ErrInvalidImageInput, MaxMultiModalImageEncodedBytes)
 	}
 
 	var result C.MultiModalEmbeddingResult
@@ -1162,13 +1190,20 @@ func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiMod
 		C.int(targetDim),
 		&result,
 	)
-	if status != 0 || result.error {
+	if status != 0 {
+		return nil, multiModalImageStatusError(int(status))
+	}
+	if result.error {
 		return nil, fmt.Errorf("multi-modal image encoding from bytes failed")
+	}
+	if result.data == nil || result.length <= 0 {
+		return nil, fmt.Errorf("multi-modal image encoding returned an empty embedding")
 	}
 	defer C.free_multimodal_embedding(result.data, result.length)
 
-	embedding := make([]float32, result.length)
-	src := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:result.length:result.length]
+	length := int(result.length)
+	embedding := make([]float32, length)
+	src := unsafe.Slice((*C.float)(unsafe.Pointer(result.data)), length)
 	for i, v := range src {
 		embedding[i] = float32(v)
 	}
@@ -1193,7 +1228,7 @@ func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiMod
 //   - error if decoding or encoding fails
 func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiModalEmbeddingOutput, error) {
 	if base64Str == "" {
-		return nil, fmt.Errorf("base64Str cannot be empty")
+		return nil, fmt.Errorf("%w: base64Str cannot be empty", ErrInvalidImageInput)
 	}
 
 	payload := base64Str
@@ -1201,9 +1236,13 @@ func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiMod
 		payload = base64Str[idx+len(";base64,"):]
 	}
 
-	imageBytes, err := base64.StdEncoding.DecodeString(payload)
+	decoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(payload))
+	imageBytes, err := io.ReadAll(io.LimitReader(decoder, MaxMultiModalImageEncodedBytes+1))
 	if err != nil {
-		return nil, fmt.Errorf("base64 decode failed: %w", err)
+		return nil, fmt.Errorf("%w: base64 decode failed: %v", ErrInvalidImageInput, err)
+	}
+	if len(imageBytes) > MaxMultiModalImageEncodedBytes {
+		return nil, fmt.Errorf("%w: image payload exceeds %d bytes", ErrInvalidImageInput, MaxMultiModalImageEncodedBytes)
 	}
 
 	return MultiModalEncodeImageFromBytes(imageBytes, targetDim)
@@ -1230,10 +1269,7 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 		return nil, fmt.Errorf("url cannot be empty")
 	}
 
-	const (
-		maxImageSize = 20 * 1024 * 1024 // 20 MB
-		httpTimeout  = 30               // seconds
-	)
+	const httpTimeout = 30 // seconds
 
 	client := &http.Client{Timeout: time.Duration(httpTimeout) * time.Second}
 	resp, err := client.Get(url)
@@ -1245,13 +1281,16 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
 	}
+	if resp.ContentLength > MaxMultiModalImageEncodedBytes {
+		return nil, fmt.Errorf("%w: image from %s exceeds maximum size of %d bytes", ErrInvalidImageInput, url, MaxMultiModalImageEncodedBytes)
+	}
 
-	imageBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxImageSize+1))
+	imageBytes, err := io.ReadAll(io.LimitReader(resp.Body, MaxMultiModalImageEncodedBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
-	if len(imageBytes) > maxImageSize {
-		return nil, fmt.Errorf("image from %s exceeds maximum size of %d bytes", url, maxImageSize)
+	if len(imageBytes) > MaxMultiModalImageEncodedBytes {
+		return nil, fmt.Errorf("%w: image from %s exceeds maximum size of %d bytes", ErrInvalidImageInput, url, MaxMultiModalImageEncodedBytes)
 	}
 
 	return MultiModalEncodeImageFromBytes(imageBytes, targetDim)
@@ -1355,7 +1394,7 @@ func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, 
 
 	// Check status code (0 = success, 1 = error)
 	if status != 0 {
-		return nil, fmt.Errorf("failed to generate embedding with dim (status: %d)", status)
+		return nil, embeddingStatusError("failed to generate embedding with dim", int(status))
 	}
 
 	// Check error flag
@@ -1413,7 +1452,7 @@ func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority floa
 
 	// Check status code (0 = success, 1 = error)
 	if status != 0 {
-		return nil, fmt.Errorf("failed to generate embedding with metadata (status: %d)", status)
+		return nil, embeddingStatusError("failed to generate embedding with metadata", int(status))
 	}
 
 	// Check error flag
@@ -1522,9 +1561,9 @@ func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, ta
 		&result,
 	)
 
-	// Check status code (0 = success, -1 = error)
+	// Check status code (0 = success, -3 = input too long, -1 = internal error)
 	if status != 0 {
-		return nil, fmt.Errorf("failed to generate embedding with model type %s (status: %d)", modelType, status)
+		return nil, embeddingStatusError("failed to generate embedding with model type "+modelType, int(status))
 	}
 
 	// Check error flag
@@ -1666,9 +1705,9 @@ func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetD
 		&result,
 	)
 
-	// Check status code (0 = success, -1 = error)
+	// Check status code (0 = success, -3 = input too long, -1 = internal error)
 	if status != 0 {
-		return nil, fmt.Errorf("failed to calculate similarity (status: %d)", status)
+		return nil, embeddingStatusError("failed to calculate similarity", int(status))
 	}
 
 	// Check error flag
@@ -1758,9 +1797,9 @@ func CalculateSimilarityBatch(query string, candidates []string, topK int, model
 		&result,
 	)
 
-	// Check status code (0 = success, -1 = error)
+	// Check status code (0 = success, -3 = input too long, -1 = internal error)
 	if status != 0 {
-		return nil, fmt.Errorf("failed to calculate batch similarity (status: %d)", status)
+		return nil, embeddingStatusError("failed to calculate batch similarity", int(status))
 	}
 
 	// Check error flag

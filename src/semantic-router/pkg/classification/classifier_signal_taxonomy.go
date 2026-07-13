@@ -23,6 +23,9 @@ func (c *Classifier) evaluateKBSignals(results *SignalResults, mu *sync.Mutex, t
 		classifyResult, err := classifier.Classify(text)
 		if err != nil {
 			logging.Warnf("[KB Signal] KB %q failed: %v", name, err)
+			mu.Lock()
+			results.recordTextEvaluationError(err)
+			mu.Unlock()
 			continue
 		}
 		classifierResults[name] = classifyResult

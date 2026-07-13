@@ -3,6 +3,7 @@
 import os
 
 from cli.consts import PLATFORM_AMD
+from cli.container_host_ports import format_port_mapping
 from cli.container_images import _normalize_platform
 from cli.utils import get_logger
 
@@ -90,9 +91,9 @@ def append_mount_specs(cmd, mount_specs: list[str]):
         cmd.extend(["-v", mount_spec])
 
 
-def append_port_mappings(cmd, port_mappings: list[tuple[int, int]]):
-    for host_port, container_port in port_mappings:
-        cmd.extend(["-p", f"{host_port}:{container_port}"])
+def append_port_mappings(cmd, port_mappings: list[tuple[str, int, int]]):
+    for bind_address, host_port, container_port in port_mappings:
+        cmd.extend(["-p", format_port_mapping(bind_address, host_port, container_port)])
 
 
 def append_env_vars(

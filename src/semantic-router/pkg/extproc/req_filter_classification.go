@@ -27,7 +27,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 	var selectedModel string
 
 	// Check if there's content to evaluate
-	if len(history.nonUserMessages) == 0 && history.currentUserMessage == "" {
+	if !hasDecisionSignalInput(history, ctx.RequestImageURL) {
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
@@ -42,9 +42,14 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 
 	signalInput := r.prepareSignalEvaluationInput(history)
 	ctx.VSRConversationFacts = signalInput.conversationFacts
-	if signalInput.evaluationText == "" {
+	if signalInput.evaluationText == "" && ctx.RequestImageURL == "" {
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
+	release, admissionErr := r.admitDecisionEvaluation(ctx.TraceContext, originalModel, ctx.RequestImageURL)
+	if admissionErr != nil {
+		return "", 0, entropy.ReasoningDecision{}, "", admissionErr
+	}
+	defer release()
 
 	signals, authzErr := r.evaluateSignalsForDecision(originalModel, signalInput, history.nonUserMessages, ctx)
 	if authzErr != nil {
@@ -63,6 +68,10 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 		ctx,
 	)
 	return decisionName, evaluationConfidence, reasoningDecision, selectedModel, nil
+}
+
+func hasDecisionSignalInput(history signalConversationHistory, imageURL string) bool {
+	return len(history.nonUserMessages) > 0 || history.currentUserMessage != "" || imageURL != ""
 }
 
 // selectModelFromCandidates uses the configured selection algorithm to choose the best model

@@ -29,7 +29,8 @@ type ComplexityClassifier struct {
 	imageEasyPrototypeBanks map[string]*prototypeBank
 
 	modelType          string // Model type for text embeddings ("qwen3" or "gemma")
-	hasImageCandidates bool   // True if any rule uses image_candidates
+	backend            string
+	hasImageCandidates bool // True if any rule uses image_candidates
 	prototypeCfg       config.PrototypeScoringConfig
 	provider           embedding.Provider
 }
@@ -56,12 +57,22 @@ func NewComplexityClassifier(
 	prototypeCfg config.PrototypeScoringConfig,
 	providers ...embedding.Provider,
 ) (*ComplexityClassifier, error) {
-	if modelType == "" {
-		modelType = "qwen3"
-	}
 	var provider embedding.Provider
 	if len(providers) > 0 {
 		provider = providers[0]
+	}
+	return newComplexityClassifierWithBackend(rules, modelType, prototypeCfg, "", provider)
+}
+
+func newComplexityClassifierWithBackend(
+	rules []config.ComplexityRule,
+	modelType string,
+	prototypeCfg config.PrototypeScoringConfig,
+	backend string,
+	provider embedding.Provider,
+) (*ComplexityClassifier, error) {
+	if modelType == "" {
+		modelType = "qwen3"
 	}
 
 	c := &ComplexityClassifier{
@@ -75,6 +86,7 @@ func NewComplexityClassifier(
 		imageHardPrototypeBanks: make(map[string]*prototypeBank),
 		imageEasyPrototypeBanks: make(map[string]*prototypeBank),
 		modelType:               modelType,
+		backend:                 normalizeTextEmbeddingBackend(backend),
 		hasImageCandidates:      config.HasImageCandidatesInRules(rules),
 		prototypeCfg:            prototypeCfg.WithDefaults(),
 		provider:                provider,
@@ -82,6 +94,7 @@ func NewComplexityClassifier(
 
 	logging.ComponentEvent("classifier", "complexity_classifier_initialized", map[string]interface{}{
 		"model_type":       c.modelType,
+		"backend":          effectiveTextEmbeddingBackend(c.backend, c.provider),
 		"rules":            len(rules),
 		"image_candidates": c.hasImageCandidates,
 	})

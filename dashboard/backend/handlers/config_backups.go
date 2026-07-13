@@ -68,25 +68,25 @@ func readConfigBackup(configDir string, version string) ([]byte, error) {
 	return os.ReadFile(backupFile)
 }
 
-func snapshotCurrentConfigBeforeRollback(configPath string, configDir string) []byte {
-	existingData, err := os.ReadFile(configPath)
-	if err != nil || len(existingData) == 0 {
-		return existingData
+func snapshotCurrentConfigBeforeRollback(configPath string, configDir string) (configFileSnapshot, error) {
+	previous, err := captureConfigFileSnapshot(configPath)
+	if err != nil || !previous.existed || len(previous.data) == 0 {
+		return previous, err
 	}
 
 	backupDir := configBackupDir(configDir)
 	if err := os.MkdirAll(backupDir, 0o755); err != nil {
 		log.Printf("Warning: failed to create backup directory: %v", err)
-		return existingData
+		return previous, nil
 	}
 
 	currentVersion := time.Now().Format("20060102-150405")
 	preRollbackFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", currentVersion))
-	if err := os.WriteFile(preRollbackFile, existingData, 0o644); err != nil {
+	if err := os.WriteFile(preRollbackFile, previous.data, 0o644); err != nil {
 		log.Printf("Warning: failed to snapshot current config before rollback: %v", err)
 	}
 
-	return existingData
+	return previous, nil
 }
 
 func versionsLocalList(w http.ResponseWriter, configPath string) {

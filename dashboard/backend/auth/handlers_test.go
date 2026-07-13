@@ -60,6 +60,43 @@ func newAuthenticatedRequest(t *testing.T, svc *Service, user *User, method, pat
 	return req
 }
 
+func TestAuthRoutesServeBootstrapTrailingSlash(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestAuthService(t)
+	handler := AuthRoutes(svc)
+
+	canRegister := httptest.NewRecorder()
+	handler.ServeHTTP(
+		canRegister,
+		httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/can-register/", nil),
+	)
+	if canRegister.Code != http.StatusOK {
+		t.Fatalf("can-register trailing slash status = %d, want %d", canRegister.Code, http.StatusOK)
+	}
+
+	register := httptest.NewRecorder()
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/auth/bootstrap/register/",
+		strings.NewReader(`{}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	handler.ServeHTTP(register, req)
+	if register.Code != http.StatusForbidden {
+		t.Fatalf("register trailing slash status = %d, want %d", register.Code, http.StatusForbidden)
+	}
+
+	suffix := httptest.NewRecorder()
+	handler.ServeHTTP(
+		suffix,
+		httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/can-register/suffix", nil),
+	)
+	if suffix.Code != http.StatusNotFound {
+		t.Fatalf("can-register suffix status = %d, want %d", suffix.Code, http.StatusNotFound)
+	}
+}
+
 func TestAuthenticateRequestUsesCurrentDatabaseState(t *testing.T) {
 	t.Parallel()
 

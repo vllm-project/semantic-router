@@ -2,14 +2,15 @@ package classification
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -36,18 +37,37 @@ var getMultiModalImageEmbedding = func(imageRef string, targetDim int) ([]float3
 		return nil, fmt.Errorf("imageRef cannot be empty")
 	}
 
-	payload := imageRef
-
 	if strings.HasPrefix(imageRef, "/") || strings.HasPrefix(imageRef, "./") {
-		data, err := os.ReadFile(imageRef)
+		file, err := os.Open(imageRef)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open image file %q: %w", imageRef, err)
+		}
+		defer file.Close()
+		info, err := file.Stat()
+		if err != nil {
+			return nil, fmt.Errorf("failed to stat image file %q: %w", imageRef, err)
+		}
+		if info.Size() > candle_binding.MaxMultiModalImageEncodedBytes {
+			return nil, fmt.Errorf("%w: image file %q exceeds %d bytes", candle_binding.ErrInvalidImageInput, imageRef, candle_binding.MaxMultiModalImageEncodedBytes)
+		}
+		data, err := io.ReadAll(io.LimitReader(file, candle_binding.MaxMultiModalImageEncodedBytes+1))
 		if err != nil {
 			return nil, fmt.Errorf("failed to read image file %q: %w", imageRef, err)
 		}
-		payload = base64.StdEncoding.EncodeToString(data)
-	} else if idx := strings.Index(imageRef, ";base64,"); idx >= 0 {
-		payload = imageRef[idx+len(";base64,"):]
+		if len(data) > candle_binding.MaxMultiModalImageEncodedBytes {
+			return nil, fmt.Errorf("%w: image file %q exceeds %d bytes", candle_binding.ErrInvalidImageInput, imageRef, candle_binding.MaxMultiModalImageEncodedBytes)
+		}
+		output, err := candle_binding.MultiModalEncodeImageFromBytes(data, targetDim)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
 	}
 
+	payload := imageRef
+	if idx := strings.Index(imageRef, ";base64,"); idx >= 0 {
+		payload = imageRef[idx+len(";base64,"):]
+	}
 	output, err := candle_binding.MultiModalEncodeImageFromBase64(payload, targetDim)
 	if err != nil {
 		return nil, err
@@ -129,30 +149,60 @@ func (c *Classifier) initializeKeywordEmbeddingClassifier() error {
 		return fmt.Errorf("keyword embedding similarity match is not properly configured")
 	}
 
-	modelType := strings.ToLower(strings.TrimSpace(c.Config.EmbeddingConfig.ModelType))
-	if modelType == "multimodal" {
-		mmPath := config.ResolveModelPath(c.Config.MultiModalModelPath)
-		if mmPath == "" {
-			return fmt.Errorf("embedding_rules with model_type=multimodal requires embedding_models.multimodal_model_path")
+	plan, err := resolveTextEmbeddingRuntimePlan(c.Config, c.keywordEmbeddingClassifier.modelType)
+	if err != nil {
+		return fmt.Errorf("invalid text embedding runtime plan for embedding rules: %w", err)
+	}
+
+	switch {
+	case plan.ModelType == "multimodal":
+		return c.initializeKeywordMultimodalBackend(plan)
+	case plan.Backend == config.EmbeddingBackendOpenVINO ||
+		plan.Backend == config.EmbeddingBackendCandle && plan.LocalOverride:
+		return c.initializeKeywordSharedTextBackend(plan)
+	default:
+		return c.initializeKeywordConfiguredBackend(plan)
+	}
+}
+
+func (c *Classifier) initializeKeywordMultimodalBackend(plan embedding.RuntimePlan) error {
+	if plan.LocalOverride {
+		if err := c.ensureTextEmbeddingRuntime(plan); err != nil {
+			return fmt.Errorf("failed to initialize multimodal model for embedding rules: %w", err)
 		}
-		if err := initMultiModalModel(mmPath, c.Config.UseCPU); err != nil {
-			return fmt.Errorf("failed to initialize multimodal model for embedding_rules: %w", err)
-		}
-		logging.ComponentEvent("classifier", "keyword_embedding_backend_initialized", map[string]interface{}{
-			"backend":   "multimodal",
-			"model_ref": mmPath,
-			"use_cpu":   c.Config.UseCPU,
-		})
 		return c.keywordEmbeddingClassifier.WarmupCandidateEmbeddings()
 	}
 
+	mmPath := config.ResolveModelPath(c.Config.MultiModalModelPath)
+	if mmPath == "" {
+		return fmt.Errorf("embedding_rules with model_type=multimodal requires embedding_models.multimodal_model_path")
+	}
+	if err := initMultiModalModel(mmPath, c.Config.UseCPU); err != nil {
+		return fmt.Errorf("failed to initialize multimodal model for embedding_rules: %w", err)
+	}
+	logging.ComponentEvent("classifier", "keyword_embedding_backend_initialized", map[string]interface{}{
+		"backend":   "multimodal",
+		"model_ref": mmPath,
+		"use_cpu":   c.Config.UseCPU,
+	})
+	return c.keywordEmbeddingClassifier.WarmupCandidateEmbeddings()
+}
+
+func (c *Classifier) initializeKeywordSharedTextBackend(plan embedding.RuntimePlan) error {
+	if err := c.ensureTextEmbeddingRuntime(plan); err != nil {
+		return err
+	}
+	return c.keywordEmbeddingClassifier.WarmupCandidateEmbeddings()
+}
+
+func (c *Classifier) initializeKeywordConfiguredBackend(plan embedding.RuntimePlan) error {
 	if err := c.keywordEmbeddingInitializer.Init(
 		c.Config.Qwen3ModelPath,
 		c.Config.GemmaModelPath,
 		c.Config.MmBertModelPath,
 		c.Config.UseCPU,
-		c.Config.EmbeddingConfig.Backend,
-		c.Config.EmbeddingConfig.ModelType,
+		plan.Backend,
+		plan.ModelType,
 	); err != nil {
 		return err
 	}
@@ -160,39 +210,23 @@ func (c *Classifier) initializeKeywordEmbeddingClassifier() error {
 }
 
 func (c *EmbeddingClassifier) getBackend() string {
-	if backend := embeddingBackendOverride(); backend != "" {
+	backend := effectiveTextEmbeddingBackend(c.backend, c.provider)
+	if override := embeddingBackendOverride(); override != "" {
 		logging.Infof("Embedding backend override from env: %s", backend)
-		return backend
 	}
-	if c.backend == "" {
-		return "candle"
-	}
-	return c.backend
+	return backend
 }
 
 func (c *EmbeddingClassifier) computeEmbedding(text string, modelType string, phases ...string) ([]float32, error) {
-	backend := c.getBackend()
 	start := time.Now()
-	var embedding []float32
-	var err error
-
-	switch backend {
-	case config.EmbeddingBackendOpenAICompatible:
-		if c.provider == nil {
-			return nil, fmt.Errorf("embedding provider is required for backend %q", backend)
-		}
-		embedding, err = c.provider.Embed(context.Background(), text)
-	case "openvino":
-		embedding, err = getOpenVINOEmbedding(modelType, text, c.optimizationConfig.TargetDimension)
-	case "candle":
-		var output *candle_binding.EmbeddingOutput
-		output, err = getEmbeddingWithModelType(text, modelType, c.optimizationConfig.TargetDimension)
-		if err == nil {
-			embedding = output.Embedding
-		}
-	default:
-		return nil, fmt.Errorf("unsupported embedding backend %q", backend)
-	}
+	embedding, backend, err := executeTextEmbedding(
+		context.Background(),
+		c.backend,
+		c.provider,
+		text,
+		modelType,
+		c.optimizationConfig.TargetDimension,
+	)
 
 	elapsed := time.Since(start)
 	dim := 0

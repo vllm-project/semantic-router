@@ -19,12 +19,23 @@ use crate::model_architectures::unified_interface::{
     ConfigurableModel, CoreModel, PathSpecialization,
 };
 //Import embedding models
+use crate::model_architectures::embedding::tokenizer_contract::prepare_embedding_tokenizer;
 use crate::model_architectures::embedding::{
     GemmaEmbeddingConfig, GemmaEmbeddingModel, MmBertEmbeddingModel, MultiModalEmbeddingModel,
     Qwen3EmbeddingModel,
 };
 use candle_nn::VarBuilder;
 use tokenizers::Tokenizer;
+
+fn load_embedding_tokenizer(model_path: &str, model_name: &str) -> Result<Tokenizer> {
+    let tokenizer_path = format!("{model_path}/tokenizer.json");
+    let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|error| {
+        E::msg(format!(
+            "Failed to load {model_name} tokenizer from {tokenizer_path}: {error:?}"
+        ))
+    })?;
+    prepare_embedding_tokenizer(tokenizer, model_name).map_err(|error| E::msg(error.to_string()))
+}
 
 /// Model factory configuration
 #[derive(Debug, Clone)]
@@ -170,13 +181,7 @@ impl ModelFactory {
             .map_err(|e| E::msg(format!("Failed to load Qwen3 model: {:?}", e)))?;
 
         // Load tokenizer
-        let tokenizer_path = format!("{}/tokenizer.json", model_path);
-        let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
-            E::msg(format!(
-                "Failed to load Qwen3 tokenizer from {}: {:?}",
-                tokenizer_path, e
-            ))
-        })?;
+        let tokenizer = load_embedding_tokenizer(model_path, "Qwen3")?;
 
         self.qwen3_embedding_model = Some(model);
         self.qwen3_tokenizer = Some(tokenizer);
@@ -195,7 +200,7 @@ impl ModelFactory {
         let safetensors_path = format!("{}/model.safetensors", model_path);
         let vb = unsafe {
             VarBuilder::from_mmaped_safetensors(
-                &[safetensors_path.clone()],
+                std::slice::from_ref(&safetensors_path),
                 candle_core::DType::F32,
                 &self.device,
             )
@@ -207,13 +212,7 @@ impl ModelFactory {
             .map_err(|e| E::msg(format!("Failed to load Gemma model: {:?}", e)))?;
 
         // Load tokenizer
-        let tokenizer_path = format!("{}/tokenizer.json", model_path);
-        let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
-            E::msg(format!(
-                "Failed to load Gemma tokenizer from {}: {:?}",
-                tokenizer_path, e
-            ))
-        })?;
+        let tokenizer = load_embedding_tokenizer(model_path, "Gemma")?;
 
         self.gemma_embedding_model = Some(model);
         self.gemma_tokenizer = Some(tokenizer);
@@ -235,13 +234,7 @@ impl ModelFactory {
             .map_err(|e| E::msg(format!("Failed to load mmBERT model: {:?}", e)))?;
 
         // Load tokenizer
-        let tokenizer_path = format!("{}/tokenizer.json", model_path);
-        let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
-            E::msg(format!(
-                "Failed to load mmBERT tokenizer from {}: {:?}",
-                tokenizer_path, e
-            ))
-        })?;
+        let tokenizer = load_embedding_tokenizer(model_path, "mmBERT")?;
 
         self.mmbert_embedding_model = Some(model);
         self.mmbert_tokenizer = Some(tokenizer);
@@ -262,13 +255,7 @@ impl ModelFactory {
         let model = MultiModalEmbeddingModel::load(model_path, &self.device)
             .map_err(|e| E::msg(format!("Failed to load multimodal model: {:?}", e)))?;
 
-        let tokenizer_path = format!("{}/tokenizer.json", model_path);
-        let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
-            E::msg(format!(
-                "Failed to load multimodal tokenizer from {}: {:?}",
-                tokenizer_path, e
-            ))
-        })?;
+        let tokenizer = load_embedding_tokenizer(model_path, "multimodal")?;
 
         self.multimodal_embedding_model = Some(model);
         self.multimodal_tokenizer = Some(tokenizer);

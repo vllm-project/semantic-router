@@ -7,18 +7,16 @@ import React, {
   useState,
 } from 'react'
 import {
-  clearStoredAuthToken,
   getAuthSessionRevision,
-  getStoredAuthToken,
   installAuthenticatedFetch,
-  normalizeAuthToken,
+  markAuthSessionChanged,
   notifyUnauthorized,
   shouldClearSessionForUnauthorized,
-  storeAuthToken,
   UNAUTHORIZED_EVENT,
 } from '../utils/authFetch'
 import {
   changePasswordAndRotateSession,
+  COOKIE_AUTH_RESPONSE_HEADERS,
   fetchCurrentAuthUser,
   hasAuthenticatedSession,
   readAuthResponseError,
@@ -26,14 +24,13 @@ import {
 } from './authSession'
 
 interface AuthContextValue {
-  token: string | null
   user: AuthUser | null
   isLoading: boolean
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<void>
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>
-  setSession: (token: string, user?: AuthUser | null) => void
-  logout: () => void
+  establishSession: (user?: AuthUser | null) => Promise<void>
+  logout: () => Promise<void>
   refreshSession: () => Promise<void>
 }
 
@@ -42,26 +39,34 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 installAuthenticatedFetch()
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(() => getStoredAuthToken())
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   const clearSession = useCallback(() => {
-    setToken(null)
     setUser(null)
-    clearStoredAuthToken()
+    markAuthSessionChanged()
   }, [])
 
-  const setSession = useCallback((nextToken: string, nextUser?: AuthUser | null) => {
-    const storedToken = storeAuthToken(nextToken)
-    setToken(storedToken)
-    setUser(storedToken ? (nextUser ?? null) : null)
+  const establishSession = useCallback(async (nextUser?: AuthUser | null) => {
+    // Advance before any fallback request so a late 401 from the previous
+    // session cannot clear the newly issued HttpOnly cookie.
+    markAuthSessionChanged()
+    if (nextUser) {
+      setUser(nextUser)
+      return
+    }
+
+    const result = await fetchCurrentAuthUser()
+    if (!result.user) {
+      throw new Error('Authentication succeeded but the session user is unavailable')
+    }
+    setUser(result.user)
   }, [])
 
   const changePassword = useCallback(
     (currentPassword: string, newPassword: string) =>
-      changePasswordAndRotateSession(currentPassword, newPassword, setSession, user),
-    [setSession, user],
+      changePasswordAndRotateSession(currentPassword, newPassword, establishSession, user),
+    [establishSession, user],
   )
 
   const refreshSession = useCallback(async () => {
@@ -69,7 +74,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true)
     try {
       const result = await fetchCurrentAuthUser()
-      if (result.clearLocalToken) {
+      if (result.unauthorized) {
         notifyUnauthorized(requestRevision)
         return
       }
@@ -80,15 +85,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsLoading(false)
     }
   }, [])
-
-  useEffect(() => {
-    if (token) {
-      const storedToken = storeAuthToken(token)
-      if (storedToken !== token) {
-        setToken(storedToken)
-      }
-    }
-  }, [token])
 
   useEffect(() => {
     void refreshSession()
@@ -112,7 +108,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        cache: 'no-store',
+        redirect: 'error',
+        headers: {
+          'Content-Type': 'application/json',
+          ...COOKIE_AUTH_RESPONSE_HEADERS,
+        },
         body: JSON.stringify({ email, password }),
       })
 
@@ -120,34 +122,35 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         throw new Error(await readAuthResponseError(response))
       }
 
-      const payload = (await response.json()) as { token: string; user?: AuthUser }
-      const nextToken = normalizeAuthToken(payload.token)
-      if (!nextToken) {
-        throw new Error('Login response did not include a valid session token')
-      }
-      setSession(nextToken, payload.user ?? null)
+      const payload = (await response.json()) as { user?: AuthUser }
+      await establishSession(payload.user ?? null)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const logout = () => {
-    void fetch('/api/auth/logout', { method: 'POST', keepalive: true }).catch(() => {
-      // Local logout should still complete if the server session clear cannot be reached.
+  const logout = async () => {
+    const response = await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      keepalive: true,
     })
+    if (!response.ok) {
+      throw new Error(await readAuthResponseError(response))
+    }
     clearSession()
   }
 
   return (
     <AuthContext.Provider
       value={{
-        token,
         user,
         isLoading,
-        isAuthenticated: hasAuthenticatedSession(token, user),
+        isAuthenticated: hasAuthenticatedSession(user),
         login,
         changePassword,
-        setSession,
+        establishSession,
         logout,
         refreshSession,
       }}

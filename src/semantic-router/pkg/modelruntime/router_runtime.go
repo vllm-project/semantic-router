@@ -3,34 +3,13 @@ package modelruntime
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
-	"sync"
-	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
-
-type EmbeddingRuntimeState struct {
-	AnyReady          bool
-	ToolsReady        bool
-	EmbeddingProvider *EmbeddingProviderRuntimeState
-}
-
-type EmbeddingProviderRuntimeState struct {
-	Mode           string
-	Backend        string
-	Model          string
-	Dimension      int
-	APIKeyEnv      string
-	APIKeyEnvSet   *bool
-	Healthy        *bool
-	LastProbeError string
-	LastCheckedAt  string
-}
 
 type PrepareRouterRuntimeOptions struct {
 	Component                  string
@@ -53,15 +32,6 @@ type embeddingPaths struct {
 	bert       string
 }
 
-type embeddingStateTracker struct {
-	mu    sync.Mutex
-	state EmbeddingRuntimeState
-}
-
-func newEmbeddingStateTracker(state EmbeddingRuntimeState) *embeddingStateTracker {
-	return &embeddingStateTracker{state: cloneEmbeddingRuntimeState(state)}
-}
-
 func PrepareRouterRuntime(
 	ctx context.Context,
 	cfg *config.RouterConfig,
@@ -73,8 +43,17 @@ func PrepareRouterRuntime(
 	}
 
 	paths := resolveEmbeddingPaths(cfg)
-	state, embeddingTasks, tracker := embeddingRuntimeTasks(cfg, component, paths)
-	if !embeddingRuntimeConfigured(cfg, paths) {
+	plan, err := embedding.ResolveRuntimePlan(
+		cfg.EmbeddingModels,
+		embedding.BackendOverrideFromEnv(),
+		embedding.ModelTypeOverrideFromEnv(),
+	)
+	if err != nil {
+		return EmbeddingRuntimeState{}, fmt.Errorf("invalid embedding runtime plan: %w", err)
+	}
+	paths = paths.forRuntimePlan(plan)
+	state, embeddingTasks, tracker := embeddingRuntimeTasksForPlan(cfg, component, paths, plan)
+	if !embeddingRuntimeConfigured(plan, paths) {
 		logMissingEmbeddingModelsConfig(component)
 	}
 
@@ -87,14 +66,14 @@ func PrepareRouterRuntime(
 		return state, nil
 	}
 
-	_, err := Execute(ctx, tasks, Options{
+	_, err = Execute(ctx, tasks, Options{
 		MaxParallelism: options.MaxParallelism,
 		OnEvent:        options.OnEvent,
 	})
 	if tracker != nil {
 		state = tracker.snapshot()
 	}
-	if embeddingRuntimeConfigured(cfg, paths) {
+	if embeddingRuntimeConfigured(plan, paths) {
 		logging.ComponentEvent(component, "embedding_models_init_completed", map[string]interface{}{
 			"embedding_ready": state.AnyReady,
 			"tools_ready":     state.ToolsReady,
@@ -152,21 +131,63 @@ func embeddingRuntimeTasks(
 	component string,
 	paths embeddingPaths,
 ) (EmbeddingRuntimeState, []Task, *embeddingStateTracker) {
-	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+	plan, err := embedding.ResolveRuntimePlan(
+		cfg.EmbeddingModels,
+		embedding.BackendOverrideFromEnv(),
+		embedding.ModelTypeOverrideFromEnv(),
+	)
+	if err != nil {
+		return EmbeddingRuntimeState{}, nil, nil
+	}
+	return embeddingRuntimeTasksForPlan(cfg, component, paths.forRuntimePlan(plan), plan)
+}
+
+func embeddingRuntimeTasksForPlan(
+	cfg *config.RouterConfig,
+	component string,
+	paths embeddingPaths,
+	plan embedding.RuntimePlan,
+) (EmbeddingRuntimeState, []Task, *embeddingStateTracker) {
+	if plan.Backend == config.EmbeddingBackendOpenAICompatible {
 		tracker := newEmbeddingStateTracker(EmbeddingRuntimeState{
 			EmbeddingProvider: remoteEmbeddingProviderRuntimeStateFromConfig(cfg),
 		})
-		logEmbeddingRuntimeStart(component, cfg, paths)
+		logEmbeddingRuntimeStart(component, cfg, paths, plan)
 		return tracker.snapshot(), remoteEmbeddingRuntimeTask(cfg, component, tracker), tracker
+	}
+	// OpenVINO lifecycle is owned by the classification runtime because its
+	// binding is build-tagged there. The shared plan still prevents the remote
+	// provider task (or Candle initializer) from running for an OpenVINO override.
+	if plan.Backend == config.EmbeddingBackendOpenVINO {
+		logEmbeddingRuntimeStart(component, cfg, paths, plan)
+		return EmbeddingRuntimeState{}, nil, nil
 	}
 	if !paths.hasConfiguredModels() {
 		return EmbeddingRuntimeState{}, nil, nil
 	}
 
-	logEmbeddingRuntimeStart(component, cfg, paths)
+	logEmbeddingRuntimeStart(component, cfg, paths, plan)
 	requiresMultimodalTools := toolsUseMultiModalEmbeddings(cfg)
 	tracker := newEmbeddingStateTracker(EmbeddingRuntimeState{})
 	return tracker.snapshot(), buildEmbeddingRuntimeTasks(cfg, component, paths, requiresMultimodalTools, tracker), tracker
+}
+
+func (p embeddingPaths) forRuntimePlan(plan embedding.RuntimePlan) embeddingPaths {
+	if !plan.LocalOverride {
+		return p
+	}
+	selected := embeddingPaths{bert: p.bert}
+	switch plan.ModelType {
+	case config.EmbeddingModelTypeQwen3:
+		selected.qwen3 = p.qwen3
+	case "gemma":
+		selected.gemma = p.gemma
+	case "mmbert", "modernbert":
+		selected.mmBert = p.mmBert
+	case "multimodal":
+		selected.multiModal = p.multiModal
+	}
+	return selected
 }
 
 func semanticCacheBERTTask(cfg *config.RouterConfig, component string) []Task {
@@ -520,108 +541,11 @@ func resolveBertModelID(modelID string) string {
 	return config.ResolveModelPath(modelID)
 }
 
-func (t *embeddingStateTracker) markAnyReady() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.state.AnyReady = true
-}
-
-func (t *embeddingStateTracker) markToolsReady() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.state.AnyReady = true
-	t.state.ToolsReady = true
-}
-
-func (t *embeddingStateTracker) markEmbeddingProvider(status *EmbeddingProviderRuntimeState) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.state.EmbeddingProvider = cloneEmbeddingProviderRuntimeState(status)
-}
-
-func (t *embeddingStateTracker) snapshot() EmbeddingRuntimeState {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return cloneEmbeddingRuntimeState(t.state)
-}
-
-func cloneEmbeddingRuntimeState(state EmbeddingRuntimeState) EmbeddingRuntimeState {
-	state.EmbeddingProvider = cloneEmbeddingProviderRuntimeState(state.EmbeddingProvider)
-	return state
-}
-
-func cloneEmbeddingProviderRuntimeState(status *EmbeddingProviderRuntimeState) *EmbeddingProviderRuntimeState {
-	if status == nil {
-		return nil
-	}
-	clone := *status
-	if status.APIKeyEnvSet != nil {
-		value := *status.APIKeyEnvSet
-		clone.APIKeyEnvSet = &value
-	}
-	if status.Healthy != nil {
-		value := *status.Healthy
-		clone.Healthy = &value
-	}
-	return &clone
-}
-
-func remoteEmbeddingProviderRuntimeStateFromConfig(cfg *config.RouterConfig) *EmbeddingProviderRuntimeState {
-	if cfg == nil || !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
-		return nil
-	}
-
-	apiKeyEnv := strings.TrimSpace(cfg.EmbeddingModels.Endpoint.APIKeyEnv)
-	var apiKeyEnvSet *bool
-	if apiKeyEnv != "" {
-		value := os.Getenv(apiKeyEnv) != ""
-		apiKeyEnvSet = &value
-	}
-
-	dimension := cfg.EmbeddingModels.Endpoint.Dimensions
-	if dimension == 0 {
-		dimension = cfg.EmbeddingModels.EmbeddingConfig.TargetDimension
-	}
-
-	return &EmbeddingProviderRuntimeState{
-		Mode:         "remote",
-		Backend:      cfg.EmbeddingModels.EmbeddingBackend(),
-		Model:        strings.TrimSpace(cfg.EmbeddingModels.Endpoint.Model),
-		Dimension:    dimension,
-		APIKeyEnv:    apiKeyEnv,
-		APIKeyEnvSet: apiKeyEnvSet,
-	}
-}
-
-func remoteEmbeddingProviderProbeStatus(
-	cfg *config.RouterConfig,
-	provider embedding.Provider,
-	dimension int,
-	probeErr error,
-) *EmbeddingProviderRuntimeState {
-	status := remoteEmbeddingProviderRuntimeStateFromConfig(cfg)
-	if status == nil {
-		status = &EmbeddingProviderRuntimeState{Mode: "remote"}
-	}
-	if provider != nil {
-		status.Backend = provider.Backend()
-	}
-	if dimension > 0 {
-		status.Dimension = dimension
-	}
-	healthy := probeErr == nil
-	status.Healthy = &healthy
-	status.LastCheckedAt = time.Now().UTC().Format(time.RFC3339)
-	if probeErr != nil {
-		status.LastProbeError = probeErr.Error()
-	}
-	return status
-}
-
-func logEmbeddingRuntimeStart(component string, cfg *config.RouterConfig, paths embeddingPaths) {
+func logEmbeddingRuntimeStart(component string, cfg *config.RouterConfig, paths embeddingPaths, plan embedding.RuntimePlan) {
 	logging.ComponentEvent(component, "embedding_models_init_started", map[string]interface{}{
 		"use_cpu":               cfg.UseCPU,
-		"backend":               cfg.EmbeddingModels.EmbeddingBackend(),
+		"backend":               plan.Backend,
+		"model_type":            plan.ModelType,
 		"qwen3_configured":      paths.qwen3 != "",
 		"gemma_configured":      paths.gemma != "",
 		"mmbert_configured":     paths.mmBert != "",
@@ -630,8 +554,8 @@ func logEmbeddingRuntimeStart(component string, cfg *config.RouterConfig, paths 
 	})
 }
 
-func embeddingRuntimeConfigured(cfg *config.RouterConfig, paths embeddingPaths) bool {
-	return cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() || paths.hasConfiguredModels()
+func embeddingRuntimeConfigured(plan embedding.RuntimePlan, paths embeddingPaths) bool {
+	return plan.Backend == config.EmbeddingBackendOpenAICompatible || plan.Backend == config.EmbeddingBackendOpenVINO || paths.hasConfiguredModels()
 }
 
 func buildEmbeddingRuntimeTasks(

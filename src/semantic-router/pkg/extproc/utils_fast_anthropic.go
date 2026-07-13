@@ -118,9 +118,7 @@ func consumeFastExtractAnthropicMessage(msg gjson.Result, result *FastExtractRes
 }
 
 func recordAnthropicUserMessage(result *FastExtractResult, text string, content gjson.Result) {
-	if result.FirstImageURL == "" {
-		result.FirstImageURL = extractAnthropicImageURLFromContent(content)
-	}
+	recordAnthropicImageParts(result, content)
 	if text == "" {
 		return
 	}
@@ -189,35 +187,69 @@ func scanAnthropicBlockTypes(content gjson.Result) (hasToolResult bool, hasToolU
 	return hasToolResult, hasToolUse
 }
 
-// extractAnthropicImageURLFromContent returns the first safe-to-surface
-// image reference from an Anthropic content array. Only inline base64
-// sources are returned (the same SSRF-safety policy as the OpenAI fast
-// extractor); URL and file_id sources are silently skipped here and
-// handled by the full inbound parser.
-func extractAnthropicImageURLFromContent(content gjson.Result) string {
+func recordAnthropicImageParts(result *FastExtractResult, content gjson.Result) {
 	if !content.IsArray() {
-		return ""
+		return
 	}
-	var found string
 	content.ForEach(func(_, block gjson.Result) bool {
-		if block.Get("type").String() != "image" {
-			return true
-		}
-		source := block.Get("source")
-		if source.Get("type").String() != "base64" {
-			return true
-		}
-		mediaType := source.Get("media_type").String()
-		data := source.Get("data").String()
-		if mediaType == "" || data == "" {
-			return true
-		}
-		candidate := fmt.Sprintf("data:%s;base64,%s", mediaType, data)
-		if isSafeImageDataURL(candidate) {
-			found = candidate
-			return false
-		}
+		recordAnthropicImagePart(result, block)
 		return true
 	})
-	return found
+}
+
+func recordAnthropicImagePart(result *FastExtractResult, block gjson.Result) {
+	if block.Get("type").String() != "image" {
+		return
+	}
+
+	result.ImagePartPresent = true
+	source := block.Get("source")
+	sourceType := source.Get("type")
+	if !source.Exists() || !sourceType.Exists() || sourceType.Type != gjson.String {
+		result.InvalidImagePart = true
+		return
+	}
+
+	switch sourceType.String() {
+	case "base64":
+		recordAnthropicBase64Image(result, source)
+	case "url":
+		validateAnthropicRemoteImage(result, source)
+	case "file", "file_id":
+		validateAnthropicFileImage(result, source)
+	default:
+		result.InvalidImagePart = true
+	}
+}
+
+func recordAnthropicBase64Image(result *FastExtractResult, source gjson.Result) {
+	mediaType := source.Get("media_type")
+	data := source.Get("data")
+	if !mediaType.Exists() || mediaType.Type != gjson.String ||
+		!data.Exists() || data.Type != gjson.String {
+		result.InvalidImagePart = true
+		return
+	}
+	recordImageReference(result, fmt.Sprintf("data:%s;base64,%s", mediaType.String(), data.String()))
+}
+
+func validateAnthropicRemoteImage(result *FastExtractResult, source gjson.Result) {
+	remoteURL := source.Get("url")
+	if !remoteURL.Exists() || remoteURL.Type != gjson.String || !isValidRemoteImageURL(remoteURL.String()) {
+		result.InvalidImagePart = true
+	}
+}
+
+func validateAnthropicFileImage(result *FastExtractResult, source gjson.Result) {
+	fileID := source.Get("file_id")
+	if !isNonEmptyAnthropicString(fileID) {
+		fileID = source.Get("id")
+	}
+	if !isNonEmptyAnthropicString(fileID) {
+		result.InvalidImagePart = true
+	}
+}
+
+func isNonEmptyAnthropicString(value gjson.Result) bool {
+	return value.Exists() && value.Type == gjson.String && strings.TrimSpace(value.String()) != ""
 }

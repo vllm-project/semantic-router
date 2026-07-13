@@ -10,6 +10,27 @@ import (
 	"time"
 )
 
+const legacyAuthGenerationSchema = `
+CREATE TABLE users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  last_login_at INTEGER
+);
+CREATE TABLE auth_sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  issued_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  revoked_at INTEGER,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);`
+
 func TestAuthSQLiteDSNEnforcesForeignKeysAndPreservesParameters(t *testing.T) {
 	t.Parallel()
 
@@ -80,70 +101,7 @@ func TestNewStoreMigratesLegacyAuthGenerationWithoutLosingState(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "legacy-auth.db")
-	db, err := sql.Open("sqlite3", path)
-	if err != nil {
-		t.Fatalf("open legacy database: %v", err)
-	}
-	legacySchema := `
-CREATE TABLE users (
-  id TEXT PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
-  name TEXT NOT NULL,
-  password_hash TEXT NOT NULL,
-  role TEXT NOT NULL,
-  status TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  last_login_at INTEGER
-);
-CREATE TABLE auth_sessions (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  issued_at INTEGER NOT NULL,
-  expires_at INTEGER NOT NULL,
-  revoked_at INTEGER,
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-);`
-	if _, err := db.Exec(legacySchema); err != nil {
-		_ = db.Close()
-		t.Fatalf("create legacy schema: %v", err)
-	}
-	hash, err := hashVersionedPassword("legacy generation password")
-	if err != nil {
-		_ = db.Close()
-		t.Fatalf("hash legacy password: %v", err)
-	}
-	now := time.Now().Unix()
-	if _, err := db.Exec(
-		`INSERT INTO users(
-		 id, email, name, password_hash, role, status, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		"legacy-user",
-		"legacy-generation@example.com",
-		"Legacy User",
-		hash,
-		RoleRead,
-		defaultUserStatusActive,
-		now,
-		now,
-	); err != nil {
-		_ = db.Close()
-		t.Fatalf("insert legacy user: %v", err)
-	}
-	if _, err := db.Exec(
-		`INSERT INTO auth_sessions(id, user_id, issued_at, expires_at)
-		 VALUES (?, ?, ?, ?)`,
-		"legacy-session",
-		"legacy-user",
-		now,
-		now+3600,
-	); err != nil {
-		_ = db.Close()
-		t.Fatalf("insert legacy session: %v", err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatalf("close legacy database: %v", err)
-	}
+	now := seedLegacyAuthGenerationDatabase(t, path)
 
 	store, err := NewStore(path)
 	if err != nil {
@@ -181,6 +139,56 @@ CREATE TABLE auth_sessions (
 	); err != nil {
 		t.Fatalf("login after additive migration: %v", err)
 	}
+}
+
+func seedLegacyAuthGenerationDatabase(t *testing.T, path string) int64 {
+	t.Helper()
+
+	db, openErr := sql.Open("sqlite3", path)
+	if openErr != nil {
+		t.Fatalf("open legacy database: %v", openErr)
+	}
+	if _, err := db.Exec(legacyAuthGenerationSchema); err != nil {
+		_ = db.Close()
+		t.Fatalf("create legacy schema: %v", err)
+	}
+	hash, hashErr := hashVersionedPassword("legacy generation password")
+	if hashErr != nil {
+		_ = db.Close()
+		t.Fatalf("hash legacy password: %v", hashErr)
+	}
+	now := time.Now().Unix()
+	if _, err := db.Exec(
+		`INSERT INTO users(
+		 id, email, name, password_hash, role, status, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		"legacy-user",
+		"legacy-generation@example.com",
+		"Legacy User",
+		hash,
+		RoleRead,
+		defaultUserStatusActive,
+		now,
+		now,
+	); err != nil {
+		_ = db.Close()
+		t.Fatalf("insert legacy user: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO auth_sessions(id, user_id, issued_at, expires_at)
+		 VALUES (?, ?, ?, ?)`,
+		"legacy-session",
+		"legacy-user",
+		now,
+		now+3600,
+	); err != nil {
+		_ = db.Close()
+		t.Fatalf("insert legacy session: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close legacy database: %v", err)
+	}
+	return now
 }
 
 func TestAuthStoreDeleteAppliesForeignKeyActions(t *testing.T) {

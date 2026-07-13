@@ -6,6 +6,10 @@ import socket
 import subprocess
 from pathlib import Path
 
+from cli.container_host_ports import (
+    format_port_mapping,
+    resolve_effective_internal_bind_address,
+)
 from cli.container_images import get_fleet_sim_container_image
 from cli.container_runtime import get_container_runtime
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
@@ -166,11 +170,15 @@ def container_remove_network(network_name):
 
 
 def container_start_jaeger(
-    network_name=None, stack_layout: RuntimeStackLayout | None = None
+    network_name=None,
+    stack_layout: RuntimeStackLayout | None = None,
+    *,
+    bind_address: str | None = None,
 ):
     """Start Jaeger container for distributed tracing."""
     runtime = get_container_runtime()
     stack_layout = stack_layout or resolve_runtime_stack()
+    bind_address = resolve_effective_internal_bind_address(bind_address)
     container_name = stack_layout.jaeger_container_name
     network_name = network_name or stack_layout.network_name
     _replace_existing_container(container_name)
@@ -186,9 +194,9 @@ def container_start_jaeger(
         "-e",
         "COLLECTOR_OTLP_ENABLED=true",
         "-p",
-        f"{stack_layout.jaeger_otlp_port}:4317",
+        format_port_mapping(bind_address, stack_layout.jaeger_otlp_port, 4317),
         "-p",
-        f"{stack_layout.jaeger_ui_port}:16686",
+        format_port_mapping(bind_address, stack_layout.jaeger_ui_port, 16686),
         "docker.io/jaegertracing/all-in-one:latest",
     ]
     return _run_service_start(cmd, "Jaeger")
@@ -198,10 +206,13 @@ def container_start_prometheus(
     network_name=None,
     config_dir=None,
     stack_layout: RuntimeStackLayout | None = None,
+    *,
+    bind_address: str | None = None,
 ):
     """Start Prometheus container for metrics collection."""
     runtime = get_container_runtime()
     stack_layout = stack_layout or resolve_runtime_stack()
+    bind_address = resolve_effective_internal_bind_address(bind_address)
     container_name = stack_layout.prometheus_container_name
     network_name = network_name or stack_layout.network_name
     _replace_existing_container(container_name)
@@ -244,7 +255,7 @@ def container_start_prometheus(
         "-v",
         f"{os.path.abspath(prometheus_data_dir)}:/prometheus",
         "-p",
-        f"{stack_layout.prometheus_port}:9090",
+        format_port_mapping(bind_address, stack_layout.prometheus_port, 9090),
         "docker.io/prom/prometheus:v2.53.0",
         "--config.file=/etc/prometheus/prometheus.yaml",
         "--storage.tsdb.path=/prometheus/data",
@@ -257,10 +268,13 @@ def container_start_grafana(
     network_name=None,
     config_dir=None,
     stack_layout: RuntimeStackLayout | None = None,
+    *,
+    bind_address: str | None = None,
 ):
     """Start Grafana container for visualization."""
     runtime = get_container_runtime()
     stack_layout = stack_layout or resolve_runtime_stack()
+    bind_address = resolve_effective_internal_bind_address(bind_address)
     container_name = stack_layout.grafana_container_name
     network_name = network_name or stack_layout.network_name
     _replace_existing_container(container_name)
@@ -307,14 +321,17 @@ def container_start_grafana(
         "-v",
         f"{os.path.abspath(os.path.join(grafana_dir, 'llm-router-dashboard.serve.json'))}:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro",
         "-p",
-        f"{stack_layout.grafana_port}:3000",
+        format_port_mapping(bind_address, stack_layout.grafana_port, 3000),
         "docker.io/grafana/grafana:11.5.1",
     ]
     return _run_service_start(cmd, "Grafana")
 
 
 def container_start_redis(
-    network_name=None, stack_layout: RuntimeStackLayout | None = None
+    network_name=None,
+    stack_layout: RuntimeStackLayout | None = None,
+    *,
+    bind_address: str | None = None,
 ):
     """Start a Redis container for durable storage backends.
 
@@ -322,6 +339,7 @@ def container_start_redis(
     """
     runtime = get_container_runtime()
     stack_layout = stack_layout or resolve_runtime_stack()
+    bind_address = resolve_effective_internal_bind_address(bind_address)
     container_name = stack_layout.redis_container_name
     network_name = network_name or stack_layout.network_name
 
@@ -349,14 +367,17 @@ def container_start_redis(
         "--network",
         network_name,
         "-p",
-        f"{stack_layout.redis_port}:6379",
+        format_port_mapping(bind_address, stack_layout.redis_port, 6379),
         "docker.io/library/redis:7-alpine",
     ]
     return _run_service_start(cmd, "Redis")
 
 
 def container_start_postgres(
-    network_name=None, stack_layout: RuntimeStackLayout | None = None
+    network_name=None,
+    stack_layout: RuntimeStackLayout | None = None,
+    *,
+    bind_address: str | None = None,
 ):
     """Start a Postgres container for durable storage backends.
 
@@ -364,6 +385,7 @@ def container_start_postgres(
     """
     runtime = get_container_runtime()
     stack_layout = stack_layout or resolve_runtime_stack()
+    bind_address = resolve_effective_internal_bind_address(bind_address)
     container_name = stack_layout.postgres_container_name
     network_name = network_name or stack_layout.network_name
 
@@ -397,7 +419,7 @@ def container_start_postgres(
         "-e",
         "POSTGRES_PASSWORD=router-secret",
         "-p",
-        f"{stack_layout.postgres_port}:5432",
+        format_port_mapping(bind_address, stack_layout.postgres_port, 5432),
         "docker.io/library/postgres:16-alpine",
     ]
     return _run_service_start(cmd, "Postgres")
@@ -408,6 +430,7 @@ def container_start_milvus(
     stack_layout: RuntimeStackLayout | None = None,
     *,
     state_root_dir: str | None = None,
+    bind_address: str | None = None,
 ):
     """Start a Milvus container for the semantic cache backend.
 
@@ -415,6 +438,7 @@ def container_start_milvus(
     """
     runtime = get_container_runtime()
     stack_layout = stack_layout or resolve_runtime_stack()
+    bind_address = resolve_effective_internal_bind_address(bind_address)
     container_name = stack_layout.milvus_container_name
     network_name = network_name or stack_layout.network_name
 
@@ -463,7 +487,7 @@ def container_start_milvus(
         "-e",
         "CLUSTER_ENABLED=false",
         "-p",
-        f"{stack_layout.milvus_port}:19530",
+        format_port_mapping(bind_address, stack_layout.milvus_port, 19530),
         "-v",
         f"{os.path.abspath(milvus_data_dir)}:/var/lib/milvus:z",
         "docker.io/milvusdb/milvus:v2.3.3",
@@ -481,10 +505,12 @@ def container_start_fleet_sim(
     network_name: str | None = None,
     config_dir: str | None = None,
     stack_layout: RuntimeStackLayout | None = None,
+    bind_address: str | None = None,
 ):
     """Start the vllm-sr-sim sidecar container."""
     runtime = get_container_runtime()
     stack_layout = stack_layout or resolve_runtime_stack()
+    bind_address = resolve_effective_internal_bind_address(bind_address)
     container_name = stack_layout.fleet_sim_container_name
     network_name = network_name or stack_layout.network_name
     sim_image = get_fleet_sim_container_image(image=image, pull_policy=pull_policy)
@@ -510,7 +536,7 @@ def container_start_fleet_sim(
         "-v",
         f"{os.path.abspath(sim_state_dir)}:/state",
         "-p",
-        f"{stack_layout.fleet_sim_port}:8000",
+        format_port_mapping(bind_address, stack_layout.fleet_sim_port, 8000),
         sim_image,
     ]
     return _run_service_start(cmd, "vllm-sr-sim")

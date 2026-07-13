@@ -62,7 +62,11 @@ type intentMessageContentPart struct {
 func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 	text := strings.TrimSpace(req.Text)
 
-	if input, ok := resolveIntentSignalInputFromMessages(req.Messages); ok {
+	input, ok, err := resolveIntentSignalInputFromMessages(req.Messages)
+	if err != nil {
+		return intentSignalInput{}, err
+	}
+	if ok {
 		return applyTopLevelTextFallback(input, text), nil
 	}
 
@@ -75,6 +79,27 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 		contextText:     text,
 		currentUserText: text,
 	}, nil
+}
+
+// HasInlineImageInput reports whether resolving this request will perform the
+// bounded full-image validation used by the classify/eval path. It deliberately
+// applies only the cheap canonical data-URI shape check so request entrypoints
+// can acquire process admission before any base64 decode or pixel allocation.
+func (req IntentRequest) HasInlineImageInput() bool {
+	for _, message := range req.Messages {
+		if !strings.EqualFold(strings.TrimSpace(message.Role), "user") {
+			continue
+		}
+		for _, part := range parseIntentMessageContentParts(message.Content) {
+			if part.ImageURL == nil {
+				continue
+			}
+			if _, ok := imageurl.CanonicalDataURL(strings.TrimSpace(part.ImageURL.URL)); ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // applyTopLevelTextFallback fills empty text slots from req.Text when the
@@ -94,12 +119,15 @@ func applyTopLevelTextFallback(input intentSignalInput, text string) intentSigna
 	return input
 }
 
-func resolveIntentSignalInputFromMessages(messages []IntentMessage) (intentSignalInput, bool) {
+func resolveIntentSignalInputFromMessages(messages []IntentMessage) (intentSignalInput, bool, error) {
 	if len(messages) == 0 {
-		return intentSignalInput{}, false
+		return intentSignalInput{}, false, nil
 	}
 
-	history := extractIntentConversationHistory(messages)
+	history, err := extractIntentConversationHistory(messages)
+	if err != nil {
+		return intentSignalInput{}, false, err
+	}
 	input := intentSignalInput{
 		evaluationText:    history.currentUserMessage,
 		contextText:       strings.Join(history.nonUserMessages, " "),
@@ -130,91 +158,127 @@ func resolveIntentSignalInputFromMessages(messages []IntentMessage) (intentSigna
 	// An image-only user turn (no accompanying text) is still a valid input for
 	// image-modality signals, so accept the message path when an image is present
 	// even if there is no evaluation text to score.
-	return input, strings.TrimSpace(input.evaluationText) != "" || input.imageURL != ""
+	return input, strings.TrimSpace(input.evaluationText) != "" || input.imageURL != "", nil
 }
 
-func extractIntentConversationHistory(messages []IntentMessage) intentConversationHistory {
+func extractIntentConversationHistory(messages []IntentMessage) (intentConversationHistory, error) {
 	var history intentConversationHistory
+	var imageBudget imageurl.RequestImageBudget
 
 	for _, msg := range messages {
 		text := extractIntentMessageText(msg.Content)
 		role := strings.ToLower(strings.TrimSpace(msg.Role))
-
-		if role == "user" {
-			imageURL := extractIntentMessageImageURL(msg.Content)
-			if text == "" && imageURL == "" {
-				continue
-			}
-			// An image-only turn attaches its image without clobbering the most
-			// recent user text, which stays the best text to score.
-			if text == "" {
-				history.currentUserImageURL = imageURL
-				continue
-			}
-			if history.currentUserMessage != "" {
-				history.priorUserMessages = append(history.priorUserMessages, history.currentUserMessage)
-			}
-			history.currentUserMessage = text
-			history.currentUserImageURL = imageURL
-			continue
-		}
-
-		if text == "" {
-			continue
-		}
-
 		switch role {
-		case "system", "assistant":
-			history.nonUserMessages = append(history.nonUserMessages, text)
-			if role == "assistant" {
-				history.hasAssistantReply = true
+		case "user":
+			if err := history.applyUserMessage(msg.Content, text, &imageBudget); err != nil {
+				return intentConversationHistory{}, err
 			}
+		case "system", "assistant":
+			history.applyNonUserMessage(role, text)
 		}
 	}
 
-	return history
+	return history, nil
 }
 
-// extractIntentMessageImageURL returns the first safe inline base64 image data
-// URI (canonicalized) from a message's content parts. Only data URIs are
-// accepted; HTTP(S) URLs are rejected to prevent SSRF. This shares the same
-// imageurl gate as the ExtProc request path but is not a full behavioral mirror
-// of it (e.g. the ExtProc path fills the first safe image once across all user
-// turns, whereas this HTTP path resolves per turn).
-func extractIntentMessageImageURL(raw json.RawMessage) string {
+func (history *intentConversationHistory) applyUserMessage(
+	raw json.RawMessage,
+	text string,
+	imageBudget *imageurl.RequestImageBudget,
+) error {
+	imageURL, err := extractIntentMessageImageURL(raw, imageBudget)
+	if err != nil {
+		return err
+	}
+	if text == "" {
+		// An image-only turn attaches its image without clobbering the most
+		// recent user text, which stays the best text to score.
+		if imageURL != "" {
+			history.currentUserImageURL = imageURL
+		}
+		return nil
+	}
+	if history.currentUserMessage != "" {
+		history.priorUserMessages = append(history.priorUserMessages, history.currentUserMessage)
+	}
+	history.currentUserMessage = text
+	history.currentUserImageURL = imageURL
+	return nil
+}
+
+func (history *intentConversationHistory) applyNonUserMessage(role, text string) {
+	if text == "" {
+		return
+	}
+	history.nonUserMessages = append(history.nonUserMessages, text)
+	if role == "assistant" {
+		history.hasAssistantReply = true
+	}
+}
+
+// extractIntentMessageImageURL returns the first strictly decodable inline JPEG
+// or PNG data URI (canonicalized) from a message's content parts, after
+// validating every generically allowlisted image part. Invalid base64, corrupt
+// images, MIME/format mismatches, and formats unsupported by Candle fail the
+// request; HTTP(S), file, unsupported-MIME, and unknown shapes retain their
+// SSRF-safe drop semantics. The generic ExtProc allowlist stays broader.
+func extractIntentMessageImageURL(raw json.RawMessage, imageBudget *imageurl.RequestImageBudget) (string, error) {
+	return firstSafeImageURL(parseIntentMessageContentParts(raw), imageBudget)
+}
+
+func parseIntentMessageContentParts(raw json.RawMessage) []intentMessageContentPart {
 	raw = bytesTrimSpace(raw)
 	if len(raw) == 0 || string(raw) == "null" {
-		return ""
+		return nil
 	}
 
 	var parts []intentMessageContentPart
 	if err := json.Unmarshal(raw, &parts); err == nil {
-		return firstSafeImageURL(parts)
+		return parts
 	}
 
 	var part intentMessageContentPart
 	if err := json.Unmarshal(raw, &part); err == nil {
-		return firstSafeImageURL([]intentMessageContentPart{part})
+		return []intentMessageContentPart{part}
 	}
-
-	return ""
+	return nil
 }
 
-func firstSafeImageURL(parts []intentMessageContentPart) string {
+func firstSafeImageURL(parts []intentMessageContentPart, imageBudget *imageurl.RequestImageBudget) (string, error) {
+	var firstImageURL string
 	for _, part := range parts {
 		if part.ImageURL == nil {
 			continue
+		}
+		imageURL := strings.TrimSpace(part.ImageURL.URL)
+		_, ok := imageurl.CanonicalDataURL(imageURL)
+		if !ok {
+			// CanonicalDataURL intentionally rejects an empty payload. Probe the
+			// same shared parser with a harmless payload so an otherwise allowlisted
+			// empty data URI is distinguished from HTTP(S), file, unsupported MIME,
+			// and unknown shapes, which retain their SSRF-safe drop semantics.
+			if imageurl.IsSafeImageDataURL(imageURL + "AA==") {
+				return "", ErrInvalidImageInput
+			}
+			continue
+		}
+		validated, ok := imageurl.ValidateJPEGOrPNGDataURL(imageURL, imageBudget)
+		if !ok {
+			return "", ErrInvalidImageInput
 		}
 		// Return the canonical form (lowercased scheme/MIME/";base64," marker,
 		// payload preserved) rather than the raw URI. The classifier backend that
 		// ultimately consumes this scans for ";base64," case-sensitively, so an
 		// accepted uppercase-scheme data URI would otherwise yield no image signal
 		// on the classify/eval path even though the gate admitted it.
-		if canonical, ok := imageurl.CanonicalDataURL(strings.TrimSpace(part.ImageURL.URL)); ok {
-			return canonical
+		// Continue scanning after selecting it: every later allowlisted image part
+		// must satisfy the same strict decoder contract, even though only the first
+		// image is scored.
+		if firstImageURL == "" {
+			firstImageURL = validated.DataURL
 		}
 	}
-	return ""
+	return firstImageURL, nil
 }
 
 func extractIntentMessageText(raw json.RawMessage) string {

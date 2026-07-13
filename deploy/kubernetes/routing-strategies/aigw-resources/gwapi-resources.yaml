@@ -146,6 +146,7 @@ spec:
         name: semantic-router-extproc
         typedConfig:
           '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+          failure_mode_allow: false
           allow_mode_override: true
           grpcService:
             envoyGrpc:

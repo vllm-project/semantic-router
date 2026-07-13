@@ -93,8 +93,8 @@ func TestLegacyLoginUpgradeCannotOverwriteConcurrentPasswordReset(t *testing.T) 
 	waitForVerification()
 
 	newPassword := "legacy account reset password 2026"
-	if err := svc.ResetPassword(context.Background(), user.ID, newPassword); err != nil {
-		t.Fatalf("ResetPassword() error = %v", err)
+	if resetErr := svc.ResetPassword(context.Background(), user.ID, newPassword); resetErr != nil {
+		t.Fatalf("ResetPassword() error = %v", resetErr)
 	}
 	resumeLogin()
 	assertRejectedStaleLogin(t, awaitAsyncLogin(t, result))

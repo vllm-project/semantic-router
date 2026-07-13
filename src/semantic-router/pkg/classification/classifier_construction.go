@@ -20,10 +20,11 @@ type classifierOptionBuilder struct {
 	providerInitOnce   sync.Once
 	provider           embedding.Provider
 	providerErr        error
+	textBackendRuntime *textEmbeddingRuntime
 }
 
 func newClassifierOptionBuilder(cfg *config.RouterConfig, options []option) *classifierOptionBuilder {
-	return &classifierOptionBuilder{cfg: cfg, options: options}
+	return &classifierOptionBuilder{cfg: cfg, options: options, textBackendRuntime: &textEmbeddingRuntime{}}
 }
 
 func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]option, error) {
@@ -44,6 +45,7 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 		return nil, err
 	}
 	b.options = append(b.options, parallelOptions...)
+	b.options = append(b.options, withTextEmbeddingRuntime(b.textBackendRuntime))
 	b.addCategoryClassifier(categoryMapping)
 	b.addMCPCategoryClassifier()
 	return b.options, nil
@@ -128,6 +130,22 @@ func (b *classifierOptionBuilder) defaultEmbeddingModelType() string {
 		return "qwen3"
 	}
 	return modelType
+}
+
+func (b *classifierOptionBuilder) initTextEmbeddingBackendIfNeeded(reason string, modelType string) (embedding.RuntimePlan, error) {
+	plan, err := resolveTextEmbeddingRuntimePlan(b.cfg, modelType)
+	if err != nil {
+		return embedding.RuntimePlan{}, fmt.Errorf("invalid text embedding runtime plan for %s: %w", reason, err)
+	}
+	requiresLocalInitialization := plan.Backend == config.EmbeddingBackendOpenVINO ||
+		plan.Backend == config.EmbeddingBackendCandle && plan.LocalOverride
+	if !requiresLocalInitialization {
+		return plan, nil
+	}
+	if err := b.textBackendRuntime.ensureInitialized(b.cfg, plan); err != nil {
+		return embedding.RuntimePlan{}, fmt.Errorf("failed to initialize text embedding backend for %s: %w", reason, err)
+	}
+	return plan, nil
 }
 
 func (c *Classifier) logHeuristicClassifierInitialization() {

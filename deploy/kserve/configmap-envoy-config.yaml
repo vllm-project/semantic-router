@@ -76,7 +76,9 @@ data:
                     response_body_mode: "BUFFERED"
                     request_trailer_mode: "SKIP"
                     response_trailer_mode: "SKIP"
-                  failure_mode_allow: true
+                  # Routing depends on headers emitted by ExtProc. Never continue
+                  # with client-supplied routing metadata when ExtProc is down.
+                  failure_mode_allow: false
                   message_timeout: 300s
               - name: envoy.filters.http.router
                 typed_config:

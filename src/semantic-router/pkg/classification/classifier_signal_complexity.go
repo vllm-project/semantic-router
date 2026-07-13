@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -22,6 +23,15 @@ func (c *Classifier) evaluateComplexitySignal(results *SignalResults, mu *sync.M
 	logging.Debugf("[Signal Computation] Complexity signal evaluation completed in %v", elapsed)
 	if err != nil {
 		logging.Errorf("complexity rule evaluation failed: %v", err)
+		if errors.Is(err, ErrImageSignalEvaluation) {
+			mu.Lock()
+			results.recordImageEvaluationError(err)
+			mu.Unlock()
+		} else {
+			mu.Lock()
+			results.recordTextEvaluationError(err)
+			mu.Unlock()
+		}
 		return
 	}
 

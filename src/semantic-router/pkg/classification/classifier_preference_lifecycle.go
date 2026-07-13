@@ -32,11 +32,23 @@ func (c *Classifier) initializePreferenceClassifier() error {
 
 	externalCfg := c.Config.FindExternalModelByRole(config.ModelRolePreference)
 	preferenceCfg := c.Config.PreferenceModel.WithDefaults()
-	provider, err := c.preferenceEmbeddingProvider()
-	if err != nil {
-		return err
+	var classifier *PreferenceClassifier
+	var err error
+	if preferenceCfg.ContrastiveEnabled() {
+		provider, prepareErr := c.prepareContrastivePreferenceClassifier(&preferenceCfg)
+		if prepareErr != nil {
+			return prepareErr
+		}
+		classifier, err = newPreferenceClassifierWithBackend(
+			externalCfg,
+			c.Config.PreferenceRules,
+			&preferenceCfg,
+			configuredTextEmbeddingBackend(c.Config),
+			provider,
+		)
+	} else {
+		classifier, err = NewPreferenceClassifier(externalCfg, c.Config.PreferenceRules, &preferenceCfg)
 	}
-	classifier, err := NewPreferenceClassifierWithProvider(externalCfg, c.Config.PreferenceRules, &preferenceCfg, provider)
 	if err != nil {
 		return fmt.Errorf("failed to create preference classifier: %w", err)
 	}
@@ -46,9 +58,34 @@ func (c *Classifier) initializePreferenceClassifier() error {
 	return nil
 }
 
+func (c *Classifier) prepareContrastivePreferenceClassifier(
+	preferenceCfg *config.PreferenceModelConfig,
+) (embedding.Provider, error) {
+	plan, err := resolveTextEmbeddingRuntimePlan(c.Config, preferenceCfg.EmbeddingModel)
+	if err != nil {
+		return nil, fmt.Errorf("invalid text embedding runtime plan for preference rules: %w", err)
+	}
+	if initErr := c.ensureTextEmbeddingRuntime(plan); initErr != nil {
+		return nil, fmt.Errorf("failed to initialize text embedding backend for preference rules: %w", initErr)
+	}
+	preferenceCfg.EmbeddingModel = plan.ModelType
+	provider, err := c.preferenceEmbeddingProvider()
+	if err != nil {
+		return nil, err
+	}
+	return provider, nil
+}
+
 func (c *Classifier) preferenceEmbeddingProvider() (embedding.Provider, error) {
-	if c == nil || c.Config == nil || !c.Config.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+	if c == nil || c.Config == nil {
 		return nil, nil
+	}
+	effectiveBackend := effectiveTextEmbeddingBackend(configuredTextEmbeddingBackend(c.Config), nil)
+	if effectiveBackend != config.EmbeddingBackendOpenAICompatible {
+		return nil, nil
+	}
+	if !c.Config.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+		return nil, fmt.Errorf("embedding backend %q requires a configured remote provider", effectiveBackend)
 	}
 	provider, err := embedding.NewProvider(c.Config.EmbeddingModels, embedding.ProviderOptions{})
 	if err != nil {

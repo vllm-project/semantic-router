@@ -18,7 +18,7 @@ type BootstrapRegistrationRequest struct {
 }
 
 type LoginResponse struct {
-	Token string `json:"token"`
+	Token string `json:"token,omitempty"`
 	User  *User  `json:"user"`
 }
 
@@ -47,18 +47,26 @@ type UpdateUserRequest struct {
 
 func AuthRoutes(svc *Service) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/auth/bootstrap/can-register", withAuthNoStore(bootstrapCanRegisterHandler(svc)))
-	mux.HandleFunc("/api/auth/bootstrap/register", withAuthNoStore(bootstrapRegisterHandler(svc)))
-	mux.HandleFunc("/api/auth/login", withAuthNoStore(loginHandler(svc)))
-	mux.HandleFunc("/api/auth/login/", withAuthNoStore(loginHandler(svc)))
-	mux.HandleFunc("/api/auth/logout", withAuthNoStore(logoutHandler(svc)))
-	mux.HandleFunc("/api/auth/logout/", withAuthNoStore(logoutHandler(svc)))
-	mux.HandleFunc("/api/auth/me", withAuthNoStore(meHandler(svc)))
-	mux.HandleFunc("/api/auth/me/", withAuthNoStore(meHandler(svc)))
-	mux.HandleFunc("/api/auth/password", withAuthNoStore(changePasswordHandler(svc)))
-	mux.HandleFunc("/api/auth/password/", withAuthNoStore(changePasswordHandler(svc)))
+	registerExactAuthHandler(mux, "/api/auth/bootstrap/can-register", bootstrapCanRegisterHandler(svc))
+	registerExactAuthHandler(mux, "/api/auth/bootstrap/register", bootstrapRegisterHandler(svc))
+	registerExactAuthHandler(mux, "/api/auth/login", loginHandler(svc))
+	registerExactAuthHandler(mux, "/api/auth/logout", logoutHandler(svc))
+	registerExactAuthHandler(mux, "/api/auth/me", meHandler(svc))
+	registerExactAuthHandler(mux, "/api/auth/password", changePasswordHandler(svc))
 
 	return mux
+}
+
+func registerExactAuthHandler(mux *http.ServeMux, path string, handler http.HandlerFunc) {
+	wrapper := withAuthNoStore(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != path && r.URL.Path != path+"/" {
+			http.NotFound(w, r)
+			return
+		}
+		handler(w, r)
+	})
+	mux.HandleFunc(path, wrapper)
+	mux.HandleFunc(path+"/", wrapper)
 }
 
 func RegisterAdminRoutes(mux *http.ServeMux, svc *Service) {
