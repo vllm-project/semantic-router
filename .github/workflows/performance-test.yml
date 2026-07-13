@@ -99,6 +99,34 @@ jobs:
           export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release
           make perf-bench-looper 2>&1 | tee -a reports/bench-output.txt
 
+      - name: Generate current results
+        id: current
+        run: |
+          set -o pipefail
+          cd perf && go run cmd/perftest/main.go \
+            --parse-bench=../reports/bench-output.txt \
+            --output=../reports/current.json
+
+      # The regression gate. Diffs the current run against the committed
+      # per-suite baselines in perf/testdata/baselines and exits non-zero if any
+      # benchmark regresses beyond its threshold in config/thresholds.yaml, so a
+      # regression turns this required check red on the PR (#2455).
+      #
+      # Absolute ns/op is machine-dependent, so a trustworthy gate needs
+      # baselines captured on this same ubuntu-latest runner class. The Nightly
+      # Performance Baseline workflow refreshes and commits them; run it once
+      # (workflow_dispatch) to seed ubuntu-latest baselines before relying on
+      # pass/fail. The cross-hardware / cross-backend matrix is tracked by #1510.
+      - name: Compare against baseline and gate on regressions
+        id: gate
+        run: |
+          cd perf && go run cmd/perftest/main.go \
+            --compare-baseline=testdata/baselines/ \
+            --current=../reports/current.json \
+            --threshold-file=config/thresholds.yaml \
+            --output=../reports/comparison.json \
+            --fail-on-regression
+
       - name: Parse benchmark results
         id: parse
         if: always()
@@ -123,8 +151,15 @@ jobs:
               echo "⚠️ not run"
             fi
           }
-          if [ "${{ steps.bench.outcome }}" = "success" ] && [ "${{ steps.looper.outcome }}" = "success" ]; then
-            headline="Component benchmarks completed successfully."
+          case "${{ steps.gate.outcome }}" in
+            success) gate_status="✅ no regressions beyond thresholds";;
+            failure) gate_status="❌ regression detected beyond threshold";;
+            *)       gate_status="⚠️ not run";;
+          esac
+          if [ "${{ steps.gate.outcome }}" = "failure" ]; then
+            headline="❌ **Performance regression gate FAILED** — a benchmark regressed beyond its configured threshold. See the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+          elif [ "${{ steps.bench.outcome }}" = "success" ] && [ "${{ steps.looper.outcome }}" = "success" ]; then
+            headline="Component benchmarks completed with no regressions beyond thresholds."
           else
             headline="❌ Component benchmarks **FAILED** — see the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
           fi
@@ -138,6 +173,7 @@ jobs:
           - Decision engine benchmarks: $(suite_status BenchmarkEvaluate)
           - Cache benchmarks: $(suite_status BenchmarkCache)
           - Looper family benchmarks: $(suite_status "Benchmark(ReMoM|Fusion|Flow|Base)")
+          - Regression gate: ${gate_status}
 
           ### Details
           See attached benchmark artifacts for detailed results and profiles.

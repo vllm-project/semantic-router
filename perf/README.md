@@ -49,7 +49,8 @@ make perf-profile-mem
 ### Baseline Comparison
 
 ```bash
-# Compare current performance against baseline
+# Compare against baseline (report only). Consumes reports/bench-output.txt, so
+# run a benchmark target that tees there first (or use make perf-check).
 make perf-compare
 
 # Update baselines (run this on main branch after verifying improvements)
@@ -59,7 +60,7 @@ make perf-baseline-update
 ### Regression Detection
 
 ```bash
-# Run benchmarks and fail if regressions detected
+# Run benchmarks and fail if any benchmark regresses beyond its threshold
 make perf-check
 ```
 
@@ -156,7 +157,10 @@ Defined in `config/thresholds.yaml`:
 | Cache (1K entries) | P95 latency | < 5ms |
 | Cache | Hit rate | > 80% |
 
-Regression thresholds: 10-20% depending on component.
+Regression thresholds are per-benchmark `ns/op` bounds (5% for the cheap,
+deterministic decision engine; 25% for the noisier Looper micro-benchmarks; 10%
+default). They are matched by benchmark name — see
+[Thresholds Config](#thresholds-config-configthresholdsyaml).
 
 ## E2E Performance Tests
 
@@ -175,14 +179,48 @@ Test cases:
 
 ## CI/CD Integration
 
-Performance tests run automatically on every PR:
+### PR regression gate
 
-1. **PR Opened** → Run component benchmarks (5 min)
-2. **Compare Against Baseline** → Calculate % changes
-3. **Post Results to PR** → Automatic comment with metrics table
-4. **Block if Regression** → Fail CI if thresholds exceeded
+`performance-test.yml` runs on every PR that touches the router, bindings, or
+`perf/`:
 
-Nightly jobs update baselines on the main branch.
+1. **Run benchmarks** — component suites + the Looper family, tee'd to
+   `reports/bench-output.txt`.
+2. **Generate current results** — `perftest --parse-bench` turns that raw output
+   into `reports/current.json`.
+3. **Compare and gate** — `perftest --compare-baseline ... --fail-on-regression`
+   diffs `current.json` against the committed per-suite baselines and **exits
+   non-zero if any benchmark regresses beyond its threshold**, turning the check
+   red on the PR.
+4. **Comment on the PR** — a summary comment reports each suite's status and the
+   regression-gate result.
+
+### Baseline lifecycle
+
+The gate compares **absolute `ns/op`**, which is machine-dependent, so the
+committed baselines in `testdata/baselines/` must come from the **same
+ubuntu-latest runner class** the PR gate runs on. The **Nightly Performance
+Baseline** workflow (`performance-nightly.yml`) refreshes and commits them on
+that runner.
+
+> **Seeding (one-time):** the baselines currently in the repo were captured on
+> developer machines. Trigger the Nightly workflow once (`workflow_dispatch`) to
+> replace them with ubuntu-latest numbers before relying on the gate; otherwise
+> the first PRs will see cross-machine noise. Suites whose baseline is empty
+> (e.g. classification before models are cached) are simply skipped by the gate,
+> never falsely failed.
+
+For **local** runs, `make perf-check` compares against these committed baselines
+too — refresh your own with `make perf-baseline-update` first, since your
+hardware differs from CI.
+
+### Scope
+
+This gate establishes the single-runner numeric-regression mechanism. Large-scale
+**cross-hardware / cross-backend** coverage (Candle/ONNX × NVIDIA × AMD,
+backend-specific baselines) is tracked separately by **#1510**. The gap this work
+closes was surfaced by the router-quality audit in **#2375** and filed as
+**#2455**.
 
 ## Configuration
 
@@ -201,12 +239,25 @@ benchmark_config:
 
 ### Thresholds Config (`config/thresholds.yaml`)
 
+Regression thresholds are matched **per benchmark** by name. Each entry maps a
+Go-regexp pattern to the maximum tolerated `ns/op` regression (percent slower
+than baseline); the **first matching pattern wins**, so entries are ordered
+most-specific first, and any benchmark matching nothing uses `default`:
+
 ```yaml
 component_benchmarks:
-  classification:
-    batch_size_1:
-      max_p95_latency_ms: 10.0
-      max_regression_percent: 10
+  default:
+    max_regression_percent: 10
+  benchmarks:
+    - name: classification
+      pattern: "^BenchmarkClassify"
+      max_regression_percent: 15
+    - name: decision_engine
+      pattern: "^Benchmark(EvaluateDecisions|PrioritySelection|Rule)"
+      max_regression_percent: 5
+    - name: looper
+      pattern: "^Benchmark(ReMoM|Fusion|Flow|Base)"
+      max_regression_percent: 25
 ```
 
 ## Troubleshooting
