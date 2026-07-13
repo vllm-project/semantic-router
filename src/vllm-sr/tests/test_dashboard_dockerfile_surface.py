@@ -12,17 +12,36 @@ EXTPROC_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc"
 EXTPROC_ROCM_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc-rocm"
 
 
+def test_router_dockerfiles_copy_the_complete_candle_go_package() -> None:
+    for dockerfile in (
+        VLLM_SR_DOCKERFILE,
+        VLLM_SR_ROCM_DOCKERFILE,
+        VLLM_SR_CUDA_DOCKERFILE,
+    ):
+        content = dockerfile.read_text(encoding="utf-8")
+
+        assert "COPY candle-binding/go.mod candle-binding/*.go ./" in content
+        assert (
+            "COPY --from=rust-builder /build/go.mod /build/*.go "
+            "/build/../candle-binding/"
+        ) in content
+
+
 def test_dashboard_dockerfile_uses_glibc_builder_for_cgo_backend() -> None:
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert "FROM docker.io/library/golang:1.24-bookworm AS backend-builder" in content
+    assert "ARG IMAGE_REGISTRY=docker.io/" in content
+    assert (
+        "FROM ${IMAGE_REGISTRY}library/golang:1.25-bookworm AS backend-builder"
+        in content
+    )
     assert "apt_get_install_with_retry build-essential" in content
 
 
 def test_dashboard_dockerfile_retries_runtime_apk_installs() -> None:
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert "FROM docker.io/library/python:3.11-slim-bookworm" in content
+    assert "FROM ${IMAGE_REGISTRY}library/python:3.11-slim-bookworm" in content
     assert (
         "apt_get_install_with_retry ca-certificates curl docker.io gosu wget" in content
     )
@@ -66,13 +85,8 @@ def test_dashboard_dockerfile_copies_model_eval_scripts_and_requirements() -> No
 def test_vllm_sr_dockerfile_stays_router_only() -> None:
     content = VLLM_SR_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert (
-        "ARG RUST_RUNTIME_COMPAT_IMAGE=docker.io/rustlang/rust:nightly-bullseye"
-        in content
-    )
-    assert (
-        "ARG GO_RUNTIME_COMPAT_IMAGE=docker.io/library/golang:1.24-bullseye" in content
-    )
+    assert "ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bullseye" in content
+    assert "ARG GO_RUNTIME_COMPAT_IMAGE=library/golang:1.25-bookworm" in content
     assert "GLIBC_2.39+" in content
     assert 'ENTRYPOINT ["/app/start-router.sh"]' in content
     assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
@@ -114,18 +128,11 @@ def test_vllm_sr_rocm_dockerfile_uses_fully_qualified_base_images() -> None:
     """
     content = VLLM_SR_ROCM_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert (
-        "ARG RUST_RUNTIME_COMPAT_IMAGE=docker.io/rustlang/rust:nightly-bullseye"
-        in content
-    )
-    assert (
-        "ARG ONNX_RUST_RUNTIME_COMPAT_IMAGE=docker.io/library/rust:1.90-bullseye"
-        in content
-    )
-    assert (
-        "ARG GO_RUNTIME_COMPAT_IMAGE=docker.io/library/golang:1.24-bullseye" in content
-    )
-    assert "FROM docker.io/rocm/dev-ubuntu-22.04:7.0" in content
+    assert "ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bullseye" in content
+    assert "ARG ONNX_RUST_RUNTIME_COMPAT_IMAGE=library/rust:1.90-bullseye" in content
+    assert "ARG GO_RUNTIME_COMPAT_IMAGE=library/golang:1.25-bookworm" in content
+    assert "ARG IMAGE_REGISTRY=docker.io/" in content
+    assert "FROM ${IMAGE_REGISTRY}rocm/dev-ubuntu-22.04:7.0" in content
 
 
 def test_vllm_sr_cuda_dockerfile_stays_router_only() -> None:
