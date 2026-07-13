@@ -7,6 +7,9 @@ VLLM_SR_CONTAINER_IMAGE_DEFAULT = "ghcr.io/vllm-project/semantic-router/vllm-sr:
 VLLM_SR_CONTAINER_IMAGE_ROCM = (
     "ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest"
 )
+VLLM_SR_CONTAINER_IMAGE_CUDA = (
+    "ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest"
+)
 VLLM_SR_ROUTER_CONTAINER_IMAGE_DEFAULT = VLLM_SR_CONTAINER_IMAGE_DEFAULT
 VLLM_SR_ROUTER_CONTAINER_IMAGE_ROCM = VLLM_SR_CONTAINER_IMAGE_ROCM
 VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT = "envoyproxy/envoy:v1.34-latest"

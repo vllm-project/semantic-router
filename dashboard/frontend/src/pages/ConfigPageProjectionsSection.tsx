@@ -662,7 +662,7 @@ export default function ConfigPageProjectionsSection({
           <code style={{ fontSize: '0.8em' }}>projection_trace</code> (partition contenders and winners, score
           contributions, mapping confidence and boundary distance, per-output threshold steps). See{' '}
           <a
-            href="https://vllm-semantic-router.com/docs/tutorials/projection/traces"
+            href="https://vllm-sr.ai/docs/tutorials/projection/traces"
             target="_blank"
             rel="noreferrer"
           >

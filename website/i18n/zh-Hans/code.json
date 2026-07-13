@@ -384,7 +384,7 @@
     "message": "构建你的"
   },
   "homepage.hero.line2": {
-    "message": "Mixture-of-Models。"
+    "message": "Mixture-of-Models"
   },
   "homepage.hero.description": {
     "message": "将信号与偏好转化为跨异构 LLM 的可执行模型路径。"
