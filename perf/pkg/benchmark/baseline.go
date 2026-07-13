@@ -240,9 +240,22 @@ func mergeThreshold(primary, fallback RegressionThreshold) RegressionThreshold {
 // no baseline entry and were therefore not compared. Surfacing these keeps a
 // gate pass honest: an empty or missing baseline suite is excluded, not checked.
 func UngatedBenchmarks(current, baseline *Baseline) []string {
+	return missingKeys(current.Benchmarks, baseline.Benchmarks)
+}
+
+// MissingBenchmarks returns the names (sorted) of baseline benchmarks that have
+// no current result — benchmarks that were expected but did not run (a crashed
+// suite, a rename, or a filtered run). Without surfacing these, a benchmark that
+// disappears from the run is silently skipped and could pass the gate unnoticed.
+func MissingBenchmarks(current, baseline *Baseline) []string {
+	return missingKeys(baseline.Benchmarks, current.Benchmarks)
+}
+
+// missingKeys returns the keys of have that are absent from other, sorted.
+func missingKeys(have, other map[string]BenchmarkMetric) []string {
 	var names []string
-	for name := range current.Benchmarks {
-		if _, ok := baseline.Benchmarks[name]; !ok {
+	for name := range have {
+		if _, ok := other[name]; !ok {
 			names = append(names, name)
 		}
 	}

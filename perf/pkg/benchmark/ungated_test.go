@@ -18,3 +18,18 @@ func TestUngatedBenchmarks(t *testing.T) {
 		t.Errorf("UngatedBenchmarks = %v, want %v", got, want)
 	}
 }
+
+// TestMissingBenchmarks reports baseline benchmarks with no current result —
+// benchmarks that were expected but did not run (a crashed suite, a rename, or
+// a filtered run). Without this they would be silently skipped and a
+// disappeared benchmark could pass the gate.
+func TestMissingBenchmarks(t *testing.T) {
+	baseline := &Baseline{Benchmarks: map[string]BenchmarkMetric{"A": {}, "Gone": {}, "AlsoGone": {}}}
+	current := &Baseline{Benchmarks: map[string]BenchmarkMetric{"A": {}, "New": {}}}
+
+	got := MissingBenchmarks(current, baseline)
+	want := []string{"AlsoGone", "Gone"} // sorted; A ran, New has no baseline (that's UngatedBenchmarks)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("MissingBenchmarks = %v, want %v", got, want)
+	}
+}

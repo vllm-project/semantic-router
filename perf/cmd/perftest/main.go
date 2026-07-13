@@ -102,6 +102,14 @@ func compareWithBaseline(baselineDir, currentResultsFile, thresholdFile, outputP
 			len(ungated), strings.Join(ungated, ", "))
 	}
 
+	// Surface baseline benchmarks that produced no current result: they were
+	// expected but did not run (a crashed suite, a rename, or a filtered run),
+	// so they are not compared and a disappeared benchmark would pass silently.
+	if missing := benchmark.MissingBenchmarks(current, baseline); len(missing) > 0 {
+		fmt.Printf("⚠️  %d baseline benchmark(s) had NO current result (not measured — crashed, renamed, or filtered?): %s\n",
+			len(missing), strings.Join(missing, ", "))
+	}
+
 	results, err := benchmark.CompareWithBaseline(current, baseline, thresholds)
 	if err != nil {
 		return fmt.Errorf("failed to compare results: %w", err)
