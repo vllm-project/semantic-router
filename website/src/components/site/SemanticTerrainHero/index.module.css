@@ -1,5 +1,9 @@
 .stage {
   --terrain-model-gap: 2.5rem;
+  --hero-bg: #030303;
+  --hero-accent-blue: #4da9ff;
+  --hero-cta-primary: #30a2ff;
+  --hero-cta-primary-hover: #75c5ff;
   position: relative;
   isolation: isolate;
   display: grid;
@@ -7,7 +11,7 @@
   min-height: calc(100vh - var(--site-header-height));
   min-height: calc(100svh - var(--site-header-height));
   overflow: hidden;
-  background: #030303;
+  background: var(--hero-bg);
   color: #fafafa;
 }
 
@@ -16,7 +20,7 @@
   z-index: 0;
   inset: 0;
   overflow: hidden;
-  background: #030303;
+  background: var(--hero-bg);
   color: #a1a1aa;
   font-family: var(--ifm-font-family-monospace);
   pointer-events: none;
@@ -30,7 +34,7 @@
   width: 100%;
   height: 100%;
   cursor: grab;
-  opacity: 0.74;
+  opacity: 0.78;
   pointer-events: auto;
   touch-action: pan-y;
 }
@@ -146,16 +150,16 @@
   z-index: -1;
   inset: 0;
   background:
-    radial-gradient(ellipse 70% 55% at 50% 42%, rgba(48, 162, 255, 0.14), transparent 62%),
-    radial-gradient(circle at 50% 48%, rgba(3, 3, 3, 0.72) 0%, rgba(3, 3, 3, 0.38) 42%, transparent 70%),
-    linear-gradient(180deg, rgba(3, 3, 3, 0.35), rgba(3, 3, 3, 0.88));
+    radial-gradient(ellipse 72% 58% at 50% 42%, rgba(48, 162, 255, 0.16), transparent 62%),
+    radial-gradient(circle at 50% 48%, rgba(3, 3, 3, 0.78) 0%, rgba(3, 3, 3, 0.42) 42%, transparent 72%),
+    linear-gradient(180deg, rgba(3, 3, 3, 0.28), rgba(3, 3, 3, 0.9));
   pointer-events: none;
 }
 
 .copy {
   display: grid;
-  width: min(100%, 54rem);
-  gap: 1.5rem;
+  width: min(100%, 62rem);
+  gap: clamp(1.35rem, 2.5vw, 1.9rem);
   justify-items: center;
   margin: 0 auto;
   pointer-events: auto;
@@ -179,65 +183,69 @@
   align-items: center;
   justify-content: center;
   gap: 0.95rem;
-  color: #f4f4f5;
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.92rem;
-  font-weight: 650;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+  color: #f8fafc;
 }
 
 .brand img {
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2.85rem;
+  height: 2.85rem;
+  flex: 0 0 auto;
   object-fit: contain;
 }
 
+.brandWordmark {
+  font-family: var(--ifm-heading-font-family);
+  font-size: clamp(0.9rem, 1.35vw, 1.1rem);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .systemLabel {
-  margin: 0.5rem 0 0;
+  margin: 0;
   color: #a1a1aa;
   font-family: var(--ifm-font-family-monospace);
-  font-size: 0.88rem;
+  font-size: clamp(0.8rem, 1.25vw, 0.98rem);
   font-weight: 600;
   letter-spacing: 0.13em;
   line-height: 1.5;
-  text-transform: uppercase;
   text-align: center;
+  text-transform: uppercase;
 }
 
 .copy h1 {
   display: block;
   width: 100%;
-  max-width: min(100%, 34rem);
-  margin: 0.4rem auto 0;
-  color: #fafafa;
-  font-size: clamp(2.9rem, 7.2vw, 5.5rem);
-  font-weight: 420;
-  letter-spacing: -0.045em;
-  line-height: 1.06;
+  max-width: min(100%, 56rem);
+  margin: 0;
+  color: #f8fafc;
+  font-family: var(--ifm-heading-font-family);
+  font-size: clamp(2.65rem, 6vw, 5rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.14;
   text-align: center;
-  text-wrap: balance;
-}
-
-.copy h1 .accent {
-  display: block;
-  margin-bottom: 0.08em;
-  color: var(--site-brand-blue);
-  font-size: 0.94em;
-  font-weight: 720;
-}
-
-.copy h1 .headlineLine {
-  display: block;
   white-space: nowrap;
 }
 
+.copy h1 .accent {
+  display: inline;
+  color: var(--hero-accent-blue);
+}
+
+.copy h1 .headlineLine {
+  display: inline;
+}
+
 .description {
-  max-width: min(100%, 38rem);
-  margin: 0.45rem auto 0;
+  max-width: min(100%, 42rem);
+  margin: 0;
   color: #b2b2b8;
-  font-size: clamp(1.15rem, 1.75vw, 1.52rem);
-  font-weight: 480;
+  font-family: var(--ifm-font-family-base);
+  font-size: clamp(1.15rem, 1.75vw, 1.5rem);
+  font-weight: 400;
   line-height: 1.55;
   letter-spacing: -0.01em;
   text-align: center;
@@ -248,48 +256,59 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 1rem;
+  gap: 0.85rem;
   width: 100%;
-  margin-top: 1.35rem;
+  margin-top: 0.35rem;
 }
 
 .actions .primaryCta,
 .actions .secondaryCta {
-  min-width: 16.75rem;
-  min-height: 4rem;
-  padding-inline: 1.65rem;
-  border-radius: 0.35rem;
+  min-width: 12.25rem;
+  min-height: 3rem;
+  padding: 0.65rem 1.35rem;
+  border-radius: 0.45rem;
+  font-family: var(--ifm-font-family-base);
   font-size: 0.88rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  box-shadow: none;
+  backdrop-filter: none;
+  transform: none;
 }
 
 .actions .primaryCta {
-  border-color: var(--site-brand-blue);
-  background: var(--site-brand-blue);
+  gap: 0.45rem;
+  border-color: var(--hero-cta-primary);
+  background: var(--hero-cta-primary);
   color: #030303;
-  box-shadow: 0 16px 36px rgba(48, 162, 255, 0.22);
 }
 
 .actions .primaryCta:hover {
-  border-color: var(--site-brand-blue-light);
-  background: var(--site-brand-blue-light);
+  border-color: var(--hero-cta-primary-hover);
+  background: var(--hero-cta-primary-hover);
   color: #030303;
-  box-shadow: var(--site-hover-glow);
+  box-shadow: 0 12px 32px rgba(48, 162, 255, 0.28);
+  transform: translateY(-1px);
+}
+
+.ctaArrow {
+  font-size: 1.05em;
+  line-height: 1;
 }
 
 .actions .secondaryCta {
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(3, 3, 3, 0.64);
-  color: #fafafa;
-  box-shadow: none;
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(3, 3, 3, 0.55);
+  color: #f4f4f5;
 }
 
 .actions .secondaryCta:hover {
-  border-color: var(--site-hover-border);
-  background: var(--site-hover-surface-bg-soft);
+  border-color: rgba(255, 255, 255, 0.48);
+  background: rgba(255, 255, 255, 0.08);
   color: #ffffff;
-  box-shadow: var(--site-hover-inset);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
 }
 
 .modelBand {
@@ -384,7 +403,6 @@
 
   .copy {
     width: min(100%, 48rem);
-    gap: 1.15rem;
   }
 }
 
@@ -416,8 +434,6 @@
   }
 
   .hero {
-    align-items: center;
-    justify-items: center;
     padding: 4.5rem 0 2.75rem;
   }
 
@@ -432,52 +448,45 @@
   }
 
   .brand {
-    font-size: 0.78rem;
+    gap: 0.7rem;
   }
 
   .brand img {
-    width: 2.1rem;
-    height: 2.1rem;
+    width: 2.35rem;
+    height: 2.35rem;
+  }
+
+  .brandWordmark {
+    font-size: 0.78rem;
+    letter-spacing: 0.12em;
   }
 
   .systemLabel {
     max-width: 30rem;
-    margin-top: 0.5rem;
-    font-size: 0.72rem;
+    font-size: 0.78rem;
   }
 
   .copy h1 {
-    max-width: min(100%, 26rem);
-    font-size: clamp(2.35rem, 8.8vw, 3.35rem);
-    line-height: 1.12;
-    text-align: center;
-  }
-
-  .copy h1 .headlineLine {
-    white-space: normal;
+    max-width: 100%;
+    font-size: clamp(1.6rem, 5vw, 2.85rem);
+    line-height: 1.18;
   }
 
   .description {
-    max-width: 33rem;
-    font-size: 1.15rem;
+    max-width: 22rem;
+    font-size: 1.02rem;
   }
 
   .actions {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
     width: 100%;
   }
 
   .actions .primaryCta,
   .actions .secondaryCta {
-    width: auto;
-    min-width: min(100%, 15.5rem);
-    flex: 1 1 14rem;
-    max-width: 18.5rem;
-    min-height: 3.75rem;
-    font-size: 0.82rem;
+    width: min(100%, 16rem);
+    min-width: 0;
   }
 
   .modelBand {
@@ -509,20 +518,11 @@
   }
 
   .copy {
-    gap: 0.8rem;
+    gap: 0.9rem;
   }
 
   .copy h1 {
-    font-size: clamp(2.5rem, 5.8vw, 4.1rem);
-  }
-
-  .systemLabel {
-    margin-top: 0;
-  }
-
-  .description,
-  .actions {
-    margin-top: 0.25rem;
+    font-size: clamp(2.2rem, 5.2vw, 3.75rem);
   }
 
   .modelBand {

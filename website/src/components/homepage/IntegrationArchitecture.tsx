@@ -3,9 +3,11 @@ import clsx from 'clsx'
 import Translate, { translate } from '@docusaurus/Translate'
 import Link from '@docusaurus/Link'
 import Claude from '@lobehub/icons/es/Claude/components/Mono'
+import DeepSeek from '@lobehub/icons/es/DeepSeek/components/Mono'
 import Gemini from '@lobehub/icons/es/Gemini/components/Mono'
 import Mistral from '@lobehub/icons/es/Mistral/components/Mono'
 import OpenAI from '@lobehub/icons/es/OpenAI/components/Mono'
+import Zhipu from '@lobehub/icons/es/Zhipu/components/Mono'
 import ScrollReveal from '@site/src/components/site/ScrollReveal'
 import shared from './homepageShared.module.css'
 import styles from './IntegrationArchitecture.module.css'
@@ -15,22 +17,25 @@ const DECISION_ENGINE_INDEX = 1
 
 type ModelKind = 'closed' | 'open'
 
-type ModelRoute = {
+type ModelTarget = {
   id: string
   label: string
   provider: string
   kind: ModelKind
-  queryLabel: string
   Icon: React.ComponentType<{ size?: number }>
 }
 
-const modelRoutes: ModelRoute[] = [
+type IncomingQuery = {
+  id: string
+  label: string
+}
+
+const modelTargets: ModelTarget[] = [
   {
     id: 'anthropic',
     label: 'Claude',
     provider: 'Anthropic',
     kind: 'closed',
-    queryLabel: translate({ id: 'homepage.integration.query1', message: 'Query 1' }),
     Icon: Claude,
   },
   {
@@ -38,7 +43,6 @@ const modelRoutes: ModelRoute[] = [
     label: 'ChatGPT',
     provider: 'OpenAI',
     kind: 'closed',
-    queryLabel: translate({ id: 'homepage.integration.query2', message: 'Query 2' }),
     Icon: OpenAI,
   },
   {
@@ -46,7 +50,6 @@ const modelRoutes: ModelRoute[] = [
     label: 'Gemini',
     provider: 'Google',
     kind: 'closed',
-    queryLabel: translate({ id: 'homepage.integration.query3', message: 'Query 3' }),
     Icon: Gemini,
   },
   {
@@ -54,10 +57,58 @@ const modelRoutes: ModelRoute[] = [
     label: 'Mistral',
     provider: 'Mistral AI',
     kind: 'open',
-    queryLabel: translate({ id: 'homepage.integration.query4', message: 'Query 4' }),
     Icon: Mistral,
   },
+  {
+    id: 'deepseek',
+    label: 'DeepSeek',
+    provider: 'DeepSeek',
+    kind: 'open',
+    Icon: DeepSeek,
+  },
+  {
+    id: 'glm',
+    label: 'GLM',
+    provider: 'Zhipu AI',
+    kind: 'open',
+    Icon: Zhipu,
+  },
 ]
+
+const incomingQueries: IncomingQuery[] = [
+  {
+    id: 'query-1',
+    label: translate({ id: 'homepage.integration.query1', message: 'Query 1' }),
+  },
+  {
+    id: 'query-2',
+    label: translate({ id: 'homepage.integration.query2', message: 'Query 2' }),
+  },
+  {
+    id: 'query-3',
+    label: translate({ id: 'homepage.integration.query3', message: 'Query 3' }),
+  },
+  {
+    id: 'query-4',
+    label: translate({ id: 'homepage.integration.query4', message: 'Query 4' }),
+  },
+  {
+    id: 'query-5',
+    label: translate({ id: 'homepage.integration.query5', message: 'Query 5' }),
+  },
+  {
+    id: 'query-6',
+    label: translate({ id: 'homepage.integration.query6', message: 'Query 6' }),
+  },
+]
+
+// Sequential queries, each routed to a different model in the fleet.
+const ROUTE_TARGET_BY_QUERY = [3, 0, 4, 1, 5, 2]
+
+function getModelForQuery(queryIndex: number): ModelTarget {
+  const modelIndex = ROUTE_TARGET_BY_QUERY[queryIndex % ROUTE_TARGET_BY_QUERY.length]
+  return modelTargets[modelIndex]
+}
 
 const ROUTE_CYCLE_MS = 3400
 const SVG_WIDTH = 800
@@ -111,20 +162,20 @@ function measureRouteLayout(
   }
 
   const targets: Record<string, Point> = {}
-  modelRoutes.forEach((route, index) => {
+  modelTargets.forEach((model, index) => {
     const row = modelRows[index]
     if (!row) {
       return
     }
 
     const rowRect = row.getBoundingClientRect()
-    targets[route.id] = {
+    targets[model.id] = {
       x: toPercentX(rowRect.left + rowRect.width * 0.5),
       y: toPercentY(rowRect.top + rowRect.height * 0.42),
     }
   })
 
-  if (Object.keys(targets).length !== modelRoutes.length) {
+  if (Object.keys(targets).length !== modelTargets.length) {
     return null
   }
 
@@ -133,26 +184,26 @@ function measureRouteLayout(
 
 function QueryColumn({
   title,
-  activeRouteId,
+  activeQueryIndex,
 }: {
   title: string
-  activeRouteId: string
+  activeQueryIndex: number
 }): JSX.Element {
   return (
     <div className={styles.flowColumn}>
       <span className={styles.flowColumnTitle}>{title}</span>
       <ul className={styles.flowList}>
-        {modelRoutes.map((route, index) => {
-          const active = route.id === activeRouteId
+        {incomingQueries.map((query, index) => {
+          const active = index === activeQueryIndex
           return (
             <li
-              key={route.id}
+              key={query.id}
               className={clsx(styles.flowNode, styles.query, {
                 [styles.queryActive]: active,
               })}
               style={{ animationDelay: `${index * 0.15}s` }}
             >
-              <span className={styles.queryLabel}>{route.queryLabel}</span>
+              <span className={styles.queryLabel}>{query.label}</span>
               {active && (
                 <span className={styles.querySending}>
                   <Translate id="homepage.integration.sending">Sending</Translate>
@@ -167,37 +218,39 @@ function QueryColumn({
 }
 
 function ModelTile({
-  route,
+  model,
   active,
+  activeQueryLabel,
   onRowRef,
 }: {
-  route: ModelRoute
+  model: ModelTarget
   active: boolean
-  onRowRef: (routeId: string, node: HTMLLIElement | null) => void
+  activeQueryLabel?: string
+  onRowRef: (modelId: string, node: HTMLLIElement | null) => void
 }): JSX.Element {
-  const { Icon } = route
-  const isOpen = route.kind === 'open'
+  const { Icon } = model
+  const isOpen = model.kind === 'open'
 
   return (
     <li
       ref={(node) => {
-        onRowRef(route.id, node)
+        onRowRef(model.id, node)
       }}
       className={clsx(styles.modelTile, {
         [styles.modelTileOpen]: isOpen,
         [styles.modelTileActive]: active,
       })}
-      aria-label={`${route.provider} ${route.label}`}
+      aria-label={`${model.provider} ${model.label}`}
     >
       <span className={styles.modelTileArrow} aria-hidden="true" />
       <div className={styles.modelCube}>
         <div className={styles.modelCubeFace} aria-hidden="true" />
         <Icon size={isOpen ? 30 : 28} />
       </div>
-      <span className={styles.modelTileName}>{route.label}</span>
-      {active && (
+      <span className={styles.modelTileName}>{model.label}</span>
+      {active && activeQueryLabel && (
         <span className={styles.routeBadge}>
-          {route.queryLabel}
+          {activeQueryLabel}
           {' '}
           →
         </span>
@@ -208,15 +261,17 @@ function ModelTile({
 
 function ModelColumn({
   title,
-  activeRouteId,
+  activeModelId,
+  activeQueryLabel,
   onRowRef,
 }: {
   title: string
-  activeRouteId: string
-  onRowRef: (routeId: string, node: HTMLLIElement | null) => void
+  activeModelId: string
+  activeQueryLabel: string
+  onRowRef: (modelId: string, node: HTMLLIElement | null) => void
 }): JSX.Element {
-  const closedModels = modelRoutes.filter(route => route.kind === 'closed')
-  const openModels = modelRoutes.filter(route => route.kind === 'open')
+  const closedModels = modelTargets.filter(model => model.kind === 'closed')
+  const openModels = modelTargets.filter(model => model.kind === 'open')
 
   return (
     <div className={styles.flowColumn}>
@@ -227,11 +282,12 @@ function ModelColumn({
             <Translate id="homepage.integration.closedModels">Closed models</Translate>
           </span>
           <ul className={styles.modelGrid}>
-            {closedModels.map(route => (
+            {closedModels.map(model => (
               <ModelTile
-                key={route.id}
-                route={route}
-                active={route.id === activeRouteId}
+                key={model.id}
+                model={model}
+                active={model.id === activeModelId}
+                activeQueryLabel={activeQueryLabel}
                 onRowRef={onRowRef}
               />
             ))}
@@ -243,11 +299,12 @@ function ModelColumn({
             <Translate id="homepage.integration.openModels">Open models</Translate>
           </span>
           <ul className={styles.modelGridOpen}>
-            {openModels.map(route => (
+            {openModels.map(model => (
               <ModelTile
-                key={route.id}
-                route={route}
-                active={route.id === activeRouteId}
+                key={model.id}
+                model={model}
+                active={model.id === activeModelId}
+                activeQueryLabel={activeQueryLabel}
                 onRowRef={onRowRef}
               />
             ))}
@@ -263,14 +320,16 @@ function ModelColumn({
 }
 
 function RoutingAnimation({
-  activeRoute,
+  activeModel,
+  activeQueryLabel,
   layout,
 }: {
-  activeRoute: ModelRoute
+  activeModel: ModelTarget
+  activeQueryLabel: string
   layout: RouteLayout | null
 }): JSX.Element {
   const packetRef = useRef<HTMLSpanElement | null>(null)
-  const target = layout?.targets[activeRoute.id]
+  const target = layout?.targets[activeModel.id]
   const origin = layout?.origin
   const mid = origin && target
     ? {
@@ -345,7 +404,7 @@ function RoutingAnimation({
     return () => {
       animation.cancel()
     }
-  }, [activeRoute.id, origin, target, mid])
+  }, [activeModel.id, origin, target, mid])
 
   return (
     <div className={styles.flowTrack} aria-hidden="true">
@@ -360,7 +419,7 @@ function RoutingAnimation({
       )}
       {origin && target && (
         <span
-          key={activeRoute.id}
+          key={`${activeModel.id}-${activeQueryLabel}`}
           ref={packetRef}
           className={styles.queryPacket}
           style={{
@@ -368,7 +427,7 @@ function RoutingAnimation({
             top: `${origin.y}%`,
           }}
         >
-          <span className={styles.packetLabel}>{activeRoute.queryLabel}</span>
+          <span className={styles.packetLabel}>{activeQueryLabel}</span>
         </span>
       )}
       {layout && (
@@ -380,17 +439,17 @@ function RoutingAnimation({
               <stop offset="100%" stopColor="#0876c9" stopOpacity="0.75" />
             </linearGradient>
           </defs>
-          {modelRoutes.map((route) => {
-            const routeTarget = layout.targets[route.id]
+          {modelTargets.map((model) => {
+            const routeTarget = layout.targets[model.id]
             if (!routeTarget) {
               return null
             }
 
             return (
               <path
-                key={route.id}
+                key={model.id}
                 className={clsx(styles.flowPathEgress, {
-                  [styles.flowPathEgressActive]: activeRoute.id === route.id,
+                  [styles.flowPathEgressActive]: activeModel.id === model.id,
                 })}
                 d={buildEgressPath(layout.origin, routeTarget)}
               />
@@ -403,15 +462,16 @@ function RoutingAnimation({
 }
 
 export default function IntegrationArchitecture(): JSX.Element {
-  const [routeIndex, setRouteIndex] = useState(0)
+  const [activeQueryIndex, setActiveQueryIndex] = useState(0)
   const [layout, setLayout] = useState<RouteLayout | null>(null)
   const diagramRef = useRef<HTMLDivElement | null>(null)
   const decisionEngineRef = useRef<HTMLLIElement | null>(null)
   const modelRowRefs = useRef<Record<string, HTMLLIElement | null>>({})
-  const activeRoute = modelRoutes[routeIndex]
+  const activeQuery = incomingQueries[activeQueryIndex]
+  const activeModel = getModelForQuery(activeQueryIndex)
 
-  const handleModelRowRef = useCallback((routeId: string, node: HTMLLIElement | null) => {
-    modelRowRefs.current[routeId] = node
+  const handleModelRowRef = useCallback((modelId: string, node: HTMLLIElement | null) => {
+    modelRowRefs.current[modelId] = node
   }, [])
 
   const updateLayout = useCallback(() => {
@@ -421,8 +481,8 @@ export default function IntegrationArchitecture(): JSX.Element {
       return
     }
 
-    const modelRows = modelRoutes
-      .map(route => modelRowRefs.current[route.id])
+    const modelRows = modelTargets
+      .map(model => modelRowRefs.current[model.id])
       .filter((row): row is HTMLLIElement => row !== null)
 
     const nextLayout = measureRouteLayout(diagram, decisionEngine, modelRows)
@@ -458,7 +518,7 @@ export default function IntegrationArchitecture(): JSX.Element {
       window.cancelAnimationFrame(frameId)
       resizeObserver.disconnect()
     }
-  }, [updateLayout, routeIndex])
+  }, [updateLayout, activeQueryIndex])
 
   useEffect(() => {
     const retryDelays = [80, 200, 500, 1000]
@@ -473,11 +533,11 @@ export default function IntegrationArchitecture(): JSX.Element {
         window.clearTimeout(timeoutId)
       })
     }
-  }, [updateLayout, routeIndex])
+  }, [updateLayout, activeQueryIndex])
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
-      setRouteIndex(current => (current + 1) % modelRoutes.length)
+      setActiveQueryIndex(current => (current + 1) % incomingQueries.length)
     }, ROUTE_CYCLE_MS)
 
     return () => {
@@ -508,20 +568,24 @@ export default function IntegrationArchitecture(): JSX.Element {
               <span className={styles.routeStatusLabel}>
                 <Translate id="homepage.integration.routing">Routing</Translate>
               </span>
-              <span className={styles.routeStatusValue} key={activeRoute.id}>
-                {activeRoute.queryLabel}
+              <span className={styles.routeStatusValue} key={`${activeQuery.id}-${activeModel.id}`}>
+                {activeQuery.label}
                 {' '}
                 →
                 {' '}
-                {activeRoute.label}
+                {activeModel.label}
               </span>
             </div>
 
             <div className={styles.diagramShell} ref={diagramRef}>
-              <RoutingAnimation activeRoute={activeRoute} layout={layout} />
+              <RoutingAnimation
+                activeModel={activeModel}
+                activeQueryLabel={activeQuery.label}
+                layout={layout}
+              />
               <QueryColumn
                 title={translate({ id: 'homepage.integration.incoming', message: 'Incoming queries' })}
-                activeRouteId={activeRoute.id}
+                activeQueryIndex={activeQueryIndex}
               />
               <div className={`${styles.routerHub} ${styles.routerHubActive}`}>
                 <span className={styles.hubBadge}>
@@ -550,7 +614,8 @@ export default function IntegrationArchitecture(): JSX.Element {
               </div>
               <ModelColumn
                 title={translate({ id: 'homepage.integration.models', message: 'Models' })}
-                activeRouteId={activeRoute.id}
+                activeModelId={activeModel.id}
+                activeQueryLabel={activeQuery.label}
                 onRowRef={handleModelRowRef}
               />
             </div>

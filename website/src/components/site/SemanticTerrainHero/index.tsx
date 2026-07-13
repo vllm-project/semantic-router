@@ -45,7 +45,9 @@ export default function SemanticTerrainHero(): JSX.Element {
           <div className={styles.copy}>
             <div className={styles.brand}>
               <img src={logoSrc} alt="" aria-hidden="true" />
-              <span>vLLM Semantic Router</span>
+              <span className={styles.brandWordmark}>
+                <Translate id="homepage.hero.brand">vLLM Semantic Router</Translate>
+              </span>
             </div>
 
             <p className={styles.systemLabel}>
@@ -58,6 +60,7 @@ export default function SemanticTerrainHero(): JSX.Element {
               <span className={styles.accent}>
                 <Translate id="homepage.hero.line1">Build your</Translate>
               </span>
+              {' '}
               <span className={styles.headlineLine}>
                 <Translate id="homepage.hero.line2">
                   Mixture-of-Models.
@@ -81,6 +84,9 @@ export default function SemanticTerrainHero(): JSX.Element {
                 <Translate id="homepage.hero.primaryCta">
                   Try the Playground
                 </Translate>
+                <span aria-hidden="true" className={styles.ctaArrow}>
+                  →
+                </span>
               </PillLink>
               <PillLink
                 className={styles.secondaryCta}
@@ -94,7 +100,6 @@ export default function SemanticTerrainHero(): JSX.Element {
             </div>
           </div>
         </div>
-
       </header>
 
       <section

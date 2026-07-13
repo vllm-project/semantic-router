@@ -275,8 +275,7 @@
 }
 
 .modelGridOpen {
-  grid-template-columns: minmax(0, 1fr);
-  max-width: 6.5rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .modelTile {
