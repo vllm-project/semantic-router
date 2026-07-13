@@ -89,26 +89,9 @@ func compareWithBaseline(baselineDir, currentResultsFile, thresholdFile, outputP
 	}
 	fmt.Printf("Loaded baseline with %d benchmarks\n", len(baseline.Benchmarks))
 
-	// Load current results
-	var current *benchmark.Baseline
-	if currentResultsFile != "" {
-		currentData, err := os.ReadFile(currentResultsFile)
-		if err != nil {
-			return fmt.Errorf("failed to read current results: %w", err)
-		}
-		if err := json.Unmarshal(currentData, &current); err != nil {
-			return fmt.Errorf("failed to parse current results: %w", err)
-		}
-	} else {
-		// Look for current.json in baseline dir
-		currentPath := filepath.Join(baselineDir, "current.json")
-		currentData, err := os.ReadFile(currentPath)
-		if err != nil {
-			return fmt.Errorf("failed to read current results: %w", err)
-		}
-		if err := json.Unmarshal(currentData, &current); err != nil {
-			return fmt.Errorf("failed to parse current results: %w", err)
-		}
+	current, err := loadCurrentResults(currentResultsFile, baselineDir)
+	if err != nil {
+		return err
 	}
 	fmt.Printf("Loaded current results with %d benchmarks\n", len(current.Benchmarks))
 
@@ -119,16 +102,51 @@ func compareWithBaseline(baselineDir, currentResultsFile, thresholdFile, outputP
 			len(ungated), strings.Join(ungated, ", "))
 	}
 
-	// Compare with baseline
 	results, err := benchmark.CompareWithBaseline(current, baseline, thresholds)
 	if err != nil {
 		return fmt.Errorf("failed to compare results: %w", err)
 	}
-
-	// Print results
 	benchmark.PrintComparisonResults(results)
 
-	// Generate comparison output
+	if err := writeComparisonOutput(outputPath, baselineDir, currentResultsFile, results); err != nil {
+		return err
+	}
+
+	if benchmark.HasRegressions(results) {
+		n := countRegressions(results)
+		fmt.Printf("\n⚠️  %d performance regression(s) detected beyond configured thresholds!\n", n)
+		if failOnRegression {
+			return fmt.Errorf("%d performance regression(s) exceeded the configured thresholds", n)
+		}
+	}
+
+	return nil
+}
+
+// loadCurrentResults reads the current benchmark results from an explicit file,
+// or from the current.json fallback in the baseline directory.
+func loadCurrentResults(currentResultsFile, baselineDir string) (*benchmark.Baseline, error) {
+	path := currentResultsFile
+	if path == "" {
+		path = filepath.Join(baselineDir, "current.json")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read current results: %w", err)
+	}
+	var current benchmark.Baseline
+	if err := json.Unmarshal(data, &current); err != nil {
+		return nil, fmt.Errorf("failed to parse current results: %w", err)
+	}
+	return &current, nil
+}
+
+// writeComparisonOutput marshals the comparison to outputPath as JSON when a
+// path is given; a empty path is a no-op.
+func writeComparisonOutput(outputPath, baselineDir, currentResultsFile string, results []benchmark.ComparisonResult) error {
+	if outputPath == "" {
+		return nil
+	}
 	comparisonOutput := struct {
 		BaselineDir    string                       `json:"baseline_dir"`
 		CurrentFile    string                       `json:"current_file"`
@@ -142,33 +160,25 @@ func compareWithBaseline(baselineDir, currentResultsFile, thresholdFile, outputP
 		Results:        results,
 		HasRegressions: benchmark.HasRegressions(results),
 	}
-
-	// Save comparison output
-	if outputPath != "" {
-		outputData, err := json.MarshalIndent(comparisonOutput, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal comparison: %w", err)
-		}
-		if err := os.WriteFile(outputPath, outputData, 0644); err != nil {
-			return fmt.Errorf("failed to write output: %w", err)
-		}
-		fmt.Printf("Comparison results saved to: %s\n", outputPath)
+	outputData, err := json.MarshalIndent(comparisonOutput, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal comparison: %w", err)
 	}
-
-	if benchmark.HasRegressions(results) {
-		n := 0
-		for _, r := range results {
-			if r.RegressionDetected {
-				n++
-			}
-		}
-		fmt.Printf("\n⚠️  %d performance regression(s) detected beyond configured thresholds!\n", n)
-		if failOnRegression {
-			return fmt.Errorf("%d performance regression(s) exceeded the configured thresholds", n)
-		}
+	if err := os.WriteFile(outputPath, outputData, 0o644); err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
 	}
-
+	fmt.Printf("Comparison results saved to: %s\n", outputPath)
 	return nil
+}
+
+func countRegressions(results []benchmark.ComparisonResult) int {
+	n := 0
+	for _, r := range results {
+		if r.RegressionDetected {
+			n++
+		}
+	}
+	return n
 }
 
 // parseBenchToBaseline reads raw `go test -bench` output and writes it as a
