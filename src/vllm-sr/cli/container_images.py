@@ -9,6 +9,8 @@ from cli.consts import (
     IMAGE_PULL_POLICY_IF_NOT_PRESENT,
     IMAGE_PULL_POLICY_NEVER,
     PLATFORM_AMD,
+    PLATFORM_NVIDIA,
+    VLLM_SR_CONTAINER_IMAGE_CUDA,
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
     VLLM_SR_CONTAINER_IMAGE_ROCM,
     VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT,
@@ -90,9 +92,10 @@ def _derive_official_variant(image_name, default_variant_image):
     image_name = image_name.strip()
     default_repo = VLLM_SR_CONTAINER_IMAGE_DEFAULT.rsplit(":", 1)[0]
     rocm_repo = VLLM_SR_CONTAINER_IMAGE_ROCM.rsplit(":", 1)[0]
+    cuda_repo = VLLM_SR_CONTAINER_IMAGE_CUDA.rsplit(":", 1)[0]
     variant_repo = default_variant_image.rsplit(":", 1)[0]
 
-    for candidate_repo in (default_repo, rocm_repo):
+    for candidate_repo in (default_repo, rocm_repo, cuda_repo):
         if image_name == candidate_repo:
             return f"{variant_repo}:latest"
         prefix = f"{candidate_repo}:"
@@ -103,12 +106,16 @@ def _derive_official_variant(image_name, default_variant_image):
 
 
 def _is_official_vllm_sr_image(image_name):
-    """Return True when the image is an official vllm-sr CPU or ROCm reference."""
+    """Return True when the image is an official vllm-sr CPU, ROCm, or CUDA reference."""
     if not image_name:
         return False
 
     image_name = image_name.strip()
-    for candidate in (VLLM_SR_CONTAINER_IMAGE_DEFAULT, VLLM_SR_CONTAINER_IMAGE_ROCM):
+    for candidate in (
+        VLLM_SR_CONTAINER_IMAGE_DEFAULT,
+        VLLM_SR_CONTAINER_IMAGE_ROCM,
+        VLLM_SR_CONTAINER_IMAGE_CUDA,
+    ):
         candidate_repo = candidate.rsplit(":", 1)[0]
         if image_name == candidate_repo or image_name.startswith(f"{candidate_repo}:"):
             return True
@@ -134,6 +141,16 @@ def _select_image_source(image, normalized_platform):
         selected_image = amd_image or VLLM_SR_CONTAINER_IMAGE_ROCM
         log.info(
             f"Platform '{normalized_platform}' detected, using AMD ROCm default image: "
+            f"{selected_image}"
+        )
+        return selected_image
+    if normalized_platform == PLATFORM_NVIDIA:
+        nvidia_image = os.getenv(
+            "VLLM_SR_IMAGE_NVIDIA", VLLM_SR_CONTAINER_IMAGE_CUDA
+        ).strip()
+        selected_image = nvidia_image or VLLM_SR_CONTAINER_IMAGE_CUDA
+        log.info(
+            f"Platform '{normalized_platform}' detected, using NVIDIA CUDA default image: "
             f"{selected_image}"
         )
         return selected_image
