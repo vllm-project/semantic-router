@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -21,6 +22,11 @@ type VectorStoreRuntime struct {
 	Embedder       vectorstore.Embedder
 	registryCloser io.Closer
 }
+
+// vectorStoreShutdownTimeout bounds how long Shutdown waits for the ingestion
+// pipeline to drain in-flight jobs before cancelling them, so a wedged embedder
+// or backend cannot block process shutdown indefinitely.
+const vectorStoreShutdownTimeout = 30 * time.Second
 
 func NewVectorStoreRuntime(cfg *config.RouterConfig) (*VectorStoreRuntime, error) {
 	if cfg == nil {
@@ -123,7 +129,11 @@ func (r *VectorStoreRuntime) Shutdown() error {
 		return nil
 	}
 	if r.Pipeline != nil {
-		r.Pipeline.Stop()
+		ctx, cancel := context.WithTimeout(context.Background(), vectorStoreShutdownTimeout)
+		defer cancel()
+		if err := r.Pipeline.Stop(ctx); err != nil {
+			logging.Warnf("Ingestion pipeline did not drain within %s: %v", vectorStoreShutdownTimeout, err)
+		}
 	}
 	if r.registryCloser != nil {
 		if err := r.registryCloser.Close(); err != nil {

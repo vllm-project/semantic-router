@@ -91,7 +91,7 @@ func newIngestionPipelineTestFixture() *ingestionPipelineTestFixture {
 func (f *ingestionPipelineTestFixture) cleanup() {
 	GinkgoHelper()
 
-	f.pipeline.Stop()
+	f.pipeline.Stop(context.Background())
 	Expect(os.RemoveAll(f.tempDir)).To(Succeed())
 }
 
@@ -306,7 +306,7 @@ var _ = Describe("IngestionPipeline status, detach, and lifecycle", func() {
 
 	It("should start and stop idempotently", func() {
 		f.pipeline.Start()
-		f.pipeline.Stop()
-		f.pipeline.Stop()
+		f.pipeline.Stop(context.Background())
+		f.pipeline.Stop(context.Background())
 	})
 })
