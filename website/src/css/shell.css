@@ -25,14 +25,21 @@
 }
 
 .navbar__brand {
-  gap: 0.68rem;
-  margin-right: 0.55rem;
+  gap: 0;
+  margin-right: 0.75rem;
   min-width: 0;
 }
 
 .navbar__logo {
-  width: 1.95rem;
-  height: 1.95rem;
+  width: clamp(7.25rem, 9vw, 9rem);
+  height: 3.35rem;
+  margin-right: 0;
+}
+
+.navbar__logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .navbar__title {
@@ -311,8 +318,8 @@ html[data-route-kind="blog"] .nav-docs-only {
   }
 
   .navbar__logo {
-    width: 1.85rem;
-    height: 1.85rem;
+    width: 7rem;
+    height: 3rem;
   }
 
   .navbar__title {
@@ -363,7 +370,7 @@ html[data-route-kind="blog"] .nav-docs-only {
 
   .navbar-sidebar .menu__link:hover,
   .navbar-sidebar .menu__link--active {
-    background: rgba(239, 68, 68, 0.12);
+    background: var(--site-accent-soft);
     color: #ffffff;
   }
 

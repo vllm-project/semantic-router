@@ -13,7 +13,7 @@ image: /img/amd-deploy-0.png
 
 </div>
 
-Running [vLLM Semantic Router](https://vllm-semantic-router.com) on AMD Developer Cloud is not just about bringing up one more inference endpoint. It is about turning it into a routed multi-tier system that can classify requests, choose a semantic lane, and make replay and Insights immediately useful.
+Running [vLLM Semantic Router](https://vllm-sr.ai) on AMD Developer Cloud is not just about bringing up one more inference endpoint. It is about turning it into a routed multi-tier system that can classify requests, choose a semantic lane, and make replay and Insights immediately useful.
 
 This post walks through the practical path: start the ROCm backend on an AMD Developer Cloud instance, install vLLM-SR, import the reference profile, and validate the deployment end to end.
 
@@ -169,7 +169,7 @@ Python version: python3.12
 # Create a virtual environment (recommended)
 python3 -m venv vsr
 source vsr/bin/activate 
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash
+curl -fsSL https://vllm-sr.ai/install.sh | bash
 ```
 
 ![vLLM Semantic Router installation step](/img/amd-deploy-3.png)

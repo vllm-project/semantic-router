@@ -47,7 +47,7 @@ const LandingPage: React.FC = () => {
               className={styles.secondaryButton}
               onClick={() =>
                 window.open(
-                  'https://vllm-semantic-router.com/docs/intro/',
+                  'https://vllm-sr.ai/docs/intro/',
                   '_blank',
                   'noopener,noreferrer',
                 )

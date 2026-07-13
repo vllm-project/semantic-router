@@ -487,18 +487,20 @@
   }
 }
 
-.hubBadge {
+.hubBrand {
   position: relative;
   z-index: 1;
-  display: inline-flex;
-  width: fit-content;
-  padding: 0.32rem 0.68rem;
-  border-radius: 999px;
-  background: rgba(48, 162, 255, 0.38);
-  color: #fff;
-  font-size: var(--site-text-caption);
-  font-weight: var(--site-font-weight-semibold);
-  letter-spacing: 0.02em;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  padding: 0.2rem 0.5rem;
+}
+
+.hubBrand img {
+  display: block;
+  width: min(100%, 10rem);
+  height: auto;
+  object-fit: contain;
 }
 
 .hubModules {
