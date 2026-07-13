@@ -22,8 +22,6 @@ describe('layout mega-menu geometry', () => {
     expect(getLayoutMegaMenuGeometry(outcomes)).toEqual({
       density: 'compact',
       itemCount: 3,
-      maxWidth: 860,
-      railWidth: 200,
       sectionCount: 3,
     })
   })
@@ -34,8 +32,6 @@ describe('layout mega-menu geometry', () => {
     expect(getLayoutMegaMenuGeometry(routing)).toEqual({
       density: 'standard',
       itemCount: 6,
-      maxWidth: 980,
-      railWidth: 210,
       sectionCount: 3,
     })
   })
@@ -58,8 +54,6 @@ describe('layout mega-menu geometry', () => {
     expect(getLayoutMegaMenuGeometry(denseCategory)).toEqual({
       density: 'dense',
       itemCount: 8,
-      maxWidth: 1280,
-      railWidth: 220,
       sectionCount: 4,
     })
   })

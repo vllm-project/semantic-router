@@ -934,11 +934,11 @@ const PaperFigureShowcase: React.FC = () => {
             <Translate id="homepage.paperFigures.label">Routing Blueprint</Translate>
           </p>
           <h2 className={styles.paperTitle}>
-            <Translate id="homepage.paperFigures.title">How System Works</Translate>
+            <Translate id="homepage.paperFigures.title">From signal to model path.</Translate>
           </h2>
           <p className={styles.paperDescription}>
             <Translate id="homepage.paperFigures.description">
-              An interactive walkthrough of signal extraction, projection coordination, decision logic, and model routing behavior.
+              Explore how the architecture extracts signals, composes decisions, and executes the selected path.
             </Translate>
           </p>
         </div>

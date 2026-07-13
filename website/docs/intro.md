@@ -5,11 +5,11 @@ description: Research-driven introduction to vLLM Semantic Router, an Envoy-base
 
 # vLLM Semantic Router
 
-**Building Mixture-of-Models: The Next-Generation Model Architecture for
-Heterogeneous LLM Inference.**
+**We believe Mixture-of-Models is the next-generation model architecture for
+heterogeneous LLM inference.**
 
-**vLLM Semantic Router** turns signals and preferences into executable model
-paths.
+**That is why we built vLLM Semantic Router**—to turn signals and preferences
+into executable model paths for every user, product, and workload.
 
 The project sits between clients and model backends as an Envoy External
 Processor (`ext_proc`), turning routing from ad hoc application logic into an

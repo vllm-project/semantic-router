@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { mockAuthenticatedSession } from './support/auth'
+import { openComposerAddMenu } from './support/playground'
 
 const openClawTeam = {
   id: 'team-alpha',
@@ -92,10 +93,16 @@ async function mockCollaborationBootstrap(page: Page) {
 
 async function enableClawRoom(page: Page, waitForWebSocket = true) {
   await page.goto('/playground')
-  await page.getByRole('button', { name: 'Enable HireClaw' }).click()
-  await page.getByRole('button', { name: 'Open ClawRoom view' }).click()
+  const menu = await openComposerAddMenu(page)
+  await menu.getByRole('menuitemcheckbox', { name: 'Enable HireClaw' }).click()
+  const roomToggle = menu.getByRole('menuitemcheckbox', { name: 'Open ClawRoom view' })
+  await expect(roomToggle).toBeEnabled()
+  await roomToggle.click()
   await expect(page.getByTestId('claw-room-transcript')).toBeVisible()
   await expect(page.getByText('hello team')).toBeVisible()
+  const roomMenu = await openComposerAddMenu(page)
+  await expect(roomMenu.getByRole('menuitemcheckbox', { name: 'Exit ClawRoom view' })).toBeVisible()
+  await page.keyboard.press('Escape')
   if (waitForWebSocket) {
     await expect(page.getByTestId('claw-room-transport-status')).toContainText('Live')
   }

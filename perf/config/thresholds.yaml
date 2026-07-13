@@ -50,6 +50,21 @@ component_benchmarks:
     hnsw_vs_linear:
       max_regression_percent: 10
 
+  looper:
+    # Tier-1 pure-function micro-benchmarks (no network, deterministic core).
+    # Micro-benchmarks are noisy run-to-run (~10% swing observed on idle
+    # hardware), so thresholds are generous: they catch large/structural
+    # regressions (e.g. an accidental O(n^2) or a per-call allocation blowup),
+    # not measurement jitter.
+    remom_distribution:
+      max_regression_percent: 25
+    fusion_prompt_build:
+      max_regression_percent: 25
+    flow_prompt_build:
+      max_regression_percent: 25
+    base_streaming:
+      max_regression_percent: 25
+
 e2e_tests:
   throughput:
     min_sustained_qps: 500

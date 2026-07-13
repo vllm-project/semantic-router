@@ -4,9 +4,9 @@ sidebar_position: 1
 
 # What are our Goals?
 
-**Building Mixture-of-Models: The Next-Generation Model Architecture for Heterogeneous LLM Inference.**
+**We believe Mixture-of-Models is the next-generation model architecture for heterogeneous LLM inference.**
 
-**vLLM Semantic Router** turns signals and preferences into executable model paths defined for each user, product, and workload.
+**That is why we built vLLM Semantic Router**—to turn signals and preferences into executable model paths for every user, product, and workload.
 
 ## Core Questions
 

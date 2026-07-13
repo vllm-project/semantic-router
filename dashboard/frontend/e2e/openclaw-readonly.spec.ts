@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mockAuthenticatedSession } from './support/auth';
+import { openComposerAddMenu } from './support/playground';
 
 const setupState = {
   setupMode: false,
@@ -171,10 +172,19 @@ async function mockReadonlyOpenClaw(page: Page) {
 }
 
 async function enableHireClaw(page: Page) {
-  const toggle = page.getByRole('button', { name: 'Enable HireClaw' });
+  const menu = await openComposerAddMenu(page);
+  const toggle = menu.getByRole('menuitemcheckbox', { name: 'Enable HireClaw' });
   await expect(toggle).toBeVisible();
   await toggle.click();
-  await expect(page.getByRole('button', { name: /Open ClawRoom view|Exit ClawRoom view/i })).toBeVisible();
+  await expect(menu.getByRole('menuitemcheckbox', { name: /Open ClawRoom view|Exit ClawRoom view/i })).toBeVisible();
+  await page.keyboard.press('Escape');
+}
+
+async function enterClawRoom(page: Page) {
+  const menu = await openComposerAddMenu(page);
+  const toggle = menu.getByRole('menuitemcheckbox', { name: 'Open ClawRoom view' });
+  await expect(toggle).toBeEnabled();
+  await toggle.click();
 }
 
 test.describe('Readonly OpenClaw', () => {
@@ -218,7 +228,7 @@ test.describe('Readonly OpenClaw', () => {
 
     await page.goto('/playground');
     await enableHireClaw(page);
-    await page.getByRole('button', { name: 'Open ClawRoom view' }).click();
+    await enterClawRoom(page);
 
     await expect(page.getByRole('button', { name: 'New room' })).toBeDisabled();
     await page.getByRole('button', { name: 'Open sidebar' }).click();
@@ -269,7 +279,7 @@ test.describe('Readonly OpenClaw', () => {
 
     await page.goto('/playground');
     await enableHireClaw(page);
-    await page.getByRole('button', { name: 'Open ClawRoom view' }).click();
+    await enterClawRoom(page);
 
     const header = page.getByTestId('claw-room-header');
     const transcript = page.getByTestId('claw-room-transcript');
@@ -318,7 +328,7 @@ test.describe('Readonly OpenClaw', () => {
 
     await page.goto('/playground');
     await enableHireClaw(page);
-    await page.getByRole('button', { name: 'Open ClawRoom view' }).click();
+    await enterClawRoom(page);
 
     const accountButton = page.getByTestId('playground-account-control');
     await expect(accountButton).toBeVisible();

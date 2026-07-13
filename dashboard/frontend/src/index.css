@@ -15,6 +15,10 @@
   --action-primary-bg: #f5f5f7;
   --focus-ring: rgba(245, 245, 247, 0.72);
 
+  /* Shared geometry for public and authenticated app headers. */
+  --app-header-height: 80px;
+  --app-shell-gutter: clamp(1.5rem, 3.5vw, 4.5rem);
+
   /* Compatibility aliases while feature surfaces migrate to semantic tokens. */
   --color-primary: #f5f5f7;
   --color-primary-dark: #d4d4d8;
@@ -94,6 +98,13 @@
   --transition-fast: 150ms ease;
   --transition-base: 250ms ease;
   --transition-slow: 350ms ease;
+}
+
+@media (max-width: 1023px) {
+  :root {
+    --app-header-height: 56px;
+    --app-shell-gutter: 1rem;
+  }
 }
 
 * {
