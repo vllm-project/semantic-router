@@ -1,111 +1,107 @@
-import React, { useEffect, useRef } from 'react'
+import React from 'react'
 import Translate from '@docusaurus/Translate'
 import { PillLink, SectionLabel } from '@site/src/components/site/Chrome'
-import { committerMembers, steeringCommitteeMembers } from '@site/src/data/teamMembers'
+import { committerMembers, steeringCommitteeMembers, type TeamMember } from '@site/src/data/teamMembers'
 import styles from './styles.module.css'
 
 const teamMembers = [...steeringCommitteeMembers, ...committerMembers]
 
-const TeamCarousel: React.FC = () => {
-  const scrollRef = useRef<HTMLDivElement>(null)
+interface MemberSequenceProps {
+  duplicate?: boolean
+}
 
-  useEffect(() => {
-    const scrollContainer = scrollRef.current
-    if (!scrollContainer) return
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+function revealFocusedCard(event: React.FocusEvent<HTMLElement>): void {
+  const card = event.currentTarget.closest('article')
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-    let animationFrameId: number
-    let scrollPosition = 0
-    const scrollSpeed = 0.5 // pixels per frame
-    let totalWidth = 0
+  card?.scrollIntoView({
+    behavior: prefersReducedMotion ? 'auto' : 'smooth',
+    block: 'nearest',
+    inline: 'center',
+  })
+}
 
-    const updateTotalWidth = () => {
-      const cards = Array.from(scrollContainer.children).slice(0, teamMembers.length)
-      const gap = parseFloat(window.getComputedStyle(scrollContainer).gap || '0')
-
-      totalWidth = cards.reduce((total, card, index) => {
-        const width = (card as HTMLElement).offsetWidth
-        return total + width + (index < cards.length - 1 ? gap : 0)
-      }, 0)
-    }
-
-    updateTotalWidth()
-    window.addEventListener('resize', updateTotalWidth)
-
-    const scroll = () => {
-      scrollPosition += scrollSpeed
-
-      if (scrollPosition >= totalWidth) {
-        scrollPosition = 0
-      }
-
-      if (scrollContainer) {
-        scrollContainer.style.transform = `translateX(-${scrollPosition}px)`
-      }
-
-      animationFrameId = requestAnimationFrame(scroll)
-    }
-
-    animationFrameId = requestAnimationFrame(scroll)
-
-    return () => {
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId)
-      }
-      window.removeEventListener('resize', updateTotalWidth)
-    }
-  }, [])
-
-  // Duplicate members for infinite scroll effect
-  const duplicatedMembers = [...teamMembers, ...teamMembers, ...teamMembers]
-
+function MemberCard({
+  member,
+  duplicate = false,
+}: {
+  member: TeamMember
+  duplicate?: boolean
+}): JSX.Element {
   return (
-    <section className={styles.teamSection}>
+    <article
+      className={styles.memberCard}
+      aria-label={duplicate ? undefined : `${member.name}`}
+      tabIndex={duplicate ? -1 : 0}
+      onFocus={duplicate ? undefined : revealFocusedCard}
+    >
+      <div className={styles.avatarWrapper}>
+        <img
+          src={member.avatar}
+          alt=""
+          className={styles.avatar}
+          loading="lazy"
+        />
+        <span className={`${styles.badge} ${styles[member.memberType]}`}>
+          {member.memberType === 'steering'
+            ? <Translate id="team.badge.steering">Steering Committee</Translate>
+            : <Translate id="team.badge.committer">Committer</Translate>}
+        </span>
+      </div>
+      <h3 className={styles.memberName}>{member.name}</h3>
+      <p className={styles.memberRole}>
+        {member.role}
+        {member.company && (
+          <span className={styles.company}>
+            {' '}
+            @
+            {member.company}
+          </span>
+        )}
+      </p>
+    </article>
+  )
+}
+
+function MemberSequence({ duplicate = false }: MemberSequenceProps): JSX.Element {
+  return (
+    <div className={styles.sequence} aria-hidden={duplicate || undefined}>
+      {teamMembers.map((member, index) => (
+        <MemberCard
+          key={`${member.name}-${index}`}
+          member={member}
+          duplicate={duplicate}
+        />
+      ))}
+    </div>
+  )
+}
+
+const TeamCarousel: React.FC = () => {
+  return (
+    <section className={styles.teamSection} aria-labelledby="team-carousel-title">
       <div className="site-shell-container">
         <div className={styles.teamHeader}>
           <div>
             <SectionLabel>
-              <Translate id="teamCarousel.label">Governance</Translate>
+              <Translate id="teamCarousel.label">Community</Translate>
             </SectionLabel>
-            <h2 className={styles.title}>
-              <Translate id="teamCarousel.title">Meet Our Team</Translate>
+            <h2 className={styles.title} id="team-carousel-title">
+              <Translate id="teamCarousel.title">Built in the open.</Translate>
             </h2>
           </div>
           <p className={styles.subtitle}>
-            <Translate id="teamCarousel.subtitle">Innovation thrives when great minds come together</Translate>
+            <Translate id="teamCarousel.subtitle">
+              Maintainers across research, infrastructure, and model systems shape the project together.
+            </Translate>
           </p>
         </div>
 
         <div className={styles.carouselShell}>
-          <div className={styles.carouselContainer}>
-            <div className={styles.carouselTrack} ref={scrollRef}>
-              {duplicatedMembers.map((member, index) => (
-                <article key={`${member.name}-${index}`} className={styles.memberCard}>
-                  <div className={styles.avatarWrapper}>
-                    <img
-                      src={member.avatar}
-                      alt={member.name}
-                      className={styles.avatar}
-                    />
-                    <span className={`${styles.badge} ${styles[member.memberType]}`}>
-                      {member.memberType === 'steering'
-                        ? <Translate id="team.badge.steering">Steering Committee</Translate>
-                        : <Translate id="team.badge.committer">Committer</Translate>}
-                    </span>
-                  </div>
-                  <h3 className={styles.memberName}>{member.name}</h3>
-                  <p className={styles.memberRole}>
-                    {member.role}
-                    {member.company && (
-                      <span className={styles.company}>
-                        {' '}
-                        @
-                        {member.company}
-                      </span>
-                    )}
-                  </p>
-                </article>
-              ))}
+          <div className={styles.viewport}>
+            <div className={styles.track}>
+              <MemberSequence />
+              <MemberSequence duplicate />
             </div>
           </div>
         </div>
@@ -113,7 +109,7 @@ const TeamCarousel: React.FC = () => {
         <div className={styles.teamFooter}>
           <p>
             <Translate id="teamCarousel.footer">
-              Steering committee members and committers across research, infrastructure, and open-source operations.
+              Meet the people turning Mixture-of-Models into shared infrastructure.
             </Translate>
           </p>
           <PillLink to="/community/team" muted>

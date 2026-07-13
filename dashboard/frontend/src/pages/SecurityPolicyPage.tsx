@@ -1,4 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { StringListEditor } from '../components/StringListEditor'
+import { useAuth } from '../contexts/AuthContext'
+import { useReadonly } from '../contexts/ReadonlyContext'
+import { canManageSecurity } from '../utils/accessControl'
 import styles from './SecurityPolicyPage.module.css'
 
 interface Subject {
@@ -41,13 +45,16 @@ const emptyPolicy: SecurityPolicy = {
 }
 
 const SecurityPolicyPage: React.FC = () => {
+  const { user, isLoading: authLoading } = useAuth()
+  const { isReadonly, isLoading: readonlyLoading } = useReadonly()
+  const permissionsLoading = authLoading || readonlyLoading
+  const canManage = !permissionsLoading && !isReadonly && canManageSecurity(user)
   const [policy, setPolicy] = useState<SecurityPolicy>(emptyPolicy)
   const [fragment, setFragment] = useState<GeneratedFragment | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [modelInputs, setModelInputs] = useState<Record<number, string>>({})
 
   const fetchPolicy = useCallback(async () => {
     try {
@@ -76,6 +83,7 @@ const SecurityPolicyPage: React.FC = () => {
   }, [fetchPolicy])
 
   const handleSave = async () => {
+    if (!canManage) return
     try {
       setSaving(true)
       setError(null)
@@ -110,6 +118,7 @@ const SecurityPolicyPage: React.FC = () => {
   }
 
   const handlePreview = async () => {
+    if (!canManage) return
     try {
       setError(null)
       const res = await fetch('/api/security/policy/preview', {
@@ -126,6 +135,7 @@ const SecurityPolicyPage: React.FC = () => {
   }
 
   const addRoleMapping = () => {
+    if (!canManage) return
     setPolicy((previous) => ({
       ...previous,
       role_mappings: [
@@ -142,6 +152,7 @@ const SecurityPolicyPage: React.FC = () => {
   }
 
   const removeRoleMapping = (index: number) => {
+    if (!canManage) return
     setPolicy((previous) => ({
       ...previous,
       role_mappings: previous.role_mappings.filter((_, itemIndex) => itemIndex !== index),
@@ -149,6 +160,7 @@ const SecurityPolicyPage: React.FC = () => {
   }
 
   const updateRoleMapping = (index: number, field: string, value: unknown) => {
+    if (!canManage) return
     setPolicy((previous) => ({
       ...previous,
       role_mappings: previous.role_mappings.map((mapping, itemIndex) =>
@@ -158,6 +170,7 @@ const SecurityPolicyPage: React.FC = () => {
   }
 
   const addRateTier = () => {
+    if (!canManage) return
     setPolicy((previous) => ({
       ...previous,
       rate_tiers: [
@@ -174,6 +187,7 @@ const SecurityPolicyPage: React.FC = () => {
   }
 
   const removeRateTier = (index: number) => {
+    if (!canManage) return
     setPolicy((previous) => ({
       ...previous,
       rate_tiers: previous.rate_tiers.filter((_, itemIndex) => itemIndex !== index),
@@ -181,6 +195,7 @@ const SecurityPolicyPage: React.FC = () => {
   }
 
   const updateRateTier = (index: number, field: string, value: unknown) => {
+    if (!canManage) return
     setPolicy((previous) => ({
       ...previous,
       rate_tiers: previous.rate_tiers.map((tier, itemIndex) =>
@@ -209,6 +224,20 @@ const SecurityPolicyPage: React.FC = () => {
         </p>
       </header>
 
+      {!permissionsLoading && !canManage ? (
+        <div className={styles.readOnlyNotice} role="status">
+          <strong>View-only access.</strong>{' '}
+          {isReadonly ? (
+            <>This dashboard deployment is in read-only mode, so security changes are disabled.</>
+          ) : (
+            <>
+              You can review security policy mappings and rate limits, but the{' '}
+              <code>security.manage</code> permission is required to change them.
+            </>
+          )}
+        </div>
+      ) : null}
+
       {error ? (
         <div className={`${styles.notice} ${styles.errorNotice}`} role="alert">
           {error}
@@ -232,14 +261,18 @@ const SecurityPolicyPage: React.FC = () => {
             <h2 id="role-mappings-heading">Role-to-Model Mappings</h2>
             <p>Bind users or groups to router roles and an explicit model allowlist.</p>
           </div>
-          <button type="button" className={styles.primaryButton} onClick={addRoleMapping}>
-            <span aria-hidden="true">+</span> Add Mapping
-          </button>
+          {canManage ? (
+            <button type="button" className={styles.primaryButton} onClick={addRoleMapping}>
+              <span aria-hidden="true">+</span> Add Mapping
+            </button>
+          ) : null}
         </div>
 
         {policy.role_mappings.length === 0 ? (
           <div className={styles.emptyState}>
-            No role mappings configured. Add a mapping to define model access.
+            {canManage
+              ? 'No role mappings configured. Add a mapping to define model access.'
+              : 'No role mappings configured.'}
           </div>
         ) : (
           <div className={styles.mappingList}>
@@ -253,6 +286,7 @@ const SecurityPolicyPage: React.FC = () => {
                       className={styles.input}
                       value={mapping.name}
                       onChange={(event) => updateRoleMapping(index, 'name', event.target.value)}
+                      readOnly={!canManage}
                     />
                   </div>
                   <div className={styles.field}>
@@ -263,46 +297,31 @@ const SecurityPolicyPage: React.FC = () => {
                       value={mapping.role}
                       onChange={(event) => updateRoleMapping(index, 'role', event.target.value)}
                       placeholder="e.g., premium_tier"
+                      readOnly={!canManage}
                     />
                   </div>
                   <div className={styles.field}>
-                    <label htmlFor={`mapping-models-${index}`}>Models (comma-separated)</label>
-                    <input
-                      id={`mapping-models-${index}`}
-                      className={styles.input}
-                      value={modelInputs[index] ?? mapping.model_refs.join(', ')}
-                      onChange={(event) =>
-                        setModelInputs((previous) => ({
-                          ...previous,
-                          [index]: event.target.value,
-                        }))
-                      }
-                      onBlur={(event) => {
-                        updateRoleMapping(
-                          index,
-                          'model_refs',
-                          event.target.value
-                            .split(',')
-                            .map((value) => value.trim())
-                            .filter(Boolean),
-                        )
-                        setModelInputs((previous) => {
-                          const next = { ...previous }
-                          delete next[index]
-                          return next
-                        })
-                      }}
-                      placeholder="e.g., gpt-4, claude-3"
+                    <span className={styles.fieldLabel}>Models</span>
+                    <StringListEditor
+                      value={mapping.model_refs}
+                      onChange={(value) => updateRoleMapping(index, 'model_refs', value)}
+                      addLabel="Add model"
+                      emptyLabel="No model allowlist configured."
+                      itemLabel="Model reference"
+                      placeholder="e.g., gpt-4"
+                      readOnly={!canManage}
                     />
                   </div>
-                  <button
-                    type="button"
-                    className={styles.removeButton}
-                    onClick={() => removeRoleMapping(index)}
-                    aria-label={`Remove role mapping ${mapping.name || index + 1}`}
-                  >
-                    <span aria-hidden="true">×</span>
-                  </button>
+                  {canManage ? (
+                    <button
+                      type="button"
+                      className={styles.removeButton}
+                      onClick={() => removeRoleMapping(index)}
+                      aria-label={`Remove role mapping ${mapping.name || index + 1}`}
+                    >
+                      <span aria-hidden="true">×</span>
+                    </button>
+                  ) : null}
                 </div>
 
                 <fieldset className={styles.subjects}>
@@ -324,6 +343,7 @@ const SecurityPolicyPage: React.FC = () => {
                           newSubjects[subjectIndex] = { ...subject, kind: event.target.value }
                           updateRoleMapping(index, 'subjects', newSubjects)
                         }}
+                        disabled={!canManage}
                       >
                         <option value="Group">Group</option>
                         <option value="User">User</option>
@@ -344,6 +364,7 @@ const SecurityPolicyPage: React.FC = () => {
                           updateRoleMapping(index, 'subjects', newSubjects)
                         }}
                         placeholder="Group or user name"
+                        readOnly={!canManage}
                       />
                     </div>
                   ))}
@@ -361,14 +382,18 @@ const SecurityPolicyPage: React.FC = () => {
             <h2 id="rate-tiers-heading">Rate Limit Tiers</h2>
             <p>Set request and token budgets for a matching group or individual user.</p>
           </div>
-          <button type="button" className={styles.primaryButton} onClick={addRateTier}>
-            <span aria-hidden="true">+</span> Add Tier
-          </button>
+          {canManage ? (
+            <button type="button" className={styles.primaryButton} onClick={addRateTier}>
+              <span aria-hidden="true">+</span> Add Tier
+            </button>
+          ) : null}
         </div>
 
         {policy.rate_tiers.length === 0 ? (
           <div className={styles.emptyState}>
-            No rate tiers configured. Add a tier to define traffic limits.
+            {canManage
+              ? 'No rate tiers configured. Add a tier to define traffic limits.'
+              : 'No rate tiers configured.'}
           </div>
         ) : (
           <div
@@ -387,9 +412,11 @@ const SecurityPolicyPage: React.FC = () => {
                   <th scope="col">User</th>
                   <th scope="col">RPM</th>
                   <th scope="col">TPM</th>
-                  <th scope="col">
-                    <span className={styles.visuallyHidden}>Actions</span>
-                  </th>
+                  {canManage ? (
+                    <th scope="col">
+                      <span className={styles.visuallyHidden}>Actions</span>
+                    </th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
@@ -401,6 +428,7 @@ const SecurityPolicyPage: React.FC = () => {
                         aria-label={`Rate tier ${index + 1} name`}
                         value={tier.name}
                         onChange={(event) => updateRateTier(index, 'name', event.target.value)}
+                        readOnly={!canManage}
                       />
                     </td>
                     <td>
@@ -410,6 +438,7 @@ const SecurityPolicyPage: React.FC = () => {
                         value={tier.group}
                         onChange={(event) => updateRateTier(index, 'group', event.target.value)}
                         placeholder="*"
+                        readOnly={!canManage}
                       />
                     </td>
                     <td>
@@ -419,6 +448,7 @@ const SecurityPolicyPage: React.FC = () => {
                         value={tier.user}
                         onChange={(event) => updateRateTier(index, 'user', event.target.value)}
                         placeholder="*"
+                        readOnly={!canManage}
                       />
                     </td>
                     <td>
@@ -430,6 +460,7 @@ const SecurityPolicyPage: React.FC = () => {
                         onChange={(event) =>
                           updateRateTier(index, 'rpm', parseInt(event.target.value) || 0)
                         }
+                        readOnly={!canManage}
                       />
                     </td>
                     <td>
@@ -441,18 +472,21 @@ const SecurityPolicyPage: React.FC = () => {
                         onChange={(event) =>
                           updateRateTier(index, 'tpm', parseInt(event.target.value) || 0)
                         }
+                        readOnly={!canManage}
                       />
                     </td>
-                    <td className={styles.actionCell}>
-                      <button
-                        type="button"
-                        className={styles.removeButton}
-                        onClick={() => removeRateTier(index)}
-                        aria-label={`Remove rate tier ${tier.name || index + 1}`}
-                      >
-                        <span aria-hidden="true">×</span>
-                      </button>
-                    </td>
+                    {canManage ? (
+                      <td className={styles.actionCell}>
+                        <button
+                          type="button"
+                          className={styles.removeButton}
+                          onClick={() => removeRateTier(index)}
+                          aria-label={`Remove rate tier ${tier.name || index + 1}`}
+                        >
+                          <span aria-hidden="true">×</span>
+                        </button>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
@@ -461,23 +495,25 @@ const SecurityPolicyPage: React.FC = () => {
         )}
       </section>
 
-      <div className={styles.actions} aria-label="Security policy actions">
-        <button
-          type="button"
-          className={styles.secondaryButton}
-          onClick={() => void handlePreview()}
-        >
-          Preview Config Fragment
-        </button>
-        <button
-          type="button"
-          className={styles.primaryButton}
-          onClick={() => void handleSave()}
-          disabled={saving}
-        >
-          {saving ? 'Saving...' : 'Save & Generate'}
-        </button>
-      </div>
+      {canManage ? (
+        <div className={styles.actions} aria-label="Security policy actions">
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            onClick={() => void handlePreview()}
+          >
+            Preview Config Fragment
+          </button>
+          <button
+            type="button"
+            className={styles.primaryButton}
+            onClick={() => void handleSave()}
+            disabled={saving}
+          >
+            {saving ? 'Saving...' : 'Save & Generate'}
+          </button>
+        </div>
+      ) : null}
 
       {fragment ? (
         <section

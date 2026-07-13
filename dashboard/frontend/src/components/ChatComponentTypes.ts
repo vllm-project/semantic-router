@@ -4,11 +4,11 @@ import type { PlaygroundAttachment, PlaygroundAttachmentSummary } from './playgr
 export type { PlaygroundAttachment, PlaygroundAttachmentSummary }
 
 export const GREETING_LINES = [
-  'Route with confidence.',
-  'One interface. Every local model.',
-  'Policy-aware intelligence for production systems.',
-  'Open source. Built for operators.',
-  'What would you like to solve?'
+  'Understand every request.',
+  'Make preference executable.',
+  'Compose heterogeneous LLMs.',
+  'Execute the right model path.',
+  'What should we solve next?'
 ]
 
 export const generateMessageId = () => `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
@@ -174,7 +174,6 @@ export const buildClawRequestHighlights = (
 
   return []
 }
-
 export const buildClawResultHighlights = (
   clawToolName: string,
   resultContent: unknown,

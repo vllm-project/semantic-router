@@ -1,35 +1,30 @@
 export interface FieldSchema {
   key: string
   label: string
-  type: 'string' | 'number' | 'boolean' | 'string[]' | 'number[]' | 'select' | 'json'
+  type:
+    | 'string'
+    | 'number'
+    | 'boolean'
+    | 'string[]'
+    | 'number[]'
+    | 'string[][]'
+    | 'select'
+    | 'object'
+    | 'object[]'
+    | 'key-value'
+    | 'rule'
   options?: string[]
   required?: boolean
   placeholder?: string
   description?: string
+  fields?: FieldSchema[]
+  addLabel?: string
+  emptyLabel?: string
+  itemLabel?: string
+  itemLabelKey?: string
+  keyLabel?: string
+  valueLabel?: string
 }
-
-export const SIGNAL_TYPES = [
-  'keyword',
-  'embedding',
-  'domain',
-  'fact_check',
-  'user_feedback',
-  'reask',
-  'preference',
-  'language',
-  'context',
-  'structure',
-  'complexity',
-  'modality',
-  'authz',
-  'jailbreak',
-  'pii',
-  'kb',
-  'conversation',
-  'event',
-] as const
-
-export type SignalType = (typeof SIGNAL_TYPES)[number]
 
 export function getSignalFieldSchema(signalType: string): FieldSchema[] {
   switch (signalType) {
@@ -95,7 +90,20 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
           type: 'string[]',
           placeholder: 'Add category...',
         },
-        { key: 'model_scores', label: 'Model Scores', type: 'json' },
+        {
+          key: 'model_scores',
+          label: 'Model Scores',
+          type: 'object[]',
+          addLabel: 'Add model score',
+          emptyLabel: 'No model scores configured.',
+          itemLabel: 'Model Score',
+          itemLabelKey: 'model',
+          fields: [
+            { key: 'model', label: 'Model', type: 'string', required: true },
+            { key: 'score', label: 'Score', type: 'number', required: true },
+            { key: 'use_reasoning', label: 'Use Reasoning', type: 'boolean' },
+          ],
+        },
       ]
     case 'fact_check':
       return [{ key: 'description', label: 'Description', type: 'string', required: true }]
@@ -139,16 +147,61 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
         {
           key: 'feature',
           label: 'Feature',
-          type: 'json',
+          type: 'object',
           required: true,
           description:
-            'Typed structure feature object, e.g. { type: "count", source: { type: "regex", pattern: "[?？]" } }',
+            'Choose the feature operation and configure its regex, keyword-set, or sequence source.',
+          fields: [
+            {
+              key: 'type',
+              label: 'Feature Type',
+              type: 'select',
+              options: ['exists', 'count', 'density', 'sequence'],
+              required: true,
+            },
+            {
+              key: 'source',
+              label: 'Source',
+              type: 'object',
+              required: true,
+              fields: [
+                {
+                  key: 'type',
+                  label: 'Source Type',
+                  type: 'select',
+                  options: ['regex', 'keyword_set', 'sequence'],
+                  required: true,
+                },
+                { key: 'pattern', label: 'Regex Pattern', type: 'string' },
+                {
+                  key: 'keywords',
+                  label: 'Keywords',
+                  type: 'string[]',
+                  placeholder: 'Add keyword...',
+                },
+                { key: 'case_sensitive', label: 'Case Sensitive', type: 'boolean' },
+                {
+                  key: 'sequences',
+                  label: 'Sequences',
+                  type: 'string[][]',
+                  addLabel: 'Add sequence',
+                  emptyLabel: 'No marker sequences configured.',
+                },
+              ],
+            },
+          ],
         },
         {
           key: 'predicate',
           label: 'Predicate',
-          type: 'json',
-          description: 'Optional numeric predicate, e.g. { gte: 4 }',
+          type: 'object',
+          description: 'Optional numeric comparison applied to the extracted feature.',
+          fields: [
+            { key: 'gt', label: 'Greater Than', type: 'number' },
+            { key: 'gte', label: 'Greater Than or Equal', type: 'number' },
+            { key: 'lt', label: 'Less Than', type: 'number' },
+            { key: 'lte', label: 'Less Than or Equal', type: 'number' },
+          ],
         },
       ]
     case 'complexity':
@@ -163,21 +216,49 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
         {
           key: 'hard',
           label: 'Hard Examples',
-          type: 'json',
-          description: 'e.g. { candidates: ["..."] }',
+          type: 'object',
+          description: 'Text and image examples associated with the hard side of the rule.',
+          fields: [
+            {
+              key: 'candidates',
+              label: 'Text Candidates',
+              type: 'string[]',
+              placeholder: 'Add hard example...',
+            },
+            {
+              key: 'image_candidates',
+              label: 'Image Candidates',
+              type: 'string[]',
+              placeholder: 'Add image example...',
+            },
+          ],
         },
         {
           key: 'easy',
           label: 'Easy Examples',
-          type: 'json',
-          description: 'e.g. { candidates: ["..."] }',
+          type: 'object',
+          description: 'Text and image examples associated with the easy side of the rule.',
+          fields: [
+            {
+              key: 'candidates',
+              label: 'Text Candidates',
+              type: 'string[]',
+              placeholder: 'Add easy example...',
+            },
+            {
+              key: 'image_candidates',
+              label: 'Image Candidates',
+              type: 'string[]',
+              placeholder: 'Add image example...',
+            },
+          ],
         },
         { key: 'description', label: 'Description', type: 'string' },
         {
           key: 'composer',
           label: 'Composer',
-          type: 'json',
-          description: '{ operator: "OR", conditions: [{ type: "domain", name: "..." }] }',
+          type: 'rule',
+          description: 'Optional recursive AND, OR, or NOT composition over other signals.',
         },
       ]
     case 'modality':
@@ -187,9 +268,17 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
         {
           key: 'subjects',
           label: 'Subjects',
-          type: 'json',
+          type: 'object[]',
           required: true,
-          description: '[{ kind: "Group", name: "..." }]',
+          description: 'Users, groups, or other identities assigned to this role.',
+          addLabel: 'Add subject',
+          emptyLabel: 'No subjects configured.',
+          itemLabel: 'Subject',
+          itemLabelKey: 'name',
+          fields: [
+            { key: 'kind', label: 'Kind', type: 'string', required: true, placeholder: 'Group' },
+            { key: 'name', label: 'Name', type: 'string', required: true },
+          ],
         },
         { key: 'role', label: 'Role', type: 'string', required: true, placeholder: 'premium_tier' },
         { key: 'description', label: 'Description', type: 'string' },
@@ -271,8 +360,18 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
         {
           key: 'target',
           label: 'Target',
-          type: 'json',
-          description: 'Match target, e.g. { kind: "group", value: "category" }',
+          type: 'object',
+          description: 'Knowledge-base group or label to match.',
+          fields: [
+            {
+              key: 'kind',
+              label: 'Target Kind',
+              type: 'select',
+              options: ['group', 'label'],
+              required: true,
+            },
+            { key: 'value', label: 'Target Value', type: 'string', required: true },
+          ],
         },
         {
           key: 'match',
@@ -289,11 +388,59 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
         {
           key: 'feature',
           label: 'Feature',
-          type: 'json',
+          type: 'object',
           required: true,
-          description: '{ type: "count", source: { type: "message", role: "user" } }',
+          description: 'Count or detect a conversation source such as messages or tool activity.',
+          fields: [
+            {
+              key: 'type',
+              label: 'Feature Type',
+              type: 'select',
+              options: ['count', 'exists'],
+              required: true,
+            },
+            {
+              key: 'source',
+              label: 'Source',
+              type: 'object',
+              required: true,
+              fields: [
+                {
+                  key: 'type',
+                  label: 'Source Type',
+                  type: 'select',
+                  options: [
+                    'message',
+                    'tool_definition',
+                    'assistant_tool_call',
+                    'assistant_tool_cycle',
+                    'active_tool_loop',
+                  ],
+                  required: true,
+                },
+                {
+                  key: 'role',
+                  label: 'Message Role',
+                  type: 'select',
+                  options: ['', 'system', 'developer', 'user', 'assistant', 'tool'],
+                  description: 'Only used when the source type is message.',
+                },
+              ],
+            },
+          ],
         },
-        { key: 'predicate', label: 'Predicate', type: 'json', description: '{ gte: 2 }' },
+        {
+          key: 'predicate',
+          label: 'Predicate',
+          type: 'object',
+          description: 'Optional numeric comparison for count features.',
+          fields: [
+            { key: 'gt', label: 'Greater Than', type: 'number' },
+            { key: 'gte', label: 'Greater Than or Equal', type: 'number' },
+            { key: 'lt', label: 'Less Than', type: 'number' },
+            { key: 'lte', label: 'Less Than or Equal', type: 'number' },
+          ],
+        },
       ]
     case 'event':
       return [
@@ -315,38 +462,6 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
     default:
       return [{ key: 'description', label: 'Description', type: 'string' }]
   }
-}
-
-export const PLUGIN_TYPES = [
-  'semantic_cache',
-  'memory',
-  'system_prompt',
-  'header_mutation',
-  'hallucination',
-  'router_replay',
-  'rag',
-  'image_gen',
-  'fast_response',
-  'tools',
-  'tool_selection',
-  'request_params',
-  'response_jailbreak',
-] as const
-
-export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
-  semantic_cache: 'Cache semantically similar queries to reduce latency and cost',
-  memory: 'Persistent conversation memory with vector retrieval',
-  system_prompt: 'Inject or replace system prompts for the model',
-  header_mutation: 'Add, update, or remove HTTP headers on requests/responses',
-  hallucination: 'Detect hallucinated content using NLI or other methods',
-  router_replay: 'Record request/response pairs for replay and debugging',
-  rag: 'Retrieval-Augmented Generation — inject retrieved context into prompts',
-  image_gen: 'Route to image generation backends',
-  fast_response: 'Short-circuit and return a fixed response without calling upstream models',
-  tools: 'Route-local tool filtering and semantic tool selection',
-  tool_selection: 'Semantic tool add/filter plugin for route-local tool catalogs',
-  request_params: 'Mutate request parameters before forwarding to the model',
-  response_jailbreak: 'Screen generated responses for jailbreak-like output before returning',
 }
 
 export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
@@ -470,14 +585,30 @@ export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
         {
           key: 'add',
           label: 'Add Headers',
-          type: 'json',
-          description: '[{ "name": "X-Custom", "value": "..." }]',
+          type: 'object[]',
+          description: 'Headers inserted when they are not already present.',
+          addLabel: 'Add header',
+          emptyLabel: 'No headers to add.',
+          itemLabel: 'Header',
+          itemLabelKey: 'name',
+          fields: [
+            { key: 'name', label: 'Header Name', type: 'string', required: true },
+            { key: 'value', label: 'Header Value', type: 'string', required: true },
+          ],
         },
         {
           key: 'update',
           label: 'Update Headers',
-          type: 'json',
-          description: '[{ "name": "X-Custom", "value": "..." }]',
+          type: 'object[]',
+          description: 'Headers overwritten before forwarding the request.',
+          addLabel: 'Add header update',
+          emptyLabel: 'No headers to update.',
+          itemLabel: 'Header',
+          itemLabelKey: 'name',
+          fields: [
+            { key: 'name', label: 'Header Name', type: 'string', required: true },
+            { key: 'value', label: 'Header Value', type: 'string', required: true },
+          ],
         },
         {
           key: 'delete',
@@ -627,20 +758,11 @@ export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
   }
 }
 
-export const BACKEND_TYPES = [
-  'vllm_endpoint',
-  'provider_profile',
-  'embedding_model',
-  'semantic_cache',
-  'memory',
-  'response_api',
-  'vector_store',
-  'image_gen_backend',
-] as const
-
 export {
   ALGORITHM_DESCRIPTIONS,
   ALGORITHM_TYPES,
   getAlgorithmFieldSchema,
 } from './dslAlgorithmSchemas'
 export type { AlgorithmType } from './dslAlgorithmSchemas'
+export { BACKEND_TYPES, PLUGIN_DESCRIPTIONS, PLUGIN_TYPES, SIGNAL_TYPES } from './dslSchemaCatalogs'
+export type { SignalType } from './dslSchemaCatalogs'

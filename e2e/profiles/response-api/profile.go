@@ -59,6 +59,7 @@ func (p *Profile) GetTestCases() []string {
 		"response-api-get",
 		"response-api-delete",
 		"response-api-input-items",
+		"response-api-streaming-sse",
 		"response-api-conversation-chaining",
 		"response-api-error-missing-input",
 		"response-api-error-nonexistent-previous-response-id",

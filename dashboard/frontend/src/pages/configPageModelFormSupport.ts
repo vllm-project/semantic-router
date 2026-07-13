@@ -1,8 +1,23 @@
 import type {
   BackendRefEntry,
   ConfigData,
+  LoRAAdapter,
   ModelPricing,
 } from './configPageSupport'
+
+export function normalizeModelLoras(value: unknown): LoRAAdapter[] {
+  if (!Array.isArray(value)) return []
+
+  return value
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry))
+    .map((entry) => ({
+      name: typeof entry.name === 'string' ? entry.name.trim() : '',
+      description: typeof entry.description === 'string' && entry.description.trim()
+        ? entry.description.trim()
+        : undefined,
+    }))
+    .filter((entry) => entry.name)
+}
 
 export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
   if (!Array.isArray(value)) return []
@@ -40,8 +55,8 @@ export function normalizeModelStringMap(value: unknown): Record<string, string> 
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
 
   const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, item]) => typeof item === 'string' && item.trim())
-    .map(([key, item]) => [key, item as string])
+    .filter(([key, item]) => key.trim() && typeof item === 'string' && item.trim())
+    .map(([key, item]) => [key.trim(), (item as string).trim()])
   return entries.length > 0 ? Object.fromEntries(entries) : undefined
 }
 

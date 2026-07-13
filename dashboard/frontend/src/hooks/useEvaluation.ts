@@ -1,6 +1,6 @@
 // Custom hooks for evaluation functionality
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type {
   EvaluationTask,
   DatasetInfo,
@@ -20,6 +20,57 @@ import {
   normalizeDimensionsForLevel,
 } from '../utils/evaluationConfig';
 import { CANONICAL_AUTO_MODEL } from '../utils/routerModelSelection';
+import { createEvaluationRequest } from './evaluationRequestSupport';
+
+interface EvaluationLoadOptions {
+  showLoading?: boolean;
+  allowHidden?: boolean;
+}
+
+interface VisibilityPollingOptions {
+  active: boolean;
+  autoRefresh: boolean;
+  refreshInterval: number;
+  load: (options?: EvaluationLoadOptions) => Promise<void>;
+  invalidate: () => void;
+  shouldPoll?: () => boolean;
+}
+
+const alwaysPoll = () => true;
+const noop = () => undefined;
+
+function useVisibilityPolling({
+  active,
+  autoRefresh,
+  refreshInterval,
+  load,
+  invalidate,
+  shouldPoll = alwaysPoll,
+}: VisibilityPollingOptions) {
+  useEffect(() => {
+    if (!active) {
+      invalidate();
+      return;
+    }
+
+    void load({ showLoading: true, allowHidden: true });
+    if (!autoRefresh) return invalidate;
+
+    const refreshWhenVisible = () => {
+      if (!document.hidden && shouldPoll()) void load();
+    };
+    const interval = window.setInterval(() => {
+      if (shouldPoll()) void load();
+    }, refreshInterval);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      invalidate();
+    };
+  }, [active, autoRefresh, invalidate, load, refreshInterval, shouldPoll]);
+}
 
 // Hook for managing tasks list
 export function useTasks(autoRefresh = false, refreshInterval = 5000) {
@@ -27,30 +78,38 @@ export function useTasks(autoRefresh = false, refreshInterval = 5000) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchTasks = useCallback(async () => {
+  const request = useMemo(
+    () => createEvaluationRequest((signal) => api.listTasks(undefined, signal)),
+    [],
+  );
+
+  const fetchTasks = useCallback(async (options: EvaluationLoadOptions = {}) => {
+    if (options.showLoading) setLoading(true);
+    let settled = false;
     try {
-      const data = await api.listTasks();
+      const data = await request.run({ allowHidden: options.allowHidden });
+      if (!data) return;
+      settled = true;
       setTasks(data);
       setError(null);
     } catch (err) {
+      settled = true;
       setError(err instanceof Error ? err.message : 'Failed to fetch tasks');
     } finally {
-      setLoading(false);
+      if (settled && options.showLoading) setLoading(false);
     }
-  }, []);
+  }, [request]);
 
-  useEffect(() => {
-    fetchTasks();
-
-    if (autoRefresh) {
-      const interval = setInterval(fetchTasks, refreshInterval);
-      return () => clearInterval(interval);
-    }
-  }, [fetchTasks, autoRefresh, refreshInterval]);
+  useVisibilityPolling({
+    active: true,
+    autoRefresh,
+    refreshInterval,
+    load: fetchTasks,
+    invalidate: request.invalidate,
+  });
 
   const refresh = useCallback(() => {
-    setLoading(true);
-    fetchTasks();
+    return fetchTasks({ showLoading: true, allowHidden: true });
   }, [fetchTasks]);
 
   return { tasks, loading, error, refresh };
@@ -62,32 +121,56 @@ export function useTask(taskId: string | null, autoRefresh = false, refreshInter
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchTask = useCallback(async () => {
-    if (!taskId) return;
-    setLoading(true);
+  const terminalRef = useRef(false);
+  const request = useMemo(
+    () =>
+      taskId
+        ? createEvaluationRequest((signal) => api.getTask(taskId, signal))
+        : null,
+    [taskId],
+  );
+
+  const fetchTask = useCallback(async (options: EvaluationLoadOptions = {}) => {
+    if (!request) return;
+    if (options.showLoading) setLoading(true);
+    let settled = false;
     try {
-      const data = await api.getTask(taskId);
+      const data = await request.run({ allowHidden: options.allowHidden });
+      if (!data) return;
+      settled = true;
+      terminalRef.current = ['completed', 'failed', 'cancelled'].includes(data.status);
       setTask(data);
       setError(null);
     } catch (err) {
+      settled = true;
       setError(err instanceof Error ? err.message : 'Failed to fetch task');
     } finally {
-      setLoading(false);
+      if (settled && options.showLoading) setLoading(false);
     }
-  }, [taskId]);
+  }, [request]);
 
   useEffect(() => {
-    fetchTask();
+    terminalRef.current = false;
+    setTask(null);
+    setError(null);
+    setLoading(Boolean(taskId));
+  }, [taskId]);
 
-    if (!autoRefresh) {
-      return;
-    }
+  const shouldPoll = useCallback(() => !terminalRef.current, []);
+  useVisibilityPolling({
+    active: Boolean(taskId && request),
+    autoRefresh,
+    refreshInterval,
+    load: fetchTask,
+    invalidate: request?.invalidate ?? noop,
+    shouldPoll,
+  });
 
-    const interval = window.setInterval(fetchTask, refreshInterval);
-    return () => window.clearInterval(interval);
-  }, [fetchTask, autoRefresh, refreshInterval]);
-
-  return { task, loading, error, refresh: fetchTask };
+  const refresh = useCallback(
+    () => fetchTask({ showLoading: true, allowHidden: true }),
+    [fetchTask],
+  );
+  return { task: task?.id === taskId ? task : null, loading, error, refresh };
 }
 
 // Hook for progress tracking via SSE
@@ -97,42 +180,74 @@ export function useProgress(taskId: string | null, enabled = true) {
   const [completed, setCompleted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
+  const disconnectRequestedRef = useRef(false);
 
   useEffect(() => {
+    disconnectRequestedRef.current = false;
+    setProgress(null);
+    setCompleted(false);
+    setConnected(false);
+    setError(null);
     if (!taskId || !enabled) {
       return;
     }
 
-    setCompleted(false);
-    setConnected(false);
-    setError(null);
+    let streamCleanup: (() => void) | null = null;
+    let terminal = false;
 
-    const cleanup = api.subscribeToProgress(
-      taskId,
-      (update) => {
-        setProgress(update);
-        setConnected(true);
-        setError(null);
-      },
-      () => {
-        setCompleted(true);
-        setConnected(false);
-      },
-      (err) => {
-        setError(err.message);
-        setConnected(false);
-      }
-    );
+    const closeStream = (updateState = true) => {
+      streamCleanup?.();
+      streamCleanup = null;
+      cleanupRef.current = null;
+      if (updateState) setConnected(false);
+    };
+    const connect = () => {
+      if (document.hidden || terminal || disconnectRequestedRef.current || streamCleanup) return;
+      streamCleanup = api.subscribeToProgress(
+        taskId,
+        (update) => {
+          setProgress(update);
+          setConnected(true);
+          setError(null);
+        },
+        () => {
+          terminal = true;
+          disconnectRequestedRef.current = true;
+          streamCleanup = null;
+          cleanupRef.current = null;
+          setCompleted(true);
+          setConnected(false);
+        },
+        (err) => {
+          streamCleanup = null;
+          cleanupRef.current = null;
+          setError(err.message);
+          setConnected(false);
+        },
+        () => {
+          setConnected(true);
+          setError(null);
+        },
+      );
+      cleanupRef.current = streamCleanup;
+    };
+    const handleVisibilityChange = () => {
+      if (document.hidden) closeStream();
+      else connect();
+    };
 
-    cleanupRef.current = cleanup;
+    connect();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      cleanup();
-      cleanupRef.current = null;
+      terminal = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      closeStream(false);
     };
   }, [taskId, enabled]);
 
   const disconnect = useCallback(() => {
+    disconnectRequestedRef.current = true;
     if (cleanupRef.current) {
       cleanupRef.current();
       cleanupRef.current = null;
@@ -149,25 +264,51 @@ export function useResults(taskId: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchResults = useCallback(async () => {
-    if (!taskId) return;
-    setLoading(true);
+  const request = useMemo(
+    () =>
+      taskId
+        ? createEvaluationRequest((signal) => api.getResults(taskId, signal))
+        : null,
+    [taskId],
+  );
+
+  const fetchResults = useCallback(async (options: EvaluationLoadOptions = {}) => {
+    if (!request) return;
+    if (options.showLoading) setLoading(true);
+    let settled = false;
     try {
-      const data = await api.getResults(taskId);
+      const data = await request.run({ allowHidden: options.allowHidden });
+      if (!data) return;
+      settled = true;
       setResults(data);
       setError(null);
     } catch (err) {
+      settled = true;
       setError(err instanceof Error ? err.message : 'Failed to fetch results');
     } finally {
-      setLoading(false);
+      if (settled && options.showLoading) setLoading(false);
     }
-  }, [taskId]);
+  }, [request]);
 
   useEffect(() => {
-    fetchResults();
-  }, [fetchResults]);
+    setResults(null);
+    setError(null);
+    setLoading(Boolean(taskId));
+    if (!request) return;
+    void fetchResults({ showLoading: true, allowHidden: true });
+    return request.invalidate;
+  }, [fetchResults, request, taskId]);
 
-  return { results, loading, error, refresh: fetchResults };
+  const refresh = useCallback(
+    () => fetchResults({ showLoading: true, allowHidden: true }),
+    [fetchResults],
+  );
+  return {
+    results: results?.task.id === taskId ? results : null,
+    loading,
+    error,
+    refresh,
+  };
 }
 
 // Hook for available datasets
@@ -176,22 +317,37 @@ export function useDatasets() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchDatasets() {
-      try {
-        const data = await api.getDatasets();
-        setDatasets(data);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch datasets');
-      } finally {
-        setLoading(false);
-      }
+  const request = useMemo(
+    () => createEvaluationRequest((signal) => api.getDatasets(signal)),
+    [],
+  );
+  const fetchDatasets = useCallback(async (options: EvaluationLoadOptions = {}) => {
+    if (options.showLoading) setLoading(true);
+    let settled = false;
+    try {
+      const data = await request.run({ allowHidden: options.allowHidden });
+      if (!data) return;
+      settled = true;
+      setDatasets(data);
+      setError(null);
+    } catch (err) {
+      settled = true;
+      setError(err instanceof Error ? err.message : 'Failed to fetch datasets');
+    } finally {
+      if (settled && options.showLoading) setLoading(false);
     }
-    fetchDatasets();
-  }, []);
+  }, [request]);
 
-  return { datasets, loading, error };
+  useEffect(() => {
+    void fetchDatasets({ showLoading: true, allowHidden: true });
+    return request.invalidate;
+  }, [fetchDatasets, request]);
+
+  const refresh = useCallback(
+    () => fetchDatasets({ showLoading: true, allowHidden: true }),
+    [fetchDatasets],
+  );
+  return { datasets, loading, error, refresh };
 }
 
 // Hook for task mutations (create, run, cancel, delete)

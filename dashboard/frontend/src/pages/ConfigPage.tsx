@@ -40,9 +40,10 @@ interface ConfigPageProps {
 const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config' }) => {
   const { isReadonly } = useReadonly()
   const { user } = useAuth()
+  const isMCPSection = activeSection === 'mcp'
   const configReadonly = isReadonly || !canWriteConfig(user)
   const [config, setConfig] = useState<ConfigData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!isMCPSection)
   const [error, setError] = useState<string | null>(null)
   const [configFormat, setConfigFormat] = useState<ConfigFormat>('python-cli')
 
@@ -79,12 +80,20 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set())
 
   useEffect(() => {
+    if (isMCPSection) {
+      setLoading(false)
+      setError(null)
+      return
+    }
+
     fetchConfig()
     fetchRouterDefaults()
-  }, [])
+  }, [isMCPSection])
 
   // Fetch tools database when config is loaded
   useEffect(() => {
+    if (isMCPSection) return
+
     const toolsDBPath =
       routerDefaults?.integrations?.tools?.tools_db_path ||
       config?.global?.integrations?.tools?.tools_db_path ||
@@ -97,6 +106,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     config?.global?.integrations?.tools?.tools_db_path,
     config?.tools?.tools_db_path,
     routerDefaults?.integrations?.tools?.tools_db_path,
+    isMCPSection,
   ])
 
   const fetchConfig = async () => {
@@ -414,14 +424,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   return (
     <div className={styles.container}>
       <div className={styles.content}>
-        {loading && (
+        {!isMCPSection && loading && (
           <div className={styles.loading}>
             <div className={styles.spinner}></div>
             <p>Loading configuration...</p>
           </div>
         )}
 
-        {error && !loading && (
+        {!isMCPSection && error && !loading && (
           <div className={styles.error}>
             <span className={styles.errorIcon}></span>
             <div>
@@ -431,7 +441,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
           </div>
         )}
 
-        {config && !loading && !error && (
+        {isMCPSection && (
+          <div className={styles.contentArea}>
+            <ConfigPageMCPSection />
+          </div>
+        )}
+
+        {!isMCPSection && config && !loading && !error && (
           <div className={styles.contentArea}>
             {renderActiveSection()}
           </div>
