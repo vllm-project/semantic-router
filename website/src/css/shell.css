@@ -128,7 +128,7 @@
   background: rgba(255, 255, 255, 0.06);
   color: #ffffff;
   border-color: transparent;
-  box-shadow: inset 0 -2px #e31b23;
+  box-shadow: inset 0 -2px var(--site-accent);
 }
 
 .navbar__item.navbar__link.nav-utility,
@@ -151,7 +151,7 @@
   background: rgba(255, 255, 255, 0.06);
   color: #ffffff;
   border-color: transparent;
-  box-shadow: inset 0 -2px #e31b23;
+  box-shadow: inset 0 -2px var(--site-accent);
 }
 
 html[data-route-kind="home"] .nav-docs-only,
@@ -290,7 +290,7 @@ html[data-route-kind="blog"] .nav-docs-only {
   }
 
   .navbar__toggle:hover {
-    border-color: #e31b23;
+    border-color: var(--site-accent);
     background: #27272a;
     color: #ffffff;
   }
