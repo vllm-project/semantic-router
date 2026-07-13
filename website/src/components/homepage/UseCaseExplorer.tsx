@@ -335,94 +335,94 @@ export default function UseCaseExplorer(): JSX.Element {
         </ScrollReveal>
 
         <ScrollReveal delay={80}>
-        <div className={`${shared.darkCard} ${styles.shell}`}>
-          <div className={styles.tabRow} role="tablist" aria-label="Router use cases">
-            {useCaseTabs.map((tab) => {
-              const selected = tab.id === activeId
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  aria-controls={`use-case-panel-${tab.id}`}
-                  id={`use-case-tab-${tab.id}`}
-                  className={selected ? styles.tabActive : styles.tab}
-                  onClick={() => setActiveId(tab.id)}
-                >
-                  <span className={styles.tabIndex}>
-                    {String(useCaseTabs.indexOf(tab) + 1).padStart(2, '0')}
-                  </span>
-                  <span className={styles.tabLabel}>{tab.label}</span>
-                  <span className={styles.tabSubtitle}>{tab.subtitle}</span>
-                </button>
-              )
-            })}
-          </div>
-
-          <div
-            className={styles.panel}
-            role="tabpanel"
-            id={`use-case-panel-${activeTab.id}`}
-            aria-labelledby={`use-case-tab-${activeTab.id}`}
-          >
-            <div className={styles.panelHeader}>
-              <div className={styles.panelIntro}>
-                <h3>{activeTab.heading}</h3>
-                <p>{activeTab.summary}</p>
-              </div>
-            </div>
-
-            <div className={styles.panelBody}>
-              <UseCaseFlow steps={activeTab.flow} />
-
-              <div className={styles.featureList}>
-                {activeTab.features.map((feature, index) => (
-                  <Link
-                    key={feature.title}
-                    className={styles.featureRow}
-                    to={feature.docTo}
+          <div className={`${shared.darkCard} ${styles.shell}`}>
+            <div className={styles.tabRow} role="tablist" aria-label="Router use cases">
+              {useCaseTabs.map((tab) => {
+                const selected = tab.id === activeId
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    aria-controls={`use-case-panel-${tab.id}`}
+                    id={`use-case-tab-${tab.id}`}
+                    className={selected ? styles.tabActive : styles.tab}
+                    onClick={() => setActiveId(tab.id)}
                   >
-                    <span className={styles.featureIndex}>{String(index + 1).padStart(2, '0')}</span>
-                    <div className={styles.featureCopy}>
-                      <strong>{feature.title}</strong>
-                      <p>{feature.description}</p>
-                    </div>
-                    <span className={styles.featureArrow} aria-hidden="true">→</span>
-                  </Link>
-                ))}
-              </div>
+                    <span className={styles.tabIndex}>
+                      {String(useCaseTabs.indexOf(tab) + 1).padStart(2, '0')}
+                    </span>
+                    <span className={styles.tabLabel}>{tab.label}</span>
+                    <span className={styles.tabSubtitle}>{tab.subtitle}</span>
+                  </button>
+                )
+              })}
             </div>
 
-            <div className={styles.panelFooter}>
-              <div className={styles.integrationRow}>
-                <span className={styles.integrationLabel}>
-                  <Translate id="homepage.useCases.integrations">Integrations</Translate>
-                </span>
-                <Link className={styles.integrationChip} to="/docs/installation">
-                  <Translate id="homepage.useCases.integration.extproc">Envoy ExtProc</Translate>
-                </Link>
-                <Link className={styles.integrationChip} to="/docs/installation/k8s/agentgateway">
-                  <Translate id="homepage.useCases.integration.gateway">Gateway API</Translate>
-                </Link>
-                <Link className={styles.integrationChip} to="/docs/installation/k8s/operator">
-                  <Translate id="homepage.useCases.integration.operator">K8s Operator</Translate>
-                </Link>
-                <Link className={styles.integrationChip} to="/docs/installation">
-                  <Translate id="homepage.useCases.integration.local">Local vllm-sr</Translate>
-                </Link>
+            <div
+              className={styles.panel}
+              role="tabpanel"
+              id={`use-case-panel-${activeTab.id}`}
+              aria-labelledby={`use-case-tab-${activeTab.id}`}
+            >
+              <div className={styles.panelHeader}>
+                <div className={styles.panelIntro}>
+                  <h3>{activeTab.heading}</h3>
+                  <p>{activeTab.summary}</p>
+                </div>
               </div>
-              <div className={styles.panelActions}>
-                <PillLink to="/docs/intro">
-                  <Translate id="homepage.useCases.primaryCta">Get hands on</Translate>
-                </PillLink>
-                <PillLink href="https://github.com/vllm-project/semantic-router" muted rel="noreferrer" target="_blank">
-                  <Translate id="homepage.useCases.secondaryCta">View on GitHub</Translate>
-                </PillLink>
+
+              <div className={styles.panelBody}>
+                <UseCaseFlow steps={activeTab.flow} />
+
+                <div className={styles.featureList}>
+                  {activeTab.features.map((feature, index) => (
+                    <Link
+                      key={feature.title}
+                      className={styles.featureRow}
+                      to={feature.docTo}
+                    >
+                      <span className={styles.featureIndex}>{String(index + 1).padStart(2, '0')}</span>
+                      <div className={styles.featureCopy}>
+                        <strong>{feature.title}</strong>
+                        <p>{feature.description}</p>
+                      </div>
+                      <span className={styles.featureArrow} aria-hidden="true">→</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+
+              <div className={styles.panelFooter}>
+                <div className={styles.integrationRow}>
+                  <span className={styles.integrationLabel}>
+                    <Translate id="homepage.useCases.integrations">Integrations</Translate>
+                  </span>
+                  <Link className={styles.integrationChip} to="/docs/installation">
+                    <Translate id="homepage.useCases.integration.extproc">Envoy ExtProc</Translate>
+                  </Link>
+                  <Link className={styles.integrationChip} to="/docs/installation/k8s/agentgateway">
+                    <Translate id="homepage.useCases.integration.gateway">Gateway API</Translate>
+                  </Link>
+                  <Link className={styles.integrationChip} to="/docs/installation/k8s/operator">
+                    <Translate id="homepage.useCases.integration.operator">K8s Operator</Translate>
+                  </Link>
+                  <Link className={styles.integrationChip} to="/docs/installation">
+                    <Translate id="homepage.useCases.integration.local">Local vllm-sr</Translate>
+                  </Link>
+                </div>
+                <div className={styles.panelActions}>
+                  <PillLink to="/docs/intro">
+                    <Translate id="homepage.useCases.primaryCta">Get hands on</Translate>
+                  </PillLink>
+                  <PillLink href="https://github.com/vllm-project/semantic-router" muted rel="noreferrer" target="_blank">
+                    <Translate id="homepage.useCases.secondaryCta">View on GitHub</Translate>
+                  </PillLink>
+                </div>
               </div>
             </div>
           </div>
-        </div>
         </ScrollReveal>
       </div>
     </section>

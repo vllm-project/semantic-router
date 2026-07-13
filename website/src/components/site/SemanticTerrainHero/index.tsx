@@ -58,7 +58,7 @@ export default function SemanticTerrainHero(): JSX.Element {
               <span className={styles.accent}>
                 <Translate id="homepage.hero.line1">Build your</Translate>
               </span>
-              <span>
+              <span className={styles.headlineLine}>
                 <Translate id="homepage.hero.line2">
                   Mixture-of-Models.
                 </Translate>

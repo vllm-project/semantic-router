@@ -54,9 +54,13 @@
 
 .track:hover {
   transform: translateY(-2px);
-  border-color: rgba(99, 102, 241, 0.22);
-  background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
-  box-shadow: var(--site-shadow-soft);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg-soft);
+  box-shadow: var(--site-hover-glow);
+}
+
+.track:hover .trackLabel {
+  color: var(--site-brand-blue);
 }
 
 .trackLabel {

@@ -23,22 +23,23 @@
 }
 
 .tab:hover {
-  border-color: rgba(124, 58, 237, 0.4);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg-soft);
   color: #fff;
 }
 
 .tabActive {
-  border-color: rgba(124, 58, 237, 0.55);
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.28), rgba(48, 162, 255, 0.14));
+  border-color: var(--site-hover-border-strong);
+  background: var(--site-hover-surface-bg);
   color: #fff;
 }
 
-.sectionLabel {
-  color: rgba(255, 255, 255, 0.72);
+.sectionLabel::after {
+  color: var(--site-brand-blue);
 }
 
-.sectionLabel::after {
-  color: #a78bfa;
+.solutionLabel {
+  color: var(--site-brand-blue);
 }
 
 .panel {
@@ -73,7 +74,11 @@
 }
 
 .solutionLabel {
-  color: #a78bfa;
+  color: var(--site-brand-blue);
+}
+
+.sectionLabel {
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .problemBlock p,

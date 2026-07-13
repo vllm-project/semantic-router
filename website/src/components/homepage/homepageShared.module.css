@@ -4,7 +4,8 @@
 .lightSection,
 .darkSection {
   position: relative;
-  overflow: hidden;
+  overflow-x: clip;
+  overflow-y: visible;
   padding: var(--site-section-pad) 0;
   scroll-margin-top: calc(var(--site-header-height) + 1rem);
   background: transparent;
@@ -19,12 +20,12 @@
 .sectionHeader {
   display: grid;
   gap: 0.75rem;
-  max-width: 44rem;
+  max-width: min(100%, 40rem);
   margin-bottom: var(--site-section-gap);
 }
 
 .sectionHeaderWide {
-  max-width: 52rem;
+  max-width: min(100%, 48rem);
 }
 
 .eyebrow {
@@ -48,37 +49,42 @@
 }
 
 .eyebrow:hover {
-  border-color: rgba(48, 162, 255, 0.35);
-  background: rgba(48, 162, 255, 0.08);
-  color: var(--site-muted-bright);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg);
+  color: var(--site-brand-blue);
   box-shadow: var(--site-hover-glow);
 }
 
 .sectionTitle {
   margin: 0;
-  font-size: var(--site-text-h1);
+  max-width: none;
+  font-size: var(--site-text-h2);
   font-weight: var(--site-font-weight-semibold);
-  line-height: var(--site-leading-tight);
-  letter-spacing: -0.03em;
+  line-height: 1.18;
+  letter-spacing: -0.025em;
   color: var(--site-text-strong);
-  text-wrap: balance;
+  text-wrap: pretty;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .sectionSubtitle {
   margin: 0;
-  max-width: 42rem;
+  max-width: none;
+  width: 100%;
   color: var(--site-muted-bright);
-  font-size: var(--site-text-body);
-  line-height: var(--site-leading-normal);
+  font-size: var(--site-text-small);
+  line-height: var(--site-leading-relaxed);
   text-wrap: pretty;
+  overflow-wrap: normal;
 }
 
 .darkCard {
-  border: 1px solid rgba(124, 58, 237, 0.22);
+  border: 1px solid rgba(48, 162, 255, 0.18);
   border-radius: 1.25rem;
   background:
-    radial-gradient(circle at 14% 0%, rgba(124, 58, 237, 0.16), transparent 40%),
-    radial-gradient(circle at 86% 0%, rgba(48, 162, 255, 0.1), transparent 34%),
+    radial-gradient(circle at 14% 0%, rgba(48, 162, 255, 0.12), transparent 40%),
+    radial-gradient(circle at 86% 0%, rgba(48, 162, 255, 0.08), transparent 34%),
     linear-gradient(180deg, var(--site-surface-raised) 0%, var(--site-surface) 55%, var(--site-bg) 100%);
   box-shadow: var(--site-shadow-raised);
   overflow: hidden;
@@ -89,10 +95,8 @@
 }
 
 .darkCard:hover {
-  border-color: rgba(124, 58, 237, 0.38);
-  box-shadow:
-    0 28px 60px rgba(0, 0, 0, 0.35),
-    0 0 0 1px rgba(124, 58, 237, 0.14);
+  border-color: var(--site-hover-border-strong);
+  box-shadow: var(--site-hover-glow);
 }
 
 .surfaceCard {
@@ -113,9 +117,9 @@
 }
 
 .surfaceCard:hover {
-  border-color: rgba(48, 162, 255, 0.28);
-  background: linear-gradient(180deg, var(--site-surface-raised) 0%, var(--site-surface-alt) 100%);
-  box-shadow: var(--site-hover-shadow);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg-soft);
+  box-shadow: var(--site-hover-glow);
   transform: var(--site-hover-lift);
 }
 
@@ -146,9 +150,13 @@
 
 .featureCard:hover {
   transform: var(--site-hover-lift);
-  border-color: rgba(48, 162, 255, 0.28);
-  background: linear-gradient(180deg, var(--site-surface-alt) 0%, var(--site-surface) 100%);
-  box-shadow: var(--site-hover-shadow);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg-soft);
+  box-shadow: var(--site-hover-glow);
+}
+
+.featureCard:hover h3 {
+  color: var(--site-brand-blue);
 }
 
 .featureCard h3 {
@@ -178,7 +186,7 @@
 }
 
 .featureLink:hover {
-  color: #c4b5fd;
+  color: var(--site-brand-blue);
   text-decoration: none;
 }
 

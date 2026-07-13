@@ -377,7 +377,22 @@ export default function IntegrationArchitecture(): JSX.Element {
       window.cancelAnimationFrame(frameId)
       resizeObserver.disconnect()
     }
-  }, [updateLayout])
+  }, [updateLayout, routeIndex])
+
+  useEffect(() => {
+    const retryDelays = [80, 200, 500, 1000]
+    const timeoutIds = retryDelays.map(delay =>
+      window.setTimeout(() => {
+        updateLayout()
+      }, delay),
+    )
+
+    return () => {
+      timeoutIds.forEach((timeoutId) => {
+        window.clearTimeout(timeoutId)
+      })
+    }
+  }, [updateLayout, routeIndex])
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {

@@ -16,7 +16,7 @@
 }
 
 .stepNumber {
-  color: #7c3aed;
+  color: var(--site-brand-blue);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.72rem;
   font-weight: 700;
@@ -59,7 +59,7 @@
   border: 1px solid var(--site-border);
   border-radius: 1rem;
   background:
-    linear-gradient(135deg, rgba(124, 58, 237, 0.06), rgba(48, 162, 255, 0.05)),
+    linear-gradient(135deg, rgba(48, 162, 255, 0.06), rgba(8, 118, 201, 0.04)),
     rgba(255, 255, 255, 0.9);
 }
 
@@ -89,7 +89,7 @@
   content: '—';
   position: absolute;
   left: 0;
-  color: #7c3aed;
+  color: var(--site-brand-blue);
 }
 
 .ctaRow {

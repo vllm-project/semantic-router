@@ -67,8 +67,8 @@
 
 .dependencyMarquee:hover,
 .teamMarquee:hover {
-  border-color: rgba(99, 102, 241, 0.2);
-  box-shadow: var(--site-hover-shadow);
+  border-color: var(--site-hover-border);
+  box-shadow: var(--site-hover-glow);
   transform: translateY(-2px);
 }
 
@@ -152,12 +152,12 @@
 
 .dependencyChip:hover,
 .dependencyChip:focus-visible {
-  border-color: rgba(99, 102, 241, 0.28);
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(124, 58, 237, 0.04));
-  color: var(--site-text-strong);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg);
+  color: var(--site-brand-blue);
   text-decoration: none;
   transform: translateY(-2px);
-  box-shadow: 0 10px 22px rgba(99, 102, 241, 0.1);
+  box-shadow: 0 10px 22px rgba(48, 162, 255, 0.12);
 }
 
 .dependencyLogo {
@@ -175,9 +175,9 @@
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
-  width: 15rem;
-  min-width: 15rem;
-  min-height: 11.5rem;
+  width: 16.5rem;
+  min-width: 16.5rem;
+  min-height: 11rem;
   padding: 1rem;
   border: 1px solid var(--site-border);
   border-radius: 0.9rem;
@@ -193,11 +193,16 @@
 
 .memberCard:hover,
 .memberCard:focus-visible {
-  border-color: rgba(99, 102, 241, 0.24);
-  background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
-  box-shadow: var(--site-hover-shadow);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg-soft);
+  box-shadow: var(--site-hover-glow);
   text-decoration: none;
   transform: var(--site-hover-lift);
+}
+
+.memberCard:hover .memberCopy strong,
+.memberCard:focus-visible .memberCopy strong {
+  color: var(--site-brand-blue);
 }
 
 .avatarWrap {
@@ -228,13 +233,10 @@
 
 .memberRole,
 .memberCompany {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  composes: site-card-line from global;
   color: var(--site-muted);
-  font-size: 0.76rem;
-  line-height: 1.3;
+  font-size: 0.78rem;
+  line-height: 1.35;
 }
 
 .memberCompany {
@@ -254,8 +256,8 @@
 }
 
 .steering {
-  background: rgba(99, 102, 241, 0.08);
-  color: var(--site-text);
+  background: rgba(48, 162, 255, 0.12);
+  color: var(--site-brand-blue);
 }
 
 .committer {

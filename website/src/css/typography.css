@@ -10,7 +10,19 @@ html[data-route-kind='home'] h3,
 html[data-route-kind='home'] h4 {
   font-weight: var(--site-font-weight-semibold);
   letter-spacing: -0.025em;
-  text-wrap: balance;
+  line-height: var(--site-leading-tight);
+  text-wrap: pretty;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: manual;
+}
+
+html[data-route-kind='home'] h1 {
+  font-size: var(--site-text-h1);
+}
+
+html[data-route-kind='home'] h2 {
+  font-size: var(--site-text-h2);
 }
 
 html[data-route-kind='home'] p {

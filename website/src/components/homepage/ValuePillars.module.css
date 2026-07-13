@@ -22,9 +22,13 @@
 
 .card:hover {
   transform: var(--site-hover-lift);
-  border-color: rgba(48, 162, 255, 0.32);
-  background: linear-gradient(180deg, var(--site-surface-raised) 0%, var(--site-surface-alt) 100%);
-  box-shadow: var(--site-hover-shadow);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg-soft);
+  box-shadow: var(--site-hover-glow);
+}
+
+.card:hover h3 {
+  color: var(--site-brand-blue);
 }
 
 .cardTop {

@@ -1,9 +1,9 @@
 .reveal {
   opacity: 0;
-  transform: translate3d(0, 1.35rem, 0);
+  transform: translate3d(0, 1.1rem, 0) scale(0.985);
   transition:
-    opacity 640ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 640ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 720ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 720ms cubic-bezier(0.16, 1, 0.3, 1);
   will-change: opacity, transform;
 }
 

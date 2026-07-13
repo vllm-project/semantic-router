@@ -60,7 +60,7 @@ export default function ValuePillars(): JSX.Element {
     <section className={shared.bandSection} aria-labelledby="value-pillars-title">
       <div className={`site-shell-container ${shared.sectionInner}`}>
         <ScrollReveal>
-          <header className={shared.sectionHeader}>
+          <header className={`${shared.sectionHeader} ${shared.sectionHeaderWide}`}>
             <span className={shared.eyebrow}>
               <Translate id="homepage.pillars.eyebrow">Why Semantic Router</Translate>
             </span>

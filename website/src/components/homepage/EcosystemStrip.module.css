@@ -44,10 +44,28 @@
 .card:focus-visible,
 .cardHighlight:focus-visible {
   transform: var(--site-hover-lift);
-  border-color: rgba(99, 102, 241, 0.28);
-  background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
-  box-shadow: var(--site-hover-shadow);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg-soft);
+  box-shadow: var(--site-hover-glow);
   text-decoration: none;
+}
+
+.card:hover strong,
+.cardHighlight:hover strong,
+.card:focus-visible strong,
+.cardHighlight:focus-visible strong {
+  color: var(--site-brand-blue);
+}
+
+.cardHighlight {
+  border-color: rgba(48, 162, 255, 0.24);
+  background: var(--site-hover-surface-bg);
+}
+
+.cardHighlight:hover,
+.cardHighlight:focus-visible {
+  background: linear-gradient(135deg, rgba(48, 162, 255, 0.14), rgba(8, 118, 201, 0.08));
+  box-shadow: var(--site-hover-glow);
 }
 
 .card strong,
@@ -62,17 +80,6 @@
   color: var(--site-muted);
   font-size: 0.84rem;
   line-height: 1.5;
-}
-
-.cardHighlight {
-  border-color: rgba(99, 102, 241, 0.24);
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(124, 58, 237, 0.06));
-}
-
-.cardHighlight:hover,
-.cardHighlight:focus-visible {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.14), rgba(124, 58, 237, 0.1));
-  box-shadow: var(--site-hover-glow);
 }
 
 @media (max-width: 996px) {
