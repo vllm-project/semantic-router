@@ -97,7 +97,7 @@ func (c *MilvusCache) FindSimilarWithThreshold(ctx context.Context, model string
 	logging.Debugf("MilvusCache.FindSimilarWithThreshold: searching for model='%s', query=%s, threshold=%.4f",
 		model, logging.ContentDescriptor(query), threshold)
 
-	queryEmbedding, err := c.getEmbedding(query)
+	queryEmbedding, err := c.getEmbedding(ctx, query)
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
 		return LookupResult{}, fmt.Errorf("failed to generate embedding: %w", err)

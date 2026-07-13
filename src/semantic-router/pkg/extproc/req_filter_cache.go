@@ -112,7 +112,9 @@ func (r *OpenAIRouter) storePendingCacheRequest(ctx *RequestContext, categoryNam
 	}
 	ttlSeconds := r.Config.GetCacheTTLSecondsForDecisionObject(ctx.VSRSelectedDecision)
 	partition := semanticCachePartition(ctx, requestModel)
-	if err := r.Cache.AddPendingRequest(ctx.RequestID, partition, cacheQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
+	// Thread the request-scoped (span) context so cancellation of the request
+	// reaches the embedding work in the pending write, mirroring the lookup (#2473).
+	if err := r.Cache.AddPendingRequest(ctx.TraceContext, ctx.RequestID, partition, cacheQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
 		logging.Errorf("Error adding pending request to cache: %v", err)
 	}
 }

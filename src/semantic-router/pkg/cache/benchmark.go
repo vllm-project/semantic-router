@@ -142,7 +142,7 @@ func populateCache(cache *InMemoryCache, size int) error {
 			query := queries[idx]
 			responseBody := []byte(fmt.Sprintf("Response for: %s", query))
 
-			err := cache.AddEntry(requestID,
+			err := cache.AddEntry(context.Background(), requestID,
 				"test-model", query, []byte(query), responseBody, -1)
 			if err != nil {
 				errors <- fmt.Errorf("failed to add entry %d: %w", idx, err)
@@ -189,7 +189,7 @@ func measureSearchLatency(cache *InMemoryCache, model, query string) latencyMeas
 
 	// Measure embedding generation time ONCE
 	startEmbed := time.Now()
-	queryEmbedding, err := cache.generateEmbedding(query)
+	queryEmbedding, err := cache.generateEmbedding(context.Background(), query)
 	measurement.EmbeddingTime = time.Since(startEmbed)
 
 	if err != nil {

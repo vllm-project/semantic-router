@@ -41,6 +41,16 @@ type LookupResult struct {
 	Similarity float32
 }
 
+// ctxErr reports a context's cancellation or deadline error, treating a nil
+// context as "no error". Cache backends call it to short-circuit a lookup or
+// write before starting synchronous embedding/storage work (#2473).
+func ctxErr(ctx context.Context) error {
+	if ctx == nil {
+		return nil
+	}
+	return ctx.Err()
+}
+
 // CacheBackend defines the interface for semantic cache implementations
 type CacheBackend interface {
 	// IsEnabled returns whether caching is currently active
@@ -49,18 +59,18 @@ type CacheBackend interface {
 	// CheckConnection verifies the cache backend connection is healthy
 	// Returns nil if the connection is healthy, error otherwise
 	// For local caches (in-memory), this may be a no-op
-	CheckConnection() error
+	CheckConnection(ctx context.Context) error
 
 	// AddPendingRequest stores a request awaiting its response. Model is an
 	// exact cache partition key; entries from another model partition must
 	// never be considered by lookup.
-	AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error
+	AddPendingRequest(ctx context.Context, requestID string, model string, query string, requestBody []byte, ttlSeconds int) error
 
 	// UpdateWithResponse completes a pending request with the received response
-	UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error
+	UpdateWithResponse(ctx context.Context, requestID string, responseBody []byte, ttlSeconds int) error
 
 	// AddEntry stores a complete request-response pair in the cache
-	AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error
+	AddEntry(ctx context.Context, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error
 
 	// FindSimilar searches the exact model partition using the backend's
 	// configured similarity threshold. The returned LookupResult carries the

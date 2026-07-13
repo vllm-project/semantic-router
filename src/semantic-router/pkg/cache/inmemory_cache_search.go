@@ -131,7 +131,7 @@ func (c *InMemoryCache) FindSimilar(ctx context.Context, model string, query str
 }
 
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
-func (c *InMemoryCache) FindSimilarWithThreshold(_ context.Context, model string, query string, threshold float32) (LookupResult, error) {
+func (c *InMemoryCache) FindSimilarWithThreshold(ctx context.Context, model string, query string, threshold float32) (LookupResult, error) {
 	start := time.Now()
 
 	if !c.enabled {
@@ -141,7 +141,7 @@ func (c *InMemoryCache) FindSimilarWithThreshold(_ context.Context, model string
 	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: searching for model='%s', query=%s, threshold=%.4f",
 		model, logging.ContentDescriptor(query), threshold)
 
-	queryEmbedding, err := c.generateEmbedding(query)
+	queryEmbedding, err := c.generateEmbedding(ctx, query)
 	if err != nil {
 		metrics.RecordCacheOperation("memory", "find_similar", "error", time.Since(start).Seconds())
 		return LookupResult{}, fmt.Errorf("failed to generate embedding: %w", err)
