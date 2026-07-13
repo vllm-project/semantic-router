@@ -1,11 +1,3 @@
-resources:
-  limits:
-    cpu: "2"
-    memory: 4Gi
-  requests:
-    cpu: 500m
-    memory: 2Gi
-
 config:
   version: v0.3
   listeners: []
