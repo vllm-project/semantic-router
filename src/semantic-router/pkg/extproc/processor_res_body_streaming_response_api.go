@@ -31,9 +31,10 @@ func responseAPIStreamingHeaderMutation() *ext_proc.HeaderMutation {
 		SetHeaders: []*core.HeaderValueOption{
 			{
 				Header: &core.HeaderValue{
-					Key:   "content-type",
-					Value: "text/event-stream; charset=utf-8",
+					Key:      "content-type",
+					RawValue: []byte("text/event-stream; charset=utf-8"),
 				},
+				AppendAction: core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
 			},
 		},
 		RemoveHeaders: []string{"content-length"},
