@@ -39,7 +39,11 @@ global:
 
 Keep `max_bytes` high enough for your largest prompt or multimodal payload. Keep `timeout_sec` greater than the expected upload time between the first body chunk and end-of-stream.
 
-The default reference config shows the same structure in `config/config.yaml`, and the streaming e2e profile uses it in `e2e/profiles/streaming/values.yaml`.
+The 10 MiB and 30-second values above are example guardrails matching the
+streaming e2e profile in `e2e/profiles/streaming/values.yaml`; they are not
+runtime defaults or experimentally calibrated limits. Omitting either value or
+setting it to zero disables that guard. The reference `config/config.yaml`
+demonstrates a smaller 1 MiB and 15-second policy.
 
 ## Envoy AI Gateway / Envoy Gateway
 
