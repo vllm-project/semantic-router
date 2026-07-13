@@ -9,6 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from cli import container_images  # noqa: E402
 from cli.consts import (  # noqa: E402
+    VLLM_SR_CONTAINER_IMAGE_CUDA,
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
     VLLM_SR_CONTAINER_IMAGE_ROCM,
     VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT,
@@ -129,6 +130,53 @@ def test_get_runtime_images_derives_official_envoy_image_from_rocm_base(monkeypa
     }
     assert ensured == [
         (VLLM_SR_CONTAINER_IMAGE_ROCM, "never"),
+        (VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT, "never"),
+        (VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT, "never"),
+    ]
+
+
+def test_select_image_source_picks_cuda_default_for_nvidia(monkeypatch):
+    monkeypatch.delenv("VLLM_SR_IMAGE", raising=False)
+    monkeypatch.delenv("VLLM_SR_IMAGE_NVIDIA", raising=False)
+
+    assert (
+        container_images._select_image_source(None, "nvidia")
+        == VLLM_SR_CONTAINER_IMAGE_CUDA
+    )
+
+
+def test_select_image_source_honors_nvidia_env_override(monkeypatch):
+    monkeypatch.delenv("VLLM_SR_IMAGE", raising=False)
+    monkeypatch.setenv("VLLM_SR_IMAGE_NVIDIA", "my-registry/vllm-sr-cuda:pinned")
+
+    assert (
+        container_images._select_image_source(None, "nvidia")
+        == "my-registry/vllm-sr-cuda:pinned"
+    )
+
+
+def test_get_runtime_images_derives_official_service_images_from_cuda_base(monkeypatch):
+    ensured = []
+    monkeypatch.setattr(
+        container_images,
+        "_resolve_selected_image",
+        lambda image, normalized_platform: VLLM_SR_CONTAINER_IMAGE_CUDA,
+    )
+    monkeypatch.setattr(
+        container_images,
+        "_ensure_image_available",
+        lambda image, pull_policy: ensured.append((image, pull_policy)),
+    )
+
+    images = container_images.get_runtime_images(pull_policy="never", platform="nvidia")
+
+    assert images == {
+        "router": VLLM_SR_CONTAINER_IMAGE_CUDA,
+        "envoy": VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT,
+        "dashboard": VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT,
+    }
+    assert ensured == [
+        (VLLM_SR_CONTAINER_IMAGE_CUDA, "never"),
         (VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT, "never"),
         (VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT, "never"),
     ]
