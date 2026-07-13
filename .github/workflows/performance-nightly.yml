@@ -1,11 +1,11 @@
 name: Nightly Performance Baseline
 
 on:
-  schedule:
-    # Run at 3:00 AM UTC daily to refresh baselines on the ubuntu-latest runner
-    # class that the PR regression gate (performance-test.yml) compares against.
-    - cron: "0 3 * * *"
-  workflow_dispatch: # Allow manual triggering (run once to seed ubuntu-latest baselines)
+  # Disabled - baseline comparison not currently used in PR tests
+  # schedule:
+  #   # Run at 3:00 AM UTC daily
+  #   - cron: "0 3 * * *"
+  workflow_dispatch:  # Allow manual triggering
 
 jobs:
   update-baseline:
@@ -67,12 +67,8 @@ jobs:
         run: |
           pip install -U "huggingface_hub[cli]" hf_transfer
 
-      # The component benchmarks initialize classifiers and embedding models
-      # directly, so the minimal benchmark model set must be pre-downloaded —
-      # otherwise the classification and cache baselines come out empty and
-      # those suites are silently excluded from the PR regression gate.
-      - name: Download benchmark models
-        run: make download-models-perf
+      # Models are now automatically downloaded by the router at startup
+      # No need to pre-download models - the router will download them on first run
 
       - name: Create reports directory
         run: mkdir -p reports

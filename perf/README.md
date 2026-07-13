@@ -204,12 +204,12 @@ against the existing committed baselines with no special seeding. Suites whose
 baseline is empty (e.g. classification before benchmark models are cached) are
 simply skipped, never falsely failed.
 
-The **Nightly Performance Baseline** workflow (`performance-nightly.yml`) keeps
-the baselines current as the code evolves and records the advisory `ns/op`
-numbers from the CI runner. It is recommended (re-enabled here) but is not a
-prerequisite for the gate to be trustworthy — allocation counts don't drift with
-hardware, only with code and the Go version, so refresh the baselines when a PR
-legitimately changes allocations, or on a Go upgrade.
+Refresh the baselines with `make perf-baseline-update` (then commit
+`testdata/baselines/`) when a PR legitimately changes a benchmark's allocations,
+or on a Go upgrade — allocation counts drift only with the code and the Go
+version, not with hardware. A `performance-nightly.yml` workflow exists to
+automate this refresh; it is currently **disabled**, and enabling it (it commits
+to the repo) is a maintainer decision, deliberately left out of this change.
 
 For **local** runs, `make perf-check` compares against these committed baselines
 too; `ns/op` will differ from your hardware but only shows as advisory.
