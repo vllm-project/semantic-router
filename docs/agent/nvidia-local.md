@@ -7,19 +7,17 @@ detection, jailbreak guard, mmBERT embedding for Knowledge-Base
 signals, hallucination mitigation, feedback detection. The backend
 LLM is reached over the network and is **not** served from this host.
 
-**How this relates to `deploy/amd/README.md`:** the two documents,
-despite their filename symmetry, are not parallel.
-[`deploy/amd/README.md`](../amd/README.md) is a *routing profile*
-guide (the `balance.yaml` recipe running against a single ROCm vLLM
-backend), which is a different concern. The AMD equivalent of *this*
-file — how to build the router image on ROCm and serve it with
-`vllm-sr serve --platform amd` — lives in
-[`docs/agent/amd-local.md`](../../docs/agent/amd-local.md), together
-with the `amd-local` entry in
-[`docs/agent/environments.md`](../../docs/agent/environments.md).
-A future refactor may move this playbook to a matching
-`docs/agent/nvidia-local.md` for structural symmetry; that reshuffle
-is intentionally out of scope for this PR.
+**How this relates to `amd-local.md`:** this file is the NVIDIA
+equivalent of [`amd-local.md`](amd-local.md) — how to build the router
+image on CUDA and serve it with `vllm-sr serve --platform nvidia`.
+Both live under `docs/agent/` and have matching entries in
+[`environments.md`](environments.md).
+
+[`deploy/amd/README.md`](../../deploy/amd/README.md) is a different
+concern: a *routing profile* guide (the `balance.yaml` recipe running
+against a single ROCm vLLM backend). The naming looks parallel but
+the topic isn't. `deploy/nvidia/` is intentionally left empty until a
+matching NVIDIA routing profile is authored.
 
 > **When this playbook is NOT for you:** upstream `onnx-binding/README.md`
 > documents CPU≈GPU latency parity for BERT-size embeddings at small
@@ -216,7 +214,7 @@ Without overrides, even when the container has GPU access, the router
 runs entirely on CPU.
 
 Add the following override block under `global.model_catalog` in your
-routing recipe (e.g. [`deploy/recipes/balance.yaml`](../recipes/balance.yaml)
+routing recipe (e.g. [`deploy/recipes/balance.yaml`](../../deploy/recipes/balance.yaml)
 or whichever recipe your deployment loads):
 
 ```yaml
