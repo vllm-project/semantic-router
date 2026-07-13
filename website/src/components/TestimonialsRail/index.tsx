@@ -36,6 +36,16 @@ const testimonials: Testimonial[] = [
     statement: 'The future is multi-models and you’ll want to customize your router the same way you customize your code!',
   },
   {
+    image: '/img/testimonials/mark-papermaster.jpeg',
+    kind: 'quote',
+    label: 'System-level optimization',
+    name: 'Mark Papermaster',
+    role: 'AMD CTO & EVP',
+    sourceLabel: 'theCUBE at RAISE Summit · 2026',
+    sourceUrl: 'https://www.thecube.net/events/nyse/raise-summit-26/content/Videos/9b85b557-8da2-4e68-8621-a9cec1a84674',
+    statement: 'We’ve become system optimizers, still optimizing every component, but then equally looking at how you optimize how each of the pieces come together.',
+  },
+  {
     image: '/img/testimonials/chris-wright.jpeg',
     kind: 'perspective',
     label: 'Hybrid enterprise AI',
