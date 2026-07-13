@@ -162,6 +162,14 @@ jobs:
           else
             headline="❌ Component benchmarks **FAILED** — see the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
           fi
+          # Blocking (allocs/op or B/op over threshold) and advisory (ns/op
+          # slower — reported, never blocks) lists, pulled from the comparison.
+          blocked=""
+          advisory=""
+          if [ -f reports/comparison.json ]; then
+            blocked=$(jq -r '.results[]? | select(.RegressionDetected==true) | "- \(.BenchmarkName): allocs/op \(.AllocsPerOpChange|round)%, B/op \(.BytesPerOpChange|round)%"' reports/comparison.json 2>/dev/null || true)
+            advisory=$(jq -r '.results[]? | select(.NsAdvisory==true) | "- \(.BenchmarkName): ns/op \(.NsPerOpChange|round)% slower"' reports/comparison.json 2>/dev/null || true)
+          fi
           cat > reports/summary.md <<EOF
           ## Performance Benchmark Results
 
@@ -173,6 +181,14 @@ jobs:
           - Cache benchmarks: $(suite_status BenchmarkCache)
           - Looper family benchmarks: $(suite_status "Benchmark(ReMoM|Fusion|Flow|Base)")
           - Regression gate: ${gate_status}
+          EOF
+          if [ -n "$blocked" ]; then
+            { echo ""; echo "### Blocking regressions (allocs/op or B/op over threshold)"; echo "$blocked"; } >> reports/summary.md
+          fi
+          if [ -n "$advisory" ]; then
+            { echo ""; echo "### Advisory — slower wall-clock, does not block the gate (ns/op)"; echo "$advisory"; } >> reports/summary.md
+          fi
+          cat >> reports/summary.md <<EOF
 
           ### Details
           See attached benchmark artifacts for detailed results and profiles.
