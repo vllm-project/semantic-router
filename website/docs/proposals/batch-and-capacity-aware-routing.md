@@ -82,7 +82,7 @@ load-balancing layer that the router is merely *aware* of:
 In this shape, **capacity is a serving concern, not a routing concern**: the router
 emits a preferred model (and ordered fallbacks); the LB layer honors real-time
 concurrency limits, spills over when a pool saturates, and is sized offline by the
-[fleet simulator](../fleet-sim/overview.md). Batch-level *joint* optimization would only
+[fleet simulator](../fleet-sim/overview). Batch-level *joint* optimization would only
 ever be justified for **bulk / asynchronous** workloads, never for interactive traffic.
 
 ## 3. Why we do not fold this into the routing decision
@@ -168,7 +168,7 @@ them separate keeps the router simple, fast, and portable across deployments.
   Measured headroom over matched-cost per-query routing is ≈0 (batch) to ~1 point
   (tight capacity), and unstable under cost pressure.
 - **Treat capacity as a load-balancing layer** below routing (least-loaded / spillover
-  / admission), sized by the [fleet simulator](../fleet-sim/overview.md). The router may
+  / admission), sized by the [fleet simulator](../fleet-sim/overview). The router may
   emit ordered fallbacks the LB layer can use, but does not solve a capacity program
   itself.
 - **Invest in the quality estimator instead** — that is where the remaining cost-savings
