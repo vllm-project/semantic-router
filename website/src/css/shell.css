@@ -213,6 +213,7 @@ html[data-route-kind="blog"] .nav-docs-only {
 }
 
 .footer__link-item:hover {
+  color: #ffffff;
   opacity: 1;
 }
 
