@@ -245,7 +245,7 @@ spec:
 EOF
 ```
 
-The bundled agentgateway demo explicitly opts into full-duplex streamed request
+The bundled agentgateway example explicitly opts into full-duplex streamed request
 bodies. This is an example-specific choice; other proxy defaults and examples
 may continue to use buffered request bodies. The accompanying Semantic Router
 values enable `global.router.streamed_body`, allowing the router to accumulate
