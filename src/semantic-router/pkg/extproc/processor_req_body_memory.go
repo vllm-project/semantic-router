@@ -322,6 +322,12 @@ func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName stri
 	logging.Infof("[FastResponse] Decision '%s' has fast_response plugin, returning immediate response", decisionName)
 	metrics.RecordPluginExecution("fast_response", decisionName, "executed", 0)
 
+	if isResponseAPIRequest(ctx) {
+		if response, ok := r.createResponseAPIFastResponse(ctx, fastCfg.Message, decisionName); ok {
+			return response
+		}
+	}
+
 	return httputil.CreateFastResponse(fastCfg.Message, ctx.ExpectStreamingResponse, decisionName)
 }
 
