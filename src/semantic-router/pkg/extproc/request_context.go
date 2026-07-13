@@ -82,6 +82,7 @@ type RequestContext struct {
 	HasStreamingChunks bool                            // True when at least one SSE chunk has been received
 	StreamingContent   string                          // Accumulated content from delta.content
 	StreamingReasoning string                          // Accumulated reasoning from delta.reasoning_content
+	StreamingRefusal   string                          // Accumulated refusal text from delta.refusal
 	StreamingMetadata  map[string]interface{}          // id, model, created from first chunk
 	StreamingToolCalls map[int]*StreamingToolCallState // Accumulated delta.tool_calls keyed by tool index
 	StreamingComplete  bool                            // True when [DONE] marker received
@@ -90,9 +91,18 @@ type RequestContext struct {
 	// Response API streaming translation state. When /v1/responses is backed by
 	// an upstream Chat Completions stream, these fields track the outbound
 	// Responses API event envelope emitted to the client.
-	ResponseAPIStreamStarted   bool
-	ResponseAPIStreamItemID    string
-	ResponseAPIStreamCreatedAt int64
+	ResponseAPIStreamStarted              bool
+	ResponseAPIStreamMessageStarted       bool
+	ResponseAPIStreamNextOutputIndex      int
+	ResponseAPIStreamMessageOutputIndex   int
+	ResponseAPIStreamItemID               string
+	ResponseAPIStreamToolCallItemIDs      map[int]string
+	ResponseAPIStreamToolCallOutputIndex  map[int]int
+	ResponseAPIStreamReasoningItemID      string
+	ResponseAPIStreamReasoningOutputIndex int
+	ResponseAPIStreamReasoningStarted     bool
+	ResponseAPIStreamRefusalStarted       bool
+	ResponseAPIStreamCreatedAt            int64
 
 	// UpstreamStatusCode is the HTTP status the upstream returned, captured at
 	// the response-header phase. Zero means the status was never observed for
