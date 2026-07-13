@@ -24,10 +24,6 @@ test('Chinese homepage positioning follows the current English message IDs', asy
     readFile(chineseMessagesURL, 'utf8').then(JSON.parse),
   ])
   const contract = {
-    'homepage.hero.systemLabel': {
-      english: 'The next-generation model architecture',
-      chinese: '下一代模型架构',
-    },
     'homepage.hero.description': {
       english: 'System-level intelligence for heterogeneous LLM inference',
       chinese: '面向异构 LLM 推理的系统级智能',

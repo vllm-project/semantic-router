@@ -66,9 +66,12 @@ Out of scope:
 
 ## Next Action
 
-Rebase the frozen proof onto the final fetched `origin/main`, then pass CPU
-feature, affected-E2E, local PR, and AMD gates. Submit the signed-off proof pull
-request, keep CI green, and attach the final non-sensitive closure receipts.
+The proof is rebased onto final integration base
+`fe0b37d09ae0c113f8f7668656d837f2473b436a`, and the post-rebase manifest,
+changed-file lint, and fast CI gates pass for all 744 changed paths. Pass the
+remaining feature, affected-E2E, local PR, and isolated AMD gates on the exact
+final HEAD. Then submit the signed-off proof pull request, keep CI green, and
+attach the final non-sensitive closure receipts.
 
 ## Operating Rules
 
