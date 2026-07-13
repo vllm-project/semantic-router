@@ -238,7 +238,7 @@ func TestFactoryWithSelectionRegistryUsesRuntimeRLDrivenSelector(t *testing.T) {
 	runtimeRegistry := selection.NewRegistry()
 	runtimeRegistry.Register(selection.MethodRLDriven, runtimeSelector)
 
-	got := FactoryWithSelectionRegistry(cfg, "rl_driven", runtimeRegistry)
+	got := FactoryWithSelectionRegistry(cfg, "rl_driven", runtimeRegistry, nil)
 	rlLooper, ok := got.(*RLDrivenLooper)
 	if !ok {
 		t.Fatalf("FactoryWithSelectionRegistry returned %T, want *RLDrivenLooper", got)
