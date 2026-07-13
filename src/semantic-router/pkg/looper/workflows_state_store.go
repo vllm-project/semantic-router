@@ -22,12 +22,28 @@ const (
 	defaultWorkflowStateRedisAddress = "localhost:6379"
 	defaultWorkflowStateKeyPrefix    = "vllm-sr:flow:state:"
 	defaultWorkflowStateFileDir      = "vllm-sr-flow-state"
+
+	// maxStatePayloadBytes caps the serialised size of a single workflow
+	// tool state entry. This prevents a runaway workflow with huge tool
+	// trajectories from blowing up memory or Redis bandwidth.
+	maxStatePayloadBytes = 512 * 1024 // 512 KiB
+
+	// maxMemoryStateEntries caps how many in-flight states the memory
+	// backend will hold. After cleanup, if the map is still at capacity
+	// we reject the Put to prevent unbounded growth.
+	maxMemoryStateEntries = 10_000
+
+	// workflowStateSweeperInterval is how often the background goroutine
+	// proactively purges expired entries. Keeps memory/file state bounded
+	// even when no new requests arrive.
+	workflowStateSweeperInterval = 60 * time.Second
 )
 
 type workflowToolStateStore interface {
 	Put(ctx context.Context, state *workflowPendingToolState) (string, error)
 	Take(ctx context.Context, id string) (*workflowPendingToolState, bool, error)
 	Clear(ctx context.Context) error
+	Close() error
 }
 
 type workflowStepResultState struct {
@@ -92,24 +108,64 @@ func workflowToolStateExpired(state *workflowPendingToolState, ttl time.Duration
 	return now.Sub(state.CreatedAt) > ttl
 }
 
+// checkPayloadSize rejects payloads that exceed the hard cap. Applied in
+// every backend's Put path after json.Marshal so the limit is on wire bytes.
+func checkPayloadSize(data []byte) error {
+	if len(data) > maxStatePayloadBytes {
+		return fmt.Errorf("workflow state payload %d bytes exceeds limit %d", len(data), maxStatePayloadBytes)
+	}
+	return nil
+}
+
 type workflowMemoryToolStateStore struct {
-	mu     sync.Mutex
-	ttl    time.Duration
-	states map[string]*workflowPendingToolState
+	mu        sync.Mutex
+	ttl       time.Duration
+	states    map[string]*workflowPendingToolState
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 func newWorkflowMemoryToolStateStore(ttl time.Duration) *workflowMemoryToolStateStore {
-	return &workflowMemoryToolStateStore{
+	s := &workflowMemoryToolStateStore{
 		ttl:    ttl,
 		states: map[string]*workflowPendingToolState{},
+		done:   make(chan struct{}),
+	}
+	go s.sweepLoop()
+	return s
+}
+
+func (s *workflowMemoryToolStateStore) sweepLoop() {
+	ticker := time.NewTicker(workflowStateSweeperInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.done:
+			return
+		case now := <-ticker.C:
+			s.mu.Lock()
+			s.cleanupLocked(now.UTC())
+			s.mu.Unlock()
+		}
 	}
 }
 
 func (s *workflowMemoryToolStateStore) Put(_ context.Context, state *workflowPendingToolState) (string, error) {
+	normalizeWorkflowToolStateForStore(state)
+	// Marshal early to enforce payload cap before touching the map.
+	data, err := json.Marshal(state)
+	if err != nil {
+		return "", fmt.Errorf("marshal workflow state: %w", err)
+	}
+	if sizeErr := checkPayloadSize(data); sizeErr != nil {
+		return "", sizeErr
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cleanupLocked(time.Now().UTC())
-	normalizeWorkflowToolStateForStore(state)
+	if len(s.states) >= maxMemoryStateEntries {
+		return "", fmt.Errorf("workflow memory state store at capacity (%d entries)", maxMemoryStateEntries)
+	}
 	s.states[state.ID] = state
 	return state.ID, nil
 }
@@ -132,6 +188,11 @@ func (s *workflowMemoryToolStateStore) Clear(_ context.Context) error {
 	return nil
 }
 
+func (s *workflowMemoryToolStateStore) Close() error {
+	s.closeOnce.Do(func() { close(s.done) })
+	return nil
+}
+
 func (s *workflowMemoryToolStateStore) cleanupLocked(now time.Time) {
 	for id, state := range s.states {
 		if workflowToolStateExpired(state, s.ttl, now) {
@@ -141,14 +202,32 @@ func (s *workflowMemoryToolStateStore) cleanupLocked(now time.Time) {
 }
 
 type workflowFileToolStateStore struct {
-	dir string
-	ttl time.Duration
+	dir       string
+	ttl       time.Duration
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 func newWorkflowFileToolStateStore(dir string, ttl time.Duration) *workflowFileToolStateStore {
-	return &workflowFileToolStateStore{
-		dir: workflowStateFileDir(dir),
-		ttl: ttl,
+	s := &workflowFileToolStateStore{
+		dir:  workflowStateFileDir(dir),
+		ttl:  ttl,
+		done: make(chan struct{}),
+	}
+	go s.sweepLoop()
+	return s
+}
+
+func (s *workflowFileToolStateStore) sweepLoop() {
+	ticker := time.NewTicker(workflowStateSweeperInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.done:
+			return
+		case now := <-ticker.C:
+			s.cleanupExpired(now.UTC())
+		}
 	}
 }
 
@@ -172,6 +251,9 @@ func (s *workflowFileToolStateStore) Put(_ context.Context, state *workflowPendi
 	data, err := json.Marshal(state)
 	if err != nil {
 		return "", fmt.Errorf("marshal workflow state: %w", err)
+	}
+	if sizeErr := checkPayloadSize(data); sizeErr != nil {
+		return "", sizeErr
 	}
 	path, err := s.pathForID(state.ID)
 	if err != nil {
@@ -235,6 +317,11 @@ func (s *workflowFileToolStateStore) Clear(_ context.Context) error {
 			}
 		}
 	}
+	return nil
+}
+
+func (s *workflowFileToolStateStore) Close() error {
+	s.closeOnce.Do(func() { close(s.done) })
 	return nil
 }
 
@@ -325,6 +412,9 @@ func (s *workflowRedisToolStateStore) Put(ctx context.Context, state *workflowPe
 	if err != nil {
 		return "", fmt.Errorf("marshal workflow state: %w", err)
 	}
+	if sizeErr := checkPayloadSize(data); sizeErr != nil {
+		return "", sizeErr
+	}
 	if err := s.client.Set(ctx, s.key(state.ID), data, s.ttl).Err(); err != nil {
 		return "", fmt.Errorf("store workflow state in redis: %w", err)
 	}
@@ -373,6 +463,13 @@ func (s *workflowRedisToolStateStore) Clear(ctx context.Context) error {
 		}
 		cursor = next
 	}
+}
+
+func (s *workflowRedisToolStateStore) Close() error {
+	if s.client != nil {
+		return s.client.Close()
+	}
+	return nil
 }
 
 func (s *workflowRedisToolStateStore) key(id string) string {

@@ -26,6 +26,22 @@ func NewWorkflowsLooper(cfg *config.LooperConfig) *WorkflowsLooper {
 	}
 }
 
+// newWorkflowsLooperWithService creates a WorkflowsLooper that shares the
+// state store owned by the given service. When service is nil it falls back
+// to creating a per-instance store (backward-compatible with tests).
+func newWorkflowsLooperWithService(cfg *config.LooperConfig, svc *WorkflowStateService) *WorkflowsLooper {
+	var store workflowToolStateStore
+	if svc != nil {
+		store = svc.store
+	} else {
+		store = newWorkflowToolStateStoreFromConfig(workflowFlowRuntimeConfig(cfg))
+	}
+	return &WorkflowsLooper{
+		BaseLooper: NewBaseLooper(cfg),
+		toolStates: store,
+	}
+}
+
 func workflowFlowRuntimeConfig(cfg *config.LooperConfig) config.FlowRuntimeConfig {
 	if cfg == nil {
 		return config.FlowRuntimeConfig{}
