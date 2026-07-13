@@ -112,18 +112,18 @@ func BuildSearchQuery(ctx context.Context, history []ConversationMessage, query 
 	historyText := formatHistoryForPrompt(history)
 	userPrompt := fmt.Sprintf("History:\n%s\n\nQuery: %s\n\nRewritten query:", historyText, query)
 
-	logging.Debugf("Memory: query rewrite: original=%q, history_len=%d", truncateForLog(query, 80), len(history))
+	logging.Debugf("Memory: query rewrite started: query_chars=%d, history_messages=%d", len(query), len(history))
 
 	rewrittenQuery, err := callLLMForQueryRewrite(ctx, resolved, userPrompt)
 	if err != nil {
-		logging.Errorf("Memory: Query rewriting failed, using original: %v", err)
+		logging.Errorf("Memory: Query rewriting failed, using original: %s", safeErrorForLog(err))
 		return query, nil
 	}
 
 	rewrittenQuery = strings.TrimSpace(rewrittenQuery)
 	rewrittenQuery = strings.Trim(rewrittenQuery, "\"'")
 
-	logging.Debugf("Memory: query rewrite: result=%q", truncateForLog(rewrittenQuery, 80))
+	logging.Debugf("Memory: query rewrite completed: result_chars=%d", len(rewrittenQuery))
 
 	return rewrittenQuery, nil
 }

@@ -7,8 +7,13 @@ jobs:
   review:
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: write
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: tesslio/skill-review@main
+        with:
+          persist-credentials: false
+      # Pin the reviewed composite action. Its nested installers still receive
+      # only a read-only token, and comment creation is deliberately disabled.
+      - uses: tesslio/skill-review@c9357d3848c862bfe750e89c1c42599f3f45d483
+        with:
+          comment: false

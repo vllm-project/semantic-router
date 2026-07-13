@@ -1,0 +1,69 @@
+name: ONNX Binding CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - main
+    paths:
+      - "onnx-binding/**"
+      - "src/semantic-router/**"
+      - "tools/make/rust.mk"
+      - ".github/workflows/onnx-binding-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "onnx-binding/**"
+      - "src/semantic-router/**"
+      - "tools/make/rust.mk"
+      - ".github/workflows/onnx-binding-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  model-free-contracts:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.90
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: false
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            onnx-binding/target/
+          key: ${{ runner.os }}-onnx-cargo-${{ hashFiles('onnx-binding/Cargo.lock', 'onnx-binding/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-onnx-cargo-
+
+      - name: Run model-free ONNX binding and router contracts
+        run: make test-onnx-binding-ci

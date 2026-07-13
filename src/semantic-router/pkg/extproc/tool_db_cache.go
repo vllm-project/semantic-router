@@ -53,24 +53,34 @@ func (r *OpenAIRouter) getOrLoadToolDatabaseForSelection(absPath string) (*tools
 		return db, nil
 	}
 
-	emb := r.Config.EmbeddingModels
-	provider, err := toolsEmbeddingProvider(r.Config)
+	db, err := r.newToolSelectionDatabase()
 	if err != nil {
 		return nil, err
 	}
-	db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
-		Enabled:             true,
-		SimilarityThreshold: 0,
-		ModelType:           emb.EmbeddingConfig.ModelType,
-		TargetDimension:     emb.EmbeddingConfig.TargetDimension,
-		Provider:            provider,
-	})
 	if err := db.LoadToolsFromFile(absPath); err != nil {
 		return nil, err
 	}
 	r.toolSelectionDBByPath[absPath] = db
 	logging.Infof("tool_selection: loaded tools database %q (%d tools)", absPath, db.GetToolCount())
 	return db, nil
+}
+
+func (r *OpenAIRouter) newToolSelectionDatabase() (*tools.ToolsDatabase, error) {
+	plan, err := r.resolvedEmbeddingRuntimePlan()
+	if err != nil {
+		return nil, err
+	}
+	provider, err := toolsEmbeddingProvider(r.Config, plan)
+	if err != nil {
+		return nil, err
+	}
+	return tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
+		Enabled:             true,
+		SimilarityThreshold: 0,
+		ModelType:           plan.ModelType,
+		TargetDimension:     r.Config.EmbeddingModels.EmbeddingConfig.TargetDimension,
+		Provider:            provider,
+	}), nil
 }
 
 func (r *OpenAIRouter) toolDatabaseForSelectionPlugin(sel *config.ToolSelectionPluginConfig) (*tools.ToolsDatabase, bool, error) {

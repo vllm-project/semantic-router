@@ -1,14 +1,11 @@
 package auth
 
 import (
-	"bufio"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -22,10 +19,8 @@ const (
 	maximumPasswordCodePoints = 1024
 	passwordHashCost          = 12
 	// #nosec G101 -- public on-disk hash format marker, not a credential.
-	passwordHashPrefix        = "$vsr$bcrypt-sha256$v1$"
-	maximumBlocklistFileBytes = 8 * 1024 * 1024
-	maximumBlocklistLineBytes = 4096
-	maximumBlocklistEntries   = 250_000
+	passwordHashPrefix         = "$vsr$bcrypt-sha256$v1$"
+	bcryptMaximumPasswordBytes = 72
 )
 
 const (
@@ -154,77 +149,6 @@ func newLocalPasswordBlocklist(additionalValues ...string) *localPasswordBlockli
 	}
 }
 
-// LoadPasswordBlocklist merges a bounded local newline-delimited blocklist
-// with the built-in minimum. Exactly empty lines and lines whose first byte is
-// # are ignored. Leading and trailing whitespace is otherwise significant so
-// that complete whitespace-bearing passwords can be represented. Loading
-// fails closed at startup; entries are never logged.
-func LoadPasswordBlocklist(path string) (PasswordBlocklist, error) {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return newLocalPasswordBlocklist(), nil
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("open password blocklist: %w", err)
-	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil {
-		return nil, fmt.Errorf("stat password blocklist: %w", err)
-	}
-	if !info.Mode().IsRegular() {
-		return nil, errors.New("password blocklist must be a regular file")
-	}
-	if info.Size() > maximumBlocklistFileBytes {
-		return nil, fmt.Errorf("password blocklist exceeds %d bytes", maximumBlocklistFileBytes)
-	}
-
-	entries, err := scanPasswordBlocklist(file)
-	if err != nil {
-		return nil, err
-	}
-	if len(entries) == 0 {
-		return nil, errors.New("password blocklist contains no usable entries")
-	}
-	return newLocalPasswordBlocklist(entries...), nil
-}
-
-func scanPasswordBlocklist(reader io.Reader) ([]string, error) {
-	limited := &io.LimitedReader{R: reader, N: maximumBlocklistFileBytes + 1}
-	entries := make([]string, 0, 1024)
-	scanner := bufio.NewScanner(limited)
-	// The explicit byte check defines the line limit. The extra two scanner
-	// bytes accommodate the delimiter (including CRLF) at the exact boundary.
-	scanner.Buffer(make([]byte, 4096), maximumBlocklistLineBytes+2)
-	for scanner.Scan() {
-		if len(scanner.Bytes()) > maximumBlocklistLineBytes {
-			return nil, fmt.Errorf(
-				"password blocklist line exceeds %d bytes",
-				maximumBlocklistLineBytes,
-			)
-		}
-		entry := scanner.Text()
-		if entry == "" || strings.HasPrefix(entry, "#") {
-			continue
-		}
-		if !utf8.ValidString(entry) {
-			return nil, errors.New("password blocklist contains invalid Unicode")
-		}
-		entries = append(entries, norm.NFC.String(entry))
-		if len(entries) > maximumBlocklistEntries {
-			return nil, fmt.Errorf("password blocklist exceeds %d entries", maximumBlocklistEntries)
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("read password blocklist: %w", err)
-	}
-	if limited.N == 0 {
-		return nil, fmt.Errorf("password blocklist exceeds %d bytes", maximumBlocklistFileBytes)
-	}
-	return entries, nil
-}
-
 func (b *localPasswordBlocklist) Blocked(password, accountEmail string) bool {
 	normalized := norm.NFC.String(password)
 	if _, found := b.exactValues[normalized]; found {
@@ -273,6 +197,19 @@ func hashVersionedPassword(normalizedPassword string) (string, error) {
 	return passwordHashPrefix + string(hash), nil
 }
 
+// hashPasswordForStorage preserves rollback compatibility for ordinary
+// already-normalized bcrypt inputs. Passwords that exceed bcrypt's 72-byte
+// boundary, or whose Unicode normalization changes their byte sequence, use
+// the versioned SHA-256 prehash format so their complete normalized value is
+// authenticated instead of truncated.
+func hashPasswordForStorage(originalPassword, normalizedPassword string) (string, error) {
+	if originalPassword == normalizedPassword && len([]byte(normalizedPassword)) <= bcryptMaximumPasswordBytes {
+		hash, err := bcrypt.GenerateFromPassword([]byte(normalizedPassword), passwordHashCost)
+		return string(hash), err
+	}
+	return hashVersionedPassword(normalizedPassword)
+}
+
 func verifyStoredPassword(hash, password string) bool {
 	if hash == "" || !utf8.ValidString(password) {
 		return false
@@ -285,13 +222,9 @@ func verifyStoredPassword(hash, password string) bool {
 		stored := strings.TrimPrefix(hash, passwordHashPrefix)
 		return bcrypt.CompareHashAndPassword([]byte(stored), prehash) == nil
 	}
-	// Legacy rows contain a plain bcrypt hash. Keep verification during the
-	// migration window; successful login upgrades the row to the versioned form.
+	// Legacy rows contain a plain bcrypt hash. Keep them byte-stable during the
+	// dual-read release so the ordinary-password path remains rollback-safe.
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
-}
-
-func passwordHashNeedsUpgrade(hash string) bool {
-	return hash != "" && !strings.HasPrefix(hash, passwordHashPrefix)
 }
 
 func passwordsEquivalent(first, second string) bool {

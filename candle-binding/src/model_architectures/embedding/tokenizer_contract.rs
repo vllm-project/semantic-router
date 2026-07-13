@@ -95,6 +95,21 @@ pub(crate) fn encode_embedding_checked(
     maximum: usize,
     model: &str,
 ) -> Result<Encoding, EmbeddingTokenError> {
+    let encoding = encode_embedding_for_routing(tokenizer, text, model)?;
+    validate_embedding_token_count(encoding.get_ids().len(), maximum, model)?;
+    Ok(encoding)
+}
+
+/// Encode one input without applying a model context limit.
+///
+/// Auto-routing uses this helper to measure the exact tokenizer output before
+/// choosing a model. The selected model's checked encode still enforces its
+/// context window before tensor construction.
+pub(crate) fn encode_embedding_for_routing(
+    tokenizer: &Tokenizer,
+    text: &str,
+    model: &str,
+) -> Result<Encoding, EmbeddingTokenError> {
     assert_embedding_tokenizer_prepared(tokenizer, model)?;
     let encoding =
         tokenizer
@@ -103,7 +118,7 @@ pub(crate) fn encode_embedding_checked(
                 model: model.to_string(),
                 detail: format!("{error:?}"),
             })?;
-    validate_embedding_token_count(encoding.get_ids().len(), maximum, model)?;
+    validate_embedding_token_count(encoding.get_ids().len(), usize::MAX, model)?;
     Ok(encoding)
 }
 
@@ -113,13 +128,7 @@ pub(crate) fn encode_embedding_batch_checked(
     maximum: usize,
     model: &str,
 ) -> Result<Vec<Encoding>, EmbeddingTokenError> {
-    assert_embedding_tokenizer_prepared(tokenizer, model)?;
-    let encodings = tokenizer
-        .encode_batch(texts.to_vec(), true)
-        .map_err(|error| EmbeddingTokenError::Tokenization {
-            model: model.to_string(),
-            detail: format!("batch: {error:?}"),
-        })?;
+    let encodings = encode_embedding_batch_for_routing(tokenizer, texts, model)?;
     for (index, encoding) in encodings.iter().enumerate() {
         validate_embedding_token_count(encoding.get_ids().len(), maximum, model).map_err(
             |error| match error {
@@ -132,6 +141,35 @@ pub(crate) fn encode_embedding_batch_checked(
                     count,
                     maximum,
                 },
+                other => other,
+            },
+        )?;
+    }
+    Ok(encodings)
+}
+
+/// Encode a batch without applying a model context limit so auto-routing can
+/// compare the true tokenizer lengths of every available candidate.
+pub(crate) fn encode_embedding_batch_for_routing(
+    tokenizer: &Tokenizer,
+    texts: &[&str],
+    model: &str,
+) -> Result<Vec<Encoding>, EmbeddingTokenError> {
+    assert_embedding_tokenizer_prepared(tokenizer, model)?;
+    let encodings = tokenizer
+        .encode_batch(texts.to_vec(), true)
+        .map_err(|error| EmbeddingTokenError::Tokenization {
+            model: model.to_string(),
+            detail: format!("batch: {error:?}"),
+        })?;
+    for (index, encoding) in encodings.iter().enumerate() {
+        validate_embedding_token_count(encoding.get_ids().len(), usize::MAX, model).map_err(
+            |error| match error {
+                EmbeddingTokenError::EmptyEncoding { model } => {
+                    EmbeddingTokenError::EmptyEncoding {
+                        model: format!("texts[{index}] {model}"),
+                    }
+                }
                 other => other,
             },
         )?;

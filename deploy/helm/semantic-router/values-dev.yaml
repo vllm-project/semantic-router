@@ -20,6 +20,7 @@ persistence:
 
 dashboard:
   enabled: true
+  securityProfile: development
 
 autoscaling:
   enabled: false

@@ -3,19 +3,26 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
-const weatherRequestTimeout = 12 * time.Second
-
-var (
+const (
+	weatherRequestTimeout   = 12 * time.Second
+	weatherMaxResponseSize  = 2 * 1024 * 1024
+	weatherMaxLocationRunes = 256
 	weatherGeocodingBaseURL = "https://geocoding-api.open-meteo.com"
 	weatherForecastBaseURL  = "https://api.open-meteo.com"
 )
+
+var errWeatherResultsNotFound = errors.New("no weather results found")
+
+var errWeatherUpstream = errors.New("weather upstream request failed")
 
 type weatherRequest struct {
 	Location string `json:"location"`
@@ -82,6 +89,18 @@ type weatherForecastResponse struct {
 }
 
 func WeatherHandler() http.HandlerFunc {
+	return weatherHandlerWithClient(
+		newPublicOutboundHTTPClient(weatherRequestTimeout),
+		weatherGeocodingBaseURL,
+		weatherForecastBaseURL,
+	)
+}
+
+func weatherHandlerWithClient(
+	client outboundHTTPClient,
+	geocodingBaseURL string,
+	forecastBaseURL string,
+) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -89,8 +108,8 @@ func WeatherHandler() http.HandlerFunc {
 		}
 
 		var req weatherRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		if status, err := decodeBoundedJSON(w, r, outboundMaxRequestBodyBytes, &req); err != nil {
+			http.Error(w, "Invalid request body", status)
 			return
 		}
 
@@ -99,25 +118,31 @@ func WeatherHandler() http.HandlerFunc {
 			http.Error(w, "location is required", http.StatusBadRequest)
 			return
 		}
+		if utf8.RuneCountInString(location) > weatherMaxLocationRunes {
+			http.Error(w, "location is too long", http.StatusRequestEntityTooLarge)
+			return
+		}
 
 		unit := normalizeWeatherUnit(req.Unit)
 
 		ctx, cancel := context.WithTimeout(r.Context(), weatherRequestTimeout)
 		defer cancel()
 
-		result, err := fetchWeather(ctx, location, unit)
+		result, err := fetchWeather(ctx, client, geocodingBaseURL, forecastBaseURL, location, unit)
 		if err != nil {
 			status := http.StatusBadGateway
-			if strings.Contains(err.Error(), "no weather results") {
+			message := "Weather service temporarily unavailable"
+			if errors.Is(err, errWeatherResultsNotFound) {
 				status = http.StatusNotFound
+				message = "No weather results found"
 			}
-			http.Error(w, err.Error(), status)
+			http.Error(w, message, status)
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(result); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to encode weather response: %v", err), http.StatusInternalServerError)
+			http.Error(w, "Failed to encode weather response", http.StatusInternalServerError)
 		}
 	}
 }
@@ -131,13 +156,20 @@ func normalizeWeatherUnit(unit string) string {
 	}
 }
 
-func fetchWeather(ctx context.Context, location string, unit string) (*weatherLookupResult, error) {
-	target, err := geocodeLocation(ctx, location)
+func fetchWeather(
+	ctx context.Context,
+	client outboundHTTPClient,
+	geocodingBaseURL string,
+	forecastBaseURL string,
+	location string,
+	unit string,
+) (*weatherLookupResult, error) {
+	target, err := geocodeLocation(ctx, client, geocodingBaseURL, location)
 	if err != nil {
 		return nil, err
 	}
 
-	forecast, err := fetchWeatherForecast(ctx, target, unit)
+	forecast, err := fetchWeatherForecast(ctx, client, forecastBaseURL, target, unit)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +200,12 @@ func fetchWeather(ctx context.Context, location string, unit string) (*weatherLo
 	}, nil
 }
 
-func geocodeLocation(ctx context.Context, location string) (*weatherLocationResult, error) {
+func geocodeLocation(
+	ctx context.Context,
+	client outboundHTTPClient,
+	baseURL string,
+	location string,
+) (*weatherLocationResult, error) {
 	query := url.Values{}
 	query.Set("name", location)
 	query.Set("count", "1")
@@ -176,11 +213,11 @@ func geocodeLocation(ctx context.Context, location string) (*weatherLocationResu
 	query.Set("format", "json")
 
 	var payload weatherGeocodingResponse
-	if err := fetchJSON(ctx, weatherGeocodingBaseURL+"/v1/search?"+query.Encode(), &payload); err != nil {
+	if err := fetchJSON(ctx, client, baseURL+"/v1/search?"+query.Encode(), &payload); err != nil {
 		return nil, err
 	}
 	if len(payload.Results) == 0 {
-		return nil, fmt.Errorf("no weather results found for %q", location)
+		return nil, errWeatherResultsNotFound
 	}
 
 	result := payload.Results[0]
@@ -194,7 +231,13 @@ func geocodeLocation(ctx context.Context, location string) (*weatherLocationResu
 	}, nil
 }
 
-func fetchWeatherForecast(ctx context.Context, location *weatherLocationResult, unit string) (*weatherForecastResponse, error) {
+func fetchWeatherForecast(
+	ctx context.Context,
+	client outboundHTTPClient,
+	baseURL string,
+	location *weatherLocationResult,
+	unit string,
+) (*weatherForecastResponse, error) {
 	query := url.Values{}
 	query.Set("latitude", fmt.Sprintf("%.6f", location.Latitude))
 	query.Set("longitude", fmt.Sprintf("%.6f", location.Longitude))
@@ -205,31 +248,47 @@ func fetchWeatherForecast(ctx context.Context, location *weatherLocationResult, 
 	query.Set("precipitation_unit", "mm")
 
 	var payload weatherForecastResponse
-	if err := fetchJSON(ctx, weatherForecastBaseURL+"/v1/forecast?"+query.Encode(), &payload); err != nil {
+	if err := fetchJSON(ctx, client, baseURL+"/v1/forecast?"+query.Encode(), &payload); err != nil {
 		return nil, err
 	}
 
 	return &payload, nil
 }
 
-func fetchJSON(ctx context.Context, targetURL string, output interface{}) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
+func fetchJSON(
+	ctx context.Context,
+	client outboundHTTPClient,
+	targetURL string,
+	output interface{},
+) error {
+	parsedURL, err := parseOutboundHTTPURL(targetURL)
 	if err != nil {
-		return fmt.Errorf("failed to build request: %w", err)
+		return errWeatherUpstream
+	}
+	if validationErr := client.ValidateURL(ctx, parsedURL.String()); validationErr != nil {
+		return errWeatherUpstream
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsedURL.String(), nil)
+	if err != nil {
+		return errWeatherUpstream
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to fetch weather data: %w", err)
+		return errWeatherUpstream
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("weather upstream returned %s", resp.Status)
+		return errWeatherUpstream
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(output); err != nil {
-		return fmt.Errorf("failed to decode weather response: %w", err)
+	body, err := readBoundedOutboundBody(resp.Body, weatherMaxResponseSize)
+	if err != nil {
+		return err
+	}
+	if decodeErr := json.Unmarshal(body, output); decodeErr != nil {
+		return errWeatherUpstream
 	}
 	return nil
 }

@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -29,7 +30,13 @@ func setupAuthRoutes(mux *http.ServeMux, cfg *config.Config) (*auth.Service, err
 	if err != nil {
 		return nil, fmt.Errorf("initialize auth store: %w", err)
 	}
-	blocklist, err := auth.LoadPasswordBlocklist(cfg.PasswordBlocklistPath)
+	blocklist, blocklistMetadata, err := auth.LoadPasswordBlocklistForProfile(
+		auth.PasswordBlocklistLoadConfig{
+			Profile:        cfg.SecurityProfile,
+			Path:           cfg.PasswordBlocklistPath,
+			ExpectedSHA256: cfg.PasswordBlocklistSHA256,
+		},
+	)
 	if err != nil {
 		_ = store.Close()
 		return nil, fmt.Errorf("load password blocklist: %w", err)
@@ -54,8 +61,26 @@ func setupAuthRoutes(mux *http.ServeMux, cfg *config.Config) (*auth.Service, err
 	}
 
 	registerAuthProxyRoutes(mux, authSvc)
+	registerPasswordPolicyMetadataRoute(mux, blocklistMetadata)
 	auth.RegisterAdminRoutes(mux, authSvc)
 	return authSvc, nil
+}
+
+func registerPasswordPolicyMetadataRoute(
+	mux *http.ServeMux,
+	metadata auth.PasswordBlocklistMetadata,
+) {
+	registerAuthMethodRoute(
+		mux,
+		"/api/auth/password-policy",
+		http.MethodGet,
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(metadata); err != nil {
+				log.Printf("encode password policy metadata: %v", err)
+			}
+		},
+	)
 }
 
 func registerAuthProxyRoutes(mux *http.ServeMux, authSvc *auth.Service) {

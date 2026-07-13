@@ -214,17 +214,21 @@ export const StatusTab: React.FC<StatusTabProps> = ({
       setRoomBridgeEvents((previous) => [...previous.slice(-19), event])
       if (iframeRef.current) postRoomEventToFrame(iframeRef.current, linkedRoomId, event)
     })
-    const unsubscribeSurface = listenForSurfaceEvents(linkedRoomId, (_roomId, payload) => {
-      subscription.sendSurfaceEvent(payload, {
-        senderType: 'worker',
-        senderId: selectedContainer,
-        senderName: selectedContainer,
-      })
-      setSurfaceEvents((previous) => [
-        ...previous.slice(-9),
-        { source: 'clawos-room-bridge', type: 'surface_event', roomId: linkedRoomId, payload },
-      ])
-    })
+    const unsubscribeSurface = listenForSurfaceEvents(
+      linkedRoomId,
+      (_roomId, payload) => {
+        subscription.sendSurfaceEvent(payload, {
+          senderType: 'worker',
+          senderId: selectedContainer,
+          senderName: selectedContainer,
+        })
+        setSurfaceEvents((previous) => [
+          ...previous.slice(-9),
+          { source: 'clawos-room-bridge', type: 'surface_event', roomId: linkedRoomId, payload },
+        ])
+      },
+      () => iframeRef.current?.contentWindow ?? null,
+    )
     return () => {
       unsubscribeSurface()
       subscription.close()

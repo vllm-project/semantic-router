@@ -12,7 +12,7 @@ This directory holds smoke, demo, and harness manifests that the repository uses
 `global.model_catalog.embeddings.semantic.embedding_config.backend: openai_compatible`
 without changing the default `config/config.yaml`. It uses mock chat backends on
 `host.docker.internal:18000` and `host.docker.internal:18001`, and reads the
-embedding provider credential from `OPENAI_API_KEY`. For Azure OpenAI-compatible
+embedding provider credential from `VLLM_SR_EMBEDDING_API_KEY`. For Azure OpenAI-compatible
 providers, change `global.model_catalog.embeddings.semantic.endpoint.base_url` to
 `https://<resource>.openai.azure.com/openai/v1` before running the smoke.
 

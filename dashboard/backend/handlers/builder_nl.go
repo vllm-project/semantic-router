@@ -18,8 +18,8 @@ func BuilderNLGenerateHandler(configPath, envoyURL string) http.HandlerFunc {
 		}
 
 		var req BuilderNLGenerateRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeBuilderNLError(w, http.StatusBadRequest, fmt.Sprintf("Invalid request body: %v", err))
+		if status, err := decodeBoundedJSON(w, r, documentRequestBodyLimit, &req); err != nil {
+			writeBuilderNLError(w, status, "Invalid request body")
 			return
 		}
 
@@ -46,8 +46,8 @@ func BuilderNLGenerateStreamHandler(configPath, envoyURL string) http.HandlerFun
 		}
 
 		var req BuilderNLGenerateRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeBuilderNLError(w, http.StatusBadRequest, fmt.Sprintf("Invalid request body: %v", err))
+		if status, err := decodeBoundedJSON(w, r, documentRequestBodyLimit, &req); err != nil {
+			writeBuilderNLError(w, status, "Invalid request body")
 			return
 		}
 
@@ -109,8 +109,8 @@ func BuilderNLVerifyHandler(configPath, envoyURL string) http.HandlerFunc {
 		}
 
 		var req BuilderNLVerifyRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeBuilderNLError(w, http.StatusBadRequest, fmt.Sprintf("Invalid request body: %v", err))
+		if status, err := decodeBoundedJSON(w, r, smallJSONRequestBodyLimit, &req); err != nil {
+			writeBuilderNLError(w, status, "Invalid request body")
 			return
 		}
 

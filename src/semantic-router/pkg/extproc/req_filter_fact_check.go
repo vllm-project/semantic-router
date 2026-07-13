@@ -63,7 +63,7 @@ func (r *OpenAIRouter) checkRequestHasTools(ctx *RequestContext) {
 	// Parse request to check for tools
 	var requestMap map[string]interface{}
 	if err := json.Unmarshal(ctx.OriginalRequestBody, &requestMap); err != nil {
-		logging.Debugf("Failed to parse request for tool check: %v", err)
+		logging.Debugf("Failed to parse request for tool check: %s", safeErrorForLog(err))
 		return
 	}
 

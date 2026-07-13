@@ -121,7 +121,7 @@ func (f *ResponseAPIFilter) TranslateRequest(ctx context.Context, body []byte) (
 	if req.PreviousResponseID != "" {
 		history, err := f.store.GetConversationChain(ctx, req.PreviousResponseID)
 		if err != nil && !errors.Is(err, responsestore.ErrNotFound) {
-			logging.Warnf("Failed to fetch conversation history for %s: %v", req.PreviousResponseID, err)
+			logging.Warnf("Failed to fetch conversation history for %s: %s", req.PreviousResponseID, safeErrorForLog(err))
 		}
 		respCtx.ConversationHistory = history
 	}
@@ -191,7 +191,7 @@ func isResponseAPIErrorBody(body []byte) bool {
 func parseChatCompletionResponse(body []byte) (*openai.ChatCompletion, bool) {
 	var completionResp openai.ChatCompletion
 	if err := json.Unmarshal(body, &completionResp); err != nil {
-		logging.Errorf("Response API: Failed to parse completion response: %v", err)
+		logging.Errorf("Response API: Failed to parse completion response: %s", safeErrorForLog(err))
 		return nil, false
 	}
 
@@ -231,7 +231,7 @@ func (f *ResponseAPIFilter) maybeStoreTranslatedResponse(
 	if shouldStore && f.store.IsEnabled() {
 		stored := f.toStoredResponse(respCtx.OriginalRequest, responseAPIResp)
 		if err := f.store.StoreResponse(ctx, stored); err != nil {
-			logging.Warnf("Response API: Failed to store response: %v", err)
+			logging.Warnf("Response API: Failed to store response: %s", safeErrorForLog(err))
 		}
 	}
 }
@@ -242,7 +242,7 @@ func marshalTranslatedResponse(
 ) ([]byte, bool) {
 	translatedBody, err := json.Marshal(responseAPIResp)
 	if err != nil {
-		logging.Errorf("Response API: Failed to marshal response: %v", err)
+		logging.Errorf("Response API: Failed to marshal response: %s", safeErrorForLog(err))
 		return originalBody, false
 	}
 
@@ -316,7 +316,7 @@ func (f *ResponseAPIFilter) HandleGetResponse(ctx context.Context, responseID st
 		if errors.Is(err, responsestore.ErrNotFound) {
 			return createResponseAPIError(404, "Response not found: "+responseID), nil
 		}
-		logging.Errorf("Response API: Error getting response %s: %v", responseID, err)
+		logging.Errorf("Response API: Error getting response %s: %s", responseID, safeErrorForLog(err))
 		return createResponseAPIError(500, "Error retrieving response"), nil
 	}
 
@@ -326,7 +326,7 @@ func (f *ResponseAPIFilter) HandleGetResponse(ctx context.Context, responseID st
 	// Marshal response
 	body, err := json.Marshal(resp)
 	if err != nil {
-		logging.Errorf("Response API: Error marshaling response: %v", err)
+		logging.Errorf("Response API: Error marshaling response: %s", safeErrorForLog(err))
 		return createResponseAPIError(500, "Error serializing response"), nil
 	}
 
@@ -345,7 +345,7 @@ func (f *ResponseAPIFilter) HandleDeleteResponse(ctx context.Context, responseID
 		if errors.Is(err, responsestore.ErrNotFound) {
 			return createResponseAPIError(404, "Response not found: "+responseID), nil
 		}
-		logging.Errorf("Response API: Error deleting response %s: %v", responseID, err)
+		logging.Errorf("Response API: Error deleting response %s: %s", responseID, safeErrorForLog(err))
 		return createResponseAPIError(500, "Error deleting response"), nil
 	}
 
@@ -358,7 +358,7 @@ func (f *ResponseAPIFilter) HandleDeleteResponse(ctx context.Context, responseID
 
 	body, err := json.Marshal(deleteResp)
 	if err != nil {
-		logging.Errorf("Response API: Error marshaling delete response: %v", err)
+		logging.Errorf("Response API: Error marshaling delete response: %s", safeErrorForLog(err))
 		return createResponseAPIError(500, "Error serializing response"), nil
 	}
 
@@ -377,7 +377,7 @@ func (f *ResponseAPIFilter) HandleGetInputItems(ctx context.Context, responseID 
 		if errors.Is(err, responsestore.ErrNotFound) {
 			return createResponseAPIError(404, "Response not found: "+responseID), nil
 		}
-		logging.Errorf("Response API: Error getting response %s: %v", responseID, err)
+		logging.Errorf("Response API: Error getting response %s: %s", responseID, safeErrorForLog(err))
 		return createResponseAPIError(500, "Error retrieving response"), nil
 	}
 
@@ -400,7 +400,7 @@ func (f *ResponseAPIFilter) HandleGetInputItems(ctx context.Context, responseID 
 
 	body, err := json.Marshal(listResp)
 	if err != nil {
-		logging.Errorf("Response API: Error marshaling input items: %v", err)
+		logging.Errorf("Response API: Error marshaling input items: %s", safeErrorForLog(err))
 		return createResponseAPIError(500, "Error serializing response"), nil
 	}
 

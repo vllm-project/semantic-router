@@ -37,7 +37,7 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 		return requestBody, nil
 	}
 
-	logging.Debugf("Memory: retrieval flow query=%q", truncateForLog(userContent, 80))
+	logging.Debugf("Memory: retrieval flow started: query_chars=%d", len(userContent))
 	searchQuery, userID, shouldSearch := r.prepareMemorySearchQuery(ctx, userContent, openAIRequest)
 	if !shouldSearch {
 		return requestBody, nil
@@ -46,8 +46,8 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	memories, err := store.Retrieve(ctx.TraceContext, retrieveOpts)
 	if err != nil {
 		metrics.RecordPluginExecution("memory", ctx.VSRSelectedDecisionName, "retrieval_error", 0)
-		logging.Errorf("Memory: retrieval failed for user=%s decision=%s query=%q: %v",
-			userID, ctx.VSRSelectedDecisionName, truncateForLog(searchQuery, 60), err)
+		logging.Errorf("Memory: retrieval failed for user=%s decision=%s query_chars=%d: %s",
+			userID, ctx.VSRSelectedDecisionName, len(searchQuery), safeErrorForLog(err))
 		return requestBody, fmt.Errorf("memory retrieval failed: %w", err)
 	}
 	memories = r.filterRetrievedMemories(memoryPluginConfig, memories, userID)
@@ -86,7 +86,7 @@ func (r *OpenAIRouter) resolveMemoryPluginConfig(
 	// Check config-based per-route disable
 	requestPath := ctx.Headers[":path"]
 	if r.isMemoryDisabledForRoute(requestPath) {
-		logging.Debugf("Memory: Disabled for route %s via config (SDK-managed memory opt-out)", requestPath)
+		logging.Debugf("Memory: Disabled for route %s via config (SDK-managed memory opt-out)", normalizeRequestPath(requestPath))
 		return memoryPluginConfig, false
 	}
 
@@ -112,7 +112,7 @@ func (r *OpenAIRouter) prepareMemorySearchQuery(
 	history := r.extractConversationHistory(openAIRequest)
 	searchQuery, err := BuildSearchQuery(ctx.TraceContext, history, userContent, r.Config)
 	if err != nil {
-		logging.Warnf("Memory: Query rewriting failed, using original query: %v", err)
+		logging.Warnf("Memory: Query rewriting failed, using original query: %s", safeErrorForLog(err))
 		searchQuery = userContent
 	}
 
@@ -135,7 +135,7 @@ func (r *OpenAIRouter) extractConversationHistory(
 
 	history, err := ExtractConversationHistory(messagesJSON)
 	if err != nil {
-		logging.Warnf("Memory: Failed to extract conversation history: %v", err)
+		logging.Warnf("Memory: Failed to extract conversation history: %s", safeErrorForLog(err))
 		return []ConversationMessage{}
 	}
 
@@ -218,7 +218,7 @@ func (r *OpenAIRouter) injectRetrievedMemories(
 
 	injectedBody, err := injectMemoryMessages(requestBody, ctx.MemoryContext)
 	if err != nil {
-		logging.Warnf("Memory: Failed to inject memory context: %v", err)
+		logging.Warnf("Memory: Failed to inject memory context: %s", safeErrorForLog(err))
 		metrics.RecordPluginExecution("memory", ctx.VSRSelectedDecisionName, "injection_error", 0)
 		ctx.MemoryContext = ""
 		return requestBody

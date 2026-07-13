@@ -150,7 +150,6 @@ func TestValidUnsafeRequestOriginProtectsCookieSessions(t *testing.T) {
 		{name: "fetch metadata fallback", source: CredentialSourceCookie, fetchSite: "same-origin", wantAllowed: true},
 		{name: "same-site fetch metadata", source: CredentialSourceCookie, fetchSite: "same-site", wantAllowed: false},
 		{name: "cookie without browser evidence", source: CredentialSourceCookie, wantAllowed: false},
-		{name: "query without browser evidence", source: CredentialSourceQuery, wantAllowed: false},
 		{name: "non-browser bearer", source: CredentialSourceBearer, wantAllowed: true},
 	}
 	for _, test := range tests {

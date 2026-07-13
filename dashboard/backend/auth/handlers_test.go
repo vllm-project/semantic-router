@@ -240,6 +240,7 @@ func TestLoginHandlerReturnsEffectivePermissions(t *testing.T) {
 		strings.NewReader(`{"email":"login@example.com","password":"secret-password"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(authResponseModeHeader, authResponseModeBearer)
 	mux.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusOK {

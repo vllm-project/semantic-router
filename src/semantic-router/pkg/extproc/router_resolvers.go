@@ -121,8 +121,8 @@ func buildAuthzProvider(cfg *config.RouterConfig, provider config.AuthzProviderC
 }
 
 func logValidationErrors(prefix string, validationErrors []string) {
-	for _, validationError := range validationErrors {
-		logging.Errorf("%s config validation error: %s", prefix, validationError)
+	for index := range validationErrors {
+		logging.Errorf("%s config validation error at index %d", prefix, index)
 	}
 }
 
@@ -227,7 +227,7 @@ func buildEnvoyRateLimitProvider(providerCfg config.RateLimitProviderConfig) rat
 
 	envoyProvider, err := ratelimit.NewEnvoyRLSProvider(providerCfg.Address, domain)
 	if err != nil {
-		logging.Errorf("RateLimit: failed to create envoy-ratelimit provider: %v", err)
+		logging.Errorf("RateLimit: failed to create envoy-ratelimit provider: %s", safeErrorForLog(err))
 		return nil
 	}
 	logging.Infof("RateLimit: envoy-ratelimit provider at %s (domain=%s)", providerCfg.Address, domain)

@@ -90,7 +90,9 @@ def test_append_passthrough_env_vars_collects_dashboard_auth_and_masks_secrets(
         "DASHBOARD_ADMIN_EMAIL": "admin@example.com",
         "DASHBOARD_ADMIN_PASSWORD": "admin-password-value",
         "DASHBOARD_ADMIN_NAME": "Local Admin",
+        "DASHBOARD_SECURITY_PROFILE": "production",
         "DASHBOARD_PASSWORD_BLOCKLIST_PATH": "/tmp/password-blocklist.txt",
+        "DASHBOARD_PASSWORD_BLOCKLIST_SHA256": "a" * 64,
         "DASHBOARD_ALLOW_OPEN_BOOTSTRAP": "false",
     }
     for name, value in values.items():

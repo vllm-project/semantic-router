@@ -2,13 +2,24 @@ package handlers
 
 import (
 	"bytes"
+	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/jsonunicode"
+)
+
+const (
+	topologyMaxQueryBytes        = 16 << 10
+	topologyMaxResponseBodyBytes = 4 << 20
+	topologyRouterTimeout        = 10 * time.Second
 )
 
 // TestQueryMode represents the test query mode
@@ -66,6 +77,7 @@ type TestQueryResult struct {
 // routerAPIURL: the Router API URL for dry-run mode (real classification)
 // configPath: path to config.yaml for simulate mode (local simulation)
 func TopologyTestQueryHandler(configPath, routerAPIURL string) http.HandlerFunc {
+	client := newTopologyRouterHTTPClient()
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -74,13 +86,17 @@ func TopologyTestQueryHandler(configPath, routerAPIURL string) http.HandlerFunc 
 
 		// Parse request
 		var req TestQueryRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		if status, err := decodeBoundedJSON(w, r, smallJSONRequestBodyLimit, &req); err != nil {
+			http.Error(w, "Invalid request body", status)
 			return
 		}
 
 		if req.Query == "" {
 			http.Error(w, "Query cannot be empty", http.StatusBadRequest)
+			return
+		}
+		if len([]byte(req.Query)) > topologyMaxQueryBytes {
+			http.Error(w, "Query is too large", http.StatusBadRequest)
 			return
 		}
 
@@ -95,7 +111,7 @@ func TopologyTestQueryHandler(configPath, routerAPIURL string) http.HandlerFunc 
 
 		if req.Mode == TestQueryModeDryRun && routerAPIURL != "" {
 			// Dry-run mode: call real Router API for actual classification
-			result = callRouterAPI(req, routerAPIURL, configPath)
+			result = callRouterAPI(r.Context(), client, req, routerAPIURL, configPath)
 		} else {
 			// Simulate mode is no longer supported
 			result = &TestQueryResult{
@@ -164,7 +180,13 @@ type RouterEvalResponse struct {
 }
 
 // callRouterAPI calls the real Router API for classification
-func callRouterAPI(req TestQueryRequest, routerAPIURL, configPath string) *TestQueryResult {
+func callRouterAPI(
+	ctx context.Context,
+	client *http.Client,
+	req TestQueryRequest,
+	routerAPIURL,
+	configPath string,
+) *TestQueryResult {
 	// Prepare request to Router API
 	intentReq := RouterIntentRequest{
 		Text: req.Query,
@@ -184,34 +206,26 @@ func callRouterAPI(req TestQueryRequest, routerAPIURL, configPath string) *TestQ
 	}
 
 	// Call Router eval API so topology can inspect all matched signals and signal scores.
-	apiURL := fmt.Sprintf("%s/api/v1/eval", strings.TrimSuffix(routerAPIURL, "/"))
-	httpReq, err := http.NewRequest("POST", apiURL, bytes.NewReader(reqBody))
+	apiURL, err := topologyRouterEvalURL(routerAPIURL)
+	if err != nil || client == nil {
+		return topologyRouterUnavailableResult(req)
+	}
+	callCtx, cancel := context.WithTimeout(ctx, topologyRouterTimeout)
+	defer cancel()
+	httpReq, err := http.NewRequestWithContext(callCtx, http.MethodPost, apiURL.String(), bytes.NewReader(reqBody))
 	if err != nil {
-		return &TestQueryResult{
-			Query:           req.Query,
-			Mode:            req.Mode,
-			HighlightedPath: []string{"client"},
-			Warning:         fmt.Sprintf("Failed to create request: %v", err),
-		}
+		return topologyRouterUnavailableResult(req)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		log.Printf("Router API call failed: %v", err)
-		return &TestQueryResult{
-			Query:           req.Query,
-			Mode:            req.Mode,
-			HighlightedPath: []string{"client"},
-			Warning:         fmt.Sprintf("Router API unavailable: %v", err),
-			IsAccurate:      false,
-		}
+		log.Printf("Router API call failed")
+		return topologyRouterUnavailableResult(req)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 		log.Printf("Router API returned %d for topology eval", resp.StatusCode)
 		return &TestQueryResult{
 			Query:           req.Query,
@@ -223,20 +237,76 @@ func callRouterAPI(req TestQueryRequest, routerAPIURL, configPath string) *TestQ
 	}
 
 	// Parse response
+	body, err := readBoundedOutboundBody(resp.Body, topologyMaxResponseBodyBytes)
+	if err != nil {
+		log.Printf("Router API topology response exceeded its read budget or failed")
+		return topologyRouterInvalidResponseResult(req)
+	}
 	var routerResp RouterEvalResponse
-	if err := json.NewDecoder(resp.Body).Decode(&routerResp); err != nil {
-		log.Printf("Failed to decode Router API response: %v", err)
-		return &TestQueryResult{
-			Query:           req.Query,
-			Mode:            req.Mode,
-			HighlightedPath: []string{"client"},
-			Warning:         "Failed to parse Router API response",
-			IsAccurate:      false,
-		}
+	if !jsonunicode.Valid(body) || json.Unmarshal(body, &routerResp) != nil {
+		log.Printf("Failed to decode Router API topology response")
+		return topologyRouterInvalidResponseResult(req)
 	}
 
 	// Convert Router response to TestQueryResult
 	return convertRouterResponse(req, &routerResp, configPath)
+}
+
+func topologyRouterEvalURL(raw string) (*url.URL, error) {
+	base, err := parseRouterClassifierProxyBaseURL(raw)
+	if err != nil {
+		return nil, err
+	}
+	target := *base
+	target.Path = strings.TrimRight(base.Path, "/") + "/api/v1/eval"
+	target.RawPath = ""
+	target.RawQuery = ""
+	target.Fragment = ""
+	return &target, nil
+}
+
+func newTopologyRouterHTTPClient() *http.Client {
+	dialer := &net.Dialer{Timeout: topologyRouterTimeout, KeepAlive: 30 * time.Second}
+	transport := &http.Transport{
+		Proxy:                  nil,
+		DialContext:            dialer.DialContext,
+		ForceAttemptHTTP2:      true,
+		MaxIdleConns:           20,
+		MaxIdleConnsPerHost:    10,
+		IdleConnTimeout:        90 * time.Second,
+		TLSHandshakeTimeout:    topologyRouterTimeout,
+		ResponseHeaderTimeout:  topologyRouterTimeout,
+		ExpectContinueTimeout:  time.Second,
+		MaxResponseHeaderBytes: outboundMaxResponseHeaderBytes,
+		TLSClientConfig:        &tls.Config{MinVersion: tls.VersionTLS12},
+	}
+	return &http.Client{
+		Transport: transport,
+		Timeout:   topologyRouterTimeout,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
+
+func topologyRouterUnavailableResult(req TestQueryRequest) *TestQueryResult {
+	return &TestQueryResult{
+		Query:           req.Query,
+		Mode:            req.Mode,
+		HighlightedPath: []string{"client"},
+		Warning:         "Router API unavailable",
+		IsAccurate:      false,
+	}
+}
+
+func topologyRouterInvalidResponseResult(req TestQueryRequest) *TestQueryResult {
+	return &TestQueryResult{
+		Query:           req.Query,
+		Mode:            req.Mode,
+		HighlightedPath: []string{"client"},
+		Warning:         "Failed to parse Router API response",
+		IsAccurate:      false,
+	}
 }
 
 // System fallback decisions - these are hardcoded in the router, not from config

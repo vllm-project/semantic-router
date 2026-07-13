@@ -5,9 +5,15 @@ import {
   PYTHON_ROUTER_KEYS,
   SECTION_META,
 } from './configPageRouterDefaultsCatalog'
-import { routerStructuredField } from './configPageRouterStructuredFields'
-import { normalizeRouterStructuredFields } from './configPageRouterStructuredSchema'
+import { fieldsForKey } from './configPageRouterDefaultsFields'
+import { GLOBAL_SECTION_PATHS, ROUTER_SECTION_LAYERS } from './configPageRouterDefaultsMetadata'
+import {
+  normalizeRouterStructuredFields,
+  REMOTE_EMBEDDING_API_KEY_ENV,
+} from './configPageRouterStructuredSchema'
 import type { CanonicalGlobalConfig, ConfigData, Tool } from './configPageSupport'
+
+export { ROUTER_LAYER_META } from './configPageRouterDefaultsMetadata'
 
 export type RouterSystemKey =
   | 'router_core'
@@ -75,83 +81,8 @@ interface RouterSectionContext {
   toolsError: string | null
 }
 
-export const ROUTER_LAYER_META: Record<RouterLayerKey, { title: string; description: string }> = {
-  router: {
-    title: 'Router',
-    description: 'Core router-engine controls, startup behavior, and model-selection strategy.',
-  },
-  services: {
-    title: 'Services',
-    description: 'APIs, replay, observability, and other router-owned service surfaces.',
-  },
-  stores: {
-    title: 'Stores',
-    description: 'Shared storage-backed capabilities such as semantic cache and memory.',
-  },
-  integrations: {
-    title: 'Integrations',
-    description: 'Auxiliary runtime integrations used by routing and tool selection.',
-  },
-  model_catalog: {
-    title: 'Model Catalog',
-    description: 'Router-owned embedding catalogs, external models, and model-backed modules.',
-  },
-}
-
 function cloneDefaultSection(key: RouterSystemKey): unknown {
   return JSON.parse(JSON.stringify(DEFAULT_SECTIONS[key]))
-}
-
-const GLOBAL_SECTION_PATHS: Record<RouterSystemKey, string[]> = {
-  router_core: ['router'],
-  response_api: ['services', 'response_api'],
-  router_replay: ['services', 'router_replay'],
-  authz: ['services', 'authz'],
-  ratelimit: ['services', 'ratelimit'],
-  memory: ['stores', 'memory'],
-  semantic_cache: ['stores', 'semantic_cache'],
-  vector_store: ['stores', 'vector_store'],
-  tools: ['integrations', 'tools'],
-  prompt_guard: ['model_catalog', 'modules', 'prompt_guard'],
-  classifier: ['model_catalog', 'modules', 'classifier'],
-  hallucination_mitigation: ['model_catalog', 'modules', 'hallucination_mitigation'],
-  feedback_detector: ['model_catalog', 'modules', 'feedback_detector'],
-  external_models: ['model_catalog', 'external'],
-  system_models: ['model_catalog', 'system'],
-  embedding_models: ['model_catalog', 'embeddings'],
-  prompt_compression: ['model_catalog', 'modules', 'prompt_compression'],
-  modality_detector: ['model_catalog', 'modules', 'modality_detector'],
-  observability: ['services', 'observability'],
-  looper: ['integrations', 'looper'],
-  clear_route_cache: ['router', 'clear_route_cache'],
-  model_selection: ['router', 'model_selection'],
-  api: ['services', 'api'],
-}
-
-const ROUTER_SECTION_LAYERS: Record<RouterSystemKey, RouterLayerKey> = {
-  router_core: 'router',
-  response_api: 'services',
-  router_replay: 'services',
-  authz: 'services',
-  ratelimit: 'services',
-  memory: 'stores',
-  semantic_cache: 'stores',
-  vector_store: 'stores',
-  tools: 'integrations',
-  prompt_guard: 'model_catalog',
-  classifier: 'model_catalog',
-  hallucination_mitigation: 'model_catalog',
-  feedback_detector: 'model_catalog',
-  external_models: 'model_catalog',
-  system_models: 'model_catalog',
-  embedding_models: 'model_catalog',
-  prompt_compression: 'model_catalog',
-  modality_detector: 'model_catalog',
-  observability: 'services',
-  looper: 'integrations',
-  clear_route_cache: 'router',
-  model_selection: 'router',
-  api: 'services',
 }
 
 const LEGACY_ROOT_KEYS: Partial<Record<RouterSystemKey, keyof ConfigData>> = {
@@ -608,473 +539,6 @@ function statusForKey(data: unknown): RouterSectionBadge {
   return enabledBadge(typeof section?.enabled === 'boolean' ? section.enabled : undefined)
 }
 
-function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
-  switch (key) {
-    case 'router_core':
-      return [
-        {
-          name: 'config_source',
-          label: 'Config Source',
-          type: 'select',
-          options: ['file', 'kubernetes'],
-          required: true,
-        },
-        {
-          name: 'strategy',
-          label: 'Routing Strategy',
-          type: 'text',
-          placeholder: 'static, router_dc, automix...',
-        },
-        {
-          name: 'auto_model_name',
-          label: 'Auto Model Name',
-          type: 'text',
-          placeholder: 'vllm-sr/auto',
-        },
-        routerStructuredField(key, 'auto_model_names'),
-        {
-          name: 'include_config_models_in_list',
-          label: 'Include Config Models In List',
-          type: 'boolean',
-        },
-        routerStructuredField(key, 'streamed_body'),
-      ]
-    case 'response_api':
-      return [
-        { name: 'enabled', label: 'Enable Response API', type: 'boolean' },
-        {
-          name: 'store_backend',
-          label: 'Store Backend',
-          type: 'select',
-          options: ['memory', 'milvus', 'redis'],
-          required: true,
-        },
-        { name: 'ttl_seconds', label: 'TTL (seconds)', type: 'number', placeholder: '86400' },
-        { name: 'max_responses', label: 'Max Responses', type: 'number', placeholder: '1000' },
-      ]
-    case 'router_replay':
-      return [
-        { name: 'enabled', label: 'Enable Router Replay', type: 'boolean' },
-        {
-          name: 'store_backend',
-          label: 'Store Backend',
-          type: 'select',
-          options: ['memory', 'redis', 'postgres', 'milvus'],
-          required: true,
-        },
-        { name: 'ttl_seconds', label: 'TTL (seconds)', type: 'number', placeholder: '2592000' },
-        { name: 'async_writes', label: 'Async Writes', type: 'boolean' },
-      ]
-    case 'authz':
-      return [
-        { name: 'fail_open', label: 'Fail Open', type: 'boolean' },
-        routerStructuredField(key, 'identity'),
-        routerStructuredField(key, 'providers'),
-      ]
-    case 'ratelimit':
-      return [
-        { name: 'fail_open', label: 'Fail Open', type: 'boolean' },
-        routerStructuredField(key, 'providers'),
-      ]
-    case 'memory':
-      return [
-        { name: 'enabled', label: 'Enable Memory', type: 'boolean' },
-        { name: 'auto_store', label: 'Auto Store Facts', type: 'boolean' },
-        routerStructuredField(key, 'milvus'),
-        { name: 'embedding_model', label: 'Embedding Model', type: 'text', placeholder: 'bert' },
-        {
-          name: 'default_retrieval_limit',
-          label: 'Default Retrieval Limit',
-          type: 'number',
-          placeholder: '5',
-        },
-        {
-          name: 'default_similarity_threshold',
-          label: 'Similarity Threshold',
-          type: 'percentage',
-          placeholder: '70',
-        },
-        {
-          name: 'extraction_batch_size',
-          label: 'Extraction Batch Size',
-          type: 'number',
-          placeholder: '10',
-        },
-        { name: 'hybrid_search', label: 'Hybrid Search', type: 'boolean' },
-        { name: 'hybrid_mode', label: 'Hybrid Mode', type: 'text', placeholder: 'rerank' },
-        { name: 'adaptive_threshold', label: 'Adaptive Threshold', type: 'boolean' },
-        routerStructuredField(key, 'quality_scoring'),
-        routerStructuredField(key, 'reflection'),
-      ]
-    case 'semantic_cache':
-      return [
-        { name: 'enabled', label: 'Enable Semantic Cache', type: 'boolean' },
-        {
-          name: 'backend_type',
-          label: 'Backend Type',
-          type: 'select',
-          options: ['memory', 'milvus', 'redis'],
-          required: true,
-        },
-        {
-          name: 'similarity_threshold',
-          label: 'Similarity Threshold',
-          type: 'percentage',
-          placeholder: '80',
-        },
-        { name: 'max_entries', label: 'Max Entries', type: 'number', placeholder: '1000' },
-        { name: 'ttl_seconds', label: 'TTL (seconds)', type: 'number', placeholder: '3600' },
-        {
-          name: 'eviction_policy',
-          label: 'Eviction Policy',
-          type: 'select',
-          options: ['fifo', 'lru', 'lfu'],
-        },
-        {
-          name: 'embedding_model',
-          label: 'Embedding Model Override',
-          type: 'text',
-          placeholder: 'mmbert',
-        },
-        routerStructuredField(key, 'redis'),
-        routerStructuredField(key, 'milvus'),
-      ]
-    case 'vector_store':
-      return [
-        { name: 'enabled', label: 'Enable Vector Store', type: 'boolean' },
-        {
-          name: 'backend_type',
-          label: 'Backend Type',
-          type: 'select',
-          options: ['memory', 'milvus', 'llama_stack'],
-          required: true,
-        },
-        {
-          name: 'file_storage_dir',
-          label: 'File Storage Dir',
-          type: 'text',
-          placeholder: '/var/lib/vsr/data',
-        },
-        {
-          name: 'max_file_size_mb',
-          label: 'Max File Size (MB)',
-          type: 'number',
-          placeholder: '50',
-        },
-        {
-          name: 'embedding_model',
-          label: 'Embedding Model',
-          type: 'select',
-          options: ['bert', 'qwen3', 'gemma', 'mmbert', 'multimodal'],
-        },
-        {
-          name: 'embedding_dimension',
-          label: 'Embedding Dimension',
-          type: 'number',
-          placeholder: '384',
-        },
-        { name: 'ingestion_workers', label: 'Ingestion Workers', type: 'number', placeholder: '2' },
-        routerStructuredField(key, 'supported_formats'),
-        routerStructuredField(key, 'memory'),
-        routerStructuredField(key, 'milvus'),
-        routerStructuredField(key, 'llama_stack'),
-      ]
-    case 'tools':
-      return [
-        { name: 'enabled', label: 'Enable Tool Auto Selection', type: 'boolean' },
-        { name: 'top_k', label: 'Top K', type: 'number', placeholder: '3' },
-        {
-          name: 'similarity_threshold',
-          label: 'Similarity Threshold',
-          type: 'percentage',
-          placeholder: '20',
-        },
-        {
-          name: 'tools_db_path',
-          label: 'Tools DB Path',
-          type: 'text',
-          placeholder: 'config/tools_db.json',
-        },
-        { name: 'fallback_to_empty', label: 'Fallback To Empty', type: 'boolean' },
-        routerStructuredField(key, 'advanced_filtering'),
-      ]
-    case 'prompt_guard':
-      return [
-        { name: 'enabled', label: 'Enable Prompt Guard', type: 'boolean' },
-        { name: 'model_ref', label: 'Model Ref', type: 'text', placeholder: 'prompt_guard' },
-        {
-          name: 'model_id',
-          label: 'Model ID Override',
-          type: 'text',
-          placeholder: 'models/mmbert32k-jailbreak-detector-merged',
-        },
-        { name: 'threshold', label: 'Threshold', type: 'percentage', placeholder: '70' },
-        { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
-        { name: 'use_mmbert_32k', label: 'Use mmBERT 32K', type: 'boolean' },
-        { name: 'use_modernbert', label: 'Use ModernBERT', type: 'boolean' },
-        {
-          name: 'jailbreak_mapping_path',
-          label: 'Mapping Path',
-          type: 'text',
-          placeholder: 'models/.../jailbreak_type_mapping.json',
-        },
-      ]
-    case 'classifier':
-      return [
-        routerStructuredField(key, 'domain'),
-        routerStructuredField(key, 'pii'),
-        routerStructuredField(key, 'mcp'),
-        routerStructuredField(key, 'preference'),
-      ]
-    case 'hallucination_mitigation':
-      return [
-        { name: 'enabled', label: 'Enable Hallucination Mitigation', type: 'boolean' },
-        {
-          name: 'on_hallucination_detected',
-          label: 'On Detection Action',
-          type: 'text',
-          placeholder: 'block',
-        },
-        routerStructuredField(key, 'fact_check'),
-        routerStructuredField(key, 'detector'),
-        routerStructuredField(key, 'explainer'),
-      ]
-    case 'feedback_detector':
-      return [
-        { name: 'enabled', label: 'Enable Feedback Detector', type: 'boolean' },
-        { name: 'model_ref', label: 'Model Ref', type: 'text', placeholder: 'feedback_detector' },
-        {
-          name: 'model_id',
-          label: 'Model ID Override',
-          type: 'text',
-          placeholder: 'models/mmbert32k-feedback-detector-merged',
-        },
-        { name: 'threshold', label: 'Threshold', type: 'percentage', placeholder: '70' },
-        { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
-        { name: 'use_mmbert_32k', label: 'Use mmBERT 32K', type: 'boolean' },
-        { name: 'use_modernbert', label: 'Use ModernBERT', type: 'boolean' },
-      ]
-    case 'external_models':
-      return [routerStructuredField(key, 'items')]
-    case 'system_models':
-      return [
-        {
-          name: 'prompt_guard',
-          label: 'Prompt Guard Binding',
-          type: 'text',
-          placeholder: 'models/mmbert32k-jailbreak-detector-merged',
-        },
-        {
-          name: 'domain_classifier',
-          label: 'Domain Classifier Binding',
-          type: 'text',
-          placeholder: 'models/mmbert32k-intent-classifier-merged',
-        },
-        {
-          name: 'pii_classifier',
-          label: 'PII Classifier Binding',
-          type: 'text',
-          placeholder: 'models/mmbert32k-pii-detector-merged',
-        },
-        {
-          name: 'fact_check_classifier',
-          label: 'Fact Check Binding',
-          type: 'text',
-          placeholder: 'models/mmbert32k-factcheck-classifier-merged',
-        },
-        {
-          name: 'hallucination_detector',
-          label: 'Hallucination Detector Binding',
-          type: 'text',
-          placeholder: 'models/mom-halugate-detector',
-        },
-        {
-          name: 'hallucination_explainer',
-          label: 'Hallucination Explainer Binding',
-          type: 'text',
-          placeholder: 'models/mom-halugate-explainer',
-        },
-        {
-          name: 'feedback_detector',
-          label: 'Feedback Detector Binding',
-          type: 'text',
-          placeholder: 'models/mmbert32k-feedback-detector-merged',
-        },
-      ]
-    case 'embedding_models':
-      return [
-        {
-          name: 'qwen3_model_path',
-          label: 'Qwen3 Model Path',
-          type: 'text',
-          placeholder: 'models/mom-embedding-pro',
-        },
-        {
-          name: 'gemma_model_path',
-          label: 'Gemma Model Path',
-          type: 'text',
-          placeholder: 'models/mom-embedding-flash',
-        },
-        {
-          name: 'mmbert_model_path',
-          label: 'mmBERT Model Path',
-          type: 'text',
-          placeholder: 'models/mmbert-embed-32k-2d-matryoshka',
-        },
-        {
-          name: 'multimodal_model_path',
-          label: 'Multimodal Model Path',
-          type: 'text',
-          placeholder: 'models/mom-embedding-multimodal',
-        },
-        {
-          name: 'bert_model_path',
-          label: 'BERT Model Path',
-          type: 'text',
-          placeholder: 'models/mom-embedding-bert',
-        },
-        { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
-        routerStructuredField(key, 'embedding_config'),
-      ]
-    case 'prompt_compression':
-      return [
-        { name: 'enabled', label: 'Enable Prompt Compression', type: 'boolean' },
-        {
-          name: 'profile',
-          label: 'Profile',
-          type: 'select',
-          options: ['default', 'coding', 'medical', 'security', 'multi_turn'],
-        },
-        { name: 'max_tokens', label: 'Max Tokens', type: 'number', placeholder: '512' },
-        { name: 'min_length', label: 'Min Length', type: 'number', placeholder: '64' },
-        routerStructuredField(key, 'skip_signals'),
-        {
-          name: 'textrank_weight',
-          label: 'TextRank Weight',
-          type: 'number',
-          step: 0.01,
-          placeholder: '1.0',
-        },
-        {
-          name: 'position_weight',
-          label: 'Position Weight',
-          type: 'number',
-          step: 0.01,
-          placeholder: '1.0',
-        },
-        {
-          name: 'tfidf_weight',
-          label: 'TFIDF Weight',
-          type: 'number',
-          step: 0.01,
-          placeholder: '1.0',
-        },
-        {
-          name: 'novelty_weight',
-          label: 'Novelty Weight',
-          type: 'number',
-          step: 0.01,
-          placeholder: '0.05',
-        },
-        {
-          name: 'position_depth',
-          label: 'Position Depth',
-          type: 'number',
-          step: 0.01,
-          placeholder: '1.0',
-        },
-        {
-          name: 'preserve_first_n',
-          label: 'Preserve First Sentences',
-          type: 'number',
-          placeholder: '3',
-        },
-        {
-          name: 'preserve_last_n',
-          label: 'Preserve Last Sentences',
-          type: 'number',
-          placeholder: '2',
-        },
-      ]
-    case 'modality_detector':
-      return [
-        { name: 'enabled', label: 'Enable Modality Detector', type: 'boolean' },
-        routerStructuredField(key, 'prompt_prefixes'),
-        {
-          name: 'method',
-          label: 'Detection Method',
-          type: 'select',
-          options: ['classifier', 'keyword', 'hybrid'],
-        },
-        routerStructuredField(key, 'classifier'),
-        routerStructuredField(key, 'keywords'),
-        routerStructuredField(key, 'both_keywords'),
-        {
-          name: 'confidence_threshold',
-          label: 'Confidence Threshold',
-          type: 'percentage',
-          placeholder: '80',
-        },
-        {
-          name: 'lower_threshold_ratio',
-          label: 'Lower Threshold Ratio',
-          type: 'percentage',
-          placeholder: '60',
-        },
-      ]
-    case 'observability':
-      return [routerStructuredField(key, 'metrics'), routerStructuredField(key, 'tracing')]
-    case 'looper':
-      return [
-        { name: 'enabled', label: 'Enable Looper', type: 'boolean' },
-        {
-          name: 'endpoint',
-          label: 'Endpoint',
-          type: 'text',
-          placeholder: 'http://localhost:8899/v1/chat/completions',
-        },
-        {
-          name: 'timeout_seconds',
-          label: 'Timeout (seconds)',
-          type: 'number',
-          placeholder: '1200',
-        },
-        routerStructuredField(key, 'headers'),
-      ]
-    case 'clear_route_cache':
-      return [
-        { name: 'value', label: 'Clear Route Cache For Auxiliary Mutations', type: 'boolean' },
-      ]
-    case 'model_selection':
-      return [
-        { name: 'enabled', label: 'Enable Model Selection', type: 'boolean' },
-        {
-          name: 'default_algorithm',
-          label: 'Method',
-          type: 'select',
-          options: ['knn', 'kmeans', 'svm', 'router_dc', 'automix', 'hybrid'],
-          required: true,
-        },
-        {
-          name: 'models_path',
-          label: 'ML Models Path',
-          type: 'text',
-          placeholder: 'models/model_selection',
-        },
-        routerStructuredField(key, 'knn'),
-        routerStructuredField(key, 'kmeans'),
-        routerStructuredField(key, 'svm'),
-        routerStructuredField(key, 'router_dc'),
-        routerStructuredField(key, 'automix'),
-        routerStructuredField(key, 'hybrid'),
-      ]
-    case 'api':
-      return [routerStructuredField(key, 'batch_classification')]
-  }
-
-  return []
-}
-
 function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
   if (key === 'clear_route_cache') {
     return { value: Boolean(data) }
@@ -1118,8 +582,18 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
   if (key === 'embedding_models') {
     const embeddings = asObject(data)
     const semantic = asObject(embeddings?.semantic)
+    const endpoint = asObject(semantic?.endpoint)
     return {
       ...(semantic || {}),
+      endpoint: endpoint
+        ? {
+            ...endpoint,
+            api_key_env:
+              endpoint.api_key_env === REMOTE_EMBEDDING_API_KEY_ENV
+                ? REMOTE_EMBEDDING_API_KEY_ENV
+                : undefined,
+          }
+        : undefined,
       bert: asObject(embeddings?.bert) || {},
       __catalog: embeddings || {},
     }
@@ -1186,13 +660,22 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
     }) as Partial<ConfigData>
   }
   if (key === 'embedding_models') {
-    const { bert, __catalog, ...semanticFields } = data
+    const { bert, __catalog, endpoint, ...semanticFields } = data
     const catalog = asObject(__catalog)
+    const originalSemantic = asObject(catalog?.semantic)
+    const originalEndpoint = asObject(originalSemantic?.endpoint)
+    const currentEndpoint = asObject(endpoint)
+    const endpointPatch = currentEndpoint
+      ? buildEmbeddingEndpointPatch(originalEndpoint, currentEndpoint)
+      : originalEndpoint
+        ? null
+        : undefined
     return buildNestedPatch(GLOBAL_SECTION_PATHS[key], {
       ...(catalog || {}),
       semantic: {
-        ...(asObject(catalog?.semantic) || {}),
+        ...(originalSemantic || {}),
         ...semanticFields,
+        ...(endpointPatch !== undefined ? { endpoint: endpointPatch } : {}),
       },
       bert: asObject(bert) || {},
     }) as Partial<ConfigData>
@@ -1216,6 +699,39 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
     }) as Partial<ConfigData>
   }
   return buildNestedPatch(GLOBAL_SECTION_PATHS[key], data) as Partial<ConfigData>
+}
+
+const REMOTE_EMBEDDING_OPTIONAL_FIELDS = [
+  'api_key_env',
+  'timeout_seconds',
+  'max_retries',
+  'dimensions',
+] as const
+
+function buildEmbeddingEndpointPatch(
+  original: Record<string, unknown> | undefined,
+  current: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!current) return undefined
+
+  const patch: Record<string, unknown> = {
+    ...current,
+  }
+  if (current.api_key_env === REMOTE_EMBEDDING_API_KEY_ENV) {
+    patch.api_key_env = REMOTE_EMBEDDING_API_KEY_ENV
+  } else {
+    delete patch.api_key_env
+  }
+  for (const key of REMOTE_EMBEDDING_OPTIONAL_FIELDS) {
+    if (
+      original &&
+      Object.prototype.hasOwnProperty.call(original, key) &&
+      patch[key] === undefined
+    ) {
+      patch[key] = null
+    }
+  }
+  return patch
 }
 
 export function buildEffectiveRouterConfig(

@@ -13,6 +13,12 @@ pub enum UnifiedError {
     Inference { operation: String, source: String },
     /// Tokenization error
     Tokenization { source: String },
+    /// The tokenizer output exceeds the selected embedding model's context.
+    InputTooLong {
+        model: String,
+        count: usize,
+        maximum: usize,
+    },
     /// Validation error
     Validation {
         field: String,
@@ -44,6 +50,15 @@ impl fmt::Display for UnifiedError {
             UnifiedError::Tokenization { source } => {
                 write!(f, "Tokenization error: {}", source)
             }
+            UnifiedError::InputTooLong {
+                model,
+                count,
+                maximum,
+            } => write!(
+                f,
+                "{} input has {} tokens; maximum context is {}",
+                model, count, maximum
+            ),
             UnifiedError::Validation {
                 field,
                 expected,
@@ -72,6 +87,13 @@ impl fmt::Display for UnifiedError {
 }
 
 impl std::error::Error for UnifiedError {}
+
+impl UnifiedError {
+    /// Returns true only for request input that exceeds a model context window.
+    pub fn is_input_too_long(&self) -> bool {
+        matches!(self, Self::InputTooLong { .. })
+    }
+}
 
 /// Result type alias using UnifiedError
 pub type UnifiedResult<T> = Result<T, UnifiedError>;
@@ -107,6 +129,14 @@ pub mod errors {
         }
     }
 
+    pub fn input_too_long(model: &str, count: usize, maximum: usize) -> UnifiedError {
+        UnifiedError::InputTooLong {
+            model: model.to_string(),
+            count,
+            maximum,
+        }
+    }
+
     pub fn file_not_found(path: &str) -> UnifiedError {
         UnifiedError::FileNotFound {
             path: path.to_string(),
@@ -132,5 +162,23 @@ pub mod errors {
             expected: expected.to_string(),
             actual: actual.to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn input_too_long_is_the_only_context_limit_error() {
+        let limit = errors::input_too_long("mmBERT", 33, 32);
+        assert!(limit.is_input_too_long());
+        assert_eq!(
+            limit.to_string(),
+            "mmBERT input has 33 tokens; maximum context is 32"
+        );
+
+        assert!(!errors::tokenization_error("invalid input").is_input_too_long());
+        assert!(!errors::inference_error("run", "failure").is_input_too_long());
     }
 }

@@ -3,25 +3,52 @@ package embedding
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
+
+func TestRetryDelaySaturatesWithoutOverflow(t *testing.T) {
+	maxInt := int(^uint(0) >> 1)
+	tests := []struct {
+		attempt int
+		want    time.Duration
+	}{
+		{attempt: -maxInt, want: baseRetryDelay},
+		{attempt: 0, want: baseRetryDelay},
+		{attempt: 1, want: baseRetryDelay},
+		{attempt: 2, want: 2 * baseRetryDelay},
+		{attempt: 3, want: 4 * baseRetryDelay},
+		{attempt: 4, want: 8 * baseRetryDelay},
+		{attempt: 5, want: maxRetryDelay},
+		{attempt: maxInt, want: maxRetryDelay},
+	}
+	for _, tt := range tests {
+		if got := retryDelay(tt.attempt); got != tt.want {
+			t.Errorf("retryDelay(%d) = %s, want %s", tt.attempt, got, tt.want)
+		}
+	}
+}
 
 func TestOpenAICompatibleProviderEmbedBatch(t *testing.T) {
 	server := newEmbeddingBatchServer(t)
 	defer server.Close()
 
-	t.Setenv("EMBEDDING_API_KEY", "test-key")
+	t.Setenv(config.EmbeddingAPIKeyEnvName, "test-key")
 	provider := newTestOpenAIProvider(t, OpenAICompatibleConfig{
 		BaseURL:           server.URL + "/v1",
 		Model:             "BAAI/bge-m3",
-		APIKeyEnv:         "EMBEDDING_API_KEY",
+		APIKeyEnv:         config.EmbeddingAPIKeyEnvName,
 		Dimensions:        2,
 		ExpectedDimension: 2,
+		HTTPClient:        server.Client(),
 	})
 
 	embeddings, err := provider.EmbedBatch(context.Background(), []string{"hello", "world"})
@@ -38,7 +65,7 @@ func TestOpenAICompatibleProviderEmbedBatch(t *testing.T) {
 
 func newEmbeddingBatchServer(t *testing.T) *httptest.Server {
 	t.Helper()
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assertEmbeddingBatchRequest(t, r)
 		writeEmbeddingResponse(t, w, [][]float64{{0.1, 0.2}, {0.3, 0.4}})
 	}))
@@ -116,29 +143,6 @@ func TestOpenAICompatibleProviderAuthFailureIsClear(t *testing.T) {
 	}
 }
 
-func TestOpenAICompatibleProviderRequiresConfiguredAPIKeyEnv(t *testing.T) {
-	var calls int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&calls, 1)
-		writeEmbeddingResponse(t, w, [][]float64{{0.1, 0.2}})
-	}))
-	defer server.Close()
-
-	provider := newTestOpenAIProvider(t, OpenAICompatibleConfig{
-		BaseURL:   server.URL,
-		Model:     "embedding-model",
-		APIKeyEnv: "MISSING_EMBEDDING_API_KEY",
-	})
-
-	_, err := provider.Embed(context.Background(), "hello")
-	if err == nil || !strings.Contains(err.Error(), "MISSING_EMBEDDING_API_KEY") {
-		t.Fatalf("Embed() error = %v, want missing env error", err)
-	}
-	if calls != 0 {
-		t.Fatalf("provider made %d request(s), want 0", calls)
-	}
-}
-
 func TestOpenAICompatibleProviderTimeoutIsClear(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		select {
@@ -180,20 +184,6 @@ func TestOpenAICompatibleProviderDimensionMismatch(t *testing.T) {
 	}
 }
 
-func TestNewOpenAICompatibleProviderValidatesConfig(t *testing.T) {
-	cases := []OpenAICompatibleConfig{
-		{Model: "embedding-model"},
-		{BaseURL: "localhost:8000", Model: "embedding-model"},
-		{BaseURL: "http://localhost:8000", Dimensions: 2, ExpectedDimension: 3},
-		{BaseURL: "http://localhost:8000"},
-	}
-	for _, cfg := range cases {
-		if _, err := NewOpenAICompatibleProvider(cfg); err == nil {
-			t.Fatalf("NewOpenAICompatibleProvider(%+v) returned nil error", cfg)
-		}
-	}
-}
-
 func newTestOpenAIProvider(t *testing.T, cfg OpenAICompatibleConfig) *OpenAICompatibleProvider {
 	t.Helper()
 	provider, err := NewOpenAICompatibleProvider(cfg)
@@ -207,10 +197,57 @@ func writeEmbeddingResponse(t *testing.T, w http.ResponseWriter, embeddings [][]
 	t.Helper()
 	data := make([]embeddingDatum, len(embeddings))
 	for i, embedding := range embeddings {
-		data[i] = embeddingDatum{Index: i, Embedding: embedding}
+		data[i] = embeddingDatum{Index: intPointer(i), Embedding: embedding}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(embeddingsResponse{Data: data}); err != nil {
 		t.Fatalf("encode response: %v", err)
 	}
+}
+
+func paddedEmbeddingResponse(t *testing.T, count int, paddingLength int) []byte {
+	t.Helper()
+	data := make([]embeddingDatum, count)
+	for i := range data {
+		data[i] = embeddingDatum{Index: intPointer(i), Embedding: []float64{float64(i)}}
+	}
+	payload, err := json.Marshal(struct {
+		Data    []embeddingDatum `json:"data"`
+		Padding string           `json:"padding"`
+	}{Data: data, Padding: strings.Repeat("x", paddingLength)})
+	if err != nil {
+		t.Fatalf("marshal padded response: %v", err)
+	}
+	return payload
+}
+
+func assertEmbeddingResponseError(t *testing.T, err error, kind embeddingResponseErrorKind) {
+	t.Helper()
+	var responseErr *embeddingResponseError
+	if !errors.As(err, &responseErr) || responseErr.kind != kind {
+		t.Fatalf("error = %v, want embedding response error kind %q", err, kind)
+	}
+}
+
+type countingReadCloser struct {
+	*strings.Reader
+	bytesRead int
+	sawEOF    bool
+}
+
+func (r *countingReadCloser) Read(p []byte) (int, error) {
+	n, err := r.Reader.Read(p)
+	r.bytesRead += n
+	if errors.Is(err, io.EOF) {
+		r.sawEOF = true
+	}
+	return n, err
+}
+
+func (r *countingReadCloser) Close() error {
+	return nil
+}
+
+func intPointer(value int) *int {
+	return &value
 }

@@ -84,6 +84,12 @@ func NewOpenClawMCPHandler(openClaw *OpenClawHandler) *OpenClawMCPHandler {
 }
 
 func (h *OpenClawMCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		if status, err := boundMCPProtocolJSON(w, r); err != nil {
+			http.Error(w, err.Error(), status)
+			return
+		}
+	}
 	h.httpMCP.ServeHTTP(w, r)
 }
 

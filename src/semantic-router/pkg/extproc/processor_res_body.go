@@ -88,7 +88,7 @@ func (r *OpenAIRouter) normalizeProviderResponseBody(
 	// fields the upstream actually produced.
 	transformedBody, err := anthropic.ToOpenAIResponseBodyWithExt(responseBody, ctx.RequestModel, ctx.IRExtensions)
 	if err != nil {
-		logging.Errorf("Failed to transform Anthropic response to OpenAI format: %v", err)
+		logging.Errorf("Failed to transform Anthropic response to OpenAI format: %s", safeErrorForLog(err))
 		return nil, false, err
 	}
 

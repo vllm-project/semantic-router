@@ -106,6 +106,11 @@ def test_container_start_milvus_uses_explicit_state_root(monkeypatch, tmp_path):
     monkeypatch.setattr(
         container_services, "container_status", lambda _name: "not found"
     )
+    monkeypatch.setattr(
+        container_services,
+        "_running_container_for_network_alias",
+        lambda _runtime, _network, _alias: None,
+    )
     monkeypatch.setattr(container_services, "_is_port_in_use", lambda _port: False)
     monkeypatch.setattr(
         container_services,
@@ -132,6 +137,11 @@ def test_container_start_milvus_fails_on_port_conflict_without_container(
     monkeypatch.setattr(container_services, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
         container_services, "container_status", lambda _name: "not found"
+    )
+    monkeypatch.setattr(
+        container_services,
+        "_running_container_for_network_alias",
+        lambda _runtime, _network, _alias: None,
     )
     monkeypatch.setattr(container_services, "_is_port_in_use", lambda _port: True)
     monkeypatch.setattr(container_services, "_run_service_start", fail_run)

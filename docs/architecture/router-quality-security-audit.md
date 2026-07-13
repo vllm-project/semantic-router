@@ -7,7 +7,8 @@ This reference records the repository-wide audit requested by
 maintainer and contributor index for understanding the identified risk classes,
 their owning source surfaces, and the evidence required to close them.
 
-- **Audited base:** `c992852773cb9ca5e00ffe0fb5f51c658c9a896d`
+- **Initial audited base:** `63bf27bf303a2ad78b88bb4be27e437af28652d0`
+- **Final integration base:** `fe0b37d09ae0c113f8f7668656d837f2473b436a`
 - **Audit period:** 2026-07-12 through 2026-07-13
 - **Roadmap parent:**
   [#2287](https://github.com/vllm-project/semantic-router/issues/2287)
@@ -107,7 +108,7 @@ medium confidence until builds and images are reproducibly pinned.
 | CLI | Pydantic contract, migration/version behavior, runtime paths, host publication, generated Envoy, local stores | Input strictness differs from Go; one low-risk path gap; internal ports were wildcard-published; local stores share weak credential/network boundaries; edge stripping is defense in depth only |
 | Dashboard | Authentication/RBAC, router proxy, browser credential transport, public demo access, outbound fetches, config mutation, ML pipeline, OpenClaw | Shared credential, official bearer transport, and the WebSocket disconnect/fan-out race are closed by the proof; egress, fail-open route authorization, embedded-origin isolation, file/job/image boundaries, cross-process config transactions, and graceful WebSocket delivery/reclamation remain terminally owned |
 | Kubernetes and operator | Dynamic CRDs, converter, operator CRD/webhook/controllers, canonical generation | Raw preserved routing can bypass strict core admission; legacy/canonical ownership and boolean semantics drift |
-| Native bindings | Candle, ONNX, ML, NLP, OpenVINO Go/Rust lifecycle seams | Candle/ONNX/NLP lifecycle and concurrency gaps; lower ML wrappers are sound; ONNX Go tests do not compile |
+| Native bindings | Candle, ONNX, ML, NLP, OpenVINO Go/Rust lifecycle seams | Candle/ONNX/NLP lifecycle and concurrency gaps; lower ML wrappers are sound; ONNX compile drift, silent input truncation, and image-boundary divergence entered the proof loop |
 | E2E, testing, performance | Acceptance floors, native compile lanes, numeric comparison, affected-profile selection, local image/serve orchestration | Report-only zero floors, missing ONNX compile coverage, non-gating numeric comparison, a baseline-profile short circuit that hid affected profiles, and local feature-gate false-green paths |
 | Dependencies and supply chain | Go, npm, Cargo, frozen Python lock, toolchains | Reachable direct advisories and no reproducible multi-ecosystem vulnerability gate with expiring exceptions |
 | Fleet and training | Large CLI/training orchestrators, artifact and data I/O, existing debt | Keep outside the proof PR; use existing Fleet debt and a focused training provenance/lifecycle follow-up |
@@ -182,12 +183,26 @@ endpoint is a privileged operator-controlled endpoint because it receives
 request content, provider credentials, and the internal credential. See the
 [security hardening guide](security-hardening.md) for the deployment contract.
 
-The canonical Kubernetes CLI path creates one release-scoped immutable Secret
-through standard input, generates a shared Looper key when the operator did not
-supply one, and reuses only that key across later generations. Every retained
-Helm revision protects its referenced Secret from garbage collection, and
-credential-bearing revisions use non-overlapping `Recreate` rollouts. Cleanup
-fails closed when current or rollback references cannot be proved.
+The canonical Kubernetes CLI path serializes each release's deploy and teardown
+mutations with a renewable, compare-and-swap Kubernetes Lease. It reuses the
+currently referenced immutable Secret only when the complete encoded key set is
+unchanged; any credential change creates a fresh release-scoped immutable
+generation through standard input. The first generation gets a shared Looper
+key when the operator did not supply one, and later generations carry only that
+key unless it is explicitly rotated. Every retained Helm revision protects its
+referenced Secret from garbage collection, and credential-bearing revisions
+use non-overlapping `Recreate` rollouts.
+
+Teardown stamps every observed generation with a bounded 15-minute no-delete
+deadline before uninstall. It releases the Lease while waiting, so an emergency
+redeploy remains available, then reacquires the Lease, reloads lifecycle state,
+and rechecks live references before each deletion. A later deploy can safely
+adopt an exact quarantined generation. If any release reappears during the wait,
+the entire pre-uninstall batch is deferred so both its live workload and retained
+Helm revision history remain valid; only a still-absent release enters the final
+per-Secret reference check. Creation and quarantine timestamps use a strict RFC
+3339 grammar, future-skew is bounded, and cleanup fails closed on malformed
+metadata or whenever current/rollback references cannot be proved.
 
 The privileged HTTP client uses a private pooled direct transport, ignores
 ambient proxy variables, and refuses redirects. The shared value remains a
@@ -220,6 +235,19 @@ explicitly fail closed and documents Agentgateway's fail-closed default. A
 deployment that deliberately chooses fail-open still needs a proven
 pre-routing strip-and-server-rebuild boundary; a route-level header modifier
 runs too late to establish that provenance.
+
+The same review found a provider-side confused-deputy boundary in the new
+remote embedding surface: a configurable environment-variable name could turn
+an endpoint into an oracle for unrelated process secrets. The proof accepts
+only `VLLM_SR_EMBEDDING_API_KEY`, requires HTTPS when it is selected, rejects
+userinfo/query/fragment ambiguity without echoing the URL, refuses redirects
+and ambient proxies, bounds retries and response allocation, and never returns
+provider bodies. Dashboard `config.write` alone no longer reaches any handler
+that synchronously applies runtime configuration; `config.deploy` is the
+explicit provider-credential use/disclosure authority and is required for
+setup activation and every config apply path. Generic provider
+`backend_refs[].api_key_env` remains a broader typed-binding problem owned by
+the terminal issue below rather than being misrepresented as closed here.
 
 Required invariant: authenticate the caller into typed identity, strip its
 credential at the mandatory ingress prelude, and inject only a selected
@@ -311,11 +339,11 @@ legacy storage key, never injects the dashboard bearer or rewrites browser
 URLs, restores sessions through `/api/auth/me`, and uses a credential-free
 revision only to reject stale `401` events. Maintained login, bootstrap, and
 password-change requests explicitly negotiate a cookie-only response whose
-JSON omits the JWT; omitting that mode preserves the existing non-browser
-bearer API. `/api/auth/me` replaces the exact validated legacy JavaScript
+JSON omits the JWT; cookie-only is also the default, while metadata-free
+non-browser clients explicitly request bearer mode. `/api/auth/me` replaces the exact validated legacy JavaScript
 cookie with HttpOnly/SameSite/Secure attributes and the JWT's remaining expiry
 without minting a session. A shared canonical-origin seam
-protects WebSockets, credentialed CORS, and unsafe cookie/query-authenticated
+protects WebSockets, credentialed CORS, and unsafe cookie-authenticated
 HTTP methods; bearer-authenticated non-browser clients retain their explicit
 API contract. Reverse proxies strip every dashboard credential and Referer,
 preserve an explicitly opted-in Router API credential only when dashboard
@@ -327,7 +355,13 @@ lists, is rewritten to `frame-ancestors 'self'` and receives
 `worker-src 'none'` as defense in depth. Cookie logout, including a request
 where `SameSite` withholds the cookie, requires same-origin browser evidence;
 metadata-free bearer API logout remains compatible. That CSP does not replace
-origin isolation.
+origin isolation. The raw WebSocket path constructs one escaped origin-form
+request target, rejects decoded request-line and header controls before dialing
+or hijacking, regenerates one canonical `Connection`/`Upgrade` handshake pair,
+strips connection-nominated and framing headers, and forbids
+static `Host` or handshake-key overrides. HTTPS upstreams use verified system
+roots, SNI/hostname validation, TLS 1.2 or newer, context-aware dialing, and
+IPv6-safe authority construction.
 
 Required invariant: cookie-only normal browser sessions, no reusable
 credential in URLs or script storage, CSRF protection for unsafe methods, and
@@ -437,7 +471,7 @@ browser fields retain stable `username`, `current-password`, and `new-password`
 semantics. Production ingress must still enforce a trusted client-source rate
 limit; process-local admission is a bounded backstop, not a distributed denial-
 of-service boundary. This proof is owned by the audit pull request. The
-The maintained browser's script-visible bearer, query-token, and CSRF boundary
+maintained browser's script-visible bearer, query-token, and CSRF boundary
 is closed under WEB-01; embedded-origin isolation remains with
 [#2465](https://github.com/vllm-project/semantic-router/issues/2465).
 Credential-lifecycle audit write failures are now content-free and
@@ -683,12 +717,26 @@ Runtime preparation and classification execution now consume the same resolved
 `RuntimePlan`, including backend, canonical model type, and local model path.
 That override-first contract covers embedding rules, reask, complexity query
 and preload, contrastive preference, contrastive jailbreak, and knowledge-base
-query and preload. `EMBEDDING_MODEL_TYPE_OVERRIDE` is the preferred explicit
-model selector; the deployed `EMBEDDING_MODEL_OVERRIDE` Helm/E2E contract
-remains a lower-precedence compatibility alias. Switching a remote-configured
-provider to a local backend requires either an explicit supported model with
-its configured path or exactly one configured local model path. Missing,
-ambiguous, or unsupported plans fail classifier construction before inference.
+query and preload. The same construction-time plan is stored on ExtProc and
+propagated to tool databases, request-time tool filtering, cached tool
+registries, model selection, admission, runtime probes, BERT feature gates,
+and the model-download manifest. No request path re-reads environment
+overrides into a second effective plan. Remote plans validate their endpoint
+capability before publication and skip local assets; remote-to-local plans
+avoid remote clients and download only the selected local embedding model.
+Semantic cache, memory, and non-LlamaStack vector-store implementations still
+call Candle directly, so they retain a separately derived, required union of
+their configured local assets instead of being accidentally disabled by a
+remote or OpenVINO classification plan. Shared consumer models initialize once;
+explicit local consumer models without a configured path fail during runtime
+construction. Llama Stack remains the owner of its own vector-store embedder.
+`EMBEDDING_MODEL_TYPE_OVERRIDE` is the preferred explicit model selector; the
+deployed `EMBEDDING_MODEL_OVERRIDE` Helm/E2E contract remains a
+lower-precedence compatibility alias. Switching a remote-configured provider
+to a local backend requires either an explicit supported model with its
+configured path or exactly one configured local model path. Missing,
+ambiguous, unsupported, or unusable remote plans fail construction before
+inference.
 OpenVINO accepts one canonical text-embedding plan per classifier generation,
 initializes it once, and rejects conflicting family plans before a second model
 is built. An external, non-contrastive preference classifier does not initialize
@@ -702,6 +750,20 @@ error rather than becoming an empty/default route; API and ExtProc return fixed,
 non-cacheable client-safe failures. Standalone API-server auto-discovery also
 returns its classifier build or initialization error instead of replacing a
 configured failure with a placeholder `200` service.
+
+Remote OpenAI-compatible embedding responses are read through a
+batch-and-dimension-derived byte budget with a 32 MiB absolute ceiling before
+JSON allocation. Content-Length and streamed overflow, trailing JSON values,
+cardinality or dimension drift, non-finite numbers, and values outside the
+float32 range fail closed without echoing provider response bodies. This keeps
+a compromised or misconfigured provider from turning a routing probe into an
+unbounded allocation or poisoning downstream similarity indexes with infinity.
+Provider construction also enforces the same bounded HTTP(S), timeout, retry,
+and dimension contract in Go, the CLI schema, the dashboard structured editor,
+and the generated operator CRD. Retry delay saturates without integer overflow;
+response indexes distinguish an omitted value from an explicit zero; bounded
+error bodies are drained when safe so keep-alive remains usable, but are never
+returned as public error text.
 
 Tokenizers disable truncation and padding once at model initialization, assert
 that contract at inference, and reuse one encoding/tensor construction for
@@ -895,8 +957,13 @@ and
 
 Point-in-time scans found a reachable direct Go dependency advisory, committed
 Rust and Python lock findings, frontend runtime advisories, website build-time
-advisories, and floating patch-level toolchains. The repository lacks one
-required, lock-aware policy with reviewed expiry for exceptions.
+advisories, and floating patch-level toolchains. The audit proof patches the
+Dashboard's resolved runtime dependency advisories, upgrades its build chain,
+pins Dashboard and pre-commit builders and CI to the supported Node 24 LTS
+line, and makes the Dashboard workflow reject moderate-or-higher deployed
+frontend findings. The repository still lacks one required multi-ecosystem,
+lock-aware policy with reviewed expiry for build-only or unavoidable
+exceptions.
 
 Required invariant: patched and consistently pinned dependencies/toolchains;
 per-ecosystem scans against committed resolution artifacts; separate deployed
@@ -906,12 +973,16 @@ owner, reason, exposure, and expiry. Terminal owner:
 
 #### TEST-01 — ONNX model-free compile contract
 
-The ONNX Go tests target stale APIs and do not compile, while no mandatory
-provider-independent CI lane catches the drift.
+The ONNX Go tests targeted stale APIs and did not compile, while no mandatory
+provider-independent CI lane caught the drift. The audit proof repairs the Go
+surface and model-free suite, adds native typed-error tests, and makes each GPU
+and ExtProc image copy the complete binding package rather than a hand-picked
+file list.
 
 Required invariant: `go test ./...` compiles and passes without model assets,
 with model/provider receipts selected separately and tied to native capability
-contracts. Terminal owner:
+contracts. The proof is part of the audit pull request; permanent mandatory CI
+ownership remains with
 [#2477](https://github.com/vllm-project/semantic-router/issues/2477), linked to
 [#2396](https://github.com/vllm-project/semantic-router/issues/2396).
 
@@ -930,13 +1001,19 @@ without fail-fast semantics. A router or dashboard image build could fail and
 the recipe could print a success line and continue with a stale image. The
 agent serve target also resolved a global `vllm-sr` executable instead of the
 repository-managed virtual environment, so build and smoke could exercise
-different CLI installations.
+different CLI installations. Deployment review additionally found workflow-
+driven integration teardown paths that still target fixed default container
+names or ports even when the surrounding run uses another stack identity.
 
 Required invariant: every image-build failure terminates the recipe before a
 success message or later stage, and build, serve, stop, and smoke use the same
 repo-owned CLI environment. Missing or failed stop tooling must not report a
 successful cleanup. This proof is owned by the audit pull request and requires
-an actual feature-gate rerun after the failure-path fix.
+an actual feature-gate rerun after the failure-path fix. Stack-aware,
+ownership-checked integration teardown is terminally owned by
+[#2487](https://github.com/vllm-project/semantic-router/issues/2487); until that
+lands, shared-host validation must use unique resources, avoid the unsafe
+targets, and verify pre/post state.
 
 #### TEST-04 — Affected-profile selection integrity
 
@@ -1046,7 +1123,9 @@ new evidence:
 - Operator backend sorting and split builder files are deterministic positives.
 - DSL unary `NOT` compilation is internally consistent; divergence occurs in
   other input surfaces.
-- The Wizmap production dependency audit reported no finding at audit time.
+- The Dashboard and Wizmap deployed dependency audits reported no finding after
+  the audit-time Dashboard lock refresh; build-only findings remain classified
+  under DEP-01 rather than being shipped in either runtime image.
 
 ## Final-main delta review
 
@@ -1069,11 +1148,21 @@ as the Looper proof.
 | MD-09 | Final auth review found cacheable protected responses, unbounded per-user session rows, and local dashboard secrets flowing through a broad runtime environment | Apply protected-response no-store, bounded transactional session retention, and an immutable dashboard-only env/mount plan whose secrets avoid argv and non-dashboard services | WEB-03; WEB-01 / #2465 owns remaining embedded-origin isolation and #2482 owns durable audit delivery |
 | MD-10 | Embedding surfaces admitted oversized batches/text and malformed raw Unicode, cloned tokenizers at request time, retokenized two batch paths, and could not distinguish native token-limit failures | Add shared bounded validation/admission, strict raw-Unicode checks, initialization-time tokenizer controls, single-encode tensor reuse, and typed native-to-HTTP `413` propagation | RT-08 / #2396 and TD042 still own native generation, scheduling, unload, and structural lifecycle work |
 | MD-11 | Cookie-authenticated OpenClaw WebSockets accepted every browser origin, including hostile same-site sibling origins | Enforce strict scheme/authority origin equality for every protected WebSocket in shared auth middleware and at the room upgrader; reject missing, ambiguous, and malformed origin/proxy metadata with focused and upgrade tests | WEB-01; #2465 owns remaining embedded-origin isolation |
-| MD-12 | The official browser stored/replayed and received a dashboard JWT in script-visible state, embedded proxies leaked it through headers, cookies, query and Referer, upstreams could overwrite the session cookie or widen Service Worker scope, credentialed CORS reflected same-site siblings, and logout/CSP policy-list edges were not fail closed | Make the maintained client negotiate cookie-only JSON and purge legacy storage; reissue legacy cookies as HttpOnly without minting a session; enforce one canonical HTTP/WebSocket origin and unsafe-method/logout CSRF boundary; strip dashboard credentials at every proxy branch while retaining explicit auth-disabled Router API forwarding; filter session `Set-Cookie`/Service Worker scope; preserve every CSP enforcement policy with self-only framing and no workers; add no-referrer/bounded upgrade defenses plus unit, source-contract, browser, normal and race tests | WEB-01 proof in this PR; #2465 owns separate-origin/capability isolation for same-origin embedded upstream HTML and any scoped OpenClaw browser ticket |
-| MD-13 | Process admission covered embeddings/similarity but classify/eval/combined and ExtProc native paths could run outside the limit; capability checks and execution could disagree under a local override; text backend failures could become default routing; invalid image-only parts could disappear; partial knowledge-base preload could publish inconsistent state; standalone classifier startup could hide a configured build failure behind a placeholder | Use one shared override-first `RuntimePlan` for startup and execution across embedding, reask, complexity, contrastive preference/jailbreak, and knowledge-base query/preload; fail closed on missing or ambiguous remote-to-local model selection and conflicting OpenVINO generation plans; keep the legacy model-override alias below the preferred explicit selector; use one process admission singleton across API and ExtProc; propagate typed text failures and fixed non-cacheable `400`/`500`/`503`; preserve invalid image presence; make KB preload atomic/retryable; fail standalone configured startup; skip unused embedding initialization for external preference; prove provider/native execution parity with call counters | RT-08 / #2396 and TD042 still own native generation, unload, scheduling, and structure; RT-01/#2470 owns config-refresh generation leasing and retirement |
+| MD-12 | The official browser stored/replayed and received a dashboard JWT in script-visible state, embedded proxies leaked it through headers, cookies, query and Referer, upstreams could overwrite the session cookie or widen Service Worker scope, credentialed CORS reflected same-site siblings, logout/CSP policy-list edges were not fail closed, and the raw WebSocket proxy serialized request-target/header data without a complete control-byte, hop-by-hop, TLS, IPv6-authority, or target-base-path boundary | Make the maintained client negotiate cookie-only JSON and purge legacy storage; reissue legacy cookies as HttpOnly without minting a session; enforce one canonical HTTP/WebSocket origin and unsafe-method/logout CSRF boundary; strip dashboard credentials at every proxy branch while retaining explicit auth-disabled Router API forwarding; filter session `Set-Cookie`/Service Worker scope; preserve every CSP enforcement policy with self-only framing and no workers; add no-referrer/bounded upgrade defenses; build one escaped/control-free upgrade request, regenerate canonical hop-by-hop headers, forbid framing/host/key overrides, use verified TLS 1.2+ context-aware IPv6-safe dialing, and join stripped HTTP/WebSocket paths against the same upstream base; cover unit, source-contract, real-upgrade, browser, normal and race paths | WEB-01 proof in this PR; #2465 owns separate-origin/capability isolation for same-origin embedded upstream HTML and any scoped OpenClaw browser ticket |
+| MD-13 | Process admission covered embeddings/similarity but classify/eval/combined and ExtProc native paths could run outside the limit; capability checks and execution could disagree under a local override; text backend failures could become default routing; tools, selection, runtime probes, BERT feature gates, and model downloads could derive a second backend/model choice; invalid image-only parts could disappear; partial knowledge-base preload could publish inconsistent state; standalone classifier startup could hide a configured build failure behind a placeholder | Resolve one override-first `RuntimePlan` and propagate it across embedding, reask, complexity, contrastive preference/jailbreak, knowledge-base query/preload, ExtProc tools and selection, admission, model runtime, and model download; validate remote endpoint capability before publication; make local-to-remote use the selected provider and remote-to-local avoid every remote client and unused asset; fail closed on missing or ambiguous remote-to-local model selection and conflicting OpenVINO generation plans; keep the legacy model-override alias below the preferred explicit selector; use one process admission singleton across API and ExtProc; propagate typed text failures and fixed non-cacheable `400`/`500`/`503`; preserve invalid image presence; make KB preload atomic/retryable; fail standalone configured startup; skip unused embedding initialization for external preference; prove both override directions and provider/native execution parity with HTTP call counters | RT-08 / #2396 and TD042 still own native generation, unload, scheduling, and structure; RT-01/#2470 owns config-refresh generation leasing and retirement |
 | MD-14 | Dashboard Docker/status/log and OpenClaw subprocesses could hang or allocate unbounded output; daemon failure masqueraded as absence; stopped Envoy and setup failure could be reported successful | Add deadline, wait, cancellation and aggregate output budgets; separate status stdout/stderr; distinguish absent/unknown/present-stopped; fail and restore config on runtime uncertainty; isolate unit tests from host Docker | CFG-01 proof in this PR; #2326 and TD046 still own cross-process CAS/fsync/generation transactions |
-| MD-15 | Public dashboard auth/setup route exemptions used broad prefixes, so unknown suffixed API paths could bypass authentication and fall through to another route or proxy | Replace prefix exemptions with exact registered paths and test unknown suffixes through both active-auth and unavailable-auth guards | WEB-02 proof in this PR; #2466 still owns the exhaustive route/method/permission registry and commit-boundary reauthorization |
+| MD-15 | Public dashboard auth/setup route exemptions used broad prefixes, so unknown suffixed API paths could bypass authentication and fall through to another route or proxy; runtime-applying config writes required only draft-write authority even though endpoint selection can disclose provider credentials | Replace prefix exemptions with exact registered paths and test unknown suffixes through both active-auth and unavailable-auth guards; require explicit `config.deploy` authority for setup activation and every synchronous runtime-config apply while keeping `config.write` draft-only | WEB-02 proof in this PR; #2466 still owns the exhaustive route/method/permission registry and commit-boundary reauthorization |
 | MD-16 | OpenClaw room fan-out could send while disconnect closed the same client channel, producing a deterministic data race and possible send-on-closed panic | Funnel every producer through one non-blocking enqueue/close ownership lock; make unregister/close idempotent; add deterministic close/fan-out barriers, survivor-WS/SSE continuity, repeated race, full-handler race, and vet receipts | Audit PR closes the race; #1521 retains graceful close-frame, delivery/backpressure, and room-map reclamation QoS |
+| MD-17 | ONNX silently truncated true tokenizer output, reported whitespace counts as token lengths, silently substituted mmBERT for unsupported embedding models and layers, allowed a lower early-exit artifact to masquerade as the full model, trusted malformed model-output and direct audio/image tensor shapes across the C ABI, and diverged from Candle public result types, options, and sentinels; ONNX multimodal output could accept arbitrary-rank or unpooled tensors; Candle auto similarity could route pair or batch inputs into different embedding spaces or choose from an average rather than the longest input; Candle and ONNX accepted embedded-NUL strings that C truncated to another request, while Candle MLP JSON retained the same gap; native image URL helpers had backend-dependent SSRF policy and treated broad IPv6 space as public; non-CGO Candle contracts, builders, workflows, and official workarounds copied or selected incomplete surfaces | Reject embedded NUL before request-controlled Go-to-C text/JSON allocation; disable tokenizer truncation/padding and return true tokenizer counts; normalize ONNX similarity `auto` honestly while failing closed on unsupported embedding models and unproven layers; require a provable full-layer primary session and accept only a single pooled multimodal vector at the configured dimension; validate every output batch/sequence/hidden dimension and storage cardinality before row access; propagate model/layer/dimension/quality/latency options through public pair and batch APIs; choose one available, context-compatible Candle model from the longest pair/batch input and use it for the entire comparison; restore shared native/mock public types, current embedding/image/similarity validation, error sentinels, metadata, and no-CGO compilation; validate tensor dimensions, multiplication, addressability, encoded bytes, geometry, format, and decode allocation in Go and defensive Rust seams; apply credential-free HTTPS, no-redirect, no-proxy, public-DNS and pinned-dial policy to both backends without echoing URL paths; admit ordinary native IPv6 only inside `2000::/3` after explicit IANA special-use/tunnel/documentation denial and reapply public-IPv4 policy to NAT64; preserve typed `-3`, owned probability copies, and idempotent frees; repair model-free Go/Rust and real-consumer coverage; move complete package copies behind dependency/native cache layers; keep historical docs compatible while current docs use the canonical CPU/AMD/NVIDIA flow; default Git TLS verification on; and trigger consuming image workflows for direct build inputs, Docker ignore files, and draft-to-ready transitions | Audit PR closes the bounded input, error, tensor-memory, model-output, layer-truth, same-space similarity, options, focused mock validation, ownership, compatibility, SSRF, compile, image-copy, docs-example, TLS-default, cache-order, and CI-dependency contracts; #2491 owns the broader non-CGO classification/state decision and mandatory full-suite contract; RT-08/#2396 retains generation/lifecycle ownership and TEST-01/#2477 retains the permanent mandatory ONNX provider lane |
+| MD-18 | A remote/OpenVINO `RuntimePlan` suppressed model initialization for semantic cache, memory, and non-LlamaStack vector stores even though their execution paths still called Candle; remote-provider success and error responses had no complete allocation/conversion or keep-alive lifecycle budget; timeout/retry values and exponential delay could exceed safe bounds; an explicit response `index: 0` was conflated with an omitted index; endpoint config could select unrelated process secrets, silently discard URL query/fragment data, follow redirects, or inherit an ambient proxy | Derive one required union of the local-only consumers' assets independently from the classification/tools plan, deduplicate shared models, fail construction on missing paths, and keep Llama Stack provider-owned; cap remote success/error bytes before JSON allocation, reject trailing data and float32-invalid values, never echo provider bodies or URLs, drain bounded error bodies for safe reuse, preserve omitted-versus-zero indexes, use saturating bounded backoff, accept only the dedicated embedding credential, require authenticated endpoints to use HTTPS, reject userinfo/query/fragment, redirects, and implicit proxies, and enforce the same timeout/retry/dimension/key contract across Go, CLI, dashboard, operator API, generated CRD, and runtime env wiring | RT-01/#2470 still owns refresh-generation leasing; RT-08/#2396 owns eventual provider-aware consumer migration and native generation lifecycle; SEC-04/#2286 owns generic provider credential bindings |
+| MD-19 | Public native controls could narrow negative or oversized dimensions, layers, limits, counts, and top-k values through `C.int`; public-only image URL policy recognized only the well-known NAT64 prefix, could miss RFC 6052 network-specific translation, and did not explicitly deny the complete IANA special-purpose IPv6 set | Validate every public integer and priority before native dispatch with CGO0 parity; admit ordinary IPv6 only in `2000::/3` after explicit special-use denial; discover active PREF64 values through bounded RFC 7050 lookups, decode all six RFC 6052 layouts plus the well-known prefix, reapply public IPv4 policy, reject ambiguity/failure and RFC 8215 local-use space, briefly cache results, and preserve DNS pinning/no-proxy/no-redirect | #2491 retains broader non-CGO behavioral fidelity; RT-08/#2396 retains native handle lifecycle and mandatory provider coverage |
+| MD-20 | Mixed text-plus-image embedding requests accepted ordinary text-model controls and returned same-dimension vectors from unrelated text and multimodal spaces, making a structurally valid response semantically unsafe for cross-modal retrieval | Require the backend to declare one shared multimodal text/image capability and dimension, reject explicit text models, layers, and routing priorities, route mixed text through `MultiModalEncodeText`, validate both modalities and dimensions, and label both results with the same multimodal model; preserve the single-modality contracts and cover fail-closed admission, typed errors, and both native build tags | RT-08/#2396 retains model generation and lifecycle ownership; TEST-01/#2477 retains mandatory ONNX provider/runtime receipts |
+| MD-21 | ONNX returned an unloaded mmBERT placeholder before initialization while Candle returned no inventory; the model-info API counted the placeholder, making total/ready summaries backend-dependent and reporting a model the API contract described as loaded | Normalize native inventory at the API seam, exclude every `IsLoaded=false` row, derive backend, supported dimensions, Matryoshka, and target-layer metadata from the active backend capability contract, and run the router APIServer normal/race/vet suite through the ONNX module replacement in the canonical ONNX CI lane | RT-08/#2396 retains model generation and lifecycle ownership; TEST-01/#2477 retains mandatory ONNX runtime/provider coverage |
+| MD-22 | The same-origin WizMap rendered knowledge-base records through raw HTML after only two substring checks, while URL query parameters could select attacker-hosted metadata and point data; ordinary event-handler markup therefore crossed from untrusted records into the authenticated Dashboard origin | Render records only through Svelte text interpolation with fixed highlight elements; treat query terms literally; require a complete same-origin HTTP(S) metadata/data pair; reject fragments, credentials, cross-origin values, and redirects; add hostile-markup, metacharacter, URL-policy, source-contract, build, and canonical Dashboard regressions | Audit PR closes the direct injection and external-data path; WEB-01/#2465 retains separate-origin capability isolation for any future embedded active content |
+| MD-23 | Candle unified and multimodal startup raced to publish incompatible contents into one process-global `OnceLock`; an earlier or failed model request could be reported as success, Gemma failure could permanently publish an empty factory, ordinary local plans did not require their selected path, and auto similarity estimated context from whitespace rather than each real tokenizer | Serialize validated model publication, keep multimodal state independent, publish only after every requested model and exact path is present, leave failed construction retryable, require the selected Candle/OpenVINO path, initialize only the plan model plus explicit local-consumer union, and route single/pair/batch auto requests from exact untruncated per-model tokenization while preserving one embedding space and typed `-3` overflow | RT-08/#2396 retains model-generation retirement/unload; TEST-01/#2477 retains mandatory real-model provider coverage beyond the model-free concurrency, retry, CJK/subword, normal/race/vet, and AMD proof here |
+| MD-24 | Reopened Dashboard review found MCP stdio command execution and secret-bearing DTOs under overbroad authority; built-in OpenClaw mutation reachable through generic tools; same-name host container lifecycle control; worker-token/host-path serialization; same-origin active worker UI with ambient session authority; unbounded live authorization, room history, and automation goroutines; permissive room JSON and cross-window messages; and outbound fetch paths with DNS-rebinding, redirect, proxy, decompression, spoofed-source, and content-log gaps | Split OpenClaw read/use/manage authority and revalidate live mutations; disable production stdio MCP and same-origin worker UI; redact secret DTOs while preserving omitted secret updates; add an internal MCP process capability; bind container and volume lifecycle to instance labels plus immutable IDs; keep private registry fields out of API JSON; require digest/network/resource production controls; cap live watchers, room rows/history, and automation; make HTTP/WS JSON strict and bounded; verify exact postMessage origin/source; and route every maintained fetch through one TLS/public-DNS/pinned/no-proxy/per-hop/bounded client with metadata-only logs | Audit PR closes the concrete authority, serialization, name-capture, admission, and maintained outbound paths. WEB-02/#2466 retains exhaustive future-route registration; OC-01/#2468 retains non-root worker/socket/network provenance; WEB-01/#2465 retains separate-origin capability delivery; RT-10/#1521 retains distributed/archival QoS. |
+| MD-25 | Final control-plane review found loose or unbounded JSON, YAML, multipart, subprocess, and response handling across Builder, config rollback, topology, Evaluation, and ML; backup names and file roots admitted traversal, symlink, or permission hazards; Builder and internal classifier/topology clients could inherit proxies, follow redirects, or reflect upstream detail; Evaluation and ML lacked complete work, stream, upload, and artifact ownership; and every training job pointed at one mutable output directory | Canonicalize and cap every caller-controlled field before logs or side effects; use strict single-document decoders and explicit body/file/work limits; make config and result storage private, symlink-safe, atomic, and content-free on failure; use direct TLS 1.2+ clients with no redirects or ambient proxies; bound Evaluation runs, SSE registries, subprocess output, and private result paths; bound ML jobs, requests, files, sidecar streams, and downloads; isolate uploads and copy each successful training artifact through an already-open verified descriptor into a private job-owned snapshot | Audit PR closes the concrete input, egress, admission, and per-job isolation failures. #1388 retains policy for operator-selected Evaluation endpoints; #2467 retains authenticated/shared sidecar transport plus aggregate ML retention; #2326 and TD046 retain cross-process config transactions; TD048 retains aggregate Evaluation/ML job recovery, pagination, quota, and garbage collection. |
+| MD-26 | Final adversarial review found fixed Dashboard reverse proxies inheriting `HTTP_PROXY`, unbounded Jaeger/OpenClaw/Replay response buffering, malformed Replay JSON failing open to a low-privilege caller, and the pull-request image job logging into GHCR with package-write authority before running PR-controlled code | Give every fixed reverse proxy one direct pooled TLS 1.2+ transport with a model-compatible bounded header wait; cap transformed response bodies with `limit+1`, close every body, return a generic `502`, and fail Replay redaction closed; make the PR image job read-only, disable checkout credential persistence, and remove registry login while preserving authenticated login only in non-PR publication jobs | Audit PR closes the concrete credential-egress, OOM, redaction, and CI-token paths. SEC-06/#2464 retains future-module content canaries; WEB-02/#2466 retains exhaustive route registration; DEP-01/#2476 retains the broader reproducible multi-ecosystem supply-chain gate. |
 
 ## Terminal closure package catalog
 
@@ -1086,40 +1175,40 @@ record. The underlying defect remains open until that record's evidence merges.
 | SEC-01 Management RBAC and outcome provenance | Critical / security | SA-01, SA-05 | #2463 and #1452 | Deny-by-default route matrix, protected listener, redacted config, source/event ownership tests |
 | SEC-02 Replay confidentiality | Critical / security | SA-02 | #1146, coordinated with #2157 and #2364 | Anonymous and cross-tenant denial, summary default, detail privilege, backend tenant predicates |
 | SEC-03 Looper internal authenticity | High / proof change | SA-03, XR-SEC-001 | #1443 plus audit PR | Runtime credential, reload continuity, versioned rollback-safe Kubernetes Secret, shared-secret multi-replica contract, generic rejection, no upstream/log/config leak, focused and AMD E2E |
-| SEC-04 Credential separation | High / security | SA-04, MD-01, MD-12 | Audit PR for MD-01/MD-12; #2286 for the broader routing boundary | Default stripping on every branch, explicit forwarding opt-in, fail-closed edge defaults, canary tests |
+| SEC-04 Credential separation | High / security | SA-04, MD-01, MD-12, MD-26 | Audit PR for MD-01/MD-12/MD-26; #2286 for the broader routing boundary | Default stripping on every branch, explicit forwarding opt-in, direct internal transports, fail-closed edge defaults, canary tests |
 | SEC-05 Trusted identity and state ownership | High / security and API | SA-06, SA-09 | #1445, #2362, #2364 | Custom-name/casing matrix and two-tenant store/cache/memory/Replay/learning tests |
-| SEC-06 Content-free diagnostics | High / security | SA-07, MD-05 | Audit PR for the documentation delta; #2464 for runtime coverage | INFO/DEBUG/TRACE content canaries and approved helper/static check |
-| NET-01 Dashboard outbound fetch | High / security | CC-01, XR-SEC-002 | #1388 | Address, redirect, resolution, proxy, expansion, and limit suite through one service |
+| SEC-06 Content-free diagnostics | High / security | SA-07, MD-05, MD-24, MD-25, MD-26 | Audit PR for maintained ExtProc and Dashboard runtime coverage; #2464 retains future-module enforcement | INFO/DEBUG/TRACE content canaries, bounded transformed bodies, and approved helper/static check |
+| NET-01 Dashboard outbound fetch | High / security | CC-01, XR-SEC-002, MD-24, MD-25, MD-26 | Audit PR; #1388 retains operator-selected endpoint policy and any future product-policy expansion | Address, redirect, resolution, proxy, expansion, cancellation, rebinding, credential, and limit suite through owned clients |
 | NET-02 Local host-publication boundary | Critical / network and control-plane security | CC-15, MD-07 | Audit PR plus non-public deployment receipt | Loopback-safe internal defaults, listener-address fidelity, validated explicit opt-in, command contracts, external negative and intended-gateway positive probes |
 | WEB-01 Browser session transport | High / security | CC-02, MD-11, MD-12 | Audit PR for cookie/proxy/origin proof; #2465 for embedded-origin isolation | Strict same-origin HTTP/WebSocket boundaries, cookie-only flows, no reusable URL/storage token, scoped tickets, CSRF and compromised-upstream tests |
-| WEB-02 Route-bound authorization | High / security and API | CC-03, MD-15 | Audit PR for exact public exemptions; #2466 for the broader registry | Exhaustive route/method mapping, commit-boundary live-session reauthorization for privileged writes, and independent Replay/feedback role tests |
+| WEB-02 Route-bound authorization | High / security and API | CC-03, MD-15, MD-24, MD-25, MD-26 | Audit PR for exact exemptions, live auth/OpenClaw boundaries, strict control-plane admission, and fail-closed Replay redaction; #2466 for the exhaustive registry | Exhaustive route/method mapping, commit-boundary live-session reauthorization for privileged writes, bounded inputs/responses, and independent Replay/feedback role tests |
 | WEB-03 Password lifecycle | High / security and interoperability | CC-14, MD-09 | Audit PR and #2482 | Shared NIST-aligned policy, CAS login/session replacement, bounded verification and session retention, private auth storage, dashboard-only local secret transport, protected-response no-store, fail-closed startup, Chrome form and well-known-path tests; transactional audit delivery remains #2482 |
 | WEB-04 Public/shared demo credentials | Critical / credential exposure | MD-06 | Audit PR plus non-public live-rotation receipt | No published reusable secret, old login rejected, sessions revoked, private recovery material, capability-limited demo access |
-| ML-01 Sidecar and artifact boundary | High / security and resource | CC-04, XR-SEC-003 | #2467 | Shared-root integration, containment, authenticated transport, mount/network contract |
-| ML-02 Job and upload isolation | High / resource and security | CC-05, XR-SEC-003 | #2467 | Body budgets, random isolated jobs, output containment, concurrency/cancel/cleanup tests |
-| OC-01 OpenClaw provisioning | High / supply chain | CC-06 | #2468 | Catalog-only skills, path containment, image provenance, reduced privilege |
+| ML-01 Sidecar and artifact boundary | High / security and resource | CC-04, XR-SEC-003, MD-25 | Audit PR for direct bounded transport and contained immutable job snapshots; #2467 for authenticated/shared sidecar transport and aggregate retention | Shared-root integration, containment, authenticated transport, immutable job identity, mount/network contract |
+| ML-02 Job and upload isolation | High / resource and security | CC-05, XR-SEC-003, MD-25 | Audit PR for bounded private uploads, admission, SSE, and downloads; #2467 and TD048 for cancellation, recovery, aggregate quota, and cleanup | Body/work budgets, random isolated jobs, output containment, concurrency/cancel/recovery/cleanup tests |
+| OC-01 OpenClaw provisioning | High / supply chain and host control | CC-06, MD-24 | Audit PR for catalog/path/digest/ownership/resource proof; #2468 for non-root/socket/network provenance | Catalog-only skills, symlink/path containment, image provenance, instance-owned container/volume lifecycle, bounded runtime resources, reduced privilege |
 | API-01 OpenAI adapter parity | Medium / API | SA-10 | #2358 | SDK differential/round-trip fixtures, strict unions, escaped IDs |
 | API-02 External RAG bounds | Medium / API and security | SA-08 | #2478 | Typed substitution, exact byte limits, malformed/oversized fixtures |
-| CFG-01 Transactional config writer | High / integrity | CC-07, MD-14 | Audit PR for bounded subprocess/apply rollback proof; #2326 and TD046 for full transaction ownership | CAS, cross-process lock, fsync/rename, rollback fault injection, race tests |
+| CFG-01 Transactional config writer | High / integrity | CC-07, MD-14, MD-25 | Audit PR for bounded subprocess/apply rollback plus private atomic file proof; #2326 and TD046 for full transaction ownership | CAS, cross-process lock, symlink-safe private storage, fsync/rename, rollback fault injection, race tests |
 | CFG-02 Version/schema/rule convergence | High / contract | CC-08, CC-09, CC-10, MD-04, MD-05 | Audit PR for the website/docs delta; #2469, #2122, #2355, and TD046 for convergence | Shared corpus across Go, CLI, DSL, dashboard, dynamic CRD, operator; strict pre-rollout admission |
 | CLI-01 Runtime state path | Low / CLI | CC-11 | #2479 | Normalization, containment, atomic private writes |
 | CLI-02 Local storage secret lifecycle | High / security and CLI | CC-16 | #2485 | Per-stack CSPRNG credentials, private persistence, authenticated stores, workload-network isolation, migration and rotation receipts |
 | PERF-02 Validation snapshot | Medium / performance | CC-12 | TD046 | One manifest read per KB and scaling benchmark |
 | ARCH-01 Control-plane hotspots | Medium / architecture | CC-13 | Existing indexed debt, especially TD006, TD020, TD046 | Extraction-first boundaries and structure ownership |
-| RT-01 Runtime generation and classifier snapshot | High / resource | RR-01, RR-02 | #2470, TD045, and #2396 | Constructor fault matrix, stream/reload race, exact cleanup, bounded graceful shutdown |
+| RT-01 Runtime generation and classifier snapshot | High / resource | RR-01, RR-02, MD-18 | #2470, TD045, and #2396 | Constructor fault matrix, stream/reload race, exact cleanup, bounded graceful shutdown |
 | RT-02 Looper workflow and I/O budgets | High / resource and performance | RR-03, RR-04 | #2471, #1456, and #2336 | Cross-request resume, stable clients/goroutines, byte limits, streaming/cancellation fixtures |
 | RT-03 Replay actor and retention | High / data integrity and resource | RR-05, RR-06 | #2472, coordinated with #1146 and #2157 | Admission-close-drain barriers, durable acknowledgment, TTL conformance, cursor pagination, total-size cap |
 | RT-04 Cache cancellation and result value | High / resource and correctness | RR-07 | #2473 | Per-request scores, miss reset, cancellation propagation, constructor cleanup |
 | RT-05 Vector lifecycle and consistency | High / resource and integrity | RR-08, RR-09 | #2474 | Stop deadline, bounded batching/status, side-effect fault matrix, restart reconciliation |
 | RT-06 Selection ownership and cardinality | High / resource | RR-10, RR-11 | #2222 and #2396 | No unused allocations, concurrent lease/load/close, bounded soak and persistence |
 | RT-07 Memory tracking actor | High / resource | RR-12 | #2339 | Bounded slow-backend soak, atomic/coalesced updates, owned/borrowed exact-close tests |
-| RT-08 Native generation and lifecycle | High and medium / native | RR-13, RR-14, RR-15, MD-02, MD-03, MD-10, MD-13 | Audit PR for image/text input, cross-surface admission, and error/resource contracts; #2396, #2477, and TD042 for lifecycle/structure | Init failure/retry/path tests, bounded queue/unload, allocator instrumentation, classify/reload/close sanitizers |
+| RT-08 Native generation and lifecycle | High and medium / native | RR-13, RR-14, RR-15, MD-02, MD-03, MD-10, MD-13, MD-17, MD-18, MD-19, MD-20, MD-21 | Audit PR for image/text input, cross-surface admission, same-space routing, loaded-only inventory, and error/resource contracts; #2396, #2477, and TD042 for lifecycle/structure | Init failure/retry/path tests, bounded queue/unload, allocator instrumentation, classify/reload/close sanitizers |
 | RT-09 Search and timer lifecycle | High and medium / performance/resource | RR-16, RR-17 | #2475 and TD045 | Positive-duration validation, concurrent close race, 100k search profiles |
-| RT-10 OpenClaw collaboration lifecycle | High and medium / correctness and resource | RR-18, MD-16 | Audit PR for single-owner send/close race proof; reopened #1521 for graceful close/QoS/reclamation | Idempotent disconnect, focused repeated race, full handler race, SSE continuity, close frame, bounded backpressure and reclamation |
-| DEP-01 Vulnerability gate | High / supply chain | XR-DEP-001 | #2476 | Patched dependencies, lock/toolchain pins, ecosystem scans, expiring exceptions |
-| TEST-01 ONNX compile lane | High / testing/native | XR-TEST-001 | #2477 and #2396 | Model-free `go test` plus selected runtime receipts |
+| RT-10 OpenClaw collaboration lifecycle | High and medium / correctness and resource | RR-18, MD-16, MD-24 | Audit PR for single-owner send/close plus bounded room/automation proof; reopened #1521 for distributed archival/QoS/reclamation | Idempotent disconnect, focused repeated race, full handler race, SSE continuity, close frame, bounded messages/history/workers/backpressure and reclamation |
+| DEP-01 Vulnerability gate | High / supply chain | XR-DEP-001, MD-26 | Audit PR for least-privilege PR image jobs; #2476 for the broader dependency gate | No write credential before untrusted code, patched dependencies, lock/toolchain pins, ecosystem scans, expiring exceptions |
+| TEST-01 ONNX compile lane | High / testing/native | XR-TEST-001, MD-17, MD-19, MD-20, MD-21 | Audit PR, #2477, and #2396 | Model-free binding and router-APIServer Go normal/race/vet, Rust typed-status tests, exact GPU image build, plus selected runtime receipts |
 | TEST-02 E2E acceptance floors | High / testing | XR-TEST-002 | #2379 | Role inventory and deterministic non-zero acceptance contracts |
-| TEST-03 Local feature-gate integrity | High / testing | XR-TEST-003 | Audit PR | Forced build/stop-failure propagation, repo-owned CLI resolution, and successful post-fix feature smoke |
+| TEST-03 Local feature-gate integrity | High / testing | XR-TEST-003 | Audit PR and #2487 | Forced build/stop-failure propagation, repo-owned CLI resolution, successful post-fix feature smoke, and ownership-safe isolated teardown |
 | TEST-04 Affected-profile selection integrity | High / testing | XR-TEST-004, MD-08 | Audit PR | Strict baseline-union-affected selector, canonical/common-trigger consistency, complete security-path ownership, simultaneous-path tests, and selected-profile CI receipt |
 | PERF-01 Numeric regression gate | High / performance/testing | XR-PERF-001 | #2455 | Repaired compare path and required PR-visible numeric result |
 
@@ -1133,7 +1222,7 @@ This compact ledger is the completeness check for the four audit lanes.
 | Resource and runtime | RR-01→RT-01; RR-02→RT-01; RR-03→RT-02; RR-04→RT-02; RR-05→RT-03; RR-06→RT-03; RR-07→RT-04; RR-08→RT-05; RR-09→RT-05; RR-10→RT-06; RR-11→RT-06; RR-12→RT-07; RR-13→RT-08; RR-14→RT-08; RR-15→RT-08; RR-16→RT-09; RR-17→RT-09; RR-18→RT-10 |
 | Control plane and contract | CC-01→NET-01; CC-02→WEB-01; CC-03→WEB-02; CC-04→ML-01; CC-05→ML-02; CC-06→OC-01; CC-07→CFG-01; CC-08→CFG-02; CC-09→CFG-02; CC-10→CFG-02; CC-11→CLI-01; CC-12→PERF-02; CC-13→ARCH-01; CC-14→WEB-03; CC-15→NET-02; CC-16→CLI-02 |
 | Cross-repository | XR-SEC-001→SEC-03; XR-SEC-002→NET-01; XR-SEC-003→ML-01/ML-02; XR-DEP-001→DEP-01; XR-TEST-001→TEST-01; XR-TEST-002→TEST-02; XR-TEST-003→TEST-03; XR-TEST-004→TEST-04; XR-PERF-001→PERF-01 |
-| Final-main delta | MD-01→SEC-04; MD-02→RT-08; MD-03→RT-08; MD-04→CFG-02; MD-05→SEC-06/CFG-02; MD-06→WEB-04; MD-07→NET-02; MD-08→TEST-04; MD-09→WEB-03; MD-10→RT-08; MD-11→WEB-01; MD-12→SEC-04/WEB-01; MD-13→RT-08/RT-01; MD-14→CFG-01; MD-15→WEB-02; MD-16→RT-10 |
+| Final-main delta | MD-01→SEC-04; MD-02→RT-08; MD-03→RT-08; MD-04→CFG-02; MD-05→SEC-06/CFG-02; MD-06→WEB-04; MD-07→NET-02; MD-08→TEST-04; MD-09→WEB-03; MD-10→RT-08; MD-11→WEB-01; MD-12→SEC-04/WEB-01; MD-13→RT-08/RT-01; MD-14→CFG-01; MD-15→WEB-02; MD-16→RT-10; MD-17→TEST-01/RT-08; MD-18→RT-01/RT-08; MD-19→TEST-01/RT-08; MD-20→TEST-01/RT-08; MD-21→TEST-01/RT-08; MD-22→WEB-01; MD-23→RT-08/TEST-01; MD-24→SEC-06/NET-01/WEB-01/WEB-02/OC-01/RT-10 |
 
 Publication and closure check: every raw finding now maps to an applied issue
 or indexed debt record with priority metadata. Attach the final proof pull
@@ -1234,8 +1323,23 @@ green:
   repeated race and full handler race runs pass. Remaining graceful-delivery
   QoS is retained under RT-10/#1521 rather than waived.
 - ML Rust tests passed. The NLP Rust crate currently contains no unit tests.
-- ONNX Go tests fail to compile against current APIs. This is TEST-01, not an
-  environment waiver.
+- ONNX model-free Go normal/race/vet, no-CGO and real-consumer compilation, and
+  65 Rust library tests pass after repairing API/probability ownership, typed
+  context-limit propagation, true token metadata, `auto` compatibility,
+  unsupported-model/layer fallback, full-layer provenance, model-output shape
+  admission, strict pooled multimodal output, complete similarity options,
+  embedded-NUL admission, URL/tensor/image budgets, and build-package copies.
+  Candle's focused embedded-NUL, SSRF, direct tensor, pair/batch same-model,
+  metadata, mock input-contract compile, and MLP JSON normal/race/vet plus
+  defensive Rust dimension tests and router-consumer suites also pass. Canonical
+  Docker/workflow/docs contracts cover complete binding copies,
+  dependency-cache ordering, safe mirror arguments, TLS-on defaults, direct
+  build inputs, draft-to-ready events, and historical-document compatibility.
+  Exact ROCm image/runtime evidence remains part of the final AMD receipt rather
+  than being inferred from local compilation. The complete non-CGO behavioral
+  suite still exposes pre-existing synthetic classification and state drift;
+  [#2491](https://github.com/vllm-project/semantic-router/issues/2491) owns the
+  decision to make that build contract-faithful or explicitly fail closed.
 - Native-linked Looper and extproc suites passed after the normal native build,
   including focused authentication/reentry integration tests and repeated race
   runs. Broader feature, affected-E2E, platform, and final PR receipts remain

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -22,6 +23,9 @@ func newEmbeddingOnlyConfig() *config.RouterConfig {
 		InlineModels: config.InlineModels{
 			EmbeddingModels: config.EmbeddingModels{
 				MmBertModelPath: testEmbeddingModelPath,
+				EmbeddingConfig: config.HNSWConfig{
+					ModelType: "mmbert",
+				},
 			},
 		},
 	}
@@ -59,6 +63,86 @@ func TestBuildModelSpecsRequiresEmbeddingModelWeightsAndTokenizer(t *testing.T) 
 	}
 }
 
+func TestBuildModelSpecsAppliesCompletenessToPlanSelectedPath(t *testing.T) {
+	qwenPath := "models/test-qwen3"
+	mmBertPath := "models/test-mmbert"
+	cfg := &config.RouterConfig{
+		MoMRegistry: map[string]string{
+			qwenPath:   "example/test-qwen3",
+			mmBertPath: "example/test-mmbert",
+		},
+		InlineModels: config.InlineModels{EmbeddingModels: config.EmbeddingModels{
+			Qwen3ModelPath:  qwenPath,
+			MmBertModelPath: mmBertPath,
+			EmbeddingConfig: config.HNSWConfig{ModelType: config.EmbeddingModelTypeQwen3},
+		}},
+	}
+
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+	qwenSpec, ok := findSpecByPath(specs, qwenPath)
+	if !ok {
+		t.Fatalf("BuildModelSpecs() missing selected path %q: %#v", qwenPath, specs)
+	}
+	for _, want := range embeddingModelWeightFiles {
+		if !slices.Contains(qwenSpec.RequiredFiles, want) {
+			t.Fatalf("selected path RequiredFiles = %#v, missing %q", qwenSpec.RequiredFiles, want)
+		}
+	}
+	mmBertSpec, ok := findSpecByPath(specs, mmBertPath)
+	if !ok {
+		t.Fatalf("BuildModelSpecs() missing configured non-selected path %q: %#v", mmBertPath, specs)
+	}
+	for _, selectedOnly := range embeddingModelWeightFiles {
+		if slices.Contains(mmBertSpec.RequiredFiles, selectedOnly) {
+			t.Fatalf("non-selected path RequiredFiles = %#v, unexpectedly contains %q", mmBertSpec.RequiredFiles, selectedOnly)
+		}
+	}
+}
+
+func TestBuildModelSpecsEmbeddingRulesStillRequireSelectedLocalPath(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{Signals: config.Signals{
+			EmbeddingRules: []config.EmbeddingRule{{Name: "required", Candidates: []string{"hello"}}},
+		}},
+	}
+
+	_, err := BuildModelSpecs(cfg)
+	if err == nil || !strings.Contains(err.Error(), "requires a configured qwen3 model path") {
+		t.Fatalf("BuildModelSpecs() error = %v, want selected local path failure", err)
+	}
+}
+
+func TestBuildModelSpecsLocalConsumerStillRequiresSelectedLocalPath(t *testing.T) {
+	cfg := &config.RouterConfig{
+		InlineModels: config.InlineModels{EmbeddingModels: config.EmbeddingModels{
+			EmbeddingConfig: config.HNSWConfig{ModelType: "mmbert"},
+		}},
+		Memory: config.MemoryConfig{Enabled: true, EmbeddingModel: "mmbert"},
+	}
+
+	_, err := BuildModelSpecs(cfg)
+	if err == nil || !strings.Contains(err.Error(), "requires a configured mmbert model path") {
+		t.Fatalf("BuildModelSpecs() error = %v, want selected local consumer path failure", err)
+	}
+}
+
+func TestBuildModelSpecsBertConsumerDoesNotInventQwenPlan(t *testing.T) {
+	cfg := &config.RouterConfig{
+		Memory: config.MemoryConfig{Enabled: true, EmbeddingModel: "bert"},
+	}
+
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+	if len(specs) != 0 {
+		t.Fatalf("BuildModelSpecs() returned %d specs, want none: %#v", len(specs), specs)
+	}
+}
+
 func TestBuildModelSpecsSkipsEmbeddingModelsForRemoteBackend(t *testing.T) {
 	cfg := newEmbeddingOnlyConfig()
 	cfg.EmbeddingModels.EmbeddingConfig = config.HNSWConfig{
@@ -76,6 +160,51 @@ func TestBuildModelSpecsSkipsEmbeddingModelsForRemoteBackend(t *testing.T) {
 	}
 	if len(specs) != 0 {
 		t.Fatalf("BuildModelSpecs() returned %d specs for remote embedding backend, want 0: %#v", len(specs), specs)
+	}
+}
+
+func TestBuildModelSpecsRemoteConfigWithLocalOverrideIncludesSelectedModel(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", config.EmbeddingBackendCandle)
+	t.Setenv("EMBEDDING_MODEL_TYPE_OVERRIDE", "mmbert")
+	cfg := newEmbeddingOnlyConfig()
+	cfg.EmbeddingModels.EmbeddingConfig = config.HNSWConfig{
+		Backend:   config.EmbeddingBackendOpenAICompatible,
+		ModelType: config.EmbeddingModelTypeRemote,
+	}
+	cfg.EmbeddingModels.Endpoint = config.EmbeddingEndpointConfig{
+		BaseURL: "http://embedding-service:8000/v1",
+		Model:   "remote-embedding",
+	}
+
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+	spec, ok := findSpecByPath(specs, testEmbeddingModelPath)
+	if !ok || len(specs) != 1 {
+		t.Fatalf("local override specs = %#v", specs)
+	}
+	for _, want := range embeddingModelWeightFiles {
+		if !slices.Contains(spec.RequiredFiles, want) {
+			t.Fatalf("local override RequiredFiles = %#v, missing %q", spec.RequiredFiles, want)
+		}
+	}
+}
+
+func TestBuildModelSpecsLocalConfigWithRemoteOverrideSkipsLocalModels(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", config.EmbeddingBackendOpenAICompatible)
+	cfg := newEmbeddingOnlyConfig()
+	cfg.EmbeddingModels.Endpoint = config.EmbeddingEndpointConfig{
+		BaseURL: "http://embedding-service:8000/v1",
+		Model:   "remote-embedding",
+	}
+
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+	if len(specs) != 0 {
+		t.Fatalf("remote override specs = %#v, want none", specs)
 	}
 }
 

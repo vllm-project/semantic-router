@@ -42,7 +42,7 @@ ENV ORT_CK_FLASH_ATTN_LIB=/usr/local/lib/libort_ck_flash_attn.so
 
 # Copy Go sources and FA test
 COPY go.mod go.sum* ./
-COPY semantic-router.go fa_test.go ./
+COPY *.go ./
 
 # Copy scripts
 COPY scripts/download_fa_models.py scripts/run_fa_tests.sh scripts/

@@ -758,6 +758,7 @@ test.describe('Layout top navigation', () => {
           'mlpipeline.manage',
           'openclaw.manage',
           'openclaw.read',
+          'openclaw.use',
           'replay.read',
           'security.manage',
           'tools.use',

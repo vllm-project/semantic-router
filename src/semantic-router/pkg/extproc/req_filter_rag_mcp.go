@@ -80,7 +80,7 @@ func (r *OpenAIRouter) substituteVariables(toolArgs map[string]interface{}, ctx 
 
 			tmpl, err := template.New("substitution").Parse(templateStr)
 			if err != nil {
-				logging.Warnf("Failed to parse template for key %s: %v, using original value", k, err)
+				logging.Warnf("Failed to parse template for key_chars=%d: %s, using original value", len(k), safeErrorForLog(err))
 				result[k] = val
 				continue
 			}
@@ -95,7 +95,7 @@ func (r *OpenAIRouter) substituteVariables(toolArgs map[string]interface{}, ctx 
 
 			var buf bytes.Buffer
 			if err := tmpl.Execute(&buf, templateData); err != nil {
-				logging.Warnf("Failed to execute template for key %s: %v, using original value", k, err)
+				logging.Warnf("Failed to execute template for key_chars=%d: %s, using original value", len(k), safeErrorForLog(err))
 				result[k] = val
 				continue
 			}

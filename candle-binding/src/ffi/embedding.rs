@@ -8,8 +8,8 @@ use crate::ffi::types::{
     BatchSimilarityResult, EmbeddingResult, EmbeddingSimilarityResult, SimilarityMatch,
 };
 use crate::model_architectures::embedding::tokenizer_contract::{
-    encode_embedding_batch_checked, encode_embedding_checked, prepare_embedding_tokenizer,
-    EmbeddingTokenError,
+    encode_embedding_batch_checked, encode_embedding_batch_for_routing, encode_embedding_checked,
+    prepare_embedding_tokenizer, EmbeddingTokenError,
 };
 use crate::model_architectures::ModelType;
 use std::ffi::{c_char, CStr};
@@ -19,7 +19,7 @@ use super::image_input::{decode_resize_to_chw_f32, MAX_MULTIMODAL_IMAGE_ENCODED_
 //Import embedding models and model factory
 use crate::model_architectures::config::{DualPathConfig, EmbeddingConfig};
 use crate::model_architectures::model_factory::ModelFactory;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 // ============================================================================
 // Refactoring: Shared embedding generation logic
@@ -92,6 +92,11 @@ type EmbeddingGenerationResult<T> = Result<T, EmbeddingGenerationError>;
 
 /// Global singleton for ModelFactory
 pub(crate) static GLOBAL_MODEL_FACTORY: OnceLock<ModelFactory> = OnceLock::new();
+
+/// Serializes every embedding-model publication. Loading can be expensive, but
+/// more importantly a concurrent multimodal/unified startup must never race to
+/// publish incompatible contents into a process-global `OnceLock`.
+static EMBEDDING_INIT_LOCK: Mutex<()> = Mutex::new(());
 
 use crate::model_architectures::embedding::MultiModalEmbeddingModel;
 use tokenizers::Tokenizer as MmTokenizer;
@@ -310,91 +315,174 @@ where
         .collect())
 }
 
-/// Initialize mmBERT embedding model with 2D Matryoshka support
-///
-/// This model supports:
-/// - 32K context length
-/// - Multilingual (1800+ languages via Glot500)
-/// - 2D Matryoshka: dimension reduction (768→64) AND layer early exit (22→3 layers)
-///
-/// # Safety
-/// - `model_path` must be a valid null-terminated C string
-///
-/// # Returns
-/// - `true` if initialization succeeded
-/// - `false` if initialization failed
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
-pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu: bool) -> bool {
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct EmbeddingFactoryRequest {
+    qwen3_path: Option<String>,
+    gemma_path: Option<String>,
+    mmbert_path: Option<String>,
+}
+
+impl EmbeddingFactoryRequest {
+    fn is_empty(&self) -> bool {
+        self.qwen3_path.is_none() && self.gemma_path.is_none() && self.mmbert_path.is_none()
+    }
+
+    fn validate_factory(&self, factory: &ModelFactory) -> Result<(), String> {
+        validate_requested_model(
+            "Qwen3",
+            self.qwen3_path.as_deref(),
+            factory.get_qwen3_model().is_some(),
+            factory.get_qwen3_model_path(),
+        )?;
+        validate_requested_model(
+            "Gemma",
+            self.gemma_path.as_deref(),
+            factory.get_gemma_model().is_some(),
+            factory.get_gemma_model_path(),
+        )?;
+        validate_requested_model(
+            "mmBERT",
+            self.mmbert_path.as_deref(),
+            factory.get_mmbert_model().is_some(),
+            factory.get_mmbert_model_path(),
+        )
+    }
+}
+
+fn validate_requested_model(
+    model: &str,
+    requested_path: Option<&str>,
+    loaded: bool,
+    loaded_path: Option<&str>,
+) -> Result<(), String> {
+    let Some(requested_path) = requested_path else {
+        return Ok(());
+    };
+    if !loaded {
+        return Err(format!("requested {model} model is not loaded"));
+    }
+    if loaded_path != Some(requested_path) {
+        return Err(format!(
+            "requested {model} model path does not match the process-global model"
+        ));
+    }
+    Ok(())
+}
+
+fn initialize_once_with_validation<T>(
+    slot: &OnceLock<T>,
+    build: impl FnOnce() -> Result<T, String>,
+    validate: impl Fn(&T) -> Result<(), String>,
+) -> Result<(), String> {
+    if let Some(existing) = slot.get() {
+        return validate(existing);
+    }
+
+    let candidate = build()?;
+    validate(&candidate)?;
+    match slot.set(candidate) {
+        Ok(()) => Ok(()),
+        Err(_) => slot
+            .get()
+            .ok_or_else(|| "global model publication lost without a winner".to_string())
+            .and_then(validate),
+    }
+}
+
+fn parse_optional_model_path(
+    model_path: *const c_char,
+    field: &str,
+) -> Result<Option<String>, String> {
+    if model_path.is_null() {
+        return Ok(None);
+    }
+    let path = unsafe { CStr::from_ptr(model_path) }
+        .to_str()
+        .map_err(|error| format!("invalid UTF-8 in {field}: {error}"))?;
+    if path.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(path.to_string()))
+}
+
+fn build_embedding_factory(
+    request: &EmbeddingFactoryRequest,
+    use_cpu: bool,
+) -> Result<ModelFactory, String> {
     use candle_core::Device;
 
-    if model_path.is_null() {
-        eprintln!("Error: model_path is null");
-        return false;
+    if request.is_empty() {
+        return Err("at least one embedding model path must be provided".to_string());
     }
-
-    let path = unsafe {
-        match CStr::from_ptr(model_path).to_str() {
-            Ok(s) if !s.is_empty() => s.to_string(),
-            _ => {
-                eprintln!("Error: invalid model_path");
-                return false;
-            }
-        }
-    };
-
-    // Check if already initialized
-    if let Some(factory) = GLOBAL_MODEL_FACTORY.get() {
-        if factory.get_mmbert_model().is_some() {
-            eprintln!("WARNING: mmBERT model already initialized");
-            return true;
-        }
-    }
-
-    // Determine device
     let device = if use_cpu {
         Device::Cpu
     } else {
         Device::cuda_if_available(0).unwrap_or(Device::Cpu)
     };
+    let mut factory = ModelFactory::new(device);
 
-    // Create or get factory
-    let factory = if GLOBAL_MODEL_FACTORY.get().is_some() {
-        // Factory exists but mmbert not loaded - we can't modify OnceLock
-        eprintln!("Error: ModelFactory already initialized without mmBERT. Initialize mmBERT first or use init_embedding_models_with_mmbert.");
-        return false;
-    } else {
-        let mut factory = ModelFactory::new(device);
-        match factory.register_mmbert_embedding_model(&path) {
-            Ok(_) => {
-                println!("INFO: mmBERT embedding model registered successfully");
-            }
-            Err(e) => {
-                eprintln!("ERROR: Failed to register mmBERT model: {:?}", e);
-                return false;
-            }
-        }
+    if let Some(path) = request.qwen3_path.as_deref() {
         factory
-    };
-
-    match GLOBAL_MODEL_FACTORY.set(factory) {
-        Ok(_) => true,
-        Err(_) => {
-            eprintln!("Error: Failed to set global model factory");
-            false
-        }
+            .register_qwen3_embedding_model(path)
+            .map_err(|error| format!("failed to register Qwen3 model: {error:?}"))?;
     }
+    if let Some(path) = request.gemma_path.as_deref() {
+        factory
+            .register_gemma_embedding_model(path)
+            .map_err(|error| format!("failed to register Gemma model: {error:?}"))?;
+    }
+    if let Some(path) = request.mmbert_path.as_deref() {
+        factory
+            .register_mmbert_embedding_model(path)
+            .map_err(|error| format!("failed to register mmBERT model: {error:?}"))?;
+    }
+    request.validate_factory(&factory)?;
+    Ok(factory)
 }
 
-/// Initialize embedding models with given paths (including mmBERT)
-///
-/// # Safety
-/// - All paths must be valid null-terminated C strings or null
-/// - Must be called before any embedding generation functions
-///
-/// # Returns
-/// - `true` if initialization succeeded
-/// - `false` if initialization failed
+fn initialize_embedding_factory(request: EmbeddingFactoryRequest, use_cpu: bool) -> bool {
+    let _guard = EMBEDDING_INIT_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let result = initialize_once_with_validation(
+        &GLOBAL_MODEL_FACTORY,
+        || build_embedding_factory(&request, use_cpu),
+        |factory| request.validate_factory(factory),
+    );
+    if let Err(error) = result {
+        eprintln!("ERROR: embedding model initialization failed: {error}");
+        return false;
+    }
+    true
+}
+
+/// Initialize mmBERT embedding model with 2D Matryoshka support.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu: bool) -> bool {
+    let mmbert_path = match parse_optional_model_path(model_path, "mmBERT model path") {
+        Ok(Some(path)) => Some(path),
+        Ok(None) => {
+            eprintln!("ERROR: mmBERT model path is required");
+            return false;
+        }
+        Err(error) => {
+            eprintln!("ERROR: {error}");
+            return false;
+        }
+    };
+    initialize_embedding_factory(
+        EmbeddingFactoryRequest {
+            mmbert_path,
+            ..EmbeddingFactoryRequest::default()
+        },
+        use_cpu,
+    )
+}
+
+/// Initialize embedding models with given paths (including mmBERT).
+/// Existing process-global state is successful only when it contains every
+/// requested model at the same path.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn init_embedding_models_with_mmbert(
@@ -403,98 +491,32 @@ pub extern "C" fn init_embedding_models_with_mmbert(
     mmbert_model_path: *const c_char,
     use_cpu: bool,
 ) -> bool {
-    use candle_core::Device;
-
-    if GLOBAL_MODEL_FACTORY.get().is_some() {
-        eprintln!("WARNING: ModelFactory already initialized");
-        return true;
-    }
-
-    // Parse paths
-    let qwen3_path = if qwen3_model_path.is_null() {
-        None
-    } else {
-        unsafe {
-            match CStr::from_ptr(qwen3_model_path).to_str() {
-                Ok(s) if !s.is_empty() => Some(s.to_string()),
-                _ => None,
-            }
-        }
-    };
-
-    let gemma_path = if gemma_model_path.is_null() {
-        None
-    } else {
-        unsafe {
-            match CStr::from_ptr(gemma_model_path).to_str() {
-                Ok(s) if !s.is_empty() => Some(s.to_string()),
-                _ => None,
-            }
-        }
-    };
-
-    let mmbert_path = if mmbert_model_path.is_null() {
-        None
-    } else {
-        unsafe {
-            match CStr::from_ptr(mmbert_model_path).to_str() {
-                Ok(s) if !s.is_empty() => Some(s.to_string()),
-                _ => None,
-            }
-        }
-    };
-
-    if qwen3_path.is_none() && gemma_path.is_none() && mmbert_path.is_none() {
-        eprintln!("Error: at least one model path must be provided");
-        return false;
-    }
-
-    let device = if use_cpu {
-        Device::Cpu
-    } else {
-        Device::cuda_if_available(0).unwrap_or(Device::Cpu)
-    };
-
-    let mut factory = ModelFactory::new(device);
-
-    // Register models
-    if let Some(path) = qwen3_path {
-        if let Err(e) = factory.register_qwen3_embedding_model(&path) {
-            eprintln!("ERROR: Failed to register Qwen3 model: {:?}", e);
+    let request = match (
+        parse_optional_model_path(qwen3_model_path, "Qwen3 model path"),
+        parse_optional_model_path(gemma_model_path, "Gemma model path"),
+        parse_optional_model_path(mmbert_model_path, "mmBERT model path"),
+    ) {
+        (Ok(qwen3_path), Ok(gemma_path), Ok(mmbert_path)) => EmbeddingFactoryRequest {
+            qwen3_path,
+            gemma_path,
+            mmbert_path,
+        },
+        (qwen3, gemma, mmbert) => {
+            let error = qwen3
+                .err()
+                .or_else(|| gemma.err())
+                .or_else(|| mmbert.err())
+                .unwrap_or_else(|| "invalid embedding model path".to_string());
+            eprintln!("ERROR: {error}");
             return false;
         }
-    }
-
-    if let Some(path) = gemma_path {
-        if let Err(e) = factory.register_gemma_embedding_model(&path) {
-            eprintln!("WARNING: Failed to register Gemma model: {:?}", e);
-        }
-    }
-
-    if let Some(path) = mmbert_path {
-        if let Err(e) = factory.register_mmbert_embedding_model(&path) {
-            eprintln!("ERROR: Failed to register mmBERT model: {:?}", e);
-            return false;
-        }
-        println!("INFO: mmBERT embedding model registered with 2D Matryoshka support");
-    }
-
-    match GLOBAL_MODEL_FACTORY.set(factory) {
-        Ok(_) => true,
-        Err(_) => true, // Already initialized
-    }
+    };
+    initialize_embedding_factory(request, use_cpu)
 }
 
-/// Initialize embedding models with given paths
-///
-/// # Safety
-/// - `qwen3_model_path` and `gemma_model_path` must be valid null-terminated C strings or null
-/// - Must be called before any embedding generation functions
-/// - Can only be called once (subsequent calls will return true as already initialized)
-///
-/// # Returns
-/// - `true` if initialization succeeded or already initialized
-/// - `false` if initialization failed
+/// Initialize Qwen3 and/or Gemma embedding models.
+/// Existing process-global state is successful only when it contains every
+/// requested model at the same path.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn init_embedding_models(
@@ -502,92 +524,25 @@ pub extern "C" fn init_embedding_models(
     gemma_model_path: *const c_char,
     use_cpu: bool,
 ) -> bool {
-    use candle_core::Device;
-
-    // Check if already initialized (OnceLock can only be set once)
-    if GLOBAL_MODEL_FACTORY.get().is_some() {
-        eprintln!("WARNING: ModelFactory already initialized");
-        return true; // Already initialized, return success
-    }
-
-    // Parse model paths
-    let qwen3_path = if qwen3_model_path.is_null() {
-        None
-    } else {
-        unsafe {
-            match CStr::from_ptr(qwen3_model_path).to_str() {
-                Ok(s) if !s.is_empty() => Some(s.to_string()),
-                _ => None,
-            }
+    let request = match (
+        parse_optional_model_path(qwen3_model_path, "Qwen3 model path"),
+        parse_optional_model_path(gemma_model_path, "Gemma model path"),
+    ) {
+        (Ok(qwen3_path), Ok(gemma_path)) => EmbeddingFactoryRequest {
+            qwen3_path,
+            gemma_path,
+            mmbert_path: None,
+        },
+        (qwen3, gemma) => {
+            let error = qwen3
+                .err()
+                .or_else(|| gemma.err())
+                .unwrap_or_else(|| "invalid embedding model path".to_string());
+            eprintln!("ERROR: {error}");
+            return false;
         }
     };
-
-    let gemma_path = if gemma_model_path.is_null() {
-        None
-    } else {
-        unsafe {
-            match CStr::from_ptr(gemma_model_path).to_str() {
-                Ok(s) if !s.is_empty() => Some(s.to_string()),
-                _ => None,
-            }
-        }
-    };
-
-    // Check if at least one model path is provided
-    if qwen3_path.is_none() && gemma_path.is_none() {
-        eprintln!("Error: at least one embedding model path must be provided");
-        return false;
-    }
-
-    // Determine device
-    let device = if use_cpu {
-        Device::Cpu
-    } else {
-        Device::cuda_if_available(0).unwrap_or(Device::Cpu)
-    };
-
-    // Create ModelFactory
-    let mut factory = ModelFactory::new(device);
-
-    // Register Qwen3 model if path provided
-    if let Some(path) = qwen3_path {
-        match factory.register_qwen3_embedding_model(&path) {
-            Ok(_) => {
-                // Model registered successfully
-            }
-            Err(e) => {
-                eprintln!("ERROR: Failed to register Qwen3 model: {:?}", e);
-                return false;
-            }
-        }
-    }
-
-    // Register Gemma model if path provided
-    // Note: Gemma is optional - if it fails to load, we continue with Qwen3 only
-    if let Some(path) = gemma_path {
-        match factory.register_gemma_embedding_model(&path) {
-            Ok(_) => {
-                println!(
-                    "INFO: Gemma embedding model registered successfully from {}",
-                    path
-                );
-            }
-            Err(e) => {
-                eprintln!("WARNING: Failed to register Gemma model: {:?}", e);
-                eprintln!("WARNING: Continuing with Qwen3 only. This is expected if Gemma model is not downloaded (e.g., missing HF_TOKEN for gated models)");
-                // Don't return false - Gemma is optional, continue with Qwen3
-            }
-        }
-    }
-
-    // Try to initialize the global factory
-    match GLOBAL_MODEL_FACTORY.set(factory) {
-        Ok(_) => true,
-        Err(_) => {
-            // Already initialized - idempotent behavior
-            true
-        }
-    }
+    initialize_embedding_factory(request, use_cpu)
 }
 
 /// Helper function to create a temporary classifier for routing decisions
@@ -884,7 +839,6 @@ fn generate_mmbert_embeddings_batch(
 
 /// Internal helper to generate text embedding via the multi-modal model
 fn generate_multimodal_text_embedding(
-    _factory: &ModelFactory,
     text: &str,
     target_layer: Option<usize>,
     target_dim: Option<usize>,
@@ -926,7 +880,6 @@ fn generate_multimodal_text_embedding(
 
 /// Generate text embeddings for multiple texts in a single batch (multi-modal)
 fn generate_multimodal_text_embeddings_batch(
-    _factory: &ModelFactory,
     texts: &[&str],
     target_layer: Option<usize>,
     target_dim: Option<usize>,
@@ -1023,120 +976,30 @@ pub extern "C" fn get_embedding_with_dim(
         }
     };
 
-    // This estimate is used only for model routing. The selected model's
-    // untruncated tokenizer enforces the real context limit before Tensor creation.
-    let routing_sequence_estimate = text_str
-        .split_whitespace()
-        .count()
-        .min(QWEN3_EMBEDDING_CONTEXT);
-    let requirements = EmbeddingRequirements {
-        sequence_length: routing_sequence_estimate,
+    let target_dimension = (target_dim > 0).then_some(target_dim as usize);
+    let model_type = match select_auto_embedding_model(
+        GLOBAL_MODEL_FACTORY.get(),
+        &[text_str],
+        target_dimension,
         quality_priority,
         latency_priority,
-        target_dimension: if target_dim > 0 {
-            Some(target_dim as usize)
-        } else {
-            None
-        },
-    };
-
-    // Create temporary classifier for routing
-    let classifier = match create_temp_classifier() {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("Error: failed to create classifier: {}", e);
+    ) {
+        Ok(model_type) => model_type,
+        Err(error) => {
+            eprintln!("Error: failed to select embedding model: {error}");
             unsafe {
                 (*result) = create_error_result();
             }
-            return -1;
+            return error.status();
         }
     };
 
-    // Select model based on requirements
-    let model_type = match classifier.select_embedding_model(&requirements) {
-        Ok(mt) => mt,
-        Err(e) => {
-            eprintln!("Error: model selection failed: {:?}", e);
-            unsafe {
-                (*result) = create_error_result();
-            }
-            return -1;
-        }
-    };
-
-    // Get model factory to check availability
-    let factory = GLOBAL_MODEL_FACTORY.get();
-
-    // Convert ModelType to string for get_embedding_with_model_type
-    // Check if selected model is available, fall back to mmbert if not
     let model_type_str = match model_type {
-        ModelType::Qwen3Embedding => {
-            if factory.is_some_and(|f| f.get_qwen3_model().is_some()) {
-                "qwen3"
-            } else if factory.is_some_and(|f| f.get_mmbert_model().is_some()) {
-                eprintln!("INFO: Qwen3 not available, falling back to mmbert");
-                "mmbert"
-            } else if factory.is_some_and(|f| f.get_gemma_model().is_some()) {
-                eprintln!("INFO: Qwen3 not available, falling back to gemma");
-                "gemma"
-            } else {
-                eprintln!(
-                    "Error: Qwen3Embedding selected but not available and no fallback available"
-                );
-                unsafe {
-                    (*result) = create_error_result();
-                }
-                return -1;
-            }
-        }
-        ModelType::GemmaEmbedding => {
-            if factory.is_some_and(|f| f.get_gemma_model().is_some()) {
-                "gemma"
-            } else if factory.is_some_and(|f| f.get_mmbert_model().is_some()) {
-                eprintln!("INFO: Gemma not available, falling back to mmbert");
-                "mmbert"
-            } else if factory.is_some_and(|f| f.get_qwen3_model().is_some()) {
-                eprintln!("INFO: Gemma not available, falling back to qwen3");
-                "qwen3"
-            } else {
-                eprintln!(
-                    "Error: GemmaEmbedding selected but not available and no fallback available"
-                );
-                unsafe {
-                    (*result) = create_error_result();
-                }
-                return -1;
-            }
-        }
-        ModelType::MmBertEmbedding => {
-            if factory.is_some_and(|f| f.get_mmbert_model().is_some()) {
-                "mmbert"
-            } else {
-                eprintln!("Error: MmBertEmbedding selected but not available");
-                unsafe {
-                    (*result) = create_error_result();
-                }
-                return -1;
-            }
-        }
-        ModelType::MultiModalEmbedding => {
-            if get_multimodal_refs().is_some() {
-                "multimodal"
-            } else {
-                eprintln!("Error: MultiModalEmbedding selected but not available");
-                unsafe {
-                    (*result) = create_error_result();
-                }
-                return -1;
-            }
-        }
-        _ => {
-            eprintln!("Error: unsupported model type: {:?}", model_type);
-            unsafe {
-                (*result) = create_error_result();
-            }
-            return -1;
-        }
+        ModelType::Qwen3Embedding => "qwen3",
+        ModelType::GemmaEmbedding => "gemma",
+        ModelType::MmBertEmbedding => "mmbert",
+        ModelType::MultiModalEmbedding => "multimodal",
+        _ => unreachable!("auto embedding selection returned an unsupported model"),
     };
 
     // Call get_embedding_2d_matryoshka which handles all model types
@@ -1251,29 +1114,21 @@ pub extern "C" fn get_embedding_2d_matryoshka(
         None
     };
 
-    // Get model factory
-    let factory = match GLOBAL_MODEL_FACTORY.get() {
-        Some(f) => f,
-        None => {
-            eprintln!("Error: ModelFactory not initialized");
-            unsafe {
-                (*result) = create_error_result();
-            }
-            return -1;
-        }
-    };
+    let factory = GLOBAL_MODEL_FACTORY.get();
 
     let start_time = std::time::Instant::now();
 
     // Generate embedding based on model type
     let embedding_result = match model_type {
-        ModelType::Qwen3Embedding => generate_qwen3_embedding(factory, text_str, target_dimension),
-        ModelType::GemmaEmbedding => generate_gemma_embedding(factory, text_str, target_dimension),
-        ModelType::MmBertEmbedding => {
+        ModelType::Qwen3Embedding => require_unified_factory(factory)
+            .and_then(|factory| generate_qwen3_embedding(factory, text_str, target_dimension)),
+        ModelType::GemmaEmbedding => require_unified_factory(factory)
+            .and_then(|factory| generate_gemma_embedding(factory, text_str, target_dimension)),
+        ModelType::MmBertEmbedding => require_unified_factory(factory).and_then(|factory| {
             generate_mmbert_embedding(factory, text_str, layer, target_dimension)
-        }
+        }),
         ModelType::MultiModalEmbedding => {
-            generate_multimodal_text_embedding(factory, text_str, layer, target_dimension)
+            generate_multimodal_text_embedding(text_str, layer, target_dimension)
         }
         _ => {
             eprintln!("Error: unsupported model type: {:?}", model_type);
@@ -1290,14 +1145,7 @@ pub extern "C" fn get_embedding_2d_matryoshka(
             let data = Box::into_raw(embedding_vec.into_boxed_slice()) as *mut f32;
             let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
 
-            // Map ModelType enum to FFI integer values (0=qwen3, 1=gemma, 2=mmbert, 3=multimodal)
-            let model_type_id = match model_type {
-                ModelType::Qwen3Embedding => 0,
-                ModelType::GemmaEmbedding => 1,
-                ModelType::MmBertEmbedding => 2,
-                ModelType::MultiModalEmbedding => 3,
-                _ => -1,
-            };
+            let model_type_id = embedding_model_id(model_type).unwrap_or(-1);
 
             unsafe {
                 (*result) = EmbeddingResult {
@@ -1322,27 +1170,318 @@ pub extern "C" fn get_embedding_2d_matryoshka(
     }
 }
 
-fn generate_manual_similarity_embeddings(
-    factory: &ModelFactory,
+fn embedding_model_id(model_type: ModelType) -> Option<i32> {
+    match model_type {
+        ModelType::Qwen3Embedding => Some(0),
+        ModelType::GemmaEmbedding => Some(1),
+        ModelType::MmBertEmbedding => Some(2),
+        ModelType::MultiModalEmbedding => Some(3),
+        _ => None,
+    }
+}
+
+fn require_unified_factory(
+    factory: Option<&ModelFactory>,
+) -> EmbeddingGenerationResult<&ModelFactory> {
+    factory.ok_or_else(|| "ModelFactory not initialized".to_string().into())
+}
+
+fn preferred_auto_embedding_model(sequence_length: usize) -> ModelType {
+    if (513..=GEMMA_EMBEDDING_CONTEXT).contains(&sequence_length) {
+        ModelType::GemmaEmbedding
+    } else {
+        ModelType::Qwen3Embedding
+    }
+}
+
+fn embedding_model_context(model_type: ModelType) -> Option<usize> {
+    match model_type {
+        ModelType::Qwen3Embedding => Some(QWEN3_EMBEDDING_CONTEXT),
+        ModelType::GemmaEmbedding => Some(GEMMA_EMBEDDING_CONTEXT),
+        ModelType::MmBertEmbedding => Some(MMBERT_EMBEDDING_CONTEXT),
+        ModelType::MultiModalEmbedding => Some(MULTIMODAL_TEXT_CONTEXT),
+        _ => None,
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct AutoEmbeddingCandidate {
+    model_type: ModelType,
+    sequence_length: usize,
+}
+
+fn routing_sequence_length(
+    tokenizer: &MmTokenizer,
+    texts: &[&str],
+    model: &str,
+) -> Result<usize, EmbeddingTokenError> {
+    if texts.is_empty() {
+        return Err(EmbeddingTokenError::EmptyEncoding {
+            model: format!("{model} routing batch"),
+        });
+    }
+    encode_embedding_batch_for_routing(tokenizer, texts, model)?
+        .iter()
+        .map(|encoding| encoding.get_ids().len())
+        .max()
+        .ok_or_else(|| EmbeddingTokenError::EmptyEncoding {
+            model: format!("{model} routing batch"),
+        })
+}
+
+fn push_factory_auto_candidate(
+    candidates: &mut Vec<AutoEmbeddingCandidate>,
+    model_type: ModelType,
+    model_name: &str,
+    model_loaded: bool,
+    tokenizer: Option<&MmTokenizer>,
+    texts: &[&str],
+) -> EmbeddingGenerationResult<()> {
+    if model_loaded != tokenizer.is_some() {
+        return Err(format!(
+            "{model_name} model/tokenizer initialization invariant is inconsistent"
+        )
+        .into());
+    }
+    if let Some(tokenizer) = tokenizer {
+        candidates.push(AutoEmbeddingCandidate {
+            model_type,
+            sequence_length: routing_sequence_length(tokenizer, texts, model_name)?,
+        });
+    }
+    Ok(())
+}
+
+fn auto_embedding_candidates(
+    factory: Option<&ModelFactory>,
+    texts: &[&str],
+) -> EmbeddingGenerationResult<Vec<AutoEmbeddingCandidate>> {
+    let mut candidates = Vec::with_capacity(4);
+    if let Some(factory) = factory {
+        push_factory_auto_candidate(
+            &mut candidates,
+            ModelType::Qwen3Embedding,
+            "Qwen3",
+            factory.get_qwen3_model().is_some(),
+            factory.get_qwen3_tokenizer(),
+            texts,
+        )?;
+        push_factory_auto_candidate(
+            &mut candidates,
+            ModelType::GemmaEmbedding,
+            "Gemma",
+            factory.get_gemma_model().is_some(),
+            factory.get_gemma_tokenizer(),
+            texts,
+        )?;
+        push_factory_auto_candidate(
+            &mut candidates,
+            ModelType::MmBertEmbedding,
+            "mmBERT",
+            factory.get_mmbert_model().is_some(),
+            factory.get_mmbert_tokenizer(),
+            texts,
+        )?;
+    }
+    if let Some((_, tokenizer)) = get_multimodal_refs() {
+        candidates.push(AutoEmbeddingCandidate {
+            model_type: ModelType::MultiModalEmbedding,
+            sequence_length: routing_sequence_length(tokenizer, texts, "multimodal")?,
+        });
+    }
+    if candidates.is_empty() {
+        return Err("no embedding model is initialized".to_string().into());
+    }
+    Ok(candidates)
+}
+
+fn resolve_auto_embedding_model(
+    preferred: ModelType,
+    candidates: &[AutoEmbeddingCandidate],
+) -> Option<ModelType> {
+    let preference_order = match preferred {
+        ModelType::Qwen3Embedding => [
+            ModelType::Qwen3Embedding,
+            ModelType::MmBertEmbedding,
+            ModelType::GemmaEmbedding,
+            ModelType::MultiModalEmbedding,
+        ],
+        ModelType::GemmaEmbedding => [
+            ModelType::GemmaEmbedding,
+            ModelType::MmBertEmbedding,
+            ModelType::Qwen3Embedding,
+            ModelType::MultiModalEmbedding,
+        ],
+        ModelType::MmBertEmbedding => [
+            ModelType::MmBertEmbedding,
+            ModelType::Qwen3Embedding,
+            ModelType::GemmaEmbedding,
+            ModelType::MultiModalEmbedding,
+        ],
+        ModelType::MultiModalEmbedding => [
+            ModelType::MultiModalEmbedding,
+            ModelType::MmBertEmbedding,
+            ModelType::Qwen3Embedding,
+            ModelType::GemmaEmbedding,
+        ],
+        _ => return None,
+    };
+
+    preference_order.into_iter().find(|model| {
+        candidates.iter().any(|candidate| {
+            candidate.model_type == *model
+                && embedding_model_context(*model)
+                    .is_some_and(|context| candidate.sequence_length <= context)
+        })
+    })
+}
+
+fn no_compatible_auto_model_error(
+    candidates: &[AutoEmbeddingCandidate],
+) -> EmbeddingGenerationError {
+    let candidate = candidates
+        .iter()
+        .filter_map(|candidate| {
+            embedding_model_context(candidate.model_type).map(|context| (candidate, context))
+        })
+        .max_by_key(|(_, context)| *context);
+    match candidate {
+        Some((candidate, maximum)) => EmbeddingTokenError::InputTooLong {
+            model: format!("auto-routed {:?}", candidate.model_type),
+            count: candidate.sequence_length,
+            maximum,
+        }
+        .into(),
+        None => "no compatible embedding model is available"
+            .to_string()
+            .into(),
+    }
+}
+
+fn select_auto_embedding_model(
+    factory: Option<&ModelFactory>,
+    texts: &[&str],
+    target_dimension: Option<usize>,
+    quality_priority: f32,
+    latency_priority: f32,
+) -> EmbeddingGenerationResult<ModelType> {
+    let candidates = auto_embedding_candidates(factory, texts)?;
+    // The classifier accepts a single length. Use the conservative exact maximum
+    // across available tokenizers, while candidate eligibility below remains
+    // model-specific. Capping only avoids asking the preference classifier about
+    // lengths outside its own domain; it does not weaken context enforcement.
+    let sequence_length = candidates
+        .iter()
+        .map(|candidate| candidate.sequence_length)
+        .max()
+        .unwrap_or(0)
+        .min(QWEN3_EMBEDDING_CONTEXT);
+    let requirements = EmbeddingRequirements {
+        sequence_length,
+        quality_priority,
+        latency_priority,
+        target_dimension,
+    };
+    let classifier = create_temp_classifier().map_err(EmbeddingGenerationError::from)?;
+    let preferred = classifier
+        .select_embedding_model(&requirements)
+        .unwrap_or_else(|error| {
+            eprintln!(
+                "WARNING: pair embedding model selection failed ({error:?}); checking safe fallbacks"
+            );
+            preferred_auto_embedding_model(sequence_length)
+        });
+
+    resolve_auto_embedding_model(preferred, &candidates)
+        .ok_or_else(|| no_compatible_auto_model_error(&candidates))
+}
+
+fn generate_similarity_embeddings_batch(
+    factory: Option<&ModelFactory>,
+    texts: &[&str],
+    model_type: ModelType,
+    target_layer: Option<usize>,
+    target_dimension: Option<usize>,
+) -> EmbeddingGenerationResult<(Vec<Vec<f32>>, i32)> {
+    let embeddings = match model_type {
+        ModelType::Qwen3Embedding => generate_qwen3_embeddings_batch(
+            require_unified_factory(factory)?,
+            texts,
+            target_dimension,
+        )?,
+        ModelType::GemmaEmbedding => generate_gemma_embeddings_batch(
+            require_unified_factory(factory)?,
+            texts,
+            target_dimension,
+        )?,
+        ModelType::MmBertEmbedding => generate_mmbert_embeddings_batch(
+            require_unified_factory(factory)?,
+            texts,
+            target_layer,
+            target_dimension,
+        )?,
+        ModelType::MultiModalEmbedding => {
+            generate_multimodal_text_embeddings_batch(texts, target_layer, target_dimension)?
+        }
+        _ => return Err(format!("unsupported similarity embedding model: {model_type:?}").into()),
+    };
+    let model_id = embedding_model_id(model_type)
+        .ok_or_else(|| format!("missing metadata id for embedding model: {model_type:?}"))?;
+    Ok((embeddings, model_id))
+}
+
+fn generate_similarity_embeddings(
+    factory: Option<&ModelFactory>,
     text1: &str,
     text2: &str,
-    model_type: &str,
+    model_type: ModelType,
+    target_layer: Option<usize>,
     target_dimension: Option<usize>,
 ) -> EmbeddingGenerationResult<(Vec<f32>, Vec<f32>, i32)> {
-    let (embedding1, embedding2, model_id) = if model_type == "qwen3" {
-        (
-            generate_qwen3_embedding(factory, text1, target_dimension)?.0,
-            generate_qwen3_embedding(factory, text2, target_dimension)?.0,
-            0,
-        )
-    } else {
-        (
-            generate_gemma_embedding(factory, text1, target_dimension)?.0,
-            generate_gemma_embedding(factory, text2, target_dimension)?.0,
-            1,
-        )
+    let (embedding1, embedding2) = match model_type {
+        ModelType::Qwen3Embedding => {
+            let factory = require_unified_factory(factory)?;
+            (
+                generate_qwen3_embedding(factory, text1, target_dimension)?.0,
+                generate_qwen3_embedding(factory, text2, target_dimension)?.0,
+            )
+        }
+        ModelType::GemmaEmbedding => {
+            let factory = require_unified_factory(factory)?;
+            (
+                generate_gemma_embedding(factory, text1, target_dimension)?.0,
+                generate_gemma_embedding(factory, text2, target_dimension)?.0,
+            )
+        }
+        ModelType::MmBertEmbedding => {
+            let factory = require_unified_factory(factory)?;
+            (
+                generate_mmbert_embedding(factory, text1, target_layer, target_dimension)?.0,
+                generate_mmbert_embedding(factory, text2, target_layer, target_dimension)?.0,
+            )
+        }
+        ModelType::MultiModalEmbedding => (
+            generate_multimodal_text_embedding(text1, target_layer, target_dimension)?.0,
+            generate_multimodal_text_embedding(text2, target_layer, target_dimension)?.0,
+        ),
+        _ => return Err(format!("unsupported similarity embedding model: {model_type:?}").into()),
     };
+    let model_id = embedding_model_id(model_type)
+        .ok_or_else(|| format!("missing metadata id for embedding model: {model_type:?}"))?;
     Ok((embedding1, embedding2, model_id))
+}
+
+fn validate_similarity_embedding_batch_cardinality(
+    embeddings_batch: &[Vec<f32>],
+    expected_rows: usize,
+) -> Result<(), String> {
+    if embeddings_batch.len() != expected_rows {
+        return Err(format!(
+            "expected {expected_rows} similarity embedding rows, got {}",
+            embeddings_batch.len()
+        ));
+    }
+    Ok(())
 }
 
 /// Calculate cosine similarity between two texts using embeddings
@@ -1368,6 +1507,32 @@ pub extern "C" fn calculate_embedding_similarity(
     text2: *const c_char,
     model_type_str: *const c_char,
     target_dim: i32,
+    result: *mut EmbeddingSimilarityResult,
+) -> i32 {
+    calculate_embedding_similarity_with_options(
+        text1,
+        text2,
+        model_type_str,
+        0,
+        target_dim,
+        0.5,
+        0.5,
+        result,
+    )
+}
+
+/// Calculate pair similarity while honoring the complete public routing
+/// contract. The legacy C entry point above delegates here with defaults.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn calculate_embedding_similarity_with_options(
+    text1: *const c_char,
+    text2: *const c_char,
+    model_type_str: *const c_char,
+    target_layer: i32,
+    target_dim: i32,
+    quality_priority: f32,
+    latency_priority: f32,
     result: *mut EmbeddingSimilarityResult,
 ) -> i32 {
     if text1.is_null() || text2.is_null() || model_type_str.is_null() || result.is_null() {
@@ -1413,9 +1578,13 @@ pub extern "C" fn calculate_embedding_similarity(
     };
 
     // Validate model type
-    if model_type_str != "auto" && model_type_str != "qwen3" && model_type_str != "gemma" {
+    if model_type_str != "auto"
+        && model_type_str != "qwen3"
+        && model_type_str != "gemma"
+        && model_type_str != "mmbert"
+    {
         eprintln!(
-            "Error: invalid model type '{}' (must be 'auto', 'qwen3', or 'gemma')",
+            "Error: invalid model type '{}' (must be 'auto', 'qwen3', 'gemma', or 'mmbert')",
             model_type_str
         );
         unsafe {
@@ -1423,106 +1592,75 @@ pub extern "C" fn calculate_embedding_similarity(
         }
         return -1;
     }
+    if !(0.0..=1.0).contains(&quality_priority)
+        || !(0.0..=1.0).contains(&latency_priority)
+        || (target_layer > 0 && model_type_str != "mmbert")
+    {
+        eprintln!("Error: invalid similarity routing options");
+        unsafe {
+            (*result) = EmbeddingSimilarityResult::default();
+        }
+        return -1;
+    }
 
-    // Get target dimension
+    let target_layer = if target_layer > 0 {
+        Some(target_layer as usize)
+    } else {
+        None
+    };
     let target_dimension = if target_dim > 0 {
         Some(target_dim as usize)
     } else {
         None
     };
 
-    // Get model factory
-    let factory = match GLOBAL_MODEL_FACTORY.get() {
-        Some(f) => f,
-        None => {
-            eprintln!("ERROR: ModelFactory not initialized");
-            unsafe {
-                (*result) = EmbeddingSimilarityResult::default();
-            }
-            return -1;
-        }
-    };
+    let factory = GLOBAL_MODEL_FACTORY.get();
 
-    // Generate embeddings directly based on model_type
-    let (emb1_vec, emb2_vec, model_type_id) = if model_type_str == "auto" {
-        // Auto mode: use routing for each text independently
-
-        let mut emb_result1 = EmbeddingResult::default();
-        let status1 = get_embedding_with_dim(
-            text1,
-            0.5, // default quality priority
-            0.5, // default latency priority
-            target_dim,
-            &mut emb_result1 as *mut EmbeddingResult,
-        );
-
-        if status1 != 0 || emb_result1.error {
-            eprintln!("Error generating embedding for text1");
-            // Clean up allocated memory before returning
-            if !emb_result1.data.is_null() {
-                crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length);
-            }
-            unsafe {
-                (*result) = EmbeddingSimilarityResult::default();
-            }
-            return if status1 != 0 { status1 } else { -1 };
-        }
-
-        let mut emb_result2 = EmbeddingResult::default();
-        let status2 = get_embedding_with_dim(
-            text2,
-            0.5,
-            0.5,
-            target_dim,
-            &mut emb_result2 as *mut EmbeddingResult,
-        );
-
-        if status2 != 0 || emb_result2.error {
-            eprintln!("Error generating embedding for text2");
-            if !emb_result1.data.is_null() {
-                crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length);
-            }
-            // Also clean up emb_result2
-            if !emb_result2.data.is_null() {
-                crate::ffi::memory::free_embedding(emb_result2.data, emb_result2.length);
-            }
-            unsafe {
-                (*result) = EmbeddingSimilarityResult::default();
-            }
-            return if status2 != 0 { status2 } else { -1 };
-        }
-
-        // Convert to Vec
-        let emb1 = unsafe {
-            std::slice::from_raw_parts(emb_result1.data, emb_result1.length as usize).to_vec()
-        };
-        let emb2 = unsafe {
-            std::slice::from_raw_parts(emb_result2.data, emb_result2.length as usize).to_vec()
-        };
-
-        let model_id = emb_result1.model_type;
-
-        // Free the raw data
-        crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length);
-        crate::ffi::memory::free_embedding(emb_result2.data, emb_result2.length);
-
-        (emb1, emb2, model_id)
-    } else {
-        match generate_manual_similarity_embeddings(
+    // Resolve one model for the pair, then reuse that exact embedding space for
+    // both operands. Independently auto-routing each operand can produce a
+    // numerically plausible but semantically invalid cross-model cosine score.
+    let model_type = if model_type_str == "auto" {
+        let pair = [text1_str, text2_str];
+        match select_auto_embedding_model(
             factory,
-            text1_str,
-            text2_str,
-            model_type_str,
+            &pair,
             target_dimension,
+            quality_priority,
+            latency_priority,
         ) {
-            Ok(embeddings) => embeddings,
+            Ok(model) => model,
             Err(error) => {
-                eprintln!("Error: failed to generate similarity embeddings: {error}");
+                eprintln!("Error: failed to select pair embedding model: {error}");
                 unsafe {
                     (*result) = EmbeddingSimilarityResult::default();
                 }
                 return error.status();
             }
+        }
+    } else {
+        match model_type_str {
+            "qwen3" => ModelType::Qwen3Embedding,
+            "gemma" => ModelType::GemmaEmbedding,
+            "mmbert" => ModelType::MmBertEmbedding,
+            _ => unreachable!("model type was validated above"),
+        }
+    };
+
+    let (emb1_vec, emb2_vec, model_type_id) = match generate_similarity_embeddings(
+        factory,
+        text1_str,
+        text2_str,
+        model_type,
+        target_layer,
+        target_dimension,
+    ) {
+        Ok(embeddings) => embeddings,
+        Err(error) => {
+            eprintln!("Error: failed to generate similarity embeddings: {error}");
+            unsafe {
+                (*result) = EmbeddingSimilarityResult::default();
+            }
+            return error.status();
         }
     };
 
@@ -1600,7 +1738,37 @@ pub extern "C" fn calculate_similarity_batch(
     target_dim: i32,
     result: *mut BatchSimilarityResult,
 ) -> i32 {
-    if query.is_null() || candidates.is_null() || result.is_null() {
+    calculate_similarity_batch_with_options(
+        query,
+        candidates,
+        num_candidates,
+        top_k,
+        model_type_str,
+        0,
+        target_dim,
+        0.5,
+        0.5,
+        result,
+    )
+}
+
+/// Calculate batch similarity while honoring the complete public routing
+/// contract. The legacy C entry point above delegates here with defaults.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn calculate_similarity_batch_with_options(
+    query: *const c_char,
+    candidates: *const *const c_char,
+    num_candidates: i32,
+    top_k: i32,
+    model_type_str: *const c_char,
+    target_layer: i32,
+    target_dim: i32,
+    quality_priority: f32,
+    latency_priority: f32,
+    result: *mut BatchSimilarityResult,
+) -> i32 {
+    if query.is_null() || candidates.is_null() || model_type_str.is_null() || result.is_null() {
         eprintln!("Error: null pointer passed to calculate_similarity_batch");
         return -1;
     }
@@ -1640,11 +1808,25 @@ pub extern "C" fn calculate_similarity_batch(
     };
 
     // Validate model type
-    if model_type_str != "auto" && model_type_str != "qwen3" && model_type_str != "gemma" {
+    if model_type_str != "auto"
+        && model_type_str != "qwen3"
+        && model_type_str != "gemma"
+        && model_type_str != "mmbert"
+    {
         eprintln!(
-            "Error: invalid model type '{}' (must be 'auto', 'qwen3', or 'gemma')",
+            "Error: invalid model type '{}' (must be 'auto', 'qwen3', 'gemma', or 'mmbert')",
             model_type_str
         );
+        unsafe {
+            (*result) = BatchSimilarityResult::default();
+        }
+        return -1;
+    }
+    if !(0.0..=1.0).contains(&quality_priority)
+        || !(0.0..=1.0).contains(&latency_priority)
+        || (target_layer > 0 && model_type_str != "mmbert")
+    {
+        eprintln!("Error: invalid batch similarity routing options");
         unsafe {
             (*result) = BatchSimilarityResult::default();
         }
@@ -1676,74 +1858,74 @@ pub extern "C" fn calculate_similarity_batch(
         candidate_texts.push(candidate_str);
     }
 
-    // Get global model factory
-    let factory = match GLOBAL_MODEL_FACTORY.get() {
-        Some(f) => f,
-        None => {
-            eprintln!("ERROR: ModelFactory not initialized");
-            unsafe {
-                (*result) = BatchSimilarityResult::default();
-            }
-            return -1;
-        }
-    };
-
-    // Determine which model to use
-    let (use_qwen3, model_type_id) = if model_type_str == "qwen3" {
-        (true, 0)
-    } else if model_type_str == "gemma" {
-        (false, 1)
-    } else {
-        // "auto": use simple heuristic (can be improved with routing logic)
-        let avg_len = (query_str.len() + candidate_texts.iter().map(|s| s.len()).sum::<usize>())
-            / (1 + candidate_texts.len());
-        if avg_len > 512 {
-            (true, 0) // Qwen3 for longer texts
-        } else {
-            (false, 1) // Gemma for shorter texts
-        }
-    };
+    let factory = GLOBAL_MODEL_FACTORY.get();
 
     // Prepare all texts for batch processing: [query, candidate1, candidate2, ...]
     let mut all_texts: Vec<&str> = Vec::with_capacity(1 + num_candidates as usize);
     all_texts.push(query_str);
     all_texts.extend(candidate_texts.iter().copied());
 
-    // Target dimension
+    let target_layer = if target_layer > 0 {
+        Some(target_layer as usize)
+    } else {
+        None
+    };
     let target_dimension = if target_dim > 0 {
         Some(target_dim as usize)
     } else {
         None
     };
 
-    // Batch generate embeddings using the appropriate model
-    let embeddings_batch = if use_qwen3 {
-        match generate_qwen3_embeddings_batch(factory, &all_texts, target_dimension) {
-            Ok(embs) => embs,
-            Err(e) => {
-                eprintln!("Error: Qwen3 batch embedding generation failed: {}", e);
+    let model_type = if model_type_str == "auto" {
+        match select_auto_embedding_model(
+            factory,
+            &all_texts,
+            target_dimension,
+            quality_priority,
+            latency_priority,
+        ) {
+            Ok(model) => model,
+            Err(error) => {
+                eprintln!("Error: failed to select batch embedding model: {error}");
                 unsafe {
                     (*result) = BatchSimilarityResult::default();
                 }
-                return e.status();
+                return error.status();
             }
         }
     } else {
-        match generate_gemma_embeddings_batch(factory, &all_texts, target_dimension) {
-            Ok(embs) => embs,
-            Err(e) => {
-                eprintln!("Error: Gemma batch embedding generation failed: {}", e);
-                unsafe {
-                    (*result) = BatchSimilarityResult::default();
-                }
-                return e.status();
-            }
+        match model_type_str {
+            "qwen3" => ModelType::Qwen3Embedding,
+            "gemma" => ModelType::GemmaEmbedding,
+            "mmbert" => ModelType::MmBertEmbedding,
+            _ => unreachable!("model type was validated above"),
         }
     };
 
-    // Extract query embedding (first one)
-    if embeddings_batch.is_empty() {
-        eprintln!("Error: empty embeddings batch");
+    let (embeddings_batch, model_type_id) = match generate_similarity_embeddings_batch(
+        factory,
+        &all_texts,
+        model_type,
+        target_layer,
+        target_dimension,
+    ) {
+        Ok(generated) => generated,
+        Err(error) => {
+            eprintln!("Error: batch embedding generation failed: {error}");
+            unsafe {
+                (*result) = BatchSimilarityResult::default();
+            }
+            return error.status();
+        }
+    };
+
+    // Require one output row for the query and one for every candidate before
+    // indexing or returning candidate identities across the C ABI boundary.
+    let expected_rows = 1 + num_candidates as usize;
+    if let Err(error) =
+        validate_similarity_embedding_batch_cardinality(&embeddings_batch, expected_rows)
+    {
+        eprintln!("Error: batch similarity contract mismatch: {error}");
         unsafe {
             (*result) = BatchSimilarityResult::default();
         }
@@ -2024,7 +2206,7 @@ pub extern "C" fn free_embedding_models_info(
 use crate::model_architectures::embedding::continuous_batch_scheduler::ContinuousBatchConfig;
 use crate::model_architectures::embedding::qwen3_batched::Qwen3EmbeddingModelBatched;
 use crate::model_architectures::embedding::qwen3_embedding::Qwen3EmbeddingModel;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokenizers::Tokenizer;
 
 /// Batched model with tokenizer and device info
@@ -2326,25 +2508,38 @@ pub extern "C" fn init_multimodal_embedding_model(
 ) -> bool {
     use candle_core::Device;
 
-    if model_path.is_null() {
-        eprintln!("Error: model_path is null");
-        return false;
-    }
-
-    let path = unsafe {
-        match CStr::from_ptr(model_path).to_str() {
-            Ok(s) if !s.is_empty() => s.to_string(),
-            _ => {
-                eprintln!("Error: invalid model_path");
-                return false;
-            }
+    let path = match parse_optional_model_path(model_path, "multimodal model path") {
+        Ok(Some(path)) => path,
+        Ok(None) => {
+            eprintln!("ERROR: multimodal model path is required");
+            return false;
+        }
+        Err(error) => {
+            eprintln!("ERROR: {error}");
+            return false;
         }
     };
 
-    // Already available via either factory or standalone?
-    if get_multimodal_refs().is_some() {
-        eprintln!("WARNING: Multi-modal model already initialized");
-        return true;
+    let _guard = EMBEDDING_INIT_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    // A legacy process may already hold multimodal state in the unified
+    // factory. Treat it as idempotent only when it is the exact requested path.
+    if let Some(factory) = GLOBAL_MODEL_FACTORY.get() {
+        if factory.get_multimodal_model().is_some() {
+            return validate_requested_model(
+                "multimodal",
+                Some(&path),
+                true,
+                factory.get_multimodal_model_path(),
+            )
+            .map(|()| true)
+            .unwrap_or_else(|error| {
+                eprintln!("ERROR: {error}");
+                false
+            });
+        }
     }
 
     let device = if use_cpu {
@@ -2353,60 +2548,40 @@ pub extern "C" fn init_multimodal_embedding_model(
         Device::cuda_if_available(0).unwrap_or(Device::Cpu)
     };
 
-    // If the main factory is NOT yet set, create a new one with the multimodal model.
-    if GLOBAL_MODEL_FACTORY.get().is_none() {
-        let mut factory = ModelFactory::new(device.clone());
-        match factory.register_multimodal_embedding_model(&path) {
-            Ok(_) => {
-                println!("INFO: Multi-modal embedding model registered in ModelFactory");
+    // Multimodal state is always published independently. It therefore cannot
+    // win the unified factory's OnceLock and make a concurrent unified
+    // initializer falsely report success without its requested models.
+    let result = initialize_once_with_validation(
+        &STANDALONE_MULTIMODAL,
+        || {
+            let model = MultiModalEmbeddingModel::load(&path, &device)
+                .map_err(|error| format!("failed to load multimodal model: {error:?}"))?;
+            let tokenizer_path = format!("{path}/tokenizer.json");
+            let tokenizer = Tokenizer::from_file(&tokenizer_path)
+                .map_err(|error| {
+                    format!("failed to load multimodal tokenizer from {tokenizer_path}: {error:?}")
+                })
+                .and_then(|tokenizer| {
+                    prepare_embedding_tokenizer(tokenizer, "multimodal")
+                        .map_err(|error| error.to_string())
+                })?;
+            Ok((model, tokenizer, path.clone()))
+        },
+        |(_, _, loaded_path)| {
+            if loaded_path == &path {
+                Ok(())
+            } else {
+                Err(
+                    "requested multimodal model path does not match the process-global model"
+                        .to_string(),
+                )
             }
-            Err(e) => {
-                eprintln!("ERROR: Failed to register multi-modal model: {:?}", e);
-                return false;
-            }
-        }
-        return match GLOBAL_MODEL_FACTORY.set(factory) {
-            Ok(_) => true,
-            Err(_) => {
-                eprintln!("Error: Failed to set global model factory");
-                false
-            }
-        };
-    }
-
-    // Factory already exists — load the multimodal model into the standalone global.
-    println!(
-        "INFO: ModelFactory already initialized, loading multimodal model into standalone storage"
+        },
     );
-    let model = match MultiModalEmbeddingModel::load(&path, &device) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!("ERROR: Failed to load multi-modal model: {:?}", e);
-            return false;
-        }
-    };
-    let tokenizer_path = format!("{}/tokenizer.json", path);
-    let tokenizer = match Tokenizer::from_file(&tokenizer_path)
-        .map_err(|error| format!("failed to load tokenizer: {error:?}"))
-        .and_then(|tokenizer| {
-            prepare_embedding_tokenizer(tokenizer, "multimodal").map_err(|error| error.to_string())
-        }) {
-        Ok(tokenizer) => tokenizer,
-        Err(e) => {
-            eprintln!(
-                "ERROR: Failed to load multi-modal tokenizer from {}: {:?}",
-                tokenizer_path, e
-            );
-            return false;
-        }
-    };
-    match STANDALONE_MULTIMODAL.set((model, tokenizer, path)) {
-        Ok(_) => {
-            println!("INFO: Multi-modal model registered in standalone storage");
-            true
-        }
-        Err(_) => {
-            eprintln!("Error: Standalone multimodal storage already set");
+    match result {
+        Ok(()) => true,
+        Err(error) => {
+            eprintln!("ERROR: multimodal model initialization failed: {error}");
             false
         }
     }
@@ -2705,6 +2880,32 @@ pub extern "C" fn multimodal_encode_image(
         return -1;
     }
 
+    unsafe {
+        *result = MultiModalEmbeddingResult::default();
+    }
+    if height <= 0 || width <= 0 {
+        eprintln!(
+            "Error: image dimensions must be positive (got {}x{})",
+            height, width
+        );
+        return -1;
+    }
+    let h = height as usize;
+    let w = width as usize;
+    const MAX_IMAGE_SIDE: usize = 8192;
+    const MAX_IMAGE_PIXELS: usize = 16_777_216;
+    if h > MAX_IMAGE_SIDE || w > MAX_IMAGE_SIDE || h.saturating_mul(w) > MAX_IMAGE_PIXELS {
+        eprintln!("Error: image dimensions exceed the native input budget");
+        return -1;
+    }
+    let pixel_count = match 3usize.checked_mul(h).and_then(|value| value.checked_mul(w)) {
+        Some(count) if count <= (isize::MAX as usize) / std::mem::size_of::<f32>() => count,
+        _ => {
+            eprintln!("Error: image tensor dimensions overflow addressable memory");
+            return -1;
+        }
+    };
+
     let (model, _tokenizer) = match get_multimodal_refs() {
         Some(refs) => refs,
         None => {
@@ -2717,10 +2918,6 @@ pub extern "C" fn multimodal_encode_image(
     };
 
     let start_time = std::time::Instant::now();
-
-    let h = height as usize;
-    let w = width as usize;
-    let pixel_count = 3 * h * w;
 
     let pixels = unsafe { std::slice::from_raw_parts(pixel_data, pixel_count) };
     let device = model.device();
@@ -2808,6 +3005,29 @@ pub extern "C" fn multimodal_encode_audio(
         return -1;
     }
 
+    unsafe {
+        *result = MultiModalEmbeddingResult::default();
+    }
+    if n_mels <= 0 || time_frames <= 0 {
+        eprintln!(
+            "Error: n_mels and time_frames must be positive (got {}x{})",
+            n_mels, time_frames
+        );
+        return -1;
+    }
+    let mels = n_mels as usize;
+    let frames = time_frames as usize;
+    let total = match mels.checked_mul(frames) {
+        Some(total) if total <= (isize::MAX as usize) / std::mem::size_of::<f32>() => total,
+        _ => {
+            eprintln!(
+                "Error: mel spectrogram dimensions overflow addressable memory ({}x{})",
+                n_mels, time_frames
+            );
+            return -1;
+        }
+    };
+
     let (model, _tokenizer) = match get_multimodal_refs() {
         Some(refs) => refs,
         None => {
@@ -2820,10 +3040,6 @@ pub extern "C" fn multimodal_encode_audio(
     };
 
     let start_time = std::time::Instant::now();
-
-    let mels = n_mels as usize;
-    let frames = time_frames as usize;
-    let total = mels * frames;
 
     let mel_slice = unsafe { std::slice::from_raw_parts(mel_data, total) };
     let device = model.device();
@@ -2916,6 +3132,24 @@ mod tests {
         MAX_MULTIMODAL_IMAGE_PIXELS,
     };
     use crate::model_architectures::embedding::tokenizer_contract::validate_embedding_token_count;
+    use std::sync::{Arc, Barrier};
+    use tokenizers::models::wordpiece::WordPiece;
+
+    fn subword_tokenizer() -> MmTokenizer {
+        let vocabulary = [
+            ("[UNK]".to_string(), 0),
+            ("a".to_string(), 1),
+            ("##a".to_string(), 2),
+        ];
+        let model = WordPiece::builder()
+            .vocab(vocabulary)
+            .unk_token("[UNK]".to_string())
+            .max_input_chars_per_word(QWEN3_EMBEDDING_CONTEXT + 1)
+            .build()
+            .expect("build subword tokenizer");
+        prepare_embedding_tokenizer(MmTokenizer::new(model), "test-subword")
+            .expect("prepare subword tokenizer")
+    }
 
     #[test]
     fn embedding_token_context_boundaries_are_fail_closed() {
@@ -2937,6 +3171,158 @@ mod tests {
             .expect_err("zero tokens must fail");
         assert!(!empty.is_input_too_long());
         assert_eq!(EmbeddingGenerationError::from(empty).status(), -1);
+    }
+
+    #[test]
+    fn auto_routing_uses_true_subword_length_without_whitespace() {
+        let tokenizer = subword_tokenizer();
+        let long_text = "a".repeat(GEMMA_EMBEDDING_CONTEXT + 1);
+        assert_eq!(long_text.split_whitespace().count(), 1);
+
+        let exact = routing_sequence_length(&tokenizer, &["a", &long_text], "test-subword")
+            .expect("measure true routing length");
+
+        assert_eq!(exact, GEMMA_EMBEDDING_CONTEXT + 1);
+        assert_eq!(
+            resolve_auto_embedding_model(
+                ModelType::GemmaEmbedding,
+                &[
+                    AutoEmbeddingCandidate {
+                        model_type: ModelType::GemmaEmbedding,
+                        sequence_length: exact,
+                    },
+                    AutoEmbeddingCandidate {
+                        model_type: ModelType::Qwen3Embedding,
+                        sequence_length: exact,
+                    },
+                ],
+            ),
+            Some(ModelType::Qwen3Embedding)
+        );
+    }
+
+    #[test]
+    fn auto_routing_fails_with_typed_length_error_when_every_candidate_is_too_long() {
+        let candidates = [
+            AutoEmbeddingCandidate {
+                model_type: ModelType::GemmaEmbedding,
+                sequence_length: GEMMA_EMBEDDING_CONTEXT + 1,
+            },
+            AutoEmbeddingCandidate {
+                model_type: ModelType::MultiModalEmbedding,
+                sequence_length: MULTIMODAL_TEXT_CONTEXT + 1,
+            },
+        ];
+
+        assert_eq!(
+            no_compatible_auto_model_error(&candidates).status(),
+            EMBEDDING_INPUT_TOO_LONG_STATUS
+        );
+    }
+
+    #[test]
+    fn once_publication_is_retryable_after_build_failure() {
+        let slot = OnceLock::new();
+        let failed = initialize_once_with_validation(
+            &slot,
+            || Err::<usize, _>("injected model load failure".to_string()),
+            |_| Ok(()),
+        );
+        assert!(failed.is_err());
+        assert!(slot.get().is_none());
+
+        initialize_once_with_validation(
+            &slot,
+            || Ok(7),
+            |value| {
+                (*value == 7)
+                    .then_some(())
+                    .ok_or_else(|| "wrong model identity".to_string())
+            },
+        )
+        .expect("retry succeeds");
+        assert_eq!(slot.get(), Some(&7));
+    }
+
+    #[test]
+    fn existing_once_publication_is_not_false_success_for_another_request() {
+        let slot = OnceLock::from("models/first".to_string());
+        let result = initialize_once_with_validation(
+            &slot,
+            || Ok("models/second".to_string()),
+            |loaded_path| {
+                (loaded_path == "models/second")
+                    .then_some(())
+                    .ok_or_else(|| "requested model path does not match".to_string())
+            },
+        );
+
+        assert!(result.is_err());
+        assert_eq!(slot.get().map(String::as_str), Some("models/first"));
+    }
+
+    #[test]
+    fn concurrent_once_publication_never_reports_an_unvalidated_winner() {
+        let slot = OnceLock::new();
+        let barrier = Arc::new(Barrier::new(8));
+        std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for _ in 0..8 {
+                let barrier = Arc::clone(&barrier);
+                let slot = &slot;
+                handles.push(scope.spawn(move || {
+                    barrier.wait();
+                    initialize_once_with_validation(
+                        slot,
+                        || Ok(42),
+                        |value| {
+                            (*value == 42)
+                                .then_some(())
+                                .ok_or_else(|| "unexpected published value".to_string())
+                        },
+                    )
+                }));
+            }
+            for handle in handles {
+                handle
+                    .join()
+                    .expect("initializer thread")
+                    .expect("valid winner");
+            }
+        });
+        assert_eq!(slot.get(), Some(&42));
+    }
+
+    #[test]
+    fn similarity_batch_requires_query_and_every_candidate_row() {
+        let complete = vec![vec![1.0], vec![0.5], vec![0.25]];
+        assert!(validate_similarity_embedding_batch_cardinality(&complete, 3).is_ok());
+        assert!(validate_similarity_embedding_batch_cardinality(&complete[..2], 3).is_err());
+
+        let mut extra = complete;
+        extra.push(vec![0.0]);
+        assert!(validate_similarity_embedding_batch_cardinality(&extra, 3).is_err());
+    }
+
+    #[test]
+    fn batch_similarity_rejects_null_model_type_before_c_string_parse() {
+        let query = std::ffi::CString::new("query").unwrap();
+        let candidate = std::ffi::CString::new("candidate").unwrap();
+        let candidates = [candidate.as_ptr()];
+        let mut result = crate::ffi::types::BatchSimilarityResult::default();
+
+        let status = calculate_similarity_batch(
+            query.as_ptr(),
+            candidates.as_ptr(),
+            1,
+            1,
+            std::ptr::null(),
+            0,
+            &mut result,
+        );
+
+        assert_eq!(status, -1);
+        assert!(result.error);
     }
 
     #[test]
@@ -3057,5 +3443,37 @@ mod tests {
 
         assert_eq!(empty_status, -2, "empty image bytes are invalid input");
         assert_eq!(null_result_status, -1, "a null output pointer is internal");
+    }
+
+    #[test]
+    fn multimodal_audio_rejects_invalid_dimensions_before_slice_creation() {
+        let one_value = 0_f32;
+        let mut result = crate::ffi::types::MultiModalEmbeddingResult::default();
+
+        let negative = multimodal_encode_audio(&one_value, -1, -1, 0, &mut result);
+        assert_eq!(negative, -1);
+        assert!(result.error);
+        assert!(result.data.is_null());
+
+        let overflowing = multimodal_encode_audio(&one_value, i32::MAX, i32::MAX, 0, &mut result);
+        assert_eq!(overflowing, -1);
+        assert!(result.error);
+        assert!(result.data.is_null());
+    }
+
+    #[test]
+    fn multimodal_image_rejects_invalid_dimensions_before_slice_creation() {
+        let one_value = 0_f32;
+        let mut result = crate::ffi::types::MultiModalEmbeddingResult::default();
+
+        let negative = multimodal_encode_image(&one_value, -1, -1, 0, &mut result);
+        assert_eq!(negative, -1);
+        assert!(result.error);
+        assert!(result.data.is_null());
+
+        let oversized = multimodal_encode_image(&one_value, 8193, 1, 0, &mut result);
+        assert_eq!(oversized, -1);
+        assert!(result.error);
+        assert!(result.data.is_null());
     }
 }

@@ -262,6 +262,27 @@ func TestVersionedPasswordHashSupportsLongUnicodeAndLegacyVerification(t *testin
 	}
 }
 
+func TestOrdinaryPasswordHashRemainsRollbackCompatibleBcrypt(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestAuthService(t)
+	password := "ordinary unique password 2026"
+	hash, err := svc.HashPasswordForUser("person@example.com", password)
+	if err != nil {
+		t.Fatalf("HashPasswordForUser() error = %v", err)
+	}
+	if strings.HasPrefix(hash, passwordHashPrefix) {
+		t.Fatalf("ordinary password unexpectedly used versioned-only storage: %q", hash)
+	}
+	if compareErr := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); compareErr != nil {
+		t.Fatalf("legacy backend cannot verify ordinary new hash: %v", compareErr)
+	}
+	cost, err := bcrypt.Cost([]byte(hash))
+	if err != nil || cost != passwordHashCost {
+		t.Fatalf("ordinary hash cost = %d, err=%v; want %d", cost, err, passwordHashCost)
+	}
+}
+
 func TestLegacyVerificationDoesNotShortCircuitPasswordsOverBcryptHashLimit(t *testing.T) {
 	t.Parallel()
 
@@ -294,7 +315,7 @@ func TestDummyPasswordHashUsesTheProductionWorkFactor(t *testing.T) {
 	}
 }
 
-func TestSuccessfulLegacyLoginUpgradesStoredHash(t *testing.T) {
+func TestSuccessfulLegacyLoginKeepsStoredHashRollbackCompatible(t *testing.T) {
 	t.Parallel()
 
 	svc := newTestAuthService(t)
@@ -318,11 +339,11 @@ func TestSuccessfulLegacyLoginUpgradesStoredHash(t *testing.T) {
 	if _, _, loginErr := svc.Login(context.Background(), user.Email, password); loginErr != nil {
 		t.Fatalf("Login() error = %v", loginErr)
 	}
-	_, upgradedHash, err := svc.store.GetUserWithPasswordHash(context.Background(), user.ID)
+	_, storedHash, err := svc.store.GetUserWithPasswordHash(context.Background(), user.ID)
 	if err != nil {
 		t.Fatalf("GetUserWithPasswordHash() error = %v", err)
 	}
-	if !strings.HasPrefix(upgradedHash, passwordHashPrefix) {
-		t.Fatalf("stored hash = %q, want versioned upgrade", upgradedHash)
+	if storedHash != string(legacyHash) {
+		t.Fatalf("stored hash changed during dual-read login")
 	}
 }

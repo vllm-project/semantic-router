@@ -15,6 +15,11 @@ func logoutHandler(svc *Service) http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if err := validateCredentialTransport(r); err != nil {
+			clearAuthSessionCookie(w, r)
+			http.Error(w, "Invalid authentication transport", http.StatusBadRequest)
+			return
+		}
 
 		token, credentialSource := extractAccessTokenWithSource(r)
 		// Logout always mutates browser state by expiring the session cookie,

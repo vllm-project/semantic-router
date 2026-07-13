@@ -35,7 +35,7 @@ func (r *OpenAIRouter) handleAnthropicStreamingResponseBody(
 		ctx.IRExtensions,
 	)
 	if err != nil {
-		logging.Errorf("Failed to transform Anthropic streaming chunk: %v", err)
+		logging.Errorf("Failed to transform Anthropic streaming chunk: %s", safeErrorForLog(err))
 		return buildResponseBodyContinueResponse(nil, nil)
 	}
 	if len(transformed) == 0 {

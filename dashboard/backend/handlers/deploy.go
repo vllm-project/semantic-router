@@ -62,8 +62,8 @@ func DeployPreviewHandler(configPath string) http.HandlerFunc {
 		}
 
 		var req DeployRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		if status, err := decodeBoundedJSON(w, r, deployJSONRequestBodyLimit, &req); err != nil {
+			http.Error(w, "Invalid request body", status)
 			return
 		}
 
@@ -133,8 +133,8 @@ func DeployHandler(configPath string, readonlyMode bool, configDir string) http.
 		}
 
 		var req DeployRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		if status, err := decodeBoundedJSON(w, r, deployJSONRequestBodyLimit, &req); err != nil {
+			http.Error(w, "Invalid request body", status)
 			return
 		}
 
@@ -172,12 +172,16 @@ func RollbackHandler(configPath string, readonlyMode bool, configDir string) htt
 		var rollbackReq struct {
 			Version string `json:"version"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&rollbackReq); err != nil {
-			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		if status, err := decodeBoundedJSON(w, r, smallJSONRequestBodyLimit, &rollbackReq); err != nil {
+			http.Error(w, "Invalid request body", status)
 			return
 		}
 		if rollbackReq.Version == "" {
 			http.Error(w, "version is required", http.StatusBadRequest)
+			return
+		}
+		if !validConfigBackupVersion(rollbackReq.Version) {
+			http.Error(w, "invalid backup version", http.StatusBadRequest)
 			return
 		}
 

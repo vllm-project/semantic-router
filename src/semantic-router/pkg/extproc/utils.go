@@ -28,16 +28,21 @@ func sendResponse(stream ext_proc.ExternalProcessor_ProcessServer, response *ext
 		}
 	}
 
-	// Redact credentials (Authorization / x-api-key / ...) before dumping the
-	// mutation: the credential resolver injects the upstream provider key as a
-	// set-header, so a verbatim %+v would leak it to the log (CWE-532). Gate on
-	// the debug level so the clone+redact cost is paid only when it is logged.
+	// A ProcessingResponse may contain prompts, tool/RAG/memory content, and
+	// credential-bearing header mutations. Log only typed transport metadata.
 	if logging.DebugEnabled() {
-		logging.Debugf("Processing at stage [%s]: %+v", msgType, redactResponseForLog(response))
+		logging.ComponentDebugEvent(
+			"extproc",
+			"processing_response_ready",
+			processingResponseLogFields(msgType, response),
+		)
 	}
 
 	if err := stream.Send(response); err != nil {
-		logging.Errorf("Error sending %s response: %v", msgType, err)
+		logging.ComponentErrorEvent("extproc", "processing_response_send_failed", map[string]interface{}{
+			"stage":      msgType,
+			"error_type": safeErrorForLog(err),
+		})
 		return err
 	}
 	return nil

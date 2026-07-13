@@ -9,6 +9,17 @@ const (
 
 	EmbeddingModelTypeQwen3  = "qwen3"
 	EmbeddingModelTypeRemote = "remote"
+
+	// EmbeddingEndpointMaxTimeoutSeconds bounds conversion to time.Duration and
+	// prevents a stalled provider from holding router work indefinitely.
+	EmbeddingEndpointMaxTimeoutSeconds = 3600
+	// EmbeddingEndpointMaxRetries bounds total attempts and retry backoff work.
+	EmbeddingEndpointMaxRetries = 10
+	// EmbeddingAPIKeyEnvName is the only credential source accepted by the
+	// remote embedding client. A dedicated name prevents the endpoint config
+	// from repurposing unrelated process secrets as outbound credentials.
+	// #nosec G101 -- This constant is an environment variable name, not a credential.
+	EmbeddingAPIKeyEnvName = "VLLM_SR_EMBEDDING_API_KEY"
 )
 
 // EmbeddingEndpointConfig defines an external embedding provider endpoint.
@@ -38,6 +49,12 @@ func (e EmbeddingModels) UsesRemoteEmbeddingBackend() bool {
 
 func (e EmbeddingEndpointConfig) IsConfigured() bool {
 	return strings.TrimSpace(e.BaseURL) != "" || strings.TrimSpace(e.Model) != ""
+}
+
+// IsValidEmbeddingAPIKeyEnv reports whether name is the dedicated remote
+// embedding credential source.
+func IsValidEmbeddingAPIKeyEnv(name string) bool {
+	return name == EmbeddingAPIKeyEnvName
 }
 
 func normalizeEmbeddingBackend(backend string) string {

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // ExtractModelPaths extracts all model paths from the configuration
@@ -95,10 +96,120 @@ func isModelDirectory(path string) bool {
 
 // BuildModelSpecs builds ModelSpec list from config and registry
 func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
+	plan, err := resolveModelDownloadRuntimePlan(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("invalid embedding runtime plan: %w", err)
+	}
+	return buildModelSpecsForPlan(cfg, plan)
+}
+
+// resolveModelDownloadRuntimePlan keeps model inventory generation usable for
+// sparse configurations that do not select an embedding-backed feature. The
+// executable runtime remains strict: as soon as a local model path, explicit
+// override, remote backend, or embedding consumer is configured, the shared
+// runtime-plan resolver validates the selected model and endpoint fail closed.
+func resolveModelDownloadRuntimePlan(cfg *config.RouterConfig) (embedding.RuntimePlan, error) {
+	if cfg == nil {
+		return embedding.RuntimePlan{}, fmt.Errorf("router config is nil")
+	}
+	backendOverride := embedding.BackendOverrideFromEnv()
+	modelOverride := embedding.ModelTypeOverrideFromEnv()
+	if backendOverride == "" && modelOverride == "" &&
+		!cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() &&
+		!hasConfiguredRuntimePlanModel(cfg.EmbeddingModels) &&
+		!configRequiresEmbeddingRuntimePlan(cfg) {
+		return embedding.RuntimePlan{Backend: cfg.EmbeddingModels.EmbeddingBackend()}, nil
+	}
+	return embedding.ResolveRuntimePlan(cfg.EmbeddingModels, backendOverride, modelOverride)
+}
+
+func hasConfiguredRuntimePlanModel(models config.EmbeddingModels) bool {
+	return strings.TrimSpace(models.Qwen3ModelPath) != "" ||
+		strings.TrimSpace(models.GemmaModelPath) != "" ||
+		strings.TrimSpace(models.MmBertModelPath) != "" ||
+		strings.TrimSpace(models.MultiModalModelPath) != ""
+}
+
+func configRequiresEmbeddingRuntimePlan(cfg *config.RouterConfig) bool {
+	return configHasEmbeddingSignalRules(cfg) ||
+		configHasContrastiveRules(cfg) ||
+		cfg.Tools.Enabled ||
+		configuredLocalConsumerNeedsModelPath(cfg) ||
+		decisionRequiresEmbeddingRuntimePlan(cfg)
+}
+
+func configHasEmbeddingSignalRules(cfg *config.RouterConfig) bool {
+	return len(cfg.EmbeddingRules) > 0 ||
+		len(cfg.ReaskRules) > 0 ||
+		len(cfg.ComplexityRules) > 0 ||
+		len(cfg.KBRules) > 0
+}
+
+func configHasContrastiveRules(cfg *config.RouterConfig) bool {
+	if len(cfg.PreferenceRules) > 0 && cfg.PreferenceModel.ContrastiveEnabled() {
+		return true
+	}
+	for _, rule := range cfg.JailbreakRules {
+		if strings.EqualFold(strings.TrimSpace(rule.Method), "contrastive") {
+			return true
+		}
+	}
+	return false
+}
+
+func decisionRequiresEmbeddingRuntimePlan(cfg *config.RouterConfig) bool {
+	for _, decision := range cfg.Decisions {
+		if decision.HasPlugin("memory") && localConsumerModelNeedsConfiguredPath(cfg.Memory.EmbeddingModel) {
+			return true
+		}
+		if decision.Algorithm != nil && modelSelectionAlgorithmUsesEmbeddings(decision.Algorithm.Type) {
+			return true
+		}
+	}
+	return false
+}
+
+func configuredLocalConsumerNeedsModelPath(cfg *config.RouterConfig) bool {
+	if cfg.Memory.Enabled && localConsumerModelNeedsConfiguredPath(cfg.Memory.EmbeddingModel) {
+		return true
+	}
+	if cfg.SemanticCache.Enabled && localConsumerModelNeedsConfiguredPath(cfg.SemanticCache.EmbeddingModel) {
+		return true
+	}
+	return cfg.VectorStore != nil && cfg.VectorStore.Enabled &&
+		!strings.EqualFold(strings.TrimSpace(cfg.VectorStore.BackendType), "llama_stack") &&
+		localConsumerModelNeedsConfiguredPath(cfg.VectorStore.EmbeddingModel)
+}
+
+func localConsumerModelNeedsConfiguredPath(model string) bool {
+	switch strings.ToLower(strings.TrimSpace(model)) {
+	case config.EmbeddingModelTypeQwen3, "gemma", "mmbert", "modernbert", "multimodal":
+		return true
+	default:
+		return false
+	}
+}
+
+func modelSelectionAlgorithmUsesEmbeddings(algorithmType string) bool {
+	switch strings.ToLower(strings.TrimSpace(algorithmType)) {
+	case "router_dc", "hybrid", "knn", "kmeans", "svm", "mlp":
+		return true
+	default:
+		return false
+	}
+}
+
+func buildModelSpecsForPlan(cfg *config.RouterConfig, plan embedding.RuntimePlan) ([]ModelSpec, error) {
 	// Extract all model paths from config
-	paths := filterDisabledOptionalModelPaths(cfg, ExtractModelPaths(cfg))
+	paths := ExtractModelPaths(cfg)
+	for _, path := range paths {
+		if err := validateModelDownloadDestination(path); err != nil {
+			return nil, err
+		}
+	}
+	paths = filterDisabledOptionalModelPaths(cfg, paths, plan)
 	requiredFilesByModel := ExtractRequiredFilesByModel(cfg)
-	addEmbeddingModelRequiredFiles(cfg, requiredFilesByModel)
+	addEmbeddingModelRequiredFiles(plan, requiredFilesByModel)
 
 	// Allow empty paths for API-only configurations
 	if len(paths) == 0 {
@@ -117,6 +228,9 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 		repoID, ok := registry[path]
 		if !ok {
 			return nil, fmt.Errorf("model path %s not found in mom_registry", path)
+		}
+		if err := validateModelSource(ModelSpec{RepoID: repoID, Revision: "main"}); err != nil {
+			return nil, fmt.Errorf("invalid mom_registry source for model path %q: %w", path, err)
 		}
 
 		requiredFiles := append([]string{}, DefaultRequiredFiles...)
@@ -147,13 +261,17 @@ var embeddingModelWeightFiles = []string{"model.safetensors", "tokenizer.json"}
 // addEmbeddingModelRequiredFiles marks the configured semantic embedding model as requiring
 // its safetensors weights and tokenizer so a partial (ONNX-only) directory is detected as
 // incomplete and the full snapshot is re-downloaded.
-func addEmbeddingModelRequiredFiles(cfg *config.RouterConfig, requiredFilesByModel map[string][]string) {
-	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+func addEmbeddingModelRequiredFiles(
+	plan embedding.RuntimePlan,
+	requiredFilesByModel map[string][]string,
+) {
+	if plan.Backend == config.EmbeddingBackendOpenAICompatible {
 		return
 	}
 
-	// MmBertModelPath holds the configured semantic embedding model directory.
-	path := cfg.MmBertModelPath
+	// The runtime plan is the source of truth for which semantic embedding
+	// directory must satisfy the native model completeness contract.
+	path := plan.ModelPath
 	if path == "" || !strings.HasPrefix(path, "models/") {
 		return
 	}

@@ -2,17 +2,23 @@ package handlers
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 )
+
+const maximumOpenClawIdentityFileBytes = 64 * 1024
 
 // rewriteLoopbackHost replaces 127.0.0.1 / localhost in a URL with the given
 // container name so that inter-container traffic uses Docker DNS instead of
@@ -152,7 +158,10 @@ func readIdentitySnapshot(dataDir string) identitySnapshot {
 	wsDir := filepath.Join(dataDir, "workspace")
 	snapshot := identitySnapshot{}
 
-	identityContent, err := os.ReadFile(filepath.Join(wsDir, "IDENTITY.md"))
+	identityContent, err := readPrivateOpenClawFile(
+		filepath.Join(wsDir, "IDENTITY.md"),
+		maximumOpenClawIdentityFileBytes,
+	)
 	if err == nil {
 		for _, raw := range strings.Split(string(identityContent), "\n") {
 			line := strings.TrimSpace(raw)
@@ -169,7 +178,10 @@ func readIdentitySnapshot(dataDir string) identitySnapshot {
 		}
 	}
 
-	soulContent, err := os.ReadFile(filepath.Join(wsDir, "SOUL.md"))
+	soulContent, err := readPrivateOpenClawFile(
+		filepath.Join(wsDir, "SOUL.md"),
+		maximumOpenClawIdentityFileBytes,
+	)
 	if err == nil {
 		lines := strings.Split(string(soulContent), "\n")
 		capture := false
@@ -205,12 +217,39 @@ func writeJSONError(w http.ResponseWriter, msg string, code int) {
 	}
 }
 
-func generateToken(n int) string {
-	b := make([]byte, n)
-	if _, err := rand.Read(b); err != nil {
-		return "changeme-" + fmt.Sprintf("%d", time.Now().UnixNano())
+var openClawFallbackIDCounter atomic.Uint64
+
+func generateRandomHex(reader io.Reader, n int) (string, error) {
+	if reader == nil || n <= 0 {
+		return "", errors.New("random token size and source are required")
 	}
-	return hex.EncodeToString(b)
+	b := make([]byte, n)
+	if _, err := io.ReadFull(reader, b); err != nil {
+		return "", fmt.Errorf("read cryptographic randomness: %w", err)
+	}
+	return hex.EncodeToString(b), nil
+}
+
+func generateSecretToken(n int) (string, error) {
+	return generateRandomHex(rand.Reader, n)
+}
+
+func generateNonSecretToken(n int) string {
+	if token, err := generateSecretToken(n); err == nil {
+		return token
+	}
+	seed := fmt.Sprintf(
+		"%d:%d",
+		time.Now().UTC().UnixNano(),
+		openClawFallbackIDCounter.Add(1),
+	)
+	digest := sha256.Sum256([]byte(seed))
+	encoded := hex.EncodeToString(digest[:])
+	length := n * 2
+	if length > len(encoded) {
+		length = len(encoded)
+	}
+	return encoded[:length]
 }
 
 func writeIdentityFiles(wsDir string, id IdentityConfig) error {
@@ -236,7 +275,7 @@ func writeIdentityFiles(wsDir string, id IdentityConfig) error {
 		soulParts = append(soulParts, "## Vibe\n")
 		soulParts = append(soulParts, id.Vibe+"\n")
 	}
-	if err := os.WriteFile(filepath.Join(wsDir, "SOUL.md"), []byte(strings.Join(soulParts, "\n")), 0o644); err != nil {
+	if err := writePrivateOpenClawFile(filepath.Join(wsDir, "SOUL.md"), []byte(strings.Join(soulParts, "\n"))); err != nil {
 		return err
 	}
 
@@ -254,7 +293,7 @@ func writeIdentityFiles(wsDir string, id IdentityConfig) error {
 	if id.Emoji != "" {
 		idParts = append(idParts, fmt.Sprintf("- **Emoji:** %s", id.Emoji))
 	}
-	if err := os.WriteFile(filepath.Join(wsDir, "IDENTITY.md"), []byte(strings.Join(idParts, "\n")+"\n"), 0o644); err != nil {
+	if err := writePrivateOpenClawFile(filepath.Join(wsDir, "IDENTITY.md"), []byte(strings.Join(idParts, "\n")+"\n")); err != nil {
 		return err
 	}
 
@@ -266,7 +305,25 @@ func writeIdentityFiles(wsDir string, id IdentityConfig) error {
 	if id.UserNotes != "" {
 		userParts = append(userParts, fmt.Sprintf("- **Notes:** %s", id.UserNotes))
 	}
-	return os.WriteFile(filepath.Join(wsDir, "USER.md"), []byte(strings.Join(userParts, "\n")+"\n"), 0o644)
+	return writePrivateOpenClawFile(filepath.Join(wsDir, "USER.md"), []byte(strings.Join(userParts, "\n")+"\n"))
+}
+
+func ensureOpenClawDirectory(path string, mode os.FileMode) error {
+	info, err := os.Lstat(path)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		if mkdirErr := os.Mkdir(path, mode); mkdirErr != nil {
+			return fmt.Errorf("create private OpenClaw directory: %w", mkdirErr)
+		}
+	case err != nil:
+		return fmt.Errorf("inspect private OpenClaw directory: %w", err)
+	case info.Mode()&os.ModeSymlink != 0 || !info.IsDir():
+		return errors.New("private OpenClaw directory path must not be a symlink or special file")
+	}
+	if err := os.Chmod(path, mode); err != nil {
+		return fmt.Errorf("secure private OpenClaw directory: %w", err)
+	}
+	return nil
 }
 
 func buildOpenClawModelProviderConfig(req ProvisionRequest) map[string]interface{} {
@@ -288,14 +345,41 @@ func buildOpenClawModelProviderConfig(req ProvisionRequest) map[string]interface
 }
 
 func writeOpenClawConfig(path string, req ProvisionRequest) error {
+	return writeOpenClawConfigForProfile(path, req, dashboardUsesProductionSecurityProfile())
+}
+
+func writeOpenClawConfigForProfile(path string, req ProvisionRequest, production bool) error {
 	// Recover from stale state where a previous bad bind mount caused
 	// openclaw.json to be created as a directory on host.
-	if info, err := os.Stat(path); err == nil && info.IsDir() {
+	if info, err := os.Lstat(path); err == nil && info.IsDir() {
 		if removeErr := os.RemoveAll(path); removeErr != nil {
 			return fmt.Errorf("failed to replace config directory %s with file: %w", path, removeErr)
 		}
+	} else if err == nil && (info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular()) {
+		return errors.New("OpenClaw config path must be a regular file, not a symlink or special file")
 	} else if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to stat config path %s: %w", path, err)
+	}
+
+	gatewayConfig := map[string]interface{}{
+		"port": req.Container.GatewayPort,
+		"auth": map[string]string{"mode": "token", "token": req.Container.AuthToken},
+		"http": map[string]interface{}{
+			"endpoints": map[string]interface{}{
+				"chatCompletions": map[string]interface{}{"enabled": true},
+				"responses":       map[string]interface{}{"enabled": true},
+			},
+		},
+	}
+	if !production {
+		// Same-origin control UI is a trusted-development feature only. Production
+		// disables its proxy boundary and does not emit the upstream insecure-auth
+		// escape hatches or a wildcard browser origin.
+		gatewayConfig["controlUi"] = map[string]interface{}{
+			"dangerouslyDisableDeviceAuth": true,
+			"allowInsecureAuth":            true,
+			"allowedOrigins":               []string{"*"},
+		}
 	}
 
 	cfg := map[string]interface{}{
@@ -315,21 +399,7 @@ func writeOpenClawConfig(path string, req ProvisionRequest) error {
 			},
 		},
 		"commands": map[string]interface{}{"native": "auto", "nativeSkills": "auto", "restart": true},
-		"gateway": map[string]interface{}{
-			"port": req.Container.GatewayPort,
-			"auth": map[string]string{"mode": "token", "token": req.Container.AuthToken},
-			"http": map[string]interface{}{
-				"endpoints": map[string]interface{}{
-					"chatCompletions": map[string]interface{}{"enabled": true},
-					"responses":       map[string]interface{}{"enabled": true},
-				},
-			},
-			"controlUi": map[string]interface{}{
-				"dangerouslyDisableDeviceAuth": true,
-				"allowInsecureAuth":            true,
-				"allowedOrigins":               []string{"*"},
-			},
-		},
+		"gateway":  gatewayConfig,
 	}
 	memoryBackend := strings.ToLower(strings.TrimSpace(req.Container.MemoryBackend))
 	if memoryBackend == "" {
@@ -369,111 +439,225 @@ func writeOpenClawConfig(path string, req ProvisionRequest) error {
 		// remote embedding configuration.
 		cfg["memory"] = map[string]interface{}{"backend": "builtin"}
 	}
-	if req.Container.BrowserEnabled {
+	if req.Container.BrowserEnabled && !production {
 		cfg["browser"] = map[string]interface{}{"enabled": true, "headless": true, "noSandbox": true}
 	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	return writePrivateOpenClawFile(path, data)
 }
 
-func generateDockerRunCmd(runtime string, req ProvisionRequest, dataDir string) string {
+func writePrivateOpenClawFile(path string, data []byte) error {
+	flags := os.O_WRONLY
+	created := false
+	var expected os.FileInfo
+	info, err := os.Lstat(path)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		flags = os.O_WRONLY | os.O_CREATE | os.O_EXCL
+		created = true
+	case err != nil:
+		return fmt.Errorf("inspect private OpenClaw file: %w", err)
+	case info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular():
+		return errors.New("private OpenClaw path must be a regular file, not a symlink or special file")
+	default:
+		expected = info
+	}
+
+	file, err := os.OpenFile(path, flags, 0o600)
+	if err != nil {
+		return fmt.Errorf("open private OpenClaw file: %w", err)
+	}
+	closed := false
+	succeeded := false
+	defer func() {
+		if !closed {
+			_ = file.Close()
+		}
+		if created && !succeeded {
+			_ = os.Remove(path)
+		}
+	}()
+	actual, statErr := file.Stat()
+	if statErr != nil {
+		return fmt.Errorf("inspect opened private OpenClaw file: %w", statErr)
+	}
+	if !actual.Mode().IsRegular() || (expected != nil && !os.SameFile(expected, actual)) {
+		return errors.New("private OpenClaw file changed during secure open")
+	}
+	if chmodErr := file.Chmod(0o600); chmodErr != nil {
+		return fmt.Errorf("secure private OpenClaw file: %w", chmodErr)
+	}
+	if truncateErr := file.Truncate(0); truncateErr != nil {
+		return fmt.Errorf("truncate private OpenClaw file: %w", truncateErr)
+	}
+	if _, seekErr := file.Seek(0, io.SeekStart); seekErr != nil {
+		return fmt.Errorf("rewind private OpenClaw file: %w", seekErr)
+	}
+	written, err := file.Write(data)
+	if err != nil {
+		return fmt.Errorf("write private OpenClaw file: %w", err)
+	}
+	if written != len(data) {
+		return io.ErrShortWrite
+	}
+	if syncErr := file.Sync(); syncErr != nil {
+		return fmt.Errorf("sync private OpenClaw file: %w", syncErr)
+	}
+	if closeErr := file.Close(); closeErr != nil {
+		return fmt.Errorf("close private OpenClaw file: %w", closeErr)
+	}
+	closed = true
+	succeeded = true
+	return nil
+}
+
+func readPrivateOpenClawFile(path string, maximumBytes int64) ([]byte, error) {
+	if maximumBytes <= 0 {
+		return nil, errors.New("private OpenClaw read limit must be positive")
+	}
+	expected, err := os.Lstat(path)
+	if err != nil {
+		return nil, fmt.Errorf("inspect private OpenClaw file: %w", err)
+	}
+	if expected.Mode()&os.ModeSymlink != 0 || !expected.Mode().IsRegular() {
+		return nil, errors.New("private OpenClaw path must be a regular file, not a symlink or special file")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open private OpenClaw file: %w", err)
+	}
+	defer func() { _ = file.Close() }()
+	actual, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("inspect opened private OpenClaw file: %w", err)
+	}
+	if !actual.Mode().IsRegular() || !os.SameFile(expected, actual) {
+		return nil, errors.New("private OpenClaw file changed during secure open")
+	}
+	data, err := io.ReadAll(io.LimitReader(file, maximumBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("read private OpenClaw file: %w", err)
+	}
+	if int64(len(data)) > maximumBytes {
+		return nil, errors.New("private OpenClaw file exceeds read limit")
+	}
+	return data, nil
+}
+
+func openClawContainerRunArgs(req ProvisionRequest, dataDir, ownerID string) []string {
 	volumeName := "openclaw-state-" + req.Container.ContainerName
 	healthCmd := fmt.Sprintf(
 		`node -e "fetch('http://127.0.0.1:%d/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"`,
 		req.Container.GatewayPort,
 	)
-	return fmt.Sprintf(`%s run -d \
-  --name %s \
-  --user 0:0 \
-  --network %s \
-  --health-cmd '%s' \
-  --health-interval 30s \
-  --health-timeout 5s \
-  --health-start-period 15s \
-  --health-retries 3 \
-  -v %s/workspace:/workspace \
-  -v %s/openclaw.json:/config/openclaw.json:ro \
-  -v %s:/state \
-  -e OPENCLAW_CONFIG_PATH=/config/openclaw.json \
-  -e OPENCLAW_STATE_DIR=/state \
-  %s \
-  node openclaw.mjs gateway --allow-unconfigured --bind lan`,
-		runtime, req.Container.ContainerName, req.Container.NetworkMode, healthCmd,
-		dataDir, dataDir, volumeName, req.Container.BaseImage)
+	return []string{
+		"run", "-d",
+		"--name", req.Container.ContainerName,
+		"--label", openClawManagedLabel,
+		"--label", openClawOwnerLabelKey + "=" + ownerID,
+		"--user", "0:0",
+		"--cap-drop", "ALL",
+		"--security-opt", "no-new-privileges:true",
+		"--pids-limit", "512",
+		"--memory", "4g",
+		"--cpus", "2.0",
+		"--network", req.Container.NetworkMode,
+		"--health-cmd", healthCmd,
+		"--health-interval", "30s",
+		"--health-timeout", "5s",
+		"--health-start-period", "15s",
+		"--health-retries", "3",
+		"-v", dataDir + "/workspace:/workspace",
+		"-v", dataDir + "/openclaw.json:/config/openclaw.json:ro",
+		"-v", volumeName + ":/state",
+		"-e", "OPENCLAW_CONFIG_PATH=/config/openclaw.json",
+		"-e", "OPENCLAW_STATE_DIR=/state",
+		req.Container.BaseImage,
+		"node", "openclaw.mjs", "gateway", "--allow-unconfigured", "--bind", "lan",
+	}
 }
 
-func generateComposeYAML(req ProvisionRequest, dataDir string) string {
+func openClawShellQuote(value string) string {
+	if value != "" {
+		safe := true
+		for _, character := range value {
+			if (character >= 'a' && character <= 'z') ||
+				(character >= 'A' && character <= 'Z') ||
+				(character >= '0' && character <= '9') ||
+				strings.ContainsRune("_@%+=:,./-", character) {
+				continue
+			}
+			safe = false
+			break
+		}
+		if safe {
+			return value
+		}
+	}
+	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
+}
+
+func formatOpenClawShellCommand(argv []string) string {
+	quoted := make([]string, len(argv))
+	for index := range argv {
+		quoted[index] = openClawShellQuote(argv[index])
+	}
+	return strings.Join(quoted, " ")
+}
+
+func generateDockerRunCmd(runtime string, req ProvisionRequest, dataDir, ownerID string) string {
+	volumeName := "openclaw-state-" + req.Container.ContainerName
+	volumeCommand := []string{
+		runtime, "volume", "create",
+		"--label", openClawManagedLabel,
+		"--label", openClawOwnerLabelKey + "=" + ownerID,
+		volumeName,
+	}
+	volumeInspectCommand := []string{
+		runtime, "volume", "inspect", "--format",
+		fmt.Sprintf(
+			`{{with .Labels}}{{index . %q}}{{end}}|{{with .Labels}}{{index . %q}}{{end}}`,
+			openClawManagedLabelKey,
+			openClawOwnerLabelKey,
+		),
+		volumeName,
+	}
+	runCommand := append([]string{runtime}, openClawContainerRunArgs(req, dataDir, ownerID)...)
+	return formatOpenClawShellCommand(volumeCommand) + " >/dev/null && \\\n  " +
+		formatOpenClawShellCommand(volumeInspectCommand) + " | grep -Fqx -- " +
+		openClawShellQuote("true|"+ownerID) + " && \\\n  " +
+		formatOpenClawShellCommand(runCommand)
+}
+
+func openClawProvisionGuidance(
+	production bool,
+	runtime string,
+	req ProvisionRequest,
+	dataDir string,
+	ownerID string,
+) (string, string) {
+	if production {
+		// Generated shell/YAML is convenience output, not an owned deployment
+		// artifact. Never offer copy/paste commands on the production boundary.
+		return "", ""
+	}
+	return generateDockerRunCmd(runtime, req, dataDir, ownerID), generateComposeYAML(req, dataDir, ownerID)
+}
+
+func generateComposeYAML(req ProvisionRequest, dataDir, ownerID string) string {
 	volumeName := "openclaw-state-" + req.Container.ContainerName
 	networkMode := req.Container.NetworkMode
-
-	// For bridge network names (not "host" or "container:xxx"), use the networks syntax.
-	if networkMode != "" && networkMode != "host" && !strings.HasPrefix(networkMode, "container:") {
-		return fmt.Sprintf(`services:
-  openclaw:
-    image: %s
-    container_name: %s
-    user: "0:0"
-    networks:
-      - %s
-    volumes:
-      - %s/workspace:/workspace
-      - %s/openclaw.json:/config/openclaw.json:ro
-      - %s:/state
-    environment:
-      OPENCLAW_CONFIG_PATH: /config/openclaw.json
-      OPENCLAW_STATE_DIR: /state
-    healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:%d/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
-      interval: 30s
-      timeout: 5s
-      start_period: 15s
-      retries: 3
-    command: ["node", "openclaw.mjs", "gateway", "--allow-unconfigured", "--bind", "lan"]
-    restart: unless-stopped
-
-networks:
-  %s:
-    external: true
-
-volumes:
-  %s:
-`, req.Container.BaseImage, req.Container.ContainerName, networkMode,
-			dataDir, dataDir, volumeName,
-			req.Container.GatewayPort,
-			networkMode, volumeName)
-	}
-
-	return fmt.Sprintf(`services:
-  openclaw:
-    image: %s
-    container_name: %s
-    user: "0:0"
-    network_mode: %s
-    volumes:
-      - %s/workspace:/workspace
-      - %s/openclaw.json:/config/openclaw.json:ro
-      - %s:/state
-    environment:
-      OPENCLAW_CONFIG_PATH: /config/openclaw.json
-      OPENCLAW_STATE_DIR: /state
-    healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:%d/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
-      interval: 30s
-      timeout: 5s
-      start_period: 15s
-      retries: 3
-    command: ["node", "openclaw.mjs", "gateway", "--allow-unconfigured", "--bind", "lan"]
-    restart: unless-stopped
-
-volumes:
-  %s:
-`, req.Container.BaseImage, req.Container.ContainerName, networkMode,
-		dataDir, dataDir, volumeName,
+	healthCommand := fmt.Sprintf(
+		`node -e "fetch('http://127.0.0.1:%d/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"`,
 		req.Container.GatewayPort,
-		volumeName)
+	)
+	if networkMode != "" && networkMode != "host" && !strings.HasPrefix(networkMode, "container:") {
+		return generateOpenClawBridgeComposeYAML(req, dataDir, ownerID, volumeName, networkMode, healthCommand)
+	}
+	return generateOpenClawNetworkModeComposeYAML(req, dataDir, ownerID, volumeName, networkMode, healthCommand)
 }
 
 func agentsMdContent() string {

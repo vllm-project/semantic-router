@@ -34,6 +34,7 @@ type OpenAIRouter struct {
 	Classifier            *classification.Classifier
 	ClassificationService *services.ClassificationService
 	embeddingAdmission    *embedding.ProcessAdmission
+	embeddingRuntimePlan  embedding.RuntimePlan
 	Cache                 cache.CacheBackend
 	ToolsDatabase         *tools.ToolsDatabase
 	ToolsRegistry         *tools.Registry // retriever strategy registry
@@ -154,7 +155,7 @@ func (r *OpenAIRouter) createSSEResponseWithBody(statusCode int, sseBody []byte,
 func (r *OpenAIRouter) createJSONResponse(statusCode int, data interface{}) *ext_proc.ProcessingResponse {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		logging.Errorf("Failed to marshal JSON response: %v", err)
+		logging.Errorf("Failed to marshal JSON response: %s", safeErrorForLog(err))
 		return r.createErrorResponse(500, "Internal server error")
 	}
 
@@ -175,7 +176,7 @@ func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_
 
 	jsonData, err := json.Marshal(errorResp)
 	if err != nil {
-		logging.Errorf("Failed to marshal error response: %v", err)
+		logging.Errorf("Failed to marshal error response: %s", safeErrorForLog(err))
 		jsonData = []byte(`{"error":{"message":"Internal server error","type":"internal_error","code":500}}`)
 		statusCode = 500
 	}

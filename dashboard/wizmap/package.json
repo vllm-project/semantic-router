@@ -94,6 +94,7 @@
     "deploy": "pnpm run deploy:vercel",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "test:theme": "node scripts/check-theme.mjs"
+    "test:theme": "node scripts/check-theme.mjs",
+    "test:security": "node --test scripts/security.test.mjs"
   }
 }

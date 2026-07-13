@@ -72,6 +72,11 @@ Every debt entry should include:
 
 - [TD044 Flow Tool State Durability Follow-Up](td-044-flow-tool-state-durability-gap.md)
 
+### PL0038 Router Hardening Audit
+
+- [TD047 ONNX FFI Exports Lack an Enforced Unsafe-Boundary Contract](td-047-onnx-ffi-clippy-safety-contract-gap.md)
+- [TD048 Dashboard Jobs Lack Aggregate Lifecycle Ownership](td-048-dashboard-job-lifecycle-ownership-gap.md)
+
 ## Retired Debt Policy
 
 Retired TD files are removed from this directory. Keep the ID in commit history

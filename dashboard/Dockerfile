@@ -1,5 +1,5 @@
 # Build frontend
-FROM node:18-alpine AS frontend-builder
+FROM node:24-alpine AS frontend-builder
 ARG BASE_DIR=dashboard
 WORKDIR /app/frontend
 COPY ${BASE_DIR}/frontend/package*.json ./

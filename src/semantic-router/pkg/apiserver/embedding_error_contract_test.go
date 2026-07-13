@@ -22,7 +22,7 @@ func TestSimilarityHandlersDoNotExposeNativeErrors(t *testing.T) {
 	})
 	server := &ClassificationAPIServer{embeddingAdmission: newEmbeddingProcessAdmission(1)}
 
-	calculateEmbeddingSimilarityNative = func(string, string, string, int) (*candle_binding.SimilarityOutput, error) {
+	calculateEmbeddingSimilarityNative = func(string, string, candle_binding.SimilarityOptions) (*candle_binding.SimilarityOutput, error) {
 		return nil, errors.New("private device and model path")
 	}
 	assertInferenceErrorResponse(
@@ -34,7 +34,7 @@ func TestSimilarityHandlersDoNotExposeNativeErrors(t *testing.T) {
 		"failed to calculate similarity",
 	)
 
-	calculateSimilarityBatchNative = func(string, []string, int, string, int) (*candle_binding.BatchSimilarityOutput, error) {
+	calculateSimilarityBatchNative = func(string, []string, int, candle_binding.SimilarityOptions) (*candle_binding.BatchSimilarityOutput, error) {
 		return nil, errors.New("private batch runtime detail")
 	}
 	assertInferenceErrorResponse(
@@ -46,7 +46,7 @@ func TestSimilarityHandlersDoNotExposeNativeErrors(t *testing.T) {
 		"failed to calculate batch similarity",
 	)
 
-	calculateSimilarityBatchNative = func(string, []string, int, string, int) (*candle_binding.BatchSimilarityOutput, error) {
+	calculateSimilarityBatchNative = func(string, []string, int, candle_binding.SimilarityOptions) (*candle_binding.BatchSimilarityOutput, error) {
 		return &candle_binding.BatchSimilarityOutput{
 			Matches: []candle_binding.BatchSimilarityMatch{{Index: 99, Similarity: 0.5}},
 		}, nil
@@ -74,10 +74,10 @@ func TestEmbeddingHandlersMapNativeTokenLimitsToStable413(t *testing.T) {
 	embeddingOutputForRequest = func(EmbeddingRequest, string) (*candle_binding.EmbeddingOutput, error) {
 		return nil, limitError
 	}
-	calculateEmbeddingSimilarityNative = func(string, string, string, int) (*candle_binding.SimilarityOutput, error) {
+	calculateEmbeddingSimilarityNative = func(string, string, candle_binding.SimilarityOptions) (*candle_binding.SimilarityOutput, error) {
 		return nil, limitError
 	}
-	calculateSimilarityBatchNative = func(string, []string, int, string, int) (*candle_binding.BatchSimilarityOutput, error) {
+	calculateSimilarityBatchNative = func(string, []string, int, candle_binding.SimilarityOptions) (*candle_binding.BatchSimilarityOutput, error) {
 		return nil, limitError
 	}
 
@@ -106,6 +106,65 @@ func TestEmbeddingHandlersMapNativeTokenLimitsToStable413(t *testing.T) {
 		if strings.Contains(recorder.Body.String(), "private") || strings.Contains(recorder.Body.String(), "counts") {
 			t.Fatalf("%s exposed token-limit details: %s", test.path, recorder.Body.String())
 		}
+	}
+}
+
+func TestSimilarityHandlersForwardTheCompleteNativeOptions(t *testing.T) {
+	originalSimilarity := calculateEmbeddingSimilarityNative
+	originalBatch := calculateSimilarityBatchNative
+	t.Cleanup(func() {
+		calculateEmbeddingSimilarityNative = originalSimilarity
+		calculateSimilarityBatchNative = originalBatch
+	})
+	server := &ClassificationAPIServer{embeddingAdmission: newEmbeddingProcessAdmission(1)}
+
+	var pairOptions candle_binding.SimilarityOptions
+	calculateEmbeddingSimilarityNative = func(_ string, _ string, options candle_binding.SimilarityOptions) (*candle_binding.SimilarityOutput, error) {
+		pairOptions = options
+		return &candle_binding.SimilarityOutput{ModelType: options.ModelType}, nil
+	}
+	pairRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/similarity",
+		strings.NewReader(`{"text1":"hello","text2":"world","model":"mmbert","dimension":256,"target_layer":3}`),
+	)
+	pairRequest.Header.Set("Content-Type", "application/json")
+	pairResponse := httptest.NewRecorder()
+	server.handleSimilarity(pairResponse, pairRequest)
+	if pairResponse.Code != http.StatusOK {
+		t.Fatalf("pair status = %d: %s", pairResponse.Code, pairResponse.Body.String())
+	}
+	if pairOptions.ModelType != "mmbert" || pairOptions.TargetLayer != 3 || pairOptions.TargetDim != 256 {
+		t.Fatalf("pair options were not forwarded: %#v", pairOptions)
+	}
+
+	var batchOptions candle_binding.SimilarityOptions
+	calculateSimilarityBatchNative = func(_ string, _ []string, _ int, options candle_binding.SimilarityOptions) (*candle_binding.BatchSimilarityOutput, error) {
+		batchOptions = options
+		return &candle_binding.BatchSimilarityOutput{
+			Matches: []candle_binding.BatchSimilarityMatch{{Index: 0, Similarity: 1}},
+		}, nil
+	}
+	batchBody := `{"query":"hello","candidates":["world"],"model":"auto","dimension":512,"quality_priority":0.8,"latency_priority":0.2}`
+	wantQuality, wantLatency := float32(0.8), float32(0.2)
+	if !nativeEmbeddingBackendCapabilities().autoSupportsPriorities {
+		batchBody = `{"query":"hello","candidates":["world"],"model":"auto","dimension":512}`
+		wantQuality, wantLatency = 0, 0
+	}
+	batchRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/similarity/batch",
+		strings.NewReader(batchBody),
+	)
+	batchRequest.Header.Set("Content-Type", "application/json")
+	batchResponse := httptest.NewRecorder()
+	server.handleBatchSimilarity(batchResponse, batchRequest)
+	if batchResponse.Code != http.StatusOK {
+		t.Fatalf("batch status = %d: %s", batchResponse.Code, batchResponse.Body.String())
+	}
+	if batchOptions.ModelType != "auto" || batchOptions.TargetDim != 512 ||
+		batchOptions.QualityPriority != wantQuality || batchOptions.LatencyPriority != wantLatency {
+		t.Fatalf("batch options were not forwarded: %#v", batchOptions)
 	}
 }
 

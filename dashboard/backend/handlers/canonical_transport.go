@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -34,15 +33,6 @@ type setupModeConfig struct {
 type setupConfigFile struct {
 	routerconfig.CanonicalConfig `yaml:",inline"`
 	Setup                        *setupModeConfig `yaml:"setup,omitempty"`
-}
-
-func decodeYAMLTaggedBody[T any](reader io.Reader) (T, error) {
-	var value T
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return value, err
-	}
-	return decodeYAMLTaggedBytes[T](data)
 }
 
 func decodeYAMLTaggedBytes[T any](data []byte) (T, error) {
@@ -197,7 +187,13 @@ func cloneYAMLNode(node *yaml.Node) *yaml.Node {
 	return &clone
 }
 
-func mergeMappingNodes(dst, src *yaml.Node) error {
+type yamlMergeNullDeletePolicy func(path []string, value *yaml.Node) bool
+
+func mergeMappingNodesWithNullDeletePolicy(
+	dst, src *yaml.Node,
+	path []string,
+	deleteNull yamlMergeNullDeletePolicy,
+) error {
 	if dst == nil || src == nil {
 		return nil
 	}
@@ -207,9 +203,19 @@ func mergeMappingNodes(dst, src *yaml.Node) error {
 	for i := 0; i+1 < len(src.Content); i += 2 {
 		key := src.Content[i].Value
 		srcValue := src.Content[i+1]
+		nextPath := append(append([]string(nil), path...), key)
+		if deleteNull != nil && srcValue.Tag == "!!null" && deleteNull(nextPath, srcValue) {
+			deleteMappingValueNode(dst, key)
+			continue
+		}
 		dstValue := mappingValueNode(dst, key)
 		if dstValue != nil && dstValue.Kind == yaml.MappingNode && srcValue.Kind == yaml.MappingNode {
-			if err := mergeMappingNodes(dstValue, srcValue); err != nil {
+			if err := mergeMappingNodesWithNullDeletePolicy(
+				dstValue,
+				srcValue,
+				nextPath,
+				deleteNull,
+			); err != nil {
 				return err
 			}
 			continue

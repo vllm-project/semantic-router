@@ -114,12 +114,12 @@ func handleRAGRetrievalError(
 
 	switch ragFailureMode(ragConfig) {
 	case "block":
-		logging.Errorf("RAG retrieval failed and on_failure=block: %v", err)
+		logging.Errorf("RAG retrieval failed and on_failure=block: %s", safeErrorForLog(err))
 		return fmt.Errorf("RAG retrieval failed: %w", err)
 	case "warn":
-		logging.Warnf("RAG retrieval failed (on_failure=warn): %v", err)
+		logging.Warnf("RAG retrieval failed (on_failure=warn): %s", safeErrorForLog(err))
 	default:
-		logging.Debugf("RAG retrieval failed (on_failure=skip): %v", err)
+		logging.Debugf("RAG retrieval failed (on_failure=skip): %s", safeErrorForLog(err))
 	}
 
 	ctx.RAGRetrievedContext = ""
@@ -154,8 +154,8 @@ func (r *OpenAIRouter) finalizeRAGRetrieval(
 	}
 
 	if err := r.injectRAGContext(ctx, retrievedContext, ragConfig); err != nil {
-		logging.Errorf("[RAG] Failed to inject context for decision '%s' (backend=%s): %v",
-			decisionName, ragConfig.Backend, err)
+		logging.Errorf("[RAG] Failed to inject context for decision '%s' (backend=%s): %s",
+			decisionName, ragConfig.Backend, safeErrorForLog(err))
 		metrics.RecordPluginExecution("rag", decisionName, "injection_error", 0)
 		return nil
 	}
@@ -172,7 +172,7 @@ func (r *OpenAIRouter) getCachedRAGContext(query string, ragConfig *config.RAGPl
 
 	if cached, found := r.getRAGCache(query, ragConfig); found {
 		metrics.RecordRAGCacheHit(ragConfig.Backend)
-		logging.Debugf("RAG cache hit for query: %s", query[:min(50, len(query))])
+		logging.Debugf("RAG cache hit: query_chars=%d", len(query))
 		return cached, true
 	}
 
@@ -218,8 +218,8 @@ func (r *OpenAIRouter) retrieveContextFromBackend(
 
 func (r *OpenAIRouter) logEmptyRAGContext(backend string, query string, retrievedContext string) {
 	if retrievedContext == "" {
-		logging.Debugf("[RAG] Backend '%s' returned empty context for query: %s",
-			backend, query[:min(60, len(query))])
+		logging.Debugf("[RAG] Backend '%s' returned empty context: query_chars=%d",
+			backend, len(query))
 	}
 }
 

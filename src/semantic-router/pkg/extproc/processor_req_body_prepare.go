@@ -25,7 +25,7 @@ func (r *OpenAIRouter) translateResponseAPIRequest(
 
 	respCtx, translatedBody, err := r.ResponseAPIFilter.TranslateRequest(ctx.TraceContext, requestBody)
 	if err != nil {
-		logging.Errorf("Response API translation error: %v", err)
+		logging.Errorf("Response API translation error: %s", safeErrorForLog(err))
 		return nil, r.createErrorResponse(400, "Invalid Response API request: "+err.Error())
 	}
 	if respCtx == nil || translatedBody == nil {
@@ -50,7 +50,7 @@ func (r *OpenAIRouter) extractFastRequestState(
 ) (*FastExtractResult, error) {
 	fast, err := extractRequestSignalsForProtocol(ctx.ClientProtocol, requestBody)
 	if err != nil {
-		logging.Errorf("Error extracting request fields: %v", err)
+		logging.Errorf("Error extracting request fields: %s", safeErrorForLog(err))
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
 		metrics.RecordModelRequest(ctx.RequestModel)
 		return nil, status.Errorf(codes.InvalidArgument, "invalid request body: %v", err)
@@ -109,7 +109,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		ctx,
 	)
 	if evaluationErr != nil {
-		logging.Errorf("[Request Body] signal evaluation failed: %v", evaluationErr)
+		logging.Errorf("[Request Body] signal evaluation failed: %s", safeErrorForLog(evaluationErr))
 		return requestDecisionState{}, r.classificationEvaluationErrorResponse(evaluationErr)
 	}
 
@@ -152,7 +152,7 @@ func (r *OpenAIRouter) applyRateLimitAndCacheChecks(
 			logging.ComponentErrorEvent("extproc", "rate_limit_check_failed", map[string]interface{}{
 				"request_id": ctx.RequestID,
 				"model":      selectedModel,
-				"error":      err.Error(),
+				"error_type": safeErrorForLog(err),
 			})
 			return r.createRateLimitResponse(decision)
 		}
@@ -188,7 +188,7 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 
 	openAIRequest, err := parseRequestForProtocol(ctx, requestBody)
 	if err != nil {
-		logging.Errorf("Error parsing request for routing: %v", err)
+		logging.Errorf("Error parsing request for routing: %s", safeErrorForLog(err))
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
 		return nil, nil, status.Errorf(codes.InvalidArgument, "invalid request body: %v", err)
 	}
@@ -205,7 +205,7 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 	}
 
 	if resp, err := r.handleModalityFromDecision(ctx, openAIRequest); err != nil {
-		logging.Errorf("[ModalityRouter] Error: %v", err)
+		logging.Errorf("[ModalityRouter] Error: %s", safeErrorForLog(err))
 		return nil, r.createErrorResponse(503, fmt.Sprintf("Modality routing failed: %v", err)), nil
 	} else if resp != nil {
 		return nil, resp, nil
@@ -215,7 +215,7 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 	if memErr != nil {
 		logging.ComponentWarnEvent("extproc", "memory_retrieval_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
-			"error":      memErr.Error(),
+			"error_type": safeErrorForLog(memErr),
 			"fallback":   "continue_without_memory",
 		})
 	}
@@ -271,7 +271,7 @@ func (r *OpenAIRouter) reparseRequestWithMemory(
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "memory_request_reparse_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 		return openAIRequest
 	}

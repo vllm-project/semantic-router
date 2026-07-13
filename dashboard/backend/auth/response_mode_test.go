@@ -17,10 +17,13 @@ func TestCookieOnlyAuthResponseMode(t *testing.T) {
 		values     []string
 		wantCookie bool
 		wantError  bool
+		origin     string
 	}{
-		{name: "API compatibility default"},
+		{name: "secure default", wantCookie: true},
 		{name: "maintained browser", values: []string{authResponseModeCookie}, wantCookie: true},
-		{name: "unknown mode", values: []string{"bearer"}, wantError: true},
+		{name: "explicit non-browser bearer", values: []string{authResponseModeBearer}},
+		{name: "browser cannot request bearer", values: []string{authResponseModeBearer}, origin: "https://dashboard.example.com", wantError: true},
+		{name: "unknown mode", values: []string{"unknown"}, wantError: true},
 		{name: "ambiguous mode", values: []string{authResponseModeCookie, authResponseModeCookie}, wantError: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -29,11 +32,61 @@ func TestCookieOnlyAuthResponseMode(t *testing.T) {
 			for _, value := range test.values {
 				req.Header.Add(authResponseModeHeader, value)
 			}
+			if test.origin != "" {
+				req.Header.Set("Origin", test.origin)
+			}
 			gotCookie, err := cookieOnlyAuthResponse(req)
 			if gotCookie != test.wantCookie || (err != nil) != test.wantError {
 				t.Fatalf("cookieOnlyAuthResponse() = (%v, %v), want (%v, error:%v)", gotCookie, err, test.wantCookie, test.wantError)
 			}
 		})
+	}
+}
+
+func TestDefaultLoginOmitsBearerFromJSON(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestAuthService(t)
+	user := newTestUser(t, svc, "default-cookie-login@example.com", RoleRead, defaultUserStatusActive)
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"https://dashboard.example.com/api/auth/login",
+		strings.NewReader(`{"email":"default-cookie-login@example.com","password":"secret-password"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	loginHandler(svc).ServeHTTP(recorder, req)
+
+	assertCookieOnlyLoginResponse(t, svc, recorder, user.ID)
+}
+
+func TestExplicitNonBrowserLoginCanRequestBearerJSON(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestAuthService(t)
+	user := newTestUser(t, svc, "api-bearer-login@example.com", RoleRead, defaultUserStatusActive)
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"https://dashboard.example.com/api/auth/login",
+		strings.NewReader(`{"email":"api-bearer-login@example.com","password":"secret-password"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(authResponseModeHeader, authResponseModeBearer)
+	loginHandler(svc).ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+	}
+	var payload LoginResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload.Token == "" || payload.User == nil || payload.User.ID != user.ID {
+		t.Fatalf("explicit bearer response = %#v", payload)
+	}
+	if cookies := recorder.Result().Cookies(); len(cookies) != 0 {
+		t.Fatalf("explicit bearer login unexpectedly set cookies: %#v", cookies)
 	}
 }
 

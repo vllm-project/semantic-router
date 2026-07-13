@@ -3,7 +3,7 @@ package mlpipeline
 import (
 	"context"
 	"fmt"
-	"log"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,20 +16,41 @@ import (
 // --algorithm (all|knn|kmeans|svm|mlp), --skip-mlp, and MLP-specific args.
 // If all 4 algorithms are requested, a single --algorithm all invocation is used.
 // Otherwise, train.py is invoked once per algorithm (embeddings are cached between runs).
-func (r *Runner) runTrainSubprocess(ctx context.Context, benchmarkDataPath string, req TrainRequest) (string, error) {
-	job := r.createJob("train")
+func (r *Runner) runTrainSubprocess(ctx context.Context, benchmarkDataPath string, req TrainRequest, release func()) (string, error) {
+	job, err := r.createJob("train")
+	if err != nil {
+		release()
+		return "", err
+	}
 	jobDir := r.TrainDir()
 	if err := ensureDir(jobDir); err != nil {
+		r.failJob(job.ID, "training output directory could not be created")
+		release()
 		return "", fmt.Errorf("failed to create job dir: %w", err)
 	}
 
-	r.setJobRunning(job)
+	if err := r.setJobRunning(job); err != nil {
+		release()
+		return "", err
+	}
 
-	go r.executeTrainSubprocess(ctx, job.ID, jobDir, benchmarkDataPath, req)
+	r.startAsyncJob(job.ID, release, func() {
+		r.executeTrainSubprocess(ctx, job.ID, jobDir, benchmarkDataPath, req)
+	})
 	return job.ID, nil
 }
 
 func (r *Runner) executeTrainSubprocess(ctx context.Context, jobID, jobDir, benchmarkDataPath string, req TrainRequest) {
+	defer r.cleanupManagedUploads(benchmarkDataPath)
+	jobCtx, cancel := context.WithTimeout(ctx, mlTrainingJobTimeout)
+	defer cancel()
+	r.trainMu.Lock()
+	defer r.trainMu.Unlock()
+	if err := prepareTrainOutputDir(jobDir); err != nil {
+		r.failJob(jobID, "training output directory could not be prepared")
+		r.sendProgress(jobID, 100, "Failed", "Training output directory could not be prepared")
+		return
+	}
 	r.sendProgress(jobID, 5, "Starting training", "Preparing training run")
 	plan := r.buildTrainExecutionPlan(jobDir, req)
 	r.sendProgress(jobID, 10, "Running training", plan.startMessage)
@@ -37,10 +58,10 @@ func (r *Runner) executeTrainSubprocess(ctx context.Context, jobID, jobDir, benc
 	done := r.startTrainProgressTicker(jobID, r.buildTrainProgressStages(plan.algorithms))
 	defer close(done)
 
-	lastErr := r.runTrainAlgorithms(ctx, jobID, benchmarkDataPath, plan)
+	lastErr := r.runTrainAlgorithms(jobCtx, jobID, benchmarkDataPath, plan)
 	if lastErr != nil && len(plan.runs) == 1 {
-		r.failJob(jobID, lastErr.Error())
-		r.sendProgress(jobID, 100, "Failed", lastErr.Error())
+		r.failJob(jobID, "training execution failed")
+		r.sendProgress(jobID, 100, "Failed", "Training execution failed")
 		return
 	}
 
@@ -48,15 +69,25 @@ func (r *Runner) executeTrainSubprocess(ctx context.Context, jobID, jobDir, benc
 	if len(outputFiles) == 0 {
 		errMsg := "no model files were generated"
 		if lastErr != nil {
-			errMsg = lastErr.Error()
+			errMsg = "training execution failed"
 		}
 		r.failJob(jobID, errMsg)
 		r.sendProgress(jobID, 100, "Failed", errMsg)
 		return
 	}
 
-	r.completeJob(jobID, outputFiles)
-	r.sendProgress(jobID, 100, "Completed", fmt.Sprintf("Training finished: %d model(s) generated", len(outputFiles)))
+	snapshots, err := r.snapshotTrainOutputFiles(jobID, outputFiles)
+	if err != nil {
+		r.failJob(jobID, "training output could not be snapshotted")
+		r.sendProgress(jobID, 100, "Failed", "Training output could not be snapshotted")
+		return
+	}
+	if err := r.completeJob(jobID, snapshots); err != nil {
+		r.failJob(jobID, "training output was rejected")
+		r.sendProgress(jobID, 100, "Failed", "Training output was rejected")
+		return
+	}
+	r.sendProgress(jobID, 100, "Completed", fmt.Sprintf("Training finished: %d model(s) generated", len(snapshots)))
 }
 
 type trainExecutionPlan struct {
@@ -166,17 +197,15 @@ func (r *Runner) runTrainAlgorithms(ctx context.Context, jobID, benchmarkDataPat
 			"--cache-dir", plan.cacheDir,
 		}
 		args = append(args, plan.commonArgs...)
-		log.Printf("[train/%s] Running: %s %v", jobID, r.pythonPath, args)
-
 		cmd := exec.CommandContext(ctx, r.pythonPath, args...) //nolint:gosec // pythonPath and args are server-controlled, not user input
 		cmd.Dir = r.trainingDir
 		cmd.Env = plan.pythonEnv
+		cmd.Stdout = io.Discard
+		cmd.Stderr = io.Discard
 
-		output, err := cmd.CombinedOutput()
-		log.Printf("[train/%s] Output (algorithm=%s):\n%s", jobID, algFlag, string(output))
+		err := cmd.Run()
 		if err != nil {
-			lastErr = fmt.Errorf("training %s failed: %w\n%s", algFlag, err, string(output))
-			log.Printf("[train/%s] Error training %s: %v", jobID, algFlag, err)
+			lastErr = fmt.Errorf("training %s failed: %w", algFlag, err)
 		}
 	}
 	return lastErr
@@ -191,6 +220,18 @@ func collectTrainOutputFiles(jobDir string) []string {
 		}
 	}
 	return outputFiles
+}
+
+func prepareTrainOutputDir(jobDir string) error {
+	if err := ensurePrivateDir(jobDir); err != nil {
+		return err
+	}
+	for _, modelName := range []string{"knn_model.json", "kmeans_model.json", "svm_model.json", "mlp_model.json"} {
+		if err := os.Remove(filepath.Join(jobDir, modelName)); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *Runner) startTrainProgressTicker(jobID string, stages []trainProgressStage) chan struct{} {

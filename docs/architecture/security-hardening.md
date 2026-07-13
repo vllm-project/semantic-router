@@ -177,6 +177,10 @@ credential as compromised regardless of its source:
    change revokes every prior dashboard session and issues one replacement
    session for the current browser.
 
+Chrome can continue warning until its saved entry is updated or removed even
+after the server rejects the old value. Do not try to hide that browser safety
+signal in application code.
+
 If a reusable credential was ever committed to source control, copied into
 public documentation, or shared between people, removal from the current file
 is not remediation: rotate it, revoke every existing session, and keep the
@@ -256,24 +260,30 @@ change paths share one policy based on
   reauthorization work tracked in
   [#2466](https://github.com/vllm-project/semantic-router/issues/2466).
 
-The built-in blocklist is only a minimum safety net. Production password auth
-must mount a reviewed newline-delimited corpus. With Helm, mount one key from an
-existing ConfigMap:
+The built-in blocklist is only a development safety net. The `production`
+security profile fails startup unless password auth mounts a reviewed
+newline-delimited corpus, configures the SHA-256 digest of the exact file
+bytes, and loads at least 10,000 unique NFC-normalized entries. With Helm,
+mount one key from an existing ConfigMap:
 
 ```yaml
 dashboard:
+  securityProfile: production
   passwordBlocklist:
     existingConfigMap: dashboard-password-blocklist
     key: passwords.txt
+    sha256: <64 lowercase hexadecimal characters>
 ```
 
 The chart mounts that key read-only and sets
-`DASHBOARD_PASSWORD_BLOCKLIST_PATH`. Keep the ConfigMap within Kubernetes
+`DASHBOARD_PASSWORD_BLOCKLIST_PATH` plus
+`DASHBOARD_PASSWORD_BLOCKLIST_SHA256`. Keep the ConfigMap within Kubernetes
 object-size limits. A custom deployment may instead mount a larger approved
-regular file and set the same environment variable or pass
-`--password-blocklist`. The loader rejects missing, non-regular, malformed,
-overlong, oversized, empty, or comments-only configured files and never logs
-their entries. Do not
+regular file and set the same environment variables or pass
+`--password-blocklist` and `--password-blocklist-sha256`. The loader rejects a
+missing digest in production, digest mismatch, fewer than 10,000 unique NFC
+entries, missing/non-regular files, invalid Unicode, overlong lines, oversized
+files, empty corpora, and comments-only corpora; it never logs entries. Do not
 send raw submitted passwords to an external breach-check service. The corpus is
 compared both as exact NFC-normalized complete values and as case/separator
 variants. Exactly empty lines and lines beginning with `#` are metadata;
@@ -282,6 +292,26 @@ complete values remain representable. The corpus is
 loaded once at dashboard startup; after updating an existing ConfigMap, restart
 the dashboard Deployment, wait for readiness, and test a newly blocked value
 before treating the policy update as active.
+
+### Password-Hash Rollback Check
+
+Ordinary already-NFC passwords of at most 72 UTF-8 bytes remain stored as
+plain bcrypt cost-12 rows and are readable by the previous release. Longer
+passwords, or values whose NFC normalization changes their bytes, use the
+forward-only `$vsr$bcrypt-sha256$v1$` envelope so bcrypt cannot silently
+truncate them. Before rolling back to a release that predates that envelope,
+back up the auth database together with its WAL/SHM sidecars and run:
+
+```sql
+SELECT COUNT(*)
+FROM users
+WHERE password_hash LIKE '$vsr$bcrypt-sha256$v1$%';
+```
+
+A non-zero result means that release cannot authenticate those rows. Restore
+the pre-upgrade database backup, keep the fixed release, or reset the affected
+passwords through a compatible release; do not perform a blind binary
+downgrade. Never copy hashes or submitted passwords into deployment logs.
 
 The canonical local `vllm-sr serve` flow accepts
 `DASHBOARD_PASSWORD_BLOCKLIST_PATH` as a host path. Before stopping containers,
@@ -313,11 +343,10 @@ ignores them, including a stale blocklist path.
   hostname is HTTPS-only. Add `includeSubDomains` only when every covered
   subdomain is also permanently HTTPS; do not make that assumption in a
   reusable dashboard configuration.
-- Preserve the dashboard's `nosniff`, `no-referrer`
-  referrer, and same-origin framing response headers at the edge. A reusable
-  application-level Content Security Policy is intentionally not guessed:
-  deployments must validate one against their configured proxy, iframe, and
-  model-provider surfaces before enforcement.
+- Preserve the dashboard's `nosniff`, `no-referrer`, same-origin framing,
+  restrictive Permissions Policy, and application-level Content Security
+  Policy response headers at the edge. Embedded services remain same-origin
+  paths and cannot widen the dashboard's `frame-ancestors` or worker policy.
 - Preserve `Cache-Control: no-store` on every authenticated control-plane
   response, including authorization failures and streaming endpoints. Public
   fingerprinted static assets remain eligible for their immutable cache policy.
@@ -330,11 +359,13 @@ ignores them, including a stale blocklist path.
 - Keep the maintained browser cookie-only. It must not persist the dashboard
   JWT, add it to Authorization, or place it in iframe, EventSource, WebSocket,
   Referer, query data, or normal auth JSON. Maintained login, bootstrap, and
-  password-change requests use `X-VSR-Auth-Mode: cookie`; omission preserves
-  the deliberate non-browser bearer API. `/api/auth/me` hardens an old
-  JavaScript cookie in place without minting a session. Unsafe cookie/query-authenticated HTTP requests, and
-  browser logout even when no cookie arrives, must provide a canonical
-  same-origin Origin or same-origin Fetch Metadata;
+  password-change requests use `X-VSR-Auth-Mode: cookie`; cookie-only is also
+  the default, while a metadata-free non-browser client must explicitly request
+  `X-VSR-Auth-Mode: bearer`. `/api/auth/me` hardens an old JavaScript cookie in
+  place without minting a session. Query-token and ambiguous cookie-plus-bearer
+  transports are rejected before routing. Unsafe cookie-authenticated HTTP
+  requests, and browser logout even when no cookie arrives, must provide a
+  canonical same-origin Origin or same-origin Fetch Metadata;
   credentialed CORS must never reflect a sibling origin. Embedded proxies must
   strip dashboard credentials, filter the dashboard cookie namespace, and use
   bounded upstream handshakes. Embedded responses must not widen Service
@@ -367,6 +398,94 @@ ignores them, including a stale blocklist path.
   state changes are atomic, but transactionally durable audit/outbox delivery
   remains tracked by
   [#2482](https://github.com/vllm-project/semantic-router/issues/2482).
+
+### OpenClaw and MCP Production Boundary
+
+- Use the split `openclaw.read`, `openclaw.use`, and `openclaw.manage`
+  permissions. Observation does not imply tool execution, and tool execution
+  does not imply worker, team, MCP-server, container, or gateway-token
+  administration. Long-lived room HTTP, SSE, and WebSocket mutations are
+  revalidated against the live session; logout, password changes, resets,
+  demotion, deactivation, deletion, and JWT expiry cancel the connection.
+- The production profile rejects same-origin embedded OpenClaw active content.
+  `/embedded/openclaw/*` returns `403` until the gateway UI is placed on a
+  separate origin and receives a short-lived, audience-scoped capability.
+  Development embedding remains trusted-local behavior, not a production
+  isolation claim.
+- Production MCP accepts network transports only. Stdio command execution and
+  persisted stdio auto-connect are disabled, and only `openclaw.manage` may
+  create, update, connect, or test servers. API responses omit command,
+  environment, working-directory, header, OAuth-secret, and stored-error
+  material; omitted/redacted secret updates preserve the existing value.
+- Dashboard-created OpenClaw containers and named state volumes carry both a
+  managed label and a stable Dashboard-instance owner label. Start, stop,
+  reprovision, and delete inspect those labels first and operate on the
+  immutable container ID; an absent registry row, unlabeled legacy resource,
+  or same-name foreign resource fails closed. Worker tokens and host data paths
+  are private persistence fields and never appear in worker list/detail JSON.
+- Production requires a digest-pinned image and a non-empty
+  `OPENCLAW_DEFAULT_NETWORK_MODE` naming an already-created user-defined
+  network. A provision request may omit `networkMode`, send the legacy generic
+  `host`/`bridge` UI value (normalized to the configured network), or repeat
+  that exact value; Dashboard rejects every other caller-selected network,
+  verifies the configured network through the container runtime, and never
+  auto-creates it in production. Production also rejects browser mode that
+  would require `noSandbox`, omits upstream wildcard/insecure control-UI
+  switches, rotates the gateway credential on every reprovision using 192
+  fresh CSPRNG bits, and applies CPU, memory, PID, capability, and
+  `no-new-privileges` limits.
+  Workspace/config/skill writes occur only after the old owned worker is
+  stopped and reject symlinks or special files.
+- The worker image still runs as root for upstream compatibility, and a Docker
+  socket remains a host-equivalent capability. Restrict `openclaw.manage` to
+  trusted operators and keep the Dashboard runtime isolated; non-root image
+  compatibility, stronger workload-network provenance, and socket mediation
+  remain owned by [#2468](https://github.com/vllm-project/semantic-router/issues/2468).
+
+### Dashboard Control-Plane Input and Job Boundaries
+
+- Dashboard control-plane JSON accepts exactly one bounded document, rejects
+  unknown fields where the API owns a closed request type, rejects malformed
+  Unicode and control characters, and applies field/cardinality/work limits
+  before logging, progress publication, subprocess launch, or file mutation.
+  Config and DSL backups use canonical server-generated versions, private
+  directories and files, same-directory synchronization and rename, and reject
+  symlink or special-file parents and leaves.
+- Builder, topology, classifier, ML-sidecar, and fixed reverse-proxy requests
+  use purpose-owned transports rather than `http.DefaultClient` or
+  `http.DefaultTransport`. They do not inherit ambient proxies or follow
+  redirects, require TLS 1.2+ where credentials cross the boundary, bound
+  headers and transformed bodies, and return content-free failures. Public URL
+  fetches additionally use public-address admission, DNS pinning, and per-hop
+  redirect validation. Operator-selected Evaluation endpoints remain an
+  explicit internal integration surface; restrict the corresponding
+  permission and network policy until the allowlist contract tracked by
+  [#1388](https://github.com/vllm-project/semantic-router/issues/1388) lands.
+- Evaluation limits active runs, per-task and global SSE subscribers, request
+  dimensions and samples, subprocess environment and output, history pages,
+  and private result paths. A panic or cancellation reaches one terminal state
+  and releases run and stream ownership. The process-local registry is not the
+  durable source of truth.
+- ML uploads use random private staging directories and contained regular
+  files. Benchmark work is bounded by request, model, query, task, and declared
+  token budgets. Active jobs and SSE clients have fixed admission limits. A
+  completed training job references only a private job-directory snapshot
+  copied from an already-open verified source with exclusive `0600` creation,
+  byte limits, and file/directory synchronization; the mutable `ml-train`
+  directory remains the deployment-facing latest output, not historical job
+  identity.
+- Jaeger/OpenClaw transformed responses and low-privilege Replay redaction use
+  `limit+1` reads. Oversized, malformed, or unredactable content is closed and
+  rejected with a generic `502`; it is never returned unmodified. Pull-request
+  image checks run without registry login, package-write permission, or
+  persisted checkout credentials before executing repository code.
+- Per-operation controls do not provide aggregate history ownership. Keep
+  Evaluation/ML storage on a monitored private volume and apply conservative
+  operational retention until [TD048](../agent/tech-debt/td-048-dashboard-job-lifecycle-ownership-gap.md)
+  closes restart reconciliation, pagination, aggregate quotas, and
+  reference-aware garbage collection. The ML sidecar's shared authenticated
+  workload boundary remains tracked by
+  [#2467](https://github.com/vllm-project/semantic-router/issues/2467).
 
 The maintained browser's script-visible bearer and CSRF cleanup is closed by
 the audit proof. Same-origin embedded upstream HTML still executes with ambient

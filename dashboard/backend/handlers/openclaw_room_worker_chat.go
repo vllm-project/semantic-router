@@ -3,10 +3,10 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -38,8 +38,9 @@ type openAIChatChoiceMessage struct {
 }
 
 const (
-	openClawPrimaryAgentID    = "vllm-sr"
-	openClawPrimaryAgentModel = "openclaw:main"
+	openClawPrimaryAgentID           = "vllm-sr"
+	openClawPrimaryAgentModel        = "openclaw:main"
+	maximumOpenClawWorkerConfigBytes = 1024 * 1024
 )
 
 func nestedObject(parent map[string]any, key string) map[string]any {
@@ -74,37 +75,44 @@ func (h *OpenClawHandler) ensureWorkerChatEndpoint(worker ContainerEntry) (bool,
 	if !h.canRepairWorkerChatEndpoint() {
 		return false, nil
 	}
+	resolved, err := h.resolveRegisteredOwnedContainer(worker.Name)
+	if err != nil {
+		return false, errors.New("worker is unavailable for endpoint recovery")
+	}
+	worker = resolved.entry
 
 	configPath := h.workerConfigPath(worker)
-	data, err := os.ReadFile(configPath)
+	data, err := readPrivateOpenClawFile(configPath, maximumOpenClawWorkerConfigBytes)
 	if err != nil {
-		return false, fmt.Errorf("unable to read worker config %q: %w", configPath, err)
+		return false, errors.New("unable to read worker config")
 	}
 
 	var cfg map[string]any
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return false, fmt.Errorf("invalid worker config %q: %w", configPath, err)
+	if decodeErr := json.Unmarshal(data, &cfg); decodeErr != nil {
+		return false, errors.New("invalid worker config")
 	}
 
 	changed := false
 	changed = enableGatewayEndpoint(cfg, "chatCompletions") || changed
 	changed = enableGatewayEndpoint(cfg, "responses") || changed
 	if changed {
-		updated, err := json.MarshalIndent(cfg, "", "  ")
-		if err != nil {
-			return false, fmt.Errorf("failed to marshal worker config update: %w", err)
+		updated, marshalErr := json.MarshalIndent(cfg, "", "  ")
+		if marshalErr != nil {
+			return false, errors.New("failed to marshal worker config update")
 		}
-		if err := os.WriteFile(configPath, updated, 0o644); err != nil {
-			return false, fmt.Errorf("failed to persist worker config update: %w", err)
+		if writeErr := writePrivateOpenClawFile(configPath, updated); writeErr != nil {
+			return false, errors.New("failed to persist worker config update")
 		}
 	}
 
-	if _, err := h.containerCombinedOutput("restart", worker.Name); err != nil {
+	restarted, err := h.runRegisteredOwnedContainerAction(worker.Name, "restart")
+	if err != nil {
 		if changed {
-			return false, fmt.Errorf("worker restart failed after endpoint update: %w", err)
+			return false, errors.New("worker restart failed after endpoint update")
 		}
-		return false, fmt.Errorf("worker restart failed during endpoint recovery: %w", err)
+		return false, errors.New("worker restart failed during endpoint recovery")
 	}
+	worker = restarted.entry
 
 	deadline := time.Now().Add(openClawWorkerEndpointRecoveryTimeout)
 	for time.Now().Before(deadline) {

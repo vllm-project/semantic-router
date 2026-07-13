@@ -1,13 +1,14 @@
 package auth
 
 import (
+	"slices"
 	"testing"
 )
 
 func TestNewPermissionsExistInAllPermissions(t *testing.T) {
 	t.Parallel()
 
-	requiredPerms := []string{PermFeedbackSubmit, PermReplayRead, PermSecurityManage}
+	requiredPerms := []string{PermFeedbackSubmit, PermReplayRead, PermSecurityManage, PermOpenClawUse}
 	allSet := make(map[string]bool, len(AllPermissions))
 	for _, p := range AllPermissions {
 		allSet[p] = true
@@ -44,6 +45,39 @@ func TestWriteRoleDoesNotHaveSecurityManage(t *testing.T) {
 		if p == PermSecurityManage {
 			t.Fatalf("write role should not have %q permission", PermSecurityManage)
 		}
+	}
+}
+
+func TestOnlyAdminRoleHasMCPManageByDefault(t *testing.T) {
+	t.Parallel()
+
+	if !slices.Contains(DefaultRolePermissions[RoleAdmin], PermMcpManage) {
+		t.Fatalf("admin role should have %q permission", PermMcpManage)
+	}
+	for _, role := range []string{RoleWrite, RoleRead} {
+		if slices.Contains(DefaultRolePermissions[role], PermMcpManage) {
+			t.Fatalf("role %q must not inherit %q", role, PermMcpManage)
+		}
+	}
+}
+
+func TestOpenClawCapabilitySeparation(t *testing.T) {
+	t.Parallel()
+
+	adminPermissions := DefaultRolePermissions[RoleAdmin]
+	writePermissions := DefaultRolePermissions[RoleWrite]
+	readPermissions := DefaultRolePermissions[RoleRead]
+	if !slices.Contains(adminPermissions, PermOpenClawUse) ||
+		!slices.Contains(adminPermissions, PermOpenClaw) {
+		t.Fatalf("admin OpenClaw permissions = %v, want use and manage", adminPermissions)
+	}
+	if !slices.Contains(writePermissions, PermOpenClawUse) ||
+		slices.Contains(writePermissions, PermOpenClaw) {
+		t.Fatalf("write OpenClaw permissions = %v, want use without manage", writePermissions)
+	}
+	if slices.Contains(readPermissions, PermOpenClawUse) ||
+		slices.Contains(readPermissions, PermOpenClaw) {
+		t.Fatalf("read OpenClaw permissions = %v, want receive-only", readPermissions)
 	}
 }
 

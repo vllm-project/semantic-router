@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -277,7 +276,7 @@ func (r *OpenAIRouter) executeBoth(ctx *RequestContext, cfg *config.RouterConfig
 		defer wg.Done()
 		defer func() {
 			if rec := recover(); rec != nil {
-				logging.Errorf("AR text goroutine: recovered panic: %v\n%s", rec, debug.Stack())
+				logging.Errorf("AR text goroutine: recovered panic: %s", safeRecoveredValueForLog(rec))
 				textErr = fmt.Errorf("AR text call panicked: %v", rec)
 			}
 		}()
@@ -290,7 +289,7 @@ func (r *OpenAIRouter) executeBoth(ctx *RequestContext, cfg *config.RouterConfig
 		defer wg.Done()
 		defer func() {
 			if rec := recover(); rec != nil {
-				logging.Errorf("Diffusion image goroutine: recovered panic: %v\n%s", rec, debug.Stack())
+				logging.Errorf("Diffusion image goroutine: recovered panic: %s", safeRecoveredValueForLog(rec))
 				imgErr = fmt.Errorf("diffusion call panicked: %v", rec)
 			}
 		}()
@@ -300,10 +299,10 @@ func (r *OpenAIRouter) executeBoth(ctx *RequestContext, cfg *config.RouterConfig
 	wg.Wait()
 
 	if textErr != nil {
-		logging.Errorf("[ModalityRouter] BOTH: AR call failed: %v", textErr)
+		logging.Errorf("[ModalityRouter] BOTH: AR call failed: %s", safeErrorForLog(textErr))
 	}
 	if imgErr != nil {
-		logging.Errorf("[ModalityRouter] BOTH: diffusion call failed: %v", imgErr)
+		logging.Errorf("[ModalityRouter] BOTH: diffusion call failed: %s", safeErrorForLog(imgErr))
 	}
 	if textErr != nil && imgErr != nil {
 		return nil, fmt.Errorf("BOTH: AR failed (%w) and diffusion failed (%w)", textErr, imgErr)
@@ -390,7 +389,7 @@ func (r *OpenAIRouter) executeOmni(ctx *RequestContext, cfg *config.RouterConfig
 	}
 
 	url := omniEndpoint + "/chat/completions"
-	logging.Infof("[ModalityRouter] OMNI: calling endpoint %s (model=%s)", url, omniModel)
+	logging.Infof("[ModalityRouter] OMNI: calling configured endpoint (model=%s)", omniModel)
 
 	start := time.Now()
 	httpReq, err := http.NewRequestWithContext(ctx.TraceContext, http.MethodPost, url, bytes.NewReader(reqBody))
@@ -523,7 +522,7 @@ func (r *OpenAIRouter) callARModel(ctx *RequestContext, cfg *config.RouterConfig
 	}
 
 	url := arEndpoint + "/chat/completions"
-	logging.Infof("[ModalityRouter] BOTH: calling AR endpoint %s (model=%s)", url, arModel)
+	logging.Infof("[ModalityRouter] BOTH: calling configured AR endpoint (model=%s)", arModel)
 
 	start := time.Now()
 	httpReq, err := http.NewRequestWithContext(ctx.TraceContext, http.MethodPost, url, bytes.NewReader(reqBody))

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -42,6 +43,9 @@ func TestWriteOpenClawConfig_ReplacesDirectoryPath(t *testing.T) {
 	if info.IsDir() {
 		t.Fatalf("config path should be a file, got directory")
 	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("config mode = %o, want 600", got)
+	}
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -51,6 +55,153 @@ func TestWriteOpenClawConfig_ReplacesDirectoryPath(t *testing.T) {
 	var parsed map[string]interface{}
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("config file should be valid JSON: %v", err)
+	}
+}
+
+func TestWriteOpenClawConfigRejectsSymlinkAndSecuresExistingFile(t *testing.T) {
+	t.Parallel()
+
+	req := ProvisionRequest{Container: ContainerConfig{
+		GatewayPort: 18788,
+		AuthToken:   "private-token",
+		ModelName:   "auto",
+	}}
+	t.Run("symlink", func(t *testing.T) {
+		target := filepath.Join(t.TempDir(), "target.json")
+		if err := os.WriteFile(target, []byte(`{"safe":true}`), 0o600); err != nil {
+			t.Fatalf("write target: %v", err)
+		}
+		link := filepath.Join(t.TempDir(), "openclaw.json")
+		if err := os.Symlink(target, link); err != nil {
+			t.Skipf("symlink unsupported: %v", err)
+		}
+		if err := writeOpenClawConfig(link, req); err == nil {
+			t.Fatal("writeOpenClawConfig accepted a symlink")
+		}
+		data, err := os.ReadFile(target)
+		if err != nil {
+			t.Fatalf("read target: %v", err)
+		}
+		if string(data) != `{"safe":true}` {
+			t.Fatalf("symlink target changed: %s", data)
+		}
+	})
+	t.Run("existing mode", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "openclaw.json")
+		if err := os.WriteFile(path, []byte(`{}`), 0o644); err != nil {
+			t.Fatalf("write existing config: %v", err)
+		}
+		if err := writeOpenClawConfig(path, req); err != nil {
+			t.Fatalf("writeOpenClawConfig() error = %v", err)
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat config: %v", err)
+		}
+		if got := info.Mode().Perm(); got != 0o600 {
+			t.Fatalf("existing config mode = %o, want 600", got)
+		}
+	})
+}
+
+func TestValidateRequestedOpenClawSkillsRejectsTraversalAndBoundsWork(t *testing.T) {
+	t.Parallel()
+
+	for _, skillID := range []string{"../secret", "/absolute", "nested/skill", ".", "..", "skill\nname"} {
+		if _, err := validateRequestedOpenClawSkills([]string{skillID}); err == nil {
+			t.Fatalf("accepted unsafe skill ID %q", skillID)
+		}
+	}
+	tooMany := make([]string, maxOpenClawSkillsPerWorker+1)
+	for index := range tooMany {
+		tooMany[index] = fmt.Sprintf("skill-%d", index)
+	}
+	if _, err := validateRequestedOpenClawSkills(tooMany); err == nil {
+		t.Fatal("accepted unbounded requested skill list")
+	}
+	validated, err := validateRequestedOpenClawSkills([]string{"safe-skill", "safe-skill", "other.skill"})
+	if err != nil {
+		t.Fatalf("validate safe skills: %v", err)
+	}
+	if len(validated) != 2 || validated[0] != "safe-skill" || validated[1] != "other.skill" {
+		t.Fatalf("validated skills = %v", validated)
+	}
+}
+
+func TestOpenClawProductionProvisioningRequiresPinnedIsolatedInputs(t *testing.T) {
+	t.Parallel()
+
+	pinnedImage := "ghcr.io/openclaw/openclaw@sha256:" + strings.Repeat("a", 64)
+	for _, test := range []struct {
+		image        string
+		production   bool
+		wantRejected bool
+	}{
+		{image: "ghcr.io/openclaw/openclaw:v1.2.3"},
+		{image: pinnedImage, production: true},
+		{image: "ghcr.io/openclaw/openclaw:latest", production: true, wantRejected: true},
+		{image: "image;touch-pwned", wantRejected: true},
+		{image: "--privileged", wantRejected: true},
+	} {
+		err := validateOpenClawImageReference(test.image, test.production)
+		if (err != nil) != test.wantRejected {
+			t.Errorf("validateOpenClawImageReference(%q, %v) error = %v", test.image, test.production, err)
+		}
+	}
+	for _, test := range []struct {
+		network      string
+		production   bool
+		wantRejected bool
+	}{
+		{network: "host"},
+		{network: "vllm-sr-network", production: true},
+		{network: "host", production: true, wantRejected: true},
+		{network: "bridge", production: true, wantRejected: true},
+		{network: "container:dashboard", production: true, wantRejected: true},
+		{network: "network;touch-pwned", wantRejected: true},
+	} {
+		err := validateOpenClawNetworkMode(test.network, test.production)
+		if (err != nil) != test.wantRejected {
+			t.Errorf("validateOpenClawNetworkMode(%q, %v) error = %v", test.network, test.production, err)
+		}
+	}
+
+	req := ProvisionRequest{Container: ContainerConfig{
+		ContainerName: "worker-a",
+		GatewayPort:   18790,
+		NetworkMode:   "vllm-sr-network",
+		BaseImage:     pinnedImage,
+	}}
+	dockerCommand, compose := openClawProvisionGuidance(false, "docker", req, "/safe/data", "owner-id")
+	for _, marker := range []string{
+		"--cap-drop ALL",
+		"no-new-privileges:true",
+		"--pids-limit 512",
+		"--memory 4g",
+		"--cpus 2.0",
+		openClawManagedLabel,
+		openClawOwnerLabelKey + "=owner-id",
+	} {
+		if !strings.Contains(dockerCommand, marker) {
+			t.Errorf("generated command missing %q: %s", marker, dockerCommand)
+		}
+	}
+	for _, marker := range []string{
+		"cap_drop: [\"ALL\"]",
+		"security_opt: [\"no-new-privileges:true\"]",
+		"pids_limit: 512",
+		"mem_limit: 4g",
+		"cpus: 2.0",
+		openClawManagedLabelKey,
+		openClawOwnerLabelKey,
+		"owner-id",
+	} {
+		if !strings.Contains(compose, marker) {
+			t.Errorf("generated compose missing %q: %s", marker, compose)
+		}
+	}
+	if dockerCommand, compose = openClawProvisionGuidance(true, "docker", req, "/safe/data", "owner-id"); dockerCommand != "" || compose != "" {
+		t.Fatalf("production guidance exposed copy/paste artifacts: command=%q compose=%q", dockerCommand, compose)
 	}
 }
 
@@ -736,6 +887,14 @@ func TestWorkerByIDHandler_Update(t *testing.T) {
 
 func TestWorkerByIDHandler_Delete(t *testing.T) {
 	tempDir := t.TempDir()
+	runtimePath := filepath.Join(t.TempDir(), "docker")
+	if err := os.WriteFile(runtimePath, []byte(`#!/bin/sh
+echo "Error: No such object" >&2
+exit 1
+`), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OPENCLAW_CONTAINER_RUNTIME", runtimePath)
 	h := newTestOpenClawHandler(t, tempDir, false)
 
 	if err := h.saveRegistry([]ContainerEntry{

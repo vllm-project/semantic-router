@@ -125,7 +125,9 @@ func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 			return
 		}
 
-		setAuthSessionCookie(w, r, token, svc.ttlDuration)
+		if cookieOnly {
+			setAuthSessionCookie(w, r, token, svc.ttlDuration)
+		}
 		writeAudit(r, svc, "user.bootstrap", "/api/auth/bootstrap/register", "")
 		respondJSON(w, loginResponse(token, cloneSessionUser(user, perms), cookieOnly))
 	}
@@ -175,7 +177,9 @@ func loginHandler(svc *Service) http.HandlerFunc {
 			return
 		}
 
-		setAuthSessionCookie(w, r, token, svc.ttlDuration)
+		if cookieOnly {
+			setAuthSessionCookie(w, r, token, svc.ttlDuration)
+		}
 		respondJSON(w, loginResponse(token, cloneSessionUser(user, perms), cookieOnly))
 	}
 }
@@ -260,7 +264,9 @@ func changePasswordHandler(svc *Service) http.HandlerFunc {
 			return
 		}
 
-		setAuthSessionCookie(w, r, token, svc.ttlDuration)
+		if cookieOnly {
+			setAuthSessionCookie(w, r, token, svc.ttlDuration)
+		}
 		writeAudit(r, svc, "user.password.self", "/api/auth/password", ac.UserID)
 		respondJSON(w, loginResponse(token, cloneSessionUser(user, ac.Perms), cookieOnly))
 	}

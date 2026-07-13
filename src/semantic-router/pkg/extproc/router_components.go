@@ -115,7 +115,7 @@ func detectSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
 	}
 }
 
-func createToolsDatabase(cfg *config.RouterConfig) (*tools.ToolsDatabase, error) {
+func createToolsDatabase(cfg *config.RouterConfig, plan embedding.RuntimePlan) (*tools.ToolsDatabase, error) {
 	embeddingModels := cfg.EmbeddingModels
 	toolsThreshold := embeddingModels.MinSimilarityThreshold()
 	if cfg.Tools.SimilarityThreshold != nil {
@@ -124,7 +124,7 @@ func createToolsDatabase(cfg *config.RouterConfig) (*tools.ToolsDatabase, error)
 	var provider embedding.Provider
 	if cfg.Tools.Enabled {
 		var err error
-		provider, err = toolsEmbeddingProvider(cfg)
+		provider, err = toolsEmbeddingProvider(cfg, plan)
 		if err != nil {
 			return nil, err
 		}
@@ -133,7 +133,7 @@ func createToolsDatabase(cfg *config.RouterConfig) (*tools.ToolsDatabase, error)
 	toolsDatabase := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 		SimilarityThreshold: toolsThreshold,
 		Enabled:             cfg.Tools.Enabled,
-		ModelType:           embeddingModels.EmbeddingConfig.ModelType,
+		ModelType:           plan.ModelType,
 		TargetDimension:     embeddingModels.EmbeddingConfig.TargetDimension,
 		Provider:            provider,
 	})
@@ -150,15 +150,38 @@ func createToolsDatabase(cfg *config.RouterConfig) (*tools.ToolsDatabase, error)
 	return toolsDatabase, nil
 }
 
-func toolsEmbeddingProvider(cfg *config.RouterConfig) (embedding.Provider, error) {
-	if cfg == nil || !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+func toolsEmbeddingProvider(cfg *config.RouterConfig, plan embedding.RuntimePlan) (embedding.Provider, error) {
+	if cfg == nil || plan.Backend != config.EmbeddingBackendOpenAICompatible {
 		return nil, nil
 	}
-	provider, err := embedding.NewProvider(cfg.EmbeddingModels, embedding.ProviderOptions{})
+	provider, err := embedding.NewProvider(cfg.EmbeddingModels, embedding.ProviderOptions{
+		BackendOverride: plan.Backend,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tools embedding provider: %w", err)
 	}
 	return provider, nil
+}
+
+func resolveRouterEmbeddingRuntimePlan(cfg *config.RouterConfig) (embedding.RuntimePlan, error) {
+	if cfg == nil {
+		return embedding.RuntimePlan{}, fmt.Errorf("embedding runtime config is nil")
+	}
+	return embedding.ResolveRuntimePlan(
+		cfg.EmbeddingModels,
+		embedding.BackendOverrideFromEnv(),
+		embedding.ModelTypeOverrideFromEnv(),
+	)
+}
+
+func (r *OpenAIRouter) resolvedEmbeddingRuntimePlan() (embedding.RuntimePlan, error) {
+	if r != nil && r.embeddingRuntimePlan.Backend != "" {
+		return r.embeddingRuntimePlan, nil
+	}
+	if r == nil {
+		return embedding.RuntimePlan{}, fmt.Errorf("embedding router is nil")
+	}
+	return resolveRouterEmbeddingRuntimePlan(r.Config)
 }
 
 func createRouterClassifier(
@@ -192,7 +215,7 @@ func createResponseAPIFilter(cfg *config.RouterConfig) *ResponseAPIFilter {
 	if err != nil {
 		logging.ComponentWarnEvent("extproc", "response_api_store_init_failed", map[string]interface{}{
 			"backend":              cfg.ResponseAPI.StoreBackend,
-			"error":                err.Error(),
+			"error_type":           safeErrorForLog(err),
 			"response_api_enabled": false,
 		})
 		return nil

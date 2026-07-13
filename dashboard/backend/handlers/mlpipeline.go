@@ -3,14 +3,18 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
@@ -18,17 +22,47 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
+const (
+	mlBenchmarkMultipartMemory  = 8 << 20
+	mlBenchmarkBodyLimit        = 70 << 20
+	mlModelsFileLimit           = 4 << 20
+	mlQueriesFileLimit          = 64 << 20
+	mlTrainingMultipartMemory   = 8 << 20
+	mlTrainingBodyLimit         = 66 << 20
+	mlTrainingFileLimit         = 64 << 20
+	mlFormConfigLimit           = 64 << 10
+	mlJSONBodyLimit             = 1 << 20
+	mlSSEClientsPerJobLimit     = 16
+	mlSSEClientsGlobalLimit     = 128
+	mlTerminalProgressRetention = 512
+)
+
 // MLPipelineHandler holds dependencies for ML pipeline endpoints.
 type MLPipelineHandler struct {
-	runner       *mlpipeline.Runner
-	sseClients   sync.Map // map[jobID]*sync.Map (clientID -> chan ProgressUpdate)
-	lastProgress sync.Map // map[jobID]mlpipeline.ProgressUpdate — last known progress per job
+	runner *mlpipeline.Runner
+
+	sseMu             sync.Mutex
+	sseClients        map[string]map[string]chan mlpipeline.ProgressUpdate
+	sseClientCount    int
+	sseClientSequence atomic.Uint64
+	lastProgress      map[string]mlpipeline.ProgressUpdate
+	terminalProgress  map[string]struct{}
+	terminalOrder     []string
+}
+
+type trainHandlerInput struct {
+	benchmarkDataPath string
+	config            mlpipeline.TrainRequest
+	uploadDir         string
 }
 
 // NewMLPipelineHandler creates a new ML pipeline handler.
 func NewMLPipelineHandler(runner *mlpipeline.Runner) *MLPipelineHandler {
 	h := &MLPipelineHandler{
-		runner: runner,
+		runner:           runner,
+		sseClients:       make(map[string]map[string]chan mlpipeline.ProgressUpdate),
+		lastProgress:     make(map[string]mlpipeline.ProgressUpdate),
+		terminalProgress: make(map[string]struct{}),
 	}
 	// Forward progress updates to SSE clients
 	go h.forwardProgressUpdates()
@@ -44,21 +78,94 @@ func (h *MLPipelineHandler) forwardProgressUpdates() {
 
 // broadcastProgress sends a progress update to all subscribed clients for a job.
 func (h *MLPipelineHandler) broadcastProgress(update mlpipeline.ProgressUpdate) {
-	// Store last progress so new clients can catch up (skip 0% to avoid reset on reconnect)
+	h.sseMu.Lock()
+	defer h.sseMu.Unlock()
+
 	if update.Percent > 0 {
-		h.lastProgress.Store(update.JobID, update)
+		h.lastProgress[update.JobID] = update
+		if update.Percent >= 100 {
+			if _, retained := h.terminalProgress[update.JobID]; !retained {
+				h.terminalProgress[update.JobID] = struct{}{}
+				h.terminalOrder = append(h.terminalOrder, update.JobID)
+			}
+			h.pruneTerminalProgressLocked()
+		}
 	}
 
-	if clientsMap, ok := h.sseClients.Load(update.JobID); ok {
-		clients := clientsMap.(*sync.Map)
-		clients.Range(func(key, value interface{}) bool {
-			ch := value.(chan mlpipeline.ProgressUpdate)
-			select {
-			case ch <- update:
-			default:
-			}
-			return true
-		})
+	if clients := h.sseClients[update.JobID]; clients != nil {
+		for _, ch := range clients {
+			offerProgressUpdate(ch, update)
+		}
+	}
+}
+
+func offerProgressUpdate(ch chan mlpipeline.ProgressUpdate, update mlpipeline.ProgressUpdate) {
+	select {
+	case ch <- update:
+		return
+	default:
+	}
+	if update.Percent < 100 {
+		return
+	}
+	select {
+	case <-ch:
+	default:
+	}
+	select {
+	case ch <- update:
+	default:
+	}
+}
+
+func (h *MLPipelineHandler) pruneTerminalProgressLocked() {
+	attempts := len(h.terminalOrder)
+	for len(h.lastProgress) > mlTerminalProgressRetention && len(h.terminalOrder) > 0 && attempts > 0 {
+		jobID := h.terminalOrder[0]
+		h.terminalOrder = h.terminalOrder[1:]
+		attempts--
+		if len(h.sseClients[jobID]) > 0 {
+			h.terminalOrder = append(h.terminalOrder, jobID)
+			continue
+		}
+		delete(h.terminalProgress, jobID)
+		delete(h.lastProgress, jobID)
+	}
+}
+
+func (h *MLPipelineHandler) registerSSEClient(jobID string) (string, chan mlpipeline.ProgressUpdate, mlpipeline.ProgressUpdate, bool, error) {
+	h.sseMu.Lock()
+	defer h.sseMu.Unlock()
+	clients := h.sseClients[jobID]
+	if h.sseClientCount >= mlSSEClientsGlobalLimit || len(clients) >= mlSSEClientsPerJobLimit {
+		return "", nil, mlpipeline.ProgressUpdate{}, false, errors.New("ML pipeline SSE capacity exceeded")
+	}
+	if clients == nil {
+		clients = make(map[string]chan mlpipeline.ProgressUpdate)
+		h.sseClients[jobID] = clients
+	}
+	clientID := strconv.FormatUint(h.sseClientSequence.Add(1), 10)
+	clientChan := make(chan mlpipeline.ProgressUpdate, 10)
+	clients[clientID] = clientChan
+	h.sseClientCount++
+	last, hasLast := h.lastProgress[jobID]
+	return clientID, clientChan, last, hasLast, nil
+}
+
+func (h *MLPipelineHandler) unregisterSSEClient(jobID, clientID string) {
+	h.sseMu.Lock()
+	defer h.sseMu.Unlock()
+	clients := h.sseClients[jobID]
+	if clients == nil {
+		return
+	}
+	if _, exists := clients[clientID]; exists {
+		delete(clients, clientID)
+		h.sseClientCount--
+	}
+	if len(clients) == 0 {
+		delete(h.sseClients, jobID)
+		h.pruneTerminalProgressLocked()
 	}
 }
 
@@ -100,8 +207,16 @@ func (h *MLPipelineHandler) GetJobHandler() http.HandlerFunc {
 			return
 		}
 		jobID := pathParts[0]
+		if !validMLJobID(jobID) || len(pathParts) > 2 {
+			http.Error(w, "Invalid job path", http.StatusBadRequest)
+			return
+		}
 
 		if len(pathParts) >= 2 && pathParts[1] == "events" {
+			if h.runner.GetJob(jobID) == nil {
+				http.Error(w, "Job not found", http.StatusNotFound)
+				return
+			}
 			events, err := h.runner.ListProgressEvents(jobID, 500)
 			if err != nil {
 				http.Error(w, "Failed to load progress events", http.StatusInternalServerError)
@@ -112,6 +227,10 @@ func (h *MLPipelineHandler) GetJobHandler() http.HandlerFunc {
 				JobID  string                          `json:"job_id"`
 				Events []workflowstore.MLProgressEvent `json:"events"`
 			}{JobID: jobID, Events: events})
+			return
+		}
+		if len(pathParts) == 2 {
+			http.Error(w, "Invalid job path", http.StatusBadRequest)
 			return
 		}
 
@@ -139,46 +258,68 @@ func (h *MLPipelineHandler) RunBenchmarkHandler() http.HandlerFunc {
 			return
 		}
 
-		// Parse multipart form (models YAML + queries JSONL + config)
-		if err := r.ParseMultipartForm(32 << 20); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to parse form: %v", err), http.StatusBadRequest)
+		defer cleanupMultipartForm(r)
+		if status, err := parseBoundedMultipart(w, r, mlBenchmarkBodyLimit, mlBenchmarkMultipartMemory); err != nil {
+			http.Error(w, "Invalid multipart form", status)
 			return
 		}
 
-		// Save uploaded files to job dir
-		tempDir := filepath.Join(os.TempDir(), fmt.Sprintf("ml-bench-%d", time.Now().UnixMilli()))
-		if err := os.MkdirAll(tempDir, 0o755); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to create temp dir: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		modelsPath, err := saveUploadedFile(r, "models_yaml", tempDir)
+		uploadDir, err := h.runner.CreateUploadDir("benchmark-")
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to save models YAML: %v", err), http.StatusBadRequest)
+			http.Error(w, "Failed to prepare benchmark upload", http.StatusInternalServerError)
 			return
 		}
+		runnerOwnsUpload := false
+		defer func() {
+			if !runnerOwnsUpload {
+				_ = h.runner.RemoveUploadDir(uploadDir)
+			}
+		}()
 
-		queriesPath, err := saveUploadedFile(r, "queries_jsonl", tempDir)
+		modelsPath, err := saveUploadedFile(r, "models_yaml", uploadDir, "models.yaml", mlModelsFileLimit)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to save queries JSONL: %v", err), http.StatusBadRequest)
+			http.Error(w, "Invalid models YAML upload", http.StatusBadRequest)
 			return
 		}
 
-		// Parse config from form
+		queriesPath, err := saveUploadedFile(r, "queries_jsonl", uploadDir, "queries.jsonl", mlQueriesFileLimit)
+		if err != nil {
+			http.Error(w, "Invalid queries JSONL upload", http.StatusBadRequest)
+			return
+		}
+
 		var req mlpipeline.BenchmarkRequest
 		if configJSON := r.FormValue("config"); configJSON != "" {
-			if unmarshalErr := json.Unmarshal([]byte(configJSON), &req); unmarshalErr != nil {
-				http.Error(w, fmt.Sprintf("Invalid config JSON: %v", unmarshalErr), http.StatusBadRequest)
+			if len(configJSON) > mlFormConfigLimit {
+				http.Error(w, "Benchmark config is too large", http.StatusRequestEntityTooLarge)
 				return
 			}
+			if _, decodeErr := decodeStrictJSONBytes([]byte(configJSON), &req); decodeErr != nil {
+				http.Error(w, "Invalid benchmark config", http.StatusBadRequest)
+				return
+			}
+		}
+		if validationErr := mlpipeline.ValidateBenchmarkRequest(req); validationErr != nil {
+			http.Error(w, "Invalid benchmark config", http.StatusBadRequest)
+			return
 		}
 
 		ctx := context.Background()
 		jobID, err := h.runner.RunBenchmark(ctx, modelsPath, queriesPath, req)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to start benchmark: %v", err), http.StatusInternalServerError)
+			if errors.Is(err, mlpipeline.ErrJobCapacityExceeded) {
+				w.Header().Set("Retry-After", "5")
+				http.Error(w, "ML pipeline is busy", http.StatusTooManyRequests)
+				return
+			}
+			if errors.Is(err, mlpipeline.ErrPipelineInputRejected) {
+				http.Error(w, "Invalid benchmark input", http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "Failed to start benchmark", http.StatusInternalServerError)
 			return
 		}
+		runnerOwnsUpload = true
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
@@ -203,77 +344,46 @@ func (h *MLPipelineHandler) RunTrainHandler() http.HandlerFunc {
 			return
 		}
 
-		var benchmarkDataPath string
-		var trainConfig mlpipeline.TrainRequest
-
-		contentType := r.Header.Get("Content-Type")
-
-		if strings.HasPrefix(contentType, "multipart/form-data") {
-			// ── Multipart upload mode: user uploads a training data file directly ──
-			if err := r.ParseMultipartForm(64 << 20); err != nil {
-				http.Error(w, fmt.Sprintf("Failed to parse form: %v", err), http.StatusBadRequest)
-				return
-			}
-
-			// Save the uploaded training data file
-			tempDir := filepath.Join(os.TempDir(), fmt.Sprintf("ml-train-upload-%d", time.Now().UnixMilli()))
-			if err := os.MkdirAll(tempDir, 0o755); err != nil {
-				http.Error(w, fmt.Sprintf("Failed to create temp dir: %v", err), http.StatusInternalServerError)
-				return
-			}
-
-			uploadedPath, err := saveUploadedFile(r, "training_data", tempDir)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("Failed to save training data file: %v", err), http.StatusBadRequest)
-				return
-			}
-			benchmarkDataPath = uploadedPath
-
-			// Parse config from form field
-			if configJSON := r.FormValue("config"); configJSON != "" {
-				if err := json.Unmarshal([]byte(configJSON), &trainConfig); err != nil {
-					http.Error(w, fmt.Sprintf("Invalid config JSON: %v", err), http.StatusBadRequest)
-					return
-				}
-			}
-		} else {
-			// ── JSON body mode: reference a previous benchmark job ──
-			var body struct {
-				BenchmarkDataPath string                  `json:"benchmark_data_path"`
-				BenchmarkJobID    string                  `json:"benchmark_job_id"`
-				Config            mlpipeline.TrainRequest `json:"config"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
-				return
-			}
-
-			benchmarkDataPath = body.BenchmarkDataPath
-			trainConfig = body.Config
-
-			if benchmarkDataPath == "" && body.BenchmarkJobID != "" {
-				benchJob := h.runner.GetJob(body.BenchmarkJobID)
-				if benchJob != nil && len(benchJob.OutputFiles) > 0 {
-					benchmarkDataPath = benchJob.OutputFiles[0]
-				}
-			}
+		input, ok := h.parseTrainingInput(w, r)
+		if !ok {
+			return
 		}
+		runnerOwnsUpload := false
+		defer func() {
+			if input.uploadDir != "" && !runnerOwnsUpload {
+				_ = h.runner.RemoveUploadDir(input.uploadDir)
+			}
+		}()
 
-		if benchmarkDataPath == "" {
-			http.Error(w, "Training data is required: upload a file (training_data) or provide benchmark_job_id/benchmark_data_path", http.StatusBadRequest)
+		if input.benchmarkDataPath == "" {
+			http.Error(w, "Training data is required: upload training_data or provide benchmark_job_id", http.StatusBadRequest)
 			return
 		}
 
-		if len(trainConfig.Algorithms) == 0 {
-			trainConfig.Algorithms = []string{"knn", "kmeans", "svm", "mlp"}
+		if len(input.config.Algorithms) == 0 {
+			input.config.Algorithms = []string{"knn", "kmeans", "svm", "mlp"}
+		}
+		if err := mlpipeline.ValidateTrainRequest(input.config); err != nil {
+			http.Error(w, "Invalid training config", http.StatusBadRequest)
+			return
 		}
 
 		ctx := context.Background()
-		jobID, err := h.runner.RunTrain(ctx, benchmarkDataPath, trainConfig)
+		jobID, err := h.runner.RunTrain(ctx, input.benchmarkDataPath, input.config)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to start training: %v", err), http.StatusInternalServerError)
+			if errors.Is(err, mlpipeline.ErrJobCapacityExceeded) {
+				w.Header().Set("Retry-After", "5")
+				http.Error(w, "ML pipeline is busy", http.StatusTooManyRequests)
+				return
+			}
+			if errors.Is(err, mlpipeline.ErrPipelineInputRejected) {
+				http.Error(w, "Invalid training input", http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "Failed to start training", http.StatusInternalServerError)
 			return
 		}
+		runnerOwnsUpload = input.uploadDir != ""
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
@@ -282,6 +392,89 @@ func (h *MLPipelineHandler) RunTrainHandler() http.HandlerFunc {
 			"status": "started",
 		})
 	}
+}
+
+func (h *MLPipelineHandler) parseTrainingInput(w http.ResponseWriter, r *http.Request) (trainHandlerInput, bool) {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil {
+		http.Error(w, "Unsupported request content type", http.StatusUnsupportedMediaType)
+		return trainHandlerInput{}, false
+	}
+
+	switch mediaType {
+	case "multipart/form-data":
+		return h.parseMultipartTrainingInput(w, r)
+	case "application/json":
+		return h.parseJSONTrainingInput(w, r)
+	default:
+		http.Error(w, "Unsupported request content type", http.StatusUnsupportedMediaType)
+		return trainHandlerInput{}, false
+	}
+}
+
+func (h *MLPipelineHandler) parseMultipartTrainingInput(w http.ResponseWriter, r *http.Request) (trainHandlerInput, bool) {
+	defer cleanupMultipartForm(r)
+	if status, err := parseBoundedMultipart(w, r, mlTrainingBodyLimit, mlTrainingMultipartMemory); err != nil {
+		http.Error(w, "Invalid multipart form", status)
+		return trainHandlerInput{}, false
+	}
+
+	uploadDir, err := h.runner.CreateUploadDir("training-")
+	if err != nil {
+		http.Error(w, "Failed to prepare training upload", http.StatusInternalServerError)
+		return trainHandlerInput{}, false
+	}
+	accepted := false
+	defer func() {
+		if !accepted {
+			_ = h.runner.RemoveUploadDir(uploadDir)
+		}
+	}()
+
+	uploadedPath, err := saveUploadedFile(r, "training_data", uploadDir, "training.jsonl", mlTrainingFileLimit)
+	if err != nil {
+		http.Error(w, "Invalid training data upload", http.StatusBadRequest)
+		return trainHandlerInput{}, false
+	}
+	input := trainHandlerInput{benchmarkDataPath: uploadedPath, uploadDir: uploadDir}
+	if configJSON := r.FormValue("config"); configJSON != "" {
+		if len(configJSON) > mlFormConfigLimit {
+			http.Error(w, "Training config is too large", http.StatusRequestEntityTooLarge)
+			return trainHandlerInput{}, false
+		}
+		if _, decodeErr := decodeStrictJSONBytes([]byte(configJSON), &input.config); decodeErr != nil {
+			http.Error(w, "Invalid training config", http.StatusBadRequest)
+			return trainHandlerInput{}, false
+		}
+	}
+	accepted = true
+	return input, true
+}
+
+func (h *MLPipelineHandler) parseJSONTrainingInput(w http.ResponseWriter, r *http.Request) (trainHandlerInput, bool) {
+	var body struct {
+		BenchmarkJobID string                  `json:"benchmark_job_id"`
+		Config         mlpipeline.TrainRequest `json:"config"`
+	}
+	if status, err := decodeBoundedJSON(w, r, mlJSONBodyLimit, &body); err != nil {
+		http.Error(w, "Invalid request body", status)
+		return trainHandlerInput{}, false
+	}
+	if !validMLJobID(body.BenchmarkJobID) {
+		http.Error(w, "A valid benchmark_job_id is required", http.StatusBadRequest)
+		return trainHandlerInput{}, false
+	}
+	benchJob := h.runner.GetJob(body.BenchmarkJobID)
+	if benchJob == nil || benchJob.Type != "benchmark" || benchJob.Status != mlpipeline.StatusCompleted || len(benchJob.OutputFiles) == 0 {
+		http.Error(w, "Completed benchmark job not found", http.StatusBadRequest)
+		return trainHandlerInput{}, false
+	}
+	validatedPath, err := h.runner.ValidateJobOutputFile(benchJob.ID, benchJob.Type, benchJob.OutputFiles[0])
+	if err != nil {
+		http.Error(w, "Benchmark output is unavailable", http.StatusBadRequest)
+		return trainHandlerInput{}, false
+	}
+	return trainHandlerInput{benchmarkDataPath: validatedPath, config: body.Config}, true
 }
 
 // GenerateConfigHandler generates deployment config (Layer 3).
@@ -296,14 +489,18 @@ func (h *MLPipelineHandler) GenerateConfigHandler() http.HandlerFunc {
 		}
 
 		var req mlpipeline.ConfigRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		if status, err := decodeBoundedJSON(w, r, mlJSONBodyLimit, &req); err != nil {
+			http.Error(w, "Invalid request body", status)
+			return
+		}
+		if err := mlpipeline.ValidateConfigRequest(req); err != nil {
+			http.Error(w, "Invalid config request", http.StatusBadRequest)
 			return
 		}
 
 		jobID, err := h.runner.GenerateConfig(req)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to generate config: %v", err), http.StatusInternalServerError)
+			http.Error(w, "Failed to generate config", http.StatusInternalServerError)
 			return
 		}
 
@@ -327,8 +524,8 @@ func (h *MLPipelineHandler) DownloadOutputHandler() http.HandlerFunc {
 			return
 		}
 
-		pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/ml-pipeline/download/"), "/")
-		if len(pathParts) == 0 || pathParts[0] == "" {
+		pathParts := strings.Split(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/ml-pipeline/download/"), "/"), "/")
+		if len(pathParts) == 0 || len(pathParts) > 2 || !validMLJobID(pathParts[0]) {
 			http.Error(w, "Job ID required", http.StatusBadRequest)
 			return
 		}
@@ -340,7 +537,7 @@ func (h *MLPipelineHandler) DownloadOutputHandler() http.HandlerFunc {
 			return
 		}
 
-		if len(job.OutputFiles) == 0 {
+		if job.Status != mlpipeline.StatusCompleted || len(job.OutputFiles) == 0 {
 			http.Error(w, "No output files available", http.StatusNotFound)
 			return
 		}
@@ -348,7 +545,12 @@ func (h *MLPipelineHandler) DownloadOutputHandler() http.HandlerFunc {
 		// Serve the first output file (or specific one if index is provided)
 		fileIdx := 0
 		if len(pathParts) > 1 && pathParts[1] != "" {
-			_, _ = fmt.Sscanf(pathParts[1], "%d", &fileIdx)
+			parsedIndex, err := strconv.Atoi(pathParts[1])
+			if err != nil || parsedIndex < 0 {
+				http.Error(w, "Invalid file index", http.StatusBadRequest)
+				return
+			}
+			fileIdx = parsedIndex
 		}
 		if fileIdx >= len(job.OutputFiles) {
 			http.Error(w, "File index out of range", http.StatusBadRequest)
@@ -357,8 +559,14 @@ func (h *MLPipelineHandler) DownloadOutputHandler() http.HandlerFunc {
 
 		filePath := job.OutputFiles[fileIdx]
 		filename := filepath.Base(filePath)
+		file, info, err := h.runner.OpenJobOutputFile(job.ID, job.Type, filePath)
+		if err != nil {
+			http.Error(w, "Output file unavailable", http.StatusNotFound)
+			return
+		}
+		defer file.Close()
 
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
 		if strings.HasSuffix(filename, ".yaml") || strings.HasSuffix(filename, ".yml") {
 			w.Header().Set("Content-Type", "text/yaml")
 		} else if strings.HasSuffix(filename, ".json") {
@@ -369,7 +577,7 @@ func (h *MLPipelineHandler) DownloadOutputHandler() http.HandlerFunc {
 			w.Header().Set("Content-Type", "application/octet-stream")
 		}
 
-		http.ServeFile(w, r, filePath)
+		http.ServeContent(w, r, filename, info.ModTime(), file)
 	}
 }
 
@@ -379,19 +587,22 @@ func (h *MLPipelineHandler) StreamProgressHandler() http.HandlerFunc {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 
-		pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/ml-pipeline/stream/"), "/")
-		if len(pathParts) == 0 || pathParts[0] == "" {
+		pathParts := strings.Split(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/ml-pipeline/stream/"), "/"), "/")
+		if len(pathParts) != 1 || !validMLJobID(pathParts[0]) {
 			http.Error(w, "Job ID required", http.StatusBadRequest)
 			return
 		}
-		jobID := pathParts[0]
-
-		// Set SSE headers
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		job := h.runner.GetJob(pathParts[0])
+		if job == nil {
+			http.Error(w, "Job not found", http.StatusNotFound)
+			return
+		}
+		jobID := job.ID
 
 		flusher, ok := w.(http.Flusher)
 		if !ok {
@@ -399,39 +610,32 @@ func (h *MLPipelineHandler) StreamProgressHandler() http.HandlerFunc {
 			return
 		}
 
-		// Create client channel
-		clientID := fmt.Sprintf("%d", time.Now().UnixNano())
-		clientChan := make(chan mlpipeline.ProgressUpdate, 10)
-
-		// Register client
-		var clients *sync.Map
-		if existing, ok := h.sseClients.Load(jobID); ok {
-			clients = existing.(*sync.Map)
-		} else {
-			clients = &sync.Map{}
-			h.sseClients.Store(jobID, clients)
+		clientID, clientChan, lastProgress, hasLastProgress, err := h.registerSSEClient(jobID)
+		if err != nil {
+			w.Header().Set("Retry-After", "5")
+			http.Error(w, "Too many progress stream clients", http.StatusTooManyRequests)
+			return
 		}
-		clients.Store(clientID, clientChan)
+		defer h.unregisterSSEClient(jobID, clientID)
 
-		// Clean up on disconnect
-		defer func() {
-			clients.Delete(clientID)
-			close(clientChan)
-		}()
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
 
 		// Send initial connection message
-		_, _ = fmt.Fprintf(w, "event: connected\ndata: {\"job_id\":\"%s\"}\n\n", jobID)
+		connectedData, _ := json.Marshal(map[string]string{"job_id": jobID})
+		_, _ = fmt.Fprintf(w, "event: connected\ndata: %s\n\n", connectedData)
 		flusher.Flush()
 
 		// Send last-known progress so client catches up on missed events
-		if lastProg, ok := h.lastProgress.Load(jobID); ok {
-			data, err := json.Marshal(lastProg.(mlpipeline.ProgressUpdate))
+		if hasLastProgress {
+			data, err := json.Marshal(lastProgress)
 			if err == nil {
 				_, _ = fmt.Fprintf(w, "event: progress\ndata: %s\n\n", data)
 				flusher.Flush()
 				// If the job already finished, send completed immediately
-				if lastProg.(mlpipeline.ProgressUpdate).Percent >= 100 {
-					_, _ = fmt.Fprintf(w, "event: completed\ndata: {\"job_id\":\"%s\"}\n\n", jobID)
+				if lastProgress.Percent >= 100 {
+					_, _ = fmt.Fprintf(w, "event: completed\ndata: %s\n\n", connectedData)
 					flusher.Flush()
 					return
 				}
@@ -464,7 +668,7 @@ func (h *MLPipelineHandler) StreamProgressHandler() http.HandlerFunc {
 				flusher.Flush()
 
 				if update.Percent >= 100 {
-					_, _ = fmt.Fprintf(w, "event: completed\ndata: {\"job_id\":\"%s\"}\n\n", jobID)
+					_, _ = fmt.Fprintf(w, "event: completed\ndata: %s\n\n", connectedData)
 					flusher.Flush()
 					return
 				}
@@ -473,24 +677,73 @@ func (h *MLPipelineHandler) StreamProgressHandler() http.HandlerFunc {
 	}
 }
 
-// saveUploadedFile saves a multipart file to the target directory and returns its path.
-func saveUploadedFile(r *http.Request, fieldName, targetDir string) (string, error) {
+func parseBoundedMultipart(w http.ResponseWriter, r *http.Request, maxBodyBytes, maxMemoryBytes int64) (int, error) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	if err := r.ParseMultipartForm(maxMemoryBytes); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			return http.StatusRequestEntityTooLarge, errors.New("multipart request is too large")
+		}
+		return http.StatusBadRequest, errors.New("multipart request is invalid")
+	}
+	return 0, nil
+}
+
+func cleanupMultipartForm(r *http.Request) {
+	if r != nil && r.MultipartForm != nil {
+		_ = r.MultipartForm.RemoveAll()
+	}
+}
+
+// saveUploadedFile ignores the caller-supplied filename and writes one bounded
+// upload to a server-selected name in a private directory.
+func saveUploadedFile(r *http.Request, fieldName, targetDir, targetName string, maxBytes int64) (string, error) {
 	file, header, err := r.FormFile(fieldName)
 	if err != nil {
 		return "", fmt.Errorf("missing file field '%s': %w", fieldName, err)
 	}
 	defer file.Close()
+	if header.Size > maxBytes {
+		return "", errors.New("uploaded file exceeds its limit")
+	}
 
-	destPath := filepath.Join(targetDir, header.Filename)
-	out, err := os.Create(destPath)
+	destPath := filepath.Join(targetDir, targetName)
+	out, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return "", fmt.Errorf("failed to create file: %w", err)
 	}
-	defer out.Close()
+	keepFile := false
+	defer func() {
+		_ = out.Close()
+		if !keepFile {
+			_ = os.Remove(destPath)
+		}
+	}()
 
-	if _, err := io.Copy(out, file); err != nil {
+	written, err := io.Copy(out, io.LimitReader(file, maxBytes+1))
+	if err != nil {
 		return "", fmt.Errorf("failed to write file: %w", err)
 	}
+	if written > maxBytes {
+		return "", errors.New("uploaded file exceeds its limit")
+	}
+	if err := out.Close(); err != nil {
+		return "", fmt.Errorf("failed to close file: %w", err)
+	}
+	keepFile = true
 
 	return destPath, nil
+}
+
+func validMLJobID(jobID string) bool {
+	if len(jobID) == 0 || len(jobID) > 128 {
+		return false
+	}
+	for _, r := range jobID {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			continue
+		}
+		return false
+	}
+	return true
 }

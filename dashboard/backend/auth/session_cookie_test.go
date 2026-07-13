@@ -76,13 +76,13 @@ func TestLoginHandlerSetsHttpOnlySessionCookie(t *testing.T) {
 	if err := json.NewDecoder(recorder.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if payload.Token == "" {
-		t.Fatalf("expected token in login response")
+	if payload.Token != "" {
+		t.Fatalf("default login response exposed token")
 	}
 
 	cookie := responseCookie(t, recorder, authSessionCookieName)
-	if cookie.Value != payload.Token {
-		t.Fatalf("cookie token does not match response token")
+	if cookie.Value == "" {
+		t.Fatalf("session cookie is empty")
 	}
 	if !cookie.HttpOnly {
 		t.Fatalf("session cookie should be HttpOnly")

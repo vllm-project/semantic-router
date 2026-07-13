@@ -90,18 +90,18 @@ type ClassificationOptions struct {
 type EmbeddingRequest struct {
 	Texts           []string `json:"texts"`
 	Images          []string `json:"images,omitempty"`           // Inline base64 image data URIs (data:image/...;base64,...); encoded via the multi-modal model
-	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
-	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128, 64
-	TargetLayer     int      `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
-	QualityPriority float32  `json:"quality_priority,omitempty"` // 0.0-1.0, default 0.5 (only used when model="auto")
-	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, default 0.5 (only used when model="auto")
+	Model           string   `json:"model,omitempty"`            // Backend-aware text model; mixed text+image requests require "auto"
+	Dimension       int      `json:"dimension,omitempty"`        // Model-compatible target dimension; defaults: text 768, image 384, mixed 256
+	TargetLayer     int      `json:"target_layer,omitempty"`     // Text-only mmBERT early-exit layer from the loaded model manifest (0=full)
+	QualityPriority float32  `json:"quality_priority,omitempty"` // 0.0-1.0, text-only Candle auto-routing; default 0.5
+	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, text-only Candle auto-routing; default 0.5
 	SequenceLength  int      `json:"sequence_length,omitempty"`  // Optional, auto-detected if not provided
 }
 
 // EmbeddingResult represents a single embedding result
 type EmbeddingResult struct {
 	Text             string    `json:"text"`
-	Modality         string    `json:"modality,omitempty"` // "image" for image inputs; empty for text (backward compatible)
+	Modality         string    `json:"modality,omitempty"` // "text"/"image" in mixed mode; empty for text-only (backward compatible)
 	Embedding        []float32 `json:"embedding"`
 	Dimension        int       `json:"dimension"`
 	ModelUsed        string    `json:"model_used"`
@@ -120,16 +120,16 @@ type EmbeddingResponse struct {
 type SimilarityRequest struct {
 	Text1           string  `json:"text1"`
 	Text2           string  `json:"text2"`
-	Model           string  `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
-	Dimension       int     `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128, 64
-	TargetLayer     int     `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
-	QualityPriority float32 `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
-	LatencyPriority float32 `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model
+	Model           string  `json:"model,omitempty"`            // Backend-aware: "auto" (default), "mmbert", and Candle-only "qwen3"/"gemma"
+	Dimension       int     `json:"dimension,omitempty"`        // Model-compatible target dimension; default 768
+	TargetLayer     int     `json:"target_layer,omitempty"`     // mmBERT early-exit layer from the loaded model manifest (0=full)
+	QualityPriority float32 `json:"quality_priority,omitempty"` // 0.0-1.0, Candle auto-routing only
+	LatencyPriority float32 `json:"latency_priority,omitempty"` // 0.0-1.0, Candle auto-routing only
 }
 
 // SimilarityResponse represents the response of a similarity calculation
 type SimilarityResponse struct {
-	ModelUsed        string  `json:"model_used"`         // "qwen3", "gemma", or "unknown"
+	ModelUsed        string  `json:"model_used"`         // "qwen3", "gemma", "mmbert", "multimodal", or "unknown"
 	Similarity       float32 `json:"similarity"`         // Cosine similarity score (-1.0 to 1.0)
 	ProcessingTimeMs float32 `json:"processing_time_ms"` // Processing time in milliseconds
 }
@@ -139,11 +139,11 @@ type BatchSimilarityRequest struct {
 	Query           string   `json:"query"`                      // Query text
 	Candidates      []string `json:"candidates"`                 // Array of candidate texts
 	TopK            int      `json:"top_k,omitempty"`            // Max number of matches to return (0 = return all)
-	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
-	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128, 64
-	TargetLayer     int      `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
-	QualityPriority float32  `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
-	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model
+	Model           string   `json:"model,omitempty"`            // Backend-aware: "auto" (default), "mmbert", and Candle-only "qwen3"/"gemma"
+	Dimension       int      `json:"dimension,omitempty"`        // Model-compatible target dimension; default 768
+	TargetLayer     int      `json:"target_layer,omitempty"`     // mmBERT early-exit layer from the loaded model manifest (0=full)
+	QualityPriority float32  `json:"quality_priority,omitempty"` // 0.0-1.0, Candle auto-routing only
+	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, Candle auto-routing only
 }
 
 // BatchSimilarityMatch represents a single match in batch similarity matching
@@ -157,7 +157,7 @@ type BatchSimilarityMatch struct {
 type BatchSimilarityResponse struct {
 	Matches          []BatchSimilarityMatch `json:"matches"`            // Top-k matches, sorted by similarity (descending)
 	TotalCandidates  int                    `json:"total_candidates"`   // Total number of candidates processed
-	ModelUsed        string                 `json:"model_used"`         // "qwen3", "gemma", or "unknown"
+	ModelUsed        string                 `json:"model_used"`         // "qwen3", "gemma", "mmbert", "multimodal", or "unknown"
 	ProcessingTimeMs float32                `json:"processing_time_ms"` // Processing time in milliseconds
 }
 

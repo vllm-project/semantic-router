@@ -14,20 +14,34 @@ import (
 )
 
 // runBenchmarkSubprocess runs Layer 1: benchmark.py as a local subprocess.
-func (r *Runner) runBenchmarkSubprocess(ctx context.Context, modelsYAMLPath, queryJSONLPath string, req BenchmarkRequest) (string, error) {
-	job := r.createJob("benchmark")
+func (r *Runner) runBenchmarkSubprocess(ctx context.Context, modelsYAMLPath, queryJSONLPath string, req BenchmarkRequest, release func()) (string, error) {
+	job, err := r.createJob("benchmark")
+	if err != nil {
+		release()
+		return "", err
+	}
 	jobDir := r.JobDir(job.ID)
 	if err := ensureDir(jobDir); err != nil {
+		r.failJob(job.ID, "benchmark output directory could not be created")
+		release()
 		return "", fmt.Errorf("failed to create job dir: %w", err)
 	}
 
-	r.setJobRunning(job)
+	if err := r.setJobRunning(job); err != nil {
+		release()
+		return "", err
+	}
 
-	go r.executeBenchmarkSubprocess(ctx, job.ID, jobDir, modelsYAMLPath, queryJSONLPath, req)
+	r.startAsyncJob(job.ID, release, func() {
+		r.executeBenchmarkSubprocess(ctx, job.ID, jobDir, modelsYAMLPath, queryJSONLPath, req)
+	})
 	return job.ID, nil
 }
 
 func (r *Runner) executeBenchmarkSubprocess(ctx context.Context, jobID, jobDir, modelsYAMLPath, queryJSONLPath string, req BenchmarkRequest) {
+	defer r.cleanupManagedUploads(modelsYAMLPath, queryJSONLPath)
+	jobCtx, cancel := context.WithTimeout(ctx, mlBenchmarkJobTimeout)
+	defer cancel()
 	r.sendProgress(jobID, 5, "Starting benchmark", "Preparing benchmark run")
 	outputFile := filepath.Join(jobDir, "benchmark_output.jsonl")
 	args, concurrency := r.buildBenchmarkArgs(req, modelsYAMLPath, queryJSONLPath, outputFile)
@@ -37,13 +51,12 @@ func (r *Runner) executeBenchmarkSubprocess(ctx context.Context, jobID, jobDir, 
 	numModels := countYAMLModels(modelsYAMLPath)
 	log.Printf("[benchmark/%s] Expecting ~%d results (%d queries × %d models)", jobID, numQueries*numModels, numQueries, numModels)
 
-	fullOutput, err := r.runBenchmarkCommand(ctx, jobID, args)
+	err := r.runBenchmarkCommand(jobCtx, jobID, args)
 	if err != nil {
-		r.failJob(jobID, fmt.Sprintf("benchmark failed: %v", err))
-		r.sendProgress(jobID, 100, "Failed", err.Error())
+		r.failJob(jobID, "benchmark execution failed")
+		r.sendProgress(jobID, 100, "Failed", "Benchmark execution failed")
 		return
 	}
-	log.Printf("[benchmark/%s] Output:\n%s", jobID, fullOutput)
 
 	if _, err := os.Stat(outputFile); err != nil {
 		r.failJob(jobID, "benchmark output file not created")
@@ -51,7 +64,11 @@ func (r *Runner) executeBenchmarkSubprocess(ctx context.Context, jobID, jobDir, 
 		return
 	}
 
-	r.completeJob(jobID, []string{outputFile})
+	if err := r.completeJob(jobID, []string{outputFile}); err != nil {
+		r.failJob(jobID, "benchmark output was rejected")
+		r.sendProgress(jobID, 100, "Failed", "Benchmark output was rejected")
+		return
+	}
 	r.sendProgress(jobID, 100, "Completed", "Benchmark finished successfully")
 }
 
@@ -82,7 +99,7 @@ func (r *Runner) buildBenchmarkArgs(req BenchmarkRequest, modelsYAMLPath, queryJ
 	return args, concurrency
 }
 
-func (r *Runner) runBenchmarkCommand(ctx context.Context, jobID string, args []string) (string, error) {
+func (r *Runner) runBenchmarkCommand(ctx context.Context, jobID string, args []string) error {
 	cmd := exec.CommandContext(ctx, r.pythonPath, args...) //nolint:gosec // pythonPath and args are server-controlled, not user input
 	cmd.Dir = r.trainingDir
 	cmd.Env = append(os.Environ(),
@@ -93,41 +110,46 @@ func (r *Runner) runBenchmarkCommand(ctx context.Context, jobID string, args []s
 
 	pipeR, pipeW, err := os.Pipe()
 	if err != nil {
-		return "", fmt.Errorf("failed to create pipe: %w", err)
+		return fmt.Errorf("failed to create pipe: %w", err)
 	}
 	cmd.Stdout = pipeW
 	cmd.Stderr = pipeW
 	if err := cmd.Start(); err != nil {
 		pipeW.Close()
 		pipeR.Close()
-		return "", fmt.Errorf("failed to start benchmark: %w", err)
+		return fmt.Errorf("failed to start benchmark: %w", err)
 	}
 	pipeW.Close()
 
-	fullOutput := r.collectBenchmarkProgress(jobID, pipeR)
+	scanErr := r.collectBenchmarkProgress(jobID, pipeR)
 	waitErr := cmd.Wait()
-	if waitErr != nil {
-		return fullOutput, waitErr
+	if scanErr != nil {
+		return scanErr
 	}
-	return fullOutput, nil
+	if waitErr != nil {
+		return waitErr
+	}
+	return nil
 }
 
-func (r *Runner) collectBenchmarkProgress(jobID string, pipeR *os.File) string {
+func (r *Runner) collectBenchmarkProgress(jobID string, pipeR *os.File) error {
 	defer pipeR.Close()
 	tqdmProgressRe := regexp.MustCompile(`\b(\d+)/(\d+)\b`)
 	scanner := bufio.NewScanner(pipeR)
 	scanner.Split(scanCRLF)
+	scanner.Buffer(make([]byte, 4096), 64<<10)
 
-	var outputBuf strings.Builder
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
 			continue
 		}
-		outputBuf.WriteString(line + "\n")
 		r.updateBenchmarkProgressFromLine(jobID, line, tqdmProgressRe)
 	}
-	return outputBuf.String()
+	if scanner.Err() != nil {
+		return fmt.Errorf("benchmark emitted an invalid progress stream")
+	}
+	return nil
 }
 
 func (r *Runner) updateBenchmarkProgressFromLine(jobID, line string, progressRe *regexp.Regexp) {

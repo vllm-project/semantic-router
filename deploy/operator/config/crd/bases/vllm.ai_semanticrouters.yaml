@@ -1376,6 +1376,7 @@ spec:
                           api_key_env:
                             description: APIKeyEnv names the environment variable
                               containing the provider API key.
+                            pattern: ^$|^VLLM_SR_EMBEDDING_API_KEY$
                             type: string
                           base_url:
                             description: BaseURL is the base URL for the embedding
@@ -1388,7 +1389,8 @@ spec:
                             type: integer
                           max_retries:
                             description: MaxRetries is the maximum number of retry
-                              attempts for embedding calls.
+                              attempts for embedding calls, capped at 10.
+                            maximum: 10
                             minimum: 0
                             type: integer
                           model:
@@ -1397,7 +1399,8 @@ spec:
                             type: string
                           timeout_seconds:
                             description: TimeoutSeconds is the request timeout for
-                              embedding calls.
+                              embedding calls, capped at one hour.
+                            maximum: 3600
                             minimum: 0
                             type: integer
                         type: object

@@ -61,6 +61,12 @@ typedef struct {
     bool error;
 } EmbeddingModelsInfoResult;
 
+typedef struct {
+    char* dimensions;
+    char* layers;
+    bool supports_2d;
+} MatryoshkaInfo;
+
 // ============================================================================
 // Classification Types
 // ============================================================================
@@ -104,9 +110,11 @@ extern int get_embeddings_batch(const char** texts, int num_texts, int target_la
 extern int calculate_embedding_similarity(const char* text1, const char* text2, int target_layer, int target_dim, EmbeddingSimilarityResult* result);
 extern int calculate_similarity_batch(const char* query, const char** candidates, int num_candidates, int top_k, int target_layer, int target_dim, BatchSimilarityResult* result);
 extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
+extern int get_matryoshka_info(MatryoshkaInfo* result);
 extern void free_embedding(float* data, int length);
 extern void free_batch_similarity_result(BatchSimilarityResult* result);
 extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
+extern void free_matryoshka_info(MatryoshkaInfo* result);
 
 // ============================================================================
 // Classification Functions
@@ -142,18 +150,10 @@ extern void free_multimodal_embedding(float* data, int length);
 import "C"
 
 import (
-	"bytes"
-	"encoding/base64"
 	"errors"
 	"fmt"
-	"image"
-	_ "image/jpeg"
-	_ "image/png"
-	"io"
-	"net/http"
 	"strings"
 	"sync"
-	"time"
 	"unsafe"
 )
 
@@ -176,15 +176,20 @@ type SimilarityOutput struct {
 	ProcessingTimeMs float32
 }
 
-// SimilarityMatchResult represents a single similarity match
-type SimilarityMatchResult struct {
+// BatchSimilarityMatch represents a single match in batch similarity matching.
+// Its name and fields intentionally match candle_binding so the ONNX module can
+// remain a drop-in replacement selected by go.onnx.mod.
+type BatchSimilarityMatch struct {
 	Index      int
 	Similarity float32
 }
 
+// SimilarityMatchResult preserves the original ONNX binding name.
+type SimilarityMatchResult = BatchSimilarityMatch
+
 // BatchSimilarityOutput contains batch similarity results
 type BatchSimilarityOutput struct {
-	Matches          []SimilarityMatchResult
+	Matches          []BatchSimilarityMatch
 	ModelType        string // "mmbert", "unknown"
 	ProcessingTimeMs float32
 }
@@ -201,6 +206,7 @@ type ClassResultWithProbs struct {
 	Class         int
 	Confidence    float32
 	Probabilities []float32
+	NumClasses    int
 }
 
 // TokenEntity represents a detected PII entity (candle_binding compatible)
@@ -239,21 +245,43 @@ type ModelInfo struct {
 	AvailableLayers   string
 }
 
+// MatryoshkaConfig exposes the layer and dimension combinations supported by
+// the ONNX mmBERT model.
+type MatryoshkaConfig struct {
+	Dimensions string
+	Layers     string
+	Supports2D bool
+}
+
 // ============================================================================
 // Initialization Functions
 // ============================================================================
 
 var (
-	initMu sync.Mutex
+	initMu             sync.Mutex
+	errEmbeddedNULByte = errors.New("input contains an embedded NUL byte")
 )
+
+func checkedCString(value, field string) (*C.char, error) {
+	if strings.IndexByte(value, 0) >= 0 {
+		return nil, fmt.Errorf("%w: %s", errEmbeddedNULByte, field)
+	}
+	return C.CString(value), nil
+}
 
 // InitMmBertEmbeddingModel initializes the mmBERT embedding model
 // This is the ONNX Runtime equivalent of candle_binding.InitMmBertEmbeddingModel
 func InitMmBertEmbeddingModel(modelPath string, useCPU bool) error {
+	if strings.TrimSpace(modelPath) == "" {
+		return errors.New("mmBERT model path is required")
+	}
 	initMu.Lock()
 	defer initMu.Unlock()
 
-	cPath := C.CString(modelPath)
+	cPath, err := checkedCString(modelPath, "mmBERT model path")
+	if err != nil {
+		return err
+	}
 	defer C.free(unsafe.Pointer(cPath))
 
 	if !C.init_mmbert_embedding_model(cPath, C.bool(useCPU)) {
@@ -267,10 +295,13 @@ func IsMmBertModelInitialized() bool {
 	return bool(C.is_mmbert_model_initialized())
 }
 
-// InitEmbeddingModels initializes embedding models (candle_binding compatible API)
-// For onnx_binding, only mmBERT is supported. qwen3 and gemma paths are ignored.
+// InitEmbeddingModels initializes embedding models (candle_binding compatible API).
+// ONNX supports only mmBERT, so unsupported requested models must fail closed
+// instead of returning success for a partially initialized model union.
 func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, mmBertModelPath string, useCPU bool) error {
-	// Only initialize mmBERT - qwen3 and gemma are not supported in onnx_binding
+	if strings.TrimSpace(qwen3ModelPath) != "" || strings.TrimSpace(gemmaModelPath) != "" {
+		return fmt.Errorf("onnx_binding supports only mmBERT embedding models; qwen3 and gemma are unsupported")
+	}
 	if mmBertModelPath == "" {
 		return fmt.Errorf("mmBERT model path is required for onnx_binding")
 	}
@@ -282,15 +313,11 @@ func InitEmbeddingModelsWithMmBert(qwen3ModelPath, gemmaModelPath, mmBertModelPa
 	return InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, mmBertModelPath, useCPU)
 }
 
-// InitEmbeddingModelsBatched initializes batched embedding (candle_binding compatible API)
-// For onnx_binding, batching is handled internally. This uses mmBERT.
+// InitEmbeddingModelsBatched initializes batched embedding (candle_binding compatible API).
+// Its qwen3-only signature cannot express the ONNX mmBERT capability, so it is
+// rejected rather than loading a qwen3 path as though it were mmBERT.
 func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWaitMs uint64, useCPU bool) error {
-	// onnx_binding handles batching internally, so we just initialize mmBERT
-	// Use qwen3ModelPath as the model path for compatibility (caller should pass mmBERT path)
-	if qwen3ModelPath == "" {
-		return fmt.Errorf("model path is required")
-	}
-	return InitMmBertEmbeddingModel(qwen3ModelPath, useCPU)
+	return fmt.Errorf("onnx_binding does not support the qwen3 batched embedding initializer")
 }
 
 // InitModel initializes the similarity model (legacy API)
@@ -330,9 +357,15 @@ func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
 }
 
 func initClassifier(name, modelPath string, useGPU bool) error {
-	cName := C.CString(name)
+	cName, err := checkedCString(name, "classifier name")
+	if err != nil {
+		return err
+	}
 	defer C.free(unsafe.Pointer(cName))
-	cPath := C.CString(modelPath)
+	cPath, err := checkedCString(modelPath, "classifier model path")
+	if err != nil {
+		return err
+	}
 	defer C.free(unsafe.Pointer(cPath))
 
 	if !C.init_sequence_classifier(cName, cPath, C.bool(useGPU)) {
@@ -342,9 +375,15 @@ func initClassifier(name, modelPath string, useGPU bool) error {
 }
 
 func initTokenClassifier(name, modelPath string, useGPU bool) error {
-	cName := C.CString(name)
+	cName, err := checkedCString(name, "token classifier name")
+	if err != nil {
+		return err
+	}
 	defer C.free(unsafe.Pointer(cName))
-	cPath := C.CString(modelPath)
+	cPath, err := checkedCString(modelPath, "token classifier model path")
+	if err != nil {
+		return err
+	}
 	defer C.free(unsafe.Pointer(cPath))
 
 	if !C.init_token_classifier(cName, cPath, C.bool(useGPU)) {
@@ -359,6 +398,9 @@ func initTokenClassifier(name, modelPath string, useGPU bool) error {
 
 // GetEmbedding generates an embedding for the given text
 func GetEmbedding(text string, maxLength int) ([]float32, error) {
+	if err := validateONNXNonNegativeCInt("maximum token length", maxLength); err != nil {
+		return nil, err
+	}
 	output, err := GetEmbeddingWithMetadata(text, 0, 0, 0)
 	if err != nil {
 		return nil, err
@@ -382,13 +424,25 @@ func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, 
 
 // GetEmbeddingWithMetadata generates embedding with full metadata
 func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority float32, targetDim int) (*EmbeddingOutput, error) {
-	cText := C.CString(text)
+	if err := validateONNXEmbeddingPriorities(qualityPriority, latencyPriority); err != nil {
+		return nil, err
+	}
+	if err := validateONNXNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
+	}
+	cText, err := checkedCString(text, "embedding text")
+	if err != nil {
+		return nil, err
+	}
 	defer C.free(unsafe.Pointer(cText))
 
 	var result C.EmbeddingResult
 	status := C.get_embedding_with_dim(cText, C.int(targetDim), &result)
 
-	if status != 0 || result.error {
+	if status != 0 {
+		return nil, embeddingStatusError("embedding generation failed", int(status))
+	}
+	if result.error {
 		return nil, errors.New("embedding generation failed")
 	}
 
@@ -419,15 +473,38 @@ func modelTypeToString(modelType int) string {
 	}
 }
 
+func validateONNXEmbeddingModelType(modelType string, allowMultimodal bool) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(modelType))
+	if normalized == "mmbert" {
+		return normalized, nil
+	}
+	if allowMultimodal && normalized == "multimodal" {
+		return normalized, nil
+	}
+	return "", fmt.Errorf("unsupported ONNX embedding model type %q", modelType)
+}
+
 // GetEmbedding2DMatryoshka generates embedding with 2D Matryoshka (layer + dimension)
 func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
-	cText := C.CString(text)
+	if err := validateONNXEmbeddingControls(targetLayer, targetDim); err != nil {
+		return nil, err
+	}
+	if _, err := validateONNXEmbeddingModelType(modelType, false); err != nil {
+		return nil, err
+	}
+	cText, err := checkedCString(text, "2D matryoshka embedding text")
+	if err != nil {
+		return nil, err
+	}
 	defer C.free(unsafe.Pointer(cText))
 
 	var result C.EmbeddingResult
 	status := C.get_embedding_2d_matryoshka(cText, C.int(targetLayer), C.int(targetDim), &result)
 
-	if status != 0 || result.error {
+	if status != 0 {
+		return nil, embeddingStatusError("2D matryoshka embedding generation failed", int(status))
+	}
+	if result.error {
 		return nil, errors.New("2D matryoshka embedding generation failed")
 	}
 
@@ -447,7 +524,11 @@ func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, ta
 
 // GetEmbeddingWithModelType generates embedding with specific model type
 func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
-	switch strings.ToLower(strings.TrimSpace(modelType)) {
+	normalized, err := validateONNXEmbeddingModelType(modelType, true)
+	if err != nil {
+		return nil, err
+	}
+	switch normalized {
 	case "multimodal":
 		output, err := MultiModalEncodeText(text, targetDim)
 		if err != nil {
@@ -459,9 +540,72 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 			SequenceLength:   0,
 			ProcessingTimeMs: output.ProcessingTimeMs,
 		}, nil
-	default:
-		// ONNX binding uses mmBERT path for all non-multimodal requests.
+	case "mmbert":
 		return GetEmbeddingWithMetadata(text, 0, 0, targetDim)
+	default:
+		panic("validated ONNX embedding model type became unreachable")
+	}
+}
+
+// GetEmbeddingsBatch generates embeddings for multiple texts in one native
+// batch while preserving the 2D Matryoshka layer and dimension controls.
+func GetEmbeddingsBatch(texts []string, targetLayer, targetDim int) ([]*EmbeddingOutput, error) {
+	if err := validateONNXEmbeddingControls(targetLayer, targetDim); err != nil {
+		return nil, err
+	}
+	if len(texts) == 0 {
+		return nil, errors.New("no texts provided")
+	}
+	if err := validateONNXNonNegativeCInt("embedding batch size", len(texts)); err != nil {
+		return nil, err
+	}
+
+	cTexts := make([]*C.char, len(texts))
+	for i, value := range texts {
+		var err error
+		cTexts[i], err = checkedCString(value, fmt.Sprintf("embedding texts[%d]", i))
+		if err != nil {
+			return nil, err
+		}
+		defer C.free(unsafe.Pointer(cTexts[i]))
+	}
+	results := make([]C.EmbeddingResult, len(texts))
+	status := C.get_embeddings_batch(
+		(**C.char)(unsafe.Pointer(&cTexts[0])),
+		C.int(len(cTexts)),
+		C.int(targetLayer),
+		C.int(targetDim),
+		&results[0],
+	)
+	defer freeEmbeddingResults(results)
+	if status != 0 {
+		return nil, embeddingStatusError("batch embedding generation failed", int(status))
+	}
+
+	outputs := make([]*EmbeddingOutput, len(results))
+	for i := range results {
+		result := &results[i]
+		if result.error || result.data == nil || result.length <= 0 {
+			return nil, fmt.Errorf("batch embedding generation failed at index %d", i)
+		}
+		length := int(result.length)
+		embedding := make([]float32, length)
+		copy(embedding, unsafe.Slice((*float32)(unsafe.Pointer(result.data)), length))
+		outputs[i] = &EmbeddingOutput{
+			Embedding:        embedding,
+			ModelType:        modelTypeToString(int(result.model_type)),
+			SequenceLength:   int(result.sequence_length),
+			ProcessingTimeMs: float32(result.processing_time_ms),
+		}
+	}
+	return outputs, nil
+}
+
+func freeEmbeddingResults(results []C.EmbeddingResult) {
+	for i := range results {
+		if results[i].data != nil && results[i].length > 0 {
+			C.free_embedding(results[i].data, results[i].length)
+		}
 	}
 }
 
@@ -470,16 +614,48 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 // ============================================================================
 
 // CalculateEmbeddingSimilarity calculates cosine similarity between two texts
+// with the legacy parameter surface.
 func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetDim int) (*SimilarityOutput, error) {
-	cText1 := C.CString(text1)
+	return CalculateEmbeddingSimilarityWithOptions(text1, text2, SimilarityOptions{
+		ModelType:       modelType,
+		TargetDim:       targetDim,
+		QualityPriority: 0.5,
+		LatencyPriority: 0.5,
+	})
+}
+
+// CalculateEmbeddingSimilarityWithOptions calculates pair similarity with 2D
+// Matryoshka controls. ONNX auto always resolves to mmBERT; priorities are
+// validated for cross-backend API parity but do not influence model selection.
+func CalculateEmbeddingSimilarityWithOptions(text1, text2 string, options SimilarityOptions) (*SimilarityOutput, error) {
+	normalized, err := normalizeONNXSimilarityOptions(options)
+	if err != nil {
+		return nil, err
+	}
+	cText1, err := checkedCString(text1, "similarity text1")
+	if err != nil {
+		return nil, err
+	}
 	defer C.free(unsafe.Pointer(cText1))
-	cText2 := C.CString(text2)
+	cText2, err := checkedCString(text2, "similarity text2")
+	if err != nil {
+		return nil, err
+	}
 	defer C.free(unsafe.Pointer(cText2))
 
 	var result C.EmbeddingSimilarityResult
-	status := C.calculate_embedding_similarity(cText1, cText2, 0, C.int(targetDim), &result)
+	status := C.calculate_embedding_similarity(
+		cText1,
+		cText2,
+		C.int(normalized.TargetLayer),
+		C.int(normalized.TargetDim),
+		&result,
+	)
 
-	if status != 0 || result.error {
+	if status != 0 {
+		return nil, embeddingStatusError("similarity calculation failed", int(status))
+	}
+	if result.error {
 		return nil, errors.New("similarity calculation failed")
 	}
 
@@ -491,18 +667,47 @@ func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetD
 }
 
 // CalculateSimilarityBatch finds top-k most similar candidates for a query
+// with the legacy parameter surface.
 func CalculateSimilarityBatch(query string, candidates []string, topK int, modelType string, targetDim int) (*BatchSimilarityOutput, error) {
+	return CalculateSimilarityBatchWithOptions(query, candidates, topK, SimilarityOptions{
+		ModelType:       modelType,
+		TargetDim:       targetDim,
+		QualityPriority: 0.5,
+		LatencyPriority: 0.5,
+	})
+}
+
+// CalculateSimilarityBatchWithOptions finds the top-k candidates with 2D
+// Matryoshka controls. ONNX auto always resolves to mmBERT; priorities are
+// validated for cross-backend API parity but do not influence model selection.
+func CalculateSimilarityBatchWithOptions(query string, candidates []string, topK int, options SimilarityOptions) (*BatchSimilarityOutput, error) {
+	normalized, err := normalizeONNXSimilarityOptions(options)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateONNXNonNegativeCInt("top-k", topK); err != nil {
+		return nil, err
+	}
+	if err := validateONNXNonNegativeCInt("candidate count", len(candidates)); err != nil {
+		return nil, err
+	}
 	if len(candidates) == 0 {
 		return nil, errors.New("no candidates provided")
 	}
 
-	cQuery := C.CString(query)
+	cQuery, err := checkedCString(query, "similarity query")
+	if err != nil {
+		return nil, err
+	}
 	defer C.free(unsafe.Pointer(cQuery))
 
 	// Convert candidates to C strings
 	cCandidates := make([]*C.char, len(candidates))
 	for i, c := range candidates {
-		cCandidates[i] = C.CString(c)
+		cCandidates[i], err = checkedCString(c, fmt.Sprintf("similarity candidates[%d]", i))
+		if err != nil {
+			return nil, err
+		}
 		defer C.free(unsafe.Pointer(cCandidates[i]))
 	}
 
@@ -512,12 +717,15 @@ func CalculateSimilarityBatch(query string, candidates []string, topK int, model
 		(**C.char)(unsafe.Pointer(&cCandidates[0])),
 		C.int(len(candidates)),
 		C.int(topK),
-		0, // target_layer
-		C.int(targetDim),
+		C.int(normalized.TargetLayer),
+		C.int(normalized.TargetDim),
 		&result,
 	)
 
-	if status != 0 || result.error {
+	if status != 0 {
+		return nil, embeddingStatusError("batch similarity calculation failed", int(status))
+	}
+	if result.error {
 		return nil, errors.New("batch similarity calculation failed")
 	}
 
@@ -543,12 +751,21 @@ func CalculateSimilarityBatch(query string, candidates []string, topK int, model
 }
 
 // FindMostSimilar finds the most similar candidate (legacy API)
-func FindMostSimilar(query string, candidates []string, maxLength int) (int, float32) {
+func FindMostSimilar(query string, candidates []string, maxLength int) SimResult {
+	if err := validateONNXNonNegativeCInt("maximum token length", maxLength); err != nil {
+		return SimResult{Index: -1, Score: -1.0}
+	}
+	if err := validateONNXNonNegativeCInt("candidate count", len(candidates)); err != nil {
+		return SimResult{Index: -1, Score: -1.0}
+	}
 	result, err := CalculateSimilarityBatch(query, candidates, 1, "mmbert", 0)
 	if err != nil || len(result.Matches) == 0 {
-		return -1, 0.0
+		return SimResult{Index: -1, Score: -1.0}
 	}
-	return result.Matches[0].Index, result.Matches[0].Similarity
+	return SimResult{
+		Index: result.Matches[0].Index,
+		Score: result.Matches[0].Similarity,
+	}
 }
 
 // ============================================================================
@@ -577,9 +794,15 @@ func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
 
 // ClassifyMmBert32KPII detects PII entities in text
 func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
-	cName := C.CString("pii")
+	cName, err := checkedCString("pii", "PII classifier name")
+	if err != nil {
+		return nil, err
+	}
 	defer C.free(unsafe.Pointer(cName))
-	cText := C.CString(text)
+	cText, err := checkedCString(text, "PII classification text")
+	if err != nil {
+		return nil, err
+	}
 	defer C.free(unsafe.Pointer(cText))
 
 	var result C.PIIResultFFI
@@ -617,24 +840,79 @@ func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 }
 
 func classifyWithClassifier(name, text string) (ClassResult, error) {
-	cName := C.CString(name)
-	defer C.free(unsafe.Pointer(cName))
-	cText := C.CString(text)
-	defer C.free(unsafe.Pointer(cText))
-
-	var result C.ClassificationResultFFI
-	status := C.classify_text(cName, cText, &result)
-
-	if status != 0 || result.error {
-		return ClassResult{Class: -1, Confidence: 0}, fmt.Errorf("%s classification failed", name)
+	result, err := callClassifier(name, text)
+	if err != nil {
+		return ClassResult{Class: -1}, err
 	}
-
 	defer C.free_classification_result(&result)
-
 	return ClassResult{
 		Class:      int(result.class_id),
 		Confidence: float32(result.confidence),
 	}, nil
+}
+
+// callClassifier transfers ownership of any native result allocations to its
+// caller on success. Every successful caller must call
+// C.free_classification_result exactly once.
+func callClassifier(name, text string) (C.ClassificationResultFFI, error) {
+	cName, err := checkedCString(name, "classifier name")
+	if err != nil {
+		return C.ClassificationResultFFI{}, err
+	}
+	defer C.free(unsafe.Pointer(cName))
+	cText, err := checkedCString(text, "classification text")
+	if err != nil {
+		return C.ClassificationResultFFI{}, err
+	}
+	defer C.free(unsafe.Pointer(cText))
+
+	var result C.ClassificationResultFFI
+	status := C.classify_text(cName, cText, &result)
+	if status != 0 || result.error {
+		C.free_classification_result(&result)
+		return C.ClassificationResultFFI{}, fmt.Errorf("%s classification failed", name)
+	}
+	return result, nil
+}
+
+func classifyWithClassifierProbabilities(name, text string) (ClassResultWithProbs, error) {
+	result, err := callClassifier(name, text)
+	if err != nil {
+		return ClassResultWithProbs{}, err
+	}
+	defer C.free_classification_result(&result)
+
+	if result.num_classes < 0 {
+		return ClassResultWithProbs{}, fmt.Errorf("%s classification returned a negative class count", name)
+	}
+
+	numClasses := int(result.num_classes)
+	var nativeProbabilities []float32
+	if numClasses > 0 {
+		if result.probabilities == nil {
+			return ClassResultWithProbs{}, fmt.Errorf("%s classification returned no probability data", name)
+		}
+		nativeProbabilities = unsafe.Slice((*float32)(unsafe.Pointer(result.probabilities)), numClasses)
+	}
+
+	return ownedClassResultWithProbabilities(
+		int(result.class_id),
+		float32(result.confidence),
+		nativeProbabilities,
+	), nil
+}
+
+// ownedClassResultWithProbabilities copies probability data out of native-owned
+// memory before the FFI result is released.
+func ownedClassResultWithProbabilities(class int, confidence float32, probabilities []float32) ClassResultWithProbs {
+	owned := make([]float32, len(probabilities))
+	copy(owned, probabilities)
+	return ClassResultWithProbs{
+		Class:         class,
+		Confidence:    confidence,
+		Probabilities: owned,
+		NumClasses:    len(owned),
+	}
 }
 
 // ============================================================================
@@ -671,9 +949,29 @@ func GetEmbeddingModelsInfo() (*ModelsInfoOutput, error) {
 	return &ModelsInfoOutput{Models: models}, nil
 }
 
+// GetMatryoshkaConfig returns the native 2D Matryoshka capability contract.
+func GetMatryoshkaConfig() (*MatryoshkaConfig, error) {
+	var result C.MatryoshkaInfo
+	if status := C.get_matryoshka_info(&result); status != 0 {
+		return nil, fmt.Errorf("get Matryoshka configuration failed (status: %d)", int(status))
+	}
+	defer C.free_matryoshka_info(&result)
+	if result.dimensions == nil || result.layers == nil {
+		return nil, errors.New("get Matryoshka configuration returned empty fields")
+	}
+	return &MatryoshkaConfig{
+		Dimensions: C.GoString(result.dimensions),
+		Layers:     C.GoString(result.layers),
+		Supports2D: bool(result.supports_2d),
+	}, nil
+}
+
 // IsClassifierLoaded checks if a classifier is loaded
 func IsClassifierLoaded(name string) bool {
-	cName := C.CString(name)
+	cName, err := checkedCString(name, "classifier name")
+	if err != nil {
+		return false
+	}
 	defer C.free(unsafe.Pointer(cName))
 	return bool(C.is_classifier_loaded(cName))
 }
@@ -737,15 +1035,7 @@ func ClassifyModernBertText(text string) (ClassResult, error) {
 
 // ClassifyModernBertTextWithProbabilities classifies with probabilities
 func ClassifyModernBertTextWithProbabilities(text string) (ClassResultWithProbs, error) {
-	result, err := classifyWithClassifier("modernbert", text)
-	if err != nil {
-		return ClassResultWithProbs{}, err
-	}
-	return ClassResultWithProbs{
-		Class:         result.Class,
-		Confidence:    result.Confidence,
-		Probabilities: []float32{}, // TODO: implement probability extraction
-	}, nil
+	return classifyWithClassifierProbabilities("modernbert", text)
 }
 
 // ClassifyModernBertJailbreakText classifies for jailbreak
@@ -769,9 +1059,12 @@ func ClassifyCandleBertTokens(text string) (TokenClassificationResult, error) {
 
 // CalculateSimilarity calculates similarity between two texts (legacy)
 func CalculateSimilarity(text1, text2 string, maxLength int) float32 {
+	if err := validateONNXNonNegativeCInt("maximum token length", maxLength); err != nil {
+		return -1.0
+	}
 	result, err := CalculateEmbeddingSimilarity(text1, text2, "mmbert", 0)
 	if err != nil {
-		return 0.0
+		return -1.0
 	}
 	return result.Similarity
 }
@@ -783,8 +1076,7 @@ func CalculateSimilarityDefault(text1, text2 string) float32 {
 
 // FindMostSimilarDefault finds most similar with default settings
 func FindMostSimilarDefault(query string, candidates []string) SimResult {
-	idx, score := FindMostSimilar(query, candidates, 0)
-	return SimResult{Index: idx, Score: score}
+	return FindMostSimilar(query, candidates, 512)
 }
 
 // ============================================================================
@@ -804,6 +1096,20 @@ const (
 	// NLIError means an error occurred during classification
 	NLIError NLILabel = -1
 )
+
+// String returns the Candle-compatible string representation of an NLI label.
+func (l NLILabel) String() string {
+	switch l {
+	case NLIEntailment:
+		return "ENTAILMENT"
+	case NLINeutral:
+		return "NEUTRAL"
+	case NLIContradiction:
+		return "CONTRADICTION"
+	default:
+		return "ERROR"
+	}
+}
 
 // ============================================================================
 // Hallucination Detection (stub - not implemented in onnx_binding)
@@ -845,16 +1151,20 @@ type EnhancedHallucinationSpan struct {
 	Explanation             string
 }
 
-// NLIResult represents NLI classification result
-type NLIResult struct {
-	Label             NLILabel
-	LabelStr          string
-	Confidence        float32
-	EntailmentProb    float32
-	NeutralProb       float32
-	ContradictionProb float32
-	ContradictProb    float32 // alias for ContradictionProb
+// NLIClassificationResult mirrors the Candle replacement-module API.
+type NLIClassificationResult struct {
+	Label          NLILabel `json:"label"`
+	LabelStr       string   `json:"label_str"`
+	Confidence     float32  `json:"confidence"`
+	EntailmentProb float32  `json:"entailment_prob"`
+	NeutralProb    float32  `json:"neutral_prob"`
+	ContradictProb float32  `json:"contradiction_prob"`
+	// ContradictionProb is retained for early ONNX consumers.
+	ContradictionProb float32 `json:"-"`
 }
+
+// NLIResult is retained as a source-compatible alias for early ONNX consumers.
+type NLIResult = NLIClassificationResult
 
 // InitHallucinationModel initializes the hallucination detection model
 // Note: Not yet implemented in onnx_binding
@@ -882,7 +1192,7 @@ func DetectHallucinationsWithNLI(context, question, answer string, threshold flo
 
 // ClassifyNLI performs NLI classification
 // Note: Not yet implemented in onnx_binding
-func ClassifyNLI(premise, hypothesis string) (*NLIResult, error) {
+func ClassifyNLI(premise, hypothesis string) (*NLIClassificationResult, error) {
 	return nil, fmt.Errorf("NLI classification not yet implemented in onnx_binding")
 }
 
@@ -1022,7 +1332,10 @@ func modalityToString(m int) string {
 // InitMultiModalEmbeddingModel loads the multi-modal ONNX model.
 // modelPath can contain encoders/tokenizer either at root or under modelPath/onnx.
 func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
-	cPath := C.CString(modelPath)
+	cPath, err := checkedCString(modelPath, "multi-modal model path")
+	if err != nil {
+		return err
+	}
 	defer C.free(unsafe.Pointer(cPath))
 	if !C.init_multimodal_embedding_model(cPath, C.bool(useCPU)) {
 		return fmt.Errorf("failed to initialize multi-modal embedding model from %s", modelPath)
@@ -1032,12 +1345,21 @@ func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
 
 // MultiModalEncodeText encodes text into a shared multi-modal embedding space.
 func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	cText := C.CString(text)
+	if err := validateONNXNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
+	}
+	cText, err := checkedCString(text, "multi-modal text")
+	if err != nil {
+		return nil, err
+	}
 	defer C.free(unsafe.Pointer(cText))
 
 	var result C.MultiModalEmbeddingResult
 	status := C.multimodal_encode_text(cText, C.int(targetDim), &result)
-	if status != 0 || result.error {
+	if status != 0 {
+		return nil, embeddingStatusError("multi-modal text encoding failed", int(status))
+	}
+	if result.error {
 		return nil, errors.New("multi-modal text encoding failed")
 	}
 	if result.data == nil || result.length <= 0 {
@@ -1058,8 +1380,14 @@ func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutpu
 
 // MultiModalEncodeImage encodes pre-processed pixel data (CHW, float32 [0,1]).
 func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := validateONNXNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
+	}
 	if len(pixelData) == 0 {
 		return nil, errors.New("pixelData cannot be empty")
+	}
+	if err := validateImageGeometry(width, height); err != nil {
+		return nil, fmt.Errorf("invalid pixelData geometry: %w", err)
 	}
 	expected := 3 * height * width
 	if len(pixelData) != expected {
@@ -1092,8 +1420,8 @@ func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*
 
 // MultiModalEncodeAudio encodes a mel spectrogram [nMels × timeFrames].
 func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	if len(melData) == 0 {
-		return nil, errors.New("melData cannot be empty")
+	if err := validateMultiModalAudioInput(melData, nMels, timeFrames, targetDim); err != nil {
+		return nil, err
 	}
 
 	var result C.MultiModalEmbeddingResult
@@ -1120,88 +1448,26 @@ func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) 
 	}, nil
 }
 
-// MultiModalEncodeImageFromBytes decodes raw JPEG/PNG bytes, resizes to 512×512,
-// and encodes to a multi-modal embedding.
-func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	if len(imageBytes) == 0 {
-		return nil, errors.New("imageBytes cannot be empty")
+func validateMultiModalAudioInput(melData []float32, nMels, timeFrames, targetDim int) error {
+	if err := validateONNXNonNegativeCInt("target dimension", targetDim); err != nil {
+		return err
 	}
-	pixelData, err := decodeAndResizeImageOnnx(imageBytes, 512, 512)
-	if err != nil {
-		return nil, fmt.Errorf("image decode error: %w", err)
+	if len(melData) == 0 {
+		return errors.New("melData cannot be empty")
 	}
-	return MultiModalEncodeImage(pixelData, 512, 512, targetDim)
-}
-
-// MultiModalEncodeImageFromBase64 decodes a base64-encoded image and encodes it.
-func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	if base64Str == "" {
-		return nil, errors.New("base64Str cannot be empty")
+	if nMels <= 0 || timeFrames <= 0 {
+		return fmt.Errorf("nMels and timeFrames must be positive, got %d×%d", nMels, timeFrames)
 	}
-	payload := base64Str
-	if idx := strings.Index(base64Str, ";base64,"); idx >= 0 {
-		payload = base64Str[idx+len(";base64,"):]
+	const maxCInt = 1<<31 - 1
+	if nMels > maxCInt || timeFrames > maxCInt {
+		return fmt.Errorf("nMels and timeFrames must fit C int, got %d×%d", nMels, timeFrames)
 	}
-	data, err := base64.StdEncoding.DecodeString(payload)
-	if err != nil {
-		return nil, fmt.Errorf("base64 decode error: %w", err)
+	if nMels > len(melData)/timeFrames {
+		return fmt.Errorf("melData length %d does not match %d×%d", len(melData), nMels, timeFrames)
 	}
-	return MultiModalEncodeImageFromBytes(data, targetDim)
-}
-
-// MultiModalEncodeImageFromURL downloads an image from a URL and encodes it.
-// This helper is intended for trusted, operator-supplied URLs only. It enforces
-// https-only and disables redirects, but does not perform full SSRF mitigation
-// (e.g., private IP blocking). Do not use with untrusted user input.
-func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	if url == "" {
-		return nil, errors.New("url cannot be empty")
+	expected := nMels * timeFrames
+	if len(melData) != expected {
+		return fmt.Errorf("melData length %d does not match %d×%d", len(melData), nMels, timeFrames)
 	}
-	if !strings.HasPrefix(url, "https://") {
-		return nil, errors.New("only https URLs are allowed")
-	}
-
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-	resp, err := client.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("HTTP GET error: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP GET returned status %d", resp.StatusCode)
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 50*1024*1024))
-	if err != nil {
-		return nil, fmt.Errorf("read body error: %w", err)
-	}
-	return MultiModalEncodeImageFromBytes(data, targetDim)
-}
-
-// decodeAndResizeImageOnnx decodes JPEG/PNG and returns CHW float32 [0,1] pixels.
-func decodeAndResizeImageOnnx(data []byte, targetW, targetH int) ([]float32, error) {
-	img, _, err := image.Decode(bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	bounds := img.Bounds()
-	srcW := bounds.Dx()
-	srcH := bounds.Dy()
-
-	pixels := make([]float32, 3*targetH*targetW)
-	for y := 0; y < targetH; y++ {
-		srcY := y * srcH / targetH
-		for x := 0; x < targetW; x++ {
-			srcX := x * srcW / targetW
-			r, g, b, _ := img.At(bounds.Min.X+srcX, bounds.Min.Y+srcY).RGBA()
-			pixels[0*targetH*targetW+y*targetW+x] = float32(r) / 65535.0
-			pixels[1*targetH*targetW+y*targetW+x] = float32(g) / 65535.0
-			pixels[2*targetH*targetW+y*targetW+x] = float32(b) / 65535.0
-		}
-	}
-	return pixels, nil
+	return nil
 }

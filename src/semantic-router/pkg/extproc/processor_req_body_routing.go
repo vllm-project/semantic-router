@@ -73,7 +73,7 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(
 
 	modifiedBody, err := serializeOpenAIRequestWithStream(openAIRequest, ctx.ExpectStreamingResponse)
 	if err != nil {
-		logging.Errorf("Error serializing modified request: %v", err)
+		logging.Errorf("Error serializing modified request: %s", safeErrorForLog(err))
 		metrics.RecordRequestError(matchedModel, "serialization_error")
 		return nil, status.Errorf(codes.Internal, "error serializing modified request: %v", err)
 	}
@@ -86,7 +86,7 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(
 			profile,
 		)
 		if err != nil {
-			logging.Errorf("Error setting reasoning mode %v to request: %v", useReasoning, err)
+			logging.Errorf("Error setting reasoning mode %v to request: %s", useReasoning, safeErrorForLog(err))
 			metrics.RecordRequestError(matchedModel, "serialization_error")
 			return nil, status.Errorf(codes.Internal, "error setting reasoning mode: %v", err)
 		}
@@ -100,14 +100,14 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(
 	if ctx.MemoryContext != "" {
 		modifiedBody, err = injectMemoryMessages(modifiedBody, ctx.MemoryContext)
 		if err != nil {
-			logging.Warnf("Memory: Failed to inject memory context: %v", err)
+			logging.Warnf("Memory: Failed to inject memory context: %s", safeErrorForLog(err))
 		}
 	}
 
 	if ctx.VSRSelectedDecision != nil && ctx.VSRSelectedDecision.GetRequestParamsConfig() != nil {
 		modifiedBody, err = r.buildRequestParamsMutations(ctx.VSRSelectedDecision, modifiedBody)
 		if err != nil {
-			logging.Warnf("Failed to apply request params mutation: %v", err)
+			logging.Warnf("Failed to apply request params mutation: %s", safeErrorForLog(err))
 		}
 	}
 
@@ -261,7 +261,7 @@ func (r *OpenAIRouter) buildRouteHeaderState(
 		logging.ComponentErrorEvent("extproc", "provider_profile_resolution_failed", map[string]interface{}{
 			"request_id":   ctx.RequestID,
 			"backend_name": backendName,
-			"error":        profileErr.Error(),
+			"error_type":   safeErrorForLog(profileErr),
 		})
 		return nil, r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
@@ -289,7 +289,7 @@ func (r *OpenAIRouter) appendCredentialHeaders(
 		logging.ComponentErrorEvent("extproc", "provider_auth_resolution_failed", map[string]interface{}{
 			"request_id":   ctx.RequestID,
 			"backend_name": backendName,
-			"error":        authErr.Error(),
+			"error_type":   safeErrorForLog(authErr),
 		})
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
@@ -299,7 +299,7 @@ func (r *OpenAIRouter) appendCredentialHeaders(
 		logging.ComponentErrorEvent("extproc", "credential_resolution_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"model":      model,
-			"error":      credErr.Error(),
+			"error_type": safeErrorForLog(credErr),
 		})
 		return r.createErrorResponse(401, "Authentication failed. Check your API key configuration.")
 	}
@@ -419,7 +419,7 @@ func (r *OpenAIRouter) applyRoutingPathHeader(
 
 	chatPath, pathErr := state.profile.ResolveChatPath()
 	if pathErr != nil {
-		logging.Errorf("Chat path resolution failed for endpoint %s: %v", endpointName, pathErr)
+		logging.Errorf("Chat path resolution failed for endpoint %s: %s", endpointName, safeErrorForLog(pathErr))
 		return false, r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
 	if chatPath != "" {
@@ -471,7 +471,7 @@ func (r *OpenAIRouter) buildSpecifiedModelBodyMutation(
 	if upstreamModel != model {
 		rewritten, err := rewriteModelInBody(bodyBytes, upstreamModel)
 		if err != nil {
-			logging.Warnf("Failed to rewrite model in body: %v, sending original body", err)
+			logging.Warnf("Failed to rewrite model in body: %s, sending original body", safeErrorForLog(err))
 		} else {
 			bodyBytes = rewritten
 		}
@@ -480,7 +480,7 @@ func (r *OpenAIRouter) buildSpecifiedModelBodyMutation(
 	if needsRequestParamsMutation {
 		modified, err := r.buildRequestParamsMutations(ctx.VSRSelectedDecision, bodyBytes)
 		if err != nil {
-			logging.Warnf("Failed to apply request params mutation: %v", err)
+			logging.Warnf("Failed to apply request params mutation: %s", safeErrorForLog(err))
 		} else {
 			bodyBytes = modified
 		}

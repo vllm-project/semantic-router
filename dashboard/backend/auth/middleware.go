@@ -2,45 +2,36 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
 	"time"
-	"unicode"
-
-	"github.com/vllm-project/semantic-router/dashboard/backend/browsersecurity"
 )
 
 type contextKey string
 
-const (
-	authContextKey contextKey = "dashboardAuthContext"
-
-	authSessionCookieName = "vsr_session"
-	maxAccessTokenBytes   = 8192
-)
+const authContextKey contextKey = "dashboardAuthContext"
 
 // AuthContext contains authenticated user metadata.
 type AuthContext struct {
 	UserID           string
 	SessionID        string
 	Email            string
+	Name             string
 	Role             string
 	Perms            map[string]bool
 	CredentialSource CredentialSource
 }
 
-type CredentialSource string
-
-const (
-	CredentialSourceBearer CredentialSource = "bearer"
-	CredentialSourceCookie CredentialSource = "cookie"
-	CredentialSourceQuery  CredentialSource = "query"
-)
-
 func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if err := validateCredentialTransport(r); err != nil {
+				setProtectedResponseCachePolicy(w)
+				http.Error(w, "Invalid authentication transport", http.StatusBadRequest)
+				return
+			}
 			if !requiresAuthentication(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
@@ -87,36 +78,29 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				UserID:           user.ID,
 				SessionID:        claims.ID,
 				Email:            user.Email,
+				Name:             user.Name,
 				Role:             user.Role,
 				Perms:            perms,
 				CredentialSource: credentialSource,
 			})
+			ctx = withLiveAuthorization(ctx, service, claims, credentialSource)
+			if shouldMonitorLiveAuthorization(r) {
+				monitoredContext, stop, monitorErr := service.monitorAuthorization(ctx, claims, required)
+				if monitorErr != nil {
+					if errors.Is(monitorErr, ErrLiveAuthorizationCapacity) {
+						protectedWriter.Header().Set("Retry-After", "1")
+						http.Error(protectedWriter, "Live connection capacity reached", http.StatusServiceUnavailable)
+						return
+					}
+					http.Error(protectedWriter, "Unauthorized", http.StatusUnauthorized)
+					return
+				}
+				defer stop()
+				ctx = monitoredContext
+			}
 			next.ServeHTTP(protectedWriter, r.WithContext(ctx))
 		})
 	}
-}
-
-func validUnsafeRequestOrigin(r *http.Request, credentialSource CredentialSource) bool {
-	switch r.Method {
-	case http.MethodGet, http.MethodHead, http.MethodOptions:
-		return true
-	}
-
-	if len(r.Header.Values("Origin")) > 0 {
-		return browsersecurity.ValidOrigin(r)
-	}
-	fetchSiteValues := r.Header.Values("Sec-Fetch-Site")
-	if len(fetchSiteValues) > 1 {
-		return false
-	}
-	if len(fetchSiteValues) == 1 {
-		return strings.EqualFold(strings.TrimSpace(fetchSiteValues[0]), "same-origin")
-	}
-
-	// Non-browser API clients can continue using bearer authentication without
-	// browser Origin metadata. Cookie/query credentials require same-origin
-	// browser evidence on every unsafe method.
-	return credentialSource == CredentialSourceBearer
 }
 
 // ServiceUnavailableGuard returns middleware that fails closed when the auth
@@ -173,7 +157,10 @@ func RequiredPermission(method, path string) string {
 	}
 
 	if strings.HasPrefix(path, "/api/") {
-		return PermConfigRead
+		// Any API route that reaches the smart observability proxy is read-only.
+		// Unknown unsafe methods still need write authority, and the router then
+		// rejects them instead of forwarding to Grafana's anonymous admin API.
+		return readOrManagePermission(method, PermLogsRead, PermConfigWrite)
 	}
 
 	return ""
@@ -204,8 +191,11 @@ func settingsPermission(method, path string) (string, bool) {
 			return PermConfigWrite, true
 		}
 		return PermConfigRead, true
+	case path == "/api/setup/activate":
+		// Activation writes and immediately starts a caller-selected runtime
+		// config. Treat it as provider-credential use, not a draft-only edit.
+		return PermConfigDeploy, true
 	case strings.HasPrefix(path, "/api/setup/validate"),
-		strings.HasPrefix(path, "/api/setup/activate"),
 		strings.HasPrefix(path, "/api/setup/import-remote"):
 		return PermConfigWrite, true
 	default:
@@ -217,7 +207,15 @@ func routerPermission(method, path string) (string, bool) {
 	switch {
 	case path == "/api/router/config/deploy",
 		path == "/api/router/config/deploy/preview",
-		path == "/api/router/config/rollback":
+		path == "/api/router/config/rollback",
+		path == "/api/router/config/update",
+		path == "/api/router/config/global/update",
+		path == "/api/router/config/global/raw/update",
+		path == "/api/router/config/defaults/update":
+		// These write handlers synchronously apply the resulting config. A
+		// caller who can choose provider endpoints can cause process-owned
+		// provider credentials to be sent there, so config.deploy is the
+		// explicit credential-use authority for every runtime apply path.
 		return PermConfigDeploy, true
 	case strings.HasPrefix(path, "/api/router/config/"):
 		if method == http.MethodGet {
@@ -317,9 +315,11 @@ func securityPermission(method string) string {
 func openclawPermission(method, path string) (string, bool) {
 	switch {
 	case strings.HasPrefix(path, "/embedded/openclaw/"):
-		return PermOpenClawRead, true
+		// The embedded gateway receives an injected management credential, so
+		// viewing it is itself a management capability.
+		return PermOpenClaw, true
 	case strings.HasPrefix(path, "/api/openclaw/mcp"):
-		return PermMcpManage, true
+		return PermOpenClaw, true
 	case hasAnyPrefix(path,
 		"/api/openclaw/provision",
 		"/api/openclaw/start",
@@ -328,12 +328,15 @@ func openclawPermission(method, path string) (string, bool) {
 		"/api/openclaw/next-port",
 	):
 		return PermOpenClaw, true
-	case strings.HasPrefix(path, "/api/openclaw/rooms/") && (strings.HasSuffix(path, "/messages") || strings.HasSuffix(path, "/stream") || strings.HasSuffix(path, "/ws")):
+	case strings.HasPrefix(path, "/api/openclaw/rooms/") && strings.HasSuffix(path, "/messages"):
+		return readOrManagePermission(method, PermOpenClawRead, PermOpenClawUse), true
+	case strings.HasPrefix(path, "/api/openclaw/rooms/") && (strings.HasSuffix(path, "/stream") || strings.HasSuffix(path, "/ws")):
 		return PermOpenClawRead, true
+	case strings.HasPrefix(path, "/api/openclaw/token"):
+		return PermOpenClaw, true
 	case hasAnyPrefix(path,
 		"/api/openclaw/status",
 		"/api/openclaw/skills",
-		"/api/openclaw/token",
 	):
 		return PermOpenClawRead, true
 	case hasAnyPrefix(path,
@@ -410,55 +413,6 @@ func AuditMiddleware(store *Store, action, resource string, next http.HandlerFun
 		})
 		reportAuditPersistenceError(err)
 	}
-}
-
-func extractBearer(raw string) string {
-	if raw == "" {
-		return ""
-	}
-	parts := strings.SplitN(raw, " ", 2)
-	if len(parts) != 2 {
-		return ""
-	}
-	if !strings.EqualFold(parts[0], "bearer") {
-		return ""
-	}
-	return normalizeAccessToken(parts[1])
-}
-
-func extractAccessToken(r *http.Request) string {
-	token, _ := extractAccessTokenWithSource(r)
-	return token
-}
-
-func extractAccessTokenWithSource(r *http.Request) (string, CredentialSource) {
-	if token := extractBearer(r.Header.Get("Authorization")); token != "" {
-		return token, CredentialSourceBearer
-	}
-
-	if cookie, err := r.Cookie(authSessionCookieName); err == nil {
-		if token := normalizeAccessToken(cookie.Value); token != "" {
-			return token, CredentialSourceCookie
-		}
-	}
-
-	if token := normalizeAccessToken(r.URL.Query().Get("authToken")); token != "" {
-		return token, CredentialSourceQuery
-	}
-	return "", ""
-}
-
-func normalizeAccessToken(raw string) string {
-	token := strings.TrimSpace(raw)
-	if token == "" || len(token) > maxAccessTokenBytes {
-		return ""
-	}
-	for _, r := range token {
-		if r == ';' || unicode.IsControl(r) || unicode.IsSpace(r) {
-			return ""
-		}
-	}
-	return token
 }
 
 func requiresAuthentication(path string) bool {

@@ -30,6 +30,37 @@ type RuntimePlan struct {
 	LocalOverride bool
 }
 
+// ResolveRuntimePlans resolves every model requested by a set of runtime
+// consumers against one effective backend. A process-global native factory
+// must be prepared with the union of these plans; resolving only the default
+// model can make a later family appear initialized while its model is absent.
+// Duplicate plans are removed while preserving request order.
+func ResolveRuntimePlans(
+	models config.EmbeddingModels,
+	backendOverride string,
+	modelOverride string,
+	requestedModelTypes ...string,
+) ([]RuntimePlan, error) {
+	plans := make([]RuntimePlan, 0, len(requestedModelTypes))
+	seen := make(map[RuntimePlan]struct{}, len(requestedModelTypes))
+	for _, requestedModelType := range requestedModelTypes {
+		requestedModels := models
+		if requestedModelType = normalizeRuntimeValue(requestedModelType); requestedModelType != "" {
+			requestedModels.EmbeddingConfig.ModelType = requestedModelType
+		}
+		plan, err := ResolveRuntimePlan(requestedModels, backendOverride, modelOverride)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := seen[plan]; ok {
+			continue
+		}
+		seen[plan] = struct{}{}
+		plans = append(plans, plan)
+	}
+	return plans, nil
+}
+
 // ResolveRuntimePlan applies backend/model overrides to the configured model
 // contract. Switching a remote config to a local backend requires an explicit
 // local model selection, or exactly one configured local model path.
@@ -38,7 +69,7 @@ func ResolveRuntimePlan(models config.EmbeddingModels, backendOverride string, m
 	backend := resolveRuntimeBackend(configuredBackend, backendOverride)
 	switch backend {
 	case config.EmbeddingBackendOpenAICompatible:
-		return resolveRemoteRuntimePlan(models, backend), nil
+		return resolveRemoteRuntimePlan(models, backend)
 	case config.EmbeddingBackendCandle, config.EmbeddingBackendOpenVINO:
 		return resolveLocalRuntimePlan(models, configuredBackend, backend, modelOverride)
 	default:
@@ -54,12 +85,12 @@ func resolveRuntimeBackend(configuredBackend string, backendOverride string) str
 	return backend
 }
 
-func resolveRemoteRuntimePlan(models config.EmbeddingModels, backend string) RuntimePlan {
-	modelType := normalizeRuntimeValue(models.EmbeddingConfig.ModelType)
-	if modelType == "" {
-		modelType = config.EmbeddingModelTypeRemote
+func resolveRemoteRuntimePlan(models config.EmbeddingModels, backend string) (RuntimePlan, error) {
+	plan := RuntimePlan{Backend: backend, ModelType: config.EmbeddingModelTypeRemote}
+	if _, err := NewProvider(models, ProviderOptions{BackendOverride: plan.Backend}); err != nil {
+		return RuntimePlan{}, fmt.Errorf("remote embedding runtime requires a usable endpoint: %w", err)
 	}
-	return RuntimePlan{Backend: backend, ModelType: modelType}
+	return plan, nil
 }
 
 func resolveLocalRuntimePlan(
@@ -73,7 +104,7 @@ func resolveLocalRuntimePlan(
 	if err != nil {
 		return RuntimePlan{}, err
 	}
-	if err := validateLocalRuntimePlan(backend, modelType, modelPath, supported, localOverride); err != nil {
+	if err := validateLocalRuntimePlan(backend, modelType, modelPath, supported); err != nil {
 		return RuntimePlan{}, err
 	}
 	return RuntimePlan{Backend: backend, ModelType: modelType, ModelPath: modelPath, LocalOverride: localOverride}, nil
@@ -99,15 +130,15 @@ func resolveLocalModel(models config.EmbeddingModels, modelOverride string) (str
 	return modelType, modelPath, supported, nil
 }
 
-func validateLocalRuntimePlan(backend string, modelType string, modelPath string, supported bool, localOverride bool) error {
+func validateLocalRuntimePlan(backend string, modelType string, modelPath string, supported bool) error {
 	if backend == config.EmbeddingBackendOpenVINO && modelType == "multimodal" {
 		return fmt.Errorf("embedding backend %q does not support model type %q", backend, modelType)
 	}
 	if !supported {
 		return fmt.Errorf("local embedding backend %q does not support model type %q", backend, modelType)
 	}
-	if localOverride && strings.TrimSpace(modelPath) == "" {
-		return fmt.Errorf("local embedding override requires a configured %s model path", modelType)
+	if strings.TrimSpace(modelPath) == "" {
+		return fmt.Errorf("local embedding runtime requires a configured %s model path", modelType)
 	}
 	return nil
 }

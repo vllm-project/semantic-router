@@ -9,17 +9,14 @@
 // ~4000-token prompt silently took the container down.
 //
 // `goSafely(name, fn)` wraps `go fn()` with a deferred recover that
-// logs the panic + a short stack snippet via the existing structured
-// logger and returns. The caller's normal error-handling path is
+// logs only the panic type via the existing structured logger and returns.
+// Panic values are untrusted and can contain request content or credentials.
+// The caller's normal error-handling path is
 // unchanged for non-panic outcomes.
 
 package extproc
 
-import (
-	"runtime/debug"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-)
+import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 
 // goSafely launches fn in a new goroutine with a deferred panic
 // recovery that emits a structured `extproc:goroutine_panic` event
@@ -30,9 +27,8 @@ func goSafely(name string, fn func()) {
 		defer func() {
 			if r := recover(); r != nil {
 				logging.ComponentErrorEvent("extproc", "goroutine_panic", map[string]interface{}{
-					"goroutine": name,
-					"panic":     r,
-					"stack":     string(debug.Stack()),
+					"goroutine":  name,
+					"panic_type": safeRecoveredValueForLog(r),
 				})
 			}
 		}()

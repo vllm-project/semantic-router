@@ -87,7 +87,7 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 		return nil, ""
 	}
 	if err := selection.ValidateSelectionContext(selCtx); err != nil {
-		logging.Warnf("[ModelSelection] Invalid selection context: %v, using default candidate", err)
+		logging.Warnf("[ModelSelection] Invalid selection context: %s, using default candidate", safeErrorForLog(err))
 		recordAgenticSessionDecision(selCtx, nil, defaultCandidateModelRef, ctx)
 		return defaultCandidateModelRef, ""
 	}
@@ -113,12 +113,12 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 	// Perform selection
 	result, err := selector.Select(context.Background(), selCtx)
 	if err != nil {
-		logging.Warnf("[ModelSelection] Selection failed: %v, using default candidate", err)
+		logging.Warnf("[ModelSelection] Selection failed: %s, using default candidate", safeErrorForLog(err))
 		recordAgenticSessionDecision(selCtx, nil, defaultCandidateModelRef, ctx)
 		return defaultCandidateModelRef, string(method)
 	}
 	if err := selection.ValidateSelectionResult(selCtx, result); err != nil {
-		logging.Warnf("[ModelSelection] Invalid selection result: %v, using default candidate", err)
+		logging.Warnf("[ModelSelection] Invalid selection result: %s, using default candidate", safeErrorForLog(err))
 		recordAgenticSessionDecision(selCtx, result, defaultCandidateModelRef, ctx)
 		return defaultCandidateModelRef, string(method)
 	}
@@ -231,12 +231,12 @@ func selectedModelRefFromResult(selCtx *selection.SelectionContext, result *sele
 
 func logSelectionResult(method selection.SelectionMethod, result *selection.SelectionResult, selected *config.ModelRef, learningApplied bool) {
 	if learningApplied {
-		logging.Infof("[ModelSelection] Router Learning adjusted selection to %s (base_method=%s, score=%.4f, confidence=%.2f): %s",
-			selected.Model, method, result.Score, result.Confidence, result.Reasoning)
+		logging.Infof("[ModelSelection] Router Learning adjusted selection to %s (base_method=%s, score=%.4f, confidence=%.2f)",
+			selected.Model, method, result.Score, result.Confidence)
 		return
 	}
-	logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f): %s",
-		selected.Model, method, result.Score, result.Confidence, result.Reasoning)
+	logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f)",
+		selected.Model, method, result.Score, result.Confidence)
 }
 
 func firstValidCandidateModelRef(selCtx *selection.SelectionContext) *config.ModelRef {

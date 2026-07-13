@@ -110,6 +110,13 @@ function ObjectEditor({
   const unknownCount = Object.keys(record).filter((key) => !knownKeys.has(key)).length
   const content = (
     <div className={styles.objectFields}>
+      {!readOnly && schema.removable && value !== undefined ? (
+        <div className={styles.actions}>
+          <button type="button" className={styles.removeButton} onClick={() => onChange(undefined)}>
+            {schema.removeLabel ?? `Remove ${schema.label.toLocaleLowerCase()}`}
+          </button>
+        </div>
+      ) : null}
       <div className={styles.objectGrid}>
         {fields.map(([key, fieldSchema]) => {
           const wide = isCompound(fieldSchema)

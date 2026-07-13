@@ -22,7 +22,7 @@ func createMemoryRuntime(cfg *config.RouterConfig) (memory.Store, *memory.Memory
 
 	memoryStore, err := createMemoryStore(cfg)
 	if err != nil {
-		logging.Warnf("Failed to create memory store: %v, Memory will be disabled", err)
+		logging.Warnf("Failed to create memory store: %s, Memory will be disabled", safeErrorForLog(err))
 		return nil, nil
 	}
 
@@ -111,7 +111,7 @@ func wrapWithRedisCache(store memory.Store, cfg *config.RouterConfig, backend st
 	}
 	redisCache, err := memory.NewRedisCache(ctx, cacheCfg)
 	if err != nil {
-		logging.Warnf("Memory: Redis cache disabled (connection failed: %v)", err)
+		logging.Warnf("Memory: Redis cache disabled (connection failed: %s)", safeErrorForLog(err))
 		return store
 	}
 	return memory.NewCachingStore(store, redisCache, backend)

@@ -3,13 +3,17 @@ package mlpipeline
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
@@ -95,12 +99,18 @@ type DecisionEntry struct {
 
 // Runner orchestrates benchmark, train, and config generation steps.
 type Runner struct {
-	wf           *workflowstore.Store
-	dataDir      string // directory for uploads and outputs
-	trainingDir  string // path to src/training/model_selection/ml_model_selection
-	pythonPath   string
-	mlServiceURL string // URL of the Python ML service (sidecar); empty = use subprocess
-	progressChan chan ProgressUpdate
+	wf                  *workflowstore.Store
+	dataDir             string // directory for uploads and outputs
+	trainingDir         string // path to src/training/model_selection/ml_model_selection
+	pythonPath          string
+	mlServiceURL        string // URL of the Python ML service (sidecar); empty = use subprocess
+	mlHTTPClient        *http.Client
+	progressChan        chan ProgressUpdate
+	trainMu             sync.Mutex // the stable ml-train output directory is single-writer
+	admissionMu         sync.Mutex
+	activeJobs          int
+	activeBenchmarkJobs int
+	activeTrainingJobs  int
 }
 
 // RunnerConfig holds configuration for the Runner.
@@ -128,26 +138,44 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 	if cfg.DataDir == "" {
 		cfg.DataDir = "./data/ml-pipeline"
 	}
-	// Make dataDir absolute so paths work correctly when cmd.Dir is set to trainingDir
-	if abs, err := filepath.Abs(cfg.DataDir); err == nil {
-		cfg.DataDir = abs
+	absDataDir, err := filepath.Abs(cfg.DataDir)
+	if err != nil {
+		return nil, fmt.Errorf("mlpipeline: resolve data directory: %w", err)
 	}
-	if err := ensureDir(cfg.DataDir); err != nil {
-		log.Printf("Warning: could not create ML data dir %s: %v", cfg.DataDir, err)
+	if secureErr := ensurePrivateDir(absDataDir); secureErr != nil {
+		return nil, fmt.Errorf("mlpipeline: secure data directory: %w", secureErr)
+	}
+	canonicalDataDir, err := filepath.EvalSymlinks(absDataDir)
+	if err != nil {
+		return nil, fmt.Errorf("mlpipeline: resolve data directory: %w", err)
+	}
+	cfg.DataDir = canonicalDataDir
+	if cleanupErr := cleanupStaleUploadDirs(cfg.DataDir); cleanupErr != nil {
+		return nil, fmt.Errorf("mlpipeline: clean stale uploads: %w", cleanupErr)
 	}
 	if cfg.MLServiceURL != "" {
-		log.Printf("[ml-pipeline] Using ML service at %s (HTTP mode)", cfg.MLServiceURL)
+		cfg.MLServiceURL, err = validateMLServiceURL(cfg.MLServiceURL)
+		if err != nil {
+			return nil, fmt.Errorf("mlpipeline: %w", err)
+		}
+	}
+	if cfg.MLServiceURL != "" {
+		log.Printf("[ml-pipeline] Using configured ML service (HTTP mode)")
 	} else {
 		log.Printf("[ml-pipeline] No ML_SERVICE_URL set; using subprocess mode (python=%s)", cfg.PythonPath)
 	}
-	return &Runner{
+	runner := &Runner{
 		wf:           cfg.Workflow,
 		dataDir:      cfg.DataDir,
 		trainingDir:  cfg.TrainingDir,
 		pythonPath:   cfg.PythonPath,
 		mlServiceURL: strings.TrimRight(cfg.MLServiceURL, "/"),
 		progressChan: make(chan ProgressUpdate, 100),
-	}, nil
+	}
+	if cfg.MLServiceURL != "" {
+		runner.mlHTTPClient = newMLServiceHTTPClient()
+	}
+	return runner, nil
 }
 
 // ProgressUpdates returns the channel for SSE streaming.
@@ -160,6 +188,18 @@ func (r *Runner) sendProgress(jobID string, percent int, step, message string) {
 	select {
 	case r.progressChan <- update:
 	default:
+		if percent >= 100 {
+			// A terminal update must displace stale progress so connected SSE
+			// clients are not left waiting forever on a full queue.
+			select {
+			case <-r.progressChan:
+			default:
+			}
+			select {
+			case r.progressChan <- update:
+			default:
+			}
+		}
 	}
 	if err := r.wf.UpdateMLJobProgress(jobID, percent, step); err != nil {
 		log.Printf("[ml-pipeline] persist progress for %s: %v", jobID, err)
@@ -174,25 +214,34 @@ func (r *Runner) persistJob(j *Job) error {
 	return r.wf.PutMLJob(rec)
 }
 
-func (r *Runner) setJobRunning(j *Job) {
+func (r *Runner) setJobRunning(j *Job) error {
 	j.Status = StatusRunning
 	if err := r.persistJob(j); err != nil {
-		log.Printf("[ml-pipeline] persist running state for %s: %v", j.ID, err)
+		return fmt.Errorf("persist running state: %w", err)
 	}
+	return nil
 }
 
-func (r *Runner) createJob(jobType string) *Job {
-	id := fmt.Sprintf("ml-%s-%d", jobType, time.Now().UnixMilli())
+func (r *Runner) createJob(jobType string) (*Job, error) {
+	if jobType != "benchmark" && jobType != "train" && jobType != "config" {
+		return nil, errors.New("unsupported ML pipeline job type")
+	}
+	randomID := make([]byte, 16)
+	if _, err := rand.Read(randomID); err != nil {
+		return nil, errors.New("generate ML pipeline job ID")
+	}
+	now := time.Now().UTC()
+	id := "ml-" + jobType + "-" + hex.EncodeToString(randomID)
 	job := &Job{
 		ID:        id,
 		Type:      jobType,
 		Status:    StatusPending,
-		CreatedAt: time.Now(),
+		CreatedAt: now,
 	}
 	if err := r.persistJob(job); err != nil {
-		log.Printf("[ml-pipeline] persist new job %s: %v", id, err)
+		return nil, fmt.Errorf("persist new ML pipeline job: %w", err)
 	}
-	return job
+	return job, nil
 }
 
 // GetJob returns a job by ID.
@@ -232,18 +281,23 @@ func (r *Runner) failJob(jobID, errMsg string) {
 	}
 }
 
-func (r *Runner) completeJob(jobID string, outputFiles []string) {
+func (r *Runner) completeJob(jobID string, outputFiles []string) error {
 	rec, err := r.wf.GetMLJob(jobID)
 	if err != nil || rec == nil {
-		return
+		return errors.New("job record is unavailable")
+	}
+	validatedFiles, err := r.validateOutputFiles(jobID, rec.Type, outputFiles)
+	if err != nil {
+		return err
 	}
 	rec.Status = string(StatusCompleted)
-	rec.OutputFiles = outputFiles
+	rec.OutputFiles = validatedFiles
 	rec.CompletedAt = time.Now()
 	rec.Progress = 100
 	if err := r.wf.PutMLJob(*rec); err != nil {
-		log.Printf("[ml-pipeline] persist completed state for %s: %v", jobID, err)
+		return fmt.Errorf("persist completed state: %w", err)
 	}
+	return nil
 }
 
 func jobToRecord(j *Job) workflowstore.MLJobRecord {
@@ -290,24 +344,9 @@ func (r *Runner) TrainDir() string {
 	return filepath.Join(r.dataDir, "ml-train")
 }
 
-// ensureDir creates a directory (and parents) if it does not exist.
-// If the normal MkdirAll fails (e.g. WSL/NTFS ghost entries), it falls
-// back to calling the system's "mkdir -p" command.
+// ensureDir creates a private directory and rejects symlink roots.
 func ensureDir(dir string) error {
-	// Fast path: already exists
-	if info, err := os.Stat(dir); err == nil && info.IsDir() {
-		return nil
-	}
-	// Normal creation
-	if err := os.MkdirAll(dir, 0o755); err == nil {
-		return nil
-	}
-	// Fallback: use system mkdir which may handle edge cases differently
-	cmd := exec.Command("mkdir", "-p", dir)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("mkdir -p %s: %w (%s)", dir, err, string(out))
-	}
-	return nil
+	return ensurePrivateDir(dir)
 }
 
 // scanCRLF is a bufio.SplitFunc that splits on \r or \n (or \r\n).
@@ -378,17 +417,51 @@ func countYAMLModels(path string) int {
 // RunBenchmark runs Layer 1. If ML service URL is configured, it delegates to the
 // Python HTTP sidecar. Otherwise, it spawns benchmark.py as a subprocess.
 func (r *Runner) RunBenchmark(ctx context.Context, modelsYAMLPath, queryJSONLPath string, req BenchmarkRequest) (string, error) {
-	if r.mlServiceURL != "" {
-		return r.runBenchmarkHTTP(ctx, modelsYAMLPath, queryJSONLPath, req)
+	if err := ValidateBenchmarkRequest(req); err != nil {
+		return "", fmt.Errorf("%w: %w", ErrPipelineInputRejected, err)
 	}
-	return r.runBenchmarkSubprocess(ctx, modelsYAMLPath, queryJSONLPath, req)
+	validatedModelsPath, err := r.ValidateManagedFile(modelsYAMLPath)
+	if err != nil {
+		return "", fmt.Errorf("%w: models YAML is not a managed regular file", ErrPipelineInputRejected)
+	}
+	validatedQueriesPath, err := r.ValidateManagedFile(queryJSONLPath)
+	if err != nil {
+		return "", fmt.Errorf("%w: queries JSONL is not a managed regular file", ErrPipelineInputRejected)
+	}
+	release, err := r.acquireJobSlot(pipelineBenchmarkJob)
+	if err != nil {
+		return "", err
+	}
+	if err := validateBenchmarkWorkload(validatedModelsPath, validatedQueriesPath, req); err != nil {
+		release()
+		return "", fmt.Errorf("%w: %w", ErrPipelineInputRejected, err)
+	}
+	if r.mlServiceURL != "" {
+		return r.runBenchmarkHTTP(ctx, validatedModelsPath, validatedQueriesPath, req, release)
+	}
+	return r.runBenchmarkSubprocess(ctx, validatedModelsPath, validatedQueriesPath, req, release)
 }
 
 // RunTrain runs Layer 2. If ML service URL is configured, it delegates to the
 // Python HTTP sidecar. Otherwise, it spawns train.py as a subprocess.
 func (r *Runner) RunTrain(ctx context.Context, benchmarkDataPath string, req TrainRequest) (string, error) {
-	if r.mlServiceURL != "" {
-		return r.runTrainHTTP(ctx, benchmarkDataPath, req)
+	if err := ValidateTrainRequest(req); err != nil {
+		return "", fmt.Errorf("%w: %w", ErrPipelineInputRejected, err)
 	}
-	return r.runTrainSubprocess(ctx, benchmarkDataPath, req)
+	validatedDataPath, err := r.ValidateManagedFile(benchmarkDataPath)
+	if err != nil {
+		return "", fmt.Errorf("%w: training data is not a managed regular file", ErrPipelineInputRejected)
+	}
+	release, err := r.acquireJobSlot(pipelineTrainingJob)
+	if err != nil {
+		return "", err
+	}
+	if err := validateTrainingDataFile(validatedDataPath); err != nil {
+		release()
+		return "", fmt.Errorf("%w: %w", ErrPipelineInputRejected, err)
+	}
+	if r.mlServiceURL != "" {
+		return r.runTrainHTTP(ctx, validatedDataPath, req, release)
+	}
+	return r.runTrainSubprocess(ctx, validatedDataPath, req, release)
 }

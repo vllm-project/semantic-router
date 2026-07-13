@@ -141,22 +141,35 @@ RUN cmake -B build -G Ninja \
 # Stage 6: Build Go application (both candle and onnx binaries)
 # ============================================================================
 FROM golang:1.25 AS go-builder
+ARG GOPROXY=https://proxy.golang.org,direct
+ARG GOSUMDB=sum.golang.org
 
 RUN apt-get update && apt-get install -y libssl-dev file && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+ENV GOPROXY="${GOPROXY}" \
+    GOSUMDB="${GOSUMDB}"
 
-# Copy Go module files
+# Copy Go module files first for dependency caching
 RUN mkdir -p src/semantic-router
 COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
 COPY src/semantic-router/go.onnx.mod src/semantic-router/go.onnx.sum src/semantic-router/
-COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
-COPY onnx-binding/go.mod onnx-binding/semantic-router.go onnx-binding/
-COPY ml-binding/go.mod ml-binding/ml_binding.go ml-binding/
-COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go nlp-binding/
-COPY openvino-binding/go.mod openvino-binding/semantic-router.go openvino-binding/
+COPY candle-binding/go.mod candle-binding/
+COPY onnx-binding/go.mod onnx-binding/
+COPY ml-binding/go.mod ml-binding/
+COPY nlp-binding/go.mod nlp-binding/
+COPY openvino-binding/go.mod openvino-binding/
 
-RUN cd src/semantic-router && go mod download
+RUN cd src/semantic-router && go mod download && go mod download -modfile=go.onnx.mod && \
+    cd /app/candle-binding && go mod download
+
+# Copy binding implementation files only after dependency download so normal
+# Go source edits do not invalidate the module cache.
+COPY candle-binding/*.go candle-binding/
+COPY onnx-binding/*.go onnx-binding/
+COPY ml-binding/*.go ml-binding/
+COPY nlp-binding/*.go nlp-binding/
+COPY openvino-binding/*.go openvino-binding/
 
 COPY src/semantic-router/ src/semantic-router/
 

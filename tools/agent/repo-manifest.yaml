@@ -62,10 +62,12 @@ subsystems:
   - candle-binding/**
   - ml-binding/**
   - nlp-binding/**
+  - onnx-binding/**
   entrypoints:
   - candle-binding/src/lib.rs
   - ml-binding/src/lib.rs
   - nlp-binding/src/lib.rs
+  - onnx-binding/src/lib.rs
 - name: dashboard
   paths:
   - dashboard/**
@@ -151,6 +153,8 @@ docs:
 - docs/agent/tech-debt/td-044-flow-tool-state-durability-gap.md
 - docs/agent/tech-debt/td-045-runtime-generation-ownership-gap.md
 - docs/agent/tech-debt/td-046-control-plane-contract-convergence-gap.md
+- docs/agent/tech-debt/td-047-onnx-ffi-clippy-safety-contract-gap.md
+- docs/agent/tech-debt/td-048-dashboard-job-lifecycle-ownership-gap.md
 local_agent_rules:
 - path: src/vllm-sr/cli/AGENTS.md
   scope: src/vllm-sr/cli/**
@@ -324,6 +328,12 @@ doc_governance:
   - path: docs/agent/tech-debt/td-046-control-plane-contract-convergence-gap.md
     steward: router-core
     freshness: update when the TD046 control-plane contract gap changes materially
+  - path: docs/agent/tech-debt/td-047-onnx-ffi-clippy-safety-contract-gap.md
+    steward: onnx-binding
+    freshness: update when the TD047 ONNX FFI safety-contract gap changes materially
+  - path: docs/agent/tech-debt/td-048-dashboard-job-lifecycle-ownership-gap.md
+    steward: dashboard
+    freshness: update when the TD048 Dashboard job-lifecycle ownership gap changes materially
 skills:
 - tools/agent/skills/config-platform-change/SKILL.md
 - tools/agent/skills/cross-stack-bugfix/SKILL.md

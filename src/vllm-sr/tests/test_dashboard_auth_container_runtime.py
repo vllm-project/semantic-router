@@ -1,3 +1,4 @@
+import hashlib
 from types import SimpleNamespace
 
 import pytest
@@ -67,6 +68,7 @@ def test_dashboard_auth_is_name_inherited_isolated_and_readonly_mounted(
     config = _write_config(tmp_path)
     blocklist = tmp_path / "passwords.txt"
     blocklist.write_text("known-compromised-password\n")
+    blocklist_digest = hashlib.sha256(blocklist.read_bytes()).hexdigest()
     jwt_secret = "jwt-secret-value"
     admin_password = "admin-password-value"
     _stub_runtime(monkeypatch, tmp_path)
@@ -82,7 +84,9 @@ def test_dashboard_auth_is_name_inherited_isolated_and_readonly_mounted(
                 "DASHBOARD_ADMIN_PASSWORD": admin_password,
                 "DASHBOARD_ADMIN_NAME": "Local Admin",
                 "DASHBOARD_ALLOW_OPEN_BOOTSTRAP": "false",
+                "DASHBOARD_SECURITY_PROFILE": "development",
                 "DASHBOARD_PASSWORD_BLOCKLIST_PATH": str(blocklist),
+                "DASHBOARD_PASSWORD_BLOCKLIST_SHA256": blocklist_digest,
             },
             [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
             minimal=False,
@@ -106,9 +110,10 @@ def test_dashboard_auth_is_name_inherited_isolated_and_readonly_mounted(
     assert f"DASHBOARD_ADMIN_PASSWORD={admin_password}" not in dashboard_cmd
     assert "DASHBOARD_ADMIN_EMAIL=admin@example.com" in dashboard_cmd
     assert "DASHBOARD_JWT_EXPIRY_HOURS=12" in dashboard_cmd
+    assert "DASHBOARD_SECURITY_PROFILE=development" in dashboard_cmd
+    assert f"DASHBOARD_PASSWORD_BLOCKLIST_SHA256={blocklist_digest}" in dashboard_cmd
     assert (
-        f"{blocklist.resolve()}:/etc/vllm-sr/dashboard-auth/"
-        "password-blocklist.txt:ro,z"
+        f"{blocklist.resolve()}:/etc/vllm-sr/dashboard-auth/password-blocklist.txt:ro,z"
     ) in dashboard_cmd
     assert (
         "DASHBOARD_PASSWORD_BLOCKLIST_PATH="

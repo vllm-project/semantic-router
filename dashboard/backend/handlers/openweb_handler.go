@@ -1,11 +1,10 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"time"
 )
 
@@ -18,78 +17,80 @@ type openWebFetchPlan struct {
 }
 
 func OpenWebHandler() http.HandlerFunc {
-	return handleOpenWeb
+	return openWebHandlerWithClient(newPublicOutboundHTTPClient(openWebMaxTimeout))
 }
 
-func handleOpenWeb(w http.ResponseWriter, r *http.Request) {
-	setOpenWebCORSHeaders(w)
+func openWebHandlerWithClient(client outboundHTTPClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		setOpenWebCORSHeaders(w)
 
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		req, status, err := decodeOpenWebRequest(w, r)
+		if err != nil {
+			log.Printf("[OpenWeb] Failed to parse request")
+			writeOpenWebJSON(w, status, OpenWebResponse{Error: "Invalid request format"})
+			return
+		}
+
+		if invalidResponse, ok := validateOpenWebRequest(r.Context(), client, &req); ok {
+			writeOpenWebJSON(w, http.StatusBadRequest, invalidResponse)
+			return
+		}
+
+		plan := buildOpenWebFetchPlan(req)
+		logOpenWebFetchPlan(plan)
+
+		result, fetchErr := fetchOpenWeb(r.Context(), client, plan)
+		if fetchErr != nil {
+			log.Printf("[OpenWeb] All fetch methods failed for %s", redactURLForLog(req.URL))
+			writeOpenWebJSON(w, http.StatusBadGateway, OpenWebResponse{
+				URL:   redactURLForLog(req.URL),
+				Error: "Unable to fetch web content",
+			})
+			return
+		}
+
+		writeOpenWebJSON(w, http.StatusOK, *result)
 	}
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	req, err := decodeOpenWebRequest(r)
-	if err != nil {
-		log.Printf("[OpenWeb] Failed to parse request: %v", err)
-		writeOpenWebJSON(w, http.StatusBadRequest, OpenWebResponse{Error: "Invalid request format"})
-		return
-	}
-
-	if invalidResponse, ok := validateOpenWebRequest(req); ok {
-		writeOpenWebJSON(w, http.StatusBadRequest, invalidResponse)
-		return
-	}
-
-	plan := buildOpenWebFetchPlan(req)
-	logOpenWebFetchPlan(plan)
-
-	result, fetchErr := fetchOpenWeb(plan)
-	if fetchErr != nil {
-		log.Printf(
-			"[OpenWeb] All fetch methods failed for %s: %v",
-			redactURLForLog(req.URL),
-			redactURLsForLog(fetchErr.Error()),
-		)
-		writeOpenWebJSON(w, http.StatusBadGateway, OpenWebResponse{
-			URL:   req.URL,
-			Error: fmt.Sprintf("Unable to fetch web content: %v", fetchErr),
-		})
-		return
-	}
-
-	writeOpenWebJSON(w, http.StatusOK, *result)
 }
 
 func setOpenWebCORSHeaders(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 }
 
-func decodeOpenWebRequest(r *http.Request) (OpenWebRequest, error) {
+func decodeOpenWebRequest(w http.ResponseWriter, r *http.Request) (OpenWebRequest, int, error) {
 	var req OpenWebRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		return OpenWebRequest{}, err
+	if status, err := decodeBoundedJSON(w, r, outboundMaxRequestBodyBytes, &req); err != nil {
+		return OpenWebRequest{}, status, err
 	}
-	return req, nil
+	return req, 0, nil
 }
 
-func validateOpenWebRequest(req OpenWebRequest) (OpenWebResponse, bool) {
-	if req.URL == "" {
+func validateOpenWebRequest(
+	ctx context.Context,
+	client outboundHTTPClient,
+	req *OpenWebRequest,
+) (OpenWebResponse, bool) {
+	if req == nil || req.URL == "" {
 		return OpenWebResponse{Error: "URL cannot be empty"}, true
 	}
 
-	parsedURL, err := url.Parse(req.URL)
-	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
-		return OpenWebResponse{
-			URL:   req.URL,
-			Error: "Invalid URL format",
-		}, true
+	parsedURL, err := parseOutboundHTTPURL(req.URL)
+	if err != nil {
+		return OpenWebResponse{Error: "Invalid or non-public URL"}, true
+	}
+	req.URL = parsedURL.String()
+	if err := client.ValidateURL(ctx, req.URL); err != nil {
+		return OpenWebResponse{Error: "Invalid or non-public URL"}, true
 	}
 
 	return OpenWebResponse{}, false
@@ -125,21 +126,27 @@ func logOpenWebFetchPlan(plan openWebFetchPlan) {
 	)
 }
 
-func fetchOpenWeb(plan openWebFetchPlan) (*OpenWebResponse, error) {
+func fetchOpenWeb(
+	ctx context.Context,
+	client outboundHTTPClient,
+	plan openWebFetchPlan,
+) (*OpenWebResponse, error) {
 	if !plan.forceJina {
 		log.Printf("[OpenWeb] Strategy 1: Trying direct fetch...")
-		result, err := fetchWebDirect(plan.request.URL, plan.timeout, plan.maxLength)
+		result, err := fetchWebDirect(ctx, client, plan.request.URL, plan.timeout, plan.maxLength)
 		if err == nil {
 			log.Printf("[OpenWeb] Direct fetch succeeded")
 			return result, nil
 		}
-		log.Printf("[OpenWeb] Direct fetch failed: %v", redactURLsForLog(err.Error()))
+		log.Printf("[OpenWeb] Direct fetch failed")
 		log.Printf("[OpenWeb] Strategy 2: Falling back to Jina Reader...")
 	} else {
 		log.Printf("[OpenWeb] Skipping direct fetch, using Jina Reader directly")
 	}
 
 	result, err := fetchWebWithJina(
+		ctx,
+		client,
 		plan.request.URL,
 		plan.timeout,
 		plan.format,

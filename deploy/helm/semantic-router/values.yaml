@@ -537,6 +537,9 @@ extraEnv: []
 dashboard:
   # -- Enable the vLLM-SR dashboard
   enabled: false
+  # -- Dashboard security posture. Development permits the built-in lightweight
+  # password denylist; production requires a verified external breach corpus.
+  securityProfile: development
   # -- Dashboard replica count. Must stay 1 until the dashboard auth/session store
   # supports a shared multi-replica backend.
   replicaCount: 1
@@ -580,6 +583,8 @@ dashboard:
     existingConfigMap: ""
     # -- ConfigMap key containing the newline-delimited blocklist.
     key: "passwords.txt"
+    # -- SHA-256 of the exact mounted file bytes. Required in production.
+    sha256: ""
   # -- Extra environment variables for the dashboard container, appended after the
   # chart-managed TARGET_* vars. Use this to set optional integration env the chart
   # does not expose explicitly (for example OPENCLAW_*, TARGET_ENVOY_URL, or

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
+	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
 type ClawRoomEntry struct {
@@ -63,9 +67,16 @@ type clawRoomStreamEvent struct {
 var roomMentionPattern = regexp.MustCompile(`@([a-zA-Z0-9_.-]+)`)
 
 const (
-	roomAutomationProcessedAtKey = "automationProcessedAt"
-	roomIDDynamicSuffixBytes     = 2
-	roomIDDynamicMaxAttempts     = 12
+	roomAutomationProcessedAtKey     = "automationProcessedAt"
+	roomIDDynamicSuffixBytes         = 2
+	roomIDDynamicMaxAttempts         = 12
+	maximumOpenClawRoomRequestBytes  = 64 * 1024
+	maximumOpenClawRoomMessageBytes  = 16 * 1024
+	maximumOpenClawRoomNameBytes     = 256
+	maximumOpenClawSenderFieldBytes  = 256
+	maximumOpenClawRoomMessages      = 2000
+	maximumOpenClawAutomationHistory = 256
+	maximumOpenClawAutomationWorkers = 16
 )
 
 func (h *OpenClawHandler) loadRooms() ([]ClawRoomEntry, error) {
@@ -115,19 +126,20 @@ func (h *OpenClawHandler) loadRoomMessages(roomID string) ([]ClawRoomMessage, er
 	return out, nil
 }
 
-func (h *OpenClawHandler) saveRoomMessages(roomID string, messages []ClawRoomMessage) error {
-	rows := make([][2]string, 0, len(messages))
-	for i := range messages {
-		if strings.TrimSpace(messages[i].ID) == "" {
-			return fmt.Errorf("room message missing id")
-		}
-		b, err := json.Marshal(messages[i])
-		if err != nil {
-			return err
-		}
-		rows = append(rows, [2]string{messages[i].ID, string(b)})
+func (h *OpenClawHandler) loadRecentRoomMessages(roomID string, limit int) ([]ClawRoomMessage, error) {
+	lines, err := h.wf.ListRecentOpenClawRoomMessages(roomID, limit)
+	if err != nil {
+		return nil, err
 	}
-	return h.wf.ReplaceOpenClawRoomMessages(roomID, rows)
+	out := make([]ClawRoomMessage, 0, len(lines))
+	for _, line := range lines {
+		var message ClawRoomMessage
+		if err := json.Unmarshal([]byte(line), &message); err != nil {
+			return nil, err
+		}
+		out = append(out, message)
+	}
+	return out, nil
 }
 
 func findRoomByID(rooms []ClawRoomEntry, roomID string) *ClawRoomEntry {
@@ -157,7 +169,7 @@ func buildRoomIDWithDynamicSuffix(base string) string {
 		normalizedBase = "room"
 	}
 
-	suffix := sanitizeRoomID(generateToken(roomIDDynamicSuffixBytes))
+	suffix := sanitizeRoomID(generateNonSecretToken(roomIDDynamicSuffixBytes))
 	if suffix == "" {
 		suffix = strconv.FormatInt(time.Now().UTC().UnixNano()%1_000_000, 10)
 	}
@@ -272,7 +284,7 @@ func extractMentions(content string) []string {
 }
 
 func generateRoomEntityID(prefix string) string {
-	return fmt.Sprintf("%s-%d-%s", prefix, time.Now().UTC().UnixNano(), generateToken(3))
+	return fmt.Sprintf("%s-%d-%s", prefix, time.Now().UTC().UnixNano(), generateNonSecretToken(3))
 }
 
 func newRoomMessage(room ClawRoomEntry, senderType, senderID, senderName, content string, metadata map[string]string) ClawRoomMessage {
@@ -320,7 +332,12 @@ func (h *OpenClawHandler) appendRoomMessage(roomID string, message ClawRoomMessa
 	if err != nil {
 		return err
 	}
-	if err := h.wf.AppendOpenClawRoomMessage(roomID, message.ID, string(b)); err != nil {
+	if err := h.wf.AppendOpenClawRoomMessageBounded(
+		roomID,
+		message.ID,
+		string(b),
+		maximumOpenClawRoomMessages,
+	); err != nil {
 		return err
 	}
 
@@ -385,8 +402,13 @@ func (h *OpenClawHandler) handleCreateRoom(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var req clawRoomPayload
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
+	if status, err := decodeBoundedJSON(
+		w,
+		r,
+		maximumOpenClawRoomRequestBytes,
+		&req,
+	); err != nil {
+		writeJSONError(w, err.Error(), status)
 		return
 	}
 	teamID := sanitizeTeamID(req.TeamID)
@@ -398,13 +420,17 @@ func (h *OpenClawHandler) handleCreateRoom(w http.ResponseWriter, r *http.Reques
 	if roomName == "" {
 		roomName = defaultRoomNameForTeam(teamID)
 	}
+	if len([]byte(roomName)) > maximumOpenClawRoomNameBytes {
+		writeJSONError(w, "room name is too large", http.StatusRequestEntityTooLarge)
+		return
+	}
 	requestedRoomID := sanitizeRoomID(req.ID)
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	teams, err := h.loadTeams()
 	if err != nil {
-		writeJSONError(w, fmt.Sprintf("Failed to load teams: %v", err), http.StatusInternalServerError)
+		writeJSONError(w, "Failed to load teams", http.StatusInternalServerError)
 		return
 	}
 	if findTeamByID(teams, teamID) == nil {
@@ -413,7 +439,7 @@ func (h *OpenClawHandler) handleCreateRoom(w http.ResponseWriter, r *http.Reques
 	}
 	rooms, err := h.loadRooms()
 	if err != nil {
-		writeJSONError(w, fmt.Sprintf("Failed to load rooms: %v", err), http.StatusInternalServerError)
+		writeJSONError(w, "Failed to load rooms", http.StatusInternalServerError)
 		return
 	}
 
@@ -446,7 +472,7 @@ func (h *OpenClawHandler) handleCreateRoom(w http.ResponseWriter, r *http.Reques
 	rooms = append(rooms, created)
 	sort.Slice(rooms, func(i, j int) bool { return rooms[i].Name < rooms[j].Name })
 	if err := h.saveRooms(rooms); err != nil {
-		writeJSONError(w, fmt.Sprintf("Failed to save rooms: %v", err), http.StatusInternalServerError)
+		writeJSONError(w, "Failed to save rooms", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -579,14 +605,9 @@ func (h *OpenClawHandler) handleRoomMessages(w http.ResponseWriter, r *http.Requ
 func (h *OpenClawHandler) handleGetRoomMessages(w http.ResponseWriter, r *http.Request, roomID string) {
 	h.mu.RLock()
 	rooms, roomErr := h.loadRooms()
-	messages, msgErr := h.loadRoomMessages(roomID)
 	h.mu.RUnlock()
 	if roomErr != nil {
 		writeJSONError(w, fmt.Sprintf("Failed to load rooms: %v", roomErr), http.StatusInternalServerError)
-		return
-	}
-	if msgErr != nil {
-		writeJSONError(w, fmt.Sprintf("Failed to load room messages: %v", msgErr), http.StatusInternalServerError)
 		return
 	}
 	if findRoomByID(rooms, roomID) == nil {
@@ -603,8 +624,10 @@ func (h *OpenClawHandler) handleGetRoomMessages(w http.ResponseWriter, r *http.R
 			limit = n
 		}
 	}
-	if len(messages) > limit {
-		messages = messages[len(messages)-limit:]
+	messages, msgErr := h.loadRecentRoomMessages(roomID, limit)
+	if msgErr != nil {
+		writeJSONError(w, "Failed to load room messages", http.StatusInternalServerError)
+		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(messages); err != nil {
@@ -617,14 +640,37 @@ func (h *OpenClawHandler) handlePostRoomMessage(w http.ResponseWriter, r *http.R
 		h.writeReadOnlyError(w)
 		return
 	}
+	var actor auth.AuthContext
+	browserActor := auth.HasLiveAuthorization(r.Context())
+	if browserActor {
+		var authorizationErr error
+		actor, authorizationErr = auth.RevalidateAuthorization(r.Context(), auth.PermOpenClawUse)
+		if authorizationErr != nil {
+			if errors.Is(authorizationErr, auth.ErrLivePermissionDenied) {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+			} else {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			}
+			return
+		}
+	}
 	var req clawRoomMessagePayload
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
+	if status, err := decodeBoundedJSON(
+		w,
+		r,
+		maximumOpenClawRoomRequestBytes,
+		&req,
+	); err != nil {
+		writeJSONError(w, err.Error(), status)
 		return
 	}
 	content := strings.TrimSpace(req.Content)
 	if content == "" {
 		writeJSONError(w, "content is required", http.StatusBadRequest)
+		return
+	}
+	if len([]byte(content)) > maximumOpenClawRoomMessageBytes {
+		writeJSONError(w, "content is too large", http.StatusRequestEntityTooLarge)
 		return
 	}
 
@@ -650,15 +696,32 @@ func (h *OpenClawHandler) handlePostRoomMessage(w http.ResponseWriter, r *http.R
 	if senderID == "" {
 		senderID = defaultSenderID(senderType, senderName)
 	}
+	if browserActor {
+		senderType = "user"
+		senderID = actor.UserID
+		senderName = strings.TrimSpace(actor.Name)
+		if senderName == "" {
+			senderName = actor.Email
+		}
+	}
+	if len([]byte(senderID)) > maximumOpenClawSenderFieldBytes ||
+		len([]byte(senderName)) > maximumOpenClawSenderFieldBytes {
+		writeJSONError(w, "sender identity is too large", http.StatusRequestEntityTooLarge)
+		return
+	}
 
 	created := newRoomMessage(*room, senderType, senderID, senderName, content, nil)
 	if err := h.appendRoomMessage(room.ID, created); err != nil {
-		writeJSONError(w, fmt.Sprintf("Failed to save room message: %v", err), http.StatusInternalServerError)
+		if errors.Is(err, workflowstore.ErrOpenClawRoomMessageLimit) {
+			writeJSONError(w, "room message limit reached", http.StatusConflict)
+			return
+		}
+		writeJSONError(w, "Failed to save room message", http.StatusInternalServerError)
 		return
 	}
 
 	if senderType != "system" {
-		go h.processRoomUserMessage(room.ID, created.ID)
+		h.enqueueRoomAutomation(room.ID, created.ID)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -715,7 +778,6 @@ func (h *OpenClawHandler) handleRoomStream(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -729,7 +791,10 @@ func (h *OpenClawHandler) handleRoomStream(w http.ResponseWriter, r *http.Reques
 	clients.Store(clientID, clientChan)
 	defer func() {
 		clients.Delete(clientID)
-		close(clientChan)
+		// Publishers use sync.Map.Range and may already hold this channel after
+		// deletion. They send non-blockingly, so leaving the unreferenced channel
+		// for GC avoids a send-versus-close panic without retaining a goroutine or
+		// map entry. The request context, not channel closure, owns this receiver.
 	}()
 
 	writeSSE(w, flusher, "connected", map[string]string{"roomId": roomID})

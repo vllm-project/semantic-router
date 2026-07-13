@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -12,9 +11,6 @@ import (
 // --- Start / Stop / Delete ---
 
 func (h *OpenClawHandler) deleteContainerByName(name string) error {
-	_ = h.containerRun("rm", "-f", name)
-	_ = h.containerRun("volume", "rm", "openclaw-state-"+name)
-
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -22,17 +18,42 @@ func (h *OpenClawHandler) deleteContainerByName(name string) error {
 	if err != nil {
 		return err
 	}
-	teams, teamErr := h.loadTeams()
-	filtered := entries[:0]
-	deletedTeamID := ""
-	for _, e := range entries {
-		if e.Name != name {
-			filtered = append(filtered, e)
-			continue
-		}
-		deletedTeamID = e.TeamID
+	entryIndex := findContainerIndex(entries, name)
+	if entryIndex < 0 {
+		return errOpenClawResourceNotFound
 	}
-	if err := h.saveRegistry(filtered); err != nil {
+
+	containerInspection, err := h.inspectOpenClawOwnedResource(openClawContainerResource, name)
+	if err != nil {
+		return err
+	}
+	volumeName := "openclaw-state-" + name
+	volumeInspection, err := h.inspectOpenClawOwnedResource(openClawVolumeResource, volumeName)
+	if err != nil {
+		return err
+	}
+	if (containerInspection.exists && !containerInspection.owned) ||
+		(volumeInspection.exists && !volumeInspection.owned) {
+		return errOpenClawResourceConflict
+	}
+	if containerInspection.exists {
+		if err := h.containerRun("rm", "-f", containerInspection.reference); err != nil {
+			return err
+		}
+	}
+	// Volumes do not have an immutable Docker ID. Re-inspect the label owner as
+	// close as possible to deletion instead of acting on the stale preflight
+	// result after the container removal.
+	if volumeInspection.exists {
+		if err := h.removeOwnedVolumeIfPresent(volumeName); err != nil {
+			return err
+		}
+	}
+
+	teams, teamErr := h.loadTeams()
+	deletedTeamID := entries[entryIndex].TeamID
+	entries = append(entries[:entryIndex], entries[entryIndex+1:]...)
+	if err := h.saveRegistry(entries); err != nil {
 		return err
 	}
 
@@ -49,10 +70,32 @@ func (h *OpenClawHandler) deleteContainerByName(name string) error {
 	}
 	if teamsChanged {
 		if err := h.saveTeams(teams); err != nil {
-			log.Printf("openclaw: failed to clear leader mapping for deleted worker %s: %v", name, err)
+			log.Printf("openclaw: failed to clear leader mapping for deleted worker %s", name)
 		}
 	}
 	return nil
+}
+
+func (h *OpenClawHandler) runRegisteredContainerLifecycle(name, action string) error {
+	_, err := h.runRegisteredOwnedContainerAction(name, action)
+	return err
+}
+
+func decodeOpenClawContainerName(w http.ResponseWriter, r *http.Request) (string, bool) {
+	var req struct {
+		ContainerName string `json:"containerName"`
+	}
+	if status, err := decodeBoundedJSON(w, r, 4*1024, &req); err != nil {
+		writeJSONError(w, err.Error(), status)
+		return "", false
+	}
+	rawName := strings.TrimSpace(req.ContainerName)
+	name := sanitizeContainerName(rawName)
+	if name == "" || name != rawName {
+		writeJSONError(w, "containerName must be a canonical OpenClaw worker name", http.StatusBadRequest)
+		return "", false
+	}
+	return name, true
 }
 
 func (h *OpenClawHandler) StartHandler() http.HandlerFunc {
@@ -65,26 +108,18 @@ func (h *OpenClawHandler) StartHandler() http.HandlerFunc {
 			h.writeReadOnlyError(w)
 			return
 		}
-		var req struct {
-			ContainerName string `json:"containerName"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSONError(w, "invalid request body", http.StatusBadRequest)
+		name, ok := decodeOpenClawContainerName(w, r)
+		if !ok {
 			return
 		}
-		if req.ContainerName == "" {
-			writeJSONError(w, "containerName required", http.StatusBadRequest)
-			return
-		}
-		out, err := h.containerCombinedOutput("start", req.ContainerName)
-		if err != nil {
-			writeJSONError(w, fmt.Sprintf("Failed to start: %s (%v)", strings.TrimSpace(string(out)), err), http.StatusInternalServerError)
+		if err := h.runRegisteredContainerLifecycle(name, "start"); err != nil {
+			writeJSONError(w, openClawLifecyclePublicError(err), openClawLifecycleHTTPStatus(err))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
-			"message": fmt.Sprintf("Container %s started", req.ContainerName),
+			"message": "OpenClaw managed container started",
 		}); err != nil {
 			log.Printf("openclaw: start encode error: %v", err)
 		}
@@ -101,26 +136,18 @@ func (h *OpenClawHandler) StopHandler() http.HandlerFunc {
 			h.writeReadOnlyError(w)
 			return
 		}
-		var req struct {
-			ContainerName string `json:"containerName"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSONError(w, "invalid request body", http.StatusBadRequest)
+		name, ok := decodeOpenClawContainerName(w, r)
+		if !ok {
 			return
 		}
-		if req.ContainerName == "" {
-			writeJSONError(w, "containerName required", http.StatusBadRequest)
-			return
-		}
-		out, err := h.containerCombinedOutput("stop", req.ContainerName)
-		if err != nil {
-			writeJSONError(w, fmt.Sprintf("Failed to stop: %s (%v)", strings.TrimSpace(string(out)), err), http.StatusInternalServerError)
+		if err := h.runRegisteredContainerLifecycle(name, "stop"); err != nil {
+			writeJSONError(w, openClawLifecyclePublicError(err), openClawLifecycleHTTPStatus(err))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
-			"message": fmt.Sprintf("Container %s stopped", req.ContainerName),
+			"message": "OpenClaw managed container stopped",
 		}); err != nil {
 			log.Printf("openclaw: stop encode error: %v", err)
 		}
@@ -137,20 +164,22 @@ func (h *OpenClawHandler) DeleteHandler() http.HandlerFunc {
 			h.writeReadOnlyError(w)
 			return
 		}
-		name := strings.TrimPrefix(r.URL.Path, "/api/openclaw/containers/")
-		if name == "" {
-			writeJSONError(w, "container name required in path", http.StatusBadRequest)
+		rawName := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/api/openclaw/containers/"))
+		name := sanitizeContainerName(rawName)
+		if name == "" || name != rawName {
+			writeJSONError(w, "container name must be canonical", http.StatusBadRequest)
 			return
 		}
 
 		if err := h.deleteContainerByName(name); err != nil {
-			log.Printf("openclaw: failed to save registry on delete: %v", err)
+			writeJSONError(w, openClawLifecyclePublicError(err), openClawLifecycleHTTPStatus(err))
+			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
-			"message": fmt.Sprintf("Container %s removed", name),
+			"message": "OpenClaw managed container removed",
 		}); err != nil {
 			log.Printf("openclaw: delete encode error: %v", err)
 		}
@@ -178,6 +207,13 @@ func (h *OpenClawHandler) PortForContainer(name string) (int, bool) {
 // TargetBaseForContainer resolves the HTTP base URL for a registered container.
 // Uses the container name as hostname (DNS resolution via bridge network).
 func (h *OpenClawHandler) TargetBaseForContainer(name string) (string, bool) {
+	if dashboardUsesProductionSecurityProfile() {
+		resolved, err := h.resolveRegisteredOwnedContainer(name)
+		if err != nil {
+			return "", false
+		}
+		return h.gatewayBaseURL(resolved.entry.Name, resolved.entry.Port), true
+	}
 	port, ok := h.PortForContainer(name)
 	if !ok {
 		return "", false

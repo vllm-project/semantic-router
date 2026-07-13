@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -25,7 +26,8 @@ type mcpServersResponse struct {
 		Config struct {
 			ID         string `json:"id"`
 			Connection struct {
-				URL string `json:"url"`
+				URL     string          `json:"url"`
+				Headers json.RawMessage `json:"headers"`
 			} `json:"connection"`
 		} `json:"config"`
 	} `json:"servers"`
@@ -71,12 +73,119 @@ func TestLoopbackOnly(t *testing.T) {
 	})
 }
 
+func TestInternalOpenClawMCPOnlyRequiresLoopbackAndCapability(t *testing.T) {
+	t.Parallel()
+
+	const capability = "test-capability-with-sufficient-entropy"
+	handler := internalOpenClawMCPOnly(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}), capability)
+
+	tests := []struct {
+		name       string
+		remoteAddr string
+		headers    []string
+		wantStatus int
+	}{
+		{name: "missing capability", remoteAddr: "127.0.0.1:3000", wantStatus: http.StatusForbidden},
+		{name: "wrong capability", remoteAddr: "127.0.0.1:3000", headers: []string{"wrong"}, wantStatus: http.StatusForbidden},
+		{name: "duplicate capability", remoteAddr: "127.0.0.1:3000", headers: []string{capability, capability}, wantStatus: http.StatusForbidden},
+		{name: "non-loopback", remoteAddr: "203.0.113.10:3000", headers: []string{capability}, wantStatus: http.StatusForbidden},
+		{name: "valid internal client", remoteAddr: "[::1]:3000", headers: []string{capability}, wantStatus: http.StatusNoContent},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			req := httptestRequest(http.MethodPost, internalOpenClawMCPPath, test.remoteAddr)
+			for _, value := range test.headers {
+				req.Header.Add(internalOpenClawMCPCapabilityHeader, value)
+			}
+			recorder := httptestRecorder()
+			handler.ServeHTTP(recorder, req)
+			if recorder.Code != test.wantStatus {
+				t.Fatalf("status = %d, want %d", recorder.Code, test.wantStatus)
+			}
+		})
+	}
+}
+
+func TestGenerateInternalOpenClawMCPCapabilityFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	if _, err := generateInternalOpenClawMCPCapability(nil); err == nil {
+		t.Fatal("expected nil random source to fail")
+	}
+	if _, err := generateInternalOpenClawMCPCapability(io.LimitReader(bytes.NewReader(make([]byte, 8)), 8)); err == nil {
+		t.Fatal("expected short random source to fail")
+	}
+
+	first, err := generateInternalOpenClawMCPCapability(bytes.NewReader(bytes.Repeat([]byte{0x11}, internalOpenClawMCPCapabilityBytes)))
+	if err != nil {
+		t.Fatalf("generate capability: %v", err)
+	}
+	second, err := generateInternalOpenClawMCPCapability(bytes.NewReader(bytes.Repeat([]byte{0x22}, internalOpenClawMCPCapabilityBytes)))
+	if err != nil {
+		t.Fatalf("generate second capability: %v", err)
+	}
+	if first == "" || first == second || len(first) < 40 {
+		t.Fatalf("unexpected generated capabilities: first_len=%d equal=%t", len(first), first == second)
+	}
+}
+
+func TestSetupMCPOnlyAllowsStdioInExplicitDevelopmentProfile(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		profile   string
+		wantStdio bool
+	}{
+		{name: "production", profile: config.DashboardSecurityProfileProduction, wantStdio: false},
+		{name: "unset fails closed", profile: "", wantStdio: false},
+		{name: "development", profile: config.DashboardSecurityProfileDevelopment, wantStdio: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			manager, err := SetupMCP(http.NewServeMux(), &config.Config{
+				MCPEnabled:      true,
+				SecurityProfile: test.profile,
+			}, nil, nil)
+			if err != nil {
+				t.Fatalf("SetupMCP() error = %v", err)
+			}
+			if manager == nil || manager.AllowsStdio() != test.wantStdio {
+				t.Fatalf("AllowsStdio() = %t, want %t", manager != nil && manager.AllowsStdio(), test.wantStdio)
+			}
+			manager.DisconnectAll()
+		})
+	}
+}
+
 func TestBuiltInOpenClawMCPConnectsThroughInternalLoopbackRoute(t *testing.T) {
 	t.Parallel()
 
 	baseURL := startDashboardServer(t)
 	token := loginAsBootstrapAdmin(t, baseURL)
 	client := &http.Client{Timeout: 10 * time.Second}
+
+	t.Run("registers secret-free built-in endpoint", func(t *testing.T) {
+		assertBuiltinMCPServerRegistered(t, client, baseURL, token)
+	})
+	t.Run("rejects internal requests without capability", func(t *testing.T) {
+		assertInternalMCPRequiresCapability(t, client, baseURL)
+	})
+	t.Run("connects built-in endpoint", func(t *testing.T) {
+		connectBuiltinMCPServer(t, client, baseURL, token)
+	})
+	t.Run("publishes built-in tools", func(t *testing.T) {
+		assertBuiltinMCPToolsPublished(t, client, baseURL, token)
+	})
+}
+
+func assertBuiltinMCPServerRegistered(t *testing.T, client *http.Client, baseURL, token string) {
+	t.Helper()
 
 	serversReq, err := http.NewRequest(http.MethodGet, baseURL+"/api/mcp/servers", nil)
 	if err != nil {
@@ -111,6 +220,26 @@ func TestBuiltInOpenClawMCPConnectsThroughInternalLoopbackRoute(t *testing.T) {
 	if serversPayload.Servers[0].Config.Connection.URL != expectedURL {
 		t.Fatalf("server url = %q, want %q", serversPayload.Servers[0].Config.Connection.URL, expectedURL)
 	}
+	if len(serversPayload.Servers[0].Config.Connection.Headers) != 0 {
+		t.Fatalf("internal capability header leaked in server response: %s", serversPayload.Servers[0].Config.Connection.Headers)
+	}
+}
+
+func assertInternalMCPRequiresCapability(t *testing.T, client *http.Client, baseURL string) {
+	t.Helper()
+
+	unauthorizedInternalResp, err := client.Get(baseURL + internalOpenClawMCPPath)
+	if err != nil {
+		t.Fatalf("call internal endpoint without capability: %v", err)
+	}
+	defer unauthorizedInternalResp.Body.Close()
+	if unauthorizedInternalResp.StatusCode != http.StatusForbidden {
+		t.Fatalf("internal endpoint without capability status = %d, want 403", unauthorizedInternalResp.StatusCode)
+	}
+}
+
+func connectBuiltinMCPServer(t *testing.T, client *http.Client, baseURL, token string) {
+	t.Helper()
 
 	connectReq, err := http.NewRequest(
 		http.MethodPost,
@@ -131,6 +260,10 @@ func TestBuiltInOpenClawMCPConnectsThroughInternalLoopbackRoute(t *testing.T) {
 	if connectResp.StatusCode != http.StatusOK {
 		t.Fatalf("connect status = %d, want %d", connectResp.StatusCode, http.StatusOK)
 	}
+}
+
+func assertBuiltinMCPToolsPublished(t *testing.T, client *http.Client, baseURL, token string) {
+	t.Helper()
 
 	toolsReq, err := http.NewRequest(http.MethodGet, baseURL+"/api/mcp/tools", nil)
 	if err != nil {
@@ -241,7 +374,13 @@ func loginAsBootstrapAdmin(t *testing.T, baseURL string) string {
 	t.Helper()
 
 	body := bytes.NewBufferString(`{"email":"admin@example.com","password":"secret-password"}`)
-	resp, err := http.Post(baseURL+"/api/auth/login", "application/json", body)
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/auth/login", body)
+	if err != nil {
+		t.Fatalf("create login request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-VSR-Auth-Mode", "bearer")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("login request failed: %v", err)
 	}

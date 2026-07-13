@@ -3,11 +3,16 @@ package router
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
+	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
 )
 
 func TestRedactReplayResponseBodyRemovesSensitiveFields(t *testing.T) {
@@ -180,6 +185,154 @@ func TestRedactRouterReplayResponseSkipsWriteCapableUsers(t *testing.T) {
 	if string(actualBody) != string(originalBody) {
 		t.Fatalf("response body changed for write-capable user: got %s want %s", actualBody, originalBody)
 	}
+}
+
+func TestRouterReplayProxyRedactsResponseWithinLimit(t *testing.T) {
+	t.Parallel()
+
+	const requestCanary = "bounded replay request canary"
+	const responseCanary = "bounded replay response canary"
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(
+			w,
+			`{"id":"replay-1","request_body":"`+requestCanary+`","response_body":"`+responseCanary+`"}`,
+		)
+	}))
+	defer upstream.Close()
+
+	handler, err := proxy.NewReverseProxy(upstream.URL, "", false)
+	if err != nil {
+		t.Fatalf("NewReverseProxy() error = %v", err)
+	}
+	attachRouterReplayResponseRedaction(handler)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(
+		recorder,
+		httptest.NewRequest(http.MethodGet, "http://dashboard.local/v1/router_replay/replay-1", nil),
+	)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%q", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), requestCanary) ||
+		strings.Contains(recorder.Body.String(), responseCanary) {
+		t.Fatalf("redacted response leaked a canary: %q", recorder.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode redacted response: %v", err)
+	}
+	if payload["request_body"] != "" || payload["response_body"] != "" {
+		t.Fatalf("redacted response = %#v", payload)
+	}
+	if got, want := recorder.Header().Get("Content-Length"), strconv.Itoa(recorder.Body.Len()); got != want {
+		t.Fatalf("Content-Length = %q, want %q", got, want)
+	}
+}
+
+func TestRouterReplayProxyRejectsOversizedChunkedResponse(t *testing.T) {
+	t.Parallel()
+
+	const canary = "oversized-router-replay-canary"
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		payloadSize := int(routerReplayRedactionResponseByteLimit) + 1
+		payload := strings.Repeat("x", payloadSize-len(canary)) + canary
+		_, _ = io.CopyN(w, strings.NewReader(payload), int64(payloadSize))
+	}))
+	defer upstream.Close()
+
+	handler, err := proxy.NewReverseProxy(upstream.URL, "", false)
+	if err != nil {
+		t.Fatalf("NewReverseProxy() error = %v", err)
+	}
+	attachRouterReplayResponseRedaction(handler)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(
+		recorder,
+		httptest.NewRequest(http.MethodGet, "http://dashboard.local/v1/router_replay", nil),
+	)
+
+	if recorder.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d; body=%q", recorder.Code, http.StatusBadGateway, recorder.Body.String())
+	}
+	if got := recorder.Body.String(); got != "Bad Gateway\n" || strings.Contains(got, canary) {
+		t.Fatalf("oversized upstream response was not replaced by a generic error: %q", got)
+	}
+}
+
+func TestRouterReplayProxyFailsClosedOnMalformedJSON(t *testing.T) {
+	t.Parallel()
+
+	const canary = "malformed-unredacted-canary"
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"request_body":"`+canary+`"`)
+	}))
+	defer upstream.Close()
+
+	handler, err := proxy.NewReverseProxy(upstream.URL, "", false)
+	if err != nil {
+		t.Fatalf("NewReverseProxy() error = %v", err)
+	}
+	attachRouterReplayResponseRedaction(handler)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(
+		recorder,
+		httptest.NewRequest(http.MethodGet, "http://dashboard.local/v1/router_replay/replay-1", nil),
+	)
+
+	if recorder.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d; body=%q", recorder.Code, http.StatusBadGateway, recorder.Body.String())
+	}
+	if got := recorder.Body.String(); got != "Bad Gateway\n" || strings.Contains(got, canary) {
+		t.Fatalf("malformed upstream response failed open: %q", got)
+	}
+}
+
+func TestReadBoundedRouterReplayResponseBodyAlwaysCloses(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		body    string
+		wantErr error
+	}{
+		{name: "within limit", body: `{"data":[]}`},
+		{
+			name:    "over limit",
+			body:    strings.Repeat("x", int(routerReplayRedactionResponseByteLimit)+1),
+			wantErr: errRouterReplayResponseTooLarge,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			body := &closeTrackingReplayBody{Reader: strings.NewReader(test.body)}
+			_, err := readBoundedRouterReplayResponseBody(body)
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("error = %v, want %v", err, test.wantErr)
+			}
+			if !body.closed {
+				t.Fatal("upstream response body was not closed")
+			}
+		})
+	}
+}
+
+type closeTrackingReplayBody struct {
+	io.Reader
+	closed bool
+}
+
+func (b *closeTrackingReplayBody) Close() error {
+	b.closed = true
+	return nil
 }
 
 func TestToolTraceResultStatus(t *testing.T) {

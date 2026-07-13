@@ -1,7 +1,10 @@
 package workflowstore
 
 import (
+	"errors"
 	"path/filepath"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 )
@@ -129,5 +132,81 @@ func TestOpenClawMessageAppendIncremental(t *testing.T) {
 	}
 	if lines[0] != m1 || lines[1] != m2 {
 		t.Fatalf("order/content: %v", lines)
+	}
+}
+
+func TestOpenClawMessageBoundedRecentAndUpdate(t *testing.T) {
+	t.Parallel()
+	s, err := Open(filepath.Join(t.TempDir(), "wf.sqlite"), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	for index := 1; index <= 3; index++ {
+		id := "m" + strconv.Itoa(index)
+		payload := `{"id":"` + id + `"}`
+		if appendErr := s.AppendOpenClawRoomMessageBounded("room-a", id, payload, 3); appendErr != nil {
+			t.Fatalf("append %s: %v", id, appendErr)
+		}
+	}
+	if appendErr := s.AppendOpenClawRoomMessageBounded("room-a", "m4", `{"id":"m4"}`, 3); !errors.Is(appendErr, ErrOpenClawRoomMessageLimit) {
+		t.Fatalf("fourth append error = %v, want message limit", appendErr)
+	}
+
+	recent, err := s.ListRecentOpenClawRoomMessages("room-a", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) != 2 || recent[0] != `{"id":"m2"}` || recent[1] != `{"id":"m3"}` {
+		t.Fatalf("unexpected recent chronological window: %v", recent)
+	}
+
+	if updateErr := s.UpdateOpenClawRoomMessageJSON("room-a", "m2", `{"id":"m2","updated":true}`); updateErr != nil {
+		t.Fatal(updateErr)
+	}
+	payload, found, err := s.GetOpenClawRoomMessageJSON("room-a", "m2")
+	if err != nil || !found || payload != `{"id":"m2","updated":true}` {
+		t.Fatalf("updated payload = %q, %v, %v", payload, found, err)
+	}
+}
+
+func TestOpenClawMessageBoundedConcurrentWritersDoNotOvershoot(t *testing.T) {
+	t.Parallel()
+	s, err := Open(filepath.Join(t.TempDir(), "wf.sqlite"), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	const maximum = 10
+	var wg sync.WaitGroup
+	errorsSeen := make(chan error, 64)
+	for index := 0; index < 64; index++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			id := "m" + strconv.Itoa(index)
+			errorsSeen <- s.AppendOpenClawRoomMessageBounded(
+				"room-a",
+				id,
+				`{"id":"`+id+`"}`,
+				maximum,
+			)
+		}(index)
+	}
+	wg.Wait()
+	close(errorsSeen)
+	for appendErr := range errorsSeen {
+		if appendErr != nil && !errors.Is(appendErr, ErrOpenClawRoomMessageLimit) {
+			t.Fatalf("unexpected append error: %v", appendErr)
+		}
+	}
+	messages, err := s.ListOpenClawRoomMessages("room-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != maximum {
+		t.Fatalf("stored messages = %d, want %d", len(messages), maximum)
 	}
 }

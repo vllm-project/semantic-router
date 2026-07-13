@@ -135,7 +135,7 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 		// Validate and sanitize API key to prevent header injection
 		sanitizedAPIKey, validateErr := validateHeaderValue(apiConfig.APIKey)
 		if validateErr != nil {
-			logging.Errorf("Failed to sanitize API key: %v", validateErr)
+			logging.Errorf("Failed to sanitize API key: %s", safeErrorForLog(validateErr))
 			return "", fmt.Errorf("invalid API key format")
 		}
 
@@ -146,14 +146,14 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 	for k, v := range apiConfig.Headers {
 		// Validate header name
 		if validateErr := validateHeaderName(k); validateErr != nil {
-			logging.Warnf("Skipping invalid header name: %s (error: %v)", k, validateErr)
+			logging.Warnf("Skipping invalid header name (name_chars=%d, error=%s)", len(k), safeErrorForLog(validateErr))
 			continue
 		}
 
 		// Validate and sanitize header value
 		sanitizedValue, validateErr := validateHeaderValue(v)
 		if validateErr != nil {
-			logging.Warnf("Skipping invalid header value for %s: %v", k, validateErr)
+			logging.Warnf("Skipping invalid header value (header_name_chars=%d, error=%s)", len(k), safeErrorForLog(validateErr))
 			continue
 		}
 

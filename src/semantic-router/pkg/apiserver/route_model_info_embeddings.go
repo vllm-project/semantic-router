@@ -23,27 +23,12 @@ func (s *ClassificationAPIServer) getEmbeddingModelsInfo(runtimeState *startupst
 		return models
 	}
 
-	for _, model := range embeddingInfo.Models {
-		modelPath := normalizeEmbeddingModelPath(model.ModelPath, model.ModelName)
-		if modelPath == "" {
-			modelPath = strings.TrimSpace(model.ModelPath)
+	capabilities := nativeEmbeddingBackendCapabilities()
+	for _, nativeModel := range embeddingInfo.Models {
+		model, ok := loadedEmbeddingModelInfo(nativeModel, capabilities)
+		if ok {
+			models = append(models, model)
 		}
-		if modelPath == "" {
-			modelPath = strings.TrimSpace(model.ModelName)
-		}
-
-		models = append(models, ModelInfo{
-			Name:      fmt.Sprintf("%s_embedding_model", model.ModelName),
-			Type:      "embedding",
-			Loaded:    model.IsLoaded,
-			ModelPath: modelPath,
-			Metadata: map[string]string{
-				"model_type":           model.ModelName,
-				"max_sequence_length":  fmt.Sprintf("%d", model.MaxSequenceLength),
-				"default_dimension":    fmt.Sprintf("%d", model.DefaultDimension),
-				"matryoshka_supported": "true",
-			},
-		})
 	}
 
 	for i := range models {
@@ -51,6 +36,51 @@ func (s *ClassificationAPIServer) getEmbeddingModelsInfo(runtimeState *startupst
 	}
 
 	return models
+}
+
+// loadedEmbeddingModelInfo normalizes the backend-specific native inventory
+// into the API's loaded-model contract. Some native backends return supported
+// but unloaded placeholder rows, while others return an error or an empty list
+// before initialization. Excluding placeholders here keeps readiness and model
+// counts backend-independent without hiding any model that is actually loaded.
+func loadedEmbeddingModelInfo(
+	model candle_binding.ModelInfo,
+	capabilities embeddingBackendCapabilities,
+) (ModelInfo, bool) {
+	if !model.IsLoaded {
+		return ModelInfo{}, false
+	}
+
+	modelName := strings.ToLower(strings.TrimSpace(model.ModelName))
+	modelPath := normalizeEmbeddingModelPath(model.ModelPath, modelName)
+	if modelPath == "" {
+		modelPath = strings.TrimSpace(model.ModelPath)
+	}
+	if modelPath == "" {
+		modelPath = modelName
+	}
+
+	metadata := map[string]string{
+		"backend":                capabilities.name,
+		"model_type":             modelName,
+		"max_sequence_length":    fmt.Sprintf("%d", model.MaxSequenceLength),
+		"default_dimension":      fmt.Sprintf("%d", model.DefaultDimension),
+		"matryoshka_supported":   "false",
+		"target_layer_supported": "false",
+	}
+	if capability, ok := capabilities.models[modelName]; ok {
+		metadata["supported_dimensions"] = formatDimensionList(capability.dimensions)
+		metadata["matryoshka_supported"] = fmt.Sprintf("%t", len(capability.dimensions) > 1)
+		metadata["target_layer_supported"] = fmt.Sprintf("%t", capability.supportsTargetLayer)
+	}
+
+	return ModelInfo{
+		Name:      fmt.Sprintf("%s_embedding_model", modelName),
+		Type:      "embedding",
+		Loaded:    true,
+		ModelPath: modelPath,
+		Metadata:  metadata,
+	}, true
 }
 
 func normalizeEmbeddingModelPath(runtimePath, modelName string) string {

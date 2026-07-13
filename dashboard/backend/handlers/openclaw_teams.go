@@ -45,8 +45,8 @@ func (h *OpenClawHandler) TeamsHandler() http.HandlerFunc {
 			}
 
 			var req teamPayload
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				writeJSONError(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
+			if status, err := decodeBoundedJSON(w, r, smallJSONRequestBodyLimit, &req); err != nil {
+				writeJSONError(w, "invalid request body", status)
 				return
 			}
 			name := strings.TrimSpace(req.Name)
@@ -192,8 +192,8 @@ func (h *OpenClawHandler) TeamByIDHandler() http.HandlerFunc {
 			}
 
 			var req teamPayload
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				writeJSONError(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
+			if status, err := decodeBoundedJSON(w, r, smallJSONRequestBodyLimit, &req); err != nil {
+				writeJSONError(w, "invalid request body", status)
 				return
 			}
 			name := strings.TrimSpace(req.Name)

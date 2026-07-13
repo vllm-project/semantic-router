@@ -7,6 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -28,6 +29,7 @@ type classifierMappings struct {
 
 type routerComponents struct {
 	cfg                  *config.RouterConfig
+	embeddingRuntimePlan embedding.RuntimePlan
 	categoryDescriptions []string
 	classifier           *classification.Classifier
 	classificationSvc    *services.ClassificationService
@@ -156,6 +158,11 @@ func logLoadedRouterConfig(configPath string, cfg *config.RouterConfig) {
 }
 
 func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) {
+	embeddingPlan, err := resolveRouterEmbeddingRuntimePlan(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("invalid embedding runtime plan: %w", err)
+	}
+
 	mappings, err := loadClassifierMappings(cfg)
 	if err != nil {
 		return nil, err
@@ -172,7 +179,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		return nil, err
 	}
 
-	toolsDatabase, err := createToolsDatabase(cfg)
+	toolsDatabase, err := createToolsDatabase(cfg, embeddingPlan)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +194,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	if replayRecorder != nil {
 		replayReaderForLookup = replayRecorder.Reader()
 	}
-	modelSelector, lookupTable, lookupTableCancel := createModelSelectorRegistry(cfg, replayReaderForLookup)
+	modelSelector, lookupTable, lookupTableCancel := createModelSelectorRegistry(cfg, embeddingPlan, replayReaderForLookup)
 	memoryStore, memoryExtractor := createMemoryRuntime(cfg)
 	credentialResolver := buildCredentialResolver(cfg)
 	rateLimiter := buildRateLimitResolver(cfg)
@@ -205,6 +212,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 
 	return &routerComponents{
 		cfg:                  cfg,
+		embeddingRuntimePlan: embeddingPlan,
 		categoryDescriptions: categoryDescriptions,
 		classifier:           classifier,
 		classificationSvc:    classificationSvc,
@@ -227,6 +235,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 func (components *routerComponents) buildRouter() *OpenAIRouter {
 	return &OpenAIRouter{
 		Config:                components.cfg,
+		embeddingRuntimePlan:  components.embeddingRuntimePlan,
 		CategoryDescriptions:  components.categoryDescriptions,
 		Classifier:            components.classifier,
 		ClassificationService: components.classificationSvc,

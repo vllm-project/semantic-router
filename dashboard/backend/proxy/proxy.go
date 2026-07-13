@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -18,12 +17,13 @@ import (
 // NewReverseProxy creates a reverse proxy to targetBase and strips the given prefix from the incoming path
 // It also handles CORS, iframe embedding, and other security headers
 func NewReverseProxy(targetBase, stripPrefix string, forwardAuthorization bool) (*httputil.ReverseProxy, error) {
-	targetURL, err := url.Parse(targetBase)
+	targetURL, err := parseProxyTarget(targetBase)
 	if err != nil {
-		return nil, fmt.Errorf("invalid target URL %q: %w", targetBase, err)
+		return nil, err
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+	proxy.Transport = dashboardProxyTransport
 	proxy.FlushInterval = -1 // -1 means flush immediately after each write
 	director := reverseProxyDirector{
 		original:             proxy.Director,
@@ -52,19 +52,22 @@ type reverseProxyDirector struct {
 func (d reverseProxyDirector) direct(r *http.Request) {
 	incomingOrigin := r.Header.Get("Origin")
 	originAllowed := incomingOrigin != "" && browsersecurity.ValidOrigin(r)
+	// Strip the dashboard mount before SingleHostReverseProxy joins the
+	// upstream base path. Doing this afterwards drops neither prefix when the
+	// target itself has a path and makes HTTP disagree with WebSocket routing.
+	r.URL.Path = stripProxyPath(r.URL.Path, d.stripPrefix)
+	r.URL.RawPath = ""
 	d.original(r)
 	stripDashboardCredentials(r, d.forwardAuthorization)
 
-	path := stripProxyPath(r.URL.Path, d.stripPrefix)
-	r.URL.Path = path
 	setForwardedOrigin(r.Header, incomingOrigin, originAllowed)
 	setTargetOrigin(r, d.target, d.overrideOrigin)
 	if pnaHeader := r.Header.Get("Access-Control-Request-Private-Network"); pnaHeader != "" {
-		log.Printf("PNA preflight request detected: %s", pnaHeader)
+		logProxyEvent("PNA preflight request detected", r, d.target, r.URL.EscapedPath())
 	}
 	setProxyForwardingHeaders(r)
 	r.Host = d.target.Host
-	log.Printf("Proxying: %s %s -> %s://%s%s", r.Method, d.stripPrefix, d.target.Scheme, d.target.Host, path)
+	logProxyEvent("Proxying request", r, d.target, r.URL.EscapedPath())
 }
 
 func stripProxyPath(path, stripPrefix string) string {
@@ -73,6 +76,19 @@ func stripProxyPath(path, stripPrefix string) string {
 		path = "/" + path
 	}
 	return path
+}
+
+func joinProxyTargetPath(targetPath, requestPath string) string {
+	targetSlash := strings.HasSuffix(targetPath, "/")
+	requestSlash := strings.HasPrefix(requestPath, "/")
+	switch {
+	case targetSlash && requestSlash:
+		return targetPath + requestPath[1:]
+	case !targetSlash && !requestSlash:
+		return targetPath + "/" + requestPath
+	default:
+		return targetPath + requestPath
+	}
 }
 
 func setForwardedOrigin(header http.Header, origin string, allowed bool) {
@@ -134,8 +150,8 @@ func proxyClientIP(remoteAddr string) string {
 	return ip
 }
 
-func handleReverseProxyError(w http.ResponseWriter, r *http.Request, err error) {
-	log.Printf("Proxy error for %s: %v", r.URL.Path, err)
+func handleReverseProxyError(w http.ResponseWriter, r *http.Request, _ error) {
+	logProxyEvent("Proxy upstream request failed", r, r.URL, r.URL.EscapedPath())
 	http.Error(w, "Bad Gateway", http.StatusBadGateway)
 }
 
@@ -244,12 +260,10 @@ func NewJaegerProxy(targetBase, stripPrefix string) (*httputil.ReverseProxy, err
 			return nil
 		}
 
-		// Read the response body
-		body, err := io.ReadAll(resp.Body)
+		body, err := readBoundedProxyResponseBody(resp.Body, jaegerHTMLResponseByteLimit)
 		if err != nil {
 			return err
 		}
-		resp.Body.Close()
 
 		// Inject light theme script to ensure Jaeger displays consistently in light mode
 		// This avoids theme conflicts with the dashboard
@@ -281,26 +295,38 @@ func NewJaegerProxy(targetBase, stripPrefix string) (*httputil.ReverseProxy, err
 })();
 </script>`
 
-		// Try to inject before </head>, otherwise before </body>
-		modifiedBody := string(body)
-		if strings.Contains(modifiedBody, "</head>") {
-			modifiedBody = strings.Replace(modifiedBody, "</head>", themeScript+"</head>", 1)
-		} else if strings.Contains(modifiedBody, "<body") {
-			// Find the end of the <body> tag and inject after it
-			bodyTagEnd := strings.Index(modifiedBody, ">")
-			if bodyTagEnd != -1 {
-				modifiedBody = modifiedBody[:bodyTagEnd+1] + themeScript + modifiedBody[bodyTagEnd+1:]
-			}
-		}
+		modifiedBody := injectJaegerThemeScript(body, themeScript)
 
 		// Create new response body
-		newBody := []byte(modifiedBody)
-		resp.Body = io.NopCloser(bytes.NewReader(newBody))
-		resp.ContentLength = int64(len(newBody))
-		resp.Header.Set("Content-Length", fmt.Sprintf("%d", len(newBody)))
+		resp.Body = io.NopCloser(bytes.NewReader(modifiedBody))
+		resp.ContentLength = int64(len(modifiedBody))
+		resp.Header.Set("Content-Length", fmt.Sprintf("%d", len(modifiedBody)))
 
 		return nil
 	}
 
 	return proxy, nil
+}
+
+func injectJaegerThemeScript(body []byte, themeScript string) []byte {
+	if headEnd := bytes.Index(body, []byte("</head>")); headEnd >= 0 {
+		return insertProxyResponseBytes(body, headEnd, themeScript)
+	}
+	bodyStart := bytes.Index(body, []byte("<body"))
+	if bodyStart < 0 {
+		return body
+	}
+	bodyTagEnd := bytes.IndexByte(body[bodyStart:], '>')
+	if bodyTagEnd < 0 {
+		return body
+	}
+	return insertProxyResponseBytes(body, bodyStart+bodyTagEnd+1, themeScript)
+}
+
+func insertProxyResponseBytes(body []byte, offset int, insertion string) []byte {
+	result := make([]byte, 0, len(body)+len(insertion))
+	result = append(result, body[:offset]...)
+	result = append(result, insertion...)
+	result = append(result, body[offset:]...)
+	return result
 }

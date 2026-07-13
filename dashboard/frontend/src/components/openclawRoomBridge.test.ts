@@ -1,19 +1,40 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildRoomBridgeEnvelope,
   buildRoomSurfaceWSMessage,
   CLAWOS_ROOM_BRIDGE_SOURCE,
   isRoomBridgeEnvelope,
+  listenForSurfaceEvents,
   postRoomEventToFrame,
 } from './openclawRoomBridge'
 
 describe('openclawRoomBridge', () => {
+  let messageHandler: ((event: MessageEvent) => void) | undefined
+
+  beforeEach(() => {
+    messageHandler = undefined
+    vi.stubGlobal('window', {
+      location: { origin: 'https://dashboard.example' },
+      parent: { postMessage: vi.fn() },
+      addEventListener: (type: string, handler: (event: MessageEvent) => void) => {
+        if (type === 'message') messageHandler = handler
+      },
+      removeEventListener: vi.fn(),
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('recognizes valid bridge envelopes', () => {
     const envelope = buildRoomBridgeEnvelope('room_event', 'room-alpha', {
       event: { type: 'new_message', message: { id: 'm1' } as never },
     })
     expect(isRoomBridgeEnvelope(envelope)).toBe(true)
-    expect(isRoomBridgeEnvelope({ source: 'other', type: 'room_event', roomId: 'room-alpha' })).toBe(false)
+    expect(
+      isRoomBridgeEnvelope({ source: 'other', type: 'room_event', roomId: 'room-alpha' }),
+    ).toBe(false)
   })
 
   it('builds parent to iframe room_event payloads', () => {
@@ -62,15 +83,48 @@ describe('openclawRoomBridge', () => {
         type: 'room_event',
         roomId: 'room-alpha',
       }),
-      '*'
+      window.location.origin,
     )
   })
 
+  it('accepts surface events only from the exact same-origin iframe window', () => {
+    const trustedSource = {} as Window
+    const untrustedSource = {} as Window
+    const listener = vi.fn()
+    const unsubscribe = listenForSurfaceEvents('room-alpha', listener, () => trustedSource)
+
+    const envelope = buildRoomBridgeEnvelope('surface_event', 'room-alpha', {
+      payload: { kind: 'status' },
+    })
+    messageHandler?.({
+      data: envelope,
+      origin: 'https://attacker.example',
+      source: trustedSource,
+    } as MessageEvent)
+    messageHandler?.({
+      data: envelope,
+      origin: window.location.origin,
+      source: untrustedSource,
+    } as MessageEvent)
+    expect(listener).not.toHaveBeenCalled()
+
+    messageHandler?.({
+      data: envelope,
+      origin: window.location.origin,
+      source: trustedSource,
+    } as MessageEvent)
+    expect(listener).toHaveBeenCalledOnce()
+    expect(listener).toHaveBeenCalledWith('room-alpha', { kind: 'status' })
+    unsubscribe()
+  })
+
   it('builds websocket surface_event payloads with worker identity', () => {
-    expect(buildRoomSurfaceWSMessage(
-      { kind: 'tool_call', name: 'search' },
-      { senderType: 'worker', senderId: 'worker-a', senderName: 'worker-a' }
-    )).toEqual({
+    expect(
+      buildRoomSurfaceWSMessage(
+        { kind: 'tool_call', name: 'search' },
+        { senderType: 'worker', senderId: 'worker-a', senderName: 'worker-a' },
+      ),
+    ).toEqual({
       type: 'surface_event',
       payload: { kind: 'tool_call', name: 'search' },
       senderType: 'worker',

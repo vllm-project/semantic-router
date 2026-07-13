@@ -15,9 +15,11 @@
 //! through the element pointer is reported as a layout mismatch and fails the
 //! test; the full-length `slice_from_raw_parts_mut` form passes.
 
+use super::embedding::free_matryoshka_info;
 use super::memory::{free_batch_similarity_result, free_embedding_models_info};
 use super::types::{
-    BatchSimilarityResult, EmbeddingModelInfo, EmbeddingModelsInfoResult, SimilarityMatch,
+    BatchSimilarityResult, EmbeddingModelInfo, EmbeddingModelsInfoResult, MatryoshkaInfo,
+    SimilarityMatch,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
@@ -244,4 +246,22 @@ fn test_free_embedding_models_info_uses_full_slice_layout() {
     );
     assert!(result.models.is_null());
     assert_eq!(result.num_models, 0);
+}
+
+#[test]
+fn test_free_matryoshka_info_is_idempotent() {
+    let mut info = MatryoshkaInfo {
+        dimensions: CString::new("768,512,256,128,64").unwrap().into_raw(),
+        layers: CString::new("3,6,11,22").unwrap().into_raw(),
+        supports_2d: true,
+    };
+
+    free_matryoshka_info(&mut info);
+    assert!(info.dimensions.is_null());
+    assert!(info.layers.is_null());
+
+    // A public FFI destructor should tolerate defensive repeated cleanup.
+    free_matryoshka_info(&mut info);
+    assert!(info.dimensions.is_null());
+    assert!(info.layers.is_null());
 }

@@ -52,7 +52,7 @@ func (r *OpenAIRouter) performHallucinationDetection(ctx *RequestContext, respon
 	metrics.RecordHallucinationDetectionLatency(latency)
 
 	if err != nil {
-		logging.Errorf("Hallucination detection failed: %v", err)
+		logging.Errorf("Hallucination detection failed: %s", safeErrorForLog(err))
 		metrics.RecordPluginError("hallucination", "detection_error")
 		return nil // Don't block on error
 	}
@@ -98,7 +98,7 @@ func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext,
 	metrics.RecordHallucinationDetectionLatency(latency)
 
 	if err != nil {
-		logging.Errorf("Hallucination detection with NLI failed: %v", err)
+		logging.Errorf("Hallucination detection with NLI failed: %s", safeErrorForLog(err))
 		metrics.RecordPluginError("hallucination", "detection_nli_error")
 		return nil // Don't block on error
 	}
@@ -211,7 +211,7 @@ func (r *OpenAIRouter) prependHallucinationWarningToBody(responseBody []byte, ct
 	// Parse response
 	var completion map[string]interface{}
 	if err := json.Unmarshal(responseBody, &completion); err != nil {
-		logging.Errorf("Failed to parse response for hallucination body warning: %v", err)
+		logging.Errorf("Failed to parse response for hallucination body warning: %s", safeErrorForLog(err))
 		return responseBody
 	}
 
@@ -241,7 +241,7 @@ func (r *OpenAIRouter) prependHallucinationWarningToBody(responseBody []byte, ct
 	// Marshal back
 	modifiedBody, err := json.Marshal(completion)
 	if err != nil {
-		logging.Errorf("Failed to marshal response with hallucination body warning: %v", err)
+		logging.Errorf("Failed to marshal response with hallucination body warning: %s", safeErrorForLog(err))
 		return responseBody
 	}
 
@@ -350,7 +350,7 @@ func (r *OpenAIRouter) prependUnverifiedFactualWarningToBody(responseBody []byte
 	// Parse response
 	var completion map[string]interface{}
 	if err := json.Unmarshal(responseBody, &completion); err != nil {
-		logging.Errorf("Failed to parse response for unverified factual body warning: %v", err)
+		logging.Errorf("Failed to parse response for unverified factual body warning: %s", safeErrorForLog(err))
 		return responseBody
 	}
 
@@ -380,7 +380,7 @@ func (r *OpenAIRouter) prependUnverifiedFactualWarningToBody(responseBody []byte
 	// Marshal back
 	modifiedBody, err := json.Marshal(completion)
 	if err != nil {
-		logging.Errorf("Failed to marshal response with unverified factual body warning: %v", err)
+		logging.Errorf("Failed to marshal response with unverified factual body warning: %s", safeErrorForLog(err))
 		return responseBody
 	}
 

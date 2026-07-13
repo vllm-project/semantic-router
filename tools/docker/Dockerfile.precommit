@@ -18,8 +18,8 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Node.js 20 — matches CI setup-node node-version: 20
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+# Node.js 24 LTS — matches CI setup-node node-version: 24
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
     apt-get install -y nodejs
 
 # Rust 1.90 with rustfmt + clippy — matches CI dtolnay/rust-toolchain 1.90

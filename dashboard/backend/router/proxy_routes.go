@@ -233,22 +233,36 @@ func registerSmartAPIRouter(mux *http.ServeMux, proxies dashboardProxySet) {
 			http.NotFound(w, r)
 			return
 		}
-
-		log.Printf("API request: %s %s (from: %s)", r.Method, r.URL.Path, r.Header.Get("Referer"))
+		// Deliberately omit query strings and Referer: both routinely contain
+		// bearer-like credentials or user-entered dashboard data.
+		log.Printf("API request: method=%q path=%q", r.Method, r.URL.Path)
 
 		if strings.HasPrefix(r.URL.Path, "/api/router/") && proxies.routerAPI != nil {
 			log.Printf("Routing to Router API: %s", r.URL.Path)
 			proxies.routerAPI.ServeHTTP(w, r)
 			return
 		}
+		if strings.HasPrefix(r.URL.Path, "/api/router/") {
+			http.Error(w, "Router API is not configured", http.StatusBadGateway)
+			return
+		}
 		if proxies.jaegerAPI != nil && isJaegerAPIPath(r.URL.Path) {
+			if r.Method != http.MethodGet && r.Method != http.MethodHead {
+				w.Header().Set("Allow", "GET, HEAD")
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
 			log.Printf("Routing to Jaeger API: %s", r.URL.Path)
 			proxies.jaegerAPI.ServeHTTP(w, r)
 			return
 		}
-		if proxies.grafanaStatic != nil {
+		if proxies.grafanaStatic != nil && isAllowedGrafanaReadAPIRequest(r.Method, r.URL.Path) {
 			log.Printf("Routing to Grafana API: %s", r.URL.Path)
 			proxies.grafanaStatic.ServeHTTP(w, r)
+			return
+		}
+		if proxies.grafanaStatic != nil {
+			http.NotFound(w, r)
 			return
 		}
 
@@ -256,6 +270,46 @@ func registerSmartAPIRouter(mux *http.ServeMux, proxies dashboardProxySet) {
 		w.Header().Set("Content-Type", "application/json")
 		http.Error(w, `{"error":"Service not available","message":"No API handler configured for this path"}`, http.StatusBadGateway)
 	})
+}
+
+func isAllowedGrafanaReadAPIRequest(method, path string) bool {
+	path = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(path)), "/")
+	if method == http.MethodPost {
+		return path == "/api/ds/query" || path == "/api/tsdb/query"
+	}
+	if method != http.MethodGet && method != http.MethodHead {
+		return false
+	}
+	switch path {
+	case "/api/access-control/user/permissions",
+		"/api/annotations",
+		"/api/datasources",
+		"/api/folders",
+		"/api/frontend/settings",
+		"/api/health",
+		"/api/library-elements",
+		"/api/live/ws",
+		"/api/org",
+		"/api/plugins",
+		"/api/query-history",
+		"/api/search",
+		"/api/user":
+		return true
+	}
+	for _, prefix := range []string{
+		"/api/annotations/",
+		"/api/dashboards/",
+		"/api/datasources/",
+		"/api/folders/",
+		"/api/library-elements/",
+		"/api/plugins/",
+		"/api/query-history/",
+	} {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func isJaegerAPIPath(path string) bool {

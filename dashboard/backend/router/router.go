@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
+	"github.com/vllm-project/semantic-router/dashboard/backend/mcp"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
@@ -20,6 +21,7 @@ type Server struct {
 	auth       *auth.Service
 	workflow   *workflowstore.Store
 	projection *configprojection.Store
+	mcp        *mcp.Manager
 	closeOnce  sync.Once
 	closeErr   error
 }
@@ -31,6 +33,9 @@ func (s *Server) Close() error {
 	}
 	s.closeOnce.Do(func() {
 		var authErr, workflowErr, projectionErr error
+		if s.mcp != nil {
+			s.mcp.Close()
+		}
 		if s.auth != nil {
 			authErr = s.auth.Close()
 		}
@@ -83,7 +88,14 @@ func Setup(cfg *config.Config) (*Server, error) {
 
 	registerCoreRoutes(mux, cfg)
 	registerEvaluationRoutes(mux, cfg)
-	SetupMCP(mux, cfg, wf, openClawHandler)
+	mcpManager, err := SetupMCP(mux, cfg, wf, openClawHandler)
+	if err != nil {
+		var projectionErr error
+		if cp != nil {
+			projectionErr = cp.Close()
+		}
+		return nil, errors.Join(err, wf.Close(), authSvc.Close(), projectionErr)
+	}
 	registerMLPipelineRoutes(mux, cfg, wf)
 	registerOpenClawRoutes(mux, cfg, openClawHandler)
 	registerProxyRoutes(mux, cfg)
@@ -95,5 +107,6 @@ func Setup(cfg *config.Config) (*Server, error) {
 		auth:       authSvc,
 		workflow:   wf,
 		projection: cp,
+		mcp:        mcpManager,
 	}, nil
 }

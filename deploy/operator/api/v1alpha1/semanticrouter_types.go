@@ -1185,19 +1185,19 @@ type EmbeddingEndpointConfig struct {
 	Model string `json:"model,omitempty"`
 
 	// APIKeyEnv names the environment variable containing the provider API key.
+	// +kubebuilder:validation:Pattern=`^$|^VLLM_SR_EMBEDDING_API_KEY$`
 	// +optional
 	APIKeyEnv string `json:"api_key_env,omitempty"`
-
-	// TimeoutSeconds is the request timeout for embedding calls.
+	// TimeoutSeconds is the request timeout for embedding calls, capped at one hour.
 	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=3600
 	// +optional
 	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
-
-	// MaxRetries is the maximum number of retry attempts for embedding calls.
+	// MaxRetries is the maximum number of retry attempts for embedding calls, capped at 10.
 	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=10
 	// +optional
 	MaxRetries int `json:"max_retries,omitempty"`
-
 	// Dimensions requests a provider-side output dimension when supported.
 	// +kubebuilder:validation:Minimum=1
 	// +optional

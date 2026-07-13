@@ -19,7 +19,7 @@ func (r *OpenAIRouter) handleModelsRequestHeaders(
 
 	logging.ComponentDebugEvent("extproc", "models_request_intercepted", map[string]interface{}{
 		"method": method,
-		"path":   path,
+		"path":   normalizeRequestPath(path),
 	})
 	response, err := r.handleModelsRequest(path)
 	if err != nil {
@@ -43,7 +43,7 @@ func (r *OpenAIRouter) handleResponseAPIRequestHeaders(
 			logging.ComponentDebugEvent("extproc", "response_api_request_intercepted", map[string]interface{}{
 				"request_id":  ctx.RequestID,
 				"method":      method,
-				"path":        path,
+				"path":        normalizeRequestPath(path),
 				"operation":   "get_input_items",
 				"response_id": responseID,
 			})
@@ -57,7 +57,7 @@ func (r *OpenAIRouter) handleResponseAPIRequestHeaders(
 			logging.ComponentDebugEvent("extproc", "response_api_request_intercepted", map[string]interface{}{
 				"request_id":  ctx.RequestID,
 				"method":      method,
-				"path":        path,
+				"path":        normalizeRequestPath(path),
 				"operation":   "get_response",
 				"response_id": responseID,
 			})
@@ -71,7 +71,7 @@ func (r *OpenAIRouter) handleResponseAPIRequestHeaders(
 			logging.ComponentDebugEvent("extproc", "response_api_request_intercepted", map[string]interface{}{
 				"request_id":  ctx.RequestID,
 				"method":      method,
-				"path":        path,
+				"path":        normalizeRequestPath(path),
 				"operation":   "delete_response",
 				"response_id": responseID,
 			})
@@ -84,7 +84,7 @@ func (r *OpenAIRouter) handleResponseAPIRequestHeaders(
 		logging.ComponentDebugEvent("extproc", "response_api_request_detected", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"method":     method,
-			"path":       path,
+			"path":       normalizeRequestPath(path),
 			"operation":  "create_response",
 		})
 	}
@@ -141,6 +141,6 @@ func extractResponseIDFromInputItemsPath(path string) string {
 func detectClientProtocol(path string, ctx *RequestContext) {
 	if strings.HasPrefix(path, "/v1/messages") {
 		ctx.ClientProtocol = config.ClientProtocolAnthropic
-		logging.Debugf("Detected Anthropic client protocol from path: %s", path)
+		logging.Debugf("Detected Anthropic client protocol from path: %s", normalizeRequestPath(path))
 	}
 }

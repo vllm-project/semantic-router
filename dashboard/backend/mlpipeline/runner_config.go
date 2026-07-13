@@ -12,13 +12,22 @@ import (
 
 // GenerateConfig runs Layer 3: generates a deployment-ready YAML config.
 func (r *Runner) GenerateConfig(req ConfigRequest) (string, error) {
-	job := r.createJob("config")
+	if err := ValidateConfigRequest(req); err != nil {
+		return "", err
+	}
+	job, err := r.createJob("config")
+	if err != nil {
+		return "", err
+	}
 	jobDir := r.JobDir(job.ID)
 	if err := ensureDir(jobDir); err != nil {
+		r.failJob(job.ID, "config output directory could not be created")
 		return "", fmt.Errorf("failed to create job dir: %w", err)
 	}
 
-	r.setJobRunning(job)
+	if err := r.setJobRunning(job); err != nil {
+		return "", err
+	}
 
 	r.sendProgress(job.ID, 10, "Generating config", "Building deployment configuration")
 
@@ -29,7 +38,7 @@ func (r *Runner) GenerateConfig(req ConfigRequest) (string, error) {
 	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
 	if err := enc.Encode(configMap); err != nil {
-		r.failJob(job.ID, fmt.Sprintf("failed to marshal config: %v", err))
+		r.failJob(job.ID, "generated config could not be encoded")
 		return "", err
 	}
 	enc.Close()
@@ -49,12 +58,15 @@ func (r *Runner) GenerateConfig(req ConfigRequest) (string, error) {
 	}
 	finalYAML := strings.Join(out, "\n")
 
-	if err := os.WriteFile(outputPath, []byte(finalYAML), 0o644); err != nil {
-		r.failJob(job.ID, fmt.Sprintf("failed to write config: %v", err))
+	if err := os.WriteFile(outputPath, []byte(finalYAML), 0o600); err != nil {
+		r.failJob(job.ID, "generated config could not be written")
 		return "", err
 	}
 
-	r.completeJob(job.ID, []string{outputPath})
+	if err := r.completeJob(job.ID, []string{outputPath}); err != nil {
+		r.failJob(job.ID, "generated config output was rejected")
+		return "", err
+	}
 	r.sendProgress(job.ID, 100, "Completed", "Config generated successfully")
 
 	return job.ID, nil

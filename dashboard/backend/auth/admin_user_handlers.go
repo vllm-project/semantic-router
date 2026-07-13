@@ -225,6 +225,7 @@ func handleAdminUserPatch(
 		writeUserMutationError(w, err, "update")
 		return
 	}
+	svc.invalidateUserAuthorization(userID)
 
 	writeAudit(r, svc, "user.update", "/api/admin/users/", ac.UserID)
 	respondJSON(w, user)
@@ -262,6 +263,7 @@ func handleAdminUserDelete(
 		writeUserMutationError(w, err, "delete")
 		return
 	}
+	svc.invalidateUserAuthorization(userID)
 
 	writeAudit(r, svc, "user.delete", "/api/admin/users/", ac.UserID)
 	w.WriteHeader(http.StatusNoContent)

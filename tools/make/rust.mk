@@ -19,6 +19,9 @@ RUST_CI_LIB_TESTS ?= \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_loads_with_head_weights \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_requires_pooling_head
 
+ONNX_BINDING_DIR ?= onnx-binding
+ONNX_BINDING_LIB_DIR ?= $(CURDIR)/$(ONNX_BINDING_DIR)/target/release
+
 test-rust-ci:
 	@$(LOG_TARGET)
 	@echo "Running CI-safe Rust lib unit tests (CPU-only, no model assets)"
@@ -32,6 +35,41 @@ test-rust-ci:
 		echo "Running $$test_filter"; \
 		cargo test --release --no-default-features --lib "$$test_filter" -- --exact --test-threads=1 --nocapture || exit 1; \
 	done
+
+# The complete no-CGO Candle suite has known historical mock-fidelity debt
+# tracked separately. Keep this merge gate intentionally scoped to the focused
+# fail-closed mock contract introduced for native/API boundary hardening.
+test-binding-cgo0-contract: ## Run focused Candle mock contracts with CGO disabled
+	@$(LOG_TARGET)
+	@cd candle-binding && CGO_ENABLED=0 go test -v -count=1 -run '^TestMock'
+
+test-onnx-binding-rust-ci: ## Run model-free ONNX Rust library tests on CPU
+	@$(LOG_TARGET)
+	@cd $(ONNX_BINDING_DIR) && \
+		CI=true cargo test --release --no-default-features --lib -- \
+		--test-threads=1 --nocapture
+
+test-onnx-binding-go-ci: ## Build ONNX CPU native library and run model-free Go tests
+	@$(LOG_TARGET)
+	@cd $(ONNX_BINDING_DIR) && cargo build --release --no-default-features
+	@unset MMBERT_MODEL_PATH FA_MODELS_DIR ORT_CK_FLASH_ATTN_LIB; \
+		export LD_LIBRARY_PATH="$(ONNX_BINDING_LIB_DIR):$${LD_LIBRARY_PATH:-}"; \
+		export DYLD_LIBRARY_PATH="$(ONNX_BINDING_LIB_DIR):$${DYLD_LIBRARY_PATH:-}"; \
+		cd $(ONNX_BINDING_DIR) && \
+		CGO_ENABLED=1 go test -v -count=1 ./... && \
+		CGO_ENABLED=1 go test -v -race -count=1 ./... && \
+		CGO_ENABLED=1 go vet ./...
+
+test-onnx-router-apiserver-ci: test-onnx-binding-go-ci ## Run model-free router API tests against ONNX
+	@unset MMBERT_MODEL_PATH FA_MODELS_DIR ORT_CK_FLASH_ATTN_LIB; \
+		export LD_LIBRARY_PATH="$(ONNX_BINDING_LIB_DIR):$${LD_LIBRARY_PATH:-}"; \
+		export DYLD_LIBRARY_PATH="$(ONNX_BINDING_LIB_DIR):$${DYLD_LIBRARY_PATH:-}"; \
+		cd src/semantic-router && \
+		CGO_ENABLED=1 go test -modfile=go.onnx.mod -tags=onnx -count=1 ./pkg/apiserver && \
+		CGO_ENABLED=1 go test -race -modfile=go.onnx.mod -tags=onnx -count=1 ./pkg/apiserver && \
+		CGO_ENABLED=1 go vet -modfile=go.onnx.mod -tags=onnx ./pkg/apiserver
+
+test-onnx-binding-ci: test-onnx-binding-rust-ci test-onnx-router-apiserver-ci ## Run all model-free ONNX checks
 
 # Test Rust unit tests (with release optimization for performance)
 # Note: Uses TEST_GPU_DEVICE env var (default: 2) to avoid GPU 0/1 which may be busy
@@ -201,3 +239,6 @@ rust-flash-attn: ## Build Rust library with Flash Attention 2 (requires CUDA env
 	@echo "Building nlp-binding Rust library..."
 	@cd nlp-binding && rm -f target/release/libnlp_binding.dylib target/release/deps/libnlp_binding.dylib \
 		target/release/libnlp_binding.so target/release/deps/libnlp_binding.so && cargo build --release
+
+.PHONY: test-binding-cgo0-contract test-onnx-binding-rust-ci \
+	test-onnx-binding-go-ci test-onnx-router-apiserver-ci test-onnx-binding-ci

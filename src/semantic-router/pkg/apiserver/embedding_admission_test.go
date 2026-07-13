@@ -187,11 +187,11 @@ func installEmbeddingWorkCounters(t *testing.T) *embeddingWorkCounters {
 		counters.native.Add(1)
 		return nil, errors.New("must not run")
 	}
-	calculateEmbeddingSimilarityNative = func(string, string, string, int) (*candle_binding.SimilarityOutput, error) {
+	calculateEmbeddingSimilarityNative = func(string, string, candle_binding.SimilarityOptions) (*candle_binding.SimilarityOutput, error) {
 		counters.native.Add(1)
 		return nil, errors.New("must not run")
 	}
-	calculateSimilarityBatchNative = func(string, []string, int, string, int) (*candle_binding.BatchSimilarityOutput, error) {
+	calculateSimilarityBatchNative = func(string, []string, int, candle_binding.SimilarityOptions) (*candle_binding.BatchSimilarityOutput, error) {
 		counters.native.Add(1)
 		return nil, errors.New("must not run")
 	}

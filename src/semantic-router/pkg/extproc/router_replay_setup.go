@@ -52,7 +52,7 @@ func initializeIsolatedReplayRecorders(
 
 		recorder, err := createReplayRecorder(decision.Name, backend, pluginCfg, &cfg.RouterReplay)
 		if err != nil {
-			logging.Errorf("Failed to initialize replay recorder for decision %s: %v", decision.Name, err)
+			logging.Errorf("Failed to initialize replay recorder for decision %s: %s", decision.Name, safeErrorForLog(err))
 			continue
 		}
 
@@ -81,7 +81,7 @@ func initializeSharedReplayRecorders(
 		if sharedStore == nil {
 			storage, err := createSharedReplayStore(backend, &cfg.RouterReplay)
 			if err != nil {
-				logging.Errorf("Failed to initialize shared replay store for backend %s: %v", backend, err)
+				logging.Errorf("Failed to initialize shared replay store for backend %s: %s", backend, safeErrorForLog(err))
 				return map[string]*routerreplay.Recorder{}, nil
 			}
 			sharedStore = storage

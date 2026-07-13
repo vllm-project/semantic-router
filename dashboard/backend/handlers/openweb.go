@@ -1,8 +1,8 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -20,6 +20,7 @@ const (
 	openWebMaxContentLength = 15000               // Maximum content length (characters)
 	openWebDefaultTimeout   = 10 * time.Second    // Default timeout
 	openWebMaxTimeout       = 30 * time.Second    // Maximum timeout
+	openWebMaxResponseSize  = 2 * 1024 * 1024     // Maximum upstream response size (bytes)
 	jinaReaderBaseURL       = "https://r.jina.ai" // Jina Reader API
 )
 
@@ -182,24 +183,21 @@ func shouldPreferJinaFetch(targetURL string, req OpenWebRequest) bool {
 // ========================
 
 // fetchDirect fetches web page directly
-func fetchWebDirect(targetURL string, timeout time.Duration, maxLength int) (*OpenWebResponse, error) {
+func fetchWebDirect(
+	ctx context.Context,
+	client outboundHTTPClient,
+	targetURL string,
+	timeout time.Duration,
+	maxLength int,
+) (*OpenWebResponse, error) {
 	log.Printf("[OpenWeb:Direct] Starting fetch: %s", redactURLForLog(targetURL))
 	startTime := time.Now()
 
-	client := &http.Client{
-		Timeout: timeout,
-		// Don't follow too many redirects
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("too many redirects")
-			}
-			return nil
-		},
-	}
-
-	req, err := http.NewRequest("GET", targetURL, nil)
+	requestCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(requestCtx, http.MethodGet, targetURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, errOutboundURLInvalid
 	}
 
 	// Set request headers to mimic browser
@@ -218,13 +216,12 @@ func fetchWebDirect(targetURL string, timeout time.Duration, maxLength int) (*Op
 	log.Printf("[OpenWeb:Direct] Response status: %d, elapsed: %v", resp.StatusCode, time.Since(startTime))
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
+		return nil, fmt.Errorf("remote returned HTTP %d", resp.StatusCode)
 	}
 
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBoundedOutboundBody(resp.Body, openWebMaxResponseSize)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, err
 	}
 
 	if len(body) == 0 {

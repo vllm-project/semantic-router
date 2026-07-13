@@ -1967,9 +1967,9 @@ global:
             top_m: 2
             margin_threshold: 0.0
         endpoint:
-          base_url: http://embedding-service:8000/v1
+          base_url: https://embedding-service:8000/v1
           model: BAAI/bge-m3
-          api_key_env: EMBEDDING_API_KEY
+          api_key_env: VLLM_SR_EMBEDDING_API_KEY
           timeout_seconds: 5
           max_retries: 2
           dimensions: 1024

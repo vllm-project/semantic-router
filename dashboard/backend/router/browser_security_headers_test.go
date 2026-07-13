@@ -19,9 +19,11 @@ func TestBrowserSecurityHeaders(t *testing.T) {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNoContent)
 	}
 	want := map[string]string{
-		"X-Content-Type-Options": "nosniff",
-		"Referrer-Policy":        "no-referrer",
-		"X-Frame-Options":        "SAMEORIGIN",
+		"X-Content-Type-Options":  "nosniff",
+		"Referrer-Policy":         "no-referrer",
+		"X-Frame-Options":         "SAMEORIGIN",
+		"Content-Security-Policy": dashboardContentSecurityPolicy,
+		"Permissions-Policy":      dashboardPermissionsPolicy,
 	}
 	for name, value := range want {
 		if got := recorder.Header().Get(name); got != value {

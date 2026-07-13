@@ -41,7 +41,8 @@ func (b *classifierOptionBuilder) buildEmbeddingClassifierOption() (option, erro
 		return nil, err
 	}
 	optConfig.ModelType = plan.ModelType
-	provider, err := b.embeddingProviderForRules()
+	optConfig.Backend = plan.Backend
+	provider, err := b.embeddingProviderForRules(plan)
 	if err != nil {
 		return nil, err
 	}
@@ -55,22 +56,20 @@ func (b *classifierOptionBuilder) buildEmbeddingClassifierOption() (option, erro
 	return withKeywordEmbeddingClassifier(createEmbeddingInitializer(), keywordEmbeddingClassifier), nil
 }
 
-func (b *classifierOptionBuilder) embeddingProviderForRules() (embedding.Provider, error) {
+func (b *classifierOptionBuilder) embeddingProviderForRules(plan embedding.RuntimePlan) (embedding.Provider, error) {
 	if b.cfg == nil {
 		return nil, nil
 	}
-	effectiveBackend := effectiveTextEmbeddingBackend(configuredTextEmbeddingBackend(b.cfg), nil)
-	if effectiveBackend != config.EmbeddingBackendOpenAICompatible {
+	if plan.Backend != config.EmbeddingBackendOpenAICompatible {
 		return nil, nil
 	}
-	if !b.cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
-		return nil, fmt.Errorf("embedding backend %q requires a configured remote provider", effectiveBackend)
-	}
 	b.providerInitOnce.Do(func() {
-		b.provider, b.providerErr = embedding.NewProvider(b.cfg.EmbeddingModels, embedding.ProviderOptions{})
+		b.provider, b.providerErr = embedding.NewProvider(b.cfg.EmbeddingModels, embedding.ProviderOptions{
+			BackendOverride: plan.Backend,
+		})
 		if b.providerErr != nil {
 			logging.ComponentErrorEvent("classifier", "embedding_provider_create_failed", map[string]interface{}{
-				"backend": b.cfg.EmbeddingModels.EmbeddingBackend(),
+				"backend": plan.Backend,
 				"error":   b.providerErr.Error(),
 			})
 		}
@@ -117,14 +116,14 @@ func (b *classifierOptionBuilder) buildReaskClassifierOption() (option, error) {
 		return nil, err
 	}
 	modelType = plan.ModelType
-	provider, err := b.embeddingProviderForRules()
+	provider, err := b.embeddingProviderForRules(plan)
 	if err != nil {
 		return nil, err
 	}
 	reaskClassifier, err := newReaskClassifierWithBackend(
 		b.cfg.ReaskRules,
 		modelType,
-		configuredTextEmbeddingBackend(b.cfg),
+		plan.Backend,
 		provider,
 	)
 	if err != nil {
@@ -154,7 +153,7 @@ func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, err
 		return nil, err
 	}
 	modelType = plan.ModelType
-	provider, err := b.embeddingProviderForRules()
+	provider, err := b.embeddingProviderForRules(plan)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +161,7 @@ func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, err
 		b.cfg.ComplexityRules,
 		modelType,
 		b.cfg.ComplexityModel.WithDefaults().PrototypeScoring,
-		configuredTextEmbeddingBackend(b.cfg),
+		plan.Backend,
 		provider,
 	)
 	if err != nil {
@@ -204,14 +203,14 @@ func (b *classifierOptionBuilder) buildContrastiveJailbreakClassifiersOption() (
 
 	for _, rule := range contrastiveRules {
 		group.Go(func() error {
-			provider, err := b.embeddingProviderForRules()
+			provider, err := b.embeddingProviderForRules(plan)
 			if err != nil {
 				return err
 			}
 			cjc, err := newContrastiveJailbreakClassifierWithBackend(
 				rule,
 				defaultModelType,
-				configuredTextEmbeddingBackend(b.cfg),
+				plan.Backend,
 				provider,
 			)
 			if err != nil {
@@ -277,7 +276,7 @@ func (b *classifierOptionBuilder) buildKBClassifiersOption() (option, error) {
 
 	for _, kb := range b.cfg.KnowledgeBases {
 		group.Go(func() error {
-			provider, err := b.embeddingProviderForRules()
+			provider, err := b.embeddingProviderForRules(plan)
 			if err != nil {
 				return err
 			}
@@ -285,7 +284,7 @@ func (b *classifierOptionBuilder) buildKBClassifiersOption() (option, error) {
 				kb,
 				modelType,
 				b.cfg.ConfigBaseDir,
-				configuredTextEmbeddingBackend(b.cfg),
+				plan.Backend,
 				provider,
 			)
 			if err != nil {

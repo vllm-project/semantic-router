@@ -5,10 +5,9 @@ package workflowstore
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"sync"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -23,30 +22,36 @@ type Options struct {
 
 // Store is a SQLite-backed workflow control-plane store.
 type Store struct {
-	db *sql.DB
-	mu sync.Mutex
+	db             *sql.DB
+	filesystemPath string
+	mu             sync.Mutex
 }
 
 // Open opens or creates the workflow SQLite database at dbPath.
 func Open(dbPath string, opts Options) (*Store, error) {
-	dir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, fmt.Errorf("workflowstore: create dir: %w", err)
+	dsn, err := workflowSQLiteDSN(dbPath)
+	if err != nil {
+		return nil, err
+	}
+	filesystemPath, err := prepareWorkflowDatabaseStorage(dbPath)
+	if err != nil {
+		return nil, err
 	}
 
-	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=1")
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("workflowstore: open: %w", err)
 	}
 	if err := db.Ping(); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("workflowstore: ping: %w", err)
+		return nil, errors.Join(
+			fmt.Errorf("workflowstore: ping: %w", err),
+			closeWorkflowDatabase(db, filesystemPath),
+		)
 	}
 
-	s := &Store{db: db}
+	s := &Store{db: db, filesystemPath: filesystemPath}
 	if err := s.initSchema(); err != nil {
-		_ = db.Close()
-		return nil, err
+		return nil, errors.Join(err, s.Close())
 	}
 
 	if opts.LegacyOpenClawDir != "" {
@@ -54,8 +59,15 @@ func Open(dbPath string, opts Options) (*Store, error) {
 			log.Printf("workflowstore: legacy OpenClaw import: %v", err)
 		}
 	}
+	if err := secureExistingWorkflowDatabaseFiles(filesystemPath); err != nil {
+		return nil, errors.Join(err, s.Close())
+	}
 
-	log.Printf("Workflow database initialized at: %s", dbPath)
+	if filesystemPath == "" {
+		log.Printf("Workflow in-memory database initialized")
+	} else {
+		log.Printf("Workflow database initialized at: %s", filesystemPath)
+	}
 	return s, nil
 }
 
@@ -121,7 +133,10 @@ CREATE TABLE IF NOT EXISTS mcp_server (
 
 // Close releases the database handle.
 func (s *Store) Close() error {
-	return s.db.Close()
+	if s == nil {
+		return nil
+	}
+	return closeWorkflowDatabase(s.db, s.filesystemPath)
 }
 
 // DB exposes the raw connection for health checks (row queries only).

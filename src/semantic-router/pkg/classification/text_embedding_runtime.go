@@ -12,9 +12,9 @@ import (
 // classifier generation. OpenVINO exposes one global embedding model, so all
 // families must share a canonical plan and initialization must happen once.
 type textEmbeddingRuntime struct {
-	mu          sync.Mutex
-	plan        *embedding.RuntimePlan
-	initialized bool
+	mu               sync.Mutex
+	plan             *embedding.RuntimePlan
+	initializedPlans map[embedding.RuntimePlan]struct{}
 }
 
 func (r *textEmbeddingRuntime) ensureInitialized(cfg *config.RouterConfig, plan embedding.RuntimePlan) error {
@@ -24,20 +24,33 @@ func (r *textEmbeddingRuntime) ensureInitialized(cfg *config.RouterConfig, plan 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	plans, err := configuredTextEmbeddingRuntimePlans(cfg, plan)
+	if err != nil {
+		return err
+	}
 	if r.plan != nil && r.plan.Backend == config.EmbeddingBackendOpenVINO && plan.Backend == config.EmbeddingBackendOpenVINO && r.plan.ModelType != plan.ModelType {
 		return fmt.Errorf("OpenVINO text embedding model conflict: runtime uses %q but family requested %q", r.plan.ModelType, plan.ModelType)
 	}
-	if r.plan == nil {
-		copyPlan := plan
-		r.plan = &copyPlan
+	if r.initializedPlans != nil {
+		if _, ok := r.initializedPlans[plan]; ok {
+			return nil
+		}
+		return fmt.Errorf(
+			"text embedding runtime conflict: process-global runtime does not contain backend %q model %q path %q",
+			plan.Backend,
+			plan.ModelType,
+			plan.ModelPath,
+		)
 	}
-	if r.initialized {
-		return nil
-	}
-	if err := initializeConfiguredTextEmbeddingBackend(cfg, plan); err != nil {
+	if err := initializeResolvedTextEmbeddingBackend(cfg, plans); err != nil {
 		return err
 	}
-	r.initialized = true
+	copyPlan := plan
+	r.plan = &copyPlan
+	r.initializedPlans = make(map[embedding.RuntimePlan]struct{}, len(plans))
+	for _, initializedPlan := range plans {
+		r.initializedPlans[initializedPlan] = struct{}{}
+	}
 	return nil
 }
 

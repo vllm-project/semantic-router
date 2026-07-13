@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 )
+
+const maxOpenClawSkillsPerWorker = 64
 
 // --- Skills ---
 
@@ -83,26 +86,39 @@ func (h *OpenClawHandler) loadSkills() ([]SkillTemplate, error) {
 	return []SkillTemplate{}, nil
 }
 
-func (h *OpenClawHandler) fetchSkillContent(skillID, baseImage string) string {
-	containerPaths := []string{
-		"/app/skills/" + skillID + "/SKILL.md",
-		"/app/extensions/" + skillID + "/SKILL.md",
+func validateRequestedOpenClawSkills(skillIDs []string) ([]string, error) {
+	if len(skillIDs) > maxOpenClawSkillsPerWorker {
+		return nil, fmt.Errorf("at most %d skills may be provisioned", maxOpenClawSkillsPerWorker)
 	}
-	for _, p := range containerPaths {
-		out, err := h.containerOutput("run", "--rm", baseImage, "cat", p)
-		if err == nil && len(out) > 0 {
-			return string(out)
+	validated := make([]string, 0, len(skillIDs))
+	seen := make(map[string]struct{}, len(skillIDs))
+	for _, rawID := range skillIDs {
+		skillID := strings.TrimSpace(rawID)
+		if !validOpenClawSkillID(skillID) {
+			return nil, errors.New("skill IDs must use 1-128 ASCII letters, digits, dot, underscore, or hyphen without path segments")
 		}
-	}
-	skills, err := h.loadSkills()
-	if err != nil {
-		return ""
-	}
-	for _, s := range skills {
-		if s.ID == skillID {
-			return fmt.Sprintf("---\nname: %s\ndescription: %q\nuser-invocable: true\n---\n\n# %s\n\n%s\n",
-				s.ID, s.Description, s.Name, s.Description)
+		if _, exists := seen[skillID]; exists {
+			continue
 		}
+		seen[skillID] = struct{}{}
+		validated = append(validated, skillID)
 	}
-	return ""
+	return validated, nil
+}
+
+func validOpenClawSkillID(skillID string) bool {
+	if skillID == "" || len(skillID) > 128 || skillID == "." || skillID == ".." {
+		return false
+	}
+	for index := 0; index < len(skillID); index++ {
+		value := skillID[index]
+		if (value >= 'a' && value <= 'z') ||
+			(value >= 'A' && value <= 'Z') ||
+			(value >= '0' && value <= '9') ||
+			(value == '.' && index > 0) || value == '_' || value == '-' {
+			continue
+		}
+		return false
+	}
+	return true
 }

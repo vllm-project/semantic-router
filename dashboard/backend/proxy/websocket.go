@@ -3,8 +3,8 @@ package proxy
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -44,9 +44,12 @@ func newWebSocketAwareHandlerWithHeaders(
 	staticHeaders map[string]string,
 	handshakeTimeout time.Duration,
 ) (http.Handler, error) {
-	targetURL, err := url.Parse(targetBase)
+	targetURL, err := parseProxyTarget(targetBase)
 	if err != nil {
 		return nil, err
+	}
+	if targetErr := validateWebSocketTarget(targetURL); targetErr != nil {
+		return nil, targetErr
 	}
 
 	effectiveStaticHeaders, err := normalizeStaticHeaders(staticHeaders)
@@ -79,11 +82,13 @@ func newWebSocketAwareHandlerWithHeaders(
 
 		// Rewrite control-ui-config.json to set basePath for embedded mode.
 		if strings.HasSuffix(resp.Request.URL.Path, "/__openclaw/control-ui-config.json") {
-			body, err := io.ReadAll(resp.Body)
+			body, err := readBoundedProxyResponseBody(
+				resp.Body,
+				openClawControlConfigResponseByteLimit,
+			)
 			if err != nil {
 				return err
 			}
-			_ = resp.Body.Close()
 
 			var cfg map[string]interface{}
 			if err := json.Unmarshal(body, &cfg); err == nil {
@@ -125,47 +130,6 @@ func newWebSocketAwareHandlerWithHeaders(
 	}), nil
 }
 
-func normalizeStaticHeaders(staticHeaders map[string]string) (map[string]string, error) {
-	normalized := make(map[string]string, len(staticHeaders))
-	for key, value := range staticHeaders {
-		key = strings.TrimSpace(key)
-		value = strings.TrimSpace(value)
-		if key == "" || value == "" {
-			continue
-		}
-		if !validHTTPHeaderName(key) || !validHTTPHeaderValue(value) {
-			return nil, fmt.Errorf("invalid static proxy header")
-		}
-		normalized[http.CanonicalHeaderKey(key)] = value
-	}
-	return normalized, nil
-}
-
-func validHTTPHeaderName(name string) bool {
-	for i := 0; i < len(name); i++ {
-		c := name[i]
-		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') {
-			continue
-		}
-		switch c {
-		case '!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~':
-			continue
-		default:
-			return false
-		}
-	}
-	return name != ""
-}
-
-func validHTTPHeaderValue(value string) bool {
-	for i := 0; i < len(value); i++ {
-		if value[i] == '\r' || value[i] == '\n' || value[i] == 0 || (value[i] < 0x20 && value[i] != '\t') {
-			return false
-		}
-	}
-	return true
-}
-
 func isWebSocketUpgrade(r *http.Request) bool {
 	for _, v := range r.Header.Values("Connection") {
 		for _, token := range strings.Split(v, ",") {
@@ -187,11 +151,19 @@ func proxyWebSocket(
 	staticHeaders map[string]string,
 	handshakeTimeout time.Duration,
 ) {
-	targetHost := webSocketTargetHost(target)
-	path := stripProxyPath(r.URL.Path, stripPrefix)
-	targetConn, err := net.DialTimeout("tcp", targetHost, 10*time.Second)
+	path := joinProxyTargetPath(
+		target.Path,
+		stripProxyPath(r.URL.Path, stripPrefix),
+	)
+	upgradeRequest, err := buildWebSocketUpgradeRequest(r, target, path, staticHeaders)
 	if err != nil {
-		log.Printf("WebSocket proxy: failed to connect to %s: %v", targetHost, err)
+		logProxyEvent("WebSocket proxy rejected invalid request", r, target, path)
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	targetConn, err := dialWebSocketTarget(r.Context(), target, webSocketHandshakeTimeout)
+	if err != nil {
+		logProxyEvent("WebSocket proxy target connection failed", r, target, path)
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		return
 	}
@@ -203,30 +175,25 @@ func proxyWebSocket(
 		return
 	}
 	defer clientConn.Close()
+	// net/http no longer owns a hijacked connection. Bind both halves to the
+	// request/auth context so cancellation cannot leave an authorized tunnel alive.
+	stopContextClose := context.AfterFunc(r.Context(), func() {
+		_ = clientConn.Close()
+		_ = targetConn.Close()
+	})
+	defer stopContextClose()
 
-	upgradeRequest := buildWebSocketUpgradeRequest(r, target, path, staticHeaders)
 	if _, writeErr := targetConn.Write(upgradeRequest); writeErr != nil {
-		log.Printf("WebSocket proxy: failed to write upgrade request: %v", writeErr)
+		logProxyEvent("WebSocket proxy upgrade write failed", r, target, path)
 		return
 	}
 
-	log.Printf("WebSocket proxy: %s %s -> %s%s", r.Method, r.URL.Path, target.Host, path)
+	logProxyEvent("WebSocket proxy connected", r, target, path)
 	targetReader, ok := forwardWebSocketHandshake(targetConn, clientConn, r, handshakeTimeout)
 	if !ok {
 		return
 	}
 	relayWebSocketConnections(clientConn, clientBuf, targetConn, targetReader)
-}
-
-func webSocketTargetHost(target *url.URL) string {
-	targetHost := target.Host
-	if strings.Contains(targetHost, ":") {
-		return targetHost
-	}
-	if target.Scheme == "https" || target.Scheme == "wss" {
-		return targetHost + ":443"
-	}
-	return targetHost + ":80"
 }
 
 func hijackWebSocketClient(w http.ResponseWriter) (net.Conn, *bufio.ReadWriter, bool) {
@@ -238,73 +205,11 @@ func hijackWebSocketClient(w http.ResponseWriter) (net.Conn, *bufio.ReadWriter, 
 	}
 	clientConn, clientBuf, err := hijacker.Hijack()
 	if err != nil {
-		log.Printf("WebSocket proxy: hijack failed: %v", err)
+		log.Printf("WebSocket proxy hijack failed")
 		http.Error(w, "WebSocket proxy error", http.StatusInternalServerError)
 		return nil, nil, false
 	}
 	return clientConn, clientBuf, true
-}
-
-func buildWebSocketUpgradeRequest(
-	r *http.Request,
-	target *url.URL,
-	path string,
-	staticHeaders map[string]string,
-) []byte {
-	requestURL := path
-	if rawQuery := stripDashboardAuthQuery(r.URL.RawQuery); rawQuery != "" {
-		requestURL += "?" + rawQuery
-	}
-
-	var request strings.Builder
-	request.WriteString(r.Method + " " + requestURL + " HTTP/1.1\r\n")
-	request.WriteString("Host: " + target.Host + "\r\n")
-	appendWebSocketRequestHeaders(&request, r.Header, staticHeaders)
-	for key, value := range staticHeaders {
-		request.WriteString(key + ": " + value + "\r\n")
-	}
-	request.WriteString("\r\n")
-	return []byte(request.String())
-}
-
-func appendWebSocketRequestHeaders(
-	request *strings.Builder,
-	header http.Header,
-	staticHeaders map[string]string,
-) {
-	overriddenHeaders := normalizedHeaderKeySet(staticHeaders)
-	for key, values := range header {
-		if shouldDropWebSocketHeader(key, overriddenHeaders) {
-			continue
-		}
-		if strings.EqualFold(key, "Cookie") {
-			cookieHeader := http.Header{"Cookie": append([]string(nil), values...)}
-			stripDashboardSessionCookies(cookieHeader)
-			values = cookieHeader.Values("Cookie")
-		}
-		for _, value := range values {
-			request.WriteString(key + ": " + value + "\r\n")
-		}
-	}
-}
-
-func normalizedHeaderKeySet(headers map[string]string) map[string]struct{} {
-	keys := make(map[string]struct{}, len(headers))
-	for key := range headers {
-		key = strings.ToLower(strings.TrimSpace(key))
-		if key != "" {
-			keys[key] = struct{}{}
-		}
-	}
-	return keys
-}
-
-func shouldDropWebSocketHeader(key string, overriddenHeaders map[string]struct{}) bool {
-	if strings.EqualFold(key, "Host") || strings.EqualFold(key, "Authorization") || strings.EqualFold(key, "Referer") {
-		return true
-	}
-	_, overridden := overriddenHeaders[strings.ToLower(strings.TrimSpace(key))]
-	return overridden
 }
 
 func forwardWebSocketHandshake(
@@ -320,7 +225,7 @@ func forwardWebSocketHandshake(
 	targetReader := bufio.NewReader(limitedTarget)
 	upgradeResponse, err := http.ReadResponse(targetReader, r)
 	if err != nil {
-		log.Printf("WebSocket proxy: failed to read upgrade response: %v", err)
+		log.Printf("WebSocket proxy failed to read upgrade response")
 		return nil, false
 	}
 	if limitedTarget.N == 0 {
@@ -333,13 +238,31 @@ func forwardWebSocketHandshake(
 		_, _ = io.WriteString(clientConn, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
 		return nil, false
 	}
+	canonicalizeWebSocketUpgradeResponseHeaders(upgradeResponse.Header)
 	if err := upgradeResponse.Write(clientConn); err != nil {
-		log.Printf("WebSocket proxy: failed to write upgrade response: %v", err)
+		log.Printf("WebSocket proxy failed to write upgrade response")
 		return nil, false
 	}
 	_ = targetConn.SetDeadline(time.Time{})
 	_ = clientConn.SetDeadline(time.Time{})
 	return targetReader, true
+}
+
+func canonicalizeWebSocketUpgradeResponseHeaders(header http.Header) {
+	connectionHeaders := connectionNominatedHeaders(header.Values("Connection"))
+	for key := range header {
+		normalizedKey := strings.ToLower(strings.TrimSpace(key))
+		_, nominated := connectionHeaders[normalizedKey]
+		if nominated || normalizedKey == "connection" || normalizedKey == "upgrade" ||
+			normalizedKey == "keep-alive" || normalizedKey == "proxy-authenticate" ||
+			normalizedKey == "proxy-authorization" || normalizedKey == "proxy-connection" ||
+			normalizedKey == "te" || normalizedKey == "trailer" ||
+			normalizedKey == "transfer-encoding" || normalizedKey == "content-length" {
+			header.Del(key)
+		}
+	}
+	header.Set("Connection", "Upgrade")
+	header.Set("Upgrade", "websocket")
 }
 
 func validWebSocketUpgradeResponse(response *http.Response) bool {

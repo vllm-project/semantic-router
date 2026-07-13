@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -158,57 +159,48 @@ func (h *OpenClawHandler) gatewayReachable(containerName string, port int) bool 
 	return false
 }
 
-func (h *OpenClawHandler) checkContainerHealth(entry ContainerEntry) OpenClawStatus {
-	snapshot := identitySnapshot{
-		Name:       entry.AgentName,
-		Emoji:      entry.AgentEmoji,
-		Role:       entry.AgentRole,
-		Vibe:       entry.AgentVibe,
-		Principles: entry.AgentPrinciples,
-	}
-	if (snapshot.Name == "" || snapshot.Role == "" || snapshot.Vibe == "" || snapshot.Principles == "") && entry.DataDir != "" {
-		fileSnapshot := readIdentitySnapshot(entry.DataDir)
-		if snapshot.Name == "" {
-			snapshot.Name = fileSnapshot.Name
-		}
-		if snapshot.Emoji == "" {
-			snapshot.Emoji = fileSnapshot.Emoji
-		}
-		if snapshot.Role == "" {
-			snapshot.Role = fileSnapshot.Role
-		}
-		if snapshot.Vibe == "" {
-			snapshot.Vibe = fileSnapshot.Vibe
-		}
-		if snapshot.Principles == "" {
-			snapshot.Principles = fileSnapshot.Principles
-		}
-	}
-
-	status := OpenClawStatus{
+func openClawStatusFromEntry(entry ContainerEntry) OpenClawStatus {
+	return OpenClawStatus{
 		ContainerName:   entry.Name,
-		GatewayURL:      h.gatewayBaseURL(entry.Name, entry.Port),
 		Port:            entry.Port,
 		Image:           entry.Image,
 		CreatedAt:       entry.CreatedAt,
 		TeamID:          entry.TeamID,
 		TeamName:        entry.TeamName,
-		AgentName:       snapshot.Name,
-		AgentEmoji:      snapshot.Emoji,
-		AgentRole:       snapshot.Role,
-		AgentVibe:       snapshot.Vibe,
-		AgentPrinciples: snapshot.Principles,
+		AgentName:       entry.AgentName,
+		AgentEmoji:      entry.AgentEmoji,
+		AgentRole:       entry.AgentRole,
+		AgentVibe:       entry.AgentVibe,
+		AgentPrinciples: entry.AgentPrinciples,
 		RoleKind:        normalizeRoleKind(entry.RoleKind),
 	}
+}
 
-	out, err := h.containerOutput("inspect", "-f", "{{.State.Running}}", entry.Name)
+func (h *OpenClawHandler) checkContainerHealth(entry ContainerEntry) OpenClawStatus {
+	status := OpenClawStatus{}
+	resolved, resolveErr := h.resolveRegisteredOwnedContainer(entry.Name)
+	if resolved.entry.Name != "" {
+		entry = enrichContainerIdentity(resolved.entry)
+		status = openClawStatusFromEntry(entry)
+	}
+	if resolveErr != nil {
+		switch {
+		case errors.Is(resolveErr, errOpenClawResourceConflict):
+			status.Error = "Container ownership conflict"
+		case errors.Is(resolveErr, errOpenClawResourceNotFound) && resolved.entry.Name == "":
+			status.Error = "Container not in registry"
+		default:
+			status.Error = "Container unavailable"
+		}
+		return status
+	}
+
+	status.GatewayURL = h.gatewayBaseURL(entry.Name, entry.Port)
+
+	out, err := h.containerOutput("inspect", "-f", "{{.State.Running}}", resolved.reference)
 	if err != nil {
 		status.Running = false
-		if strings.Contains(err.Error(), "container runtime not available") {
-			status.Error = err.Error()
-			return status
-		}
-		status.Error = "Container not found"
+		status.Error = "Container unavailable"
 		return status
 	}
 	status.Running = strings.TrimSpace(string(out)) == "true"
@@ -224,7 +216,7 @@ func (h *OpenClawHandler) checkContainerHealth(entry ContainerEntry) OpenClawSta
 	}
 
 	// Compare positions so a successful restart after a previous failure is correctly detected.
-	logOut, logErr := h.containerCombinedOutput("logs", "--tail", "80", entry.Name)
+	logOut, logErr := h.containerCombinedOutput("logs", "--tail", "80", resolved.reference)
 	if logErr == nil {
 		logs := string(logOut)
 		lastSuccess := strings.LastIndex(logs, "[gateway] listening on ws://")
@@ -261,7 +253,8 @@ func (h *OpenClawHandler) StatusHandler() http.HandlerFunc {
 		teams, teamErr := h.loadTeams()
 		h.mu.RUnlock()
 		if err != nil {
-			writeJSONError(w, fmt.Sprintf("Failed to load registry: %v", err), http.StatusInternalServerError)
+			log.Printf("openclaw: status registry load failed")
+			writeJSONError(w, "Failed to load OpenClaw registry", http.StatusInternalServerError)
 			return
 		}
 		teamNames := map[string]string{}
@@ -305,6 +298,9 @@ func (h *OpenClawHandler) StatusHandler() http.HandlerFunc {
 		statuses := make([]OpenClawStatus, 0, len(entries))
 		for _, e := range entries {
 			status := h.checkContainerHealth(e)
+			if status.ContainerName == "" {
+				continue
+			}
 			enrichTeam(&status)
 			statuses = append(statuses, status)
 		}

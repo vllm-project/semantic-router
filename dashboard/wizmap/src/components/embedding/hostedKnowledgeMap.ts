@@ -68,7 +68,10 @@ export async function loadHostedKnowledgeMapProjection(
 async function fetchHostedKnowledgeMapMetadata(
   url: string
 ): Promise<KnowledgeMapMetadata> {
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    credentials: 'same-origin',
+    redirect: 'error'
+  });
   if (!response.ok) {
     throw new Error(`Failed to load knowledge map metadata: HTTP ${response.status}`);
   }
@@ -78,7 +81,10 @@ async function fetchHostedKnowledgeMapMetadata(
 async function fetchHostedKnowledgeMapPoints(
   url: string
 ): Promise<KBRawPointRecord[]> {
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    credentials: 'same-origin',
+    redirect: 'error'
+  });
   if (!response.ok) {
     throw new Error(`Failed to load knowledge map points: HTTP ${response.status}`);
   }

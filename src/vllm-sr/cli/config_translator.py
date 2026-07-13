@@ -8,7 +8,9 @@ file and passed to ``helm upgrade --install -f <file>``.
 
 from __future__ import annotations
 
+import contextlib
 import os
+import shutil
 import tempfile
 
 import yaml
@@ -68,14 +70,46 @@ def translate_config_to_helm_values(
 
 
 def write_helm_values_file(values: dict, dest_dir: str | None = None) -> str:
-    """Write *values* to a temporary YAML file and return its path."""
-    if dest_dir is None:
-        dest_dir = tempfile.mkdtemp(prefix="vllm-sr-helm-")
+    """Write *values* to a private YAML file and return its path.
 
-    os.makedirs(dest_dir, exist_ok=True)
-    values_path = os.path.join(dest_dir, "values-override.yaml")
-    with open(values_path, "w", encoding="utf-8") as fh:
-        yaml.safe_dump(values, fh, default_flow_style=False)
+    A caller-provided directory remains caller-owned. When this helper creates
+    the directory, it is private, but the caller that receives the path is
+    still responsible for removing it after the consuming process exits.
+    """
+    owned_directory: str | None = None
+    try:
+        if dest_dir is None:
+            dest_dir = tempfile.mkdtemp(prefix="vllm-sr-helm-")
+            owned_directory = dest_dir
+            os.chmod(dest_dir, 0o700)
+        else:
+            os.makedirs(dest_dir, mode=0o700, exist_ok=True)
+
+        values_path = os.path.join(dest_dir, "values-override.yaml")
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(values_path)
+
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        file_descriptor = os.open(values_path, flags, 0o600)
+        try:
+            if hasattr(os, "fchmod"):
+                os.fchmod(file_descriptor, 0o600)
+            else:
+                os.chmod(values_path, 0o600)
+            with os.fdopen(file_descriptor, "w", encoding="utf-8") as values_file:
+                file_descriptor = -1
+                yaml.safe_dump(values, values_file, default_flow_style=False)
+        except BaseException:
+            if file_descriptor >= 0:
+                os.close(file_descriptor)
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(values_path)
+            raise
+    except BaseException:
+        if owned_directory is not None:
+            shutil.rmtree(owned_directory, ignore_errors=True)
+        raise
+
     log.debug(f"Wrote Helm values override to {values_path}")
     return values_path
 

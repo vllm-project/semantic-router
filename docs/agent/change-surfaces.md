@@ -48,7 +48,7 @@ This document defines the project-level surfaces used by skills, reports, and va
 
 - Rust/cgo/onnx/native model bindings used by runtime signals, classifiers, or training artifacts.
 - Typical paths: `candle-binding/**`, `ml-binding/**`, `nlp-binding/**`, `onnx-binding/**`
-- Task rules: `rust-bindings`, `router-core`
+- Task rules: `rust-bindings`, `onnx-binding`, `router-core`
 
 ## `response_headers`
 

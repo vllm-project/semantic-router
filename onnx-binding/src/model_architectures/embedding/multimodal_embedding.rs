@@ -14,6 +14,10 @@
 //! ```
 
 use crate::core::unified_error::{errors, UnifiedResult};
+use crate::model_architectures::embedding::multimodal_output::extract_embedding_from_outputs;
+use crate::model_architectures::embedding::tokenizer_contract::{
+    encode_embedding_checked, prepare_embedding_tokenizer,
+};
 use ndarray::Array1;
 use ort::session::Session;
 use ort::value::Tensor;
@@ -63,7 +67,15 @@ impl MultiModalConfig {
             errors::invalid_json(&config_path.display().to_string(), &e.to_string())
         })?;
         let mut cfg = Self::default();
-        if let Some(d) = v["embedding_dim"].as_u64() {
+        // The ONNX bundle uses `embedding_dim`; the upstream model card's root
+        // config uses `output_dim` for the same final shared-space projection.
+        if let Some(d) = v["embedding_dim"]
+            .as_u64()
+            .or_else(|| v["output_dim"].as_u64())
+        {
+            if d == 0 {
+                return Err(errors::validation("embedding_dim", "> 0", "0"));
+            }
             cfg.embedding_dim = d as usize;
         }
         if let Some(s) = v
@@ -121,6 +133,7 @@ impl MultiModalEmbeddingModel {
         }
         let tokenizer = Tokenizer::from_file(&tok_path)
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
+        let tokenizer = prepare_embedding_tokenizer(tokenizer, "multimodal")?;
 
         let text_path = find_artifact("text_encoder.onnx").ok_or_else(|| {
             errors::file_not_found(&dir.join("text_encoder.onnx").display().to_string())
@@ -256,17 +269,12 @@ impl MultiModalEmbeddingModel {
 
     /// Encode text → L2-normalised embedding.
     pub fn encode_text(&self, text: &str, target_dim: Option<usize>) -> UnifiedResult<Array1<f32>> {
-        let encoding = self
-            .tokenizer
-            .encode(text, true)
-            .map_err(|e| errors::tokenization_error(&e.to_string()))?;
+        let encoding =
+            encode_embedding_checked(&self.tokenizer, text, self.config.max_seq_len, "multimodal")?;
 
-        let max_len = encoding.len().min(self.config.max_seq_len);
-        let ids: Vec<i64> = encoding.get_ids()[..max_len]
-            .iter()
-            .map(|&id| id as i64)
-            .collect();
-        let mask: Vec<i64> = encoding.get_attention_mask()[..max_len]
+        let ids: Vec<i64> = encoding.get_ids().iter().map(|&id| id as i64).collect();
+        let mask: Vec<i64> = encoding
+            .get_attention_mask()
             .iter()
             .map(|&m| m as i64)
             .collect();
@@ -285,7 +293,7 @@ impl MultiModalEmbeddingModel {
             ])
             .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?;
 
-        let emb = self.extract_embedding_from_outputs(&outputs)?;
+        let emb = extract_embedding_from_outputs(&outputs, self.config.embedding_dim)?;
         self.maybe_truncate(emb, target_dim)
     }
 
@@ -318,7 +326,7 @@ impl MultiModalEmbeddingModel {
             ])
             .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?;
 
-        let emb = self.extract_embedding_from_outputs(&outputs)?;
+        let emb = extract_embedding_from_outputs(&outputs, self.config.embedding_dim)?;
         self.maybe_truncate(emb, target_dim)
     }
 
@@ -367,52 +375,8 @@ impl MultiModalEmbeddingModel {
             ])
             .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?;
 
-        let emb = self.extract_embedding_from_outputs(&outputs)?;
+        let emb = extract_embedding_from_outputs(&outputs, self.config.embedding_dim)?;
         self.maybe_truncate(emb, target_dim)
-    }
-
-    /// Extract a 1-D embedding from session outputs, matching the mmbert pattern.
-    fn extract_embedding_from_outputs(
-        &self,
-        outputs: &ort::session::SessionOutputs,
-    ) -> UnifiedResult<Array1<f32>> {
-        let names = [
-            "embedding",
-            "sentence_embedding",
-            "pooler_output",
-            "last_hidden_state",
-        ];
-        for name in &names {
-            let Some(output_value) = outputs.get(*name) else {
-                continue;
-            };
-            let Ok((shape, data)) = output_value.try_extract_tensor::<f32>() else {
-                continue;
-            };
-
-            let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
-            if dims.len() == 2 && dims[0] >= 1 {
-                let dim = dims[1];
-                let vec: Vec<f32> = data.iter().take(dim).copied().collect();
-                return Ok(Array1::from_vec(vec));
-            } else if dims.len() == 1 {
-                return Ok(Array1::from_vec(data.to_vec()));
-            }
-        }
-        // Fallback: first output
-        if let Some((_, output_value)) = outputs.iter().next() {
-            let Ok((shape, data)) = output_value.try_extract_tensor::<f32>() else {
-                return Err(errors::ort_error("no valid embedding output found"));
-            };
-
-            let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
-            let dim = *dims.last().unwrap_or(&0);
-            if dim > 0 {
-                let vec: Vec<f32> = data.iter().take(dim).copied().collect();
-                return Ok(Array1::from_vec(vec));
-            }
-        }
-        Err(errors::ort_error("no valid embedding output found"))
     }
 
     fn maybe_truncate(
@@ -458,6 +422,16 @@ mod tests {
 
     fn l2_norm(values: &Array1<f32>) -> f32 {
         values.iter().map(|v| v * v).sum::<f32>().sqrt()
+    }
+
+    #[test]
+    fn test_config_reads_upstream_output_dimension_alias() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("config.json"), r#"{"output_dim": 256}"#).unwrap();
+
+        let config = MultiModalConfig::from_pretrained(dir.path()).unwrap();
+
+        assert_eq!(config.embedding_dim, 256);
     }
 
     #[test]

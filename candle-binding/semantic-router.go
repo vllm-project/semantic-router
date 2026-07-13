@@ -11,12 +11,10 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"regexp"
 	"runtime"
 	"strings"
 	"sync"
-	"time"
 	"unsafe"
 )
 
@@ -112,7 +110,7 @@ typedef struct {
     float* data;
     int length;
     bool error;
-    int model_type;           // 0=Qwen3, 1=Gemma, -1=Unknown/Error
+    int model_type;           // 0=Qwen3, 1=Gemma, 2=mmBERT, 3=multimodal, -1=Unknown/Error
     int sequence_length;      // Sequence length in tokens
     float processing_time_ms; // Processing time in milliseconds
 } EmbeddingResult;
@@ -120,7 +118,7 @@ typedef struct {
 // Embedding similarity result structure
 typedef struct {
     float similarity;         // Cosine similarity score (-1.0 to 1.0)
-    int model_type;           // 0=Qwen3, 1=Gemma, -1=Unknown/Error
+    int model_type;           // 0=Qwen3, 1=Gemma, 2=mmBERT, 3=multimodal, -1=Unknown/Error
     float processing_time_ms; // Processing time in milliseconds
     bool error;               // Whether an error occurred
 } EmbeddingSimilarityResult;
@@ -135,7 +133,7 @@ typedef struct {
 typedef struct {
     SimilarityMatch* matches; // Array of top-k matches, sorted by similarity (descending)
     int num_matches;          // Number of matches returned (≤ top_k)
-    int model_type;           // 0=Qwen3, 1=Gemma, -1=Unknown/Error
+    int model_type;           // 0=Qwen3, 1=Gemma, 2=mmBERT, 3=multimodal, -1=Unknown/Error
     float processing_time_ms; // Processing time in milliseconds
     bool error;               // Whether an error occurred
 } BatchSimilarityResult;
@@ -239,7 +237,9 @@ extern bool init_mmbert_embedding_model(const char* model_path, bool use_cpu);
 extern bool init_multimodal_embedding_model(const char* model_path, bool use_cpu);
 extern bool init_embedding_models_batched(const char* qwen3_model_path, int max_batch_size, unsigned long long max_wait_ms, bool use_cpu);
 extern int calculate_embedding_similarity(const char* text1, const char* text2, const char* model_type, int target_dim, EmbeddingSimilarityResult* result);
+extern int calculate_embedding_similarity_with_options(const char* text1, const char* text2, const char* model_type, int target_layer, int target_dim, float quality_priority, float latency_priority, EmbeddingSimilarityResult* result);
 extern int calculate_similarity_batch(const char* query, const char** candidates, int num_candidates, int top_k, const char* model_type, int target_dim, BatchSimilarityResult* result);
+extern int calculate_similarity_batch_with_options(const char* query, const char** candidates, int num_candidates, int top_k, const char* model_type, int target_layer, int target_dim, float quality_priority, float latency_priority, BatchSimilarityResult* result);
 extern void free_batch_similarity_result(BatchSimilarityResult* result);
 extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
 extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
@@ -452,24 +452,6 @@ extern void candle_mlp_free_string(char* ptr);
 */
 import "C"
 
-// ErrInvalidImageInput identifies image data that cannot be decoded by the
-// multimodal image pipeline. Callers should use errors.Is rather than matching
-// error strings. Model, device, tensor, and inference failures do not wrap this
-// sentinel.
-var ErrInvalidImageInput = errors.New("invalid image input")
-
-// MaxMultiModalImageEncodedBytes is the largest encoded JPEG/PNG payload the
-// multimodal image pipeline will accept, regardless of whether bytes arrive
-// directly, through base64, from disk, or from a trusted URL.
-const MaxMultiModalImageEncodedBytes = 20 * 1024 * 1024
-
-func multiModalImageStatusError(status int) error {
-	if status == -2 {
-		return fmt.Errorf("%w: image bytes could not be decoded", ErrInvalidImageInput)
-	}
-	return fmt.Errorf("multi-modal image encoding from bytes failed (status %d)", status)
-}
-
 var (
 	initOnce                              sync.Once
 	initErr                               error
@@ -609,6 +591,12 @@ func InitModel(modelID string, useCPU bool) error {
 
 // TokenizeText tokenizes the given text into tokens and their IDs with maxLength parameter
 func TokenizeText(text string, maxLength int) (TokenizeResult, error) {
+	if err := validateNonNegativeCInt("maximum token length", maxLength); err != nil {
+		return TokenizeResult{}, err
+	}
+	if err := validateCStringInputs(cStringInput{"tokenization text", text}); err != nil {
+		return TokenizeResult{}, err
+	}
 	if !modelInitialized {
 		return TokenizeResult{}, fmt.Errorf("BERT model not initialized")
 	}
@@ -668,6 +656,12 @@ func TokenizeTextDefault(text string) (TokenizeResult, error) {
 
 // GetEmbedding gets the embedding vector for a text
 func GetEmbedding(text string, maxLength int) ([]float32, error) {
+	if err := validateNonNegativeCInt("maximum token length", maxLength); err != nil {
+		return nil, err
+	}
+	if err := validateCStringInputs(cStringInput{"embedding text", text}); err != nil {
+		return nil, err
+	}
 	if !modelInitialized {
 		return nil, fmt.Errorf("BERT model not initialized")
 	}
@@ -695,7 +689,7 @@ func GetEmbeddingDefault(text string) ([]float32, error) {
 // EmbeddingOutput represents the complete embedding generation result with metadata
 type EmbeddingOutput struct {
 	Embedding        []float32 // The embedding vector
-	ModelType        string    // Model used: "qwen3", "gemma", or "unknown"
+	ModelType        string    // Model used: "qwen3", "gemma", "mmbert", "multimodal", or "unknown"
 	SequenceLength   int       // Sequence length in tokens
 	ProcessingTimeMs float32   // Processing time in milliseconds
 }
@@ -733,6 +727,12 @@ type EmbeddingOutput struct {
 //	// Balanced for medium text
 //	embedding, err := GetEmbeddingSmart("medium article", 0.5, 0.5)
 func GetEmbeddingSmart(text string, qualityPriority, latencyPriority float32) ([]float32, error) {
+	if err := validateEmbeddingPriorities(qualityPriority, latencyPriority); err != nil {
+		return nil, err
+	}
+	if err := validateCStringInputs(cStringInput{"smart embedding text", text}); err != nil {
+		return nil, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -792,6 +792,12 @@ func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWait
 	if qwen3ModelPath == "" {
 		return fmt.Errorf("qwen3ModelPath cannot be empty for batched initialization")
 	}
+	if maxBatchSize <= 0 {
+		return fmt.Errorf("maximum batch size must be positive")
+	}
+	if err := validateNonNegativeCInt("maximum batch size", maxBatchSize); err != nil {
+		return err
+	}
 
 	cQwen3Path := C.CString(qwen3ModelPath)
 	defer C.free(unsafe.Pointer(cQwen3Path))
@@ -824,6 +830,15 @@ func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWait
 //   - *EmbeddingOutput: Embedding output with metadata
 //   - error: Non-nil if embedding generation fails
 func GetEmbeddingBatched(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
+	if err := validateNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
+	}
+	if err := validateCStringInputs(
+		cStringInput{"batched embedding text", text},
+		cStringInput{"batched embedding model type", modelType},
+	); err != nil {
+		return nil, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -975,13 +990,6 @@ func InitMmBertEmbeddingModel(modelPath string, useCPU bool) error {
 	return nil
 }
 
-// MultiModalEmbeddingOutput represents the result of a multi-modal embedding.
-type MultiModalEmbeddingOutput struct {
-	Embedding        []float32 // The embedding vector (384-dim by default)
-	Modality         string    // "text", "image", or "audio"
-	ProcessingTimeMs float32   // Processing time in milliseconds
-}
-
 // InitMultiModalEmbeddingModel initializes the multi-modal embedding model.
 //
 // Model: llm-semantic-router/multi-modal-embed-small (~120M params)
@@ -1029,6 +1037,12 @@ func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
 //   - MultiModalEmbeddingOutput with the embedding and metadata
 //   - error if encoding fails
 func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := validateNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
+	}
+	if err := validateCStringInputs(cStringInput{"multi-modal text", text}); err != nil {
+		return nil, err
+	}
 	if text == "" {
 		return nil, fmt.Errorf("text cannot be empty")
 	}
@@ -1075,12 +1089,11 @@ func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutpu
 //   - MultiModalEmbeddingOutput with the embedding and metadata
 //   - error if encoding fails
 func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	if len(pixelData) == 0 {
-		return nil, fmt.Errorf("pixelData cannot be empty")
+	if err := validateNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
 	}
-	expected := 3 * height * width
-	if len(pixelData) != expected {
-		return nil, fmt.Errorf("pixelData length %d != expected %d (3*%d*%d)", len(pixelData), expected, height, width)
+	if err := validateCandleImageTensor(pixelData, width, height); err != nil {
+		return nil, err
 	}
 
 	var result C.MultiModalEmbeddingResult
@@ -1125,12 +1138,25 @@ func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*
 //   - MultiModalEmbeddingOutput with the embedding and metadata
 //   - error if encoding fails
 func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := validateNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
+	}
 	if len(melData) == 0 {
 		return nil, fmt.Errorf("melData cannot be empty")
 	}
+	if nMels <= 0 || timeFrames <= 0 {
+		return nil, fmt.Errorf("nMels and timeFrames must be positive, got %d×%d", nMels, timeFrames)
+	}
+	const maxCInt = 1<<31 - 1
+	if nMels > maxCInt || timeFrames > maxCInt {
+		return nil, fmt.Errorf("nMels and timeFrames must fit C int, got %d×%d", nMels, timeFrames)
+	}
+	if nMels > len(melData)/timeFrames {
+		return nil, fmt.Errorf("melData length %d does not match %d×%d", len(melData), nMels, timeFrames)
+	}
 	expected := nMels * timeFrames
 	if len(melData) != expected {
-		return nil, fmt.Errorf("melData length %d != expected %d (%d*%d)", len(melData), expected, nMels, timeFrames)
+		return nil, fmt.Errorf("melData length %d does not match %d×%d", len(melData), nMels, timeFrames)
 	}
 
 	var result C.MultiModalEmbeddingResult
@@ -1176,11 +1202,11 @@ func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) 
 //   - MultiModalEmbeddingOutput with the embedding and metadata
 //   - error if decoding or encoding fails
 func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	if len(imageBytes) == 0 {
-		return nil, fmt.Errorf("%w: imageBytes cannot be empty", ErrInvalidImageInput)
+	if err := validateNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
 	}
-	if len(imageBytes) > MaxMultiModalImageEncodedBytes {
-		return nil, fmt.Errorf("%w: image payload exceeds %d bytes", ErrInvalidImageInput, MaxMultiModalImageEncodedBytes)
+	if err := validateCandleEncodedImage(imageBytes); err != nil {
+		return nil, err
 	}
 
 	var result C.MultiModalEmbeddingResult
@@ -1227,6 +1253,9 @@ func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiMod
 //   - MultiModalEmbeddingOutput with the embedding and metadata
 //   - error if decoding or encoding fails
 func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := validateNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
+	}
 	if base64Str == "" {
 		return nil, fmt.Errorf("%w: base64Str cannot be empty", ErrInvalidImageInput)
 	}
@@ -1243,54 +1272,6 @@ func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiMod
 	}
 	if len(imageBytes) > MaxMultiModalImageEncodedBytes {
 		return nil, fmt.Errorf("%w: image payload exceeds %d bytes", ErrInvalidImageInput, MaxMultiModalImageEncodedBytes)
-	}
-
-	return MultiModalEncodeImageFromBytes(imageBytes, targetDim)
-}
-
-// MultiModalEncodeImageFromURL downloads an image from a URL and encodes it
-// into an embedding using the multi-modal model.
-//
-// SECURITY: This function performs an outbound HTTP GET to the provided URL.
-// It must NOT be called with untrusted/user-supplied URLs (SSRF risk).
-// The router-side code restricts image inputs to inline data URIs via
-// isSafeImageDataURL; this helper is intended only for trusted, operator-
-// configured URLs (e.g. preloading image_candidates from config).
-//
-// Parameters:
-//   - url: HTTP(S) URL pointing to a JPEG or PNG image (trusted source only)
-//   - targetDim: Target embedding dimension (0 for default 384)
-//
-// Returns:
-//   - MultiModalEmbeddingOutput with the embedding and metadata
-//   - error if download, decoding, or encoding fails
-func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	if url == "" {
-		return nil, fmt.Errorf("url cannot be empty")
-	}
-
-	const httpTimeout = 30 // seconds
-
-	client := &http.Client{Timeout: time.Duration(httpTimeout) * time.Second}
-	resp, err := client.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("HTTP GET failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
-	}
-	if resp.ContentLength > MaxMultiModalImageEncodedBytes {
-		return nil, fmt.Errorf("%w: image from %s exceeds maximum size of %d bytes", ErrInvalidImageInput, url, MaxMultiModalImageEncodedBytes)
-	}
-
-	imageBytes, err := io.ReadAll(io.LimitReader(resp.Body, MaxMultiModalImageEncodedBytes+1))
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-	if len(imageBytes) > MaxMultiModalImageEncodedBytes {
-		return nil, fmt.Errorf("%w: image from %s exceeds maximum size of %d bytes", ErrInvalidImageInput, url, MaxMultiModalImageEncodedBytes)
 	}
 
 	return MultiModalEncodeImageFromBytes(imageBytes, targetDim)
@@ -1380,6 +1361,15 @@ func InitEmbeddingModelsWithMmBert(qwen3ModelPath, gemmaModelPath, mmBertModelPa
 //	// Auto dimension (uses full 768)
 //	embedding, err := GetEmbeddingWithDim("medium text", 0.5, 0.5, 0)
 func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, targetDim int) ([]float32, error) {
+	if err := validateEmbeddingPriorities(qualityPriority, latencyPriority); err != nil {
+		return nil, err
+	}
+	if err := validateNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
+	}
+	if err := validateCStringInputs(cStringInput{"embedding text", text}); err != nil {
+		return nil, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -1438,6 +1428,15 @@ func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, 
 //	output, err := GetEmbeddingWithMetadata("Hello world", 0.5, 0.5, 768)
 //	fmt.Printf("Used model: %s, took %.2fms\n", output.ModelType, output.ProcessingTimeMs)
 func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority float32, targetDim int) (*EmbeddingOutput, error) {
+	if err := validateEmbeddingPriorities(qualityPriority, latencyPriority); err != nil {
+		return nil, err
+	}
+	if err := validateNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
+	}
+	if err := validateCStringInputs(cStringInput{"embedding text", text}); err != nil {
+		return nil, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -1468,16 +1467,7 @@ func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority floa
 
 	embedding := cFloatArrayToGoSlice(result.data, result.length)
 
-	// Convert model_type to string
-	var modelType string
-	switch int(result.model_type) {
-	case 0:
-		modelType = "qwen3"
-	case 1:
-		modelType = "gemma"
-	default:
-		modelType = "unknown"
-	}
+	modelType := embeddingModelTypeName(int(result.model_type))
 
 	return &EmbeddingOutput{
 		Embedding:        embedding,
@@ -1541,6 +1531,15 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 //
 //	output, err := GetEmbedding2DMatryoshka("Hello world", "mmbert", 3, 256)
 func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
+	if err := validateEmbeddingControls(targetLayer, targetDim); err != nil {
+		return nil, err
+	}
+	if err := validateCStringInputs(
+		cStringInput{"2D matryoshka embedding text", text},
+		cStringInput{"2D matryoshka model type", modelType},
+	); err != nil {
+		return nil, err
+	}
 	// Validate model type
 	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" && modelType != "multimodal" {
 		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', 'mmbert', or 'multimodal')", modelType)
@@ -1604,6 +1603,15 @@ func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, ta
 
 // CalculateSimilarity calculates the similarity between two texts with maxLength parameter
 func CalculateSimilarity(text1, text2 string, maxLength int) float32 {
+	if err := validateNonNegativeCInt("maximum token length", maxLength); err != nil {
+		return -1.0
+	}
+	if err := validateCStringInputs(
+		cStringInput{"similarity text1", text1},
+		cStringInput{"similarity text2", text2},
+	); err != nil {
+		return -1.0
+	}
 	if !modelInitialized {
 		log.Printf("BERT model not initialized")
 		return -1.0
@@ -1627,7 +1635,7 @@ func CalculateSimilarityDefault(text1, text2 string) float32 {
 // SimilarityOutput represents the result of embedding similarity calculation
 type SimilarityOutput struct {
 	Similarity       float32 // Cosine similarity score (-1.0 to 1.0)
-	ModelType        string  // Model used: "qwen3", "gemma", or "unknown"
+	ModelType        string  // Model used: "qwen3", "gemma", "mmbert", "multimodal", or "unknown"
 	ProcessingTimeMs float32 // Processing time in milliseconds
 }
 
@@ -1662,7 +1670,7 @@ func cFloatArrayToGoSlice(data *C.float, length C.int) []float32 {
 //
 // Parameters:
 // - text1, text2: The two texts to compare
-// - modelType: "auto" (intelligent routing), "qwen3", or "gemma"
+// - modelType: "auto" (intelligent routing), "qwen3", "gemma", or "mmbert"
 // - targetDim: Target embedding dimension (0 for default, or 768/512/256/128 for Matryoshka)
 //
 // Returns:
@@ -1682,9 +1690,27 @@ func cFloatArrayToGoSlice(data *C.float, length C.int) []float32 {
 //	// Use Gemma with 512-dim Matryoshka
 //	result, err = CalculateEmbeddingSimilarity("text1", "text2", "gemma", 512)
 func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetDim int) (*SimilarityOutput, error) {
-	// Validate model type
-	if modelType != "auto" && modelType != "qwen3" && modelType != "gemma" {
-		return nil, fmt.Errorf("invalid model type: %s (must be 'auto', 'qwen3', or 'gemma')", modelType)
+	return CalculateEmbeddingSimilarityWithOptions(text1, text2, SimilarityOptions{
+		ModelType:       modelType,
+		TargetDim:       targetDim,
+		QualityPriority: 0.5,
+		LatencyPriority: 0.5,
+	})
+}
+
+// CalculateEmbeddingSimilarityWithOptions calculates pair similarity while
+// preserving target-layer and auto-routing priority controls.
+func CalculateEmbeddingSimilarityWithOptions(text1, text2 string, options SimilarityOptions) (*SimilarityOutput, error) {
+	normalized, err := normalizeSimilarityOptions(options)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateCStringInputs(
+		cStringInput{"embedding similarity text1", text1},
+		cStringInput{"embedding similarity text2", text2},
+		cStringInput{"embedding similarity model type", normalized.ModelType},
+	); err != nil {
+		return nil, err
 	}
 
 	cText1 := C.CString(text1)
@@ -1693,15 +1719,18 @@ func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetD
 	cText2 := C.CString(text2)
 	defer C.free(unsafe.Pointer(cText2))
 
-	cModelType := C.CString(modelType)
+	cModelType := C.CString(normalized.ModelType)
 	defer C.free(unsafe.Pointer(cModelType))
 
 	var result C.EmbeddingSimilarityResult
-	status := C.calculate_embedding_similarity(
+	status := C.calculate_embedding_similarity_with_options(
 		cText1,
 		cText2,
 		cModelType,
-		C.int(targetDim),
+		C.int(normalized.TargetLayer),
+		C.int(normalized.TargetDim),
+		C.float(normalized.QualityPriority),
+		C.float(normalized.LatencyPriority),
 		&result,
 	)
 
@@ -1715,16 +1744,7 @@ func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetD
 		return nil, fmt.Errorf("similarity calculation returned error")
 	}
 
-	// Convert model_type to string
-	var actualModelType string
-	switch int(result.model_type) {
-	case 0:
-		actualModelType = "qwen3"
-	case 1:
-		actualModelType = "gemma"
-	default:
-		actualModelType = "unknown"
-	}
+	actualModelType := embeddingModelTypeName(int(result.model_type))
 
 	return &SimilarityOutput{
 		Similarity:       float32(result.similarity),
@@ -1742,7 +1762,7 @@ type BatchSimilarityMatch struct {
 // BatchSimilarityOutput holds the result of batch similarity matching
 type BatchSimilarityOutput struct {
 	Matches          []BatchSimilarityMatch // Top-k matches, sorted by similarity (descending)
-	ModelType        string                 // Model used: "qwen3", "gemma", or "unknown"
+	ModelType        string                 // Model used: "qwen3", "gemma", "mmbert", "multimodal", or "unknown"
 	ProcessingTimeMs float32                // Processing time in milliseconds
 }
 
@@ -1755,18 +1775,44 @@ type BatchSimilarityOutput struct {
 //   - query: The query text
 //   - candidates: Array of candidate texts
 //   - topK: Maximum number of matches to return (0 = return all, sorted by similarity)
-//   - modelType: "auto", "qwen3", or "gemma"
+//   - modelType: "auto", "qwen3", "gemma", or "mmbert"
 //   - targetDim: Target dimension (0 for default, or 768/512/256/128 for Matryoshka)
 //
 // Returns:
 //   - BatchSimilarityOutput: Top-k matches sorted by similarity (descending)
 //   - error: Error message if operation failed
 func CalculateSimilarityBatch(query string, candidates []string, topK int, modelType string, targetDim int) (*BatchSimilarityOutput, error) {
-	// Validate model type
-	if modelType != "auto" && modelType != "qwen3" && modelType != "gemma" {
-		return nil, fmt.Errorf("invalid model type: %s (must be 'auto', 'qwen3', or 'gemma')", modelType)
-	}
+	return CalculateSimilarityBatchWithOptions(query, candidates, topK, SimilarityOptions{
+		ModelType:       modelType,
+		TargetDim:       targetDim,
+		QualityPriority: 0.5,
+		LatencyPriority: 0.5,
+	})
+}
 
+// CalculateSimilarityBatchWithOptions calculates batch similarity while
+// preserving target-layer and auto-routing priority controls.
+func CalculateSimilarityBatchWithOptions(query string, candidates []string, topK int, options SimilarityOptions) (*BatchSimilarityOutput, error) {
+	normalized, err := normalizeSimilarityOptions(options)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateNonNegativeCInt("top-k", topK); err != nil {
+		return nil, err
+	}
+	if err := validateNonNegativeCInt("candidate count", len(candidates)); err != nil {
+		return nil, err
+	}
+	inputs := []cStringInput{
+		{"batch similarity query", query},
+		{"batch similarity model type", normalized.ModelType},
+	}
+	for i, candidate := range candidates {
+		inputs = append(inputs, cStringInput{fmt.Sprintf("batch similarity candidates[%d]", i), candidate})
+	}
+	if err := validateCStringInputs(inputs...); err != nil {
+		return nil, err
+	}
 	if len(candidates) == 0 {
 		return nil, fmt.Errorf("candidates array cannot be empty")
 	}
@@ -1776,7 +1822,7 @@ func CalculateSimilarityBatch(query string, candidates []string, topK int, model
 	defer C.free(unsafe.Pointer(cQuery))
 
 	// Convert model type to C string
-	cModelType := C.CString(modelType)
+	cModelType := C.CString(normalized.ModelType)
 	defer C.free(unsafe.Pointer(cModelType))
 
 	// Convert candidates to C string array
@@ -1787,13 +1833,16 @@ func CalculateSimilarityBatch(query string, candidates []string, topK int, model
 	}
 
 	var result C.BatchSimilarityResult
-	status := C.calculate_similarity_batch(
+	status := C.calculate_similarity_batch_with_options(
 		cQuery,
 		(**C.char)(unsafe.Pointer(&cCandidates[0])),
 		C.int(len(candidates)),
 		C.int(topK),
 		cModelType,
-		C.int(targetDim),
+		C.int(normalized.TargetLayer),
+		C.int(normalized.TargetDim),
+		C.float(normalized.QualityPriority),
+		C.float(normalized.LatencyPriority),
 		&result,
 	)
 
@@ -1824,16 +1873,7 @@ func CalculateSimilarityBatch(query string, candidates []string, topK int, model
 	// Free the result
 	C.free_batch_similarity_result(&result)
 
-	// Convert model_type to string
-	var actualModelType string
-	switch int(result.model_type) {
-	case 0:
-		actualModelType = "qwen3"
-	case 1:
-		actualModelType = "gemma"
-	default:
-		actualModelType = "unknown"
-	}
+	actualModelType := embeddingModelTypeName(int(result.model_type))
 
 	return &BatchSimilarityOutput{
 		Matches:          matches,
@@ -1903,6 +1943,19 @@ func GetEmbeddingModelsInfo() (*ModelsInfoOutput, error) {
 
 // FindMostSimilar finds the most similar text from a list of candidates with maxLength parameter
 func FindMostSimilar(query string, candidates []string, maxLength int) SimResult {
+	if err := validateNonNegativeCInt("maximum token length", maxLength); err != nil {
+		return SimResult{Index: -1, Score: -1.0}
+	}
+	if err := validateNonNegativeCInt("candidate count", len(candidates)); err != nil {
+		return SimResult{Index: -1, Score: -1.0}
+	}
+	inputs := []cStringInput{{"similarity query", query}}
+	for i, candidate := range candidates {
+		inputs = append(inputs, cStringInput{fmt.Sprintf("similarity candidates[%d]", i), candidate})
+	}
+	if err := validateCStringInputs(inputs...); err != nil {
+		return SimResult{Index: -1, Score: -1.0}
+	}
 	if !modelInitialized {
 		log.Printf("BERT model not initialized")
 		return SimResult{Index: -1, Score: -1.0}
@@ -2039,6 +2092,9 @@ func InitJailbreakClassifier(modelPath string, numClasses int, useCPU bool) erro
 
 // ClassifyText classifies the provided text and returns the predicted class and confidence
 func ClassifyText(text string) (ClassResult, error) {
+	if err := validateCStringInputs(cStringInput{"classification text", text}); err != nil {
+		return ClassResult{}, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -2056,6 +2112,9 @@ func ClassifyText(text string) (ClassResult, error) {
 
 // ClassifyTextWithProbabilities classifies the provided text and returns the predicted class, confidence, and full probability distribution
 func ClassifyTextWithProbabilities(text string) (ClassResultWithProbs, error) {
+	if err := validateCStringInputs(cStringInput{"classification text", text}); err != nil {
+		return ClassResultWithProbs{}, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -2086,6 +2145,9 @@ func ClassifyTextWithProbabilities(text string) (ClassResultWithProbs, error) {
 
 // ClassifyPIIText classifies the provided text for PII detection and returns the predicted class and confidence
 func ClassifyPIIText(text string) (ClassResult, error) {
+	if err := validateCStringInputs(cStringInput{"PII classification text", text}); err != nil {
+		return ClassResult{}, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -2103,6 +2165,9 @@ func ClassifyPIIText(text string) (ClassResult, error) {
 
 // ClassifyJailbreakText classifies the provided text for jailbreak detection and returns the predicted class and confidence
 func ClassifyJailbreakText(text string) (ClassResult, error) {
+	if err := validateCStringInputs(cStringInput{"jailbreak classification text", text}); err != nil {
+		return ClassResult{}, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -2356,6 +2421,9 @@ func InitMmBert32KIntentClassifier(modelPath string, useCPU bool) error {
 // ClassifyMmBert32KIntent classifies text using mmBERT-32K intent classifier
 // Returns the predicted category and confidence
 func ClassifyMmBert32KIntent(text string) (ClassResult, error) {
+	if err := validateCStringInputs(cStringInput{"mmBERT intent classification text", text}); err != nil {
+		return ClassResult{}, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -2400,6 +2468,9 @@ func InitMmBert32KFactcheckClassifier(modelPath string, useCPU bool) error {
 // ClassifyMmBert32KFactcheck classifies text using mmBERT-32K fact-check classifier
 // Returns: 0=NO_FACT_CHECK_NEEDED, 1=FACT_CHECK_NEEDED
 func ClassifyMmBert32KFactcheck(text string) (ClassResult, error) {
+	if err := validateCStringInputs(cStringInput{"mmBERT fact-check classification text", text}); err != nil {
+		return ClassResult{}, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -2444,6 +2515,9 @@ func InitMmBert32KJailbreakClassifier(modelPath string, useCPU bool) error {
 // ClassifyMmBert32KJailbreak classifies text using mmBERT-32K jailbreak detector
 // Returns: 0=benign, 1=jailbreak
 func ClassifyMmBert32KJailbreak(text string) (ClassResult, error) {
+	if err := validateCStringInputs(cStringInput{"mmBERT jailbreak classification text", text}); err != nil {
+		return ClassResult{}, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -2488,6 +2562,9 @@ func InitMmBert32KFeedbackClassifier(modelPath string, useCPU bool) error {
 // ClassifyMmBert32KFeedback classifies text using mmBERT-32K feedback detector
 // Returns: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT
 func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
+	if err := validateCStringInputs(cStringInput{"mmBERT feedback classification text", text}); err != nil {
+		return ClassResult{}, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -2532,6 +2609,9 @@ func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
 // Returns a list of detected PII entities with their types and positions.
 // Entity types are returned as "LABEL_{class_id}" and translated by the Go-side PIIMapping.
 func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
+	if err := validateCStringInputs(cStringInput{"mmBERT PII classification text", text}); err != nil {
+		return nil, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -2559,13 +2639,6 @@ func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 	}
 
 	return entities, nil
-}
-
-// ModalityResult represents the output of modality routing classification
-type ModalityResult struct {
-	Modality   string  // "AR", "DIFFUSION", or "BOTH"
-	ClassID    int     // 0=AR, 1=DIFFUSION, 2=BOTH
-	Confidence float32 // Confidence score (0.0-1.0)
 }
 
 // InitMmBert32KModalityClassifier initializes the mmBERT-32K modality routing classifier
@@ -2598,6 +2671,9 @@ func InitMmBert32KModalityClassifier(modelPath string, useCPU bool) error {
 // ClassifyMmBert32KModality classifies user prompt intent into response modality
 // Returns ModalityResult with modality label ("AR", "DIFFUSION", "BOTH") and confidence
 func ClassifyMmBert32KModality(text string) (ModalityResult, error) {
+	if err := validateCStringInputs(cStringInput{"mmBERT modality classification text", text}); err != nil {
+		return ModalityResult{}, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -2656,6 +2732,9 @@ func InitFactCheckClassifier(modelPath string, useCPU bool) error {
 // ClassifyFactCheckText classifies the provided text for fact-checking needs
 // Returns the predicted class (0=NO_FACT_CHECK_NEEDED, 1=FACT_CHECK_NEEDED) and confidence
 func ClassifyFactCheckText(text string) (ClassResult, error) {
+	if err := validateCStringInputs(cStringInput{"fact-check classification text", text}); err != nil {
+		return ClassResult{}, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -2700,6 +2779,9 @@ func InitFeedbackDetector(modelPath string, useCPU bool) error {
 // ClassifyFeedbackText classifies the provided text to determine user feedback type
 // Returns: 0=SAT (satisfied), 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT
 func ClassifyFeedbackText(text string) (ClassResult, error) {
+	if err := validateCStringInputs(cStringInput{"feedback classification text", text}); err != nil {
+		return ClassResult{}, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -2865,6 +2947,13 @@ func IsNLIModelInitialized() bool {
 // threshold: confidence threshold for hallucination detection (0.0-1.0)
 // Only tokens with confidence >= threshold are considered hallucinated
 func DetectHallucinations(context, question, answer string, threshold float32) (*HallucinationDetectionResult, error) {
+	if err := validateCStringInputs(
+		cStringInput{"hallucination context", context},
+		cStringInput{"hallucination question", question},
+		cStringInput{"hallucination answer", answer},
+	); err != nil {
+		return nil, err
+	}
 	if hallucinationDetectInitErr != nil {
 		return nil, fmt.Errorf("hallucination detection model not initialized: %v", hallucinationDetectInitErr)
 	}
@@ -2917,6 +3006,12 @@ func DetectHallucinations(context, question, answer string, threshold float32) (
 
 // ClassifyNLI classifies the relationship between premise and hypothesis
 func ClassifyNLI(premise, hypothesis string) (*NLIClassificationResult, error) {
+	if err := validateCStringInputs(
+		cStringInput{"NLI premise", premise},
+		cStringInput{"NLI hypothesis", hypothesis},
+	); err != nil {
+		return nil, err
+	}
 	if nliModelInitErr != nil {
 		return nil, fmt.Errorf("NLI model not initialized: %v", nliModelInitErr)
 	}
@@ -2952,6 +3047,13 @@ func ClassifyNLI(premise, hypothesis string) (*NLIClassificationResult, error) {
 // threshold: confidence threshold for hallucination detection (0.0-1.0)
 // Only tokens with confidence >= threshold are considered hallucinated
 func DetectHallucinationsWithNLI(context, question, answer string, threshold float32) (*EnhancedHallucinationDetectionResult, error) {
+	if err := validateCStringInputs(
+		cStringInput{"hallucination context", context},
+		cStringInput{"hallucination question", question},
+		cStringInput{"hallucination answer", answer},
+	); err != nil {
+		return nil, err
+	}
 	if hallucinationDetectInitErr != nil {
 		return nil, fmt.Errorf("hallucination detection model not initialized: %v", hallucinationDetectInitErr)
 	}
@@ -3012,6 +3114,9 @@ func DetectHallucinationsWithNLI(context, question, answer string, threshold flo
 
 // ClassifyModernBertText classifies the provided text using ModernBERT and returns the predicted class and confidence
 func ClassifyModernBertText(text string) (ClassResult, error) {
+	if err := validateCStringInputs(cStringInput{"ModernBERT classification text", text}); err != nil {
+		return ClassResult{}, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -3029,6 +3134,9 @@ func ClassifyModernBertText(text string) (ClassResult, error) {
 
 // ClassifyModernBertTextWithProbabilities classifies the provided text using ModernBERT and returns the predicted class, confidence, and full probability distribution
 func ClassifyModernBertTextWithProbabilities(text string) (ClassResultWithProbs, error) {
+	if err := validateCStringInputs(cStringInput{"ModernBERT classification text", text}); err != nil {
+		return ClassResultWithProbs{}, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -3059,6 +3167,9 @@ func ClassifyModernBertTextWithProbabilities(text string) (ClassResultWithProbs,
 
 // ClassifyModernBertPIIText classifies the provided text for PII detection using ModernBERT and returns the predicted class and confidence
 func ClassifyModernBertPIIText(text string) (ClassResult, error) {
+	if err := validateCStringInputs(cStringInput{"ModernBERT PII classification text", text}); err != nil {
+		return ClassResult{}, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -3076,6 +3187,9 @@ func ClassifyModernBertPIIText(text string) (ClassResult, error) {
 
 // ClassifyModernBertJailbreakText classifies the provided text for jailbreak detection using ModernBERT and returns the predicted class and confidence
 func ClassifyModernBertJailbreakText(text string) (ClassResult, error) {
+	if err := validateCStringInputs(cStringInput{"ModernBERT jailbreak classification text", text}); err != nil {
+		return ClassResult{}, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -3158,6 +3272,9 @@ func InitDebertaJailbreakClassifier(modelPath string, useCPU bool) error {
 //	    log.Printf("🚨 Injection detected with %.2f%% confidence", result.Confidence * 100)
 //	}
 func ClassifyDebertaJailbreakText(text string) (ClassResult, error) {
+	if err := validateCStringInputs(cStringInput{"DeBERTa jailbreak classification text", text}); err != nil {
+		return ClassResult{}, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -3176,6 +3293,12 @@ func ClassifyDebertaJailbreakText(text string) (ClassResult, error) {
 // ClassifyModernBertPIITokens performs token-level PII classification using ModernBERT
 // and returns detected entities with their positions and confidence scores
 func ClassifyModernBertPIITokens(text string, modelConfigPath string) (TokenClassificationResult, error) {
+	if err := validateCStringInputs(
+		cStringInput{"ModernBERT PII token classification text", text},
+		cStringInput{"ModernBERT PII model config path", modelConfigPath},
+	); err != nil {
+		return TokenClassificationResult{}, err
+	}
 	// Validate inputs
 	if text == "" {
 		return TokenClassificationResult{}, fmt.Errorf("text cannot be empty")
@@ -3265,6 +3388,12 @@ func InitBertTokenClassifier(modelPath string, numClasses int, useCPU bool) erro
 
 // ClassifyBertPIITokens performs token classification for PII detection using BERT
 func ClassifyBertPIITokens(text string, id2labelJson string) (TokenClassificationResult, error) {
+	if err := validateCStringInputs(
+		cStringInput{"BERT PII token classification text", text},
+		cStringInput{"BERT id2label JSON", id2labelJson},
+	); err != nil {
+		return TokenClassificationResult{}, err
+	}
 	if bertTokenClassifierInitErr != nil {
 		return TokenClassificationResult{}, fmt.Errorf("BERT token classifier not initialized: %v", bertTokenClassifierInitErr)
 	}
@@ -3313,6 +3442,9 @@ func ClassifyBertPIITokens(text string, id2labelJson string) (TokenClassificatio
 
 // ClassifyBertText performs sequence classification using BERT
 func ClassifyBertText(text string) (ClassResult, error) {
+	if err := validateCStringInputs(cStringInput{"BERT classification text", text}); err != nil {
+		return ClassResult{}, err
+	}
 	if bertTokenClassifierInitErr != nil {
 		return ClassResult{}, fmt.Errorf("BERT classifier not initialized: %v", bertTokenClassifierInitErr)
 	}
@@ -3358,6 +3490,9 @@ func InitCandleBertTokenClassifier(modelPath string, numClasses int, useCPU bool
 
 // ClassifyCandleBertText classifies text using official Candle BERT implementation
 func ClassifyCandleBertText(text string) (ClassResult, error) {
+	if err := validateCStringInputs(cStringInput{"Candle BERT classification text", text}); err != nil {
+		return ClassResult{}, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -3375,6 +3510,9 @@ func ClassifyCandleBertText(text string) (ClassResult, error) {
 
 // ClassifyCandleBertTokens classifies tokens using official Candle BERT token classifier
 func ClassifyCandleBertTokens(text string) (TokenClassificationResult, error) {
+	if err := validateCStringInputs(cStringInput{"Candle BERT token classification text", text}); err != nil {
+		return TokenClassificationResult{}, err
+	}
 	if text == "" {
 		return TokenClassificationResult{}, fmt.Errorf("text cannot be empty")
 	}
@@ -3414,6 +3552,12 @@ func ClassifyCandleBertTokens(text string) (TokenClassificationResult, error) {
 
 // ClassifyCandleBertTokensWithLabels classifies tokens using official Candle BERT with proper label mapping
 func ClassifyCandleBertTokensWithLabels(text string, id2labelJSON string) (TokenClassificationResult, error) {
+	if err := validateCStringInputs(
+		cStringInput{"Candle BERT token classification text", text},
+		cStringInput{"Candle BERT id2label JSON", id2labelJSON},
+	); err != nil {
+		return TokenClassificationResult{}, err
+	}
 	if text == "" {
 		return TokenClassificationResult{}, fmt.Errorf("text cannot be empty")
 	}
@@ -3490,16 +3634,12 @@ func InitLoRAUnifiedClassifier(intentModelPath, piiModelPath, securityModelPath,
 
 // ClassifyBatchWithLoRA performs batch classification using LoRA models
 func ClassifyBatchWithLoRA(texts []string) (LoRABatchResult, error) {
-	if len(texts) == 0 {
-		return LoRABatchResult{}, fmt.Errorf("empty text batch")
+	if err := validateLoRATextBatch(texts); err != nil {
+		return LoRABatchResult{}, err
 	}
 
-	// Convert Go strings to C strings
-	cTexts := make([]*C.char, len(texts))
-	for i, text := range texts {
-		cTexts[i] = C.CString(text)
-		defer C.free(unsafe.Pointer(cTexts[i]))
-	}
+	cTexts := cStringBatch(texts)
+	defer freeCStringBatch(cTexts)
 
 	log.Printf("Processing batch with LoRA models, batch size: %d", len(texts))
 
@@ -3564,6 +3704,31 @@ func ClassifyBatchWithLoRA(texts []string) (LoRABatchResult, error) {
 	return result, nil
 }
 
+func validateLoRATextBatch(texts []string) error {
+	if len(texts) == 0 {
+		return errors.New("empty text batch")
+	}
+	inputs := make([]cStringInput, len(texts))
+	for i, text := range texts {
+		inputs[i] = cStringInput{fmt.Sprintf("LoRA classification texts[%d]", i), text}
+	}
+	return validateCStringInputs(inputs...)
+}
+
+func cStringBatch(values []string) []*C.char {
+	result := make([]*C.char, len(values))
+	for i, value := range values {
+		result[i] = C.CString(value)
+	}
+	return result
+}
+
+func freeCStringBatch(values []*C.char) {
+	for _, value := range values {
+		C.free(unsafe.Pointer(value))
+	}
+}
+
 // ================================================================================================
 // QWEN3 LORA GENERATIVE CLASSIFIER GO BINDINGS
 // ================================================================================================
@@ -3614,6 +3779,12 @@ func LoadQwen3LoRAAdapter(adapterName, adapterPath string) error {
 
 // ClassifyWithQwen3Adapter classifies text using a specific LoRA adapter
 func ClassifyWithQwen3Adapter(text, adapterName string) (*Qwen3LoRAResult, error) {
+	if err := validateCStringInputs(
+		cStringInput{"Qwen3 adapter classification text", text},
+		cStringInput{"Qwen3 adapter name", adapterName},
+	); err != nil {
+		return nil, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -3695,6 +3866,13 @@ func GetQwen3LoadedAdapters() ([]string, error) {
 func ClassifyZeroShotQwen3(text string, categories []string) (*Qwen3LoRAResult, error) {
 	if len(categories) == 0 {
 		return nil, fmt.Errorf("categories list cannot be empty")
+	}
+	inputs := []cStringInput{{"Qwen3 zero-shot classification text", text}}
+	for i, category := range categories {
+		inputs = append(inputs, cStringInput{fmt.Sprintf("Qwen3 zero-shot categories[%d]", i), category})
+	}
+	if err := validateCStringInputs(inputs...); err != nil {
+		return nil, err
 	}
 
 	cText := C.CString(text)
@@ -3811,6 +3989,9 @@ func InitQwen3Guard(modelPath string) error {
 //	    fmt.Println("🚨 Unsafe content detected!")
 //	}
 func ClassifyPromptSafety(text string) (*SafetyClassificationResult, error) {
+	if err := validateCStringInputs(cStringInput{"prompt safety classification text", text}); err != nil {
+		return nil, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -3860,6 +4041,9 @@ func ClassifyPromptSafety(text string) (*SafetyClassificationResult, error) {
 //	    fmt.Println("🚨 Unsafe output detected!")
 //	}
 func ClassifyResponseSafety(text string) (*SafetyClassificationResult, error) {
+	if err := validateCStringInputs(cStringInput{"response safety classification text", text}); err != nil {
+		return nil, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -3902,6 +4086,12 @@ func ClassifyResponseSafety(text string) (*SafetyClassificationResult, error) {
 //   - string: Raw model output
 //   - error: Non-nil if generation fails
 func GetGuardRawOutput(text string, mode string) (string, error) {
+	if err := validateCStringInputs(
+		cStringInput{"guard text", text},
+		cStringInput{"guard mode", mode},
+	); err != nil {
+		return "", err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -4112,6 +4302,9 @@ func (s *MLPSelector) ToJSON() (string, error) {
 
 // MLPFromJSON loads an MLP selector from JSON (the primary way to load trained models)
 func MLPFromJSON(jsonStr string) (*MLPSelector, error) {
+	if err := validateCStringInputs(cStringInput{"MLP JSON", jsonStr}); err != nil {
+		return nil, err
+	}
 	cJSON := C.CString(jsonStr)
 	defer C.free(unsafe.Pointer(cJSON))
 
@@ -4125,6 +4318,9 @@ func MLPFromJSON(jsonStr string) (*MLPSelector, error) {
 
 // MLPFromJSONWithDevice loads an MLP selector from JSON with specific device
 func MLPFromJSONWithDevice(jsonStr string, deviceType MLPDeviceType) (*MLPSelector, error) {
+	if err := validateCStringInputs(cStringInput{"MLP JSON", jsonStr}); err != nil {
+		return nil, err
+	}
 	cJSON := C.CString(jsonStr)
 	defer C.free(unsafe.Pointer(cJSON))
 
@@ -4138,6 +4334,9 @@ func MLPFromJSONWithDevice(jsonStr string, deviceType MLPDeviceType) (*MLPSelect
 
 // MLPFromJSONWithDeviceAndDType loads an MLP selector from JSON with device and dtype for mixed precision
 func MLPFromJSONWithDeviceAndDType(jsonStr string, deviceType MLPDeviceType, dtype MLPDType) (*MLPSelector, error) {
+	if err := validateCStringInputs(cStringInput{"MLP JSON", jsonStr}); err != nil {
+		return nil, err
+	}
 	cJSON := C.CString(jsonStr)
 	defer C.free(unsafe.Pointer(cJSON))
 

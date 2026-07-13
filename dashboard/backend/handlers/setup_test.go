@@ -3,6 +3,8 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -298,7 +300,10 @@ routing:
 	req := httptest.NewRequest(http.MethodPost, "/api/setup/import-remote", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
-	SetupImportRemoteHandler(configPath)(w, req)
+	setupImportRemoteHandlerWithClient(
+		configPath,
+		newControlledTestOutboundClient(remoteConfigServer.Client()),
+	)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
@@ -399,10 +404,90 @@ global:
 	req := httptest.NewRequest(http.MethodPost, "/api/setup/import-remote", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
-	SetupImportRemoteHandler(configPath)(w, req)
+	setupImportRemoteHandlerWithClient(
+		configPath,
+		newControlledTestOutboundClient(remoteConfigServer.Client()),
+	)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestSetupImportRemoteHandlerRejectsLoopbackInProduction(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	configPath := createBootstrapSetupConfig(t, tempDir)
+	body, err := json.Marshal(SetupImportRemoteRequest{URL: "http://127.0.0.1/config.yaml"})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/setup/import-remote", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	SetupImportRemoteHandler(configPath)(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestSetupImportRemoteHandlerRejectsOversizedResponse(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	configPath := createBootstrapSetupConfig(t, tempDir)
+	client := &controlledTestOutboundClient{do: func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body: io.NopCloser(strings.NewReader(strings.Repeat(
+				"x",
+				setupRemoteConfigMaxSize+1,
+			))),
+		}, nil
+	}}
+	body, err := json.Marshal(SetupImportRemoteRequest{URL: "https://example.com/config.yaml"})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/setup/import-remote", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	setupImportRemoteHandlerWithClient(configPath, client)(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502: %s", w.Code, w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), strings.Repeat("x", 32)) {
+		t.Fatalf("oversized remote body leaked into error: %s", w.Body.String())
+	}
+}
+
+func TestSetupImportRemoteHandlerDoesNotExposeClientErrors(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	configPath := createBootstrapSetupConfig(t, tempDir)
+	client := &controlledTestOutboundClient{do: func(*http.Request) (*http.Response, error) {
+		return nil, errors.New("https://user:pass@example.com/config?token=query-secret body-secret")
+	}}
+	body, err := json.Marshal(SetupImportRemoteRequest{URL: "https://example.com/config?token=request-secret"})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/setup/import-remote", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	setupImportRemoteHandlerWithClient(configPath, client)(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502: %s", w.Code, w.Body.String())
+	}
+	for _, secret := range []string{"user:pass", "query-secret", "request-secret", "body-secret"} {
+		if strings.Contains(w.Body.String(), secret) {
+			t.Fatalf("client error leaked %q: %s", secret, w.Body.String())
+		}
 	}
 }
 

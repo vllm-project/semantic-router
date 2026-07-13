@@ -152,7 +152,7 @@ func captureRequestHeaders(
 	logging.ComponentDebugEvent("extproc", "request_headers_captured", map[string]interface{}{
 		"request_id":      ctx.RequestID,
 		"method":          method,
-		"path":            path,
+		"path":            normalizeRequestPath(path),
 		"header_count":    len(requestHeaders.Headers),
 		"looper_request":  ctx.LooperRequest,
 		"skip_processing": ctx.SkipProcessing,

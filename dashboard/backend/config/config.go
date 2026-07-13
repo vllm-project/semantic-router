@@ -1,33 +1,41 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 )
 
 const (
 	minimumJWTExpiryHours = 1
 	maximumJWTExpiryHours = 7 * 24
+
+	DashboardSecurityProfileDevelopment = "development"
+	DashboardSecurityProfileProduction  = "production"
 )
 
 // Config holds all application configuration
 type Config struct {
-	Port                   string
-	AuthDBPath             string
-	JWTSecret              string
-	JWTExpiryHours         int
-	BootstrapAdminEmail    string
-	BootstrapAdminPassword string
-	BootstrapAdminName     string
-	PasswordBlocklistPath  string
-	StaticDir              string
-	ConfigFile             string
-	AbsConfigPath          string
-	ConfigDir              string
+	Port                    string
+	AuthDBPath              string
+	JWTSecret               string
+	JWTExpiryHours          int
+	BootstrapAdminEmail     string
+	BootstrapAdminPassword  string
+	BootstrapAdminName      string
+	SecurityProfile         string
+	PasswordBlocklistPath   string
+	PasswordBlocklistSHA256 string
+	StaticDir               string
+	ConfigFile              string
+	AbsConfigPath           string
+	ConfigDir               string
 
 	// Upstream targets
 	GrafanaURL    string
@@ -94,7 +102,9 @@ type authFlags struct {
 	bootstrapEmail    *string
 	bootstrapPassword *string
 	bootstrapName     *string
+	securityProfile   *string
 	passwordBlocklist *string
+	blocklistSHA256   *string
 }
 
 func bindAuthFlags() authFlags {
@@ -105,7 +115,9 @@ func bindAuthFlags() authFlags {
 		bootstrapEmail:    flag.String("bootstrap-admin-email", env("DASHBOARD_ADMIN_EMAIL", ""), "bootstrap admin email"),
 		bootstrapPassword: flag.String("bootstrap-admin-password", env("DASHBOARD_ADMIN_PASSWORD", ""), "bootstrap admin password"),
 		bootstrapName:     flag.String("bootstrap-admin-name", env("DASHBOARD_ADMIN_NAME", ""), "bootstrap admin name"),
+		securityProfile:   flag.String("security-profile", env("DASHBOARD_SECURITY_PROFILE", DashboardSecurityProfileDevelopment), "dashboard security profile (development or production)"),
 		passwordBlocklist: flag.String("password-blocklist", env("DASHBOARD_PASSWORD_BLOCKLIST_PATH", ""), "newline-delimited local password blocklist path"),
+		blocklistSHA256:   flag.String("password-blocklist-sha256", env("DASHBOARD_PASSWORD_BLOCKLIST_SHA256", ""), "expected SHA-256 digest for the password blocklist file"),
 	}
 }
 
@@ -199,7 +211,37 @@ func applyAuthConfig(cfg *Config, flags authFlags) error {
 	cfg.BootstrapAdminEmail = *flags.bootstrapEmail
 	cfg.BootstrapAdminPassword = *flags.bootstrapPassword
 	cfg.BootstrapAdminName = *flags.bootstrapName
-	cfg.PasswordBlocklistPath = *flags.passwordBlocklist
+	cfg.SecurityProfile = strings.TrimSpace(*flags.securityProfile)
+	cfg.PasswordBlocklistPath = strings.TrimSpace(*flags.passwordBlocklist)
+	cfg.PasswordBlocklistSHA256 = strings.ToLower(strings.TrimSpace(*flags.blocklistSHA256))
+	if cfg.SecurityProfile != DashboardSecurityProfileDevelopment &&
+		cfg.SecurityProfile != DashboardSecurityProfileProduction {
+		return fmt.Errorf(
+			"dashboard security profile must be %q or %q",
+			DashboardSecurityProfileDevelopment,
+			DashboardSecurityProfileProduction,
+		)
+	}
+	if cfg.PasswordBlocklistSHA256 != "" {
+		decoded, decodeErr := hex.DecodeString(cfg.PasswordBlocklistSHA256)
+		if decodeErr != nil || len(decoded) != sha256.Size {
+			return fmt.Errorf(
+				"dashboard password blocklist SHA-256 must be exactly %d hexadecimal characters",
+				sha256.Size*2,
+			)
+		}
+	}
+	if cfg.PasswordBlocklistPath == "" && cfg.PasswordBlocklistSHA256 != "" {
+		return fmt.Errorf("dashboard password blocklist SHA-256 requires a blocklist path")
+	}
+	if cfg.SecurityProfile == DashboardSecurityProfileProduction {
+		if cfg.PasswordBlocklistPath == "" {
+			return fmt.Errorf("production dashboard security profile requires a password blocklist path")
+		}
+		if cfg.PasswordBlocklistSHA256 == "" {
+			return fmt.Errorf("production dashboard security profile requires a password blocklist SHA-256")
+		}
+	}
 
 	ttl, err := strconv.Atoi(*flags.jwtTTL)
 	if err != nil {

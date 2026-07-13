@@ -144,7 +144,7 @@ func (r *OpenAIRouter) handleLooperExecution(
 			"request_id": reqCtx.RequestID,
 			"decision":   decision.Name,
 			"algorithm":  decision.Algorithm.Type,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 		return r.createErrorResponse(500, "Looper execution failed: "+err.Error()), nil
 	}
@@ -196,7 +196,7 @@ func (r *OpenAIRouter) handleLooperExecution(
 				"request_id": reqCtx.RequestID,
 				"decision":   decision.Name,
 				"algorithm":  resp.AlgorithmType,
-				"error":      err.Error(),
+				"error_type": safeErrorForLog(err),
 			})
 		} else {
 			resp.Body = translated

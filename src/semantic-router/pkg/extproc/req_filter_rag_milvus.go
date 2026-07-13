@@ -52,7 +52,7 @@ func (r *OpenAIRouter) retrieveFromMilvus(traceCtx context.Context, ctx *Request
 	queryEmbedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
 	if err != nil {
 		// Log full error internally but don't expose it to avoid information disclosure
-		logging.Errorf("Failed to generate embedding for RAG query: %v", err)
+		logging.Errorf("Failed to generate embedding for RAG query: %s", safeErrorForLog(err))
 		return "", fmt.Errorf("failed to generate embedding")
 	}
 

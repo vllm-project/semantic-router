@@ -3,8 +3,8 @@ package router
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"strconv"
@@ -17,6 +17,14 @@ const (
 	redactedToolResultStatusSucceeded = "succeeded"
 	redactedToolResultStatusFailed    = "failed"
 	toolExecutionFailurePrefix        = "Tool execution failed:"
+	// The router's ext-proc API rejects immediate Replay responses above 4 MiB.
+	// Mirror that contract before buffering a response for low-privilege redaction.
+	routerReplayRedactionResponseByteLimit int64 = 4 << 20
+)
+
+var (
+	errRouterReplayResponseTooLarge = errors.New("router replay response exceeds the size limit")
+	errRouterReplayRedactionFailed  = errors.New("router replay response redaction failed")
 )
 
 func attachRouterReplayResponseRedaction(proxy *httputil.ReverseProxy) {
@@ -41,17 +49,15 @@ func redactRouterReplayResponse(resp *http.Response) error {
 		return nil
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBoundedRouterReplayResponseBody(resp.Body)
 	if err != nil {
 		return err
 	}
-	_ = resp.Body.Close()
 
 	redactedBody, changed, err := redactReplayResponseBody(body)
 	if err != nil {
-		log.Printf("router replay redaction skipped for %s: %v", resp.Request.URL.Path, err)
-		resp.Body = io.NopCloser(bytes.NewReader(body))
-		return nil
+		// A low-privilege response must never fail open to the unredacted body.
+		return errRouterReplayRedactionFailed
 	}
 	if !changed {
 		resp.Body = io.NopCloser(bytes.NewReader(body))
@@ -62,6 +68,23 @@ func redactRouterReplayResponse(resp *http.Response) error {
 	resp.ContentLength = int64(len(redactedBody))
 	resp.Header.Set("Content-Length", strconv.Itoa(len(redactedBody)))
 	return nil
+}
+
+func readBoundedRouterReplayResponseBody(body io.ReadCloser) ([]byte, error) {
+	defer body.Close()
+
+	limited := &io.LimitedReader{
+		R: body,
+		N: routerReplayRedactionResponseByteLimit + 1,
+	}
+	contents, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, errRouterReplayRedactionFailed
+	}
+	if int64(len(contents)) > routerReplayRedactionResponseByteLimit {
+		return nil, errRouterReplayResponseTooLarge
+	}
+	return contents, nil
 }
 
 func shouldRedactRouterReplayResponse(resp *http.Response) bool {

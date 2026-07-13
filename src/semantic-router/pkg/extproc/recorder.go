@@ -335,7 +335,7 @@ func persistReplayRecord(
 		logging.ComponentErrorEvent("extproc", "router_replay_persist_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"decision":   record.Decision,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 		return false
 	}
@@ -346,7 +346,7 @@ func persistReplayRecord(
 		logging.ComponentEvent(
 			"extproc",
 			"router_replay_start",
-			routerreplay.LogFields(stored, "router_replay_start"),
+			safeRouterReplayLogFields(stored, "router_replay_start"),
 		)
 	}
 	return true
@@ -371,7 +371,7 @@ func (r *OpenAIRouter) updateRouterReplayStatus(ctx *RequestContext, status int,
 		logging.ComponentErrorEvent("extproc", "router_replay_status_update_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"replay_id":  ctx.RouterReplayID,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 	}
 }
@@ -407,7 +407,7 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 			logging.ComponentEvent(
 				"extproc",
 				"router_replay_complete",
-				routerreplay.LogFields(rec, "router_replay_complete"),
+				safeRouterReplayLogFields(rec, "router_replay_complete"),
 			)
 		}
 	}
@@ -446,7 +446,7 @@ func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext
 		logging.ComponentErrorEvent("extproc", "router_replay_hallucination_update_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"replay_id":  ctx.RouterReplayID,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 	}
 }
@@ -468,7 +468,7 @@ func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage ro
 		logging.ComponentErrorEvent("extproc", "router_replay_usage_update_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"replay_id":  ctx.RouterReplayID,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 	}
 }

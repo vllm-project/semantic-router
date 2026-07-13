@@ -34,6 +34,7 @@ func dashboardAuthToken(ctx context.Context, client *http.Client, baseURL string
 		return "", fmt.Errorf("create login request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-VSR-Auth-Mode", "bearer")
 
 	resp, err := client.Do(req)
 	if err != nil {

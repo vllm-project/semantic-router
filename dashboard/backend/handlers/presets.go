@@ -86,8 +86,8 @@ func PresetDeltaHandler() http.HandlerFunc {
 		}
 
 		var req PresetDeltaRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
+		if status, err := decodeBoundedJSON(w, r, smallJSONRequestBodyLimit, &req); err != nil {
+			http.Error(w, "Invalid request body", status)
 			return
 		}
 

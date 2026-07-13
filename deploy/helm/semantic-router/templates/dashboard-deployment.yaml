@@ -59,6 +59,8 @@ spec:
           value: "http://{{ include "semantic-router.fullname" . }}:{{ .Values.service.api.port }}"
         - name: TARGET_ROUTER_METRICS_URL
           value: "http://{{ include "semantic-router.fullname" . }}-metrics:{{ .Values.service.metrics.port }}/metrics"
+        - name: DASHBOARD_SECURITY_PROFILE
+          value: {{ .Values.dashboard.securityProfile | quote }}
         {{- if .Values.dashboard.jwtSecret.existingSecret }}
         - name: DASHBOARD_JWT_SECRET
           valueFrom:
@@ -69,6 +71,10 @@ spec:
         {{- if .Values.dashboard.passwordBlocklist.existingConfigMap }}
         - name: DASHBOARD_PASSWORD_BLOCKLIST_PATH
           value: "/etc/vllm-sr/password-blocklist/passwords.txt"
+        {{- if .Values.dashboard.passwordBlocklist.sha256 }}
+        - name: DASHBOARD_PASSWORD_BLOCKLIST_SHA256
+          value: {{ lower .Values.dashboard.passwordBlocklist.sha256 | quote }}
+        {{- end }}
         {{- end }}
         {{- if .Values.dashboard.readonly }}
         - name: DASHBOARD_READONLY

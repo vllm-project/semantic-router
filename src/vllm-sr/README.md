@@ -138,12 +138,33 @@ keys are not carried forward. Set exactly 64 hexadecimal characters to rotate
 the Looper key explicitly. Router revisions use `Recreate` so two credential
 generations never overlap.
 
-The Secret is created before atomic `helm upgrade --install`. Secrets needed by
-the ten retained Helm revisions remain available for rollback; unreferenced
-generations are garbage-collected, and `vllm-sr stop --target k8s` removes the
-release-owned generations after a successful uninstall. An unverifiable or
-partial cleanup makes `stop` fail after the remaining best-effort deletions. A
-retry removes release-labelled generations only after Helm proves the release
+Release mutations are serialized with a renewable Kubernetes Lease. An exact,
+immutable current generation is reused when the complete credential set is
+unchanged; any change creates the Secret before atomic `helm upgrade
+--install`. Secrets needed by the ten retained Helm revisions remain available
+for rollback. `vllm-sr stop --target k8s` quarantines release-owned generations
+before uninstall, releases the Lease during the bounded 15-minute rollback
+window so an emergency redeploy is not blocked, then reacquires it and rechecks
+live references before deletion. If any release reappears, cleanup defers the
+entire pre-uninstall batch so its live and retained-history rollback references
+remain valid. Interrupting the wait is safe; a later deploy or stop retries
+expired cleanup. Unverifiable or partial cleanup makes
+`stop` fail after the remaining best-effort deletions.
+
+The CLI identity needs namespace-scoped `get`, `create`, and `update` on
+`coordination.k8s.io/v1` Leases in addition to its existing Helm workload and
+Secret permissions (including `get`, `list`, `create`, `patch`, and `delete` on
+Secrets). It needs `get` on the target Namespace and `create` only when that
+Namespace is absent; an existing Namespace is never applied or updated. Check
+the added Lease boundary before deployment:
+
+```bash
+kubectl auth can-i get leases.coordination.k8s.io --namespace NAMESPACE
+kubectl auth can-i create leases.coordination.k8s.io --namespace NAMESPACE
+kubectl auth can-i update leases.coordination.k8s.io --namespace NAMESPACE
+```
+
+A retry removes release-labelled generations only after Helm proves the release
 is absent and Kubernetes proves the generation has no live router reference.
 The historical namespace-global `vllm-sr-env-secrets` Secret is never deleted
 automatically because it may still be required by another release's retained

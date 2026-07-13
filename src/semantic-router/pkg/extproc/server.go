@@ -184,8 +184,8 @@ func (s *Server) Start() error {
 	case err := <-serverErrCh:
 		if err != nil {
 			logging.ComponentErrorEvent("extproc", "server_stopped_with_error", map[string]interface{}{
-				"port":  s.port,
-				"error": err.Error(),
+				"port":       s.port,
+				"error_type": safeErrorForLog(err),
 			})
 			return err
 		}
@@ -336,7 +336,7 @@ func logReloadRuntimeLifecycleEvent(event modelruntime.Event) {
 		"best_effort": event.BestEffort,
 	}
 	if event.Error != nil {
-		payload["error"] = event.Error.Error()
+		payload["error_type"] = safeErrorForLog(event.Error)
 	}
 	if event.Status == modelruntime.TaskSkipped {
 		logging.ComponentWarnEvent("extproc", "runtime_lifecycle_task_skipped", payload)

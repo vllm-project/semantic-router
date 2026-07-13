@@ -202,8 +202,8 @@ def deployment_secret_refs(deployment: dict[str, Any]) -> set[str]:
     refs = _container_secret_refs(pod_spec)
     refs.update(_volume_secret_refs(pod_spec))
 
-    for item in _list_field(pod_spec, "imagePullSecrets"):
-        item = _require_mapping(item, "imagePullSecrets item")
+    for raw_item in _list_field(pod_spec, "imagePullSecrets"):
+        item = _require_mapping(raw_item, "imagePullSecrets item")
         refs.add(_required_name(item, "name", "imagePullSecrets item"))
     return refs
 
@@ -221,22 +221,22 @@ def _container_secret_refs(pod_spec: dict[str, Any]) -> set[str]:
     refs: set[str] = set()
     for field in ("initContainers", "containers", "ephemeralContainers"):
         containers = _list_field(pod_spec, field, required=field == "containers")
-        for container in containers:
-            container = _require_mapping(container, f"{field} item")
+        for raw_container in containers:
+            container = _require_mapping(raw_container, f"{field} item")
             refs.update(_env_secret_refs(container))
     return refs
 
 
 def _env_secret_refs(container: dict[str, Any]) -> set[str]:
     refs: set[str] = set()
-    for source in _list_field(container, "envFrom"):
-        source = _require_mapping(source, "envFrom item")
+    for raw_source in _list_field(container, "envFrom"):
+        source = _require_mapping(raw_source, "envFrom item")
         secret_ref = _optional_mapping(source, "secretRef", "envFrom item")
         if secret_ref is not None:
             refs.add(_required_name(secret_ref, "name", "secretRef"))
 
-    for variable in _list_field(container, "env"):
-        variable = _require_mapping(variable, "env item")
+    for raw_variable in _list_field(container, "env"):
+        variable = _require_mapping(raw_variable, "env item")
         value_from = _optional_mapping(variable, "valueFrom", "env item")
         if value_from is None:
             continue
@@ -248,8 +248,8 @@ def _env_secret_refs(container: dict[str, Any]) -> set[str]:
 
 def _volume_secret_refs(pod_spec: dict[str, Any]) -> set[str]:
     refs: set[str] = set()
-    for volume in _list_field(pod_spec, "volumes"):
-        volume = _require_mapping(volume, "volumes item")
+    for raw_volume in _list_field(pod_spec, "volumes"):
+        volume = _require_mapping(raw_volume, "volumes item")
         volume_name = _required_name(volume, "name", "volumes item")
         source_name, source = _volume_source(volume, volume_name)
 
@@ -292,8 +292,8 @@ def _volume_source(
 
 def _projected_secret_refs(projected: dict[str, Any]) -> set[str]:
     refs: set[str] = set()
-    for source in _list_field(projected, "sources", required=True):
-        source = _require_mapping(source, "projected sources item")
+    for raw_source in _list_field(projected, "sources", required=True):
+        source = _require_mapping(raw_source, "projected sources item")
         fields = set(source)
         unknown = fields - _PROJECTED_SOURCE_FIELDS
         if unknown:

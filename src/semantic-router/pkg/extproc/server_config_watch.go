@@ -62,8 +62,8 @@ func newConfigFileWatcher(cfgFile string) (*fsnotify.Watcher, string, bool) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "config_watcher_error", map[string]interface{}{
-			"stage": "create_watcher",
-			"error": err.Error(),
+			"stage":      "create_watcher",
+			"error_type": safeErrorForLog(err),
 		})
 		return nil, "", false
 	}
@@ -71,9 +71,9 @@ func newConfigFileWatcher(cfgFile string) (*fsnotify.Watcher, string, bool) {
 	cfgDir := filepath.Dir(cfgFile)
 	if err := watcher.Add(cfgDir); err != nil {
 		logging.ComponentErrorEvent("extproc", "config_watcher_error", map[string]interface{}{
-			"stage": "watch_dir",
-			"dir":   cfgDir,
-			"error": err.Error(),
+			"stage":      "watch_dir",
+			"dir":        cfgDir,
+			"error_type": safeErrorForLog(err),
 		})
 		_ = watcher.Close()
 		return nil, "", false
@@ -98,8 +98,8 @@ func (l *configFileReloadLoop) run(ctx context.Context) {
 				return
 			}
 			logging.ComponentErrorEvent("extproc", "config_watcher_error", map[string]interface{}{
-				"stage": "watch_loop",
-				"error": err.Error(),
+				"stage":      "watch_loop",
+				"error_type": safeErrorForLog(err),
 			})
 		}
 	}
@@ -183,8 +183,8 @@ func (l *configFileReloadLoop) logConfigFileStat() {
 	info, err := os.Stat(l.cfgFile)
 	if err != nil {
 		logging.ComponentDebugEvent("extproc", "config_file_stat_failed", map[string]interface{}{
-			"file":  l.cfgFile,
-			"error": err.Error(),
+			"file":       l.cfgFile,
+			"error_type": safeErrorForLog(err),
 		})
 		return
 	}
@@ -198,8 +198,8 @@ func (l *configFileReloadLoop) logConfigFileStat() {
 
 func (l *configFileReloadLoop) logReloadFailure(err error) {
 	event := map[string]interface{}{
-		"file":  l.cfgFile,
-		"error": err.Error(),
+		"file":       l.cfgFile,
+		"error_type": safeErrorForLog(err),
 	}
 	if strings.Contains(err.Error(), "model download preflight failed") {
 		event["stage"] = "model_download"
@@ -242,8 +242,8 @@ func (s *Server) handleKubernetesConfigUpdate(newCfg *config.RouterConfig) {
 	err := s.reloadRouterFromConfig("kubernetes", s.configPath, newCfg)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "config_reload_failed", map[string]interface{}{
-			"source": "kubernetes",
-			"error":  err.Error(),
+			"source":     "kubernetes",
+			"error_type": safeErrorForLog(err),
 		})
 		return
 	}

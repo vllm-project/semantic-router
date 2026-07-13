@@ -14,8 +14,8 @@ export interface AuthSessionRefreshResult {
 export type AuthSessionWriter = (user: AuthUser) => void | Promise<void>
 
 // Maintained browser clients explicitly request an HttpOnly-cookie-only auth
-// response. API clients that omit this header retain the bearer-token response
-// contract for backwards compatibility.
+// response. Cookie-only is also the server default; a metadata-free non-browser
+// client must explicitly request X-VSR-Auth-Mode: bearer when it needs the JWT.
 export const COOKIE_AUTH_RESPONSE_HEADERS: Readonly<Record<string, string>> = Object.freeze({
   'X-VSR-Auth-Mode': 'cookie',
 })

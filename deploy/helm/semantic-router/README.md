@@ -14,7 +14,7 @@ A Helm chart for deploying Semantic Router - an intelligent routing system for L
 
 ## Source Code
 
-* <https://github.com/vllm-project/semantic-router>
+- <https://github.com/vllm-project/semantic-router>
 
 ## Requirements
 
@@ -51,14 +51,38 @@ it. Other omitted credentials are never inherited from an older generation.
 The immutable Secret is sent through `kubectl` standard input and its values do
 not enter command arguments, logs, Helm values, or rendered manifests.
 
+The CLI serializes deploy and teardown mutations for one release with a
+renewable, compare-and-swap Kubernetes Lease. It reuses the current immutable
+Secret only when the complete encoded data is identical; a changed key set gets
+a fresh generation. The CLI identity therefore needs namespace-scoped `get`,
+`create`, and `update` on `coordination.k8s.io/v1` Leases, plus its existing
+Secret `get/list/create/patch/delete` and Helm workload permissions. It reads the
+target Namespace and creates it only when absent; it never applies or updates an
+existing Namespace.
+
 The CLI retains the Secrets referenced by the ten Helm revisions kept for the
-release. Before rolling back, confirm that the target revision is still listed
-and that every referenced Secret exists:
+release. A stop quarantines every observed generation before uninstall, releases
+the Lease during the bounded 15-minute rollback window, and reacquires it before
+reloading state and deleting only unreferenced generations. This keeps emergency
+redeploy available. If any release reappears during the wait, the complete
+pre-uninstall batch is deferred so both live and retained Helm-history references
+remain valid. An interrupted wait leaves credentials protected, and a later
+deploy or stop retries expired cleanup. Before rolling
+back, confirm that the target revision is still listed and every referenced
+Secret exists:
 
 ```bash
 helm history RELEASE --namespace NAMESPACE --max 10
 helm get manifest RELEASE --namespace NAMESPACE --revision REVISION
 kubectl get secret SECRET --namespace NAMESPACE
+```
+
+Preflight the new release-lock permission explicitly:
+
+```bash
+kubectl auth can-i get leases.coordination.k8s.io --namespace NAMESPACE
+kubectl auth can-i create leases.coordination.k8s.io --namespace NAMESPACE
+kubectl auth can-i update leases.coordination.k8s.io --namespace NAMESPACE
 ```
 
 Retention covers Secret references in container environment sources, image
@@ -107,11 +131,38 @@ the target revision or its referenced Secret is no longer retained.
 
 ## Password blocklist updates
 
-The dashboard reads the configured password blocklist once during process
-startup. Kubernetes may refresh an existing ConfigMap volume in place, but that
-does not update the in-memory policy. After changing the selected ConfigMap key,
-restart the dashboard Deployment and wait for it to become ready before relying
-on the new corpus:
+`dashboard.securityProfile` is an explicit deployment boundary:
+
+- `development` permits the built-in lightweight denylist and optionally loads
+  an external file.
+- `production` requires an external regular file containing at least 10,000
+  unique entries after NFC normalization, plus the SHA-256 digest of the exact
+  file bytes. Missing, malformed, undersized, or digest-mismatched corpora stop
+  the dashboard before the authentication service is created.
+
+The production values contain deliberately unusable image and corpus
+placeholders so `make helm-prod` cannot silently launch with development
+security. Pin a real non-`latest` dashboard image tag, keep `pullPolicy: Always`
+or adopt an immutable digest in your deployment tooling, create the external
+ConfigMap, and replace the digest before installation:
+
+```bash
+CORPUS=./compromised-passwords.txt
+DIGEST="$(sha256sum "${CORPUS}" | awk '{print $1}')"
+kubectl create configmap semantic-router-dashboard-password-blocklist \
+  --namespace NAMESPACE --from-file=passwords.txt="${CORPUS}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+helm upgrade --install RELEASE . --namespace NAMESPACE \
+  -f values-prod.yaml \
+  --set-string dashboard.image.tag=RELEASE_TAG \
+  --set-string dashboard.passwordBlocklist.sha256="${DIGEST}"
+```
+
+The dashboard reads the verified corpus once during process startup. Kubernetes
+may refresh an existing ConfigMap volume in place, but that does not update the
+in-memory policy. After changing the selected ConfigMap key, restart the
+dashboard Deployment and wait for it to become ready before relying on the new
+corpus:
 
 ```bash
 kubectl rollout restart deployment --namespace NAMESPACE \
@@ -121,9 +172,11 @@ kubectl rollout status deployment --namespace NAMESPACE \
   --timeout=10m
 ```
 
-Startup fails closed when the configured object, key, or file is unavailable or
-invalid. Test a newly blocked value through the password-change policy before
-considering the corpus update complete.
+Startup fails closed when the configured object, key, file, digest, or unique
+entry count is invalid. The authenticated `/api/auth/password-policy` endpoint
+returns only `profile`, `entryCount`, and `sha256`; it never returns the path or
+entries. Verify those fields and test a canary value through the password-change
+policy before considering the corpus update complete.
 
 ## Values
 
@@ -220,9 +273,10 @@ considering the corpus update complete.
 | dashboard.jwtSecret | object | `{"existingSecret":"","existingSecretKey":"jwt-secret"}` | JWT signing secret for dashboard auth sessions. Point this at a Secret you manage (ideally an ExternalSecret) so the signing key is stable. If you leave it unset, the dashboard binary falls back to generating a random secret on every pod start, which invalidates all login sessions on each restart (rolling update, chart bump, or node move forces a re-login). A zero-config install still works (the random fallback is a valid signing key, you can log in and use the dashboard); you just lose existing sessions whenever the pod restarts, so leaving it unset is fine for demos but set this for any deployment where sessions need to survive restarts. |
 | dashboard.jwtSecret.existingSecret | string | `""` | Name of an existing Secret holding the JWT signing key. When set, the dashboard reads DASHBOARD_JWT_SECRET from it via secretKeyRef. When empty, no env is injected and the binary uses its per-start random fallback. |
 | dashboard.jwtSecret.existingSecretKey | string | `"jwt-secret"` | Key within existingSecret holding the JWT signing secret. |
-| dashboard.passwordBlocklist | object | `{"existingConfigMap":"","key":"passwords.txt"}` | Optional existing ConfigMap source for a newline-delimited password blocklist. The corpus is not stored in Helm values or a Secret. |
-| dashboard.passwordBlocklist.existingConfigMap | string | `""` | Name of an existing ConfigMap containing the blocklist. When empty, the dashboard uses its built-in password policy and no volume or env var is rendered. |
+| dashboard.passwordBlocklist | object | `{"existingConfigMap":"","key":"passwords.txt","sha256":""}` | Optional existing ConfigMap source for a newline-delimited password blocklist. Production requires it and verifies its digest and NFC-unique entry count. The corpus is not stored in Helm values or a Secret. |
+| dashboard.passwordBlocklist.existingConfigMap | string | `""` | Name of an existing ConfigMap containing the blocklist. It may be empty only in the development profile. |
 | dashboard.passwordBlocklist.key | string | `"passwords.txt"` | ConfigMap key mounted read-only as `/etc/vllm-sr/password-blocklist/passwords.txt`. |
+| dashboard.passwordBlocklist.sha256 | string | `""` | SHA-256 digest of the exact mounted file bytes. Required and verified in production. |
 | dashboard.persistence.accessMode | string | `"ReadWriteOnce"` | Access mode for the dashboard-local state PVC |
 | dashboard.persistence.annotations | object | `{}` | Annotations for the dashboard-local state PVC |
 | dashboard.persistence.enabled | bool | `false` | Persist dashboard-local SQLite state for auth/session/workflow data. This is restart-safe for one dashboard replica, not a shared HA session store. |
@@ -233,6 +287,7 @@ considering the corpus update complete.
 | dashboard.podSecurityContext | object | `{"fsGroup":65532}` | Pod-level security context. The default fsGroup matches the non-root user (UID/GID 65532) baked into the upstream dashboard image, ensuring the persistence PVC mount at /app/data is writable by the binary. Without this, the dashboard crashloops with "unable to open database file" when persistence is enabled on storage classes that mount as root:root 0755 (which is the default behavior for most cloud-provider CSI drivers). Override if you build a custom dashboard image with a different non-root UID. |
 | dashboard.readonly | bool | `false` | Run dashboard in read-only mode |
 | dashboard.replicaCount | int | `1` | Dashboard replica count. Must stay 1 until the dashboard auth/session store supports a shared multi-replica backend. |
+| dashboard.securityProfile | string | `"development"` | Explicit dashboard security profile. `production` requires a verified external corpus and hardened image settings. |
 | dashboard.resources.limits | object | `{"cpu":"500m","memory":"512Mi"}` |  |
 | dashboard.resources.requests | object | `{"cpu":"100m","memory":"128Mi"}` |  |
 | dashboard.service.port | int | `8700` | Dashboard service port |

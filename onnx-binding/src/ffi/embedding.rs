@@ -10,10 +10,16 @@ use crate::ffi::types::{
 use crate::model_architectures::embedding::mmbert_embedding::MmBertEmbeddingModel;
 use parking_lot::Mutex;
 use std::ffi::{c_char, CStr, CString};
-use std::sync::OnceLock;
+use std::sync::{Mutex as InitMutex, OnceLock};
+
+use super::c_string_array::parse_c_string_array;
+use super::embedding_error_status;
+use super::init_once::{initialize_once_with_identity, InitializedModel, ModelInitIdentity};
 
 /// Global singleton for MmBertEmbeddingModel (wrapped in Mutex for mutable access)
-static GLOBAL_MMBERT_MODEL: OnceLock<Mutex<MmBertEmbeddingModel>> = OnceLock::new();
+static GLOBAL_MMBERT_MODEL: OnceLock<InitializedModel<Mutex<MmBertEmbeddingModel>>> =
+    OnceLock::new();
+static MMBERT_INIT_LOCK: InitMutex<()> = InitMutex::new(());
 
 // ============================================================================
 // Initialization Functions
@@ -50,31 +56,23 @@ pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu
         }
     };
 
-    // Check if already initialized
-    if GLOBAL_MMBERT_MODEL.get().is_some() {
-        eprintln!("WARNING: mmBERT model already initialized");
-        return true;
-    }
-
-    // Load model
-    match MmBertEmbeddingModel::load(&path, use_cpu) {
-        Ok(model) => {
+    let identity = ModelInitIdentity {
+        model_path: path.clone(),
+        use_cpu,
+    };
+    let result =
+        initialize_once_with_identity(&GLOBAL_MMBERT_MODEL, &MMBERT_INIT_LOCK, identity, || {
+            let model = MmBertEmbeddingModel::load(&path, use_cpu)
+                .map_err(|error| format!("failed to load mmBERT model: {error:?}"))?;
             println!("INFO: mmBERT embedding model loaded from {}", path);
             println!("INFO: {}", model.model_info());
-
-            match GLOBAL_MMBERT_MODEL.set(Mutex::new(model)) {
-                Ok(_) => true,
-                Err(_) => {
-                    eprintln!("Error: Failed to set global model (race condition?)");
-                    false
-                }
-            }
-        }
-        Err(e) => {
-            eprintln!("ERROR: Failed to load mmBERT model: {:?}", e);
-            false
-        }
+            Ok(Mutex::new(model))
+        });
+    if let Err(error) = result {
+        eprintln!("ERROR: mmBERT model initialization failed: {error}");
+        return false;
     }
+    true
 }
 
 /// Check if mmBERT model is initialized
@@ -86,18 +84,6 @@ pub extern "C" fn is_mmbert_model_initialized() -> bool {
 // ============================================================================
 // Embedding Generation Functions
 // ============================================================================
-
-/// Helper function to create an error result
-fn create_error_result() -> EmbeddingResult {
-    EmbeddingResult {
-        data: std::ptr::null_mut(),
-        length: 0,
-        error: true,
-        model_type: -1,
-        sequence_length: 0,
-        processing_time_ms: 0.0,
-    }
-}
 
 /// Get embedding with 2D Matryoshka support (layer early exit + dimension truncation)
 ///
@@ -112,7 +98,7 @@ fn create_error_result() -> EmbeddingResult {
 /// - `result`: Output pointer for embedding result
 ///
 /// # Returns
-/// 0 on success, -1 on error
+/// 0 on success, -3 when the tokenizer context is exceeded, -1 on internal error
 #[no_mangle]
 pub extern "C" fn get_embedding_2d_matryoshka(
     text: *const c_char,
@@ -130,7 +116,7 @@ pub extern "C" fn get_embedding_2d_matryoshka(
             Ok(s) => s,
             Err(e) => {
                 eprintln!("Error: invalid UTF-8 in text: {}", e);
-                *result = create_error_result();
+                *result = EmbeddingResult::default();
                 return -1;
             }
         }
@@ -138,11 +124,11 @@ pub extern "C" fn get_embedding_2d_matryoshka(
 
     // Get model
     let model_lock = match GLOBAL_MMBERT_MODEL.get() {
-        Some(m) => m,
+        Some(m) => &m.value,
         None => {
             eprintln!("Error: mmBERT model not initialized");
             unsafe {
-                *result = create_error_result();
+                *result = EmbeddingResult::default();
             }
             return -1;
         }
@@ -165,8 +151,8 @@ pub extern "C" fn get_embedding_2d_matryoshka(
 
     // Generate embedding
     let mut model = model_lock.lock();
-    match model.encode_single(text_str, layer, dim) {
-        Ok(embedding) => {
+    match model.encode_single_with_token_count(text_str, layer, dim) {
+        Ok((embedding, token_count)) => {
             let length = embedding.len() as i32;
             let embedding_vec: Vec<f32> = embedding.to_vec();
             let data = Box::into_raw(embedding_vec.into_boxed_slice()) as *mut f32;
@@ -178,7 +164,7 @@ pub extern "C" fn get_embedding_2d_matryoshka(
                     length,
                     error: false,
                     model_type: 0, // mmbert
-                    sequence_length: text_str.split_whitespace().count() as i32,
+                    sequence_length: token_count as i32,
                     processing_time_ms,
                 };
             }
@@ -188,9 +174,9 @@ pub extern "C" fn get_embedding_2d_matryoshka(
         Err(e) => {
             eprintln!("Error: embedding generation failed: {:?}", e);
             unsafe {
-                *result = create_error_result();
+                *result = EmbeddingResult::default();
             }
-            -1
+            embedding_error_status(&e)
         }
     }
 }
@@ -202,7 +188,7 @@ pub extern "C" fn get_embedding_2d_matryoshka(
 /// - `result`: Output pointer for embedding result
 ///
 /// # Returns
-/// 0 on success, -1 on error
+/// 0 on success, -3 when the tokenizer context is exceeded, -1 on internal error
 #[no_mangle]
 pub extern "C" fn get_embedding(text: *const c_char, result: *mut EmbeddingResult) -> i32 {
     get_embedding_2d_matryoshka(text, 0, 0, result)
@@ -216,7 +202,7 @@ pub extern "C" fn get_embedding(text: *const c_char, result: *mut EmbeddingResul
 /// - `result`: Output pointer for embedding result
 ///
 /// # Returns
-/// 0 on success, -1 on error
+/// 0 on success, -3 when the tokenizer context is exceeded, -1 on internal error
 #[no_mangle]
 pub extern "C" fn get_embedding_with_dim(
     text: *const c_char,
@@ -225,10 +211,6 @@ pub extern "C" fn get_embedding_with_dim(
 ) -> i32 {
     get_embedding_2d_matryoshka(text, 0, target_dim, result)
 }
-
-// ============================================================================
-// Batch Embedding Functions
-// ============================================================================
 
 /// Generate embeddings for multiple texts in batch
 ///
@@ -240,7 +222,7 @@ pub extern "C" fn get_embedding_with_dim(
 /// - `results`: Output array for embedding results (must be pre-allocated with num_texts elements)
 ///
 /// # Returns
-/// 0 on success, -1 on error
+/// 0 on success, -3 when any tokenizer context is exceeded, -1 on internal error
 #[no_mangle]
 pub extern "C" fn get_embeddings_batch(
     texts: *const *const c_char,
@@ -254,30 +236,17 @@ pub extern "C" fn get_embeddings_batch(
         return -1;
     }
 
-    // Parse texts
-    let mut text_strs = Vec::with_capacity(num_texts as usize);
-    for i in 0..num_texts {
-        let text_ptr = unsafe { *texts.offset(i as isize) };
-        if text_ptr.is_null() {
-            eprintln!("Error: null text at index {}", i);
+    let text_strs = match unsafe { parse_c_string_array(texts, num_texts as usize, "text") } {
+        Ok(texts) => texts,
+        Err(error) => {
+            eprintln!("Error: {error}");
             return -1;
         }
-
-        let text_str = unsafe {
-            match CStr::from_ptr(text_ptr).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Error: invalid UTF-8 in text {}: {}", i, e);
-                    return -1;
-                }
-            }
-        };
-        text_strs.push(text_str);
-    }
+    };
 
     // Get model
     let model_lock = match GLOBAL_MMBERT_MODEL.get() {
-        Some(m) => m,
+        Some(m) => &m.value,
         None => {
             eprintln!("Error: mmBERT model not initialized");
             return -1;
@@ -301,23 +270,41 @@ pub extern "C" fn get_embeddings_batch(
 
     // Generate embeddings
     let mut model = model_lock.lock();
-    match model.encode(&text_strs, layer, dim) {
-        Ok(embeddings) => {
+    match model.encode_with_token_counts(&text_strs, layer, dim) {
+        Ok((embeddings, token_counts)) => {
+            let expected_rows = num_texts as usize;
+            if embeddings.nrows() != expected_rows
+                || embeddings.ncols() == 0
+                || token_counts.len() != expected_rows
+            {
+                eprintln!(
+                    "Error: batch embedding contract mismatch: expected {} rows, got shape {:?} and {} token counts",
+                    expected_rows,
+                    embeddings.dim(),
+                    token_counts.len()
+                );
+                for i in 0..expected_rows {
+                    unsafe {
+                        *results.add(i) = EmbeddingResult::default();
+                    }
+                }
+                return -1;
+            }
             let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
             let per_text_time = processing_time_ms / num_texts as f32;
 
-            for i in 0..num_texts as usize {
+            for (i, token_count) in token_counts.iter().copied().enumerate() {
                 let embedding = embeddings.row(i).to_vec();
                 let length = embedding.len() as i32;
                 let data = Box::into_raw(embedding.into_boxed_slice()) as *mut f32;
 
                 unsafe {
-                    *results.offset(i as isize) = EmbeddingResult {
+                    *results.add(i) = EmbeddingResult {
                         data,
                         length,
                         error: false,
                         model_type: 0, // mmbert
-                        sequence_length: text_strs[i].split_whitespace().count() as i32,
+                        sequence_length: token_count as i32,
                         processing_time_ms: per_text_time,
                     };
                 }
@@ -330,10 +317,10 @@ pub extern "C" fn get_embeddings_batch(
             // Set error for all results
             for i in 0..num_texts as usize {
                 unsafe {
-                    *results.offset(i as isize) = create_error_result();
+                    *results.add(i) = EmbeddingResult::default();
                 }
             }
-            -1
+            embedding_error_status(&e)
         }
     }
 }
@@ -352,7 +339,7 @@ pub extern "C" fn get_embeddings_batch(
 /// - `result`: Output pointer for similarity result
 ///
 /// # Returns
-/// 0 on success, -1 on error
+/// 0 on success, -3 when either tokenizer context is exceeded, -1 on internal error
 #[no_mangle]
 pub extern "C" fn calculate_embedding_similarity(
     text1: *const c_char,
@@ -377,13 +364,30 @@ pub extern "C" fn calculate_embedding_similarity(
         unsafe {
             *result = EmbeddingSimilarityResult::default();
         }
-        return -1;
+        return if status1 != 0 { status1 } else { -1 };
     }
 
     let status2 = get_embedding_2d_matryoshka(text2, target_layer, target_dim, &mut emb2_result);
     if status2 != 0 || emb2_result.error {
         // Free first embedding
         crate::ffi::memory::free_embedding(emb1_result.data, emb1_result.length);
+        unsafe {
+            *result = EmbeddingSimilarityResult::default();
+        }
+        return if status2 != 0 { status2 } else { -1 };
+    }
+
+    if emb1_result.data.is_null()
+        || emb2_result.data.is_null()
+        || emb1_result.length <= 0
+        || emb1_result.length != emb2_result.length
+    {
+        eprintln!(
+            "Error: similarity embedding contract mismatch: left length {}, right length {}",
+            emb1_result.length, emb2_result.length
+        );
+        crate::ffi::memory::free_embedding(emb1_result.data, emb1_result.length);
+        crate::ffi::memory::free_embedding(emb2_result.data, emb2_result.length);
         unsafe {
             *result = EmbeddingSimilarityResult::default();
         }
@@ -422,19 +426,114 @@ pub extern "C" fn calculate_embedding_similarity(
     0
 }
 
-/// Calculate batch similarity: find top-k most similar candidates for a query
+/// Parse validated C inputs for batch similarity.
 ///
-/// # Parameters
-/// - `query`: Query text (C string)
-/// - `candidates`: Array of candidate texts (C string array)
-/// - `num_candidates`: Number of candidates
-/// - `top_k`: Maximum number of matches to return (0 = return all)
-/// - `target_layer`: Target layer for early exit (0 for full model)
-/// - `target_dim`: Target dimension (0 for default 768)
-/// - `result`: Output pointer for batch similarity result
+/// # Safety
+/// The caller must provide non-null pointers to `num_candidates` C strings that
+/// remain valid for the returned references' lifetime.
+unsafe fn parse_similarity_batch_inputs<'a>(
+    query: *const c_char,
+    candidates: *const *const c_char,
+    num_candidates: usize,
+) -> Result<(&'a str, Vec<&'a str>), String> {
+    let query_str = CStr::from_ptr(query)
+        .to_str()
+        .map_err(|error| format!("invalid UTF-8 in query: {error}"))?;
+    let mut candidate_strs = Vec::with_capacity(num_candidates);
+    for index in 0..num_candidates {
+        let candidate_ptr = *candidates.add(index);
+        if candidate_ptr.is_null() {
+            return Err(format!("null candidate at index {index}"));
+        }
+        let candidate = CStr::from_ptr(candidate_ptr)
+            .to_str()
+            .map_err(|error| format!("invalid UTF-8 in candidate {index}: {error}"))?;
+        candidate_strs.push(candidate);
+    }
+    Ok((query_str, candidate_strs))
+}
+
+fn top_similarity_matches(
+    embeddings: &ndarray::Array2<f32>,
+    num_candidates: usize,
+    top_k: i32,
+) -> Result<Vec<SimilarityMatch>, String> {
+    let expected_rows = num_candidates
+        .checked_add(1)
+        .ok_or_else(|| "candidate count overflow".to_string())?;
+    if embeddings.nrows() != expected_rows || embeddings.ncols() == 0 {
+        return Err(format!(
+            "expected embedding shape [{expected_rows}, hidden>0], got {:?}",
+            embeddings.dim()
+        ));
+    }
+    let query = embeddings.row(0);
+    let query_norm = query.iter().map(|value| value * value).sum::<f32>().sqrt();
+    let mut similarities = Vec::with_capacity(num_candidates);
+    for index in 0..num_candidates {
+        let candidate = embeddings.row(index + 1);
+        let dot_product: f32 = query
+            .iter()
+            .zip(candidate.iter())
+            .map(|(left, right)| left * right)
+            .sum();
+        let candidate_norm = candidate
+            .iter()
+            .map(|value| value * value)
+            .sum::<f32>()
+            .sqrt();
+        let similarity = if query_norm > 0.0 && candidate_norm > 0.0 {
+            dot_product / (query_norm * candidate_norm)
+        } else {
+            0.0
+        };
+        similarities.push((index, similarity));
+    }
+    similarities.sort_by(|left, right| {
+        right
+            .1
+            .partial_cmp(&left.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let limit = if top_k <= 0 || top_k as usize > num_candidates {
+        num_candidates
+    } else {
+        top_k as usize
+    };
+    Ok(similarities
+        .into_iter()
+        .take(limit)
+        .map(|(index, similarity)| SimilarityMatch {
+            index: index as i32,
+            similarity,
+        })
+        .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::top_similarity_matches;
+    use ndarray::Array2;
+
+    #[test]
+    fn top_similarity_requires_query_and_every_candidate_row() {
+        let missing_candidate = Array2::<f32>::zeros((1, 4));
+        assert!(top_similarity_matches(&missing_candidate, 1, 1).is_err());
+
+        let empty_embeddings = Array2::<f32>::zeros((2, 0));
+        assert!(top_similarity_matches(&empty_embeddings, 1, 1).is_err());
+
+        let complete = Array2::from_shape_vec((2, 2), vec![1.0, 0.0, 1.0, 0.0]).unwrap();
+        let matches = top_similarity_matches(&complete, 1, 1).unwrap();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].index, 0);
+    }
+}
+
+/// Calculate batch similarity and return the top-k candidates.
 ///
-/// # Returns
-/// 0 on success, -1 on error
+/// Returns 0 on success, -3 when any tokenizer context is exceeded, and -1 on
+/// invalid input or an internal error.
 #[no_mangle]
 pub extern "C" fn calculate_similarity_batch(
     query: *const c_char,
@@ -452,46 +551,20 @@ pub extern "C" fn calculate_similarity_batch(
 
     let start_time = std::time::Instant::now();
 
-    // Parse query
-    let query_str = unsafe {
-        match CStr::from_ptr(query).to_str() {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("Error: invalid UTF-8 in query: {}", e);
-                *result = BatchSimilarityResult::default();
-                return -1;
-            }
+    let (query_str, candidate_strs) = match unsafe {
+        parse_similarity_batch_inputs(query, candidates, num_candidates as usize)
+    } {
+        Ok(inputs) => inputs,
+        Err(error) => {
+            eprintln!("Error: {error}");
+            unsafe { *result = BatchSimilarityResult::default() };
+            return -1;
         }
     };
 
-    // Parse candidates
-    let mut candidate_strs = Vec::with_capacity(num_candidates as usize);
-    for i in 0..num_candidates {
-        let candidate_ptr = unsafe { *candidates.offset(i as isize) };
-        if candidate_ptr.is_null() {
-            eprintln!("Error: null candidate at index {}", i);
-            unsafe {
-                *result = BatchSimilarityResult::default();
-            }
-            return -1;
-        }
-
-        let candidate_str = unsafe {
-            match CStr::from_ptr(candidate_ptr).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Error: invalid UTF-8 in candidate {}: {}", i, e);
-                    *result = BatchSimilarityResult::default();
-                    return -1;
-                }
-            }
-        };
-        candidate_strs.push(candidate_str);
-    }
-
     // Get model
     let model_lock = match GLOBAL_MMBERT_MODEL.get() {
-        Some(m) => m,
+        Some(m) => &m.value,
         None => {
             eprintln!("Error: mmBERT model not initialized");
             unsafe {
@@ -528,58 +601,20 @@ pub extern "C" fn calculate_similarity_batch(
             unsafe {
                 *result = BatchSimilarityResult::default();
             }
-            return -1;
+            return embedding_error_status(&e);
         }
     };
 
-    // Extract query embedding (first one)
-    let query_embedding = embeddings.row(0);
-
-    // Calculate similarities with all candidates
-    let mut similarities = Vec::with_capacity(num_candidates as usize);
-    for i in 0..num_candidates as usize {
-        let candidate_embedding = embeddings.row(i + 1);
-
-        // Cosine similarity
-        let dot_product: f32 = query_embedding
-            .iter()
-            .zip(candidate_embedding.iter())
-            .map(|(a, b)| a * b)
-            .sum();
-        let norm_query: f32 = query_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
-        let norm_candidate: f32 = candidate_embedding
-            .iter()
-            .map(|x| x * x)
-            .sum::<f32>()
-            .sqrt();
-
-        let similarity = if norm_query > 0.0 && norm_candidate > 0.0 {
-            dot_product / (norm_query * norm_candidate)
-        } else {
-            0.0
-        };
-
-        similarities.push((i, similarity));
-    }
-
-    // Sort by similarity (descending)
-    similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-    // Take top-k
-    let k = if top_k <= 0 || top_k > num_candidates {
-        num_candidates as usize
-    } else {
-        top_k as usize
+    let top_matches = match top_similarity_matches(&embeddings, num_candidates as usize, top_k) {
+        Ok(matches) => matches,
+        Err(error) => {
+            eprintln!("Error: batch similarity contract mismatch: {error}");
+            unsafe {
+                *result = BatchSimilarityResult::default();
+            }
+            return -1;
+        }
     };
-
-    let top_matches: Vec<SimilarityMatch> = similarities
-        .iter()
-        .take(k)
-        .map(|(idx, sim)| SimilarityMatch {
-            index: *idx as i32,
-            similarity: *sim,
-        })
-        .collect();
 
     let num_matches = top_matches.len() as i32;
     let matches_ptr = Box::into_raw(top_matches.into_boxed_slice()) as *mut SimilarityMatch;
@@ -624,7 +659,8 @@ pub extern "C" fn get_embedding_models_info(result: *mut EmbeddingModelsInfoResu
     // mmBERT model info
     let model_name = CString::new("mmbert").unwrap();
     let (is_loaded, max_seq, default_dim, model_path, supports_exit, layers_str) =
-        if let Some(model_lock) = model_opt {
+        if let Some(model_context) = model_opt {
+            let model_lock = &model_context.value;
             let model = model_lock.lock();
             let config = model.config();
             let layers = model
@@ -692,8 +728,22 @@ pub extern "C" fn get_matryoshka_info(result: *mut MatryoshkaInfo) -> i32 {
         return -1;
     }
 
-    let config =
-        crate::model_architectures::embedding::mmbert_embedding::MatryoshkaConfig::default();
+    unsafe {
+        *result = MatryoshkaInfo {
+            dimensions: std::ptr::null_mut(),
+            layers: std::ptr::null_mut(),
+            supports_2d: false,
+        };
+    }
+    let model_lock = match GLOBAL_MMBERT_MODEL.get() {
+        Some(model) => &model.value,
+        None => {
+            eprintln!("Error: mmBERT embedding model not initialized");
+            return -1;
+        }
+    };
+    let model = model_lock.lock();
+    let config = model.matryoshka_config();
 
     let dimensions = config
         .dimensions
@@ -701,8 +751,8 @@ pub extern "C" fn get_matryoshka_info(result: *mut MatryoshkaInfo) -> i32 {
         .map(|d| d.to_string())
         .collect::<Vec<_>>()
         .join(",");
-    let layers = config
-        .layers
+    let layers = model
+        .available_exit_layers()
         .iter()
         .map(|l| l.to_string())
         .collect::<Vec<_>>()
@@ -715,7 +765,7 @@ pub extern "C" fn get_matryoshka_info(result: *mut MatryoshkaInfo) -> i32 {
         *result = MatryoshkaInfo {
             dimensions: dim_cstr.into_raw(),
             layers: layers_cstr.into_raw(),
-            supports_2d: true,
+            supports_2d: model.supports_layer_exit(),
         };
     }
 
@@ -733,9 +783,11 @@ pub extern "C" fn free_matryoshka_info(info: *mut MatryoshkaInfo) {
         let info_ref = &mut *info;
         if !info_ref.dimensions.is_null() {
             let _ = CString::from_raw(info_ref.dimensions);
+            info_ref.dimensions = std::ptr::null_mut();
         }
         if !info_ref.layers.is_null() {
             let _ = CString::from_raw(info_ref.layers);
+            info_ref.layers = std::ptr::null_mut();
         }
     }
 }

@@ -54,9 +54,9 @@ Out of scope:
   recommendations as repository-tracked public artifacts.
 - [x] `RHA004` Create or update durable child issues and technical debt for
   every high-priority risk class.
-- [ ] `RHA005` Complete the #1443 Looper authentication fix and close final
+- [x] `RHA005` Complete the #1443 Looper authentication fix and close final
   deployment-secret, malformed-envelope, and no-leak review findings.
-- [ ] `RHA006` Close the dashboard password lifecycle and local feature-gate
+- [x] `RHA006` Close the dashboard password lifecycle and local feature-gate
   integrity defects, then pass the local validation ladder and targeted
   regression tests.
 - [ ] `RHA007` Pass AMD deployment and affected E2E regression.
@@ -66,9 +66,9 @@ Out of scope:
 
 ## Next Action
 
-Close the final review findings, then pass CPU feature, affected-E2E, local PR,
-and AMD gates. Submit the signed-off proof pull request, keep CI green, and
-attach the final non-sensitive closure receipts.
+Rebase the frozen proof onto the final fetched `origin/main`, then pass CPU
+feature, affected-E2E, local PR, and AMD gates. Submit the signed-off proof pull
+request, keep CI green, and attach the final non-sensitive closure receipts.
 
 ## Operating Rules
 

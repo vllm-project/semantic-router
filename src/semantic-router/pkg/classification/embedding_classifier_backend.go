@@ -196,10 +196,23 @@ func (c *Classifier) initializeKeywordSharedTextBackend(plan embedding.RuntimePl
 }
 
 func (c *Classifier) initializeKeywordConfiguredBackend(plan embedding.RuntimePlan) error {
+	qwen3Path := c.Config.Qwen3ModelPath
+	gemmaPath := c.Config.GemmaModelPath
+	mmBertPath := c.Config.MmBertModelPath
+	if plan.Backend == config.EmbeddingBackendCandle {
+		plans, err := configuredTextEmbeddingRuntimePlans(c.Config, plan)
+		if err != nil {
+			return err
+		}
+		qwen3Path, gemmaPath, mmBertPath, _, err = candleRuntimePlanPaths(plans)
+		if err != nil {
+			return err
+		}
+	}
 	if err := c.keywordEmbeddingInitializer.Init(
-		c.Config.Qwen3ModelPath,
-		c.Config.GemmaModelPath,
-		c.Config.MmBertModelPath,
+		qwen3Path,
+		gemmaPath,
+		mmBertPath,
 		c.Config.UseCPU,
 		plan.Backend,
 		plan.ModelType,

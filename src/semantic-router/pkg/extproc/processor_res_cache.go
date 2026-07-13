@@ -68,7 +68,7 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	// scoping this entry to a turn-bounded lifetime (§2.8 order: ... -> TTL -> write).
 	ttlSeconds = applyRetentionTTLOverride(ttlSeconds, ctx)
 	if err := r.Cache.UpdateWithResponse(ctx.RequestID, responseBody, ttlSeconds); err != nil {
-		logging.Errorf("Error updating cache: %v", err)
+		logging.Errorf("Error updating cache: %s", safeErrorForLog(err))
 		return
 	}
 	logging.Infof("Cache updated for request ID: %s", ctx.RequestID)
@@ -226,7 +226,7 @@ func buildReconstructedStreamingResponse(
 
 	reconstructedJSON, err := json.Marshal(reconstructed)
 	if err != nil {
-		logging.Errorf("Failed to marshal reconstructed response: %v", err)
+		logging.Errorf("Failed to marshal reconstructed response: %s", safeErrorForLog(err))
 		return nil, err
 	}
 	return reconstructedJSON, nil
@@ -295,7 +295,7 @@ func (r *OpenAIRouter) updateStreamingCacheEntry(
 	ttlSeconds int,
 ) error {
 	if err := r.Cache.UpdateWithResponse(requestID, reconstructedJSON, ttlSeconds); err != nil {
-		logging.Errorf("Cache update failed for streaming %s: %v", requestID, err)
+		logging.Errorf("Cache update failed for streaming %s: %s", requestID, safeErrorForLog(err))
 		return err
 	}
 	return nil

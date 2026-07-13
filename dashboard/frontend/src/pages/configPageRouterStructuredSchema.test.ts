@@ -4,6 +4,7 @@ import { buildRouterSectionCards } from './configPageRouterDefaultsSupport'
 import {
   normalizeRouterStructuredFields,
   normalizeRouterStructuredValue,
+  REMOTE_EMBEDDING_API_KEY_ENV,
   ROUTER_STRUCTURED_FIELDS,
 } from './configPageRouterStructuredSchema'
 
@@ -141,6 +142,21 @@ describe('router defaults structured schemas', () => {
           },
           future_classifier_module: { enabled: true },
         },
+        embedding_models: {
+          semantic: {
+            future_semantic_option: 'preserved',
+            embedding_config: { backend: 'openai_compatible', model_type: 'remote' },
+            endpoint: {
+              base_url: 'https://embeddings.example/v1',
+              model: 'embedding-model',
+              api_key_env: REMOTE_EMBEDDING_API_KEY_ENV,
+              timeout_seconds: 30,
+              max_retries: 2,
+              dimensions: 1024,
+              future_transport_option: 'preserved',
+            },
+          },
+        },
       },
       routerDefaults: null,
       toolsData: [],
@@ -165,6 +181,84 @@ describe('router defaults structured schemas', () => {
         .map((field) => `${card.key}.${field.name}`),
     )
     expect(remainingJsonFields).toEqual([])
+
+    const embeddingsCard = cards.find((card) => card.key === 'embedding_models')
+    expect(embeddingsCard?.editFields.find((field) => field.name === 'endpoint')?.type).toBe(
+      'custom',
+    )
+    const embeddingPatch = embeddingsCard?.save(embeddingsCard.editData) as {
+      model_catalog?: {
+        embeddings?: { semantic?: Record<string, unknown> }
+      }
+    }
+    expect(embeddingPatch.model_catalog?.embeddings?.semantic).toEqual(
+      expect.objectContaining({
+        embedding_config: { backend: 'openai_compatible', model_type: 'remote' },
+        endpoint: expect.objectContaining({
+          base_url: 'https://embeddings.example/v1',
+          model: 'embedding-model',
+          api_key_env: REMOTE_EMBEDDING_API_KEY_ENV,
+          future_transport_option: 'preserved',
+        }),
+      }),
+    )
+
+    const endpointSchema = ROUTER_STRUCTURED_FIELDS.embedding_models?.endpoint.schema
+    expect(endpointSchema?.fields?.api_key_env?.options).toEqual([REMOTE_EMBEDDING_API_KEY_ENV])
+    expect(endpointSchema?.removable).toBe(true)
+    const clearedEndpoint = {
+      ...(embeddingsCard?.editData.endpoint as Record<string, unknown>),
+    }
+    delete clearedEndpoint.timeout_seconds
+    delete clearedEndpoint.max_retries
+    delete clearedEndpoint.dimensions
+    const clearedEmbeddingPatch = embeddingsCard?.save({
+      ...embeddingsCard.editData,
+      endpoint: clearedEndpoint,
+    }) as {
+      model_catalog?: {
+        embeddings?: { semantic?: { endpoint?: Record<string, unknown> } }
+      }
+    }
+    expect(clearedEmbeddingPatch.model_catalog?.embeddings?.semantic?.endpoint).toEqual(
+      expect.objectContaining({
+        api_key_env: REMOTE_EMBEDDING_API_KEY_ENV,
+        timeout_seconds: null,
+        max_retries: null,
+        dimensions: null,
+        future_transport_option: 'preserved',
+      }),
+    )
+    const arbitraryCredentialPatch = embeddingsCard?.save({
+      ...embeddingsCard.editData,
+      endpoint: {
+        ...(embeddingsCard.editData.endpoint as Record<string, unknown>),
+        api_key_env: 'ARBITRARY_PROCESS_SECRET',
+      },
+    }) as {
+      model_catalog?: {
+        embeddings?: { semantic?: { endpoint?: Record<string, unknown> } }
+      }
+    }
+    expect(
+      arbitraryCredentialPatch.model_catalog?.embeddings?.semantic?.endpoint?.api_key_env,
+    ).toBeNull()
+    const removedEndpointPatch = embeddingsCard?.save({
+      ...embeddingsCard.editData,
+      embedding_config: { backend: 'candle', model_type: 'mmbert' },
+      endpoint: undefined,
+    }) as {
+      model_catalog?: {
+        embeddings?: { semantic?: Record<string, unknown> }
+      }
+    }
+    expect(removedEndpointPatch.model_catalog?.embeddings?.semantic).toEqual(
+      expect.objectContaining({
+        future_semantic_option: 'preserved',
+        embedding_config: { backend: 'candle', model_type: 'mmbert' },
+        endpoint: null,
+      }),
+    )
 
     const patch = selectionCard?.save({
       ...selectionCard.editData,
@@ -192,5 +286,43 @@ describe('router defaults structured schemas', () => {
         }),
       }),
     )
+  })
+
+  it('preserves an unauthenticated HTTP embedding endpoint without adding a credential', () => {
+    const cards = buildRouterSectionCards({
+      config: null,
+      routerConfig: {
+        embedding_models: {
+          semantic: {
+            embedding_config: { backend: 'openai_compatible', model_type: 'remote' },
+            endpoint: {
+              base_url: 'http://embeddings.internal/v1',
+              model: 'internal-embedding-model',
+              future_transport_option: 'preserved',
+            },
+          },
+        },
+      },
+      routerDefaults: null,
+      toolsData: [],
+      toolsLoading: false,
+      toolsError: null,
+    })
+    const embeddingsCard = cards.find((card) => card.key === 'embedding_models')
+    const patch = embeddingsCard?.save(embeddingsCard.editData) as {
+      model_catalog?: {
+        embeddings?: { semantic?: { endpoint?: Record<string, unknown> } }
+      }
+    }
+    const endpoint = patch.model_catalog?.embeddings?.semantic?.endpoint
+
+    expect(endpoint).toEqual(
+      expect.objectContaining({
+        base_url: 'http://embeddings.internal/v1',
+        model: 'internal-embedding-model',
+        future_transport_option: 'preserved',
+      }),
+    )
+    expect(endpoint).not.toHaveProperty('api_key_env')
   })
 })

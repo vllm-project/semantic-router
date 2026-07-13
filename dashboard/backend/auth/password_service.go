@@ -25,7 +25,7 @@ func (s *Service) HashPasswordForUser(email, password string) (string, error) {
 		return "", ErrPasswordWorkSaturated
 	}
 	defer release()
-	return hashVersionedPassword(normalized)
+	return hashPasswordForStorage(password, normalized)
 }
 
 func (s *Service) VerifyPassword(hash, password string) bool {
@@ -83,7 +83,7 @@ func (s *Service) ChangePasswordWithSource(
 			Message: "new password must differ from the current password",
 		}
 	}
-	newHash, err := hashVersionedPassword(normalizedNewPassword)
+	newHash, err := hashPasswordForStorage(newPassword, normalizedNewPassword)
 	if err != nil {
 		return "", nil, err
 	}
@@ -101,6 +101,7 @@ func (s *Service) ChangePasswordWithSource(
 	); err != nil {
 		return "", nil, err
 	}
+	s.invalidateUserAuthorization(user.ID)
 	return issued.signed, user, nil
 }
 
@@ -132,14 +133,22 @@ func (s *Service) resetPassword(
 		return err
 	}
 	if authorization == nil {
-		return s.store.UpdatePasswordAndRevokeSessions(ctx, user.ID, newHash)
+		if err := s.store.UpdatePasswordAndRevokeSessions(ctx, user.ID, newHash); err != nil {
+			return err
+		}
+		s.invalidateUserAuthorization(user.ID)
+		return nil
 	}
-	return s.store.updatePasswordAndRevokeSessionsAuthorized(
+	if err := s.store.updatePasswordAndRevokeSessionsAuthorized(
 		ctx,
 		authorization,
 		user.ID,
 		newHash,
-	)
+	); err != nil {
+		return err
+	}
+	s.invalidateUserAuthorization(user.ID)
+	return nil
 }
 
 func acquirePasswordWork(work chan struct{}) (func(), bool) {

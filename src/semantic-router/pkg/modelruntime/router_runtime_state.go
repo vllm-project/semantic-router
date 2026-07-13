@@ -85,8 +85,8 @@ func cloneEmbeddingProviderRuntimeState(status *EmbeddingProviderRuntimeState) *
 	return &clone
 }
 
-func remoteEmbeddingProviderRuntimeStateFromConfig(cfg *config.RouterConfig) *EmbeddingProviderRuntimeState {
-	if cfg == nil || !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+func remoteEmbeddingProviderRuntimeStateFromConfig(cfg *config.RouterConfig, plan embedding.RuntimePlan) *EmbeddingProviderRuntimeState {
+	if cfg == nil || plan.Backend != config.EmbeddingBackendOpenAICompatible {
 		return nil
 	}
 
@@ -104,7 +104,7 @@ func remoteEmbeddingProviderRuntimeStateFromConfig(cfg *config.RouterConfig) *Em
 
 	return &EmbeddingProviderRuntimeState{
 		Mode:         "remote",
-		Backend:      cfg.EmbeddingModels.EmbeddingBackend(),
+		Backend:      plan.Backend,
 		Model:        strings.TrimSpace(cfg.EmbeddingModels.Endpoint.Model),
 		Dimension:    dimension,
 		APIKeyEnv:    apiKeyEnv,
@@ -114,11 +114,12 @@ func remoteEmbeddingProviderRuntimeStateFromConfig(cfg *config.RouterConfig) *Em
 
 func remoteEmbeddingProviderProbeStatus(
 	cfg *config.RouterConfig,
+	plan embedding.RuntimePlan,
 	provider embedding.Provider,
 	dimension int,
 	probeErr error,
 ) *EmbeddingProviderRuntimeState {
-	status := remoteEmbeddingProviderRuntimeStateFromConfig(cfg)
+	status := remoteEmbeddingProviderRuntimeStateFromConfig(cfg, plan)
 	if status == nil {
 		status = &EmbeddingProviderRuntimeState{Mode: "remote"}
 	}

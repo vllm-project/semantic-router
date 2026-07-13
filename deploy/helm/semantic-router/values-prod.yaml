@@ -19,7 +19,19 @@ persistence:
 
 dashboard:
   enabled: true
+  # Deliberately unusable placeholders: production must pin a real release tag
+  # and provision a >=10,000-entry external corpus with its exact digest.
+  securityProfile: production
   replicaCount: 1
+  image:
+    tag: replace-with-pinned-release
+    pullPolicy: Always
+  passwordBlocklist:
+    existingConfigMap: semantic-router-dashboard-password-blocklist
+    key: passwords.txt
+    # SHA-256 of an empty file. The backend rejects it for having too few
+    # entries, so this profile cannot start until an operator replaces it.
+    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
   persistence:
     enabled: true
     size: 5Gi

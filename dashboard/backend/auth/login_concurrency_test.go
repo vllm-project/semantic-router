@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -70,7 +69,7 @@ func TestVerifiedLoginCannotCreateSessionAfterAdminPasswordReset(t *testing.T) {
 	}
 }
 
-func TestLegacyLoginUpgradeCannotOverwriteConcurrentPasswordReset(t *testing.T) {
+func TestLegacyLoginCannotOverwriteConcurrentPasswordReset(t *testing.T) {
 	svc := newTestAuthService(t)
 	legacyPassword := "legacy-password-value"
 	legacyHash, err := bcrypt.GenerateFromPassword([]byte(legacyPassword), passwordHashCost)
@@ -102,9 +101,6 @@ func TestLegacyLoginUpgradeCannotOverwriteConcurrentPasswordReset(t *testing.T) 
 	_, storedHash, err := svc.store.GetUserWithPasswordHash(context.Background(), user.ID)
 	if err != nil {
 		t.Fatalf("GetUserWithPasswordHash() error = %v", err)
-	}
-	if !strings.HasPrefix(storedHash, passwordHashPrefix) {
-		t.Fatalf("stored hash = %q, want reset's versioned hash", storedHash)
 	}
 	if !svc.VerifyPassword(storedHash, newPassword) {
 		t.Fatal("concurrent reset password no longer verifies")

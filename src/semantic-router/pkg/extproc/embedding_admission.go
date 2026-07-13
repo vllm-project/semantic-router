@@ -43,19 +43,27 @@ func (r *OpenAIRouter) decisionEvaluationUsesLocalNativeEmbeddings(originalModel
 	if r == nil {
 		return false
 	}
-	return configDecisionEvaluationUsesLocalNativeEmbeddings(r.Config, originalModel)
+	plan, err := r.resolvedEmbeddingRuntimePlan()
+	if err != nil {
+		// Router construction rejects an invalid runtime plan. Keep this
+		// request-time fallback conservative as defense in depth for tests or
+		// callers that assemble OpenAIRouter directly: an invalid plan must not
+		// bypass the shared native-inference admission gate.
+		return true
+	}
+	return configDecisionEvaluationUsesLocalNativeEmbeddings(r.Config, originalModel, plan)
 }
 
-func configDecisionEvaluationUsesLocalNativeEmbeddings(routerConfig *config.RouterConfig, originalModel string) bool {
+func configDecisionEvaluationUsesLocalNativeEmbeddings(
+	routerConfig *config.RouterConfig,
+	originalModel string,
+	plan embedding.RuntimePlan,
+) bool {
 	if routerConfig == nil || !routerConfig.IsAutoModelName(originalModel) {
 		return false
 	}
 
-	backend := embedding.BackendOverrideFromEnv()
-	if backend == "" {
-		backend = routerConfig.EmbeddingModels.EmbeddingBackend()
-	}
-	if backend == config.EmbeddingBackendOpenAICompatible {
+	if plan.Backend == config.EmbeddingBackendOpenAICompatible {
 		return false
 	}
 	return configuredDecisionsUseEmbeddings(routerConfig.Decisions)

@@ -70,10 +70,89 @@ func TestResolveRuntimePlanRemoteToLocalRequiresUnambiguousModel(t *testing.T) {
 	}
 }
 
+func TestResolveRuntimePlanLocalBackendsRequireSelectedModelPath(t *testing.T) {
+	for _, backend := range []string{config.EmbeddingBackendCandle, config.EmbeddingBackendOpenVINO} {
+		for _, modelType := range []string{config.EmbeddingModelTypeQwen3, "gemma", "mmbert"} {
+			t.Run(backend+"/"+modelType, func(t *testing.T) {
+				models := localRuntimePlanModels(backend, modelType)
+				switch modelType {
+				case config.EmbeddingModelTypeQwen3:
+					models.Qwen3ModelPath = ""
+				case "gemma":
+					models.GemmaModelPath = ""
+				case "mmbert":
+					models.MmBertModelPath = ""
+				}
+
+				_, err := ResolveRuntimePlan(models, "", "")
+				if err == nil || !strings.Contains(err.Error(), "requires a configured "+modelType+" model path") {
+					t.Fatalf("ResolveRuntimePlan error = %v, want missing selected model path", err)
+				}
+			})
+		}
+	}
+}
+
+func TestResolveRuntimePlanLocalToRemoteUsesRemoteModelContract(t *testing.T) {
+	models := localRuntimePlanModels(config.EmbeddingBackendCandle, config.EmbeddingModelTypeQwen3)
+	models.Endpoint = config.EmbeddingEndpointConfig{
+		BaseURL: "https://embedding.example/v1",
+		Model:   "remote-embedding",
+	}
+
+	plan, err := ResolveRuntimePlan(models, config.EmbeddingBackendOpenAICompatible, "")
+	if err != nil {
+		t.Fatalf("local-to-remote plan: %v", err)
+	}
+	if plan.Backend != config.EmbeddingBackendOpenAICompatible || plan.ModelType != config.EmbeddingModelTypeRemote || plan.LocalOverride {
+		t.Fatalf("local-to-remote plan = %+v", plan)
+	}
+}
+
+func TestResolveRuntimePlanLocalToRemoteRequiresEndpointCapability(t *testing.T) {
+	models := localRuntimePlanModels(config.EmbeddingBackendCandle, config.EmbeddingModelTypeQwen3)
+
+	_, err := ResolveRuntimePlan(models, config.EmbeddingBackendOpenAICompatible, "")
+	if err == nil || !strings.Contains(err.Error(), "usable endpoint") {
+		t.Fatalf("local-to-remote endpoint error = %v", err)
+	}
+}
+
 func TestResolveRuntimePlanRejectsUnsupportedBackend(t *testing.T) {
 	_, err := ResolveRuntimePlan(localRuntimePlanModels("unsupported", "qwen3"), "", "")
 	if err == nil || !strings.Contains(err.Error(), "unsupported embedding backend") {
 		t.Fatalf("unsupported backend error = %v", err)
+	}
+}
+
+func TestResolveRuntimePlansPreservesDistinctConsumerModelsAndDeduplicates(t *testing.T) {
+	models := localRuntimePlanModels(config.EmbeddingBackendCandle, config.EmbeddingModelTypeQwen3)
+	plans, err := ResolveRuntimePlans(models, "", "", "qwen3", "mmbert", "modernbert", "qwen3")
+	if err != nil {
+		t.Fatalf("ResolveRuntimePlans: %v", err)
+	}
+	want := []RuntimePlan{
+		{Backend: config.EmbeddingBackendCandle, ModelType: "qwen3", ModelPath: models.Qwen3ModelPath},
+		{Backend: config.EmbeddingBackendCandle, ModelType: "mmbert", ModelPath: models.MmBertModelPath},
+	}
+	if len(plans) != len(want) {
+		t.Fatalf("plans = %+v, want %+v", plans, want)
+	}
+	for index := range want {
+		if plans[index] != want[index] {
+			t.Fatalf("plans[%d] = %+v, want %+v", index, plans[index], want[index])
+		}
+	}
+}
+
+func TestResolveRuntimePlansModelOverrideCollapsesConsumerModels(t *testing.T) {
+	models := localRuntimePlanModels(config.EmbeddingBackendCandle, config.EmbeddingModelTypeQwen3)
+	plans, err := ResolveRuntimePlans(models, "", "mmbert", "qwen3", "gemma")
+	if err != nil {
+		t.Fatalf("ResolveRuntimePlans: %v", err)
+	}
+	if len(plans) != 1 || plans[0].ModelType != "mmbert" || plans[0].ModelPath != models.MmBertModelPath {
+		t.Fatalf("override plans = %+v, want one mmbert plan", plans)
 	}
 }
 

@@ -55,7 +55,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 
 	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(cacheRequestBodyForContext(ctx))
 	if err != nil {
-		logging.Errorf("Error extracting query from request: %v", err)
+		logging.Errorf("Error extracting query from request: %s", safeErrorForLog(err))
 		return nil, false
 	}
 
@@ -81,7 +81,7 @@ func (r *OpenAIRouter) handleLooperCacheSkip(ctx *RequestContext, categoryName s
 
 	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(cacheRequestBodyForContext(ctx))
 	if err != nil {
-		logging.Errorf("Error extracting query from request: %v", err)
+		logging.Errorf("Error extracting query from request: %s", safeErrorForLog(err))
 		return nil, false
 	}
 	ctx.RequestModel = requestModel
@@ -101,7 +101,7 @@ func (r *OpenAIRouter) storePendingCacheRequest(ctx *RequestContext, categoryNam
 	}
 	ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
 	if err := r.Cache.AddPendingRequest(ctx.RequestID, requestModel, cacheQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
-		logging.Errorf("Error adding pending request to cache: %v", err)
+		logging.Errorf("Error adding pending request to cache: %s", safeErrorForLog(err))
 	}
 }
 
@@ -120,8 +120,8 @@ func (r *OpenAIRouter) performCacheLookup(
 		threshold = r.Config.GetCacheSimilarityThresholdForDecision(categoryName)
 	}
 
-	logging.Infof("handleCaching: Performing cache lookup - model=%s, query='%s', threshold=%.2f",
-		requestModel, ctx.RequestQuery, threshold)
+	logging.Infof("handleCaching: Performing cache lookup - model=%s, query_chars=%d, threshold=%.2f",
+		requestModel, len(cacheQuery), threshold)
 
 	spanCtx, span := tracing.StartPluginSpan(ctx.TraceContext, "semantic-cache", categoryName)
 
@@ -129,7 +129,8 @@ func (r *OpenAIRouter) performCacheLookup(
 	cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(requestModel, cacheQuery, threshold)
 	lookupTime := time.Since(startTime).Milliseconds()
 
-	logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)
+	logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%s, lookupTime=%dms",
+		found, safeErrorForLog(cacheErr), lookupTime)
 
 	tracing.SetSpanAttributes(span,
 		attribute.String(tracing.AttrCacheKey, ctx.RequestQuery),
@@ -139,7 +140,7 @@ func (r *OpenAIRouter) performCacheLookup(
 		attribute.Float64("cache.threshold", float64(threshold)))
 
 	if cacheErr != nil {
-		logging.Errorf("Error searching cache: %v", cacheErr)
+		logging.Errorf("Error searching cache: %s", safeErrorForLog(cacheErr))
 		tracing.RecordError(span, cacheErr)
 		tracing.EndPluginSpan(span, "error", lookupTime, "lookup_failed")
 	} else if found {
@@ -155,11 +156,11 @@ func (r *OpenAIRouter) performCacheLookup(
 
 		r.startRouterReplay(ctx, requestModel, requestModel, categoryName)
 		logging.LogEvent("cache_hit", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"model":      requestModel,
-			"query":      ctx.RequestQuery,
-			"category":   categoryName,
-			"threshold":  threshold,
+			"request_id":  ctx.RequestID,
+			"model":       requestModel,
+			"query_chars": len(cacheQuery),
+			"category":    categoryName,
+			"threshold":   threshold,
 		})
 		// Intermediate cache detail (category, matched keywords, similarity) is
 		// demoted to the x-vsr-debug surface (#2205).

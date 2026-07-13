@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -21,14 +22,20 @@ import (
 
 var containerNameInvalidChars = regexp.MustCompile(`[^a-z0-9_.-]+`)
 
+var (
+	openClawImageReferencePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]*(?:@[A-Za-z0-9_+.-]+:[A-Fa-f0-9]+)?$`)
+	openClawSHA256ImagePattern    = regexp.MustCompile(`@sha256:[A-Fa-f0-9]{64}$`)
+	openClawNetworkNamePattern    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
+)
+
 // --- Registry ---
 
 type ContainerEntry struct {
 	Name            string `json:"name"`
 	Port            int    `json:"port"`
 	Image           string `json:"image"`
-	Token           string `json:"token"`
-	DataDir         string `json:"dataDir"`
+	Token           string `json:"-"`
+	DataDir         string `json:"-"`
 	CreatedAt       string `json:"createdAt"`
 	TeamID          string `json:"teamId,omitempty"`
 	TeamName        string `json:"teamName,omitempty"`
@@ -38,6 +45,30 @@ type ContainerEntry struct {
 	AgentVibe       string `json:"agentVibe,omitempty"`
 	AgentPrinciples string `json:"agentPrinciples,omitempty"`
 	RoleKind        string `json:"roleKind,omitempty"`
+}
+
+// containerEntryRecord is the private persistence envelope. ContainerEntry is
+// also the public worker response type, so credentials and host filesystem
+// paths must never inherit its JSON surface.
+type containerEntryRecord struct {
+	ContainerEntry
+	Token   string `json:"token"`
+	DataDir string `json:"dataDir"`
+}
+
+func newContainerEntryRecord(entry ContainerEntry) containerEntryRecord {
+	return containerEntryRecord{
+		ContainerEntry: entry,
+		Token:          entry.Token,
+		DataDir:        entry.DataDir,
+	}
+}
+
+func (record containerEntryRecord) entry() ContainerEntry {
+	entry := record.ContainerEntry
+	entry.Token = record.Token
+	entry.DataDir = record.DataDir
+	return entry
 }
 
 type TeamEntry struct {
@@ -53,15 +84,19 @@ type TeamEntry struct {
 }
 
 type OpenClawHandler struct {
-	dataDir          string
-	readOnly         bool
-	routerConfigPath string
-	wf               *workflowstore.Store
-	mu               sync.RWMutex
-	roomWSClients    sync.Map
-	roomSSEClients   sync.Map
-	roomSSELastEvent sync.Map
-	roomAutomationMu sync.Map
+	dataDir                   string
+	readOnly                  bool
+	routerConfigPath          string
+	wf                        *workflowstore.Store
+	mu                        sync.RWMutex
+	roomWSClients             sync.Map
+	roomSSEClients            sync.Map
+	roomSSELastEvent          sync.Map
+	roomAutomationMu          sync.Map
+	roomAutomationAdmissionMu sync.Mutex
+	roomAutomationAdmissions  map[string]*roomAutomationAdmission
+	roomAutomationSlots       chan struct{}
+	roomAutomationProcess     func(string, string)
 }
 
 // NewOpenClawHandler constructs the OpenClaw HTTP handler. wf holds durable registry,
@@ -70,7 +105,15 @@ func NewOpenClawHandler(dataDir string, readOnly bool, wf *workflowstore.Store) 
 	if wf == nil {
 		panic("openclaw: workflow store is required")
 	}
-	return &OpenClawHandler{dataDir: dataDir, readOnly: readOnly, wf: wf}
+	handler := &OpenClawHandler{
+		dataDir:                  dataDir,
+		readOnly:                 readOnly,
+		wf:                       wf,
+		roomAutomationAdmissions: make(map[string]*roomAutomationAdmission),
+		roomAutomationSlots:      make(chan struct{}, maximumOpenClawAutomationWorkers),
+	}
+	handler.roomAutomationProcess = handler.processRoomUserMessage
+	return handler
 }
 
 func (h *OpenClawHandler) SetRouterConfigPath(configPath string) {
@@ -88,11 +131,11 @@ func (h *OpenClawHandler) loadRegistry() ([]ContainerEntry, error) {
 	}
 	out := make([]ContainerEntry, 0, len(lines))
 	for _, line := range lines {
-		var e ContainerEntry
-		if err := json.Unmarshal([]byte(line), &e); err != nil {
+		var record containerEntryRecord
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
 			return nil, err
 		}
-		out = append(out, e)
+		out = append(out, record.entry())
 	}
 	return out, nil
 }
@@ -100,7 +143,7 @@ func (h *OpenClawHandler) loadRegistry() ([]ContainerEntry, error) {
 func (h *OpenClawHandler) saveRegistry(entries []ContainerEntry) error {
 	rows := make([][2]string, 0, len(entries))
 	for i := range entries {
-		b, err := json.Marshal(entries[i])
+		b, err := json.Marshal(newContainerEntryRecord(entries[i]))
 		if err != nil {
 			return err
 		}
@@ -182,6 +225,45 @@ func isBridgeNetwork(networkMode string) bool {
 		return false
 	}
 	return true
+}
+
+func dashboardUsesProductionSecurityProfile() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("DASHBOARD_SECURITY_PROFILE")), "production")
+}
+
+func validateOpenClawImageReference(image string, requireDigest bool) error {
+	image = strings.TrimSpace(image)
+	if image == "" || len(image) > 512 || !openClawImageReferencePattern.MatchString(image) {
+		return errors.New("OpenClaw image must be one bounded OCI image reference")
+	}
+	if requireDigest && !openClawSHA256ImagePattern.MatchString(image) {
+		return errors.New("production OpenClaw images must be pinned by sha256 digest")
+	}
+	return nil
+}
+
+func validateOpenClawNetworkMode(networkMode string, production bool) error {
+	networkMode = strings.TrimSpace(networkMode)
+	if strings.HasPrefix(strings.ToLower(networkMode), "container:") {
+		name := strings.TrimSpace(strings.TrimPrefix(networkMode, "container:"))
+		if name == "" || !openClawNetworkNamePattern.MatchString(name) {
+			return errors.New("OpenClaw container network target is invalid")
+		}
+		if production {
+			return errors.New("production OpenClaw workers require an isolated user-defined network")
+		}
+		return nil
+	}
+	if networkMode == "host" || networkMode == "bridge" {
+		if production {
+			return errors.New("production OpenClaw workers require an isolated user-defined network")
+		}
+		return nil
+	}
+	if !openClawNetworkNamePattern.MatchString(networkMode) {
+		return errors.New("OpenClaw network name is invalid")
+	}
+	return nil
 }
 
 func (h *OpenClawHandler) nextAvailablePort(networkMode string) int {
@@ -404,11 +486,12 @@ func (h *OpenClawHandler) ensureImageAvailable(image string) error {
 		return nil
 	}
 
-	trimmed := strings.TrimSpace(string(out))
-	if trimmed == "" {
-		return fmt.Errorf("failed to pull OpenClaw image %q", image)
-	}
-	return fmt.Errorf("failed to pull OpenClaw image %q: %s", image, trimmed)
+	log.Printf(
+		"openclaw: image refresh failed image=%q output_bytes=%d",
+		image,
+		len(out),
+	)
+	return fmt.Errorf("failed to pull OpenClaw image %q", image)
 }
 
 func (h *OpenClawHandler) runContainerCommand(args ...string) (containerCommandOutput, error) {

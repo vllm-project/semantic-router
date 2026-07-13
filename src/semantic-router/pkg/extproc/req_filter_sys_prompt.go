@@ -47,7 +47,7 @@ func (r *OpenAIRouter) addSystemPromptIfConfigured(modifiedBody []byte, category
 	latencyMs := time.Since(startTime).Milliseconds()
 
 	if err != nil {
-		logging.Errorf("Error adding system prompt to request: %v", err)
+		logging.Errorf("Error adding system prompt to request: %s", safeErrorForLog(err))
 		tracing.RecordError(promptSpan, err)
 		tracing.EndPluginSpan(promptSpan, "error", latencyMs, "injection_failed")
 		metrics.RecordRequestError(model, "serialization_error")

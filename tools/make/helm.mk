@@ -167,6 +167,55 @@ helm-safety-validate: helm-ci-setup
 		-f "$(HELM_CHART_PATH)/values-prod.yaml" \
 		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/prod.yaml"; \
 	grep -q "kind: HorizontalPodAutoscaler" "$$tmp_dir/prod.yaml"; \
+	grep -q 'name: DASHBOARD_SECURITY_PROFILE' "$$tmp_dir/prod.yaml"; \
+	grep -q 'value: "production"' "$$tmp_dir/prod.yaml"; \
+	grep -q 'name: DASHBOARD_PASSWORD_BLOCKLIST_SHA256' "$$tmp_dir/prod.yaml"; \
+	grep -q 'imagePullPolicy: Always' "$$tmp_dir/prod.yaml"; \
+	echo "Validating production dashboard security-profile schema..."; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set dashboard.enabled=true \
+		--set dashboard.securityProfile=production \
+		--set dashboard.image.tag=release-a \
+		--set dashboard.image.pullPolicy=Always \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/prod-missing-corpus.out" 2>&1; then \
+		echo "Expected production dashboard without an external corpus to fail schema validation"; \
+		exit 1; \
+	fi; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set dashboard.enabled=true \
+		--set dashboard.securityProfile=production \
+		--set dashboard.image.tag=release-a \
+		--set dashboard.image.pullPolicy=Always \
+		--set dashboard.passwordBlocklist.existingConfigMap=production-passwords \
+		--set-string dashboard.passwordBlocklist.sha256=not-a-digest \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/prod-invalid-digest.out" 2>&1; then \
+		echo "Expected malformed production password blocklist digest to fail schema validation"; \
+		exit 1; \
+	fi; \
+	for invalid_tag in latest ''; do \
+		if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+			--set dashboard.enabled=true \
+			--set dashboard.securityProfile=production \
+			--set-string dashboard.image.tag="$$invalid_tag" \
+			--set dashboard.image.pullPolicy=Always \
+			--set dashboard.passwordBlocklist.existingConfigMap=production-passwords \
+			--set-string dashboard.passwordBlocklist.sha256=$$(printf a%.0s $$(seq 1 64)) \
+			--namespace $(HELM_NAMESPACE) > "$$tmp_dir/prod-invalid-image-tag.out" 2>&1; then \
+			echo "Expected production dashboard image tag '$$invalid_tag' to fail schema validation"; \
+			exit 1; \
+		fi; \
+	done; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set dashboard.enabled=true \
+		--set dashboard.securityProfile=production \
+		--set dashboard.image.tag=release-a \
+		--set dashboard.image.pullPolicy=IfNotPresent \
+		--set dashboard.passwordBlocklist.existingConfigMap=production-passwords \
+		--set-string dashboard.passwordBlocklist.sha256=$$(printf a%.0s $$(seq 1 64)) \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/prod-mutable-pull-policy.out" 2>&1; then \
+		echo "Expected mutable production dashboard pull policy to fail schema validation"; \
+		exit 1; \
+	fi; \
 	echo "Validating schema rejection for invalid learning guard type..."; \
 	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		--set safetyGuards.rejectMultiReplicaLocalLearningState=maybe \

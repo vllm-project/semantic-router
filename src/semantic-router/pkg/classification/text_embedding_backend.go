@@ -47,13 +47,6 @@ func normalizeTextEmbeddingBackend(backend string) string {
 	return strings.ToLower(strings.TrimSpace(backend))
 }
 
-func configuredTextEmbeddingBackend(cfg *config.RouterConfig) string {
-	if cfg == nil {
-		return ""
-	}
-	return cfg.EmbeddingModels.EmbeddingBackend()
-}
-
 func resolveTextEmbeddingRuntimePlan(cfg *config.RouterConfig, requestedModelType string) (embedding.RuntimePlan, error) {
 	if cfg == nil {
 		return embedding.RuntimePlan{}, fmt.Errorf("embedding runtime config is nil")
@@ -70,36 +63,11 @@ func resolveTextEmbeddingRuntimePlan(cfg *config.RouterConfig, requestedModelTyp
 }
 
 func initializeConfiguredTextEmbeddingBackend(cfg *config.RouterConfig, plan embedding.RuntimePlan) error {
-	switch plan.Backend {
-	case config.EmbeddingBackendOpenVINO:
-		mmBertPath := ""
-		fallbackPath := config.ResolveModelPath(plan.ModelPath)
-		if plan.ModelType == "mmbert" {
-			mmBertPath = fallbackPath
-			fallbackPath = ""
-		}
-		return initializeOpenVINOTextEmbedding(plan.ModelType, mmBertPath, fallbackPath, cfg.UseCPU)
-	case config.EmbeddingBackendCandle:
-		if !plan.LocalOverride {
-			return nil
-		}
-		qwen3Path, gemmaPath, mmBertPath := "", "", ""
-		switch plan.ModelType {
-		case config.EmbeddingModelTypeQwen3:
-			qwen3Path = config.ResolveModelPath(plan.ModelPath)
-		case "gemma":
-			gemmaPath = config.ResolveModelPath(plan.ModelPath)
-		case "mmbert":
-			mmBertPath = config.ResolveModelPath(plan.ModelPath)
-		case "multimodal":
-			return initMultiModalModel(config.ResolveModelPath(plan.ModelPath), cfg.UseCPU)
-		default:
-			return fmt.Errorf("candle local override does not support model type %q", plan.ModelType)
-		}
-		return initializeCandleTextEmbedding(qwen3Path, gemmaPath, mmBertPath, cfg.UseCPU)
-	default:
-		return nil
+	plans, err := configuredTextEmbeddingRuntimePlans(cfg, plan)
+	if err != nil {
+		return err
 	}
+	return initializeResolvedTextEmbeddingBackend(cfg, plans)
 }
 
 // executeTextEmbedding resolves and executes the effective backend together,

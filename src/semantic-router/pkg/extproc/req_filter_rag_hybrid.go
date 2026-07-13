@@ -57,7 +57,7 @@ func (r *OpenAIRouter) retrieveSequential(traceCtx context.Context, ctx *Request
 		return context, nil
 	}
 
-	logging.Warnf("Hybrid RAG: primary backend (%s) failed: %v", hybridConfig.Primary, err)
+	logging.Warnf("Hybrid RAG: primary backend (%s) failed: %s", hybridConfig.Primary, safeErrorForLog(err))
 
 	// Try fallback backend
 	if hybridConfig.Fallback == "" {

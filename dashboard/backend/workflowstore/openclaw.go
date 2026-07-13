@@ -2,7 +2,11 @@ package workflowstore
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 )
+
+var ErrOpenClawRoomMessageLimit = errors.New("openclaw room message limit reached")
 
 // ReplaceOpenClawContainers replaces all container rows (full snapshot).
 func (s *Store) ReplaceOpenClawContainers(jsonRows [][2]string) error {
@@ -149,6 +153,29 @@ func (s *Store) ListOpenClawRoomMessages(roomID string) ([]string, error) {
 	return scanJSONLines(rows)
 }
 
+// ListRecentOpenClawRoomMessages returns the newest bounded window in
+// chronological order without materializing the room's complete history.
+func (s *Store) ListRecentOpenClawRoomMessages(roomID string, limit int) ([]string, error) {
+	if limit <= 0 {
+		return []string{}, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.db.Query(`
+		SELECT json FROM (
+			SELECT seq, json
+			FROM openclaw_room_message
+			WHERE room_id = ?
+			ORDER BY seq DESC
+			LIMIT ?
+		) ORDER BY seq ASC`, roomID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanJSONLines(rows)
+}
+
 // AppendOpenClawRoomMessage inserts one message (O(1) vs rewriting a JSON file).
 func (s *Store) AppendOpenClawRoomMessage(roomID, messageID, messageJSON string) error {
 	s.mu.Lock()
@@ -157,6 +184,88 @@ func (s *Store) AppendOpenClawRoomMessage(roomID, messageID, messageJSON string)
 		`INSERT OR IGNORE INTO openclaw_room_message (room_id, message_id, json) VALUES (?, ?, ?)`,
 		roomID, messageID, messageJSON)
 	return err
+}
+
+// AppendOpenClawRoomMessageBounded atomically refuses a new row once a room
+// reaches its server-owned retention ceiling. Dashboard auth is single-replica
+// today, and the store mutex plus SQLite transaction keep concurrent writers in
+// this process from overshooting the limit.
+func (s *Store) AppendOpenClawRoomMessageBounded(
+	roomID string,
+	messageID string,
+	messageJSON string,
+	maximum int,
+) error {
+	if maximum <= 0 {
+		return fmt.Errorf("openclaw room message maximum must be positive")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	var count int
+	if err := tx.QueryRow(
+		`SELECT COUNT(*) FROM openclaw_room_message WHERE room_id = ?`,
+		roomID,
+	).Scan(&count); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if count >= maximum {
+		_ = tx.Rollback()
+		return ErrOpenClawRoomMessageLimit
+	}
+	if _, err := tx.Exec(
+		`INSERT OR IGNORE INTO openclaw_room_message (room_id, message_id, json) VALUES (?, ?, ?)`,
+		roomID,
+		messageID,
+		messageJSON,
+	); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+// GetOpenClawRoomMessageJSON returns one message without loading the room.
+func (s *Store) GetOpenClawRoomMessageJSON(roomID, messageID string) (string, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var payload string
+	err := s.db.QueryRow(
+		`SELECT json FROM openclaw_room_message WHERE room_id = ? AND message_id = ?`,
+		roomID,
+		messageID,
+	).Scan(&payload)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	return payload, err == nil, err
+}
+
+// UpdateOpenClawRoomMessageJSON updates one existing row in place.
+func (s *Store) UpdateOpenClawRoomMessageJSON(roomID, messageID, payload string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	result, err := s.db.Exec(
+		`UPDATE openclaw_room_message SET json = ? WHERE room_id = ? AND message_id = ?`,
+		payload,
+		roomID,
+		messageID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows != 1 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 // ReplaceOpenClawRoomMessages replaces all messages for a room (full snapshot).

@@ -1,8 +1,17 @@
 package handlers
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
 
@@ -88,5 +97,149 @@ func TestTruncateOpenWebContentPreservesUTF8(t *testing.T) {
 	}
 	if !strings.HasPrefix(got, "你好世界") {
 		t.Fatalf("truncateOpenWebContent prefix = %q, want rune boundary prefix", got)
+	}
+}
+
+func TestOpenWebHandlerDoesNotSetWildcardCORS(t *testing.T) {
+	t.Parallel()
+
+	client := &controlledTestOutboundClient{do: func(*http.Request) (*http.Response, error) {
+		return nil, errors.New("unexpected request")
+	}}
+	req := httptest.NewRequest(http.MethodOptions, "/api/tools/open-web", nil)
+	w := httptest.NewRecorder()
+
+	openWebHandlerWithClient(client)(w, req)
+
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("Access-Control-Allow-Origin = %q, want absent", got)
+	}
+}
+
+func TestOpenWebHandlerRejectsUserinfoBeforeRequest(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+	client := &controlledTestOutboundClient{do: func(*http.Request) (*http.Response, error) {
+		calls.Add(1)
+		return nil, errors.New("unexpected request")
+	}}
+	body, err := json.Marshal(OpenWebRequest{
+		URL: "https://user:password@example.com/article?token=query-secret",
+	})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/tools/open-web", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	openWebHandlerWithClient(client)(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", w.Code, w.Body.String())
+	}
+	if got := calls.Load(); got != 0 {
+		t.Fatalf("outbound calls = %d, want zero", got)
+	}
+	for _, secret := range []string{"user", "password", "query-secret"} {
+		if strings.Contains(w.Body.String(), secret) {
+			t.Fatalf("validation error leaked %q: %s", secret, w.Body.String())
+		}
+	}
+}
+
+func TestOpenWebHandlerRejectsLoopbackInProduction(t *testing.T) {
+	t.Parallel()
+
+	body, err := json.Marshal(OpenWebRequest{URL: "http://127.0.0.1/admin", ForceJina: true})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/tools/open-web", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	OpenWebHandler()(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestFetchWebDirectRejectsOversizedResponse(t *testing.T) {
+	t.Parallel()
+
+	client := &controlledTestOutboundClient{do: func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body: io.NopCloser(strings.NewReader(strings.Repeat(
+				"x",
+				openWebMaxResponseSize+1,
+			))),
+		}, nil
+	}}
+
+	_, err := fetchWebDirect(
+		context.Background(),
+		client,
+		"https://example.com/article",
+		time.Second,
+		openWebMaxContentLength,
+	)
+	if !errors.Is(err, errOutboundResponseTooLarge) {
+		t.Fatalf("fetchWebDirect() error = %v, want response too large", err)
+	}
+}
+
+func TestFetchWebWithJinaRejectsOversizedResponse(t *testing.T) {
+	t.Parallel()
+
+	client := &controlledTestOutboundClient{do: func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body: io.NopCloser(strings.NewReader(strings.Repeat(
+				"x",
+				openWebMaxResponseSize+1,
+			))),
+		}, nil
+	}}
+
+	_, err := fetchWebWithJina(
+		context.Background(),
+		client,
+		"https://example.com/article",
+		time.Second,
+		"markdown",
+		openWebMaxContentLength,
+		false,
+	)
+	if !errors.Is(err, errOutboundResponseTooLarge) {
+		t.Fatalf("fetchWebWithJina() error = %v, want response too large", err)
+	}
+}
+
+func TestOpenWebHandlerDoesNotExposeClientErrorsOrURLQuery(t *testing.T) {
+	t.Parallel()
+
+	client := &controlledTestOutboundClient{do: func(*http.Request) (*http.Response, error) {
+		return nil, errors.New("https://user:pass@example.com/a?token=query-secret body-secret")
+	}}
+	body, err := json.Marshal(OpenWebRequest{
+		URL: "https://example.com/article?token=request-secret",
+	})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/tools/open-web", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	openWebHandlerWithClient(client)(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502: %s", w.Code, w.Body.String())
+	}
+	for _, secret := range []string{"user:pass", "query-secret", "request-secret", "body-secret"} {
+		if strings.Contains(w.Body.String(), secret) {
+			t.Fatalf("fetch error leaked %q: %s", secret, w.Body.String())
+		}
 	}
 }

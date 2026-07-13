@@ -3,17 +3,66 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
+	"net"
 	"net/http"
 	"net/url"
 	pathpkg "path"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	sharednlgen "github.com/vllm-project/semantic-router/src/semantic-router/pkg/nlgen"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/jsonunicode"
 )
+
+const (
+	builderNLMaxResponseBodyBytes int64 = 4 << 20
+	builderNLMaxModelNameBytes          = 256
+	builderNLMaxEndpointNameBytes       = 256
+	builderNLMaxAccessKeyBytes          = 8 << 10
+)
+
+var (
+	errBuilderNLRequestFailed    = errors.New("builder ai request failed")
+	errBuilderNLResponseTooLarge = errors.New("builder ai response exceeded the size limit")
+	secureBuilderNLHTTPClient    = newBuilderNLHTTPClient()
+)
+
+type builderNLHTTPDoer interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
+// newBuilderNLHTTPClient permits explicitly configured private vLLM endpoints,
+// but does not inherit ambient proxies and never follows redirects. This is
+// essential for custom access keys: a redirect must never move a credential or
+// generated routing prompt to another origin.
+func newBuilderNLHTTPClient() *http.Client {
+	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
+	transport := &http.Transport{
+		Proxy:                  nil,
+		DialContext:            dialer.DialContext,
+		ForceAttemptHTTP2:      true,
+		MaxIdleConns:           20,
+		MaxIdleConnsPerHost:    10,
+		IdleConnTimeout:        90 * time.Second,
+		TLSHandshakeTimeout:    10 * time.Second,
+		ResponseHeaderTimeout:  builderNLMaxTimeout,
+		ExpectContinueTimeout:  time.Second,
+		MaxResponseHeaderBytes: outboundMaxResponseHeaderBytes,
+		TLSClientConfig:        &tls.Config{MinVersion: tls.VersionTLS12},
+	}
+	return &http.Client{
+		Transport: transport,
+		Timeout:   builderNLMaxTimeout,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
 
 type builderNLLLMClient struct {
 	envoyURL       string
@@ -74,31 +123,34 @@ func callBuilderNLMessages(
 	if chatReq.MaxTokens <= 0 {
 		chatReq.MaxTokens = builderNLDefaultMaxTokens
 	}
+	connectionMode, err := builderNLConnectionModeOrDefault(req.ConnectionMode)
+	if err != nil {
+		return "", err
+	}
+	var customConnection *builderNLConnection
+	if connectionMode == builderNLConnectionModeCustom {
+		if req.CustomConnection == nil {
+			return "", errors.New("custom connection details are missing")
+		}
+		normalized, err := normalizeBuilderNLConnection(*req.CustomConnection)
+		if err != nil {
+			return "", err
+		}
+		customConnection = &normalized
+	}
 	callCtx, cancel := context.WithTimeout(ctx, runtimeOptions.Timeout)
 	defer cancel()
 
 	return runBuilderNLModelCallWithProgress(callCtx, reporter, phase, attempt, runtimeOptions.Timeout, func() (string, error) {
-		connectionMode, err := builderNLConnectionModeOrDefault(req.ConnectionMode)
-		if err != nil {
-			return "", err
-		}
-
 		if connectionMode == builderNLConnectionModeCustom {
-			if req.CustomConnection == nil {
-				return "", fmt.Errorf("custom connection details are missing")
-			}
 			reportBuilderNLProgress(
 				reporter,
 				phase,
 				builderNLProgressInfo,
-				fmt.Sprintf(
-					"Calling custom %s generation model %q.",
-					req.CustomConnection.ProviderKind,
-					strings.TrimSpace(req.CustomConnection.ModelName),
-				),
+				fmt.Sprintf("Calling custom %s generation model.", customConnection.ProviderKind),
 				attempt,
 			)
-			return callBuilderNLCustomConnectionMessages(callCtx, *req.CustomConnection, chatReq)
+			return callBuilderNLCustomConnectionMessages(callCtx, *customConnection, chatReq)
 		}
 
 		if strings.TrimSpace(envoyURL) == "" {
@@ -126,14 +178,11 @@ func callBuilderNLCustomConnectionMessages(
 	conn builderNLConnection,
 	chatReq sharednlgen.ChatCompletionRequest,
 ) (string, error) {
-	modelName := strings.TrimSpace(conn.ModelName)
-	if modelName == "" {
-		return "", fmt.Errorf("custom connection modelName is required")
-	}
-	parsedBaseURL, err := normalizeBuilderNLBaseURL(conn.BaseURL, conn.ProviderKind)
+	parsedBaseURL, err := validateBuilderNLConnection(conn)
 	if err != nil {
 		return "", err
 	}
+	modelName := strings.TrimSpace(conn.ModelName)
 
 	switch conn.ProviderKind {
 	case builderNLProviderVLLM, builderNLProviderOpenAICompatible:
@@ -192,6 +241,30 @@ func callBuilderNLOpenAICompatibleMessages(
 	accessKey string,
 	chatReq sharednlgen.ChatCompletionRequest,
 ) (string, error) {
+	return callBuilderNLOpenAICompatibleMessagesWithClient(
+		secureBuilderNLHTTPClient,
+		ctx,
+		endpoint,
+		modelName,
+		accessKey,
+		chatReq,
+	)
+}
+
+func callBuilderNLOpenAICompatibleMessagesWithClient(
+	client builderNLHTTPDoer,
+	ctx context.Context,
+	endpoint string,
+	modelName string,
+	accessKey string,
+	chatReq sharednlgen.ChatCompletionRequest,
+) (string, error) {
+	if client == nil {
+		return "", errBuilderNLRequestFailed
+	}
+	if _, err := validateBuilderNLEndpoint(endpoint, accessKey); err != nil {
+		return "", err
+	}
 	payload := openAIChatRequest{
 		Model:     modelName,
 		Messages:  buildOpenAIChatMessages(chatReq.Messages),
@@ -204,12 +277,12 @@ func callBuilderNLOpenAICompatibleMessages(
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal builder ai request: %w", err)
+		return "", errBuilderNLRequestFailed
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(raw))
 	if err != nil {
-		return "", fmt.Errorf("failed to create builder ai request: %w", err)
+		return "", errBuilderNLRequestFailed
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
@@ -217,26 +290,31 @@ func callBuilderNLOpenAICompatibleMessages(
 		httpReq.Header.Set("Authorization", "Bearer "+accessKey)
 	}
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := client.Do(httpReq)
 	if err != nil {
-		return "", fmt.Errorf("builder ai request failed: %w", err)
+		return "", errBuilderNLRequestFailed
 	}
 	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(resp.Body)
-	trimmedBody := strings.TrimSpace(string(body))
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		if trimmedBody == "" {
-			trimmedBody = resp.Status
+	body, err := readBoundedOutboundBody(resp.Body, builderNLMaxResponseBodyBytes)
+	if err != nil {
+		if errors.Is(err, errOutboundResponseTooLarge) {
+			return "", errBuilderNLResponseTooLarge
 		}
-		return "", fmt.Errorf("builder ai request failed: %s", trimmedBody)
+		return "", errBuilderNLRequestFailed
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return "", fmt.Errorf("builder ai request failed with HTTP status %d", resp.StatusCode)
+	}
+	if !jsonunicode.Valid(body) {
+		return "", errors.New("builder ai response was invalid")
 	}
 
 	var parsed openAIChatResponse
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		return "", fmt.Errorf("failed to decode builder ai response: %w", err)
+		return "", errors.New("builder ai response was invalid")
 	}
 	if parsed.Error != nil && strings.TrimSpace(parsed.Error.Message) != "" {
-		return "", fmt.Errorf("builder ai request failed: %s", parsed.Error.Message)
+		return "", errors.New("builder ai provider reported an error")
 	}
 	if len(parsed.Choices) == 0 {
 		return "", fmt.Errorf("builder ai request failed: empty response")
@@ -270,8 +348,32 @@ func callBuilderNLAnthropicMessages(
 	accessKey string,
 	chatReq sharednlgen.ChatCompletionRequest,
 ) (string, error) {
+	return callBuilderNLAnthropicMessagesWithClient(
+		secureBuilderNLHTTPClient,
+		ctx,
+		endpoint,
+		modelName,
+		accessKey,
+		chatReq,
+	)
+}
+
+func callBuilderNLAnthropicMessagesWithClient(
+	client builderNLHTTPDoer,
+	ctx context.Context,
+	endpoint string,
+	modelName string,
+	accessKey string,
+	chatReq sharednlgen.ChatCompletionRequest,
+) (string, error) {
 	if accessKey == "" {
 		return "", fmt.Errorf("anthropic custom connection requires an accessKey")
+	}
+	if client == nil {
+		return "", errBuilderNLRequestFailed
+	}
+	if _, err := validateBuilderNLEndpoint(endpoint, accessKey); err != nil {
+		return "", err
 	}
 
 	var systemParts []string
@@ -306,38 +408,43 @@ func callBuilderNLAnthropicMessages(
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal anthropic builder ai request: %w", err)
+		return "", errBuilderNLRequestFailed
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(raw))
 	if err != nil {
-		return "", fmt.Errorf("failed to create anthropic builder ai request: %w", err)
+		return "", errBuilderNLRequestFailed
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
 	httpReq.Header.Set("x-api-key", accessKey)
 	httpReq.Header.Set("anthropic-version", "2023-06-01")
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := client.Do(httpReq)
 	if err != nil {
-		return "", fmt.Errorf("anthropic builder ai request failed: %w", err)
+		return "", errBuilderNLRequestFailed
 	}
 	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(resp.Body)
-	trimmedBody := strings.TrimSpace(string(body))
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		if trimmedBody == "" {
-			trimmedBody = resp.Status
+	body, err := readBoundedOutboundBody(resp.Body, builderNLMaxResponseBodyBytes)
+	if err != nil {
+		if errors.Is(err, errOutboundResponseTooLarge) {
+			return "", errBuilderNLResponseTooLarge
 		}
-		return "", fmt.Errorf("anthropic builder ai request failed: %s", trimmedBody)
+		return "", errBuilderNLRequestFailed
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return "", fmt.Errorf("anthropic builder ai request failed with HTTP status %d", resp.StatusCode)
+	}
+	if !jsonunicode.Valid(body) {
+		return "", errors.New("anthropic builder ai response was invalid")
 	}
 
 	var parsed anthropicResponse
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		return "", fmt.Errorf("failed to decode anthropic builder ai response: %w", err)
+		return "", errors.New("anthropic builder ai response was invalid")
 	}
 	if parsed.Error != nil && strings.TrimSpace(parsed.Error.Message) != "" {
-		return "", fmt.Errorf("anthropic builder ai request failed: %s", parsed.Error.Message)
+		return "", errors.New("anthropic builder ai provider reported an error")
 	}
 	for _, part := range parsed.Content {
 		if strings.TrimSpace(part.Text) != "" {
@@ -345,4 +452,66 @@ func callBuilderNLAnthropicMessages(
 		}
 	}
 	return "", fmt.Errorf("anthropic builder ai request failed: empty response content")
+}
+
+func validateBuilderNLConnection(conn builderNLConnection) (*url.URL, error) {
+	switch conn.ProviderKind {
+	case builderNLProviderVLLM, builderNLProviderOpenAICompatible, builderNLProviderAnthropic:
+	default:
+		return nil, errors.New("unsupported custom connection providerKind")
+	}
+	modelName := strings.TrimSpace(conn.ModelName)
+	if modelName == "" {
+		return nil, errors.New("custom connection modelName is required")
+	}
+	if len([]byte(conn.ModelName)) > builderNLMaxModelNameBytes || containsUnicodeControl(conn.ModelName) {
+		return nil, errors.New("custom connection modelName is too large")
+	}
+	if len([]byte(conn.EndpointName)) > builderNLMaxEndpointNameBytes || containsUnicodeControl(conn.EndpointName) {
+		return nil, errors.New("custom connection endpointName is too large")
+	}
+	accessKey := strings.TrimSpace(conn.AccessKey)
+	if len([]byte(conn.AccessKey)) > builderNLMaxAccessKeyBytes || containsUnicodeControl(conn.AccessKey) {
+		return nil, errors.New("custom connection accessKey is invalid")
+	}
+	parsed, err := normalizeBuilderNLBaseURL(conn.BaseURL, conn.ProviderKind)
+	if err != nil {
+		return nil, err
+	}
+	if accessKey != "" && parsed.Scheme != "https" {
+		return nil, errors.New("custom connections with an accessKey must use HTTPS")
+	}
+	return parsed, nil
+}
+
+// normalizeBuilderNLConnection validates all user-controlled custom connection
+// metadata before it can reach progress events, logs, URLs, or request headers.
+func normalizeBuilderNLConnection(conn builderNLConnection) (builderNLConnection, error) {
+	parsed, err := validateBuilderNLConnection(conn)
+	if err != nil {
+		return builderNLConnection{}, err
+	}
+	conn.ModelName = strings.TrimSpace(conn.ModelName)
+	conn.EndpointName = strings.TrimSpace(conn.EndpointName)
+	conn.AccessKey = strings.TrimSpace(conn.AccessKey)
+	conn.BaseURL = parsed.String()
+	return conn, nil
+}
+
+func validateBuilderNLEndpoint(raw, accessKey string) (*url.URL, error) {
+	if len([]byte(strings.TrimSpace(raw))) > outboundMaxURLBytes {
+		return nil, errors.New("builder ai endpoint is invalid")
+	}
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Opaque != "" || parsed.Host == "" || parsed.Hostname() == "" || parsed.User != nil || parsed.Fragment != "" {
+		return nil, errors.New("builder ai endpoint is invalid")
+	}
+	parsed.Scheme = strings.ToLower(parsed.Scheme)
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return nil, errors.New("builder ai endpoint is invalid")
+	}
+	if strings.TrimSpace(accessKey) != "" && parsed.Scheme != "https" {
+		return nil, errors.New("custom connections with an accessKey must use HTTPS")
+	}
+	return parsed, nil
 }

@@ -29,6 +29,8 @@ This document defines the harness-side validation ladder for repository changes.
   - runs the CI gate, feature tests, local smoke when required, and a final report
 - `make agent-e2e-affected CHANGED_FILES="..."`
   - explicit manual local E2E path for affected profiles when debugging or additional local confidence is needed
+- `make test-onnx-binding-ci`
+  - runs the model-free ONNX Rust and Go binding contracts, then reuses the built native library for `go.onnx.mod` plus the `onnx` build tag against the router API package in normal, race, and vet modes
 
 `CHANGED_FILES` accepts comma-separated, whitespace-separated, or newline-separated
 paths. For long changed-file lists or paths that need exact shell preservation, write

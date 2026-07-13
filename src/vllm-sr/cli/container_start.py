@@ -49,7 +49,9 @@ from cli.utils import get_logger
 
 log = get_logger(__name__)
 
-_ROUTER_ONLY_ENV_NAMES = frozenset({"VLLM_SR_LOOPER_SHARED_SECRET"})
+_ROUTER_ONLY_ENV_NAMES = frozenset(
+    {"VLLM_SR_EMBEDDING_API_KEY", "VLLM_SR_LOOPER_SHARED_SECRET"}
+)
 
 
 def container_start_vllm_sr(

@@ -1,16 +1,19 @@
 package modeldownload
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+import (
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+)
 
 type modelFeatureGate struct {
-	enabled func(*config.RouterConfig) bool
+	enabled func(*config.RouterConfig, embedding.RuntimePlan) bool
 	paths   func(*config.RouterConfig) []string
 }
 
 var optionalModelFeatureGates = []modelFeatureGate{
 	{
-		enabled: func(cfg *config.RouterConfig) bool {
-			return !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend()
+		enabled: func(_ *config.RouterConfig, plan embedding.RuntimePlan) bool {
+			return plan.Backend != config.EmbeddingBackendOpenAICompatible
 		},
 		paths: func(cfg *config.RouterConfig) []string {
 			return []string{
@@ -23,7 +26,7 @@ var optionalModelFeatureGates = []modelFeatureGate{
 		},
 	},
 	{
-		enabled: func(cfg *config.RouterConfig) bool {
+		enabled: func(cfg *config.RouterConfig, _ embedding.RuntimePlan) bool {
 			return cfg.NeedsCategoryMappingForRouting()
 		},
 		paths: func(cfg *config.RouterConfig) []string {
@@ -31,7 +34,7 @@ var optionalModelFeatureGates = []modelFeatureGate{
 		},
 	},
 	{
-		enabled: func(cfg *config.RouterConfig) bool {
+		enabled: func(cfg *config.RouterConfig, _ embedding.RuntimePlan) bool {
 			return cfg.NeedsPIIMappingForRouting()
 		},
 		paths: func(cfg *config.RouterConfig) []string {
@@ -39,7 +42,7 @@ var optionalModelFeatureGates = []modelFeatureGate{
 		},
 	},
 	{
-		enabled: func(cfg *config.RouterConfig) bool {
+		enabled: func(cfg *config.RouterConfig, _ embedding.RuntimePlan) bool {
 			return cfg.NeedsJailbreakMappingForRouting()
 		},
 		paths: func(cfg *config.RouterConfig) []string {
@@ -47,7 +50,7 @@ var optionalModelFeatureGates = []modelFeatureGate{
 		},
 	},
 	{
-		enabled: func(cfg *config.RouterConfig) bool {
+		enabled: func(cfg *config.RouterConfig, _ embedding.RuntimePlan) bool {
 			return cfg.IsFactCheckClassifierEnabled()
 		},
 		paths: func(cfg *config.RouterConfig) []string {
@@ -55,7 +58,7 @@ var optionalModelFeatureGates = []modelFeatureGate{
 		},
 	},
 	{
-		enabled: func(cfg *config.RouterConfig) bool {
+		enabled: func(cfg *config.RouterConfig, _ embedding.RuntimePlan) bool {
 			return cfg.IsHallucinationModelEnabled()
 		},
 		paths: func(cfg *config.RouterConfig) []string {
@@ -66,7 +69,7 @@ var optionalModelFeatureGates = []modelFeatureGate{
 		},
 	},
 	{
-		enabled: func(cfg *config.RouterConfig) bool {
+		enabled: func(cfg *config.RouterConfig, _ embedding.RuntimePlan) bool {
 			return cfg.IsFeedbackDetectorEnabled()
 		},
 		paths: func(cfg *config.RouterConfig) []string {
@@ -74,7 +77,9 @@ var optionalModelFeatureGates = []modelFeatureGate{
 		},
 	},
 	{
-		enabled: isModalityClassifierEnabled,
+		enabled: func(cfg *config.RouterConfig, _ embedding.RuntimePlan) bool {
+			return isModalityClassifierEnabled(cfg)
+		},
 		paths: func(cfg *config.RouterConfig) []string {
 			if cfg.ModalityDetector.Classifier == nil {
 				return nil
@@ -84,14 +89,30 @@ var optionalModelFeatureGates = []modelFeatureGate{
 	},
 }
 
-func filterDisabledOptionalModelPaths(cfg *config.RouterConfig, paths []string) []string {
+func filterDisabledOptionalModelPaths(
+	cfg *config.RouterConfig,
+	paths []string,
+	plan embedding.RuntimePlan,
+) []string {
 	disabled := make(map[string]struct{})
 	for _, gate := range optionalModelFeatureGates {
-		if gate.enabled(cfg) {
+		if gate.enabled(cfg, plan) {
 			continue
 		}
 		for _, path := range gate.paths(cfg) {
 			if path != "" {
+				disabled[path] = struct{}{}
+			}
+		}
+	}
+	if plan.LocalOverride {
+		for _, path := range []string{
+			cfg.Qwen3ModelPath,
+			cfg.GemmaModelPath,
+			cfg.MmBertModelPath,
+			cfg.MultiModalModelPath,
+		} {
+			if path != "" && path != plan.ModelPath {
 				disabled[path] = struct{}{}
 			}
 		}

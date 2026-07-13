@@ -19,7 +19,11 @@ def _split_runtime_topology(monkeypatch):
 def _capture_run_commands(monkeypatch):
     captured = []
 
-    def fake_run(cmd, capture_output, text, check):
+    def fake_run(cmd, capture_output, text, check, env):
+        assert capture_output is True
+        assert text is True
+        assert check is True
+        assert isinstance(env, dict)
         captured.append(cmd)
         return SimpleNamespace(stdout="container-id\n", stderr="")
 

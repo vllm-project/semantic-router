@@ -126,14 +126,32 @@ func (r *OpenAIRouter) runToolSelectionPluginFilter(
 	}
 
 	start := time.Now()
-	provider, providerErr := toolsEmbeddingProvider(r.Config)
+	if strings.TrimSpace(classificationText) == "" {
+		// An empty query has no semantic evidence with which to remove tools.
+		// Preserve the caller's tool set without resolving or invoking an
+		// embedding runtime that this request does not need.
+		filtered := append([]openai.ChatCompletionToolParam(nil), openAIRequest.Tools...)
+		latency := time.Since(start)
+		strategyLabel := config.ToolSelectionModeFilter
+		emitToolObservability(response, ctx, strategyLabel, 0, latency)
+		metrics.RecordToolsRetrieval(strategyLabel, latency.Seconds())
+		if err := r.applySelectedTools(openAIRequest, filtered, strategyLabel, 0, latency, classificationText, ts.FallbackToEmpty); err != nil {
+			return err
+		}
+		return r.updateRequestWithTools(openAIRequest, response, ctx)
+	}
+	plan, providerErr := r.resolvedEmbeddingRuntimePlan()
+	if providerErr != nil {
+		return r.handleToolSelectionError(openAIRequest, response, ctx, providerErr, r.effectiveToolSelectionFallback(ts))
+	}
+	provider, providerErr := toolsEmbeddingProvider(r.Config, plan)
 	if providerErr != nil {
 		return r.handleToolSelectionError(openAIRequest, response, ctx, providerErr, r.effectiveToolSelectionFallback(ts))
 	}
 	filtered, confidence, ferr := filterRequestToolsAgainstQuerySemantic(
 		classificationText,
 		openAIRequest.Tools,
-		em.EmbeddingConfig.ModelType,
+		plan.ModelType,
 		em.EmbeddingConfig.TargetDimension,
 		provider,
 		thresh,

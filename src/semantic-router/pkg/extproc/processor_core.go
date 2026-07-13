@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"runtime/debug"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc/codes"
@@ -62,7 +61,9 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 	// CGO inference calls) so a single bad request cannot take down the gRPC server.
 	defer func() {
 		if rec := recover(); rec != nil {
-			logging.Errorf("Process: recovered panic: %v\n%s", rec, debug.Stack())
+			logging.ComponentErrorEvent("extproc", "process_panic_recovered", map[string]interface{}{
+				"panic_type": safeRecoveredValueForLog(rec),
+			})
 			retErr = status.Errorf(codes.Internal, "internal error: %v", rec)
 		}
 	}()
@@ -107,7 +108,7 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 		return nil
 	}
 
-	logging.Errorf("Error receiving request: %v", err)
+	logging.Errorf("Error receiving request: %s", safeErrorForLog(err))
 	return err
 }
 
@@ -171,11 +172,11 @@ func (r *OpenAIRouter) processRequestHeaders(
 ) error {
 	response, err := r.handleRequestHeaders(v, ctx)
 	if err != nil {
-		logging.Errorf("handleRequestHeaders failed: %v", err)
+		logging.Errorf("handleRequestHeaders failed: %s", safeErrorForLog(err))
 		return err
 	}
 	if err := sendResponse(stream, response, "request header"); err != nil {
-		logging.Errorf("sendResponse for headers failed: %v", err)
+		logging.Errorf("sendResponse for headers failed: %s", safeErrorForLog(err))
 		return err
 	}
 	return nil
@@ -188,11 +189,11 @@ func (r *OpenAIRouter) processRequestBody(
 ) error {
 	response, err := r.handleRequestBodyDispatch(v, ctx)
 	if err != nil {
-		logging.Errorf("handleRequestBody failed: %v", err)
+		logging.Errorf("handleRequestBody failed: %s", safeErrorForLog(err))
 		return err
 	}
 	if err := sendResponse(stream, response, "request body"); err != nil {
-		logging.Errorf("sendResponse for body failed: %v", err)
+		logging.Errorf("sendResponse for body failed: %s", safeErrorForLog(err))
 		return err
 	}
 	return nil
@@ -226,7 +227,7 @@ func processUnknownRequest(
 	stream ext_proc.ExternalProcessor_ProcessServer,
 	request interface{},
 ) error {
-	logging.Warnf("Unknown request type: %v", request)
+	logging.Warnf("Unknown request type: type=%T", request)
 
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestBody{
