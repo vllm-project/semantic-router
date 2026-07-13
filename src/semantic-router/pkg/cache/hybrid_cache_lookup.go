@@ -45,7 +45,7 @@ func (h *HybridCache) findSimilar(
 	logging.Debugf("%s: searching for model='%s', query='%s', threshold=%.3f",
 		logPrefix, model, shortenHybridQuery(query), threshold)
 
-	queryEmbedding, err := h.generateEmbedding(query)
+	queryEmbedding, err := h.generateEmbedding(ctx, query)
 	if err != nil {
 		metrics.RecordCacheOperation("hybrid", metricOp, "error", time.Since(start).Seconds())
 		return LookupResult{}, fmt.Errorf("failed to generate embedding: %w", err)

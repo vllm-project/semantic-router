@@ -100,7 +100,9 @@ func (r *OpenAIRouter) storePendingCacheRequest(ctx *RequestContext, categoryNam
 		return
 	}
 	ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
-	if err := r.Cache.AddPendingRequest(ctx.RequestID, requestModel, cacheQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
+	// Thread the request-scoped (span) context so cancellation of the request
+	// reaches the embedding work in the pending write, mirroring the lookup (#2473).
+	if err := r.Cache.AddPendingRequest(ctx.TraceContext, ctx.RequestID, requestModel, cacheQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
 		logging.Errorf("Error adding pending request to cache: %v", err)
 	}
 }

@@ -40,17 +40,17 @@ func (h *HybridCache) IsEnabled() bool {
 }
 
 // AddPendingRequest stores a request awaiting its response
-func (h *HybridCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte) error {
+func (h *HybridCache) AddPendingRequest(_ context.Context, requestID string, model string, query string, requestBody []byte) error {
 	return nil
 }
 
 // UpdateWithResponse completes a pending request with its response
-func (h *HybridCache) UpdateWithResponse(requestID string, responseBody []byte) error {
+func (h *HybridCache) UpdateWithResponse(_ context.Context, requestID string, responseBody []byte) error {
 	return nil
 }
 
 // AddEntry stores a complete request-response pair
-func (h *HybridCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte) error {
+func (h *HybridCache) AddEntry(_ context.Context, requestID string, model string, query string, requestBody, responseBody []byte) error {
 	return nil
 }
 
@@ -90,6 +90,6 @@ func (h *HybridCache) GetStats() CacheStats {
 }
 
 // CheckConnection checks if the cache backend is reachable
-func (h *HybridCache) CheckConnection() error {
+func (h *HybridCache) CheckConnection(_ context.Context) error {
 	return nil
 }

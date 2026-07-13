@@ -35,17 +35,17 @@ func (c *InMemoryCache) IsEnabled() bool {
 }
 
 // AddPendingRequest stores a request awaiting its response
-func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte) error {
+func (c *InMemoryCache) AddPendingRequest(_ context.Context, requestID string, model string, query string, requestBody []byte) error {
 	return nil
 }
 
 // UpdateWithResponse completes a pending request with its response
-func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte) error {
+func (c *InMemoryCache) UpdateWithResponse(_ context.Context, requestID string, responseBody []byte) error {
 	return nil
 }
 
 // AddEntry stores a complete request-response pair
-func (c *InMemoryCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte) error {
+func (c *InMemoryCache) AddEntry(_ context.Context, requestID string, model string, query string, requestBody, responseBody []byte) error {
 	return nil
 }
 
@@ -70,6 +70,6 @@ func (c *InMemoryCache) GetStats() CacheStats {
 }
 
 // CheckConnection checks if the cache backend is reachable
-func (c *InMemoryCache) CheckConnection() error {
+func (c *InMemoryCache) CheckConnection(_ context.Context) error {
 	return nil
 }

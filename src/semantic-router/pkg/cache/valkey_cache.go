@@ -108,7 +108,7 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 		embeddingModel:      embeddingModel,
 	}
 
-	if err := cache.CheckConnection(); err != nil {
+	if err := cache.CheckConnection(context.Background()); err != nil {
 		logging.Debugf("ValkeyCache: failed to connect: %v", err)
 		return nil, err
 	}
@@ -182,8 +182,15 @@ func (c *ValkeyCache) initializeIndex() error {
 	return nil
 }
 
-// getEmbedding generates an embedding based on the configured embedding model
-func (c *ValkeyCache) getEmbedding(text string) ([]float32, error) {
+// getEmbedding generates an embedding based on the configured embedding model.
+//
+// Embedding is a synchronous CGO call that cannot be interrupted mid-flight, so
+// ctx cancellation is honored on a best-effort basis: an already-cancelled ctx
+// short-circuits before the expensive embed work starts (#2473).
+func (c *ValkeyCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
+	if err := ctxErr(ctx); err != nil {
+		return nil, err
+	}
 	modelName := c.embeddingModel
 
 	switch modelName {
@@ -299,7 +306,7 @@ func (c *ValkeyCache) IsEnabled() bool {
 }
 
 // CheckConnection verifies the Valkey connection is healthy
-func (c *ValkeyCache) CheckConnection() error {
+func (c *ValkeyCache) CheckConnection(ctx context.Context) error {
 	if !c.enabled {
 		return nil
 	}
@@ -308,7 +315,9 @@ func (c *ValkeyCache) CheckConnection() error {
 		return fmt.Errorf("valkey client is not initialized")
 	}
 
-	ctx := context.Background()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if c.config != nil && c.config.Connection.Timeout > 0 {
 		timeout := time.Duration(c.config.Connection.Timeout) * time.Second
 		var cancel context.CancelFunc
@@ -325,7 +334,7 @@ func (c *ValkeyCache) CheckConnection() error {
 }
 
 // AddPendingRequest stores a request that is awaiting its response
-func (c *ValkeyCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error {
+func (c *ValkeyCache) AddPendingRequest(ctx context.Context, requestID string, model string, query string, requestBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !c.enabled {
@@ -337,7 +346,7 @@ func (c *ValkeyCache) AddPendingRequest(requestID string, model string, query st
 		return nil
 	}
 
-	err := c.addEntry("", requestID, model, query, requestBody, nil, ttlSeconds)
+	err := c.addEntry(ctx, "", requestID, model, query, requestBody, nil, ttlSeconds)
 
 	if err != nil {
 		metrics.RecordCacheOperation("valkey", "add_pending", "error", time.Since(start).Seconds())
@@ -348,7 +357,7 @@ func (c *ValkeyCache) AddPendingRequest(requestID string, model string, query st
 	return err
 }
 
-func (c *ValkeyCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
+func (c *ValkeyCache) UpdateWithResponse(ctx context.Context, requestID string, responseBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !c.enabled {
@@ -358,7 +367,9 @@ func (c *ValkeyCache) UpdateWithResponse(requestID string, responseBody []byte, 
 	logging.Debugf("ValkeyCache.UpdateWithResponse: updating pending entry (request_id: %s, response_size: %d, ttl_seconds=%d)",
 		requestID, len(responseBody), ttlSeconds)
 
-	ctx := context.Background()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	query := fmt.Sprintf("@request_id:{%s}", escapeTagValue(requestID))
 	logging.Debugf("UpdateWithResponse: searching with TAG query: %s", query)
@@ -387,7 +398,7 @@ func (c *ValkeyCache) UpdateWithResponse(requestID string, responseBody []byte, 
 	logging.Debugf("ValkeyCache.UpdateWithResponse: found pending entry, updating (id: %s, model: %s)", entry.docID, entry.model)
 
 	// Update the document with response body and TTL
-	err = c.addEntry(entry.docID, requestID, entry.model, entry.query, []byte(entry.requestBodyStr), responseBody, ttlSeconds)
+	err = c.addEntry(ctx, entry.docID, requestID, entry.model, entry.query, []byte(entry.requestBodyStr), responseBody, ttlSeconds)
 	if err != nil {
 		metrics.RecordCacheOperation("valkey", "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to update entry: %w", err)
@@ -400,7 +411,7 @@ func (c *ValkeyCache) UpdateWithResponse(requestID string, responseBody []byte, 
 }
 
 // AddEntry stores a complete request-response pair in the cache
-func (c *ValkeyCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
+func (c *ValkeyCache) AddEntry(ctx context.Context, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !c.enabled {
@@ -412,7 +423,7 @@ func (c *ValkeyCache) AddEntry(requestID string, model string, query string, req
 		return nil
 	}
 
-	err := c.addEntry("", requestID, model, query, requestBody, responseBody, ttlSeconds)
+	err := c.addEntry(ctx, "", requestID, model, query, requestBody, responseBody, ttlSeconds)
 
 	if err != nil {
 		metrics.RecordCacheOperation("valkey", "add_entry", "error", time.Since(start).Seconds())
@@ -424,13 +435,17 @@ func (c *ValkeyCache) AddEntry(requestID string, model string, query string, req
 }
 
 // addEntry handles the internal logic for storing entries in Valkey
-func (c *ValkeyCache) addEntry(id string, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
+func (c *ValkeyCache) addEntry(ctx context.Context, id string, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	effectiveTTL := ttlSeconds
 	if ttlSeconds == -1 {
 		effectiveTTL = c.ttlSeconds
 	}
 
-	embedding, err := c.getEmbedding(query)
+	embedding, err := c.getEmbedding(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
@@ -438,8 +453,6 @@ func (c *ValkeyCache) addEntry(id string, requestID string, model string, query 
 	if id == "" {
 		id = fmt.Sprintf("%x", md5.Sum(fmt.Appendf(nil, "%s_%s_%d", model, query, time.Now().UnixNano())))
 	}
-
-	ctx := context.Background()
 
 	embeddingBytes := floatsToBytes(embedding)
 
@@ -522,7 +535,7 @@ func (c *ValkeyCache) FindSimilarWithThreshold(ctx context.Context, model string
 		ctx = context.Background()
 	}
 
-	queryEmbedding, err := c.getEmbedding(query)
+	queryEmbedding, err := c.getEmbedding(ctx, query)
 	if err != nil {
 		metrics.RecordCacheOperation("valkey", "find_similar", "error", time.Since(start).Seconds())
 		return LookupResult{}, fmt.Errorf("failed to generate embedding: %w", err)

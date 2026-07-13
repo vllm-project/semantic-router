@@ -108,6 +108,11 @@ structure_exceptions:
     file_checks: relaxed
     function_checks: relaxed
   - paths:
+      # Pre-existing benchmark scenario helpers exceed the per-function limit;
+      # #2473 only threads context.Context through their cache calls.
+      - src/semantic-router/pkg/cache/benchmark.go
+    function_checks: relaxed
+  - paths:
       - deploy/operator/api/v1alpha1/sample_validation_test.go
       - deploy/operator/api/v1alpha1/semanticrouter_types_test.go
       - deploy/operator/api/v1alpha1/semanticrouter_webhook_test.go

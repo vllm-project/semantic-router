@@ -40,7 +40,7 @@ var _ = Describe("Cache lookup isolation (regression #2473)", func() {
 
 			// ttlSeconds=-1 means "use cache default TTL"; ttlSeconds=0 would
 			// mark the entry as uncacheable and drop it silently.
-			Expect(backend.AddEntry(
+			Expect(backend.AddEntry(context.Background(),
 				"seed-1", "m", hitQuery,
 				[]byte("req"), []byte("cached"), -1,
 			)).To(Succeed())

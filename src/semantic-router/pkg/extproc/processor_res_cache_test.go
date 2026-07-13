@@ -29,9 +29,10 @@ type mockStreamingCache struct {
 
 func (m *mockStreamingCache) IsEnabled() bool { return true }
 
-func (m *mockStreamingCache) CheckConnection() error { return nil }
+func (m *mockStreamingCache) CheckConnection(_ context.Context) error { return nil }
 
 func (m *mockStreamingCache) AddPendingRequest(
+	_ context.Context,
 	_ string,
 	_ string,
 	_ string,
@@ -42,7 +43,7 @@ func (m *mockStreamingCache) AddPendingRequest(
 	return nil
 }
 
-func (m *mockStreamingCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
+func (m *mockStreamingCache) UpdateWithResponse(_ context.Context, requestID string, responseBody []byte, ttlSeconds int) error {
 	m.updateCalled = true
 	m.updateRequestID = requestID
 	m.updateResponseBody = append([]byte(nil), responseBody...)
@@ -51,6 +52,7 @@ func (m *mockStreamingCache) UpdateWithResponse(requestID string, responseBody [
 }
 
 func (m *mockStreamingCache) AddEntry(
+	_ context.Context,
 	_ string,
 	_ string,
 	_ string,

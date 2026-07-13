@@ -77,7 +77,7 @@ func NewQdrantCache(opts QdrantCacheOptions) (*QdrantCache, error) {
 		embeddingModel:      embeddingModel,
 	}
 
-	if err := c.CheckConnection(); err != nil {
+	if err := c.CheckConnection(context.Background()); err != nil {
 		_ = client.Close()
 		return nil, err
 	}
@@ -137,7 +137,15 @@ func (c *QdrantCache) ensureCollection() error {
 	return nil
 }
 
-func (c *QdrantCache) getEmbedding(text string) ([]float32, error) {
+// getEmbedding generates an embedding based on the configured embedding model.
+//
+// Embedding is a synchronous CGO call that cannot be interrupted mid-flight, so
+// ctx cancellation is honored on a best-effort basis: an already-cancelled ctx
+// short-circuits before the expensive embed work starts (#2473).
+func (c *QdrantCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
+	if err := ctxErr(ctx); err != nil {
+		return nil, err
+	}
 	modelName := c.embeddingModel
 
 	switch modelName {
@@ -206,8 +214,11 @@ func (c *QdrantCache) expiresAt(ttlSeconds int) int64 {
 
 func (c *QdrantCache) IsEnabled() bool { return c.enabled }
 
-func (c *QdrantCache) CheckConnection() error {
-	ctx, cancel := context.WithTimeout(context.Background(), c.connTimeout())
+func (c *QdrantCache) CheckConnection(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.connTimeout())
 	defer cancel()
 	_, err := c.client.ListCollections(ctx)
 	if err != nil {
@@ -216,19 +227,22 @@ func (c *QdrantCache) CheckConnection() error {
 	return nil
 }
 
-func (c *QdrantCache) AddPendingRequest(requestID, model, query string, requestBody []byte, ttlSeconds int) error {
+func (c *QdrantCache) AddPendingRequest(ctx context.Context, requestID, model, query string, requestBody []byte, ttlSeconds int) error {
 	if !c.enabled || ttlSeconds == 0 {
 		return nil
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
-	emb, err := c.getEmbedding(query)
+	emb, err := c.getEmbedding(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
 	id := fmt.Sprintf("%x", md5.Sum([]byte(requestID))) //nolint:gosec
 	wait := true
-	_, err = c.client.Upsert(context.Background(), &qdrant.UpsertPoints{
+	_, err = c.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: c.collectionName,
 		Wait:           &wait,
 		Points: []*qdrant.PointStruct{{
@@ -253,12 +267,14 @@ func (c *QdrantCache) AddPendingRequest(requestID, model, query string, requestB
 	return nil
 }
 
-func (c *QdrantCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
+func (c *QdrantCache) UpdateWithResponse(ctx context.Context, requestID string, responseBody []byte, ttlSeconds int) error {
 	if !c.enabled {
 		return nil
 	}
 
-	ctx := context.Background()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	scrollResult, _, err := c.client.ScrollAndOffset(ctx, &qdrant.ScrollPoints{
 		CollectionName: c.collectionName,
@@ -315,19 +331,22 @@ func (c *QdrantCache) UpdateWithResponse(requestID string, responseBody []byte, 
 	return nil
 }
 
-func (c *QdrantCache) AddEntry(requestID, model, query string, requestBody, responseBody []byte, ttlSeconds int) error {
+func (c *QdrantCache) AddEntry(ctx context.Context, requestID, model, query string, requestBody, responseBody []byte, ttlSeconds int) error {
 	if !c.enabled || ttlSeconds == 0 {
 		return nil
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
-	emb, err := c.getEmbedding(query)
+	emb, err := c.getEmbedding(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
 	id := fmt.Sprintf("%x", md5.Sum([]byte(requestID))) //nolint:gosec
 	wait := true
-	_, err = c.client.Upsert(context.Background(), &qdrant.UpsertPoints{
+	_, err = c.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: c.collectionName,
 		Wait:           &wait,
 		Points: []*qdrant.PointStruct{{
@@ -366,7 +385,7 @@ func (c *QdrantCache) FindSimilarWithThreshold(ctx context.Context, model, query
 		ctx = context.Background()
 	}
 
-	emb, err := c.getEmbedding(query)
+	emb, err := c.getEmbedding(ctx, query)
 	if err != nil {
 		metrics.RecordCacheOperation("qdrant", "find_similar", "error", time.Since(start).Seconds())
 		return LookupResult{}, fmt.Errorf("failed to generate embedding: %w", err)

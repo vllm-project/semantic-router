@@ -26,17 +26,20 @@ type spyCache struct {
 	pendingQuery string
 }
 
-func (s *spyCache) IsEnabled() bool                                            { return true }
-func (s *spyCache) CheckConnection() error                                     { return nil }
-func (s *spyCache) Close() error                                               { return nil }
-func (s *spyCache) GetStats() cache.CacheStats                                 { return cache.CacheStats{} }
-func (s *spyCache) UpdateWithResponse(string, []byte, int) error               { return nil }
-func (s *spyCache) AddEntry(string, string, string, []byte, []byte, int) error { return nil }
+func (s *spyCache) IsEnabled() bool                                               { return true }
+func (s *spyCache) CheckConnection(context.Context) error                         { return nil }
+func (s *spyCache) Close() error                                                  { return nil }
+func (s *spyCache) GetStats() cache.CacheStats                                    { return cache.CacheStats{} }
+func (s *spyCache) UpdateWithResponse(context.Context, string, []byte, int) error { return nil }
+func (s *spyCache) AddEntry(context.Context, string, string, string, []byte, []byte, int) error {
+	return nil
+}
+
 func (s *spyCache) FindSimilar(context.Context, string, string) (cache.LookupResult, error) {
 	return cache.LookupResult{}, nil
 }
 
-func (s *spyCache) AddPendingRequest(_ string, _ string, query string, _ []byte, _ int) error {
+func (s *spyCache) AddPendingRequest(_ context.Context, _ string, _ string, query string, _ []byte, _ int) error {
 	s.pendingAdded = true
 	s.pendingQuery = query
 	return nil
