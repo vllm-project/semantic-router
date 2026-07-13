@@ -1,0 +1,167 @@
+# ONNX Go binding CI.
+#
+# Required, provider-independent lane: builds the Rust FFI library with default
+# (CPU) features and compiles + runs the Go test package WITHOUT any model
+# artifacts. This gate proves the Go binding still matches the FFI/API contract
+# (lifecycle, error arity, Matryoshka signatures, ABI/capability types) on every
+# change — API signature drift fails compilation here, and the lane asserts that
+# a non-zero number of tests actually executed so it can never degrade into a
+# skip-only pass.
+#
+# Model/provider-dependent receipts (real mmBERT inference) stay explicitly
+# selected via workflow_dispatch so provider or model availability never
+# determines whether the base contract is checked.
+#
+# Required CI contract for native binding modularization: see
+# https://github.com/vllm-project/semantic-router/issues/2396 (tracking:
+# https://github.com/vllm-project/semantic-router/issues/2477).
+
+name: ONNX Binding CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'onnx-binding/**'
+      - '.github/workflows/onnx-binding-ci.yml'
+    branches:
+      - main
+  push:
+    paths:
+      - 'onnx-binding/**'
+      - '.github/workflows/onnx-binding-ci.yml'
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      run_model_receipts:
+        description: "Run model-dependent receipts (downloads mmBERT ONNX model)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Provider-independent compile and unit lane. Requires no model artifacts and
+  # no GPU/provider; must always run and must execute a non-zero number of tests.
+  compile-and-unit:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            onnx-binding/target
+          key: onnx-binding-cargo-${{ runner.os }}-${{ hashFiles('onnx-binding/Cargo.lock') }}
+
+      - name: Build ONNX Rust library (CPU, default features)
+        run: |
+          cd onnx-binding
+          cargo build --release
+          echo "=== Verifying library ==="
+          ls -la target/release/libonnx_semantic_router.so
+
+      - name: Vet Go binding (test package included)
+        run: |
+          cd onnx-binding
+          CGO_ENABLED=1 go vet ./...
+
+      - name: Run provider-independent unit tests (no model artifacts)
+        run: |
+          cd onnx-binding
+          export LD_LIBRARY_PATH=$PWD/target/release:$LD_LIBRARY_PATH
+          # MMBERT_MODEL_PATH is intentionally unset: model-dependent tests must
+          # skip visibly, everything else must run and pass.
+          CGO_ENABLED=1 go test -count=1 -v -json ./... | tee test-output.json
+
+      - name: Assert non-zero tests executed
+        run: |
+          cd onnx-binding
+          python3 - <<'EOF'
+          import json, sys
+
+          passed = skipped = failed = 0
+          with open("test-output.json") as f:
+              for line in f:
+                  try:
+                      event = json.loads(line)
+                  except json.JSONDecodeError:
+                      continue
+                  if "Test" not in event:
+                      continue
+                  action = event.get("Action")
+                  if action == "pass":
+                      passed += 1
+                  elif action == "skip":
+                      skipped += 1
+                  elif action == "fail":
+                      failed += 1
+
+          print(f"passed={passed} skipped={skipped} failed={failed}")
+          if failed:
+              sys.exit(f"{failed} test(s) failed")
+          if passed == 0:
+              sys.exit("Model-free lane executed zero passing tests — the gate has degraded into a skip-only pass")
+          EOF
+
+  # Model-dependent receipts: real mmBERT ONNX inference. Explicitly selected
+  # only — shows as skipped on normal PRs, never gates them silently.
+  model-receipts:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_model_receipts }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            onnx-binding/target
+          key: onnx-binding-cargo-${{ runner.os }}-${{ hashFiles('onnx-binding/Cargo.lock') }}
+
+      - name: Build ONNX Rust library (CPU, default features)
+        run: |
+          cd onnx-binding
+          cargo build --release
+
+      - name: Download mmBERT ONNX model
+        run: |
+          pip3 install --no-cache-dir "huggingface_hub[cli]"
+          hf download llm-semantic-router/mmbert-embed-32k-2d-matryoshka \
+            --local-dir onnx-binding/test_models/mmbert-embed-32k-2d-matryoshka
+
+      - name: Run model-dependent receipts
+        run: |
+          cd onnx-binding
+          export LD_LIBRARY_PATH=$PWD/target/release:$LD_LIBRARY_PATH
+          export MMBERT_MODEL_PATH=$PWD/test_models/mmbert-embed-32k-2d-matryoshka
+          CGO_ENABLED=1 go test -count=1 -v ./...
