@@ -3,6 +3,10 @@ import Head from '@docusaurus/Head'
 import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
+import ValuePillars from '@site/src/components/homepage/ValuePillars'
+import IntegrationArchitecture from '@site/src/components/homepage/IntegrationArchitecture'
+import UseCaseExplorer from '@site/src/components/homepage/UseCaseExplorer'
+import CompatibilityBand from '@site/src/components/homepage/CompatibilityBand'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
 import InstallQuickStartSection from '@site/src/components/InstallQuickStartSection'
 import PaperFigureShowcase from '@site/src/components/PaperFigureShowcase'
@@ -535,29 +539,53 @@ export default function Home(): JSX.Element {
         <SemanticTerrainHero />
 
         <div className={styles.bandGraphite}>
+          <ValuePillars />
+        </div>
+
+        <div className={styles.bandBlack}>
+          <IntegrationArchitecture />
+        </div>
+
+        <div className={styles.bandGraphite}>
           <CapabilitySection />
         </div>
+
         <div className={styles.bandBlack}>
           <TestimonialsRail />
         </div>
+
         <div className={styles.bandRaised}>
           <PaperFigureShowcase />
         </div>
+
         <div className={styles.bandBlack}>
           <EncoderIntelligenceSection />
         </div>
+
         <div className={styles.bandGraphite}>
           <InstallQuickStartSection />
         </div>
+
+        <div className={styles.bandBlack}>
+          <UseCaseExplorer />
+        </div>
+
+        <div className={styles.bandGraphite}>
+          <CompatibilityBand />
+        </div>
+
         <div className={styles.bandBlack}>
           <ResearchPaperCarousel />
         </div>
+
         <div className={styles.bandGraphite}>
           <TeamCarousel />
         </div>
+
         <div className={styles.bandBlack}>
           <AcknowledgementsSection />
         </div>
+
         <div className={styles.bandGraphite}>
           <FinalCtaSection />
         </div>

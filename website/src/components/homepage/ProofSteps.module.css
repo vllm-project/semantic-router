@@ -1,0 +1,112 @@
+.stepGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.stepCard {
+  display: grid;
+  gap: 0.7rem;
+  padding: 1.2rem;
+  border: 1px solid var(--site-border);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: var(--site-shadow-soft);
+}
+
+.stepNumber {
+  color: #7c3aed;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.stepCard h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.stepCard p {
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.codeBlock {
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--site-border);
+  border-radius: 0.65rem;
+  background: #0b0b10;
+  color: #e4e4e7;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.challengePanel {
+  display: grid;
+  gap: 0.85rem;
+  margin-bottom: 1.25rem;
+  padding: 1.25rem 1.35rem;
+  border: 1px solid var(--site-border);
+  border-radius: 1rem;
+  background:
+    linear-gradient(135deg, rgba(124, 58, 237, 0.06), rgba(48, 162, 255, 0.05)),
+    rgba(255, 255, 255, 0.9);
+}
+
+.challengePanel h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.challengeList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.challengeList li {
+  position: relative;
+  padding-left: 1rem;
+  color: var(--site-muted-bright);
+  font-size: 0.9rem;
+}
+
+.challengeList li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  color: #7c3aed;
+}
+
+.ctaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+@media (max-width: 1100px) {
+  .stepGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .stepGrid,
+  .challengeList {
+    grid-template-columns: 1fr;
+  }
+}
