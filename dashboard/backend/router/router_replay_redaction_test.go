@@ -99,6 +99,55 @@ func TestRedactReplayResponseBodyRemovesSensitiveFields(t *testing.T) {
 	}
 }
 
+func TestRedactReplayResponseBodyRedactsListPayload(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{
+		"object":"router_replay.list",
+		"count":1,
+		"data":[
+			{
+				"id":"replay-1",
+				"request_body":"secret request",
+				"response_body":"secret response",
+				"tool_trace":{
+					"flow":"User Query -> Tool Calling",
+					"tool_names":["lookup_price"],
+					"steps":[{"type":"user_input","text":"sensitive prompt"}]
+				}
+			}
+		]
+	}`)
+
+	redactedBody, changed, err := redactReplayResponseBody(body)
+	if err != nil {
+		t.Fatalf("redactReplayResponseBody() error = %v", err)
+	}
+	if !changed {
+		t.Fatalf("redactReplayResponseBody() changed = false, want true")
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(redactedBody, &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+
+	data, ok := payload["data"].([]any)
+	if !ok || len(data) != 1 {
+		t.Fatalf("data = %#v, want one record", payload["data"])
+	}
+	record, ok := data[0].(map[string]any)
+	if !ok {
+		t.Fatalf("record invalid: %#v", data[0])
+	}
+	if got := record["request_body"]; got != "" {
+		t.Fatalf("request_body = %#v, want empty string", got)
+	}
+	if got := record["response_body"]; got != "" {
+		t.Fatalf("response_body = %#v, want empty string", got)
+	}
+}
+
 func TestRedactRouterReplayResponseSkipsWriteCapableUsers(t *testing.T) {
 	t.Parallel()
 

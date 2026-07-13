@@ -29,7 +29,7 @@
 | **Location** | Inference spans edge, private, and cloud. | Keep data within its boundaries. |
 | **Preference** | "Best" changes by user and workload. | Make every preference executable. |
 
-[Explore how it works →](https://vllm-semantic-router.com/docs/)
+[Explore how it works →](https://vllm-semantic-router.com/docs/intro/)
 
 ## Getting Started
 
