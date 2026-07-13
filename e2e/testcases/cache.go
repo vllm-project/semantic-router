@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -38,6 +39,7 @@ type CacheResult struct {
 	OriginalQuestion string
 	SimilarQuestion  string
 	CacheHit         bool
+	Similarity       float64 // per-request similarity surfaced on the response (0 when absent)
 	Error            string
 }
 
@@ -151,15 +153,56 @@ func testSingleCacheRequest(ctx context.Context, testCase CacheTestCase, questio
 	cacheHitHeader := resp.Header.Get("x-vsr-cache-hit")
 	result.CacheHit = (cacheHitHeader == "true")
 
+	// Per-request similarity assertion (#2473): validate the request-owned
+	// x-vsr-cache-similarity header (see parseCacheSimilarity for the contract).
+	sim, simErr := parseCacheSimilarity(resp.Header.Get("x-vsr-cache-similarity"), result.CacheHit)
+	if simErr != "" {
+		result.Error = simErr
+		return result
+	}
+	result.Similarity = sim
+
 	if verbose {
 		if result.CacheHit {
-			fmt.Printf("[Test] ✓ Cache HIT for: %s\n", question)
+			fmt.Printf("[Test] ✓ Cache HIT for: %s (similarity=%.4f)\n", question, result.Similarity)
 		} else {
 			fmt.Printf("[Test] ✗ Cache MISS for: %s\n", question)
 		}
 	}
 
 	return result
+}
+
+// parseCacheSimilarity validates the request-owned x-vsr-cache-similarity header
+// for one lookup and returns the parsed score, or a non-empty error message.
+//
+// The header rides the x-vsr-debug surface (opted into by sendChatRequest) and
+// is per-request (#2473): a hit surfaces a positive score that, because a hit is
+// returned only when similarity >= the configured threshold, lands in (0,1]; a
+// warm-cache miss may carry this request's own best-observed score, which is
+// below threshold and so in [0,1), never a leaked hit value. An absent header on
+// a miss is valid (cold cache, no candidate scored).
+func parseCacheSimilarity(simHeader string, cacheHit bool) (float64, string) {
+	if simHeader == "" {
+		if cacheHit {
+			return 0, "cache hit missing x-vsr-cache-similarity header (per-request score not surfaced)"
+		}
+		return 0, ""
+	}
+	sim, err := strconv.ParseFloat(simHeader, 64)
+	if err != nil {
+		return 0, fmt.Sprintf("unparsable x-vsr-cache-similarity %q: %v", simHeader, err)
+	}
+	if cacheHit {
+		if sim <= 0.0 || sim > 1.0 {
+			return 0, fmt.Sprintf("cache-hit similarity %.4f out of expected (0,1] range", sim)
+		}
+		return sim, ""
+	}
+	if sim < 0.0 || sim >= 1.0 {
+		return 0, fmt.Sprintf("cache-miss similarity %.4f out of expected [0,1) range", sim)
+	}
+	return sim, ""
 }
 
 func sendChatRequest(ctx context.Context, question, localPort string, verbose bool) (*http.Response, error) {
@@ -181,6 +224,9 @@ func sendChatRequest(ctx context.Context, question, localPort string, verbose bo
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// Opt into the x-vsr-debug surface so the router emits the demoted
+	// x-vsr-cache-similarity header we assert on for #2473.
+	req.Header.Set("x-vsr-debug", "true")
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 	resp, err := httpClient.Do(req)
