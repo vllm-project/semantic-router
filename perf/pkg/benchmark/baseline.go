@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -60,6 +61,47 @@ func LoadBaseline(path string) (*Baseline, error) {
 	}
 
 	return &baseline, nil
+}
+
+// LoadBaselineDir loads and merges every *.json baseline file in dir into one
+// Baseline. update-baseline.sh writes a separate file per suite
+// (classification.json, decision.json, cache.json, extproc.json, looper.json)
+// and never the single baseline.json the comparison path used to read, so the
+// consumer must union them (#2455 rc#1). Later files win on name collisions;
+// suites are disjoint by construction, so this only matters if a benchmark is
+// re-categorized.
+func LoadBaselineDir(dir string) (*Baseline, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read baseline directory %s: %w", dir, err)
+	}
+
+	merged := &Baseline{Benchmarks: make(map[string]BenchmarkMetric)}
+	loaded := 0
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		b, err := LoadBaseline(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("failed to load baseline %s: %w", entry.Name(), err)
+		}
+		for name, metric := range b.Benchmarks {
+			merged.Benchmarks[name] = metric
+		}
+		// Carry the newest file's provenance so the report shows a real commit.
+		if b.Timestamp.After(merged.Timestamp) {
+			merged.Version = b.Version
+			merged.GitCommit = b.GitCommit
+			merged.Timestamp = b.Timestamp
+		}
+		loaded++
+	}
+
+	if loaded == 0 {
+		return nil, fmt.Errorf("no baseline *.json files found in %s", dir)
+	}
+	return merged, nil
 }
 
 // SaveBaseline saves baseline data to a JSON file

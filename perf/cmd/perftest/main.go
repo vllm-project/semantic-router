@@ -70,9 +70,10 @@ func compareWithBaseline(baselineDir, currentResultsFile, thresholdFile, outputP
 		}
 	}
 
-	// Load baseline
-	baselinePath := filepath.Join(baselineDir, "baseline.json")
-	baseline, err := benchmark.LoadBaseline(baselinePath)
+	// Load baseline: union every per-suite *.json in the directory.
+	// update-baseline.sh writes one file per suite (decision.json, looper.json,
+	// …), never a combined baseline.json, so we merge them here (#2455 rc#1).
+	baseline, err := benchmark.LoadBaselineDir(baselineDir)
 	if err != nil {
 		return fmt.Errorf("failed to load baseline: %w", err)
 	}
