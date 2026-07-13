@@ -22,7 +22,7 @@ If you need real AMD model deployment details instead of the minimal smoke path,
 
 - `cpu-local`: `make vllm-sr-dev`, then `vllm-sr serve --image-pull-policy never`
 - `amd-local`: `make vllm-sr-dev VLLM_SR_PLATFORM=amd`, then `vllm-sr serve --image-pull-policy never --platform amd`
-- `nvidia-local`: `VLLM_SR_PLATFORM=nvidia make vllm-sr-build`, then `vllm-sr serve --platform nvidia --image ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest --config <recipe>` (see [docs/agent/nvidia-local.md](docs/agent/nvidia-local.md); CLI symmetry with `--platform amd` is tracked in #2421)
+- `nvidia-local`: `VLLM_SR_PLATFORM=nvidia make vllm-sr-build`, then `vllm-sr serve --platform nvidia --config <recipe>` (selects the CUDA image + flips `use_cpu` to false, at parity with `--platform amd`; see [docs/agent/nvidia-local.md](docs/agent/nvidia-local.md))
 - `ci-k8s`: `make e2e-test`
 
 ## Non-Negotiable Rules

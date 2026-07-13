@@ -839,7 +839,7 @@ kubectl get events --sort-by='.lastTimestamp'
 
 ## Documentation
 
-Full documentation: https://vllm-semantic-router.com
+Full documentation: https://vllm-sr.ai
 
 ## License
 
