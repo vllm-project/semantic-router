@@ -1,3 +1,11 @@
+resources:
+  limits:
+    cpu: "2"
+    memory: 4Gi
+  requests:
+    cpu: 500m
+    memory: 2Gi
+
 config:
   version: v0.3
   listeners: []
@@ -353,6 +361,10 @@ config:
   global:
     router:
       strategy: priority
+      streamed_body:
+        enabled: true
+        max_bytes: 10485760
+        timeout_sec: 30
     services:
       response_api:
         enabled: true

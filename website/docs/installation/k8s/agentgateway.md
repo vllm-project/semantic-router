@@ -236,14 +236,28 @@ spec:
         port: 50051
       processingOptions:
         requestHeaderMode: Send
-        requestBodyMode: Buffered
+        requestBodyMode: FullDuplexStreamed
         responseHeaderMode: Send
         responseBodyMode: Buffered
+        requestTrailerMode: Send
+        responseTrailerMode: Send
         allowModeOverride: true
 EOF
 ```
 
-The demo uses buffered request bodies to match the existing Envoy AI Gateway and Istio examples. For large prompts, use `requestBodyMode: FullDuplexStreamed` together with a Semantic Router configuration that enables streamed body handling. agentgateway does not support `Streamed` mode; `FullDuplexStreamed` is the only streaming option. See [Streamed ExtProc and immediate responses](./streamed-extproc.md) for the full configuration, immediate-response behavior, and verification checklist.
+The bundled agentgateway demo explicitly opts into full-duplex streamed request
+bodies. This is an example-specific choice; other proxy defaults and examples
+may continue to use buffered request bodies. The accompanying Semantic Router
+values enable `global.router.streamed_body`, allowing the router to accumulate
+request chunks and process the complete body at end-of-stream.
+
+agentgateway does not support `Streamed` mode; `FullDuplexStreamed` is its
+streaming option. The deployable policy is in
+`deploy/kubernetes/agentgateway/extproc-policy.yaml`, with the matching router
+configuration in
+`deploy/kubernetes/agentgateway/semantic-router-values/values.yaml`. See
+[Streamed ExtProc and immediate responses](./streamed-extproc.md) for protocol
+behavior and the verification checklist.
 
 ## Testing the Deployment
 

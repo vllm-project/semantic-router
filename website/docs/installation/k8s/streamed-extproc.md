@@ -89,6 +89,12 @@ A complete Kubernetes example is available in `deploy/kubernetes/streaming/aigw-
 
 agentgateway uses the Gateway API `AgentgatewayPolicy` abstraction rather than raw Envoy `processing_mode` names. For streamed bodies use `FullDuplexStreamed`.
 
+Buffered request bodies remain common in proxy defaults and other deployment
+examples. The bundled agentgateway example opts into streaming explicitly in
+`deploy/kubernetes/agentgateway/extproc-policy.yaml`; its paired
+`semantic-router-values/values.yaml` enables `global.router.streamed_body`.
+Use both settings together when adopting that example.
+
 ```yaml
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -111,10 +117,18 @@ spec:
         requestBodyMode: FullDuplexStreamed
         responseHeaderMode: Send
         responseBodyMode: Buffered
+        requestTrailerMode: Send
+        responseTrailerMode: Send
         allowModeOverride: true
 ```
 
 agentgateway does not support a separate `Streamed` request-body mode. Use `FullDuplexStreamed` for streamed request bodies and enable `global.router.streamed_body` in Semantic Router.
+
+Semantic Router detects the negotiated ExtProc body mode. With
+`FullDuplexStreamed`, it buffers intermediate request chunks without emitting
+body replacements, then sends the complete processed request as one
+end-of-stream `StreamedBodyResponse`. With Envoy `STREAMED`, it retains the
+one-response-per-chunk behavior required by that mode.
 
 ## Configure an immediate streamed looper response
 
