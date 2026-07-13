@@ -1,0 +1,339 @@
+.header {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 40rem;
+  margin-bottom: 1.5rem;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: clamp(1.85rem, 4vw, 2.6rem);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+}
+
+.header p {
+  margin: 0;
+  color: var(--site-muted-bright);
+  line-height: 1.6;
+}
+
+.block {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.25rem 0 0;
+  border-top: 1px solid var(--site-border);
+}
+
+.block:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.blockHeading {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.blockHeading h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.blockHeading p {
+  margin: 0;
+  color: var(--site-muted);
+  font-size: 0.88rem;
+}
+
+.dependencyMarquee,
+.teamMarquee {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--site-border);
+  border-radius: 1rem;
+  background:
+    linear-gradient(180deg, rgba(99, 102, 241, 0.03), transparent 42%),
+    var(--site-surface);
+  box-shadow: var(--site-shadow-soft);
+  transition:
+    border-color var(--site-transition-medium),
+    box-shadow var(--site-transition-medium),
+    transform var(--site-transition-medium);
+}
+
+.dependencyMarquee:hover,
+.teamMarquee:hover {
+  border-color: var(--site-hover-border);
+  box-shadow: var(--site-hover-glow);
+  transform: translateY(-2px);
+}
+
+.marqueeViewport {
+  overflow: hidden;
+  width: 100%;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+}
+
+.dependencyMarquee .marqueeViewport {
+  padding: 0.85rem 0;
+}
+
+.teamMarquee .marqueeViewport {
+  padding: 1rem 0;
+}
+
+.dependencyTrack {
+  --community-marquee-gap: 0.65rem;
+  display: flex;
+  align-items: center;
+  gap: var(--community-marquee-gap);
+  width: max-content;
+  min-width: max-content;
+  will-change: transform;
+  animation: dependencyMarquee 42s linear infinite;
+}
+
+.teamTrack {
+  --community-marquee-gap: 0.85rem;
+  display: flex;
+  align-items: stretch;
+  gap: var(--community-marquee-gap);
+  width: max-content;
+  min-width: max-content;
+  margin: 0;
+  padding: 0 0.25rem;
+  list-style: none;
+  will-change: transform;
+  animation: teamMarquee 95s linear infinite;
+}
+
+.marqueeSequence {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex: 0 0 auto;
+  min-width: max-content;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dependencyMarquee:hover .dependencyTrack,
+.teamMarquee:hover .teamTrack {
+  animation-play-state: paused;
+}
+
+.dependencyChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.35rem;
+  padding: 0.35rem 0.75rem 0.35rem 0.45rem;
+  border: 1px solid var(--site-border);
+  border-radius: 999px;
+  background: var(--site-surface);
+  color: var(--site-muted-bright);
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    border-color var(--site-transition-fast),
+    background var(--site-transition-fast),
+    color var(--site-transition-fast),
+    transform var(--site-transition-fast),
+    box-shadow var(--site-transition-fast);
+}
+
+.dependencyChip:hover,
+.dependencyChip:focus-visible {
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg);
+  color: var(--site-brand-blue);
+  text-decoration: none;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px rgba(48, 162, 255, 0.12);
+}
+
+.dependencyLogo {
+  width: 1.35rem;
+  height: 1.35rem;
+  object-fit: contain;
+}
+
+.memberItem {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.memberCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 16.5rem;
+  min-width: 16.5rem;
+  min-height: 11rem;
+  padding: 1rem;
+  border: 1px solid var(--site-border);
+  border-radius: 0.9rem;
+  background: var(--site-surface-alt);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    border-color var(--site-transition-medium),
+    background var(--site-transition-medium),
+    transform var(--site-transition-medium),
+    box-shadow var(--site-transition-medium);
+}
+
+.memberCard:hover,
+.memberCard:focus-visible {
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg-soft);
+  box-shadow: var(--site-hover-glow);
+  text-decoration: none;
+  transform: var(--site-hover-lift);
+}
+
+.memberCard:hover .memberCopy strong,
+.memberCard:focus-visible .memberCopy strong {
+  color: var(--site-brand-blue);
+}
+
+.avatarWrap {
+  display: grid;
+  gap: 0.55rem;
+  justify-items: start;
+}
+
+.memberAvatar {
+  width: 3.5rem;
+  height: 3.5rem;
+  border: 1px solid var(--site-border);
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.memberCopy {
+  display: grid;
+  gap: 0.18rem;
+  align-content: start;
+}
+
+.memberCopy strong {
+  color: var(--site-text);
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+
+.memberRole,
+.memberCompany {
+  composes: site-card-line from global;
+  color: var(--site-muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.memberCompany {
+  color: var(--site-muted-bright);
+}
+
+.memberBadge {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.16rem 0.45rem;
+  border: 1px solid var(--site-border);
+  border-radius: 999px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.steering {
+  background: rgba(48, 162, 255, 0.12);
+  color: var(--site-brand-blue);
+}
+
+.committer {
+  background: rgba(15, 23, 42, 0.04);
+  color: var(--site-muted-bright);
+}
+
+.blockFooter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+@keyframes dependencyMarquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: translate3d(calc(-50% - (var(--community-marquee-gap) / 2)), 0, 0);
+  }
+}
+
+@keyframes teamMarquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: translate3d(calc(-50% - (var(--community-marquee-gap) / 2)), 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dependencyTrack,
+  .teamTrack {
+    animation: none;
+    flex-wrap: wrap;
+    width: 100%;
+    justify-content: center;
+    padding: 0.85rem 1rem;
+  }
+
+  .marqueeViewport {
+    -webkit-mask-image: none;
+    mask-image: none;
+    overflow-x: auto;
+  }
+
+  .marqueeSequence {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .teamTrack {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.85rem 1rem;
+  }
+
+  .memberItem {
+    width: 100%;
+  }
+
+  .memberCard {
+    width: 100%;
+    min-width: 0;
+    min-height: 11rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .memberCard {
+    width: 14rem;
+    min-width: 14rem;
+  }
+}

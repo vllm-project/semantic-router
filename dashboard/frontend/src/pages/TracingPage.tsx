@@ -8,7 +8,7 @@ const JAEGER_SERVICE: ServiceConfig = {
   name: 'Jaeger',
   envVar: 'TARGET_JAEGER_URL',
   description: 'Connect Jaeger to investigate request paths across the router and model backends.',
-  docsUrl: 'https://vllm-semantic-router.com/docs/tutorials/observability/dashboard',
+  docsUrl: 'https://vllm-sr.ai/docs/tutorials/observability/dashboard',
   exampleValue: 'http://localhost:16686',
 }
 

@@ -1,8 +1,12 @@
-import React from 'react'
+import React, { useState } from 'react'
 import Head from '@docusaurus/Head'
 import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
+import ValuePillars from '@site/src/components/homepage/ValuePillars'
+import IntegrationArchitecture from '@site/src/components/homepage/IntegrationArchitecture'
+import UseCaseExplorer from '@site/src/components/homepage/UseCaseExplorer'
+import CompatibilityBand from '@site/src/components/homepage/CompatibilityBand'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
 import InstallQuickStartSection from '@site/src/components/InstallQuickStartSection'
 import PaperFigureShowcase from '@site/src/components/PaperFigureShowcase'
@@ -13,6 +17,7 @@ import { researchPapers } from '@site/src/data/researchContent'
 import { SITE_SOCIAL_PREVIEW_IMAGE_PATH } from '@site/src/data/socialPreview'
 import TransformerPipelineAnimation from '@site/src/components/TransformerPipelineAnimation'
 import SemanticTerrainHero from '@site/src/components/site/SemanticTerrainHero'
+import ScrollReveal from '@site/src/components/site/ScrollReveal'
 import {
   PillLink,
   SectionLabel,
@@ -140,6 +145,7 @@ const architectureDimensions = [
 const encoderTracks = [
   {
     label: 'SEQ_CLS',
+    mode: 'cls' as const,
     text: translate({
       id: 'homepage.aiTech.track.sequence',
       message:
@@ -148,6 +154,7 @@ const encoderTracks = [
   },
   {
     label: 'TOKEN',
+    mode: 'token' as const,
     text: translate({
       id: 'homepage.aiTech.track.token',
       message:
@@ -156,26 +163,23 @@ const encoderTracks = [
   },
   {
     label: 'EMBED',
+    mode: 'pool' as const,
     text: translate({
       id: 'homepage.aiTech.track.embedding',
       message:
-        'Embedding and rerank paths for semantic cache, knowledge base routing, reask similarity scoring, and candidate ranking.',
+        'Embedding paths for semantic cache, knowledge base routing, and similarity scoring.',
+    }),
+  },
+  {
+    label: 'RER',
+    mode: 'cross' as const,
+    text: translate({
+      id: 'homepage.aiTech.track.rerank',
+      message:
+        'Cross-encoder reranking for high-precision candidate selection and multi-modal signals.',
     }),
   },
 ]
-
-const encoderSpotlightCard = {
-  marker: 'MOD',
-  title: translate({
-    id: 'homepage.aiTech.cap.multiModality',
-    message: 'Multi-Modality',
-  }),
-  text: translate({
-    id: 'homepage.aiTech.cap.multiModality.desc',
-    message:
-      'Detect and route text, image and audio inputs to the right modality-capable model.',
-  }),
-}
 
 const encoderCards = [
   {
@@ -253,187 +257,197 @@ function CapabilitySection(): JSX.Element {
       aria-labelledby="mixture-architecture-title"
     >
       <div className="site-shell-container">
-        <div className={styles.capabilityFrame}>
-          <header className={styles.capabilityHeading}>
-            <SectionLabel className={styles.capabilityLabel}>
-              <Translate id="homepage.capabilities.label">Architecture</Translate>
-            </SectionLabel>
-            <h2 id="mixture-architecture-title">
-              <Translate id="homepage.capabilities.heading">
-                Unify heterogeneous inference.
-              </Translate>
-            </h2>
-          </header>
+        <ScrollReveal>
+          <div className={styles.capabilityFrame}>
+            <header className={styles.capabilityHeading}>
+              <SectionLabel className={styles.capabilityLabel}>
+                <Translate id="homepage.capabilities.label">Architecture</Translate>
+              </SectionLabel>
+              <h2 id="mixture-architecture-title">
+                <Translate id="homepage.capabilities.heading">
+                  Unify heterogeneous inference.
+                </Translate>
+              </h2>
+            </header>
 
-          <div className={styles.capabilitySummary}>
-            <p>
-              <Translate id="homepage.capabilities.description">
-                Unify a fragmented model landscape across four dimensions.
-              </Translate>
-            </p>
-            <PillLink className={styles.capabilityCta} to="/docs/intro">
-              <Translate id="homepage.capabilities.docsCta">
-                Explore how it works
-              </Translate>
-            </PillLink>
-          </div>
-
-          <div
-            className={styles.architectureMatrix}
-            role="table"
-            aria-label={translate({
-              id: 'homepage.capabilities.table.aria',
-              message: 'Fragmented inference compared with vLLM Semantic Router',
-            })}
-          >
-            <div className={styles.matrixHeader} role="row">
-              <span role="columnheader">
-                <Translate id="homepage.capabilities.table.dimension">
-                  Dimension
+            <div className={styles.capabilitySummary}>
+              <p>
+                <Translate id="homepage.capabilities.description">
+                  Unify a fragmented model landscape across four dimensions.
                 </Translate>
-              </span>
-              <span role="columnheader">
-                <Translate id="homepage.capabilities.table.reality">
-                  Fragmented today
+              </p>
+              <PillLink className={styles.capabilityCta} to="/docs/intro">
+                <Translate id="homepage.capabilities.docsCta">
+                  Explore how it works
                 </Translate>
-              </span>
-              <span role="columnheader">
-                <Translate id="homepage.capabilities.table.value">
-                  With vLLM SR
-                </Translate>
-              </span>
+              </PillLink>
             </div>
 
-            {architectureDimensions.map(item => (
-              <div key={item.marker} className={styles.matrixRow} role="row">
-                <div className={styles.matrixDimension} role="rowheader">
-                  <span aria-hidden="true">{item.marker}</span>
-                  <strong>{item.dimension}</strong>
-                </div>
-                <div className={styles.matrixFragmented} role="cell">
-                  <span className={styles.matrixMobileLabel}>
-                    <Translate id="homepage.capabilities.table.reality">
-                      Fragmented today
-                    </Translate>
-                  </span>
-                  <p>{item.fragmented}</p>
-                </div>
-                <div className={styles.matrixUnified} role="cell">
-                  <span className={styles.matrixMobileLabel}>
-                    <Translate id="homepage.capabilities.table.value">
-                      With vLLM SR
-                    </Translate>
-                  </span>
-                  <p>{item.unified}</p>
-                </div>
+            <div
+              className={styles.architectureMatrix}
+              role="table"
+              aria-label={translate({
+                id: 'homepage.capabilities.table.aria',
+                message: 'Fragmented inference compared with vLLM Semantic Router',
+              })}
+            >
+              <div className={styles.matrixHeader} role="row">
+                <span role="columnheader">
+                  <Translate id="homepage.capabilities.table.dimension">
+                    Dimension
+                  </Translate>
+                </span>
+                <span role="columnheader">
+                  <Translate id="homepage.capabilities.table.reality">
+                    Fragmented today
+                  </Translate>
+                </span>
+                <span role="columnheader">
+                  <Translate id="homepage.capabilities.table.value">
+                    With vLLM SR
+                  </Translate>
+                </span>
               </div>
-            ))}
-          </div>
 
-          <div className={styles.capabilityStats}>
-            <StatStrip items={heroStats} />
+              {architectureDimensions.map(item => (
+                <div key={item.marker} className={styles.matrixRow} role="row">
+                  <div className={styles.matrixDimension} role="rowheader">
+                    <span aria-hidden="true">{item.marker}</span>
+                    <strong>{item.dimension}</strong>
+                  </div>
+                  <div className={styles.matrixFragmented} role="cell">
+                    <span className={styles.matrixMobileLabel}>
+                      <Translate id="homepage.capabilities.table.reality">
+                        Fragmented today
+                      </Translate>
+                    </span>
+                    <p>{item.fragmented}</p>
+                  </div>
+                  <div className={styles.matrixUnified} role="cell">
+                    <span className={styles.matrixMobileLabel}>
+                      <Translate id="homepage.capabilities.table.value">
+                        With vLLM SR
+                      </Translate>
+                    </span>
+                    <p>{item.unified}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className={styles.capabilityStats}>
+              <StatStrip items={heroStats} />
+            </div>
           </div>
-        </div>
+        </ScrollReveal>
       </div>
     </section>
   )
 }
 
 function EncoderIntelligenceSection(): JSX.Element {
+  const [encoderMode, setEncoderMode] = useState<'cls' | 'token' | 'pool' | 'cross'>('cls')
+
   return (
-    <section className={styles.encoderSection}>
+    <section className={styles.encoderSection} aria-labelledby="encoder-intelligence-title">
       <div className="site-shell-container">
-        <div className={styles.sectionHeading}>
-          <SectionLabel>
-            <Translate id="homepage.aiTech.label">
-              Signal intelligence
-            </Translate>
-          </SectionLabel>
-          <div>
-            <h2>
-              <Translate id="homepage.aiTech.title">
-                Intelligence before generation.
+        <ScrollReveal>
+          <div className={styles.sectionHeading}>
+            <SectionLabel>
+              <Translate id="homepage.aiTech.label">
+                Signal intelligence
               </Translate>
-            </h2>
-            <p>
-              <Translate id="homepage.aiTech.description">
-                Purpose-built encoders extract intent, context, safety, and
-                modality before a generative model is selected.
-              </Translate>
-            </p>
+            </SectionLabel>
+            <div>
+              <h2 id="encoder-intelligence-title">
+                <Translate id="homepage.aiTech.title">
+                  Intelligence before generation.
+                </Translate>
+              </h2>
+              <p>
+                <Translate id="homepage.aiTech.description">
+                  Purpose-built encoders extract intent, context, safety, and
+                  modality before a generative model is selected.
+                </Translate>
+              </p>
+            </div>
           </div>
-        </div>
+        </ScrollReveal>
 
-        <div className={styles.encoderShowcase}>
-          <div className={styles.encoderLeadStack}>
-            <div className={styles.encoderLead}>
-              <div className={styles.encoderLeadCopy}>
-                <SectionLabel>
-                  <Translate id="homepage.aiTech.leadLabel">
-                    Signal surfaces
-                  </Translate>
-                </SectionLabel>
-                <p>
-                  <Translate id="homepage.aiTech.leadCopy">
-                    Sequence classification, token labeling, embeddings, and
-                    reranking collapse into one system-intelligence layer.
-                  </Translate>
-                </p>
+        <ScrollReveal delay={70}>
+          <div className={styles.encoderFrame}>
+            <div className={styles.encoderShowcase}>
+              <div className={styles.encoderLead}>
+                <div className={styles.encoderLeadCopy}>
+                  <SectionLabel>
+                    <Translate id="homepage.aiTech.leadLabel">
+                      Signal surfaces
+                    </Translate>
+                  </SectionLabel>
+                  <p>
+                    <Translate id="homepage.aiTech.leadCopy">
+                      Sequence classification, token labeling, embeddings, and
+                      reranking collapse into one system-intelligence layer.
+                    </Translate>
+                  </p>
+                </div>
+
+                <div className={styles.encoderTrackList} role="tablist" aria-label="Encoder signal modes">
+                  {encoderTracks.map((track) => {
+                    const isActive = encoderMode === track.mode
+                    return (
+                      <button
+                        key={track.label}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        className={`${styles.encoderTrack} ${isActive ? styles.encoderTrackActive : ''}`}
+                        onClick={() => setEncoderMode(track.mode)}
+                      >
+                        <span className={styles.encoderTrackLabel}>{track.label}</span>
+                        <span className={styles.encoderTrackText}>{track.text}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className={styles.encoderActions}>
+                  <PillLink
+                    className={styles.encoderCta}
+                    href="https://huggingface.co/LLM-Semantic-Router"
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <Translate id="homepage.aiTech.primaryCta">
+                      Hugging Face Models
+                    </Translate>
+                  </PillLink>
+                </div>
               </div>
 
-              <div className={styles.encoderTrackList}>
-                {encoderTracks.map(track => (
-                  <div key={track.label} className={styles.encoderTrack}>
-                    <span className={styles.encoderTrackLabel}>
-                      {track.label}
-                    </span>
-                    <span>{track.text}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className={styles.encoderActions}>
-                <PillLink
-                  href="https://huggingface.co/LLM-Semantic-Router"
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  <Translate id="homepage.aiTech.primaryCta">
-                    Hugging Face Models
-                  </Translate>
-                </PillLink>
+              <div className={styles.encoderPipelineFrame}>
+                <TransformerPipelineAnimation
+                  mode={encoderMode}
+                  onModeChange={setEncoderMode}
+                />
               </div>
             </div>
-
-            <article
-              className={`${styles.encoderCard} ${styles.encoderSpotlightCard}`}
-            >
-              <span className={styles.encoderCardMarker}>
-                {encoderSpotlightCard.marker}
-              </span>
-              <div className={styles.encoderCardCopy}>
-                <h3>{encoderSpotlightCard.title}</h3>
-                <p>{encoderSpotlightCard.text}</p>
-              </div>
-            </article>
           </div>
+        </ScrollReveal>
 
-          <div className={styles.encoderPipelineFrame}>
-            <TransformerPipelineAnimation />
+        <ScrollReveal delay={120}>
+          <div className={styles.encoderCardGrid}>
+            {encoderCards.map(card => (
+              <article key={card.marker} className={styles.encoderCard}>
+                <span className={styles.encoderCardMarker}>{card.marker}</span>
+                <div className={styles.encoderCardCopy}>
+                  <h3>{card.title}</h3>
+                  <p>{card.text}</p>
+                </div>
+              </article>
+            ))}
           </div>
-        </div>
-
-        <div className={styles.encoderCardGrid}>
-          {encoderCards.map(card => (
-            <article key={card.marker} className={styles.encoderCard}>
-              <span className={styles.encoderCardMarker}>{card.marker}</span>
-              <div className={styles.encoderCardCopy}>
-                <h3>{card.title}</h3>
-                <p>{card.text}</p>
-              </div>
-            </article>
-          ))}
-        </div>
+        </ScrollReveal>
       </div>
     </section>
   )
@@ -443,35 +457,37 @@ function FinalCtaSection(): JSX.Element {
   return (
     <section className={styles.finalCtaSection}>
       <div className="site-shell-container">
-        <div className={styles.finalCtaFrame}>
-          <div className={styles.finalCtaCopy}>
-            <SectionLabel>
-              <Translate id="homepage.finalCta.label">Start building</Translate>
-            </SectionLabel>
-            <h2>
-              <Translate id="homepage.finalCta.title">
-                Compose your Mixture-of-Models.
-              </Translate>
-            </h2>
-            <p>
-              <Translate id="homepage.finalCta.description">
-                Shape every model path with signals, preferences, and policy.
-              </Translate>
-            </p>
+        <ScrollReveal>
+          <div className={styles.finalCtaFrame}>
+            <div className={styles.finalCtaCopy}>
+              <SectionLabel>
+                <Translate id="homepage.finalCta.label">Start building</Translate>
+              </SectionLabel>
+              <h2>
+                <Translate id="homepage.finalCta.title">
+                  Compose your Mixture-of-Models.
+                </Translate>
+              </h2>
+              <p>
+                <Translate id="homepage.finalCta.description">
+                  Shape every model path with signals, preferences, and policy.
+                </Translate>
+              </p>
+            </div>
+            <div className={styles.finalCtaActions}>
+              <PillLink
+                href="https://app.vllm-sr.ai/playground"
+                rel="noreferrer"
+                target="_blank"
+              >
+                <Translate id="homepage.finalCta.playground">Try the Playground</Translate>
+              </PillLink>
+              <PillLink to="/docs/intro" muted>
+                <Translate id="homepage.finalCta.docs">Explore the Docs</Translate>
+              </PillLink>
+            </div>
           </div>
-          <div className={styles.finalCtaActions}>
-            <PillLink
-              href="https://play.vllm-semantic-router.com/"
-              rel="noreferrer"
-              target="_blank"
-            >
-              <Translate id="homepage.finalCta.playground">Try the Playground</Translate>
-            </PillLink>
-            <PillLink to="/docs/intro" muted>
-              <Translate id="homepage.finalCta.docs">Explore the Docs</Translate>
-            </PillLink>
-          </div>
-        </div>
+        </ScrollReveal>
       </div>
     </section>
   )
@@ -535,29 +551,65 @@ export default function Home(): JSX.Element {
         <SemanticTerrainHero />
 
         <div className={styles.bandGraphite}>
+          <ValuePillars />
+        </div>
+
+        <div className={styles.bandBlack}>
+          <IntegrationArchitecture />
+        </div>
+
+        <div className={styles.bandGraphite}>
           <CapabilitySection />
         </div>
+
         <div className={styles.bandBlack}>
-          <TestimonialsRail />
+          <ScrollReveal>
+            <TestimonialsRail />
+          </ScrollReveal>
         </div>
+
         <div className={styles.bandRaised}>
-          <PaperFigureShowcase />
+          <ScrollReveal delay={60}>
+            <PaperFigureShowcase />
+          </ScrollReveal>
         </div>
+
         <div className={styles.bandBlack}>
           <EncoderIntelligenceSection />
         </div>
+
         <div className={styles.bandGraphite}>
-          <InstallQuickStartSection />
+          <ScrollReveal delay={50}>
+            <InstallQuickStartSection />
+          </ScrollReveal>
         </div>
+
         <div className={styles.bandBlack}>
-          <ResearchPaperCarousel />
+          <UseCaseExplorer />
         </div>
+
         <div className={styles.bandGraphite}>
-          <TeamCarousel />
+          <CompatibilityBand />
         </div>
+
         <div className={styles.bandBlack}>
-          <AcknowledgementsSection />
+          <ScrollReveal delay={40}>
+            <ResearchPaperCarousel />
+          </ScrollReveal>
         </div>
+
+        <div className={styles.bandGraphite}>
+          <ScrollReveal delay={40}>
+            <TeamCarousel />
+          </ScrollReveal>
+        </div>
+
+        <div className={styles.bandBlack}>
+          <ScrollReveal delay={40}>
+            <AcknowledgementsSection />
+          </ScrollReveal>
+        </div>
+
         <div className={styles.bandGraphite}>
           <FinalCtaSection />
         </div>
