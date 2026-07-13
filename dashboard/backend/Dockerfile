@@ -92,6 +92,7 @@ COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modeli
 COPY src/semantic-router/pkg/nlgen/ /app/src/semantic-router/pkg/nlgen/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
 COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startupstatus/
+COPY src/semantic-router/pkg/utils/jsonunicode/ /app/src/semantic-router/pkg/utils/jsonunicode/
 
 # Copy go.mod and go.sum first for better caching
 COPY dashboard/backend/go.mod dashboard/backend/go.sum /app/dashboard/backend/

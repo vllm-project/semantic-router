@@ -351,20 +351,24 @@ def test_dashboard_dockerfile_retries_runtime_apk_installs() -> None:
     )
 
 
-def test_dashboard_dockerfile_copies_router_dsl_package_for_backend_builds() -> None:
+def test_dashboard_dockerfile_copies_router_packages_for_backend_builds() -> None:
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert (
-        "COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/" in content
+    required_packages = (
+        "internal/nlgen",
+        "pkg/config",
+        "pkg/dsl",
+        "pkg/modelinventory",
+        "pkg/nlgen",
+        "pkg/observability",
+        "pkg/startupstatus",
+        "pkg/utils/jsonunicode",
     )
-    assert (
-        "COPY src/semantic-router/pkg/nlgen/ /app/src/semantic-router/pkg/nlgen/"
-        in content
-    )
-    assert (
-        "COPY src/semantic-router/internal/nlgen/ /app/src/semantic-router/internal/nlgen/"
-        in content
-    )
+    for package in required_packages:
+        assert (
+            f"COPY src/semantic-router/{package}/ "
+            f"/app/src/semantic-router/{package}/" in content
+        )
 
 
 def test_dashboard_dockerfile_copies_model_eval_scripts_and_requirements() -> None:
