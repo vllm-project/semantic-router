@@ -4,7 +4,7 @@
 
 `rag` is a route-local plugin for retrieval-augmented generation.
 
-It aligns to `config/plugin/rag/milvus.yaml` (Milvus) and `config/plugin/rag/qdrant.yaml` (Qdrant).
+It aligns to `config/plugin/rag/milvus.yaml` (Milvus), `config/plugin/rag/qdrant.yaml` (Qdrant), and `config/plugin/rag/external-api.yaml` (external HTTP API).
 
 ## Key Advantages
 
@@ -62,3 +62,30 @@ plugin:
       reuse_cache_connection: true
       content_field: content
 ```
+
+**External API backend:**
+
+```yaml
+plugin:
+  type: rag
+  configuration:
+    enabled: true
+    backend: external_api
+    top_k: 5
+    similarity_threshold: 0.78
+    injection_mode: tool_role
+    on_failure: warn
+    backend_config:
+      endpoint: https://search.example.com/query
+      request_format: custom
+      request_template: '{"query":"${user_content}","top_k":${top_k},"threshold":${threshold}}'
+      timeout_seconds: 15
+      max_response_body_bytes: 16777216
+```
+
+Custom request templates are parsed as JSON before placeholder substitution. Exact placeholder
+nodes such as `${top_k}` stay typed, user content cannot add fields or change the configured
+shape, and configured JSON numbers retain their original precision. Successful response bodies
+default to an exact 16 MiB limit. Set `max_response_body_bytes` to a positive byte count to
+override it; a response at the limit is accepted and a response one byte larger is rejected
+without decoding a truncated prefix.

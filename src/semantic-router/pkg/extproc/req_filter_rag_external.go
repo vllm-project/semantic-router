@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 	"sync"
@@ -22,6 +23,8 @@ var (
 	externalAPIClient     *http.Client
 	externalAPIClientOnce sync.Once
 )
+
+const defaultExternalAPIMaxResponseBodyBytes int64 = 16 << 20
 
 // getExternalAPIClient returns a shared HTTP client for external API requests
 func getExternalAPIClient() *http.Client {
@@ -192,9 +195,20 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 		return "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse response
+	maxResponseBodyBytes := externalAPIResponseBodyLimit(apiConfig)
+	responseBody, exceeded, readErr := readExternalAPIResponseBody(resp.Body, maxResponseBodyBytes)
+	if readErr != nil {
+		return "", fmt.Errorf("failed to read external API response: %w", readErr)
+	}
+	if exceeded {
+		return "", fmt.Errorf("external API successful response exceeded configured limit of %d bytes", maxResponseBodyBytes)
+	}
+
+	// Parse the complete bounded response. json.Unmarshal rejects trailing
+	// non-whitespace data and, unlike decoding a limited stream, cannot accept a
+	// valid truncated prefix.
 	var apiResponse map[string]interface{}
-	if decodeErr := json.NewDecoder(resp.Body).Decode(&apiResponse); decodeErr != nil {
+	if decodeErr := json.Unmarshal(responseBody, &apiResponse); decodeErr != nil {
 		return "", fmt.Errorf("failed to parse response: %w", decodeErr)
 	}
 
@@ -206,6 +220,28 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 
 	logging.Infof("Retrieved context from external API (latency: %.3fs, format: %s)", latency, apiConfig.RequestFormat)
 	return context, nil
+}
+
+func externalAPIResponseBodyLimit(apiConfig *config.ExternalAPIRAGConfig) int64 {
+	if apiConfig.MaxResponseBodyBytes != nil {
+		return *apiConfig.MaxResponseBodyBytes
+	}
+	return defaultExternalAPIMaxResponseBodyBytes
+}
+
+func readExternalAPIResponseBody(reader io.Reader, maxBytes int64) ([]byte, bool, error) {
+	readLimit := maxBytes
+	if maxBytes < math.MaxInt64 {
+		readLimit++
+	}
+	body, err := io.ReadAll(io.LimitReader(reader, readLimit))
+	if err != nil {
+		return nil, false, err
+	}
+	if int64(len(body)) > maxBytes {
+		return nil, true, nil
+	}
+	return body, false, nil
 }
 
 // buildPineconeRequest builds a Pinecone query request
@@ -300,8 +336,6 @@ func (r *OpenAIRouter) buildCustomRequest(ctx *RequestContext, ragConfig *config
 		return nil, fmt.Errorf("request template is required for custom format")
 	}
 
-	// Simple template substitution (can be enhanced with proper template engine)
-	query := ctx.UserContent
 	topK := 5
 	if ragConfig.TopK != nil {
 		topK = *ragConfig.TopK
@@ -311,26 +345,192 @@ func (r *OpenAIRouter) buildCustomRequest(ctx *RequestContext, ragConfig *config
 		threshold = float64(*ragConfig.SimilarityThreshold)
 	}
 
-	// Replace template variables with basic validation
-	// Note: This is a simple substitution. For production use, consider using
-	// a proper template engine (e.g., text/template) with escaping.
-	// Basic validation: check if user content contains template markers (could indicate injection attempt)
-	if strings.Contains(query, "{{") || strings.Contains(query, "}}") || strings.Contains(query, "${") {
-		logging.Warnf("User content contains template markers, potential injection attempt")
-		// Escape the markers to prevent injection
-		query = strings.ReplaceAll(query, "{{", "\\{\\{")
-		query = strings.ReplaceAll(query, "}}", "\\}\\}")
-		query = strings.ReplaceAll(query, "${", "\\${")
+	// Bare placeholders such as `"top_k": ${top_k}` are not valid JSON.
+	// Quote only exact placeholder tokens that occur outside JSON strings, then
+	// decode the template before inserting any user-controlled value. This keeps
+	// the configured object/array shape authoritative while retaining the two
+	// placeholder syntaxes supported by earlier configurations.
+	normalized := quoteBareCustomRequestPlaceholders(template)
+	document, err := decodeCustomRequestTemplate(normalized)
+	if err != nil {
+		return nil, fmt.Errorf("invalid custom request template JSON: %w", err)
 	}
 
-	replaced := strings.ReplaceAll(template, "{{.Query}}", query)
-	replaced = strings.ReplaceAll(replaced, "{{.TopK}}", fmt.Sprintf("%d", topK))
-	replaced = strings.ReplaceAll(replaced, "{{.Threshold}}", fmt.Sprintf("%.3f", threshold))
-	replaced = strings.ReplaceAll(replaced, "${user_content}", query)
-	replaced = strings.ReplaceAll(replaced, "${top_k}", fmt.Sprintf("%d", topK))
-	replaced = strings.ReplaceAll(replaced, "${threshold}", fmt.Sprintf("%.3f", threshold))
+	typedDocument, err := substituteCustomRequestPlaceholders(document, ctx.UserContent, topK, threshold)
+	if err != nil {
+		return nil, err
+	}
 
-	return []byte(replaced), nil
+	requestBody, err := json.Marshal(typedDocument)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal custom request template: %w", err)
+	}
+	return requestBody, nil
+}
+
+func decodeCustomRequestTemplate(template string) (interface{}, error) {
+	decoder := json.NewDecoder(strings.NewReader(template))
+	decoder.UseNumber()
+
+	var document interface{}
+	if err := decoder.Decode(&document); err != nil {
+		return nil, err
+	}
+
+	var trailing interface{}
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("template contains multiple JSON values")
+		}
+		return nil, fmt.Errorf("invalid trailing data: %w", err)
+	}
+	return document, nil
+}
+
+var customRequestPlaceholders = []string{
+	"{{.Query}}",
+	"{{.TopK}}",
+	"{{.Threshold}}",
+	"${user_content}",
+	"${top_k}",
+	"${threshold}",
+}
+
+func quoteBareCustomRequestPlaceholders(template string) string {
+	var result strings.Builder
+	result.Grow(len(template))
+
+	inString := false
+	escaped := false
+	for i := 0; i < len(template); {
+		if inString {
+			ch := template[i]
+			result.WriteByte(ch)
+			i++
+			if escaped {
+				escaped = false
+				continue
+			}
+			switch ch {
+			case '\\':
+				escaped = true
+			case '"':
+				inString = false
+			}
+			continue
+		}
+
+		if template[i] == '"' {
+			inString = true
+			result.WriteByte(template[i])
+			i++
+			continue
+		}
+
+		if placeholder := customRequestPlaceholderAt(template, i); placeholder != "" {
+			encoded, _ := json.Marshal(placeholder)
+			result.Write(encoded)
+			i += len(placeholder)
+			continue
+		}
+
+		result.WriteByte(template[i])
+		i++
+	}
+
+	return result.String()
+}
+
+func customRequestPlaceholderAt(value string, offset int) string {
+	for _, placeholder := range customRequestPlaceholders {
+		if strings.HasPrefix(value[offset:], placeholder) {
+			return placeholder
+		}
+	}
+	return ""
+}
+
+func containsCustomRequestPlaceholder(value string) bool {
+	for _, placeholder := range customRequestPlaceholders {
+		if strings.Contains(value, placeholder) {
+			return true
+		}
+	}
+	return false
+}
+
+func substituteCustomRequestPlaceholders(value interface{}, query string, topK int, threshold float64) (interface{}, error) {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		result := make(map[string]interface{}, len(typed))
+		for key, child := range typed {
+			if containsCustomRequestPlaceholder(key) {
+				return nil, fmt.Errorf("custom request template placeholders are not allowed in object keys: %q", key)
+			}
+			replaced, err := substituteCustomRequestPlaceholders(child, query, topK, threshold)
+			if err != nil {
+				return nil, err
+			}
+			result[key] = replaced
+		}
+		return result, nil
+	case []interface{}:
+		result := make([]interface{}, len(typed))
+		for i, child := range typed {
+			replaced, err := substituteCustomRequestPlaceholders(child, query, topK, threshold)
+			if err != nil {
+				return nil, err
+			}
+			result[i] = replaced
+		}
+		return result, nil
+	case string:
+		if replacement, ok := exactCustomRequestPlaceholder(typed, query, topK, threshold); ok {
+			return replacement, nil
+		}
+		return interpolateCustomRequestPlaceholders(typed, query, topK, threshold), nil
+	default:
+		return value, nil
+	}
+}
+
+func exactCustomRequestPlaceholder(value, query string, topK int, threshold float64) (interface{}, bool) {
+	switch value {
+	case "{{.Query}}", "${user_content}":
+		return query, true
+	case "{{.TopK}}", "${top_k}":
+		return topK, true
+	case "{{.Threshold}}", "${threshold}":
+		return json.Number(fmt.Sprintf("%.3f", threshold)), true
+	default:
+		return nil, false
+	}
+}
+
+func interpolateCustomRequestPlaceholders(value, query string, topK int, threshold float64) string {
+	var result strings.Builder
+	result.Grow(len(value))
+
+	for i := 0; i < len(value); {
+		placeholder := customRequestPlaceholderAt(value, i)
+		if placeholder == "" {
+			result.WriteByte(value[i])
+			i++
+			continue
+		}
+
+		switch placeholder {
+		case "{{.Query}}", "${user_content}":
+			result.WriteString(query)
+		case "{{.TopK}}", "${top_k}":
+			result.WriteString(fmt.Sprintf("%d", topK))
+		case "{{.Threshold}}", "${threshold}":
+			result.WriteString(fmt.Sprintf("%.3f", threshold))
+		}
+		i += len(placeholder)
+	}
+
+	return result.String()
 }
 
 // extractContextFromResponse extracts context from API response based on format

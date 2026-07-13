@@ -62,6 +62,11 @@ Each supported algorithm now has its own tutorial page under `website/docs/tutor
 
 Each supported plugin now has its own tutorial page under `website/docs/tutorials/plugin/`.
 
+External API RAG fragments must build outbound bodies from typed JSON placeholders and set
+`backend_config.max_response_body_bytes` when the default 16 MiB successful-response limit is
+not appropriate. The limit is exact: a response at the configured byte count is accepted and a
+response one byte larger is rejected before JSON decoding.
+
 The repository enforces this fragment catalog, the exhaustive reference config, the maintained deploy/E2E config assets, and the core public config docs in Go tests. When a supported signal, decision algorithm, plugin surface, or canonical contract term changes, both `go test ./pkg/config/...` and `make agent-lint` will fail until `config/`, maintained `deploy/` / `e2e/` config assets, and the core config docs are updated to match.
 
 Latest official tutorials mirror the same top-level taxonomy:

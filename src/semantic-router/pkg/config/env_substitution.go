@@ -14,8 +14,42 @@ import (
 //   - $$ for a literal $
 func expandEnvSubstitutionsInMap(raw map[string]interface{}) {
 	for key, value := range raw {
+		if key == "request_template" {
+			if template, ok := value.(string); ok {
+				raw[key] = expandEnvStringPreservingRAGPlaceholders(template)
+				continue
+			}
+		}
 		raw[key] = expandEnvSubstitutionsInValue(value)
 	}
+}
+
+var ragRequestTemplatePlaceholders = []string{
+	"${user_content}",
+	"${top_k}",
+	"${threshold}",
+}
+
+// expandEnvStringPreservingRAGPlaceholders keeps the external RAG template
+// language distinct from config environment interpolation. Other environment
+// references in the same template continue to expand normally.
+func expandEnvStringPreservingRAGPlaceholders(value string) string {
+	const escapedDollarMarker = "\x00RAG_REQUEST_ESCAPED_DOLLAR\x00"
+	protected := strings.ReplaceAll(value, "$$", escapedDollarMarker)
+	markers := []string{
+		"\x00RAG_REQUEST_PLACEHOLDER_0\x00",
+		"\x00RAG_REQUEST_PLACEHOLDER_1\x00",
+		"\x00RAG_REQUEST_PLACEHOLDER_2\x00",
+	}
+	for i, placeholder := range ragRequestTemplatePlaceholders {
+		protected = strings.ReplaceAll(protected, placeholder, markers[i])
+	}
+
+	expanded := expandEnvString(protected)
+	for i, marker := range markers {
+		expanded = strings.ReplaceAll(expanded, marker, ragRequestTemplatePlaceholders[i])
+	}
+	return strings.ReplaceAll(expanded, escapedDollarMarker, "$")
 }
 
 func expandEnvSubstitutionsInValue(value interface{}) interface{} {

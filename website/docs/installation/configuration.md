@@ -201,6 +201,12 @@ post-selection side effects.
 
 For `routing.signals.structure`, `feature.type: density` now uses built-in multilingual text-unit normalization. The router counts each CJK character as one unit, counts contiguous runs of other letters and digits as one unit, and ignores punctuation, so the same density rule shape behaves consistently across English, Chinese, and mixed-script prompts without a separate `normalize_by` field.
 
+For route-local RAG with `backend: external_api`, custom request templates are parsed as typed
+JSON before placeholder substitution. Successful response bodies use an exact 16 MiB default
+limit; set the positive `backend_config.max_response_body_bytes` field to override that limit.
+The router accepts a response at the configured byte count and rejects one byte more before JSON
+decoding, so it never accepts a valid truncated prefix.
+
 ## Repository config assets
 
 The repository now separates the exhaustive canonical reference config from reusable routing fragments:

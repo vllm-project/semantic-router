@@ -40,6 +40,7 @@ Manual-only profiles:
 - **router-replay**: Router Replay restart-recovery with Postgres backend, validating that replay records survive pod restarts
 - **vectorstore-registry**: Vector Store Registry restart-recovery with Postgres metadata backend, validating that store and file metadata survive pod restarts
 - **dynamo**: NVIDIA Dynamo deployment, batching, and GPU-health coverage
+- **rag-external-api**: Typed external RAG request construction and exact successful-response byte-limit coverage
 - **rag-hybrid-search**: Llama Stack-backed RAG vector-store and hybrid-search coverage
 
 ### Coverage Ownership Matrix
@@ -63,6 +64,7 @@ Manual-only profiles:
 | `anthropic-shim` | none | Outbound Anthropic translation cell — cache, stop-reason, and request-side field preservation |
 | `dashboard` | none | Dashboard HTTP API contract |
 | `dynamo` | none | GPU and batching behavior |
+| `rag-external-api` | none | Typed external RAG requests and exact successful-response limits |
 | `rag-hybrid-search` | none | RAG vector-store and hybrid-search behavior |
 
 ## Directory Structure

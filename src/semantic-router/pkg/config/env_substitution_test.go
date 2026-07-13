@@ -161,3 +161,34 @@ func TestExpandEnvStringUnsetVariableIsEmpty(t *testing.T) {
 		t.Fatalf("expandEnvString for missing var = %q, want empty string", got)
 	}
 }
+
+func TestExpandEnvSubstitutionsPreservesExternalRAGRequestPlaceholders(t *testing.T) {
+	t.Setenv("user_content", "wrong-query")
+	t.Setenv("top_k", "999")
+	t.Setenv("threshold", "1.0")
+	t.Setenv("RAG_TENANT", "production")
+
+	raw := map[string]interface{}{
+		"backend_config": map[interface{}]interface{}{
+			"request_template": `{"query":"${user_content}","top_k":${top_k},"threshold":${threshold},"tenant":"${RAG_TENANT}"}`,
+		},
+	}
+	expandEnvSubstitutionsInMap(raw)
+
+	backend := nestedStringMap(raw["backend_config"])
+	want := `{"query":"${user_content}","top_k":${top_k},"threshold":${threshold},"tenant":"production"}`
+	if got := backend["request_template"]; got != want {
+		t.Fatalf("request_template = %q, want %q", got, want)
+	}
+}
+
+func TestExpandEnvSubstitutionsKeepsEscapedRAGPlaceholderCompatibility(t *testing.T) {
+	raw := map[string]interface{}{
+		"request_template": `$${user_content}`,
+	}
+	expandEnvSubstitutionsInMap(raw)
+
+	if got := raw["request_template"]; got != `${user_content}` {
+		t.Fatalf("escaped request_template = %q, want literal placeholder", got)
+	}
+}
