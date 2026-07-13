@@ -102,17 +102,24 @@ type ComponentBenchmarksThresholds struct {
 	Benchmarks []BenchmarkRegressionThreshold `yaml:"benchmarks"`
 }
 
-// RegressionThreshold is the maximum tolerated ns/op regression, in percent.
+// RegressionThreshold holds the per-metric regression bounds for a benchmark.
+//
+// The gate blocks on allocs/op and B/op because they are hardware-independent
+// (determined by the code path, not the CPU), so they compare cleanly across
+// machines. ns/op is ADVISORY: MaxNsRegressionPercent is reported but never
+// fails the gate, because absolute time depends on the runner's hardware.
 type RegressionThreshold struct {
-	MaxRegressionPercent float64 `yaml:"max_regression_percent"`
+	MaxAllocsRegressionPercent float64 `yaml:"max_allocs_regression_percent"`
+	MaxBytesRegressionPercent  float64 `yaml:"max_bytes_regression_percent"`
+	MaxNsRegressionPercent     float64 `yaml:"max_ns_regression_percent,omitempty"`
 }
 
-// BenchmarkRegressionThreshold maps a benchmark-name regexp to its maximum
-// tolerated ns/op regression. Name is a human label for readability only.
+// BenchmarkRegressionThreshold maps a benchmark-name regexp to its thresholds.
+// Name is a human label for readability only.
 type BenchmarkRegressionThreshold struct {
-	Name                 string  `yaml:"name"`
-	Pattern              string  `yaml:"pattern"`
-	MaxRegressionPercent float64 `yaml:"max_regression_percent"`
+	Name                string `yaml:"name"`
+	Pattern             string `yaml:"pattern"`
+	RegressionThreshold `yaml:",inline"`
 }
 
 // E2ETestsThresholds defines thresholds for E2E tests

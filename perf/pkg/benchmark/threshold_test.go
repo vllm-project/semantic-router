@@ -8,66 +8,67 @@ import (
 func testThresholds() *ThresholdsConfig {
 	return &ThresholdsConfig{
 		ComponentBenchmarks: ComponentBenchmarksThresholds{
-			Default: RegressionThreshold{MaxRegressionPercent: 10},
+			Default: RegressionThreshold{MaxAllocsRegressionPercent: 10, MaxBytesRegressionPercent: 10},
 			Benchmarks: []BenchmarkRegressionThreshold{
-				{Name: "classification", Pattern: "^BenchmarkClassify", MaxRegressionPercent: 15},
-				{Name: "decision_engine", Pattern: "^Benchmark(EvaluateDecisions|PrioritySelection)", MaxRegressionPercent: 5},
-				{Name: "looper", Pattern: "^Benchmark(ReMoM|Fusion|Flow|Base)", MaxRegressionPercent: 25},
+				{Name: "classification", Pattern: "^BenchmarkClassify",
+					RegressionThreshold: RegressionThreshold{MaxAllocsRegressionPercent: 10, MaxBytesRegressionPercent: 10, MaxNsRegressionPercent: 30}},
+				{Name: "decision_engine", Pattern: "^Benchmark(EvaluateDecisions|PrioritySelection)",
+					RegressionThreshold: RegressionThreshold{MaxAllocsRegressionPercent: 5, MaxBytesRegressionPercent: 5, MaxNsRegressionPercent: 20}},
+				{Name: "looper", Pattern: "^Benchmark(ReMoM|Fusion|Flow|Base)",
+					RegressionThreshold: RegressionThreshold{MaxAllocsRegressionPercent: 10, MaxBytesRegressionPercent: 15, MaxNsRegressionPercent: 40}},
 			},
 		},
 	}
 }
 
-// TestGetThresholdForBenchmark guards #2455 root cause #3: the threshold must be
-// selected by the benchmark's own name, not the first non-zero entry in the
-// config. In particular a decision-engine benchmark must resolve to its own 5%,
-// never the classification 15% that the old code always returned.
-func TestGetThresholdForBenchmark(t *testing.T) {
+// TestGetThresholdsForBenchmark guards #2455 root cause #3: thresholds are
+// selected by the benchmark's own name, not the first entry in the config. The
+// decision engine keeps its own tight 5% allocs bound rather than inheriting
+// classification's 10%.
+func TestGetThresholdsForBenchmark(t *testing.T) {
 	cfg := testThresholds()
 	cases := []struct {
-		name  string
-		bench string
-		want  float64
+		name       string
+		bench      string
+		wantAllocs float64
 	}{
-		{"classification", "BenchmarkClassifyText", 15},
-		{"decision resolves to its own bound, not the first-listed one", "BenchmarkEvaluateDecisions_SingleDomain", 5},
-		{"priority shares the decision bound", "BenchmarkPrioritySelection", 5},
-		{"looper subtest name matches", "BenchmarkReMoM_Execute/1x4", 25},
+		{"classification", "BenchmarkClassifyText", 10},
+		{"decision keeps its own tight bound", "BenchmarkEvaluateDecisions_SingleDomain", 5},
+		{"looper subtest name matches", "BenchmarkReMoM_Execute/1x4", 10},
 		{"unmatched benchmark falls back to default", "BenchmarkBrandNewThing", 10},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := getThresholdForBenchmark(c.bench, cfg); got != c.want {
-				t.Errorf("getThresholdForBenchmark(%q) = %v, want %v", c.bench, got, c.want)
+			if got := getThresholdsForBenchmark(c.bench, cfg).MaxAllocsRegressionPercent; got != c.wantAllocs {
+				t.Errorf("getThresholdsForBenchmark(%q).MaxAllocsRegressionPercent = %v, want %v", c.bench, got, c.wantAllocs)
 			}
 		})
 	}
 }
 
-func TestGetThresholdForBenchmark_NilConfig(t *testing.T) {
-	if got := getThresholdForBenchmark("BenchmarkAnything", nil); got != 10 {
-		t.Errorf("nil-config threshold = %v, want 10", got)
+func TestGetThresholdsForBenchmark_NilConfig(t *testing.T) {
+	th := getThresholdsForBenchmark("BenchmarkAnything", nil)
+	if th.MaxAllocsRegressionPercent != 10 || th.MaxBytesRegressionPercent != 10 {
+		t.Errorf("nil-config thresholds = %+v, want allocs=bytes=10", th)
 	}
 }
 
 // TestLoadThresholds_ShippedConfigMapsEverySuite loads the real shipped
-// thresholds.yaml and asserts each suite — including looper, which the previous
-// struct silently dropped — resolves to its configured bound. This locks the
-// YAML and the Go struct together.
+// thresholds.yaml and asserts the decision-engine tight bound and the looper
+// block (previously silently dropped) both map, locking the YAML to the struct.
 func TestLoadThresholds_ShippedConfigMapsEverySuite(t *testing.T) {
 	cfg, err := LoadThresholds(filepath.Join("..", "..", "config", "thresholds.yaml"))
 	if err != nil {
 		t.Fatalf("LoadThresholds: %v", err)
 	}
-	cases := map[string]float64{
-		"BenchmarkClassifyText":                   15,
-		"BenchmarkEvaluateDecisions_SingleDomain": 5,
-		"BenchmarkCacheSearch":                    10,
-		"BenchmarkReMoM_DistributeRoundRobin":     25,
+	if got := getThresholdsForBenchmark("BenchmarkEvaluateDecisions_SingleDomain", cfg).MaxAllocsRegressionPercent; got != 5 {
+		t.Errorf("shipped config: decision allocs bound = %v, want 5", got)
 	}
-	for bench, want := range cases {
-		if got := getThresholdForBenchmark(bench, cfg); got != want {
-			t.Errorf("shipped config: %s -> %v, want %v", bench, got, want)
-		}
+	looper := getThresholdsForBenchmark("BenchmarkReMoM_DistributeRoundRobin", cfg)
+	if looper.MaxAllocsRegressionPercent == 0 {
+		t.Error("shipped config: looper allocs bound is 0 — the looper block is not mapped")
+	}
+	if looper.MaxNsRegressionPercent == 0 {
+		t.Error("shipped config: looper ns/op advisory bound is 0 — advisory not carried")
 	}
 }

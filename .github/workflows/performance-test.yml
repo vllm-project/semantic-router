@@ -108,15 +108,14 @@ jobs:
             --output=../reports/current.json
 
       # The regression gate. Diffs the current run against the committed
-      # per-suite baselines in perf/testdata/baselines and exits non-zero if any
-      # benchmark regresses beyond its threshold in config/thresholds.yaml, so a
-      # regression turns this required check red on the PR (#2455).
+      # per-suite baselines and exits non-zero if any benchmark's allocs/op or
+      # B/op regresses beyond its threshold in config/thresholds.yaml, turning
+      # this required check red on the PR (#2455). ns/op changes are advisory
+      # only (reported, never blocking) because absolute time is machine-dependent.
       #
-      # Absolute ns/op is machine-dependent, so a trustworthy gate needs
-      # baselines captured on this same ubuntu-latest runner class. The Nightly
-      # Performance Baseline workflow refreshes and commits them; run it once
-      # (workflow_dispatch) to seed ubuntu-latest baselines before relying on
-      # pass/fail. The cross-hardware / cross-backend matrix is tracked by #1510.
+      # allocs/op and B/op are hardware-independent, so the committed baselines
+      # compare cleanly here regardless of which machine recorded them — no
+      # seeding required. The cross-hardware / cross-backend matrix is #1510.
       - name: Compare against baseline and gate on regressions
         id: gate
         run: |

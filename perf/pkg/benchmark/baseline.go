@@ -34,16 +34,24 @@ type BenchmarkMetric struct {
 	BytesPerOp    int64   `json:"bytes_per_op,omitempty"`
 }
 
-// ComparisonResult represents the result of comparing current vs baseline
+// ComparisonResult represents the result of comparing current vs baseline.
+//
+// RegressionDetected is driven only by the hardware-independent metrics
+// (allocs/op, B/op). NsPerOpChange is advisory: NsAdvisory flags when it
+// exceeded its configured bound, but it never sets RegressionDetected because
+// absolute time is machine-dependent.
 type ComparisonResult struct {
 	BenchmarkName      string
 	Baseline           BenchmarkMetric
 	Current            BenchmarkMetric
-	NsPerOpChange      float64 // Percentage change
+	NsPerOpChange      float64 // advisory (machine-dependent)
+	AllocsPerOpChange  float64 // blocking
+	BytesPerOpChange   float64 // blocking
 	P95LatencyChange   float64
 	ThroughputChange   float64
-	RegressionDetected bool
-	Threshold          float64 // Max allowed regression percentage
+	RegressionDetected bool                // any blocking metric exceeded its threshold
+	NsAdvisory         bool                // ns/op exceeded its advisory bound (reported, non-blocking)
+	Thresholds         RegressionThreshold // thresholds applied to this benchmark
 }
 
 // LoadBaseline loads baseline data from a JSON file
@@ -140,39 +148,25 @@ func CompareWithBaseline(current, baseline *Baseline, thresholds *ThresholdsConf
 			Current:       currentMetric,
 		}
 
-		// Calculate percentage changes
+		th := getThresholdsForBenchmark(benchName, thresholds)
+		result.Thresholds = th
+
+		// ns/op is advisory: computed and flagged, but never blocks the gate,
+		// because absolute time depends on the runner's hardware.
 		if baselineMetric.NsPerOp > 0 {
-			result.NsPerOpChange = calculatePercentChange(
-				baselineMetric.NsPerOp,
-				currentMetric.NsPerOp,
-			)
+			result.NsPerOpChange = calculatePercentChange(baselineMetric.NsPerOp, currentMetric.NsPerOp)
 		}
+		result.NsAdvisory = th.MaxNsRegressionPercent > 0 &&
+			baselineMetric.NsPerOp > 0 &&
+			result.NsPerOpChange > th.MaxNsRegressionPercent
 
-		if baselineMetric.P95LatencyMs > 0 {
-			result.P95LatencyChange = calculatePercentChange(
-				baselineMetric.P95LatencyMs,
-				currentMetric.P95LatencyMs,
-			)
-		}
-
-		if baselineMetric.ThroughputQPS > 0 {
-			result.ThroughputChange = calculatePercentChange(
-				baselineMetric.ThroughputQPS,
-				currentMetric.ThroughputQPS,
-			)
-		}
-
-		// Determine threshold for this benchmark
-		threshold := getThresholdForBenchmark(benchName, thresholds)
-		result.Threshold = threshold
-
-		// Detect regressions
-		// Latency increase or throughput decrease beyond threshold = regression
-		if result.NsPerOpChange > threshold ||
-			result.P95LatencyChange > threshold ||
-			(result.ThroughputChange < -threshold && baselineMetric.ThroughputQPS > 0) {
-			result.RegressionDetected = true
-		}
+		// allocs/op and B/op are hardware-independent, so they gate the result.
+		var allocsRegressed, bytesRegressed bool
+		result.AllocsPerOpChange, allocsRegressed = metricRegression(
+			baselineMetric.AllocsPerOp, currentMetric.AllocsPerOp, th.MaxAllocsRegressionPercent)
+		result.BytesPerOpChange, bytesRegressed = metricRegression(
+			baselineMetric.BytesPerOp, currentMetric.BytesPerOp, th.MaxBytesRegressionPercent)
+		result.RegressionDetected = allocsRegressed || bytesRegressed
 
 		results = append(results, result)
 	}
@@ -189,12 +183,24 @@ func calculatePercentChange(baseline, current float64) float64 {
 	return ((current - baseline) / baseline) * 100
 }
 
-// getThresholdForBenchmark retrieves the max-regression threshold for a
-// benchmark by matching its name against the configured patterns. The first
-// matching entry wins, so thresholds.yaml lists them most-specific first;
-// benchmarks matching nothing use the configured default (#2455 rc#3).
-func getThresholdForBenchmark(benchName string, thresholds *ThresholdsConfig) float64 {
-	const fallback = 10.0
+// metricRegression returns the percent change from baseline to current for a
+// hardware-independent integer metric (allocs/op or B/op) and whether it counts
+// as a regression. A zero baseline is special: any newly-introduced allocation
+// is a regression even though the percentage is undefined.
+func metricRegression(baseline, current int64, thresholdPercent float64) (float64, bool) {
+	if baseline == 0 {
+		return 0, current > 0
+	}
+	change := (float64(current) - float64(baseline)) / float64(baseline) * 100
+	return change, change > thresholdPercent
+}
+
+// getThresholdsForBenchmark retrieves the regression thresholds for a benchmark
+// by matching its name against the configured patterns. The first matching
+// entry wins, so thresholds.yaml lists them most-specific first; benchmarks
+// matching nothing use the configured default (#2455 rc#3).
+func getThresholdsForBenchmark(benchName string, thresholds *ThresholdsConfig) RegressionThreshold {
+	fallback := RegressionThreshold{MaxAllocsRegressionPercent: 10, MaxBytesRegressionPercent: 10}
 	if thresholds == nil {
 		return fallback
 	}
@@ -203,11 +209,12 @@ func getThresholdForBenchmark(benchName string, thresholds *ThresholdsConfig) fl
 			continue
 		}
 		if matched, err := regexp.MatchString(t.Pattern, benchName); err == nil && matched {
-			return t.MaxRegressionPercent
+			return t.RegressionThreshold
 		}
 	}
-	if thresholds.ComponentBenchmarks.Default.MaxRegressionPercent > 0 {
-		return thresholds.ComponentBenchmarks.Default.MaxRegressionPercent
+	def := thresholds.ComponentBenchmarks.Default
+	if def.MaxAllocsRegressionPercent > 0 || def.MaxBytesRegressionPercent > 0 {
+		return def
 	}
 	return fallback
 }
@@ -226,8 +233,9 @@ func HasRegressions(results []ComparisonResult) bool {
 func PrintComparisonResults(results []ComparisonResult) {
 	fmt.Println("\n" + "===================================================================================")
 	fmt.Println("                        PERFORMANCE COMPARISON RESULTS")
+	fmt.Println("        (allocs/op and B/op gate the result; ns/op is advisory only)")
 	fmt.Println("===================================================================================")
-	fmt.Printf("%-50s %-15s %-15s %-15s\n", "Benchmark", "Baseline", "Current", "Change")
+	fmt.Printf("%-50s %-15s %-15s %-15s\n", "Benchmark / metric", "Baseline", "Current", "Change")
 	fmt.Println("-----------------------------------------------------------------------------------")
 
 	for _, result := range results {
@@ -236,32 +244,33 @@ func PrintComparisonResults(results []ComparisonResult) {
 			icon = "⚠️"
 		}
 
-		// Display ns/op comparison
-		fmt.Printf("%s %-48s %-15.0f %-15.0f %+.2f%%\n",
+		// Blocking metric: allocs/op (hardware-independent).
+		fmt.Printf("%s %-48s %-15d %-15d %+.2f%%\n",
 			icon,
 			result.BenchmarkName,
+			result.Baseline.AllocsPerOp,
+			result.Current.AllocsPerOp,
+			result.AllocsPerOpChange,
+		)
+
+		// Blocking metric: B/op (hardware-independent).
+		fmt.Printf("  └─ B/op:        %-15d %-15d %+.2f%%\n",
+			result.Baseline.BytesPerOp,
+			result.Current.BytesPerOp,
+			result.BytesPerOpChange,
+		)
+
+		// Advisory metric: ns/op (machine-dependent, never blocks).
+		advisory := ""
+		if result.NsAdvisory {
+			advisory = "  ⚠️ advisory"
+		}
+		fmt.Printf("  └─ ns/op (adv): %-15.0f %-15.0f %+.2f%%%s\n",
 			result.Baseline.NsPerOp,
 			result.Current.NsPerOp,
 			result.NsPerOpChange,
+			advisory,
 		)
-
-		// Display P95 latency if available
-		if result.Baseline.P95LatencyMs > 0 {
-			fmt.Printf("  └─ P95 Latency: %-15.2fms %-15.2fms %+.2f%%\n",
-				result.Baseline.P95LatencyMs,
-				result.Current.P95LatencyMs,
-				result.P95LatencyChange,
-			)
-		}
-
-		// Display throughput if available
-		if result.Baseline.ThroughputQPS > 0 {
-			fmt.Printf("  └─ Throughput:  %-15.2f qps %-15.2f qps %+.2f%%\n",
-				result.Baseline.ThroughputQPS,
-				result.Current.ThroughputQPS,
-				result.ThroughputChange,
-			)
-		}
 	}
 
 	fmt.Println("===================================================================================")

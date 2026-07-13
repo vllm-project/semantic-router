@@ -1,44 +1,61 @@
 # Performance regression thresholds for `make perf-compare` / `perf-check`.
 #
-# Each entry maps a benchmark-name regexp to the maximum tolerated ns/op
-# regression (percent slower than baseline) before the comparison flags it.
-# The FIRST matching pattern wins, so order entries most-specific first.
-# Patterns are Go regular expressions matched against the full benchmark name
-# (with the trailing -GOMAXPROCS suffix already stripped). Any benchmark that
-# matches no pattern uses `default`.
+# The gate BLOCKS on hardware-independent metrics — allocations per op
+# (max_allocs_regression_percent) and bytes per op (max_bytes_regression_percent).
+# These are determined by the code path, not the CPU, so they compare cleanly
+# across machines and CI runners. ns/op is ADVISORY: max_ns_regression_percent is
+# reported (and shown in the PR comment) but never fails the gate, because
+# absolute time depends on the runner's hardware. See perf/README.md.
+#
+# Each entry maps a benchmark-name regexp to its thresholds. The FIRST matching
+# pattern wins, so order entries most-specific first. Patterns are Go regular
+# expressions matched against the full benchmark name (with the trailing
+# -GOMAXPROCS suffix stripped). Any benchmark matching no pattern uses `default`.
 
 component_benchmarks:
   default:
-    max_regression_percent: 10
+    max_allocs_regression_percent: 10
+    max_bytes_regression_percent: 10
+    max_ns_regression_percent: 30
 
   benchmarks:
-    # Classification (CGO-bound BERT / embedding paths): noisier, looser bound.
+    # Classification (CGO-bound BERT / embedding paths).
     - name: classification
       pattern: "^BenchmarkClassify"
-      max_regression_percent: 15
+      max_allocs_regression_percent: 10
+      max_bytes_regression_percent: 10
+      max_ns_regression_percent: 30
 
-    # Decision engine (pure Go, cheap + deterministic): tight bound.
+    # Decision engine (pure Go, cheap + deterministic): tight allocation bound.
     - name: decision_engine
       pattern: "^Benchmark(EvaluateDecisions|PrioritySelection|Rule)"
-      max_regression_percent: 5
+      max_allocs_regression_percent: 5
+      max_bytes_regression_percent: 5
+      max_ns_regression_percent: 20
 
     # Cache lookup paths.
     - name: cache
       pattern: "^BenchmarkCache"
-      max_regression_percent: 10
+      max_allocs_regression_percent: 10
+      max_bytes_regression_percent: 10
+      max_ns_regression_percent: 30
 
     # ExtProc request/response hot path.
     - name: extproc
       pattern: "^Benchmark(Process|Header|Full|Different|Concurrent)"
-      max_regression_percent: 15
+      max_allocs_regression_percent: 5
+      max_bytes_regression_percent: 10
+      max_ns_regression_percent: 25
 
-    # Looper family (ReMoM/Fusion/Flow/Base) micro-benchmarks. These are noisy
-    # run-to-run (~10% swing on idle hardware), so the bound is generous: it
-    # catches structural regressions (an accidental O(n^2), a per-call
-    # allocation blowup), not measurement jitter.
+    # Looper family (ReMoM/Fusion/Flow/Base) micro-benchmarks. Some allocate a
+    # data-dependent amount, so the allocation bound is a little looser here; it
+    # still catches structural regressions (an accidental O(n^2), a per-call
+    # allocation blowup).
     - name: looper
       pattern: "^Benchmark(ReMoM|Fusion|Flow|Base)"
-      max_regression_percent: 25
+      max_allocs_regression_percent: 10
+      max_bytes_regression_percent: 15
+      max_ns_regression_percent: 40
 
 e2e_tests:
   throughput:
