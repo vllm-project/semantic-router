@@ -11,6 +11,8 @@
 # pattern wins, so order entries most-specific first. Patterns are Go regular
 # expressions matched against the full benchmark name (with the trailing
 # -GOMAXPROCS suffix stripped). Any benchmark matching no pattern uses `default`.
+# A metric an entry omits inherits `default` (omitting means "use the default",
+# never "0% / zero tolerance").
 
 component_benchmarks:
   default:

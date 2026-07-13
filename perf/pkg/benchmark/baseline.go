@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -199,24 +200,54 @@ func metricRegression(baseline, current int64, thresholdPercent float64) (float6
 // by matching its name against the configured patterns. The first matching
 // entry wins, so thresholds.yaml lists them most-specific first; benchmarks
 // matching nothing use the configured default (#2455 rc#3).
+//
+// A metric a matching entry omits (leaves at 0) inherits the default's value —
+// omitting a threshold means "use the default", never "zero tolerance".
 func getThresholdsForBenchmark(benchName string, thresholds *ThresholdsConfig) RegressionThreshold {
-	fallback := RegressionThreshold{MaxAllocsRegressionPercent: 10, MaxBytesRegressionPercent: 10}
+	fallback := RegressionThreshold{MaxAllocsRegressionPercent: 10, MaxBytesRegressionPercent: 10, MaxNsRegressionPercent: 30}
 	if thresholds == nil {
 		return fallback
 	}
+	base := mergeThreshold(thresholds.ComponentBenchmarks.Default, fallback)
 	for _, t := range thresholds.ComponentBenchmarks.Benchmarks {
 		if t.Pattern == "" {
 			continue
 		}
 		if matched, err := regexp.MatchString(t.Pattern, benchName); err == nil && matched {
-			return t.RegressionThreshold
+			return mergeThreshold(t.RegressionThreshold, base)
 		}
 	}
-	def := thresholds.ComponentBenchmarks.Default
-	if def.MaxAllocsRegressionPercent > 0 || def.MaxBytesRegressionPercent > 0 {
-		return def
+	return base
+}
+
+// mergeThreshold returns primary with any unset (zero) metric filled from
+// fallback, so an omitted YAML field inherits the default rather than becoming
+// a 0% (zero-tolerance) bound.
+func mergeThreshold(primary, fallback RegressionThreshold) RegressionThreshold {
+	if primary.MaxAllocsRegressionPercent == 0 {
+		primary.MaxAllocsRegressionPercent = fallback.MaxAllocsRegressionPercent
 	}
-	return fallback
+	if primary.MaxBytesRegressionPercent == 0 {
+		primary.MaxBytesRegressionPercent = fallback.MaxBytesRegressionPercent
+	}
+	if primary.MaxNsRegressionPercent == 0 {
+		primary.MaxNsRegressionPercent = fallback.MaxNsRegressionPercent
+	}
+	return primary
+}
+
+// UngatedBenchmarks returns the names (sorted) of current benchmarks that have
+// no baseline entry and were therefore not compared. Surfacing these keeps a
+// gate pass honest: an empty or missing baseline suite is excluded, not checked.
+func UngatedBenchmarks(current, baseline *Baseline) []string {
+	var names []string
+	for name := range current.Benchmarks {
+		if _, ok := baseline.Benchmarks[name]; !ok {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 // HasRegressions checks if any regressions were detected

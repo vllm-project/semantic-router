@@ -46,6 +46,31 @@ func TestGetThresholdsForBenchmark(t *testing.T) {
 	}
 }
 
+// TestGetThresholdsForBenchmark_OmittedFieldInheritsDefault guards the config
+// footgun: an entry that sets only some metrics must inherit the rest from the
+// default, not silently get a zero-tolerance (0%) bound.
+func TestGetThresholdsForBenchmark_OmittedFieldInheritsDefault(t *testing.T) {
+	cfg := &ThresholdsConfig{
+		ComponentBenchmarks: ComponentBenchmarksThresholds{
+			Default: RegressionThreshold{MaxAllocsRegressionPercent: 10, MaxBytesRegressionPercent: 12, MaxNsRegressionPercent: 30},
+			Benchmarks: []BenchmarkRegressionThreshold{
+				// Only allocs set; bytes and ns omitted must inherit the default.
+				{Name: "x", Pattern: "^BenchmarkX", RegressionThreshold: RegressionThreshold{MaxAllocsRegressionPercent: 3}},
+			},
+		},
+	}
+	th := getThresholdsForBenchmark("BenchmarkX", cfg)
+	if th.MaxAllocsRegressionPercent != 3 {
+		t.Errorf("allocs = %v, want 3 (explicit)", th.MaxAllocsRegressionPercent)
+	}
+	if th.MaxBytesRegressionPercent != 12 {
+		t.Errorf("bytes = %v, want 12 (inherited from default, not 0)", th.MaxBytesRegressionPercent)
+	}
+	if th.MaxNsRegressionPercent != 30 {
+		t.Errorf("ns = %v, want 30 (inherited from default, not 0)", th.MaxNsRegressionPercent)
+	}
+}
+
 func TestGetThresholdsForBenchmark_NilConfig(t *testing.T) {
 	th := getThresholdsForBenchmark("BenchmarkAnything", nil)
 	if th.MaxAllocsRegressionPercent != 10 || th.MaxBytesRegressionPercent != 10 {

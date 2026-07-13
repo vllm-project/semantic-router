@@ -112,6 +112,13 @@ func compareWithBaseline(baselineDir, currentResultsFile, thresholdFile, outputP
 	}
 	fmt.Printf("Loaded current results with %d benchmarks\n", len(current.Benchmarks))
 
+	// Surface benchmarks with no baseline so a pass is not mistaken for full
+	// coverage (e.g. classification/cache before their baselines are populated).
+	if ungated := benchmark.UngatedBenchmarks(current, baseline); len(ungated) > 0 {
+		fmt.Printf("ℹ️  %d benchmark(s) had no baseline and were NOT gated: %s\n",
+			len(ungated), strings.Join(ungated, ", "))
+	}
+
 	// Compare with baseline
 	results, err := benchmark.CompareWithBaseline(current, baseline, thresholds)
 	if err != nil {
