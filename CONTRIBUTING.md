@@ -214,6 +214,23 @@ The test suite includes:
 
 Before submitting a PR, please run the pre-commit hooks to ensure code quality and consistency. **These checks are mandatory** and will be automatically run on every commit once installed.
 
+#### CI tiers
+
+GitHub Actions uses path-aware CI profiles:
+
+| Profile | When it runs | What runs |
+| --- | --- | --- |
+| **Docs/website lightweight** | PR changes only `website/**`, `docs/**`, or other markdown/agent-text paths | `make agent-docs-ci-gate`, markdown lint, website build |
+| **Full baseline** | Router, bindings, dashboard, e2e, CI, or mixed PRs | Full pre-commit, Go/Rust lint, security scans, integration tests as applicable |
+
+Reproduce the lightweight docs gate locally:
+
+```bash
+make agent-docs-ci-gate AGENT_BASE_REF=origin/main
+```
+
+Maintainers can force the full baseline on a docs-only PR by adding the `ci/full` label.
+
 **Step 1: Install pre-commit tool**
 
 ```bash

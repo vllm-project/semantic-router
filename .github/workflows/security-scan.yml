@@ -14,8 +14,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    uses: ./.github/workflows/ci-changes.yml
+
   ast-security-scan:
-    if: github.repository == 'vllm-project/semantic-router'
+    needs: changes
+    if: >-
+      github.repository == 'vllm-project/semantic-router'
+      && needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     name: AST supply chain security scan
     permissions:
@@ -223,3 +229,14 @@ jobs:
             echo "::error::Supply chain security scan detected issues — see PR comment for details."
             exit 1
           fi
+
+  docs-only-security-skip:
+    needs: changes
+    if: >-
+      github.repository == 'vllm-project/semantic-router'
+      && needs.changes.outputs.docs_only == 'true'
+    runs-on: ubuntu-latest
+    name: AST supply chain security scan (docs-only skip)
+    steps:
+      - name: Skip full AST scan for docs-only changes
+        run: echo "Docs/website-only PR - skipping full AST security scan."
