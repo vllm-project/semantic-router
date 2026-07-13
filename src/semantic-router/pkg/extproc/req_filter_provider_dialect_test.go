@@ -34,11 +34,17 @@ func TestResolveOpenAIBackendDialect(t *testing.T) {
 			wantTopLevelEffort: true,
 		},
 		{
-			name:                      "official deepseek uses top-level thinking and effort",
+			name:                      "official deepseek uses top-level 'thinking' and effort",
 			profile:                   &config.ProviderProfile{Type: "openai", BaseURL: "https://api.deepseek.com"},
 			wantKind:                  openAIBackendDialectOfficialDeepSeek,
 			wantTopLevelEffort:        true,
 			wantTopLevelDeepSeekThink: true,
+		},
+		{
+			name:               "openrouter uses top-level reasoning effort",
+			profile:            &config.ProviderProfile{Type: "openai", BaseURL: "https://openrouter.ai/api/v1"},
+			wantKind:           openAIBackendDialectOpenRouter,
+			wantTopLevelEffort: true,
 		},
 		{
 			name:               "unknown openai-compatible provider is generic",

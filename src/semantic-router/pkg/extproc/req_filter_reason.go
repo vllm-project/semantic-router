@@ -244,6 +244,9 @@ func usesDeepSeekOfficialReasoning(
 }
 
 func applyDeepSeekOfficialReasoningMutation(mutation *reasoningRequestMutation, enabled bool, effort string) {
+	// DeepSeek's official OpenAI-compatible API uses top-level thinking plus
+	// reasoning_effort. Drop template kwargs so local-template controls do not
+	// leak into the provider request alongside official fields.
 	delete(mutation.requestMap, "chat_template_kwargs")
 	mutation.chatTemplateKwargs = map[string]interface{}{}
 
@@ -255,15 +258,9 @@ func applyDeepSeekOfficialReasoningMutation(mutation *reasoningRequestMutation, 
 		mutation.requestMap["thinking"] = map[string]interface{}{"type": "disabled"}
 		delete(mutation.requestMap, "reasoning_effort")
 	}
-	// The official OpenAI API and OpenRouter accept reasoning_effort as a
-	// top-level OpenAI-compatible field. Local vLLM-compatible servers keep the
-	// value under chat_template_kwargs.
-	return supportsTopLevelReasoningEffortHost(u.Hostname())
-}
-
-func supportsTopLevelReasoningEffortHost(host string) bool {
-	return strings.EqualFold(host, "api.openai.com") ||
-		strings.EqualFold(host, "openrouter.ai")
+	// Disabled official reasoning is still an applied provider mutation because
+	// the request must carry thinking.type=disabled.
+	mutation.reasoningApplied = true
 }
 
 // getReasoningEffort returns the reasoning effort level for a given decision and model
