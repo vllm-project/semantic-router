@@ -2,6 +2,10 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import clsx from 'clsx'
 import Translate, { translate } from '@docusaurus/Translate'
 import Link from '@docusaurus/Link'
+import Claude from '@lobehub/icons/es/Claude/components/Mono'
+import Gemini from '@lobehub/icons/es/Gemini/components/Mono'
+import Mistral from '@lobehub/icons/es/Mistral/components/Mono'
+import OpenAI from '@lobehub/icons/es/OpenAI/components/Mono'
 import ScrollReveal from '@site/src/components/site/ScrollReveal'
 import shared from './homepageShared.module.css'
 import styles from './IntegrationArchitecture.module.css'
@@ -9,27 +13,49 @@ import styles from './IntegrationArchitecture.module.css'
 const extprocRouterModules = ['Signal layer', 'Decision engine', 'Plugins']
 const DECISION_ENGINE_INDEX = 1
 
+type ModelKind = 'closed' | 'open'
+
 type ModelRoute = {
   id: string
   label: string
+  provider: string
+  kind: ModelKind
   queryLabel: string
+  Icon: React.ComponentType<{ size?: number }>
 }
 
 const modelRoutes: ModelRoute[] = [
   {
-    id: 'claude',
+    id: 'anthropic',
     label: 'Claude',
+    provider: 'Anthropic',
+    kind: 'closed',
     queryLabel: translate({ id: 'homepage.integration.query1', message: 'Query 1' }),
+    Icon: Claude,
   },
   {
-    id: 'chatgpt',
+    id: 'openai',
     label: 'ChatGPT',
+    provider: 'OpenAI',
+    kind: 'closed',
     queryLabel: translate({ id: 'homepage.integration.query2', message: 'Query 2' }),
+    Icon: OpenAI,
   },
   {
-    id: 'llama',
-    label: 'Llama',
+    id: 'gemini',
+    label: 'Gemini',
+    provider: 'Google',
+    kind: 'closed',
     queryLabel: translate({ id: 'homepage.integration.query3', message: 'Query 3' }),
+    Icon: Gemini,
+  },
+  {
+    id: 'mistral',
+    label: 'Mistral',
+    provider: 'Mistral AI',
+    kind: 'open',
+    queryLabel: translate({ id: 'homepage.integration.query4', message: 'Query 4' }),
+    Icon: Mistral,
   },
 ]
 
@@ -93,8 +119,8 @@ function measureRouteLayout(
 
     const rowRect = row.getBoundingClientRect()
     targets[route.id] = {
-      x: toPercentX(rowRect.left + rowRect.width * 0.42),
-      y: toPercentY(rowRect.top + rowRect.height / 2),
+      x: toPercentX(rowRect.left + rowRect.width * 0.5),
+      y: toPercentY(rowRect.top + rowRect.height * 0.42),
     }
   })
 
@@ -140,6 +166,46 @@ function QueryColumn({
   )
 }
 
+function ModelTile({
+  route,
+  active,
+  onRowRef,
+}: {
+  route: ModelRoute
+  active: boolean
+  onRowRef: (routeId: string, node: HTMLLIElement | null) => void
+}): JSX.Element {
+  const { Icon } = route
+  const isOpen = route.kind === 'open'
+
+  return (
+    <li
+      ref={(node) => {
+        onRowRef(route.id, node)
+      }}
+      className={clsx(styles.modelTile, {
+        [styles.modelTileOpen]: isOpen,
+        [styles.modelTileActive]: active,
+      })}
+      aria-label={`${route.provider} ${route.label}`}
+    >
+      <span className={styles.modelTileArrow} aria-hidden="true" />
+      <div className={styles.modelCube}>
+        <div className={styles.modelCubeFace} aria-hidden="true" />
+        <Icon size={isOpen ? 30 : 28} />
+      </div>
+      <span className={styles.modelTileName}>{route.label}</span>
+      {active && (
+        <span className={styles.routeBadge}>
+          {route.queryLabel}
+          {' '}
+          →
+        </span>
+      )}
+    </li>
+  )
+}
+
 function ModelColumn({
   title,
   activeRouteId,
@@ -149,34 +215,49 @@ function ModelColumn({
   activeRouteId: string
   onRowRef: (routeId: string, node: HTMLLIElement | null) => void
 }): JSX.Element {
+  const closedModels = modelRoutes.filter(route => route.kind === 'closed')
+  const openModels = modelRoutes.filter(route => route.kind === 'open')
+
   return (
     <div className={styles.flowColumn}>
       <span className={styles.flowColumnTitle}>{title}</span>
-      <ul className={styles.flowList}>
-        {modelRoutes.map((route) => {
-          const active = route.id === activeRouteId
-          return (
-            <li
-              key={route.id}
-              ref={(node) => {
-                onRowRef(route.id, node)
-              }}
-              className={clsx(styles.flowNode, styles.model, {
-                [styles.modelActive]: active,
-              })}
-            >
-              <span className={styles.modelLabel}>{route.label}</span>
-              {active && (
-                <span className={styles.routeBadge}>
-                  {route.queryLabel}
-                  {' '}
-                  →
-                </span>
-              )}
-            </li>
-          )
-        })}
-      </ul>
+      <div className={styles.modelShowcase}>
+        <div className={styles.modelGroup}>
+          <span className={styles.modelGroupLabel}>
+            <Translate id="homepage.integration.closedModels">Closed models</Translate>
+          </span>
+          <ul className={styles.modelGrid}>
+            {closedModels.map(route => (
+              <ModelTile
+                key={route.id}
+                route={route}
+                active={route.id === activeRouteId}
+                onRowRef={onRowRef}
+              />
+            ))}
+          </ul>
+        </div>
+
+        <div className={clsx(styles.modelGroup, styles.modelGroupOpen)}>
+          <span className={clsx(styles.modelGroupLabel, styles.modelGroupLabelOpen)}>
+            <Translate id="homepage.integration.openModels">Open models</Translate>
+          </span>
+          <ul className={styles.modelGridOpen}>
+            {openModels.map(route => (
+              <ModelTile
+                key={route.id}
+                route={route}
+                active={route.id === activeRouteId}
+                onRowRef={onRowRef}
+              />
+            ))}
+          </ul>
+        </div>
+
+        <p className={styles.heterogeneousCaption}>
+          <Translate id="homepage.integration.heterogeneousModels">Heterogeneous models</Translate>
+        </p>
+      </div>
     </div>
   )
 }
@@ -294,9 +375,9 @@ function RoutingAnimation({
         <svg className={styles.flowLines} viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} preserveAspectRatio="none">
           <defs>
             <linearGradient id="integrationFlowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
-              <stop offset="50%" stopColor="#a78bfa" stopOpacity="1" />
-              <stop offset="100%" stopColor="#c4b5fd" stopOpacity="0.65" />
+              <stop offset="0%" stopColor="#75c5ff" stopOpacity="0.55" />
+              <stop offset="50%" stopColor="#30a2ff" stopOpacity="1" />
+              <stop offset="100%" stopColor="#0876c9" stopOpacity="0.75" />
             </linearGradient>
           </defs>
           {modelRoutes.map((route) => {

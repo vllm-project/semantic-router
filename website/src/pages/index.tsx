@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import Head from '@docusaurus/Head'
 import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
@@ -145,6 +145,7 @@ const architectureDimensions = [
 const encoderTracks = [
   {
     label: 'SEQ_CLS',
+    mode: 'cls' as const,
     text: translate({
       id: 'homepage.aiTech.track.sequence',
       message:
@@ -153,6 +154,7 @@ const encoderTracks = [
   },
   {
     label: 'TOKEN',
+    mode: 'token' as const,
     text: translate({
       id: 'homepage.aiTech.track.token',
       message:
@@ -161,26 +163,23 @@ const encoderTracks = [
   },
   {
     label: 'EMBED',
+    mode: 'pool' as const,
     text: translate({
       id: 'homepage.aiTech.track.embedding',
       message:
-        'Embedding and rerank paths for semantic cache, knowledge base routing, reask similarity scoring, and candidate ranking.',
+        'Embedding paths for semantic cache, knowledge base routing, and similarity scoring.',
+    }),
+  },
+  {
+    label: 'RER',
+    mode: 'cross' as const,
+    text: translate({
+      id: 'homepage.aiTech.track.rerank',
+      message:
+        'Cross-encoder reranking for high-precision candidate selection and multi-modal signals.',
     }),
   },
 ]
-
-const encoderSpotlightCard = {
-  marker: 'MOD',
-  title: translate({
-    id: 'homepage.aiTech.cap.multiModality',
-    message: 'Multi-Modality',
-  }),
-  text: translate({
-    id: 'homepage.aiTech.cap.multiModality.desc',
-    message:
-      'Detect and route text, image and audio inputs to the right modality-capable model.',
-  }),
-}
 
 const encoderCards = [
   {
@@ -347,8 +346,10 @@ function CapabilitySection(): JSX.Element {
 }
 
 function EncoderIntelligenceSection(): JSX.Element {
+  const [encoderMode, setEncoderMode] = useState<'cls' | 'token' | 'pool' | 'cross'>('cls')
+
   return (
-    <section className={styles.encoderSection}>
+    <section className={styles.encoderSection} aria-labelledby="encoder-intelligence-title">
       <div className="site-shell-container">
         <ScrollReveal>
           <div className={styles.sectionHeading}>
@@ -358,7 +359,7 @@ function EncoderIntelligenceSection(): JSX.Element {
               </Translate>
             </SectionLabel>
             <div>
-              <h2>
+              <h2 id="encoder-intelligence-title">
                 <Translate id="homepage.aiTech.title">
                   Intelligence before generation.
                 </Translate>
@@ -374,8 +375,8 @@ function EncoderIntelligenceSection(): JSX.Element {
         </ScrollReveal>
 
         <ScrollReveal delay={70}>
-          <div className={styles.encoderShowcase}>
-            <div className={styles.encoderLeadStack}>
+          <div className={styles.encoderFrame}>
+            <div className={styles.encoderShowcase}>
               <div className={styles.encoderLead}>
                 <div className={styles.encoderLeadCopy}>
                   <SectionLabel>
@@ -391,19 +392,28 @@ function EncoderIntelligenceSection(): JSX.Element {
                   </p>
                 </div>
 
-                <div className={styles.encoderTrackList}>
-                  {encoderTracks.map(track => (
-                    <div key={track.label} className={styles.encoderTrack}>
-                      <span className={styles.encoderTrackLabel}>
-                        {track.label}
-                      </span>
-                      <span>{track.text}</span>
-                    </div>
-                  ))}
+                <div className={styles.encoderTrackList} role="tablist" aria-label="Encoder signal modes">
+                  {encoderTracks.map((track) => {
+                    const isActive = encoderMode === track.mode
+                    return (
+                      <button
+                        key={track.label}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        className={`${styles.encoderTrack} ${isActive ? styles.encoderTrackActive : ''}`}
+                        onClick={() => setEncoderMode(track.mode)}
+                      >
+                        <span className={styles.encoderTrackLabel}>{track.label}</span>
+                        <span className={styles.encoderTrackText}>{track.text}</span>
+                      </button>
+                    )
+                  })}
                 </div>
 
                 <div className={styles.encoderActions}>
                   <PillLink
+                    className={styles.encoderCta}
                     href="https://huggingface.co/LLM-Semantic-Router"
                     rel="noreferrer"
                     target="_blank"
@@ -415,21 +425,12 @@ function EncoderIntelligenceSection(): JSX.Element {
                 </div>
               </div>
 
-              <article
-                className={`${styles.encoderCard} ${styles.encoderSpotlightCard}`}
-              >
-                <span className={styles.encoderCardMarker}>
-                  {encoderSpotlightCard.marker}
-                </span>
-                <div className={styles.encoderCardCopy}>
-                  <h3>{encoderSpotlightCard.title}</h3>
-                  <p>{encoderSpotlightCard.text}</p>
-                </div>
-              </article>
-            </div>
-
-            <div className={styles.encoderPipelineFrame}>
-              <TransformerPipelineAnimation />
+              <div className={styles.encoderPipelineFrame}>
+                <TransformerPipelineAnimation
+                  mode={encoderMode}
+                  onModeChange={setEncoderMode}
+                />
+              </div>
             </div>
           </div>
         </ScrollReveal>

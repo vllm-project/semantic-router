@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import clsx from 'clsx'
 import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import { PillLink, SectionLabel } from '@site/src/components/site/Chrome'
@@ -23,6 +24,7 @@ interface CommandShellProps {
   copyState: CopyState
   onCopy: (target: string, text: string) => void
   shellLabel?: string
+  variant?: 'default' | 'remove'
 }
 
 function CommandShell({
@@ -31,6 +33,7 @@ function CommandShell({
   copyState,
   onCopy,
   shellLabel = 'shell',
+  variant = 'default',
 }: CommandShellProps): JSX.Element {
   const idleCopyLabel = translate({
     id: 'homepage.install.copy.idle',
@@ -53,7 +56,7 @@ function CommandShell({
       : errorLabel
 
   return (
-    <div className={styles.commandShell}>
+    <div className={clsx(styles.commandShell, variant === 'remove' && styles.commandShellRemove)}>
       <div className={styles.commandToolbar}>
         <div className={styles.terminalMeta}>
           <span className={styles.terminalDots} aria-hidden="true">
@@ -91,7 +94,9 @@ export default function InstallQuickStartSection(): JSX.Element {
   const { siteConfig } = useDocusaurusContext()
   const installScriptUrl = buildInstallScriptUrl(siteConfig.url, siteConfig.baseUrl)
   const installCommand = `curl -fsSL ${installScriptUrl} | bash`
+  const removeCommand = 'rm -rf ~/.local/share/vllm-sr && rm -f ~/.local/bin/vllm-sr'
   const serveCommand = 'vllm-sr serve --image-pull-policy never'
+  const [showFollowup, setShowFollowup] = useState(false)
   const [copyState, setCopyState] = useState<CopyState>({
     status: 'idle',
     target: null,
@@ -129,6 +134,9 @@ export default function InstallQuickStartSection(): JSX.Element {
         status: 'copied',
         target,
       })
+      if (target === 'install-command') {
+        setShowFollowup(true)
+      }
     }
     catch {
       setCopyState({
@@ -170,7 +178,13 @@ export default function InstallQuickStartSection(): JSX.Element {
               <Translate id="homepage.install.pathLabel">Local install path</Translate>
             </span>
             <span className={styles.pathMetaChip}>
-              <Translate id="homepage.install.pathDuration">3 steps · ~2 min</Translate>
+              {showFollowup
+                ? (
+                    <Translate id="homepage.install.pathDuration">3 steps · ~2 min</Translate>
+                  )
+                : (
+                    <Translate id="homepage.install.pathDurationShort">One command to start</Translate>
+                  )}
             </span>
           </div>
 
@@ -178,7 +192,7 @@ export default function InstallQuickStartSection(): JSX.Element {
             <li className={styles.step}>
               <div className={styles.stepRail} aria-hidden="true">
                 <span className={styles.stepMarker}>01</span>
-                <span className={styles.stepLine} />
+                {showFollowup && <span className={styles.stepLine} />}
               </div>
               <div className={styles.stepBody}>
                 <div className={styles.stepHeader}>
@@ -198,60 +212,95 @@ export default function InstallQuickStartSection(): JSX.Element {
                   copyState={copyState}
                   onCopy={handleCopy}
                 />
+
+                <details className={styles.removeDetails}>
+                  <summary className={styles.removeSummary}>
+                    <Translate id="homepage.install.step1.removeLabel">Remove local install</Translate>
+                  </summary>
+                  <p className={styles.removeHint}>
+                    <Translate id="homepage.install.step1.removeHint">
+                      Removes ~/.local/share/vllm-sr and ~/.local/bin/vllm-sr. Stop any running serve session first.
+                    </Translate>
+                  </p>
+                  <CommandShell
+                    command={removeCommand}
+                    copyTarget="remove-command"
+                    copyState={copyState}
+                    onCopy={handleCopy}
+                    shellLabel="remove"
+                    variant="remove"
+                  />
+                </details>
+
+                {!showFollowup && (
+                  <button
+                    type="button"
+                    className={styles.followupToggle}
+                    onClick={() => setShowFollowup(true)}
+                  >
+                    <Translate id="homepage.install.showFollowup">
+                      Show serve &amp; dashboard steps
+                    </Translate>
+                  </button>
+                )}
               </div>
             </li>
 
-            <li className={styles.step}>
-              <div className={styles.stepRail} aria-hidden="true">
-                <span className={styles.stepMarker}>02</span>
-                <span className={styles.stepLine} />
-              </div>
-              <div className={styles.stepBody}>
-                <h3 className={styles.stepTitle}>
-                  <Translate id="homepage.install.step2.title">Start local serve</Translate>
-                </h3>
-                <p className={styles.stepHint}>
-                  <Translate id="homepage.install.step2.hint">
-                    Boots the router image and dashboard. Skip if the installer already launched it.
-                  </Translate>
-                </p>
-                <CommandShell
-                  command={serveCommand}
-                  copyTarget="serve-command"
-                  copyState={copyState}
-                  onCopy={handleCopy}
-                  shellLabel="vllm-sr"
-                />
-              </div>
-            </li>
+            {showFollowup && (
+              <>
+                <li className={styles.step}>
+                  <div className={styles.stepRail} aria-hidden="true">
+                    <span className={styles.stepMarker}>02</span>
+                    <span className={styles.stepLine} />
+                  </div>
+                  <div className={styles.stepBody}>
+                    <h3 className={styles.stepTitle}>
+                      <Translate id="homepage.install.step2.title">Start local serve</Translate>
+                    </h3>
+                    <p className={styles.stepHint}>
+                      <Translate id="homepage.install.step2.hint">
+                        Boots the router image and dashboard. Skip if the installer already launched it.
+                      </Translate>
+                    </p>
+                    <CommandShell
+                      command={serveCommand}
+                      copyTarget="serve-command"
+                      copyState={copyState}
+                      onCopy={handleCopy}
+                      shellLabel="vllm-sr"
+                    />
+                  </div>
+                </li>
 
-            <li className={styles.step}>
-              <div className={styles.stepRail} aria-hidden="true">
-                <span className={styles.stepMarker}>03</span>
-              </div>
-              <div className={styles.stepBody}>
-                <h3 className={styles.stepTitle}>
-                  <Translate id="homepage.install.step3.title">Open the dashboard</Translate>
-                </h3>
-                <p className={styles.stepHint}>
-                  <Translate id="homepage.install.step3.hint">
-                    Setup mode appears on first run. Configure models, then send traffic through the router.
-                  </Translate>
-                </p>
-                <a
-                  className={styles.dashboardLink}
-                  href="http://localhost:8700"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <span className={styles.dashboardLinkLabel}>
-                    <Translate id="homepage.install.step3.linkLabel">Local dashboard</Translate>
-                  </span>
-                  <code className={styles.dashboardUrl}>localhost:8700</code>
-                  <span className={styles.dashboardArrow} aria-hidden="true">↗</span>
-                </a>
-              </div>
-            </li>
+                <li className={styles.step}>
+                  <div className={styles.stepRail} aria-hidden="true">
+                    <span className={styles.stepMarker}>03</span>
+                  </div>
+                  <div className={styles.stepBody}>
+                    <h3 className={styles.stepTitle}>
+                      <Translate id="homepage.install.step3.title">Open the dashboard</Translate>
+                    </h3>
+                    <p className={styles.stepHint}>
+                      <Translate id="homepage.install.step3.hint">
+                        Setup mode appears on first run. Configure models, then send traffic through the router.
+                      </Translate>
+                    </p>
+                    <a
+                      className={styles.dashboardLink}
+                      href="http://localhost:8700"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <span className={styles.dashboardLinkLabel}>
+                        <Translate id="homepage.install.step3.linkLabel">Local dashboard</Translate>
+                      </span>
+                      <code className={styles.dashboardUrl}>localhost:8700</code>
+                      <span className={styles.dashboardArrow} aria-hidden="true">↗</span>
+                    </a>
+                  </div>
+                </li>
+              </>
+            )}
           </ol>
 
           <div className={styles.frameFooter}>

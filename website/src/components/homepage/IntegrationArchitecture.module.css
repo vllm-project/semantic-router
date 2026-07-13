@@ -11,9 +11,9 @@
   align-items: center;
   width: fit-content;
   padding: 0.45rem 0.8rem;
-  border: 1px solid rgba(124, 58, 237, 0.28);
+  border: 1px solid rgba(48, 162, 255, 0.28);
   border-radius: 999px;
-  background: rgba(124, 58, 237, 0.1);
+  background: rgba(48, 162, 255, 0.1);
 }
 
 .routeStatusLabel {
@@ -25,7 +25,7 @@
 }
 
 .routeStatusValue {
-  color: #e9d5ff;
+  color: #cfe9ff;
   font-size: var(--site-text-small);
   font-weight: var(--site-font-weight-semibold);
   letter-spacing: -0.01em;
@@ -47,12 +47,12 @@
 .diagramShell {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(13rem, 1.2fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 0.95fr) minmax(12rem, 1.15fr) minmax(11rem, 1.05fr);
   gap: 1rem;
   align-items: stretch;
-  min-height: 16rem;
+  min-height: 18rem;
   padding: 1.15rem;
-  border: 1px solid rgba(124, 58, 237, 0.22);
+  border: 1px solid rgba(48, 162, 255, 0.22);
   border-radius: 0.9rem;
   background: rgba(6, 6, 12, 0.62);
   overflow: hidden;
@@ -70,8 +70,8 @@
   width: 0.46rem;
   height: 0.46rem;
   border-radius: 50%;
-  background: #c4b5fd;
-  box-shadow: 0 0 14px rgba(167, 139, 250, 0.75);
+  background: #75c5ff;
+  box-shadow: 0 0 14px rgba(117, 197, 255, 0.75);
   transform: translate(-50%, -50%);
 }
 
@@ -85,7 +85,7 @@
 
 .flowPathEgress {
   fill: none;
-  stroke: rgba(167, 139, 250, 0.18);
+  stroke: rgba(117, 197, 255, 0.18);
   stroke-width: 2;
   stroke-linecap: round;
   transition: stroke var(--site-transition-fast), opacity var(--site-transition-fast);
@@ -95,7 +95,7 @@
   stroke: url(#integrationFlowGradient);
   stroke-width: 2.5;
   stroke-dasharray: 10 10;
-  filter: drop-shadow(0 0 6px rgba(124, 58, 237, 0.4));
+  filter: drop-shadow(0 0 6px rgba(48, 162, 255, 0.4));
   animation: flowDash 1.1s linear infinite;
 }
 
@@ -116,15 +116,15 @@
 
 .packetLabel {
   padding: 0.2rem 0.5rem;
-  border: 1px solid rgba(196, 181, 253, 0.55);
+  border: 1px solid rgba(117, 197, 255, 0.55);
   border-radius: 999px;
-  background: rgba(124, 58, 237, 0.85);
-  color: #f5f3ff;
+  background: rgba(48, 162, 255, 0.85);
+  color: #f0f9ff;
   font-size: 0.62rem;
   font-weight: var(--site-font-weight-semibold);
   letter-spacing: 0.02em;
   white-space: nowrap;
-  box-shadow: 0 0 14px rgba(167, 139, 250, 0.55);
+  box-shadow: 0 0 14px rgba(117, 197, 255, 0.55);
 }
 
 .packetLabel::before {
@@ -134,9 +134,9 @@
   height: 0.38rem;
   margin-right: 0.3rem;
   border-radius: 50%;
-  background: #c4b5fd;
+  background: #75c5ff;
   vertical-align: middle;
-  box-shadow: 0 0 8px rgba(167, 139, 250, 0.9);
+  box-shadow: 0 0 8px rgba(117, 197, 255, 0.9);
 }
 
 .flowColumn {
@@ -195,7 +195,7 @@
 
 .queryActive {
   border-color: rgba(56, 189, 248, 0.7);
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(124, 58, 237, 0.1));
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(48, 162, 255, 0.1));
   box-shadow: 0 0 22px rgba(56, 189, 248, 0.28);
   transform: translateX(3px);
 }
@@ -230,14 +230,188 @@
 }
 
 .model {
-  border-color: rgba(167, 139, 250, 0.22);
+  border-color: rgba(117, 197, 255, 0.22);
 }
 
 .modelActive {
-  border-color: rgba(167, 139, 250, 0.65);
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.22), rgba(48, 162, 255, 0.1));
-  box-shadow: 0 0 24px rgba(124, 58, 237, 0.28);
+  border-color: rgba(117, 197, 255, 0.65);
+  background: linear-gradient(135deg, rgba(48, 162, 255, 0.22), rgba(48, 162, 255, 0.1));
+  box-shadow: 0 0 24px rgba(48, 162, 255, 0.28);
   transform: translateX(-3px);
+}
+
+.modelShowcase {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.modelGroup {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.modelGroupLabel {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.68rem;
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: 0.04em;
+}
+
+.modelGroupLabelOpen {
+  color: var(--site-brand-blue);
+}
+
+.modelGrid,
+.modelGridOpen {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.modelGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.modelGridOpen {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 6.5rem;
+}
+
+.modelTile {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  padding: 0.85rem 0.2rem 0.35rem;
+  border-radius: 0.55rem;
+  transition:
+    border-color var(--site-transition-medium),
+    background var(--site-transition-medium),
+    box-shadow var(--site-transition-medium),
+    transform var(--site-transition-medium);
+}
+
+.modelTileArrow {
+  position: absolute;
+  top: 0.15rem;
+  left: 50%;
+  width: 1px;
+  height: 0.55rem;
+  background: rgba(255, 255, 255, 0.45);
+  transform: translateX(-50%);
+}
+
+.modelTileArrow::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-top: 5px solid rgba(255, 255, 255, 0.45);
+  border-right: 4px solid transparent;
+  border-left: 4px solid transparent;
+  transform: translateX(-50%);
+}
+
+.modelCube {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 3.65rem;
+  height: 3.65rem;
+  color: rgba(255, 255, 255, 0.92);
+  transform: perspective(240px) rotateX(12deg) rotateY(-14deg);
+}
+
+.modelCubeFace {
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  border-radius: 0.2rem;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(8, 8, 12, 0.55);
+  box-shadow:
+    0.28rem 0.28rem 0 rgba(255, 255, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.modelCubeFace::before {
+  content: '';
+  position: absolute;
+  top: -0.28rem;
+  right: -0.28rem;
+  width: 100%;
+  height: 100%;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.22);
+  border-right: 1.5px solid rgba(255, 255, 255, 0.22);
+  border-radius: 0.2rem;
+  transform: skewY(-10deg);
+  z-index: -1;
+}
+
+.modelTileName {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.62rem;
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
+.modelTileOpen .modelTileArrow::after {
+  border-top-color: var(--site-brand-blue);
+}
+
+.modelTileOpen .modelCubeFace {
+  border-color: rgba(48, 162, 255, 0.72);
+  background:
+    linear-gradient(145deg, rgba(48, 162, 255, 0.18), rgba(48, 162, 255, 0.05)),
+    rgba(8, 8, 12, 0.55);
+  box-shadow:
+    0.28rem 0.28rem 0 rgba(48, 162, 255, 0.12),
+    0 0 18px rgba(48, 162, 255, 0.16),
+    inset 0 1px 0 rgba(117, 197, 255, 0.2);
+}
+
+.modelTileOpen .modelCubeFace::before {
+  border-top-color: rgba(48, 162, 255, 0.35);
+  border-right-color: rgba(48, 162, 255, 0.35);
+}
+
+.modelTileOpen .modelCube {
+  color: var(--site-brand-blue-light);
+}
+
+.modelTileOpen .modelTileArrow {
+  background: var(--site-brand-blue);
+}
+
+.modelTileOpen .modelTileName {
+  color: var(--site-brand-blue-light);
+}
+
+.modelTileActive .modelCubeFace {
+  border-color: rgba(48, 162, 255, 0.85);
+  box-shadow:
+    0.28rem 0.28rem 0 rgba(48, 162, 255, 0.14),
+    0 0 22px rgba(48, 162, 255, 0.28),
+    inset 0 1px 0 rgba(117, 197, 255, 0.24);
+}
+
+.modelTileActive {
+  transform: translateX(-2px);
+}
+
+.heterogeneousCaption {
+  margin: 0.15rem 0 0;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.72rem;
+  font-weight: var(--site-font-weight-medium);
+  letter-spacing: -0.01em;
+  text-align: center;
 }
 
 .modelLabel {
@@ -247,11 +421,12 @@
 .routeBadge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   padding: 0.15rem 0.45rem;
   border-radius: 999px;
-  background: rgba(124, 58, 237, 0.35);
-  color: #f5f3ff;
-  font-size: 0.68rem;
+  background: rgba(48, 162, 255, 0.35);
+  color: #f0f9ff;
+  font-size: 0.62rem;
   font-weight: var(--site-font-weight-semibold);
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -278,24 +453,24 @@
   align-content: center;
   min-height: 100%;
   padding: 1rem;
-  border: 1px solid rgba(124, 58, 237, 0.45);
+  border: 1px solid rgba(48, 162, 255, 0.45);
   border-radius: 0.85rem;
   background:
-    linear-gradient(180deg, rgba(124, 58, 237, 0.2), rgba(48, 162, 255, 0.08)),
+    linear-gradient(180deg, rgba(48, 162, 255, 0.2), rgba(48, 162, 255, 0.08)),
     rgba(255, 255, 255, 0.04);
-  box-shadow: 0 0 32px rgba(124, 58, 237, 0.18);
+  box-shadow: 0 0 32px rgba(48, 162, 255, 0.18);
   overflow: hidden;
   transition: box-shadow var(--site-transition-medium);
 }
 
 .routerHubActive {
-  box-shadow: 0 0 40px rgba(124, 58, 237, 0.32);
+  box-shadow: 0 0 40px rgba(48, 162, 255, 0.32);
 }
 
 .hubPulse {
   position: absolute;
   inset: -30%;
-  background: radial-gradient(circle, rgba(124, 58, 237, 0.22), transparent 62%);
+  background: radial-gradient(circle, rgba(48, 162, 255, 0.22), transparent 62%);
   animation: hubGlow 2.4s ease-in-out infinite;
   pointer-events: none;
 }
@@ -320,7 +495,7 @@
   width: fit-content;
   padding: 0.32rem 0.68rem;
   border-radius: 999px;
-  background: rgba(124, 58, 237, 0.38);
+  background: rgba(48, 162, 255, 0.38);
   color: #fff;
   font-size: var(--site-text-caption);
   font-weight: var(--site-font-weight-semibold);
@@ -355,8 +530,8 @@
   }
 
   50% {
-    border-color: rgba(167, 139, 250, 0.45);
-    background: rgba(124, 58, 237, 0.14);
+    border-color: rgba(117, 197, 255, 0.45);
+    background: rgba(48, 162, 255, 0.14);
   }
 }
 
@@ -403,7 +578,7 @@
   width: fit-content;
   align-items: center;
   gap: 0.25rem;
-  color: #c4b5fd;
+  color: #75c5ff;
   font-size: var(--site-text-caption);
   font-weight: var(--site-font-weight-semibold);
   text-decoration: none;
@@ -411,7 +586,7 @@
 }
 
 .docsLink:hover {
-  color: #e9d5ff;
+  color: #cfe9ff;
   text-decoration: none;
 }
 
@@ -419,6 +594,19 @@
   .diagramShell {
     grid-template-columns: 1fr;
     min-height: 0;
+  }
+
+  .modelGrid {
+    grid-template-columns: repeat(3, minmax(4.5rem, 1fr));
+  }
+
+  .modelGridOpen {
+    max-width: none;
+    grid-template-columns: repeat(3, minmax(4.5rem, 1fr));
+  }
+
+  .heterogeneousCaption {
+    text-align: left;
   }
 
   .flowTrack {
