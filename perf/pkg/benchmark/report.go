@@ -117,7 +117,7 @@ func (r *Report) SaveMarkdown(path string) error {
 		}
 
 		// ns/op row
-		md.WriteString(fmt.Sprintf("| %s | ns/op | %d | %d | %+.2f%% | %s |\n",
+		md.WriteString(fmt.Sprintf("| %s | ns/op | %.0f | %.0f | %+.2f%% | %s |\n",
 			comp.BenchmarkName,
 			comp.Baseline.NsPerOp,
 			comp.Current.NsPerOp,
@@ -222,7 +222,7 @@ func (r *Report) SaveHTML(path string) error {
 			statusText = "IMPROVED"
 		}
 
-		html.WriteString(fmt.Sprintf(`            <tr><td>%s</td><td>ns/op</td><td>%d</td><td>%d</td><td>%+.2f%%</td><td class="%s">%s</td></tr>`,
+		html.WriteString(fmt.Sprintf(`            <tr><td>%s</td><td>ns/op</td><td>%.0f</td><td>%.0f</td><td>%+.2f%%</td><td class="%s">%s</td></tr>`,
 			comp.BenchmarkName,
 			comp.Baseline.NsPerOp,
 			comp.Current.NsPerOp,

@@ -16,9 +16,14 @@ type Baseline struct {
 	Benchmarks map[string]BenchmarkMetric `json:"benchmarks"`
 }
 
-// BenchmarkMetric holds metrics for a single benchmark
+// BenchmarkMetric holds metrics for a single benchmark.
+//
+// NsPerOp is a float64 (not int64) because the Go benchmark runner reports
+// sub-microsecond timings with a decimal, e.g. "628.5 ns/op", and
+// update-baseline.sh writes that value verbatim into the baseline JSON. An
+// int64 field made json.Unmarshal reject every such baseline (#2455 rc#4).
 type BenchmarkMetric struct {
-	NsPerOp       int64   `json:"ns_per_op"`
+	NsPerOp       float64 `json:"ns_per_op"`
 	P50LatencyMs  float64 `json:"p50_latency_ms,omitempty"`
 	P95LatencyMs  float64 `json:"p95_latency_ms,omitempty"`
 	P99LatencyMs  float64 `json:"p99_latency_ms,omitempty"`
@@ -95,8 +100,8 @@ func CompareWithBaseline(current, baseline *Baseline, thresholds *ThresholdsConf
 		// Calculate percentage changes
 		if baselineMetric.NsPerOp > 0 {
 			result.NsPerOpChange = calculatePercentChange(
-				float64(baselineMetric.NsPerOp),
-				float64(currentMetric.NsPerOp),
+				baselineMetric.NsPerOp,
+				currentMetric.NsPerOp,
 			)
 		}
 
@@ -198,7 +203,7 @@ func PrintComparisonResults(results []ComparisonResult) {
 		}
 
 		// Display ns/op comparison
-		fmt.Printf("%s %-48s %-15d %-15d %+.2f%%\n",
+		fmt.Printf("%s %-48s %-15.0f %-15.0f %+.2f%%\n",
 			icon,
 			result.BenchmarkName,
 			result.Baseline.NsPerOp,
