@@ -22,6 +22,7 @@ func main() {
 	generateReport := flag.Bool("generate-report", false, "Generate performance report")
 	inputPath := flag.String("input", "", "Input comparison JSON for report generation")
 	parseBench := flag.String("parse-bench", "", "Path to raw `go test -bench` output to convert into a current-results JSON (writes to --output)")
+	failOnRegression := flag.Bool("fail-on-regression", false, "Exit non-zero if any benchmark regresses beyond its configured threshold")
 
 	flag.Parse()
 
@@ -46,7 +47,7 @@ func main() {
 	}
 
 	if *compareBaseline != "" {
-		if err := compareWithBaseline(*compareBaseline, *currentResults, *thresholdFile, *outputPath); err != nil {
+		if err := compareWithBaseline(*compareBaseline, *currentResults, *thresholdFile, *outputPath, *failOnRegression); err != nil {
 			fmt.Fprintf(os.Stderr, "Error comparing with baseline: %v\n", err)
 			os.Exit(1)
 		}
@@ -63,7 +64,7 @@ func main() {
 	flag.PrintDefaults()
 }
 
-func compareWithBaseline(baselineDir, currentResultsFile, thresholdFile, outputPath string) error {
+func compareWithBaseline(baselineDir, currentResultsFile, thresholdFile, outputPath string, failOnRegression bool) error {
 	fmt.Println("Comparing performance with baseline...")
 	fmt.Printf("Baseline directory: %s\n", baselineDir)
 	fmt.Printf("Current results: %s\n", currentResultsFile)
@@ -148,7 +149,16 @@ func compareWithBaseline(baselineDir, currentResultsFile, thresholdFile, outputP
 	}
 
 	if benchmark.HasRegressions(results) {
-		fmt.Println("\n⚠️ WARNING: Performance regressions detected!")
+		n := 0
+		for _, r := range results {
+			if r.RegressionDetected {
+				n++
+			}
+		}
+		fmt.Printf("\n⚠️  %d performance regression(s) detected beyond configured thresholds!\n", n)
+		if failOnRegression {
+			return fmt.Errorf("%d performance regression(s) exceeded the configured thresholds", n)
+		}
 	}
 
 	return nil

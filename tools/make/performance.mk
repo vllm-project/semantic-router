@@ -66,13 +66,24 @@ perf-e2e: build-e2e ensure-reports-dir
 	@./bin/e2e -profile=kubernetes \
 	  -tests=performance-throughput,performance-latency,performance-resource
 
-# Compare against baseline
-perf-compare: ## Compare current performance against baseline
+# Compare against baseline (report only; use perf-check to fail on regression).
+# Consumes reports/bench-output.txt (produced by 'make perf-bench'/'perf-bench-quick'
+# when its output is tee'd there, or by CI), turns it into reports/current.json,
+# and diffs it against every per-suite baseline in perf/testdata/baselines.
+perf-compare: ## Compare current benchmark output against baseline (report only)
 perf-compare: ensure-reports-dir
 	@$(LOG_TARGET)
+	@test -f reports/bench-output.txt || { \
+	  echo "reports/bench-output.txt not found — run 'make perf-bench' (tee its output there) or 'make perf-check'"; \
+	  exit 1; }
+	@echo "Building current results from benchmark output..."
+	@cd perf && go run cmd/perftest/main.go \
+	  --parse-bench=../reports/bench-output.txt \
+	  --output=../reports/current.json
 	@echo "Comparing performance against baseline..."
 	@cd perf && go run cmd/perftest/main.go \
 	  --compare-baseline=testdata/baselines/ \
+	  --current=../reports/current.json \
 	  --threshold-file=config/thresholds.yaml \
 	  --output=../reports/comparison.json
 
@@ -146,17 +157,30 @@ perf-bench-concurrency: build-router ensure-reports-dir
 	export GOMAXPROCS=$${CONCURRENCY:-4} && \
 	cd perf && go test -bench=.*Parallel -benchmem -benchtime=10s ./benchmarks/...
 
-# Run performance regression check (exits with error if regressions found)
-perf-check: ## Run benchmarks and fail if regressions detected
-perf-check: perf-bench perf-compare
+# Run benchmarks and fail if any benchmark regresses beyond its threshold.
+# Compares against the committed baselines in perf/testdata/baselines — refresh
+# them for your hardware with 'make perf-baseline-update' before trusting a
+# local pass/fail, since absolute ns/op is machine-dependent. CI self-baselines
+# against main in the same runner (see .github/workflows/performance-test.yml),
+# so it needs no committed baseline.
+perf-check: ## Run benchmarks and fail if regressions exceed thresholds
+perf-check: build-router ensure-reports-dir
 	@$(LOG_TARGET)
-	@if grep -q '"has_regressions": true' reports/comparison.json 2>/dev/null; then \
-		echo "❌ Performance regressions detected!"; \
-		cat reports/comparison.json; \
-		exit 1; \
-	else \
-		echo "No performance regressions detected"; \
-	fi
+	@echo "Running benchmarks for regression check..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	cd perf && go test -bench=. -benchmem -benchtime=10s ./benchmarks/... | tee ../reports/bench-output.txt
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	cd src/semantic-router && go test -bench='^Benchmark(ReMoM|Fusion|Flow|Base)' -benchmem -benchtime=10s ./pkg/looper/... | tee -a ../../reports/bench-output.txt
+	@echo "Building current results and comparing against baseline..."
+	@cd perf && go run cmd/perftest/main.go \
+	  --parse-bench=../reports/bench-output.txt \
+	  --output=../reports/current.json
+	@cd perf && go run cmd/perftest/main.go \
+	  --compare-baseline=testdata/baselines/ \
+	  --current=../reports/current.json \
+	  --threshold-file=config/thresholds.yaml \
+	  --output=../reports/comparison.json \
+	  --fail-on-regression
 
 # Show performance test help
 perf-help: ## Show performance testing help
