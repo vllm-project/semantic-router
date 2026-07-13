@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -146,7 +148,7 @@ var _ = Describe("Integration: Full Ingest-to-Search Pipeline", func() {
 	})
 
 	AfterEach(func() {
-		pipeline.Stop()
+		pipeline.Stop(context.Background())
 		_ = os.RemoveAll(tempDir)
 	})
 
@@ -385,3 +387,140 @@ Login attempts are locked after 5 failures.`
 
 // Verify deterministicEmbedder satisfies the Embedder interface.
 var _ Embedder = (*deterministicEmbedder)(nil)
+
+// gateEmbedder wraps a real embedder but blocks each Embed call on a shared
+// gate until it is released. It lets a test hold ingestion mid-flight so the
+// shutdown path can be exercised deterministically, then release it so workers
+// can unwind cleanly (no leaked goroutines).
+type gateEmbedder struct {
+	inner   Embedder
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func newGateEmbedder(inner Embedder) *gateEmbedder {
+	return &gateEmbedder{
+		inner:   inner,
+		entered: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+}
+
+func (g *gateEmbedder) Embed(text string) ([]float32, error) {
+	g.once.Do(func() { close(g.entered) })
+	<-g.release
+	return g.inner.Embed(text)
+}
+
+func (g *gateEmbedder) Dimension() int { return g.inner.Dimension() }
+
+var _ = Describe("Integration: Pipeline graceful and bounded shutdown", func() {
+	var (
+		backend *MemoryBackend
+		store   *FileStore
+		mgr     *Manager
+		tempDir string
+		ctx     context.Context
+	)
+
+	BeforeEach(func() {
+		var err error
+		tempDir, err = os.MkdirTemp("", "shutdown-e2e-*")
+		Expect(err).NotTo(HaveOccurred())
+
+		backend = NewMemoryBackend(MemoryBackendConfig{})
+		store, err = NewFileStore(tempDir, NewMemoryMetadataRegistry())
+		Expect(err).NotTo(HaveOccurred())
+		ctx = context.Background()
+	})
+
+	AfterEach(func() {
+		_ = os.RemoveAll(tempDir)
+	})
+
+	It("drains in-flight work on graceful stop and leaks no worker goroutines", func() {
+		// Snapshot the goroutine count before the pipeline exists so we can
+		// assert workers are fully reclaimed after Stop.
+		baseline := runtime.NumGoroutine()
+
+		embedder := newDeterministicEmbedder(8)
+		mgr = NewManager(backend, NewMemoryMetadataRegistry(), embedder.Dimension(), BackendTypeMemory)
+		pipeline := NewIngestionPipeline(backend, store, mgr, embedder, PipelineConfig{
+			Workers:   3,
+			QueueSize: 16,
+		})
+		pipeline.Start()
+
+		vs, err := mgr.CreateStore(ctx, CreateStoreRequest{Name: "graceful-shutdown"})
+		Expect(err).NotTo(HaveOccurred())
+
+		doc := "Employees accrue paid time off each month and may carry it forward."
+		record, err := store.Save("policy.txt", []byte(doc), "assistants")
+		Expect(err).NotTo(HaveOccurred())
+
+		vsf, err := pipeline.AttachFile(vs.ID, record.ID, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		Eventually(func() string {
+			s, _ := pipeline.GetFileStatus(vsf.ID)
+			return s.Status
+		}, 10*time.Second, 50*time.Millisecond).Should(Equal("completed"))
+
+		// A graceful stop (no deadline pressure) returns nil and reclaims all
+		// worker goroutines.
+		Expect(pipeline.Stop(context.Background())).To(Succeed())
+
+		Eventually(runtime.NumGoroutine, 5*time.Second, 50*time.Millisecond).
+			Should(BeNumerically("<=", baseline+1))
+
+		// The completed vectors remain searchable after shutdown.
+		results, err := backend.Search(ctx, vs.ID, mustEmbed(embedder, "paid time off"), 3, 0.0, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(results).NotTo(BeEmpty())
+	})
+
+	It("returns within the deadline when a job is wedged, without leaking goroutines after release", func() {
+		baseline := runtime.NumGoroutine()
+
+		gate := newGateEmbedder(newDeterministicEmbedder(8))
+		mgr = NewManager(backend, NewMemoryMetadataRegistry(), gate.Dimension(), BackendTypeMemory)
+		pipeline := NewIngestionPipeline(backend, store, mgr, gate, PipelineConfig{
+			Workers:   2,
+			QueueSize: 8,
+		})
+		pipeline.Start()
+
+		vs, err := mgr.CreateStore(ctx, CreateStoreRequest{Name: "wedged-shutdown"})
+		Expect(err).NotTo(HaveOccurred())
+
+		record, err := store.Save("wedged.txt", []byte("some content to embed"), "assistants")
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = pipeline.AttachFile(vs.ID, record.ID, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Ensure a worker is parked inside Embed before we attempt to stop, so
+		// the graceful drain cannot complete and Stop must honor the deadline.
+		Eventually(gate.entered, 5*time.Second).Should(BeClosed())
+
+		stopCtx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+		defer cancel()
+
+		start := time.Now()
+		Expect(pipeline.Stop(stopCtx)).To(MatchError(context.DeadlineExceeded))
+		Expect(time.Since(start)).To(BeNumerically("<", 3*time.Second))
+
+		// Releasing the wedged embedder lets the worker unwind; no goroutines
+		// should remain once it does.
+		close(gate.release)
+		Eventually(runtime.NumGoroutine, 5*time.Second, 50*time.Millisecond).
+			Should(BeNumerically("<=", baseline+1))
+	})
+})
+
+func mustEmbed(e Embedder, text string) []float32 {
+	emb, err := e.Embed(text)
+	Expect(err).NotTo(HaveOccurred())
+	return emb
+}
