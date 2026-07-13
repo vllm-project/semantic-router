@@ -232,30 +232,30 @@ func generateReportFromComparison(inputPath, outputPath string) error {
 	// For now, create empty report
 	report := benchmark.GenerateReport([]benchmark.ComparisonResult{}, metadata)
 
-	// Save in requested format based on output extension
-	if outputPath != "" {
-		if strings.HasSuffix(outputPath, ".json") {
-			if err := report.SaveJSON(outputPath); err != nil {
-				return err
-			}
-		} else if strings.HasSuffix(outputPath, ".md") {
-			if err := report.SaveMarkdown(outputPath); err != nil {
-				return err
-			}
-		} else if strings.HasSuffix(outputPath, ".html") {
-			if err := report.SaveHTML(outputPath); err != nil {
-				return err
-			}
-		} else {
-			// Default to JSON
-			if err := report.SaveJSON(outputPath + ".json"); err != nil {
-				return err
-			}
-		}
+	// Save in the format chosen from the output extension.
+	if err := saveReport(report, outputPath); err != nil {
+		return err
 	}
 
 	fmt.Println("Report generated successfully")
 	return nil
+}
+
+// saveReport writes the report to outputPath, choosing the format from the file
+// extension (defaulting to JSON). An empty path is a no-op.
+func saveReport(report *benchmark.Report, outputPath string) error {
+	switch {
+	case outputPath == "":
+		return nil
+	case strings.HasSuffix(outputPath, ".md"):
+		return report.SaveMarkdown(outputPath)
+	case strings.HasSuffix(outputPath, ".html"):
+		return report.SaveHTML(outputPath)
+	case strings.HasSuffix(outputPath, ".json"):
+		return report.SaveJSON(outputPath)
+	default:
+		return report.SaveJSON(outputPath + ".json")
+	}
 }
 
 func getGitCommit() string {
