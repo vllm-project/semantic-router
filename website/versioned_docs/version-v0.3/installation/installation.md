@@ -24,7 +24,7 @@ No GPU required - the router runs efficiently on CPU using optimized BERT models
 ### 1. Use the one-line installer (macOS/Linux)
 
 ```bash
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash
+curl -fsSL https://vllm-sr.ai/install.sh | bash
 ```
 
 The installer:
@@ -41,7 +41,7 @@ If `~/.local/bin` is not already on your `PATH`, the installer prints the export
 Need the latest stable release instead? Run:
 
 ```bash
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --channel stable
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable
 ```
 
 Windows users should run the local `vllm-sr serve` workflow from WSL2 or another
@@ -189,4 +189,4 @@ vllm-sr serve --image-pull-policy always
 
 - **Issues**: [GitHub Issues](https://github.com/vllm-project/semantic-router/issues)
 - **Community**: Join `#semantic-router` channel in vLLM Slack
-- **Documentation**: [vllm-semantic-router.com](https://vllm-semantic-router.com/)
+- **Documentation**: [vllm-sr.ai](https://vllm-sr.ai/)

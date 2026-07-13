@@ -281,7 +281,7 @@ python src/training/model_eval/result_to_config.py \
 
 ### 示例 config.eval.yaml
 
-参见更多配置信息：[配置](https://vllm-semantic-router.com/docs/installation/configuration)
+参见更多配置信息：[配置](https://vllm-sr.ai/docs/installation/configuration)
 
 ```yaml
 bert_model:

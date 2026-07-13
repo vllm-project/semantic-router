@@ -204,7 +204,7 @@ Install vLLM Semantic Router the same way as the AMD Developer Cloud guide:
 ```bash
 python3.12 -m venv vsr
 source vsr/bin/activate
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash
+curl -fsSL https://vllm-sr.ai/install.sh | bash
 
 vllm-sr --help
 ```

@@ -51,7 +51,7 @@ const ecosystemLinks = [
       id: 'homepage.ecosystem.playground',
       message: 'Try routing live',
     }),
-    href: 'https://play.vllm-semantic-router.com/',
+    href: 'https://app.vllm-sr.ai/playground',
     highlight: true,
   },
 ]

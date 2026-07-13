@@ -476,7 +476,7 @@ function FinalCtaSection(): JSX.Element {
             </div>
             <div className={styles.finalCtaActions}>
               <PillLink
-                href="https://play.vllm-semantic-router.com/"
+                href="https://app.vllm-sr.ai/playground"
                 rel="noreferrer"
                 target="_blank"
               >

@@ -38,6 +38,23 @@ export const steeringCommitteeMembers: TeamMember[] = [
     memberType: 'steering',
   },
   {
+    name: 'Huamin Chen',
+    role: <Translate id="team.members.HuaminChen.role">@Microsoft</Translate>,
+    avatar: '/img/team/huamin.png',
+    github: 'https://github.com/rootfs',
+    linkedin: 'https://www.linkedin.com/in/huaminchen',
+    externalLinks: [
+      { label: 'Hugging Face', href: 'https://huggingface.co/HuaminChen' },
+    ],
+    bio: <Translate id="team.members.HuaminChen.bio">Long-term incubator of frontier infrastructure and AI systems across cloud-native platforms, open-source ecosystems, and model-serving stacks.</Translate>,
+    expertise: [
+      <Translate id="team.members.HuaminChen.expertise.cloud">Cloud-native platforms</Translate>,
+      <Translate id="team.members.HuaminChen.expertise.serving">Model-serving stacks</Translate>,
+      <Translate id="team.members.HuaminChen.expertise.ecosystem">Open-source ecosystems</Translate>,
+    ],
+    memberType: 'steering',
+  },
+  {
     name: 'Bowei He',
     role: <Translate id="team.members.BoweiHe.role">Postdoc @ MBZUAI / McGill</Translate>,
     avatar: 'https://agentic-in.ai/people/bowei-he.jpeg',
@@ -84,23 +101,6 @@ export const steeringCommitteeMembers: TeamMember[] = [
       <Translate id="team.members.FuyuanLyu.expertise.data">Data-centric AI</Translate>,
       <Translate id="team.members.FuyuanLyu.expertise.features">Automatic feature selection</Translate>,
       <Translate id="team.members.FuyuanLyu.expertise.labeling">Automatic labeling</Translate>,
-    ],
-    memberType: 'steering',
-  },
-  {
-    name: 'Huamin Chen',
-    role: <Translate id="team.members.HuaminChen.role">@Microsoft</Translate>,
-    avatar: '/img/team/huamin.png',
-    github: 'https://github.com/rootfs',
-    linkedin: 'https://www.linkedin.com/in/huaminchen',
-    externalLinks: [
-      { label: 'Hugging Face', href: 'https://huggingface.co/HuaminChen' },
-    ],
-    bio: <Translate id="team.members.HuaminChen.bio">Long-term incubator of frontier infrastructure and AI systems across cloud-native platforms, open-source ecosystems, and model-serving stacks.</Translate>,
-    expertise: [
-      <Translate id="team.members.HuaminChen.expertise.cloud">Cloud-native platforms</Translate>,
-      <Translate id="team.members.HuaminChen.expertise.serving">Model-serving stacks</Translate>,
-      <Translate id="team.members.HuaminChen.expertise.ecosystem">Open-source ecosystems</Translate>,
     ],
     memberType: 'steering',
   },

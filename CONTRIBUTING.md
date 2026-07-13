@@ -331,7 +331,7 @@ make precommit-local
 
 ## Getting Help
 
-- Check the [documentation](https://vllm-semantic-router.com/)
+- Check the [documentation](https://vllm-sr.ai/)
 - Review existing issues and pull requests
 - Ask questions in discussions or create a new issue
 

@@ -94,9 +94,26 @@
   color: rgba(255, 255, 255, 0.68);
 }
 
+.panelStack {
+  display: grid;
+}
+
 .panel {
+  grid-area: 1 / 1;
   display: grid;
   gap: 0;
+  min-width: 0;
+}
+
+.panelActive {
+  visibility: visible;
+  opacity: 1;
+}
+
+.panelInactive {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .panelHeader {

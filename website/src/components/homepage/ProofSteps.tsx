@@ -82,7 +82,7 @@ export default function ProofSteps(): JSX.Element {
         id: 'homepage.proof.step4.desc',
         message: 'Tutorials, signal reference, and operator guides to go deeper.',
       }),
-      code: 'vllm-semantic-router.com/docs',
+      code: 'vllm-sr.ai/docs',
     },
   ]
 
