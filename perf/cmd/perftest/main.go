@@ -21,8 +21,17 @@ func main() {
 	outputPath := flag.String("output", "", "Output path for reports")
 	generateReport := flag.Bool("generate-report", false, "Generate performance report")
 	inputPath := flag.String("input", "", "Input comparison JSON for report generation")
+	parseBench := flag.String("parse-bench", "", "Path to raw `go test -bench` output to convert into a current-results JSON (writes to --output)")
 
 	flag.Parse()
+
+	if *parseBench != "" {
+		if err := parseBenchToBaseline(*parseBench, *outputPath); err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing benchmark output: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	if *generateReport {
 		if *inputPath == "" {
@@ -142,6 +151,40 @@ func compareWithBaseline(baselineDir, currentResultsFile, thresholdFile, outputP
 		fmt.Println("\n⚠️ WARNING: Performance regressions detected!")
 	}
 
+	return nil
+}
+
+// parseBenchToBaseline reads raw `go test -bench` output and writes it as a
+// Baseline JSON (the "current" result set). This is what makes a comparable
+// current/baseline pair possible: benchmarks run now are captured in the same
+// schema as the recorded baselines (#2455 rc#2).
+func parseBenchToBaseline(inputPath, outputPath string) error {
+	if outputPath == "" {
+		return fmt.Errorf("--output is required with --parse-bench")
+	}
+
+	f, err := os.Open(inputPath)
+	if err != nil {
+		return fmt.Errorf("failed to open benchmark output: %w", err)
+	}
+	defer f.Close()
+
+	baseline, err := benchmark.ParseBenchOutput(f)
+	if err != nil {
+		return err
+	}
+	if len(baseline.Benchmarks) == 0 {
+		return fmt.Errorf("no benchmark results found in %s", inputPath)
+	}
+
+	baseline.Version = "current"
+	baseline.GitCommit = getGitCommit()
+	baseline.Timestamp = time.Now()
+
+	if err := benchmark.SaveBaseline(baseline, outputPath); err != nil {
+		return err
+	}
+	fmt.Printf("Parsed %d benchmarks from %s -> %s\n", len(baseline.Benchmarks), inputPath, outputPath)
 	return nil
 }
 
