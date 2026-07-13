@@ -67,14 +67,15 @@ perf-e2e: build-e2e ensure-reports-dir
 	  -tests=performance-throughput,performance-latency,performance-resource
 
 # Compare against baseline (report only; use perf-check to fail on regression).
-# Consumes reports/bench-output.txt (produced by 'make perf-bench'/'perf-bench-quick'
-# when its output is tee'd there, or by CI), turns it into reports/current.json,
-# and diffs it against every per-suite baseline in perf/testdata/baselines.
+# Consumes reports/bench-output.txt (a captured benchmark run — 'make perf-check'
+# writes it, or tee one there yourself; CI also produces it), turns it into
+# reports/current.json, and diffs it against every per-suite baseline in
+# perf/testdata/baselines.
 perf-compare: ## Compare current benchmark output against baseline (report only)
 perf-compare: ensure-reports-dir
 	@$(LOG_TARGET)
 	@test -f reports/bench-output.txt || { \
-	  echo "reports/bench-output.txt not found — run 'make perf-bench' (tee its output there) or 'make perf-check'"; \
+	  echo "reports/bench-output.txt not found — run 'make perf-check' (runs benchmarks + gates), or capture a run first: make perf-bench-quick 2>&1 | tee reports/bench-output.txt"; \
 	  exit 1; }
 	@echo "Building current results from benchmark output..."
 	@cd perf && go run cmd/perftest/main.go \
