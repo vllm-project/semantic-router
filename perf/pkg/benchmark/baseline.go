@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -188,36 +189,27 @@ func calculatePercentChange(baseline, current float64) float64 {
 	return ((current - baseline) / baseline) * 100
 }
 
-// getThresholdForBenchmark retrieves the appropriate threshold for a benchmark
+// getThresholdForBenchmark retrieves the max-regression threshold for a
+// benchmark by matching its name against the configured patterns. The first
+// matching entry wins, so thresholds.yaml lists them most-specific first;
+// benchmarks matching nothing use the configured default (#2455 rc#3).
 func getThresholdForBenchmark(benchName string, thresholds *ThresholdsConfig) float64 {
-	// Default threshold
-	defaultThreshold := 10.0
-
+	const fallback = 10.0
 	if thresholds == nil {
-		return defaultThreshold
+		return fallback
 	}
-
-	// Try to find specific threshold based on benchmark name
-	// This is a simplified approach - could be made more sophisticated
-	for _, threshold := range thresholds.ComponentBenchmarks.Classification {
-		if threshold.MaxRegressionPercent > 0 {
-			return threshold.MaxRegressionPercent
+	for _, t := range thresholds.ComponentBenchmarks.Benchmarks {
+		if t.Pattern == "" {
+			continue
+		}
+		if matched, err := regexp.MatchString(t.Pattern, benchName); err == nil && matched {
+			return t.MaxRegressionPercent
 		}
 	}
-
-	for _, threshold := range thresholds.ComponentBenchmarks.DecisionEngine {
-		if threshold.MaxRegressionPercent > 0 {
-			return threshold.MaxRegressionPercent
-		}
+	if thresholds.ComponentBenchmarks.Default.MaxRegressionPercent > 0 {
+		return thresholds.ComponentBenchmarks.Default.MaxRegressionPercent
 	}
-
-	for _, threshold := range thresholds.ComponentBenchmarks.Cache {
-		if threshold.MaxRegressionPercent > 0 {
-			return threshold.MaxRegressionPercent
-		}
-	}
-
-	return defaultThreshold
+	return fallback
 }
 
 // HasRegressions checks if any regressions were detected

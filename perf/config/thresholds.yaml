@@ -1,68 +1,43 @@
-# Performance SLOs and regression thresholds
+# Performance regression thresholds for `make perf-compare` / `perf-check`.
+#
+# Each entry maps a benchmark-name regexp to the maximum tolerated ns/op
+# regression (percent slower than baseline) before the comparison flags it.
+# The FIRST matching pattern wins, so order entries most-specific first.
+# Patterns are Go regular expressions matched against the full benchmark name
+# (with the trailing -GOMAXPROCS suffix already stripped). Any benchmark that
+# matches no pattern uses `default`.
 
 component_benchmarks:
-  classification:
-    batch_size_1:
-      max_p95_latency_ms: 10.0
-      max_p99_latency_ms: 15.0
-      min_throughput_qps: 100
-      max_regression_percent: 10  # Fail if >10% slower
+  default:
+    max_regression_percent: 10
 
-    batch_size_10:
-      max_p95_latency_ms: 50.0
-      max_p99_latency_ms: 75.0
-      min_throughput_qps: 500
+  benchmarks:
+    # Classification (CGO-bound BERT / embedding paths): noisier, looser bound.
+    - name: classification
+      pattern: "^BenchmarkClassify"
       max_regression_percent: 15
 
-    batch_size_50:
-      max_p95_latency_ms: 200.0
-      max_p99_latency_ms: 300.0
-      min_throughput_qps: 1000
-      max_regression_percent: 15
-
-    batch_size_100:
-      max_p95_latency_ms: 400.0
-      max_p99_latency_ms: 600.0
-      min_throughput_qps: 2000
-      max_regression_percent: 20
-
-  decision_engine:
-    evaluate_decisions:
-      max_p95_latency_ms: 1.0
-      min_throughput_qps: 10000
+    # Decision engine (pure Go, cheap + deterministic): tight bound.
+    - name: decision_engine
+      pattern: "^Benchmark(EvaluateDecisions|PrioritySelection|Rule)"
       max_regression_percent: 5
 
-    priority_selection:
-      max_p95_latency_ms: 2.0
-      max_regression_percent: 5
-
-  cache:
-    search_1000_entries:
-      max_p95_latency_ms: 5.0
-      min_cache_hit_rate: 0.8
+    # Cache lookup paths.
+    - name: cache
+      pattern: "^BenchmarkCache"
       max_regression_percent: 10
 
-    search_10000_entries:
-      max_p95_latency_ms: 10.0
-      min_cache_hit_rate: 0.8
+    # ExtProc request/response hot path.
+    - name: extproc
+      pattern: "^Benchmark(Process|Header|Full|Different|Concurrent)"
       max_regression_percent: 15
 
-    hnsw_vs_linear:
-      max_regression_percent: 10
-
-  looper:
-    # Tier-1 pure-function micro-benchmarks (no network, deterministic core).
-    # Micro-benchmarks are noisy run-to-run (~10% swing observed on idle
-    # hardware), so thresholds are generous: they catch large/structural
-    # regressions (e.g. an accidental O(n^2) or a per-call allocation blowup),
-    # not measurement jitter.
-    remom_distribution:
-      max_regression_percent: 25
-    fusion_prompt_build:
-      max_regression_percent: 25
-    flow_prompt_build:
-      max_regression_percent: 25
-    base_streaming:
+    # Looper family (ReMoM/Fusion/Flow/Base) micro-benchmarks. These are noisy
+    # run-to-run (~10% swing on idle hardware), so the bound is generous: it
+    # catches structural regressions (an accidental O(n^2), a per-call
+    # allocation blowup), not measurement jitter.
+    - name: looper
+      pattern: "^Benchmark(ReMoM|Fusion|Flow|Base)"
       max_regression_percent: 25
 
 e2e_tests:

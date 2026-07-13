@@ -94,11 +94,25 @@ type ThresholdsConfig struct {
 	ResourceLimits      ResourceLimitsThresholds      `yaml:"resource_limits"`
 }
 
-// ComponentBenchmarksThresholds defines thresholds for component benchmarks
+// ComponentBenchmarksThresholds defines regression thresholds for component
+// benchmarks. Each entry matches a benchmark by name; Default applies to any
+// benchmark no entry matches.
 type ComponentBenchmarksThresholds struct {
-	Classification map[string]BenchmarkThreshold `yaml:"classification"`
-	DecisionEngine map[string]BenchmarkThreshold `yaml:"decision_engine"`
-	Cache          map[string]BenchmarkThreshold `yaml:"cache"`
+	Default    RegressionThreshold            `yaml:"default"`
+	Benchmarks []BenchmarkRegressionThreshold `yaml:"benchmarks"`
+}
+
+// RegressionThreshold is the maximum tolerated ns/op regression, in percent.
+type RegressionThreshold struct {
+	MaxRegressionPercent float64 `yaml:"max_regression_percent"`
+}
+
+// BenchmarkRegressionThreshold maps a benchmark-name regexp to its maximum
+// tolerated ns/op regression. Name is a human label for readability only.
+type BenchmarkRegressionThreshold struct {
+	Name                 string  `yaml:"name"`
+	Pattern              string  `yaml:"pattern"`
+	MaxRegressionPercent float64 `yaml:"max_regression_percent"`
 }
 
 // E2ETestsThresholds defines thresholds for E2E tests
@@ -112,15 +126,6 @@ type ResourceLimitsThresholds struct {
 	MaxMemoryMB   int     `yaml:"max_memory_mb"`
 	MaxGoroutines int     `yaml:"max_goroutines"`
 	MaxCPUPercent float64 `yaml:"max_cpu_percent"`
-}
-
-// BenchmarkThreshold defines thresholds for a single benchmark
-type BenchmarkThreshold struct {
-	MaxP95LatencyMs      float64 `yaml:"max_p95_latency_ms,omitempty"`
-	MaxP99LatencyMs      float64 `yaml:"max_p99_latency_ms,omitempty"`
-	MinThroughputQPS     float64 `yaml:"min_throughput_qps,omitempty"`
-	MinCacheHitRate      float64 `yaml:"min_cache_hit_rate,omitempty"`
-	MaxRegressionPercent float64 `yaml:"max_regression_percent"`
 }
 
 // ThroughputThreshold defines throughput thresholds
