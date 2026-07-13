@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"strings"
 	"text/template"
@@ -680,8 +680,9 @@ func (l *ReMoMLooper) sortAndShuffle(cfg *config.ReMoMAlgorithmConfig, responses
 		return len(responses[i].Content) > len(responses[j].Content)
 	})
 
-	// Shuffle with seed for reproducibility
-	r := rand.New(rand.NewSource(int64(cfg.ShuffleSeed)))
+	// Shuffle with seed for reproducibility. PCG seeds in O(1) (16-byte state)
+	// instead of the ~5KB v1 rngSource this reordered on every round.
+	r := rand.New(rand.NewPCG(uint64(cfg.ShuffleSeed), uint64(cfg.ShuffleSeed))) //nolint:gosec // deterministic shuffle seed, overflow harmless
 	r.Shuffle(len(responses), func(i, j int) {
 		responses[i], responses[j] = responses[j], responses[i]
 	})
