@@ -76,7 +76,8 @@ type RequestContext struct {
 	AnthropicPassthrough *anthropic.AnthropicPassthrough
 
 	// Semi-streaming body handler (non-nil when Envoy sends STREAMED body chunks)
-	StreamedBody *StreamedBodyHandler
+	StreamedBody          *StreamedBodyHandler
+	FullDuplexRequestBody bool // true when the data plane negotiated FULL_DUPLEX_STREAMED
 
 	// Streaming accumulation for caching
 	HasStreamingChunks bool                            // True when at least one SSE chunk has been received
