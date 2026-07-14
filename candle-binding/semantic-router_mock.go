@@ -328,6 +328,12 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 	}, nil
 }
 
+// MultiModalGetEmbeddingDim returns the mock multimodal native embedding
+// dimension (384), matching the real multi-modal-embed-small default.
+func MultiModalGetEmbeddingDim() int {
+	return 384
+}
+
 // GetEmbedding2DMatryoshka generates an embedding using mock 2D Matryoshka API
 func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
 	_ = text
