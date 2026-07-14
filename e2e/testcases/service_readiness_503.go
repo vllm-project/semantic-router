@@ -1,11 +1,9 @@
 package testcases
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -88,10 +86,10 @@ func testModelNotReady503(
 	httpClient := session.HTTPClient(30 * time.Second)
 
 	for _, ep := range endpoints {
-
-		statusCode, body, err := postJSON(
+		resp, err := postJSON(
 			ctx,
 			httpClient,
+			http.MethodPost,
 			session.URL(ep.Path),
 			[]byte(ep.Body),
 		)
@@ -99,16 +97,16 @@ func testModelNotReady503(
 			return fmt.Errorf("%s: %w", ep.Name, err)
 		}
 
-		if statusCode != http.StatusServiceUnavailable {
+		if resp.StatusCode != http.StatusServiceUnavailable {
 			return fmt.Errorf(
 				"%s: expected 503, got %d",
 				ep.Name,
-				statusCode,
+				resp.StatusCode,
 			)
 		}
 
 		var e errorEnvelope
-		if err := json.Unmarshal(body, &e); err != nil {
+		if err := json.Unmarshal(resp.Body, &e); err != nil {
 			return fmt.Errorf("%s: invalid JSON: %w", ep.Name, err)
 		}
 
@@ -123,39 +121,4 @@ func testModelNotReady503(
 	}
 
 	return nil
-}
-
-// postJSON executes a POST request with a JSON payload,
-// reads and closes the response body safely, and returns the status code.
-func postJSON(
-	ctx context.Context,
-	client *http.Client,
-	url string,
-	payload []byte,
-) (int, []byte, error) {
-
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		url,
-		bytes.NewReader(payload),
-	)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	return resp.StatusCode, body, nil
 }
