@@ -1,0 +1,207 @@
+.container {
+  width: min(100% - 2.5rem, var(--site-grid-max));
+  margin: 0 auto;
+  padding: 3rem 0 5rem;
+}
+
+.hero {
+  display: grid;
+  gap: 1.2rem;
+  padding: 1rem 0 3.25rem;
+  border-bottom: 1px solid var(--site-border-strong);
+}
+
+.eyebrow,
+.mandate > span,
+.trackTitle > span {
+  color: #087ac5;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.67rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
+.heroGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(18rem, 0.55fr);
+  gap: clamp(2rem, 7vw, 7rem);
+  align-items: end;
+}
+
+.hero h1 {
+  max-width: 66rem;
+  margin: 0;
+  color: var(--site-text);
+  font-size: clamp(3.5rem, 8.5vw, 7.25rem);
+  font-weight: 430;
+  line-height: 0.88;
+  letter-spacing: -0.055em;
+}
+
+.lede {
+  max-width: 48rem;
+  margin: 1.5rem 0 0;
+  color: var(--site-muted-bright);
+  font-size: clamp(1rem, 1.4vw, 1.2rem);
+  line-height: 1.65;
+}
+
+.mandate {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1.2rem 0;
+  border-top: 1px solid var(--site-border-strong);
+  border-bottom: 1px solid var(--site-border-strong);
+}
+
+.mandate p {
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.mandate a {
+  display: flex;
+  justify-content: space-between;
+  color: var(--site-text);
+  font-size: 0.68rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.mandate a:hover {
+  color: #087ac5;
+  text-decoration: none;
+}
+
+.tracks {
+  display: grid;
+}
+
+.track {
+  display: grid;
+  gap: 1.5rem;
+  padding: 3rem 0;
+  border-bottom: 1px solid var(--site-border-strong);
+}
+
+.trackHeader {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(18rem, 0.8fr) minmax(20rem, 1.2fr);
+  gap: 2rem;
+  align-items: start;
+}
+
+.trackNumber {
+  color: var(--site-text);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.trackTitle {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.trackTitle h2 {
+  margin: 0;
+  color: var(--site-text);
+  font-size: clamp(2rem, 3.8vw, 3.25rem);
+  font-weight: 480;
+  line-height: 0.95;
+  letter-spacing: -0.035em;
+}
+
+.trackTitle p {
+  max-width: 33rem;
+  margin: 0.4rem 0 0;
+  color: var(--site-muted-bright);
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+.responsibilities {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--site-border);
+  list-style: none;
+}
+
+.responsibilities li {
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  gap: 0.7rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--site-border);
+  color: var(--site-text);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.responsibilities span {
+  color: var(--site-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.63rem;
+}
+
+.members {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-left: 6.5rem;
+}
+
+@media (max-width: 1000px) {
+  .heroGrid,
+  .trackHeader {
+    grid-template-columns: 1fr;
+  }
+
+  .mandate {
+    max-width: 34rem;
+  }
+
+  .trackHeader {
+    gap: 1rem;
+  }
+
+  .trackNumber {
+    font-size: 1rem;
+  }
+
+  .responsibilities {
+    max-width: 42rem;
+  }
+
+  .members {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .container {
+    width: min(100% - 1.4rem, var(--site-grid-max));
+    padding-top: 1.5rem;
+  }
+
+  .hero {
+    padding-bottom: 2.25rem;
+  }
+
+  .hero h1 {
+    font-size: clamp(3rem, 17vw, 5rem);
+  }
+
+  .track {
+    padding: 2rem 0;
+  }
+
+  .members {
+    grid-template-columns: 1fr;
+  }
+}
