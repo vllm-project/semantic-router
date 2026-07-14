@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 	"strings"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -104,9 +103,8 @@ func validateCanonicalEndpointRefs(configData routerconfig.CanonicalConfig) erro
 	return nil
 }
 
-func currentGlobalDefaults(configDir string) (*routerconfig.CanonicalGlobal, error) {
+func currentGlobalDefaults(configPath string) (*routerconfig.CanonicalGlobal, error) {
 	defaults := routerconfig.DefaultCanonicalGlobal()
-	configPath := filepath.Join(configDir, "config.yaml")
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
 		return &defaults, nil
