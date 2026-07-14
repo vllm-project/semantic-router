@@ -49,9 +49,48 @@
   gap: 1rem;
 }
 
-.steeringGrid {
+.trackList {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--site-border);
+}
+
+.trackSection {
+  display: grid;
+  grid-template-columns: minmax(15rem, 0.75fr) minmax(0, 2fr);
+  gap: 1.25rem;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--site-border);
+}
+
+.trackIntro {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  padding: 0.4rem 0.5rem 0.4rem 0;
+}
+
+.trackIndex {
+  color: var(--site-muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
+.trackIntro h3 {
+  margin: 0;
+  font-size: 1.55rem;
+  line-height: 1;
+}
+
+.trackDescription {
+  margin: 0;
+  color: var(--site-muted-bright);
+  line-height: 1.65;
+}
+
+.trackMembers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
 }
 
@@ -209,7 +248,11 @@
 }
 
 @media (max-width: 996px) {
-  .steeringGrid,
+  .trackSection {
+    grid-template-columns: 1fr;
+  }
+
+  .trackMembers,
   .teamGrid,
   .involvementGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -230,7 +273,7 @@
     font-size: 1.8rem;
   }
 
-  .steeringGrid,
+  .trackMembers,
   .teamGrid,
   .involvementGrid {
     grid-template-columns: 1fr;

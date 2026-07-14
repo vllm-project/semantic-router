@@ -17,6 +17,7 @@ export interface TeamMember {
   bio: React.ReactNode
   expertise?: React.ReactNode[]
   memberType: 'steering' | 'committer'
+  steeringTrack?: 'industry' | 'academic'
 }
 
 export const steeringCommitteeMembers: TeamMember[] = [
@@ -36,6 +37,7 @@ export const steeringCommitteeMembers: TeamMember[] = [
       <Translate id="team.members.XunzhuoLiu.expertise.opensource">Open-source infrastructure</Translate>,
     ],
     memberType: 'steering',
+    steeringTrack: 'industry',
   },
   {
     name: 'Huamin Chen',
@@ -53,6 +55,7 @@ export const steeringCommitteeMembers: TeamMember[] = [
       <Translate id="team.members.HuaminChen.expertise.ecosystem">Open-source ecosystems</Translate>,
     ],
     memberType: 'steering',
+    steeringTrack: 'industry',
   },
   {
     name: 'Bowei He',
@@ -69,6 +72,7 @@ export const steeringCommitteeMembers: TeamMember[] = [
       <Translate id="team.members.BoweiHe.expertise.hunyuan">Tencent Hunyuan LLM</Translate>,
     ],
     memberType: 'steering',
+    steeringTrack: 'academic',
   },
   {
     name: 'Yankai Chen',
@@ -86,6 +90,7 @@ export const steeringCommitteeMembers: TeamMember[] = [
       <Translate id="team.members.YankaiChen.expertise.mining">Knowledge mining</Translate>,
     ],
     memberType: 'steering',
+    steeringTrack: 'academic',
   },
   {
     name: 'Fuyuan Lyu',
@@ -103,6 +108,7 @@ export const steeringCommitteeMembers: TeamMember[] = [
       <Translate id="team.members.FuyuanLyu.expertise.labeling">Automatic labeling</Translate>,
     ],
     memberType: 'steering',
+    steeringTrack: 'academic',
   },
   {
     name: 'Steve Liu',
@@ -120,8 +126,34 @@ export const steeringCommitteeMembers: TeamMember[] = [
       <Translate id="team.members.SteveLiu.expertise.cps">Cyber-physical systems</Translate>,
     ],
     memberType: 'steering',
+    steeringTrack: 'academic',
   },
 ]
+
+export const industryTrackMembers = steeringCommitteeMembers.filter(
+  member => member.steeringTrack === 'industry',
+)
+
+export const academicTrackMembers = steeringCommitteeMembers.filter(
+  member => member.steeringTrack === 'academic',
+)
+
+export function getTeamMemberBadge(member: TeamMember): React.ReactNode {
+  if (member.memberType === 'committer') {
+    return <Translate id="team.badge.committer">Committer</Translate>
+  }
+
+  if (member.steeringTrack === 'industry') {
+    return <Translate id="team.track.industry.title">Industry Track</Translate>
+  }
+
+  if (member.steeringTrack === 'academic') {
+    return <Translate id="team.track.academic.title">Academic Track</Translate>
+  }
+
+  return <Translate id="team.badge.steering">Steering Committee</Translate>
+}
+
 export const topNewContributorMembers: TeamMember[] = [
   {
     name: 'FAUST',

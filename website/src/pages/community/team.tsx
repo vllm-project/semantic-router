@@ -3,7 +3,13 @@ import Layout from '@theme/Layout'
 import Translate from '@docusaurus/Translate'
 import Link from '@docusaurus/Link'
 import { FaExternalLinkAlt, FaGithub, FaLinkedin } from 'react-icons/fa'
-import { committerMembers, steeringCommitteeMembers, type TeamMember } from '@site/src/data/teamMembers'
+import {
+  academicTrackMembers,
+  committerMembers,
+  getTeamMemberBadge,
+  industryTrackMembers,
+  type TeamMember,
+} from '@site/src/data/teamMembers'
 import styles from './team.module.css'
 
 interface TeamMemberProps {
@@ -23,9 +29,7 @@ const TeamMemberCard: React.FC<TeamMemberProps> = ({ member }) => {
           <div className={styles.nameWithBadge}>
             <h3 className={styles.memberName}>{member.name}</h3>
             <span className={`${styles.badge} ${styles[member.memberType]}`}>
-              {member.memberType === 'steering'
-                ? <Translate id="team.badge.steering">Steering Committee</Translate>
-                : <Translate id="team.badge.committer">Committer</Translate>}
+              {getTeamMemberBadge(member)}
             </span>
           </div>
           <p className={styles.memberRole}>
@@ -109,17 +113,51 @@ const Team: React.FC = () => {
         <main className={styles.main}>
           <section className={styles.section}>
             <h2>
-              <Translate id="team.steering.title">Steering Committee</Translate>
+              <Translate id="team.steering.title">Leadership Tracks</Translate>
             </h2>
             <p className={styles.sectionDescription}>
               <Translate id="team.steering.description">
-                The steering committee guides roadmap direction, project scope, and cross-community alignment for vLLM Semantic Router.
+                Project leadership is organized across industry and academic tracks, with shared direction shaped at the boundary between engineering and research.
               </Translate>
             </p>
-            <div className={styles.steeringGrid}>
-              {steeringCommitteeMembers.map((member, index) => (
-                <TeamMemberCard key={index} member={member} />
-              ))}
+            <div className={styles.trackList}>
+              <section className={styles.trackSection} aria-labelledby="industry-track-title">
+                <header className={styles.trackIntro}>
+                  <span className={styles.trackIndex}>01 / Industry</span>
+                  <h3 id="industry-track-title">
+                    <Translate id="team.track.industry.title">Industry Track</Translate>
+                  </h3>
+                  <p className={styles.trackDescription}>
+                    <Translate id="team.track.industry.description">
+                      Leads the project's engineering direction and works with the research side to decide where frontier research and industrial practice meet, including the project's overall engineering evolution.
+                    </Translate>
+                  </p>
+                </header>
+                <div className={styles.trackMembers}>
+                  {industryTrackMembers.map(member => (
+                    <TeamMemberCard key={member.name} member={member} />
+                  ))}
+                </div>
+              </section>
+
+              <section className={styles.trackSection} aria-labelledby="academic-track-title">
+                <header className={styles.trackIntro}>
+                  <span className={styles.trackIndex}>02 / Academic</span>
+                  <h3 id="academic-track-title">
+                    <Translate id="team.track.academic.title">Academic Track</Translate>
+                  </h3>
+                  <p className={styles.trackDescription}>
+                    <Translate id="team.track.academic.description">
+                      Advances frontier academic research around the project and works closely with the engineering side to turn research into shared project progress.
+                    </Translate>
+                  </p>
+                </header>
+                <div className={styles.trackMembers}>
+                  {academicTrackMembers.map(member => (
+                    <TeamMemberCard key={member.name} member={member} />
+                  ))}
+                </div>
+              </section>
             </div>
           </section>
 

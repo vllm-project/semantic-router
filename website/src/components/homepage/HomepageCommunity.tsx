@@ -4,7 +4,12 @@ import Translate from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import { PillLink, SectionLabel } from '@site/src/components/site/Chrome'
 import acknowledgementsData from '@site/src/components/AcknowledgementsSection/data.json'
-import { committerMembers, steeringCommitteeMembers, type TeamMember } from '@site/src/data/teamMembers'
+import {
+  committerMembers,
+  getTeamMemberBadge,
+  steeringCommitteeMembers,
+  type TeamMember,
+} from '@site/src/data/teamMembers'
 import shared from './homepageShared.module.css'
 import styles from './HomepageCommunity.module.css'
 
@@ -72,9 +77,7 @@ function MemberCard({
             className={styles.memberAvatar}
           />
           <span className={`${styles.memberBadge} ${styles[member.memberType]}`}>
-            {member.memberType === 'steering'
-              ? <Translate id="team.badge.steering">Steering Committee</Translate>
-              : <Translate id="team.badge.committer">Committer</Translate>}
+            {getTeamMemberBadge(member)}
           </span>
         </div>
         <div className={styles.memberCopy}>
@@ -149,7 +152,7 @@ export default function HomepageCommunity(): JSX.Element {
             </h3>
             <p>
               <Translate id="homepage.community.team.subtitle">
-                Steering committee and committers across research and infrastructure.
+                Industry and academic leadership tracks alongside committers across research and infrastructure.
               </Translate>
             </p>
           </div>
