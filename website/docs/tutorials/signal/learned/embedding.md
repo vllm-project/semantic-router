@@ -6,6 +6,8 @@
 
 This family is learned: it depends on the semantic embedding assets in `global.model_catalog.embeddings`.
 
+Those assets can run locally or through an external OpenAI-compatible text embedding endpoint. See [Remote Embedding Providers](../../global/remote-embeddings) for the shared provider configuration; signal candidates, thresholds, and decision conditions remain unchanged.
+
 ## Key Advantages
 
 - Handles paraphrases better than plain keyword rules.
