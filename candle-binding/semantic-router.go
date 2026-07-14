@@ -259,6 +259,7 @@ extern int multimodal_encode_text(const char* text, int target_dim, MultiModalEm
 extern int multimodal_encode_image(const float* pixel_data, int height, int width, int target_dim, MultiModalEmbeddingResult* result);
 extern int multimodal_encode_image_from_bytes(const unsigned char* bytes_ptr, size_t bytes_len, int target_dim, MultiModalEmbeddingResult* result);
 extern int multimodal_encode_audio(const float* mel_data, int n_mels, int time_frames, int target_dim, MultiModalEmbeddingResult* result);
+extern int multimodal_get_embedding_dim();
 extern void free_multimodal_embedding(float* data, int length);
 extern void free_tokenization_result(TokenizationResult result);
 extern ClassificationResult classify_text(const char* text);
@@ -1179,6 +1180,17 @@ func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiMod
 		Modality:         "image",
 		ProcessingTimeMs: float32(result.processing_time_ms),
 	}, nil
+}
+
+// MultiModalGetEmbeddingDim returns the loaded multimodal model's native
+// embedding dimension, or -1 if no multimodal model is loaded.
+//
+// The router uses this to enforce the over-dimension contract with the real
+// model value instead of a hardcoded constant: the API dimension default (768)
+// exceeds the multimodal native dimension (384), so image-bearing requests must
+// default to and be validated against the native dimension.
+func MultiModalGetEmbeddingDim() int {
+	return int(C.multimodal_get_embedding_dim())
 }
 
 // MultiModalEncodeImageFromBase64 decodes a base64-encoded image and encodes it
