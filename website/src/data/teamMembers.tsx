@@ -24,7 +24,7 @@ export interface TeamMember {
 export const steeringCommitteeMembers: TeamMember[] = [
   {
     name: 'Xunzhuo Liu',
-    role: <Translate id="team.members.XunzhuoLiu.role">LLM Routing @ vLLM</Translate>,
+    role: <Translate id="team.members.XunzhuoLiu.role">LLM Routing @ AMD</Translate>,
     avatar: '/img/team/xunzhuo.png',
     github: 'https://github.com/Xunzhuo',
     linkedin: 'http://linkedin.com/in/bitliu',
