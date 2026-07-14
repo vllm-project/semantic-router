@@ -76,7 +76,8 @@ type RequestContext struct {
 	AnthropicPassthrough *anthropic.AnthropicPassthrough
 
 	// Semi-streaming body handler (non-nil when Envoy sends STREAMED body chunks)
-	StreamedBody *StreamedBodyHandler
+	StreamedBody          *StreamedBodyHandler
+	FullDuplexRequestBody bool // true when the data plane negotiated FULL_DUPLEX_STREAMED
 
 	// Streaming accumulation for caching
 	HasStreamingChunks bool                            // True when at least one SSE chunk has been received
@@ -274,7 +275,13 @@ type RequestContext struct {
 
 	// Memory retrieval tracking
 	// Stores formatted memory context to be injected after system prompt
-	MemoryContext string // Formatted memory context (empty if no memories retrieved)
+	MemoryContext        string // Formatted memory context (empty if no memories retrieved)
+	MemoryBackend        string
+	MemoryStatus         string
+	MemoryReason         string
+	MemoryFallbackReason string
+	MemoryFailOpen       bool
+	MemoryResultCount    int
 
 	// Note: Per-user API keys from ext_authz / Authorino are read directly from
 	// ctx.Headers by the CredentialResolver (pkg/authz). No separate fields needed.
