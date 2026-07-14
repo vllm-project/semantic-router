@@ -3,6 +3,7 @@ package benchmark
 import (
 	"fmt"
 	"os"
+	"regexp"
 
 	"gopkg.in/yaml.v3"
 )
@@ -157,6 +158,18 @@ func LoadThresholds(path string) (*ThresholdsConfig, error) {
 	var thresholds ThresholdsConfig
 	if err := yaml.Unmarshal(data, &thresholds); err != nil {
 		return nil, fmt.Errorf("failed to parse thresholds: %w", err)
+	}
+
+	// Reject invalid benchmark patterns up front. Otherwise a typo'd regexp is
+	// skipped at match time and the benchmark silently falls back to the (looser)
+	// default, quietly relaxing the gate with no signal.
+	for _, b := range thresholds.ComponentBenchmarks.Benchmarks {
+		if b.Pattern == "" {
+			continue
+		}
+		if _, err := regexp.Compile(b.Pattern); err != nil {
+			return nil, fmt.Errorf("invalid regexp for benchmark %q: %w", b.Name, err)
+		}
 	}
 
 	return &thresholds, nil
