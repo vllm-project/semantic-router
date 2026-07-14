@@ -26,3 +26,4 @@ type InferenceRequest struct {
 type ModelHandle interface {
 	ID() string
 }
+
