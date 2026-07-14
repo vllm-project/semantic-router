@@ -60,7 +60,7 @@ func (h *candleHandle) ID() string {
 func (a *Adapter) LoadModel(ctx context.Context, req native.LoadRequest) (native.ModelHandle, error) {
 	// For Phase 2, we just delegate to candle_binding's legacy initializer
 	// mapping the request parameters to the old shape.
-	
+
 	// E.g. candle_binding.InitModel(...) would happen here in a full migration.
 	// For now, this serves as the adapter entry point.
 	return &candleHandle{id: req.ModelRef}, nil
@@ -78,7 +78,7 @@ func (a *Adapter) Info() []native.ModelInfo {
 	if err != nil {
 		return nil
 	}
-	
+
 	var results []native.ModelInfo
 	for _, m := range info.Models {
 		results = append(results, native.ModelInfo{
@@ -98,3 +98,4 @@ func init() {
 	// Register the Candle adapter automatically
 	native.Registry.Register(NewAdapter())
 }
+
