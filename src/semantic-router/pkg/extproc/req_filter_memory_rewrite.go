@@ -231,11 +231,11 @@ func callLLMForQueryRewrite(ctx context.Context, resolved *ResolvedLLMConfig, us
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
 		return "", fmt.Errorf("LLM returned status %d: %s", resp.StatusCode, truncateForLog(string(body), 200))
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
 	if err != nil {
 		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
@@ -264,6 +264,10 @@ func setJSONField(data []byte, key string, value interface{}) ([]byte, error) {
 // ExtractConversationHistory extracts conversation history from raw request messages.
 // It filters out system messages and returns user/assistant messages for context.
 func ExtractConversationHistory(messagesJSON []byte) ([]ConversationMessage, error) {
+	if len(messagesJSON) == 0 {
+		return nil, nil
+	}
+
 	var messages []map[string]interface{}
 	if err := json.Unmarshal(messagesJSON, &messages); err != nil {
 		return nil, fmt.Errorf("failed to parse messages: %w", err)
@@ -276,16 +280,42 @@ func ExtractConversationHistory(messagesJSON []byte) ([]ConversationMessage, err
 			continue
 		}
 
-		content, ok := msg["content"].(string)
-		if !ok || content == "" {
+		contentStr := extractMessageContent(msg["content"])
+		if contentStr == "" {
 			continue
 		}
 
 		history = append(history, ConversationMessage{
 			Role:    role,
-			Content: content,
+			Content: contentStr,
 		})
 	}
 
 	return history, nil
+}
+
+// extractMessageContent parses a message content field which may be a string or a multimodal array of parts.
+func extractMessageContent(contentObj interface{}) string {
+	if cStr, ok := contentObj.(string); ok {
+		return cStr
+	}
+
+	cArr, ok := contentObj.([]interface{})
+	if !ok {
+		return ""
+	}
+
+	var parts []string
+	for _, part := range cArr {
+		pMap, ok := part.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if pType, ok := pMap["type"].(string); ok && pType == "text" {
+			if pText, ok := pMap["text"].(string); ok {
+				parts = append(parts, pText)
+			}
+		}
+	}
+	return strings.Join(parts, "\n")
 }
