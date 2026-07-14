@@ -24,14 +24,20 @@ func buildReplayRouteDiagnostics(
 ) *routerreplay.RouteDiagnostics {
 	finalModel := replaySelectedModel(originalModel, selectedModel)
 	diagnostics := &routerreplay.RouteDiagnostics{
-		Decision:         decisionName,
-		DecisionTier:     decisionTier,
-		DecisionPriority: decisionPriority,
-		SelectionMethod:  ctx.VSRSelectionMethod,
-		OriginalModel:    originalModel,
-		ProposalModel:    finalModel,
-		SelectedModel:    finalModel,
-		SessionAction:    replaySessionActionNone,
+		Decision:             decisionName,
+		DecisionTier:         decisionTier,
+		DecisionPriority:     decisionPriority,
+		SelectionMethod:      ctx.VSRSelectionMethod,
+		OriginalModel:        originalModel,
+		ProposalModel:        finalModel,
+		SelectedModel:        finalModel,
+		SessionAction:        replaySessionActionNone,
+		MemoryBackend:        ctx.MemoryBackend,
+		MemoryStatus:         ctx.MemoryStatus,
+		MemoryReason:         ctx.MemoryReason,
+		MemoryFallbackReason: ctx.MemoryFallbackReason,
+		MemoryFailOpen:       ctx.MemoryFailOpen,
+		MemoryResultCount:    ctx.MemoryResultCount,
 	}
 
 	if policy, ok := protectionLearningPolicyForContext(ctx); ok {
