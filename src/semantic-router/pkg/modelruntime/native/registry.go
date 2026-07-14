@@ -68,3 +68,4 @@ func (r *AdapterRegistry) List() []BackendAdapter {
 
 // Registry is the global adapter registry.
 var Registry = NewRegistry()
+
