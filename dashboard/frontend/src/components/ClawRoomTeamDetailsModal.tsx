@@ -1,6 +1,7 @@
-import { useEffect, useId } from 'react'
+import { useId } from 'react'
 import { createPortal } from 'react-dom'
 
+import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import styles from './ClawRoomChat.module.css'
 
 interface TeamOption {
@@ -44,40 +45,23 @@ export default function ClawRoomTeamDetailsModal({
 }: ClawRoomTeamDetailsModalProps) {
   const titleId = useId()
   const memberSubtitle = `${memberProfiles.length} ${memberProfiles.length === 1 ? 'claw' : 'claws'}`
+  const dialogOpen = Boolean(isOpen && selectedTeam)
+  const dialogRef = useAccessibleDialog<HTMLDivElement>({ isOpen: dialogOpen, onClose })
 
-  useEffect(() => {
-    if (!isOpen) {
-      return
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose()
-      }
-    }
-
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    window.addEventListener('keydown', handleKeyDown)
-
-    return () => {
-      document.body.style.overflow = previousOverflow
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isOpen, onClose])
-
-  if (!isOpen || !selectedTeam || typeof document === 'undefined') {
+  if (!dialogOpen || !selectedTeam || typeof document === 'undefined') {
     return null
   }
 
   return createPortal(
     <div className={styles.teamDetailsOverlay} onClick={onClose}>
       <div
+        ref={dialogRef}
         className={styles.teamDetailsDialog}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         data-testid="claw-room-team-details-dialog"
+        tabIndex={-1}
         onClick={event => event.stopPropagation()}
       >
         <div className={styles.teamDetailsHeader}>
@@ -92,6 +76,7 @@ export default function ClawRoomTeamDetailsModal({
             className={styles.teamDetailsCloseButton}
             aria-label="Close team details"
             onClick={onClose}
+            data-dialog-initial-focus
           >
             ×
           </button>

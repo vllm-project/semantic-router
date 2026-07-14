@@ -50,23 +50,64 @@ func TestParseResponseUsage_ExtractsUsageFields(t *testing.T) {
 	}, usage)
 }
 
-func TestParseResponseUsage_TracksCachedTokenReporting(t *testing.T) {
+func TestParseResponseUsage_TracksCacheTokenReporting(t *testing.T) {
 	usage := parseResponseUsage([]byte(`{
-		"usage": {
-			"prompt_tokens": 100,
-			"completion_tokens": 7,
-			"prompt_tokens_details": {
-				"cached_tokens": 40
+			"usage": {
+				"prompt_tokens": 100,
+				"completion_tokens": 7,
+				"prompt_tokens_details": {
+					"cached_tokens": 40,
+					"cache_write_tokens": 25
+				}
 			}
-		}
 	}`), "test-model")
 
 	assert.Equal(t, responseUsageMetrics{
 		promptTokens:               100,
 		cachedPromptTokens:         40,
 		cachedPromptTokensReported: true,
+		cacheWriteTokens:           25,
+		cacheWriteTokensReported:   true,
 		completionTokens:           7,
 	}, usage)
+}
+
+func TestParseResponseUsage_ExtractsResponsesAPIUsage(t *testing.T) {
+	usage := parseResponseUsage([]byte(`{
+			"usage": {
+				"input_tokens": 120,
+				"output_tokens": 8,
+				"input_tokens_details": {
+					"cached_tokens": 50,
+					"cache_write_tokens": 30
+				}
+			}
+		}`), "test-model")
+
+	assert.Equal(t, responseUsageMetrics{
+		promptTokens:               120,
+		cachedPromptTokens:         50,
+		cachedPromptTokensReported: true,
+		cacheWriteTokens:           30,
+		cacheWriteTokensReported:   true,
+		completionTokens:           8,
+	}, usage)
+}
+
+func TestParseResponseUsage_ClampsOverreportedCacheDetails(t *testing.T) {
+	usage := parseResponseUsage([]byte(`{
+			"usage": {
+				"prompt_tokens": 100,
+				"completion_tokens": 7,
+				"prompt_tokens_details": {
+					"cached_tokens": 80,
+					"cache_write_tokens": 50
+				}
+			}
+		}`), "test-model")
+
+	assert.Equal(t, 80, usage.cachedPromptTokens)
+	assert.Equal(t, 20, usage.cacheWriteTokens)
 }
 
 func TestParseResponseUsage_ReturnsZeroForInvalidUsageTypes(t *testing.T) {
@@ -139,6 +180,25 @@ func TestExtractStreamingUsage_PartialFields(t *testing.T) {
 	assert.Equal(t, int64(10), usage.PromptTokens)
 	assert.Equal(t, int64(0), usage.CompletionTokens, "missing fields default to 0")
 	assert.Equal(t, int64(0), usage.TotalTokens, "missing fields default to 0")
+}
+
+func TestStreamingPromptTokenDetailsExtractsReadsAndWrites(t *testing.T) {
+	ctx := &RequestContext{
+		StreamingMetadata: map[string]interface{}{
+			"usage": map[string]interface{}{
+				"prompt_tokens_details": map[string]interface{}{
+					"cached_tokens":      float64(40),
+					"cache_write_tokens": float64(25),
+				},
+			},
+		},
+	}
+
+	cached, cachedReported, cacheWrite, cacheWriteReported := streamingPromptTokenDetails(ctx, 100)
+	assert.Equal(t, 40, cached)
+	assert.True(t, cachedReported)
+	assert.Equal(t, 25, cacheWrite)
+	assert.True(t, cacheWriteReported)
 }
 
 func TestCalibrateTokenEstimatorUsesContextTextBytes(t *testing.T) {

@@ -617,15 +617,16 @@ const Figure4Panel: React.FC = () => {
   }, [activeGroup])
 
   return (
-    <div ref={ref} className={`${styles.figureCanvas} ${styles.figureCanvasFill}`}>
+    <div ref={ref} className={`${styles.figureCanvas} ${styles.taxonomyCanvas}`}>
       <div className={styles.taxonomyGrid}>
         {(['heuristic', 'learned'] as SignalGroupKey[]).map((group, index) => {
           const groupMeta = FIGURE4_GROUPS[group]
           const isActiveGroup = group === activeGroup
+          const cardClass = group === 'heuristic' ? styles.taxonomyCardHeuristic : styles.taxonomyCardLearned
           return (
             <React.Fragment key={group}>
               <motion.div
-                className={`${styles.taxonomyCard} ${isActiveGroup ? styles.taxonomyCardActive : styles.taxonomyCardMuted}`}
+                className={`${styles.taxonomyCard} ${cardClass} ${isActiveGroup ? styles.taxonomyCardActive : styles.taxonomyCardMuted}`}
                 onClick={() => setActiveGroup(group)}
                 onMouseEnter={() => setActiveGroup(group)}
                 role="button"
@@ -660,17 +661,17 @@ const Figure4Panel: React.FC = () => {
                   })}
                 </div>
               </motion.div>
-              {index === 0 && <div className={styles.taxonomyArrow}>+</div>}
+              {index === 0 && <div className={`${styles.taxonomyArrow} ${styles.taxonomyArrowPlus}`}>+</div>}
             </React.Fragment>
           )
         })}
-        <div className={styles.taxonomyArrow}>→</div>
+        <div className={`${styles.taxonomyArrow} ${styles.taxonomyArrowFlow}`}>→</div>
         <div className={styles.taxonomyResult}>S(r)</div>
       </div>
       <p className={styles.taxonomyNote}>
         {translate({
           id: 'homepage.paperFigures.figure4.summaryText',
-          message: '16 total signals. Active signal: {signal}. {groupNote}',
+          message: '14 total signals. Active signal: {signal}. {groupNote}',
           values: {
             signal: activeSignal,
             groupNote: FIGURE4_GROUPS[activeGroup].note,
@@ -934,11 +935,11 @@ const PaperFigureShowcase: React.FC = () => {
             <Translate id="homepage.paperFigures.label">Routing Blueprint</Translate>
           </p>
           <h2 className={styles.paperTitle}>
-            <Translate id="homepage.paperFigures.title">How System Works</Translate>
+            <Translate id="homepage.paperFigures.title">From signal to model path.</Translate>
           </h2>
           <p className={styles.paperDescription}>
             <Translate id="homepage.paperFigures.description">
-              An interactive walkthrough of signal extraction, projection coordination, decision logic, and model routing behavior.
+              Explore how the architecture extracts signals, composes decisions, and executes the selected path.
             </Translate>
           </p>
         </div>

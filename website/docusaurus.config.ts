@@ -7,13 +7,16 @@ import rehypeKatex from 'rehype-katex'
 
 const lightCodeTheme = themes.github
 const darkCodeTheme = themes.vsDark
-const siteUrl = 'https://vllm-semantic-router.com'
-const siteDefaultDescription = 'Open-source LLM router for Mixture-of-Models. Route requests by cost, latency, privacy, safety, and modality across local, private, and frontier models.'
+const siteUrl = 'https://vllm-sr.ai'
+const siteDefaultDescription
+  = 'We believe Mixture-of-Models is the next-generation model architecture for heterogeneous LLM inference. vLLM Semantic Router makes it executable.'
+const siteSocialTitle
+  = 'Mixture-of-Models for Heterogeneous LLM Inference | vLLM Semantic Router'
 const siteSocialPreviewImageUrl = `${siteUrl}/${SITE_SOCIAL_PREVIEW_IMAGE}`
 
 const config: Config = {
   title: 'vLLM Semantic Router',
-  tagline: 'Open-source LLM router for Mixture-of-Models',
+  tagline: 'Building Mixture-of-Models: The Next-Generation Model Architecture for Heterogeneous LLM Inference',
   favicon: 'img/vllm.png',
 
   // Set the production url of your site here
@@ -53,12 +56,8 @@ const config: Config = {
       'classic',
       {
         docs: {
-          beforeDefaultRemarkPlugins: [
-            [remarkMath, {}],
-          ],
-          beforeDefaultRehypePlugins: [
-            [rehypeKatex, {}],
-          ],
+          beforeDefaultRemarkPlugins: [[remarkMath, {}]],
+          beforeDefaultRehypePlugins: [[rehypeKatex, {}]],
           sidebarPath: './sidebars.ts',
           lastVersion: 'current',
           versions: {
@@ -97,7 +96,8 @@ const config: Config = {
           showReadingTime: true,
           postsPerPage: 10,
           blogTitle: 'vLLM Semantic Router Blog',
-          blogDescription: 'Latest updates, insights, and technical articles about vLLM Semantic Router',
+          blogDescription:
+            'Latest updates, insights, and technical articles about vLLM Semantic Router',
           blogSidebarTitle: 'Recent Posts',
           blogSidebarCount: 10,
           // Please change this to your repo.
@@ -156,20 +156,30 @@ const config: Config = {
     image: SITE_SOCIAL_PREVIEW_IMAGE,
     metadata: [
       { name: 'description', content: siteDefaultDescription },
-      { name: 'keywords', content: 'open-source LLM router, multi-model routing, semantic router, model selection, AI gateway, vLLM, Envoy, inference routing, policy-aware routing, privacy-aware routing, safety routing' },
+      {
+        name: 'keywords',
+        content:
+          'Mixture-of-Models, heterogeneous LLM inference, preference-driven AI, open-source LLM router, multi-model routing, model orchestration, model selection, model cascade, Fusion API, semantic router, vLLM',
+      },
       { name: 'author', content: 'vLLM Semantic Router Team' },
       { name: 'application-name', content: 'vLLM Semantic Router' },
-      { property: 'og:title', content: 'vLLM Semantic Router | Open-Source LLM Router' },
+      { property: 'og:title', content: siteSocialTitle },
       { property: 'og:description', content: siteDefaultDescription },
       { property: 'og:type', content: 'website' },
       { property: 'og:site_name', content: 'vLLM Semantic Router' },
       { property: 'og:image', content: siteSocialPreviewImageUrl },
-      { property: 'og:image:alt', content: 'vLLM Semantic Router social preview' },
+      {
+        property: 'og:image:alt',
+        content: 'vLLM Semantic Router social preview',
+      },
       { name: 'twitter:card', content: 'summary_large_image' },
-      { name: 'twitter:title', content: 'vLLM Semantic Router | Open-Source LLM Router' },
+      { name: 'twitter:title', content: siteSocialTitle },
       { name: 'twitter:description', content: siteDefaultDescription },
       { name: 'twitter:image', content: siteSocialPreviewImageUrl },
-      { name: 'twitter:image:alt', content: 'vLLM Semantic Router social preview' },
+      {
+        name: 'twitter:image:alt',
+        content: 'vLLM Semantic Router social preview',
+      },
 
       // GEO metadata config
       { name: 'geo.region', content: 'US-CA' },
@@ -178,11 +188,10 @@ const config: Config = {
       { name: 'ICBM', content: '37.7749, -122.4194' },
     ],
     navbar: {
-      title: 'vLLM-SR',
       logo: {
         alt: 'vLLM Semantic Router Logo',
-        src: 'img/vllm.png',
-        srcDark: 'img/vllm.png',
+        src: 'img/vllm-sr-logo.white.png',
+        srcDark: 'img/vllm-sr-logo.white.png',
       },
       items: [
         {
@@ -283,7 +292,7 @@ const config: Config = {
       ],
     },
     footer: {
-      style: 'light',
+      style: 'dark',
       links: [
         {
           title: 'Documentation',
@@ -377,8 +386,8 @@ const config: Config = {
         'name': 'vLLM Semantic Router',
         'applicationCategory': 'AIInfrastructure',
         'operatingSystem': 'Cross-platform',
-        'description': 'Open-source LLM router for Mixture-of-Models',
-        'url': 'https://vllm-semantic-router.com',
+        'description': siteDefaultDescription,
+        'url': 'https://vllm-sr.ai',
         'publisher': {
           '@type': 'Organization',
           'name': 'vLLM Semantic Router Team',

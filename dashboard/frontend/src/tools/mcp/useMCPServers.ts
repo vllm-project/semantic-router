@@ -3,7 +3,12 @@
  * 管理 MCP 服务器状态的 React Hook
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import {
+  createLatestMCPRequestRunner,
+  getMCPRequestErrorMessage,
+  type LatestMCPRequestRunner,
+} from './requestSupport'
 import type { MCPServerConfig, MCPServerState, MCPTool } from './types'
 import * as api from './api'
 
@@ -16,28 +21,37 @@ export interface UseMCPServersReturn {
   loading: boolean
   /** 错误信息 */
   error: string | null
-  
+  /** 工具目录错误信息 */
+  toolsError: string | null
+
   // 服务器管理
   /** 刷新服务器列表 */
-  refreshServers: () => Promise<void>
+  refreshServers: (signal?: AbortSignal) => Promise<void>
   /** 添加服务器 */
-  addServer: (config: Omit<MCPServerConfig, 'id'>) => Promise<MCPServerConfig>
+  addServer: (config: Omit<MCPServerConfig, 'id'>, signal?: AbortSignal) => Promise<MCPServerConfig>
   /** 更新服务器 */
-  updateServer: (id: string, config: Partial<MCPServerConfig>) => Promise<void>
+  updateServer: (
+    id: string,
+    config: Partial<MCPServerConfig>,
+    signal?: AbortSignal,
+  ) => Promise<void>
   /** 删除服务器 */
-  deleteServer: (id: string) => Promise<void>
-  
+  deleteServer: (id: string, signal?: AbortSignal) => Promise<void>
+
   // 连接管理
   /** 连接服务器 */
-  connect: (id: string) => Promise<void>
+  connect: (id: string, signal?: AbortSignal) => Promise<void>
   /** 断开连接 */
-  disconnect: (id: string) => Promise<void>
+  disconnect: (id: string, signal?: AbortSignal) => Promise<void>
   /** 测试连接 */
-  testConnection: (config: MCPServerConfig) => Promise<{ success: boolean; error?: string }>
-  
+  testConnection: (
+    config: MCPServerConfig,
+    signal?: AbortSignal,
+  ) => Promise<{ success: boolean; error?: string }>
+
   // 工具管理
   /** 刷新工具列表 */
-  refreshTools: () => Promise<void>
+  refreshTools: (signal?: AbortSignal) => Promise<void>
 }
 
 /**
@@ -48,72 +62,111 @@ export function useMCPServers(): UseMCPServersReturn {
   const [tools, setTools] = useState<MCPTool[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [toolsError, setToolsError] = useState<string | null>(null)
+  const serversRequestRef = useRef<LatestMCPRequestRunner | null>(null)
+  const toolsRequestRef = useRef<LatestMCPRequestRunner | null>(null)
+  if (!serversRequestRef.current) serversRequestRef.current = createLatestMCPRequestRunner()
+  if (!toolsRequestRef.current) toolsRequestRef.current = createLatestMCPRequestRunner()
 
   // 刷新服务器列表
-  const refreshServers = useCallback(async () => {
-    try {
-      const data = await api.getServers()
-      setServers(data)
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load servers')
-    }
+  const refreshServers = useCallback(async (externalSignal?: AbortSignal) => {
+    await serversRequestRef.current?.run(
+      (signal) => api.getServers(signal),
+      {
+        onSuccess: (data) => {
+          setServers(data)
+          setError(null)
+        },
+        onError: (requestError) => {
+          setError(getMCPRequestErrorMessage(requestError, 'Failed to load MCP servers.'))
+        },
+      },
+      externalSignal,
+    )
   }, [])
 
   // 刷新工具列表
-  const refreshTools = useCallback(async () => {
-    try {
-      const data = await api.getTools()
-      setTools(data)
-    } catch (err) {
-      console.error('Failed to load tools:', err)
-    }
+  const refreshTools = useCallback(async (externalSignal?: AbortSignal) => {
+    await toolsRequestRef.current?.run(
+      (signal) => api.getTools(signal),
+      {
+        onSuccess: (data) => {
+          setTools(data)
+          setToolsError(null)
+        },
+        onError: (requestError) => {
+          setToolsError(getMCPRequestErrorMessage(requestError, 'Failed to load MCP tools.'))
+        },
+      },
+      externalSignal,
+    )
   }, [])
 
   // 初始加载
   useEffect(() => {
+    let active = true
     const init = async () => {
       setLoading(true)
       await Promise.all([refreshServers(), refreshTools()])
-      setLoading(false)
+      if (active) setLoading(false)
     }
-    init()
+    void init()
+    return () => {
+      active = false
+      serversRequestRef.current?.cancel()
+      toolsRequestRef.current?.cancel()
+    }
   }, [refreshServers, refreshTools])
 
   // 添加服务器
-  const addServer = useCallback(async (config: Omit<MCPServerConfig, 'id'>) => {
-    const newServer = await api.createServer(config)
-    await refreshServers()
-    return newServer
-  }, [refreshServers])
+  const addServer = useCallback(
+    async (config: Omit<MCPServerConfig, 'id'>, signal?: AbortSignal) => {
+      const newServer = await api.createServer(config, signal)
+      await refreshServers(signal)
+      return newServer
+    },
+    [refreshServers],
+  )
 
   // 更新服务器
-  const updateServer = useCallback(async (id: string, config: Partial<MCPServerConfig>) => {
-    await api.updateServer(id, config)
-    await refreshServers()
-  }, [refreshServers])
+  const updateServer = useCallback(
+    async (id: string, config: Partial<MCPServerConfig>, signal?: AbortSignal) => {
+      await api.updateServer(id, config, signal)
+      await refreshServers(signal)
+    },
+    [refreshServers],
+  )
 
   // 删除服务器
-  const deleteServer = useCallback(async (id: string) => {
-    await api.deleteServer(id)
-    await Promise.all([refreshServers(), refreshTools()])
-  }, [refreshServers, refreshTools])
+  const deleteServer = useCallback(
+    async (id: string, signal?: AbortSignal) => {
+      await api.deleteServer(id, signal)
+      await Promise.all([refreshServers(signal), refreshTools(signal)])
+    },
+    [refreshServers, refreshTools],
+  )
 
   // 连接服务器
-  const connect = useCallback(async (id: string) => {
-    await api.connectServer(id)
-    await Promise.all([refreshServers(), refreshTools()])
-  }, [refreshServers, refreshTools])
+  const connect = useCallback(
+    async (id: string, signal?: AbortSignal) => {
+      await api.connectServer(id, signal)
+      await Promise.all([refreshServers(signal), refreshTools(signal)])
+    },
+    [refreshServers, refreshTools],
+  )
 
   // 断开连接
-  const disconnect = useCallback(async (id: string) => {
-    await api.disconnectServer(id)
-    await Promise.all([refreshServers(), refreshTools()])
-  }, [refreshServers, refreshTools])
+  const disconnect = useCallback(
+    async (id: string, signal?: AbortSignal) => {
+      await api.disconnectServer(id, signal)
+      await Promise.all([refreshServers(signal), refreshTools(signal)])
+    },
+    [refreshServers, refreshTools],
+  )
 
   // 测试连接
-  const testConnection = useCallback(async (config: MCPServerConfig) => {
-    return api.testConnection(config)
+  const testConnection = useCallback(async (config: MCPServerConfig, signal?: AbortSignal) => {
+    return api.testConnection(config, signal)
   }, [])
 
   return {
@@ -121,6 +174,7 @@ export function useMCPServers(): UseMCPServersReturn {
     tools,
     loading,
     error,
+    toolsError,
     refreshServers,
     addServer,
     updateServer,

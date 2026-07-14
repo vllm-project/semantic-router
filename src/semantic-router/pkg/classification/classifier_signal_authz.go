@@ -2,7 +2,6 @@ package classification
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -27,11 +26,7 @@ import (
 //   - convFacts (ConversationFacts): optional conversation facts for conversation signals
 func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, headers map[string]string, forceEvaluateAll bool, imageURL string, extra ...interface{}) (*SignalResults, error) {
 	opts := parseEvaluateSignalsExtra(extra)
-	var img []string
-	if strings.TrimSpace(imageURL) != "" {
-		img = []string{imageURL}
-	}
-	results := c.EvaluateAllSignalsWithContext(text, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, forceEvaluateAll, opts.uncompressedText, opts.skipCompressionSignals, opts.convFacts, img...)
+	results := c.EvaluateAllSignalsWithContext(text, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, forceEvaluateAll, opts.uncompressedText, opts.skipCompressionSignals, opts.convFacts, imageURL)
 	if err := c.appendAuthzFromHeaders(results, headers, forceEvaluateAll); err != nil {
 		return nil, err
 	}

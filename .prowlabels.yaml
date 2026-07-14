@@ -35,3 +35,4 @@ pr-state:
   - needs-rebase
   - blocked
   - close-candidate
+  - ci/full

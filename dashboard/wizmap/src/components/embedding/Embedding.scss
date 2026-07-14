@@ -6,6 +6,8 @@
   position: relative;
   width: 100%;
   height: 100%;
+  color: var(--wiz-text-secondary);
+  background: transparent;
 }
 
 .embedding {
@@ -13,6 +15,7 @@
   width: 100%;
   height: 100%;
   position: relative;
+  background: transparent;
 }
 
 .embedding-svg {
@@ -51,8 +54,8 @@
 }
 
 :global(.prompt-point) {
-  fill: $gray-700;
-  opacity: 0.4;
+  fill: var(--wiz-text-secondary);
+  opacity: 0.58;
 }
 
 .embedding-canvas {
@@ -127,7 +130,7 @@
 
 :global(.top-svg .label-background) {
   transition: 300ms ease-in-out ease-in-out;
-  fill: white;
+  fill: var(--wiz-surface-glass);
   opacity: 0;
 }
 
@@ -136,8 +139,8 @@
 }
 
 :global(.top-svg .highlight-point) {
-  fill: $gray-900;
-  stroke: $gray-50;
+  fill: var(--wiz-text-primary);
+  stroke: var(--wiz-brand);
 }
 
 :global(.top-svg .topic-label) {
@@ -146,7 +149,7 @@
   pointer-events: none;
   line-height: 1;
   will-change: transform;
-  fill: black;
+  fill: var(--wiz-text-primary);
 }
 
 :global(.top-svg .topic-label text) {
@@ -216,13 +219,13 @@
   :global(.topic-tile) {
     transition: stroke 300ms ease-in-out;
     fill: none;
-    stroke: $gray-900;
+    stroke: var(--wiz-border-strong);
   }
 
   :global(.topic-tile-back) {
     transition: stroke 300ms ease-in-out;
     fill: none;
-    stroke: white;
+    stroke: var(--wiz-canvas);
   }
 }
 
@@ -230,7 +233,7 @@
   opacity: 0.2;
 
   :global(.topic-tile) {
-    stroke: $gray-200;
+    stroke: var(--wiz-border);
   }
 
   :global(.direction-indicator) {
@@ -241,7 +244,7 @@
 :global(.top-svg .direction-indicator) {
   transition: opacity 300ms ease-in-out;
   stroke: none;
-  fill: $gray-900;
+  fill: var(--wiz-text-secondary);
 }
 
 :global(.top-svg g.topics.hidden) {
@@ -257,7 +260,7 @@
 :global(.top-svg g.topics-top) {
   :global(.highlight-tile) {
     fill: none;
-    stroke: $purple-900;
+    stroke: var(--wiz-brand-bright);
     transition: opacity 100ms linear;
   }
 }
@@ -277,6 +280,18 @@
     stroke: currentColor;
     width: 100%;
     height: 100%;
+  }
+}
+
+.control-bar .svg-icon {
+  :global(path:not([style*='stroke:black'])),
+  :global(circle) {
+    fill: currentColor !important;
+  }
+
+  :global(path[style*='stroke:black']) {
+    fill: none !important;
+    stroke: currentColor !important;
   }
 }
 
@@ -311,10 +326,12 @@ $control-item-height: 42px;
       gap: 7px;
       font-size: $font-d1;
       font-weight: 600;
-      border: 1px solid rgba(20, 30, 58, 0.08);
+      border: 1px solid var(--wiz-border-strong);
 
-      background-color: white;
-      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+      background: var(--wiz-surface-glass);
+      color: var(--wiz-text-secondary);
+      box-shadow: var(--wiz-shadow);
+      backdrop-filter: blur(14px);
       border-radius: 12px;
       padding: 0 14px;
       min-height: 0;
@@ -327,40 +344,41 @@ $control-item-height: 42px;
       -webkit-user-select: none;
       cursor: pointer;
 
-      transition: background-color 100ms ease-in-out, border-color 100ms ease-in-out,
-        color 100ms ease-in-out;
+      transition: background-color 100ms ease-in-out,
+        border-color 100ms ease-in-out, color 100ms ease-in-out;
 
       &:disabled {
         display: none;
       }
 
       &:hover {
-        background-color: $gray-50;
-        border-color: rgba(30, 136, 229, 0.2);
+        background: var(--wiz-surface-raised);
+        border-color: rgba(255, 255, 255, 0.28);
+        color: var(--wiz-text-primary);
       }
 
       &:active {
-        background-color: $gray-200;
+        background: rgba(255, 255, 255, 0.1);
       }
 
       &.activated {
-        background-color: change-color($color: $blue-50, $lightness: 96%);
-        color: $blue-700;
-        border-color: rgba(30, 136, 229, 0.18);
+        background: var(--wiz-brand-soft);
+        color: var(--wiz-text-primary);
+        border-color: rgba(227, 27, 35, 0.5);
 
         &:hover {
-          background-color: change-color($color: $blue-50, $lightness: 93%);
+          background: rgba(227, 27, 35, 0.2);
         }
 
         &:active {
-          background-color: change-color($color: $blue-50, $lightness: 89%);
+          background: rgba(227, 27, 35, 0.28);
         }
       }
 
       &:disabled:hover,
       &:disabled:active {
-        background-color: white;
-        border-color: rgba(20, 30, 58, 0.08);
+        background: var(--wiz-surface-glass);
+        border-color: var(--wiz-border);
       }
 
       // Safe area to avoid trigger point hover
@@ -403,10 +421,12 @@ $control-item-height: 42px;
       position: absolute;
       top: calc(100% + 10px);
 
-      background-color: white;
-      box-shadow: 0 16px 36px rgba(15, 23, 42, 0.14);
-      border: 1px solid rgba(20, 30, 58, 0.08);
+      background: var(--wiz-surface-glass);
+      color: var(--wiz-text-secondary);
+      box-shadow: var(--wiz-shadow);
+      border: 1px solid var(--wiz-border-strong);
       border-radius: 12px;
+      backdrop-filter: blur(16px);
 
       max-width: 600px;
       padding: 6px 12px;
@@ -477,7 +497,7 @@ $control-item-height: 42px;
 
     .label-menu {
       gap: 6px;
-      accent-color: $blue-400;
+      accent-color: var(--wiz-brand);
 
       .item-header {
         margin-bottom: 12px;
@@ -520,16 +540,16 @@ $control-item-height: 42px;
 
       .play-pause-button {
         position: relative;
-        color: $blue-400;
+        color: var(--wiz-text-secondary);
         width: $play-button-width;
         height: $play-button-width;
 
         &:hover {
-          color: $blue-500;
+          color: var(--wiz-text-primary);
         }
 
         &:active {
-          color: $blue-600;
+          color: var(--wiz-brand-bright);
         }
 
         .svg-icon {
@@ -564,7 +584,7 @@ $control-item-height: 42px;
         .slider-svg {
           height: 25px;
           width: $slider-width + $svg-padding * 2;
-          color: $gray-600;
+          color: var(--wiz-text-muted);
 
           :global(g.axis-group) {
             transform: translate($svg-padding, 0);
@@ -572,7 +592,7 @@ $control-item-height: 42px;
 
           :global(text) {
             font-size: 12px;
-            fill: $gray-600;
+            fill: var(--wiz-text-muted);
           }
 
           :global(path.domain) {
@@ -580,8 +600,7 @@ $control-item-height: 42px;
           }
 
           :global(g.tick line) {
-            stroke: $gray-400;
-            stroke: white;
+            stroke: var(--wiz-border-strong);
           }
         }
       }
@@ -589,7 +608,7 @@ $control-item-height: 42px;
       .back-slider {
         height: $slider-height;
         width: $slider-width;
-        background-color: $gray-400;
+        background: rgba(255, 255, 255, 0.18);
         position: absolute;
         top: $slider-top;
         z-index: 1;
@@ -608,7 +627,7 @@ $control-item-height: 42px;
           top: 0px;
           height: 100%;
           width: 0px;
-          background-color: $purple-200;
+          background: rgba(227, 27, 35, 0.46);
         }
 
         .middle-thumb {
@@ -620,8 +639,8 @@ $control-item-height: 42px;
 
           width: $thumb-width;
           height: $thumb-width;
-          background-color: $purple-500;
-          color: $purple-500;
+          background: var(--wiz-brand);
+          color: var(--wiz-brand);
           border-radius: 100%;
 
           cursor: grab;
@@ -717,8 +736,9 @@ $control-item-height: 42px;
   border-radius: 2px;
   line-height: 1.2;
   white-space: nowrap;
-  background-color: $purple-700;
-  color: white;
+  border: 1px solid rgba(227, 27, 35, 0.42);
+  background: rgba(38, 11, 13, 0.96);
+  color: var(--wiz-text-primary);
 
   -webkit-backface-visibility: hidden;
   -webkit-transform: translateZ(0);

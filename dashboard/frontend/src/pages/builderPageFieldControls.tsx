@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
 import type { FieldSchema } from "@/lib/dslMutations";
 
 import styles from "./BuilderPage.module.css";
+import { StructuredFieldEditor } from "./builderPageStructuredFieldControls";
 
 export const CustomSelect: React.FC<{
   value: string;
@@ -220,13 +221,24 @@ export const FieldEditor: React.FC<{
         </div>
       );
     case "string[]":
+    case "string[][]":
+    case "object":
+    case "object[]":
+    case "key-value":
+    case "rule":
       return (
-        <StringArrayEditor
-          label={schema.label}
-          required={schema.required}
-          value={(value as string[]) ?? []}
+        <StructuredFieldEditor
+          schema={schema}
+          value={value}
           onChange={onChange}
-          placeholder={schema.placeholder}
+          renderField={(nestedSchema, nestedValue, nestedOnChange) => (
+            <FieldEditor
+              key={nestedSchema.key}
+              schema={nestedSchema}
+              value={nestedValue}
+              onChange={nestedOnChange}
+            />
+          )}
         />
       );
     case "number[]": {
@@ -253,43 +265,6 @@ export const FieldEditor: React.FC<{
         />
       );
     }
-    case "json":
-      return (
-        <div className={styles.fieldGroup}>
-          <label className={styles.fieldLabel}>
-            {schema.label}{" "}
-            {schema.required && (
-              <span style={{ color: "var(--color-danger)" }}>*</span>
-            )}
-          </label>
-          <textarea
-            className={styles.fieldTextarea}
-            value={
-              value !== undefined && value !== null
-                ? typeof value === "string"
-                  ? value
-                  : JSON.stringify(value, null, 2)
-                : ""
-            }
-            onChange={(e) => {
-              try {
-                onChange(JSON.parse(e.target.value));
-              } catch {
-                onChange(e.target.value);
-              }
-            }}
-            rows={3}
-            style={{ fontSize: "var(--text-xs)" }}
-          />
-          {schema.description && (
-            <span
-              style={{ fontSize: "0.625rem", color: "var(--color-text-muted)" }}
-            >
-              {schema.description}
-            </span>
-          )}
-        </div>
-      );
     default:
       return null;
   }
