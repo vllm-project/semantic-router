@@ -3,10 +3,9 @@
 package apiserver
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -260,6 +259,9 @@ func TestEmbeddingEndpointsReturn503WhenNotReady(t *testing.T) {
 				t.Fatalf("expected EMBEDDING_NOT_READY, got: %s", rr.Body.String())
 			}
 		})
+	}
+}
+
 // target_layer must be validated against the layers the loaded model actually
 // advertises, not a hardcoded list. For the official
 // mmbert-embed-32k-2d-matryoshka (available_layers [6, 11, 16, 22]), layer 16
