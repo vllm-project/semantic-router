@@ -309,7 +309,7 @@ func PrintComparisonResults(results []ComparisonResult) {
 		if result.NsAdvisory {
 			advisory = "  ⚠️ advisory"
 		}
-		fmt.Printf("  └─ ns/op (adv): %-15.0f %-15.0f %+.2f%%%s\n",
+		fmt.Printf("  └─ ns/op (adv): %-15.1f %-15.1f %+.2f%%%s\n",
 			result.Baseline.NsPerOp,
 			result.Current.NsPerOp,
 			result.NsPerOpChange,
