@@ -93,6 +93,25 @@ fn get_multimodal_refs() -> Option<(&'static MultiModalEmbeddingModel, &'static 
     None
 }
 
+/// Return the loaded multimodal model's native embedding dimension.
+///
+/// The router needs this to enforce the over-dimension contract server-side:
+/// the API default (768) exceeds the multimodal native dimension (384), so the
+/// Go layer must clamp its default and reject above-native requests using the
+/// real value rather than a hardcoded constant that a model config could
+/// override via `embedding_dim`.
+///
+/// # Returns
+/// The native embedding dimension (> 0) on success, or -1 if no multimodal
+/// model is loaded.
+#[no_mangle]
+pub extern "C" fn multimodal_get_embedding_dim() -> i32 {
+    match get_multimodal_refs() {
+        Some((model, _tokenizer)) => model.config().embedding_dim as i32,
+        None => -1,
+    }
+}
+
 /// Generic internal helper for single text embedding generation
 ///
 /// This function extracts common logic for both Qwen3 and Gemma models.
