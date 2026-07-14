@@ -21,12 +21,16 @@ type VectorStoreRuntime struct {
 	Pipeline       *vectorstore.IngestionPipeline
 	Embedder       vectorstore.Embedder
 	registryCloser io.Closer
+	// drainTimeout bounds how long Shutdown waits for in-flight ingestion jobs
+	// to drain before cancelling them. Sourced from
+	// vector_store.ingestion_drain_timeout_seconds.
+	drainTimeout time.Duration
 }
 
-// vectorStoreShutdownTimeout bounds how long Shutdown waits for the ingestion
-// pipeline to drain in-flight jobs before cancelling them, so a wedged embedder
-// or backend cannot block process shutdown indefinitely.
-const vectorStoreShutdownTimeout = 30 * time.Second
+// defaultDrainTimeout is the fallback shutdown drain bound used when a runtime
+// is constructed without a configured drain timeout, so Stop is never
+// unbounded.
+const defaultDrainTimeout = 30 * time.Second
 
 func NewVectorStoreRuntime(cfg *config.RouterConfig) (*VectorStoreRuntime, error) {
 	if cfg == nil {
@@ -77,6 +81,7 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig) (*VectorStoreRuntime, error
 		Pipeline:       pipeline,
 		Embedder:       embedder,
 		registryCloser: regCloser,
+		drainTimeout:   time.Duration(cfg.VectorStore.IngestionDrainTimeoutSeconds) * time.Second,
 	}, nil
 }
 
@@ -129,10 +134,16 @@ func (r *VectorStoreRuntime) Shutdown() error {
 		return nil
 	}
 	if r.Pipeline != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), vectorStoreShutdownTimeout)
+		// Fall back to a bounded default if drainTimeout was not configured
+		// (e.g. a hand-constructed runtime), so Stop is never unbounded.
+		drain := r.drainTimeout
+		if drain <= 0 {
+			drain = defaultDrainTimeout
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), drain)
 		defer cancel()
 		if err := r.Pipeline.Stop(ctx); err != nil {
-			logging.Warnf("Ingestion pipeline did not drain within %s: %v", vectorStoreShutdownTimeout, err)
+			logging.Warnf("Ingestion pipeline did not drain within %s: %v", drain, err)
 		}
 	}
 	if r.registryCloser != nil {
