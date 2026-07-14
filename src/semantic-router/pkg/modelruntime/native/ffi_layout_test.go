@@ -1,6 +1,7 @@
 package native
 
 import (
+	"context"
 	"testing"
 )
 
@@ -44,4 +45,5 @@ func TestRegistryThreadSafety(t *testing.T) {
 		<-done
 	}
 }
+
 
