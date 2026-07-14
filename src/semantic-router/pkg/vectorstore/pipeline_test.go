@@ -33,7 +33,7 @@ type mockEmbedder struct {
 	called int
 }
 
-func (m *mockEmbedder) Embed(_ string) ([]float32, error) {
+func (m *mockEmbedder) Embed(_ context.Context, _ string) ([]float32, error) {
 	m.called++
 	if m.err != nil {
 		return nil, m.err

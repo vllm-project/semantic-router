@@ -51,7 +51,7 @@ func newDeterministicEmbedder(dim int) *deterministicEmbedder {
 	return e
 }
 
-func (e *deterministicEmbedder) Embed(text string) ([]float32, error) {
+func (e *deterministicEmbedder) Embed(_ context.Context, text string) ([]float32, error) {
 	// Check for keyword matches and return the corresponding basis vector.
 	for keyword, emb := range e.keywords {
 		if containsWord(text, keyword) {
@@ -201,7 +201,7 @@ Login attempts are locked after 5 failures.`
 		Expect(updated.FileCounts.Failed).To(Equal(0))
 
 		// 6. Search for PTO-related content
-		ptoQuery, err := embedder.Embed("What is our PTO policy?")
+		ptoQuery, err := embedder.Embed(context.Background(), "What is our PTO policy?")
 		Expect(err).NotTo(HaveOccurred())
 
 		results, err := backend.Search(ctx, vs.ID, ptoQuery, 5, 0.5, nil)
@@ -213,7 +213,7 @@ Login attempts are locked after 5 failures.`
 		Expect(results[0].Score).To(BeNumerically(">", 0.9))
 
 		// 7. Search for security-related content
-		secQuery, err := embedder.Embed("How do I reset my password?")
+		secQuery, err := embedder.Embed(context.Background(), "How do I reset my password?")
 		Expect(err).NotTo(HaveOccurred())
 
 		results, err = backend.Search(ctx, vs.ID, secQuery, 5, 0.5, nil)
@@ -248,7 +248,7 @@ Login attempts are locked after 5 failures.`
 		// Simulate RAG retrieval:
 		// 1. Embed the user query
 		userQuery := "What is the vacation policy?"
-		queryEmbedding, err := embedder.Embed(userQuery)
+		queryEmbedding, err := embedder.Embed(context.Background(), userQuery)
 		Expect(err).NotTo(HaveOccurred())
 
 		// 2. Search the vector store
@@ -311,7 +311,7 @@ Login attempts are locked after 5 failures.`
 		Expect(updated.FileCounts.Completed).To(Equal(4))
 
 		// Search should return results from multiple files
-		query, _ := embedder.Embed("PTO policy information")
+		query, _ := embedder.Embed(ctx, "PTO policy information")
 		results, err := backend.Search(ctx, vs.ID, query, 10, 0, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(results)).To(BeNumerically(">=", 4))
@@ -333,7 +333,7 @@ Login attempts are locked after 5 failures.`
 		}, 10*time.Second, 100*time.Millisecond).Should(Equal("completed"))
 
 		// Verify search finds results
-		query, _ := embedder.Embed("PTO")
+		query, _ := embedder.Embed(ctx, "PTO")
 		results, err := backend.Search(ctx, vs.ID, query, 10, 0.5, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(results)).To(BeNumerically(">=", 1))
@@ -407,10 +407,10 @@ func newGateEmbedder(inner Embedder) *gateEmbedder {
 	}
 }
 
-func (g *gateEmbedder) Embed(text string) ([]float32, error) {
+func (g *gateEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
 	g.once.Do(func() { close(g.entered) })
 	<-g.release
-	return g.inner.Embed(text)
+	return g.inner.Embed(ctx, text)
 }
 
 func (g *gateEmbedder) Dimension() int { return g.inner.Dimension() }
@@ -520,7 +520,7 @@ var _ = Describe("Integration: Pipeline graceful and bounded shutdown", func() {
 })
 
 func mustEmbed(e Embedder, text string) []float32 {
-	emb, err := e.Embed(text)
+	emb, err := e.Embed(context.Background(), text)
 	Expect(err).NotTo(HaveOccurred())
 	return emb
 }

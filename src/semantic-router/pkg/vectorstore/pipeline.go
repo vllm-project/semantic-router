@@ -24,9 +24,11 @@ import (
 )
 
 // Embedder generates vector embeddings from text. Implementations
-// wrap the actual embedding model (e.g. Candle FFI).
+// wrap the actual embedding model (e.g. Candle FFI). Embed takes a
+// context so a cancelled lifecycle or request aborts embedding work at
+// the next checkpoint instead of running to completion.
 type Embedder interface {
-	Embed(text string) ([]float32, error)
+	Embed(ctx context.Context, text string) ([]float32, error)
 	Dimension() int
 }
 
@@ -418,7 +420,7 @@ func (p *IngestionPipeline) embedChunks(ctx context.Context, job IngestionJob, f
 			return nil, false
 		}
 
-		embedding, err := p.embedder.Embed(chunk.Content)
+		embedding, err := p.embedder.Embed(ctx, chunk.Content)
 		if err != nil {
 			p.failJob(ctx, job, "embedding_error", fmt.Sprintf("failed to embed chunk %d: %v", chunk.ChunkIndex, err))
 			return nil, false

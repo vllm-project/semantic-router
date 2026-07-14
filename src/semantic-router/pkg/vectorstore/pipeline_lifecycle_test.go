@@ -41,7 +41,11 @@ func newBlockingEmbedder(dim int) *blockingEmbedder {
 	}
 }
 
-func (e *blockingEmbedder) Embed(_ string) ([]float32, error) {
+// Embed intentionally ignores ctx and blocks until released, modelling a
+// stage that does not honor cancellation mid-call. This is what the bounded
+// Stop(ctx) path must defend against; making stages natively ctx-interruptible
+// is a deliberate follow-up tracked under #2474.
+func (e *blockingEmbedder) Embed(_ context.Context, _ string) ([]float32, error) {
 	e.once.Do(func() {
 		close(e.started)
 	})
