@@ -11,6 +11,7 @@ pub mod model_architectures;
 pub mod utils;
 
 // C FFI interface
+pub mod registry;
 pub mod ffi;
 
 // Test fixtures and utilities (only available in test builds)
