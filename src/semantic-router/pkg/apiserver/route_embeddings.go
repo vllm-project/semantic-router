@@ -29,6 +29,28 @@ var multiModalEmbeddingDim = candle_binding.MultiModalGetEmbeddingDim
 // path is configured; it matches the canonical shipped checkpoint.
 const multiModalModelFallbackID = "multi-modal-embed-small"
 
+// imageTargetDimension resolves the per-request image encoding dimension.
+//
+// Image-only requests use req.Dimension directly (validated <= native). Mixed
+// text+image requests always encode the image side at the multimodal native
+// dimension: req.Dimension controls the text side and would exceed the image
+// ceiling, and forcing a single uniform dimension across two encoders whose
+// embedding spaces do not align gives no real benefit while silently
+// downgrading text recall.
+//
+// If no multimodal model is loaded (getter reports <= 0), fall back to
+// req.Dimension so the downstream encode surfaces "model not loaded" rather
+// than this helper guessing a value.
+func imageTargetDimension(req EmbeddingRequest) int {
+	if len(req.Texts) == 0 {
+		return req.Dimension
+	}
+	if native := multiModalEmbeddingDim(); native > 0 {
+		return native
+	}
+	return req.Dimension
+}
+
 // isMultiModalModelName reports whether an explicit model selector names the
 // multimodal embedding model. Mirrors the aliases registered in
 // config/registry.go so an image request may name the multimodal model
@@ -168,13 +190,18 @@ func applyEmbeddingDefaults(req *EmbeddingRequest) {
 		req.Model = "auto"
 	}
 	if req.Dimension == 0 {
-		// Image inputs cap at the multimodal model's native dimension, which is
-		// below the text default (768). Defaulting an image-bearing request to
-		// 768 would exceed the native dimension and, under the over-dimension
-		// contract, be rejected. Default such requests to the native dimension
-		// so a plain image (or mixed text+image) request succeeds with uniform
-		// vectors instead of failing or silently mixing dimensions.
-		if len(req.Images) > 0 {
+		// req.Dimension follows the primary modality:
+		//   - text-only / mixed: text default (768). In mixed mode Dimension
+		//     controls the text side; the image side always encodes at its
+		//     native dimension and is not affected by req.Dimension.
+		//   - image-only: multimodal native dimension (384), the ceiling MRL
+		//     can produce.
+		// Forcing mixed requests to a single uniform dimension would silently
+		// downgrade text recall (768 -> 384) for a false-consistency win:
+		// cross-encoder vectors live in different embedding spaces regardless
+		// of dimension, so uniform width does not enable cross-modal cosine.
+		// Per-item response.dimension disambiguates for the caller.
+		if len(req.Texts) == 0 && len(req.Images) > 0 {
 			if native := multiModalEmbeddingDim(); native > 0 {
 				req.Dimension = native
 			} else {
@@ -201,11 +228,17 @@ func validateEmbeddingRequest(req EmbeddingRequest, mmbertLayers []int) (string,
 		return "INVALID_DIMENSION", fmt.Sprintf("dimension must be one of: 64, 128, 256, 384, 512, 768, 1024 (got %d)", req.Dimension), false
 	}
 	if len(req.Images) > 0 {
-		// Image inputs route to the multimodal model, whose native dimension is
-		// a ceiling: MRL only truncates down, so an above-native request cannot
-		// be satisfied and is rejected rather than silently returning native.
-		if native := multiModalEmbeddingDim(); native > 0 && req.Dimension > native {
-			return "INVALID_DIMENSION", fmt.Sprintf("dimension must be <= %d for image inputs (multimodal model native dimension; got %d)", native, req.Dimension), false
+		// Image-only: req.Dimension is the image target, so the multimodal
+		// native dimension is a hard ceiling (MRL only truncates down; an
+		// above-native request cannot be satisfied and is rejected rather
+		// than silently returning native).
+		// Mixed: req.Dimension applies to the text side and the image side
+		// always encodes at its native dimension, so a text-legal
+		// req.Dimension (e.g. 768) is not constrained by the image ceiling.
+		if len(req.Texts) == 0 {
+			if native := multiModalEmbeddingDim(); native > 0 && req.Dimension > native {
+				return "INVALID_DIMENSION", fmt.Sprintf("dimension must be <= %d for image inputs (multimodal model native dimension; got %d)", native, req.Dimension), false
+			}
 		}
 		// target_layer is a text-only mmbert 2DMSE control; it cannot apply to
 		// image encoding, so reject instead of silently ignoring it.
@@ -268,6 +301,7 @@ func buildEmbeddingResults(req EmbeddingRequest, multiModalModelID string) ([]Em
 		totalProcessingTime += processingTime
 	}
 
+	imgDim := imageTargetDimension(req)
 	for i, image := range req.Images {
 		// Canonicalize so the FFI's case-sensitive ";base64," scan finds the
 		// payload boundary (validation already guaranteed a safe data URI).
@@ -275,7 +309,7 @@ func buildEmbeddingResults(req EmbeddingRequest, multiModalModelID string) ([]Em
 		if canonical, ok := imageurl.CanonicalDataURL(image); ok {
 			encodeInput = canonical
 		}
-		output, err := multiModalEncodeImage(encodeInput, req.Dimension)
+		output, err := multiModalEncodeImage(encodeInput, imgDim)
 		if err != nil {
 			// The image already passed the safe-data-URI + base64-decode gate, so
 			// an encode failure here is input-caused (undecodable image bytes);
