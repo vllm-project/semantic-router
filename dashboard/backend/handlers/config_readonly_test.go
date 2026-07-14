@@ -45,7 +45,7 @@ func TestUpdateRouterDefaultsHandler_ReadonlyMode(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	UpdateRouterDefaultsHandler(tempDir, true)(w, req)
+	UpdateRouterDefaultsHandler(filepath.Join(tempDir, "custom-config.yaml"), true, tempDir)(w, req)
 
 	if w.Code != http.StatusForbidden {
 		t.Errorf("Expected status 403, got %d. Response: %s", w.Code, w.Body.String())
