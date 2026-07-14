@@ -11,6 +11,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -26,6 +27,10 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	requestBody []byte,
 	openAIRequest *openai.ChatCompletionNewParams,
 ) ([]byte, error) {
+	ctx.MemoryBackend = r.Config.Memory.Backend
+	if ctx.MemoryBackend == "" {
+		ctx.MemoryBackend = "milvus"
+	}
 	memoryPluginConfig, shouldRetrieve := r.resolveMemoryPluginConfig(ctx)
 	if !shouldRetrieve {
 		return requestBody, nil
@@ -33,6 +38,7 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	store := r.getMemoryStore()
 	if store == nil || !store.IsEnabled() {
 		logging.Debugf("Memory: Store not available or disabled, skipping retrieval")
+		recordMemoryOutcome(ctx, "unavailable", "store_unavailable", true)
 		return requestBody, nil
 	}
 
@@ -44,13 +50,19 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	retrieveOpts := r.buildMemoryRetrieveOptions(memoryPluginConfig, searchQuery, userID)
 	memories, err := store.Retrieve(ctx.TraceContext, retrieveOpts)
 	if err != nil {
-		metrics.RecordPluginExecution("memory", ctx.VSRSelectedDecisionName, "retrieval_error", 0)
+		recordMemoryOutcome(ctx, "unavailable", "retrieval_error", true)
 		logging.Errorf("Memory: retrieval failed for user=%s decision=%s query=%q: %v",
 			userID, ctx.VSRSelectedDecisionName, truncateForLog(searchQuery, 60), err)
 		return requestBody, fmt.Errorf("memory retrieval failed: %w", err)
 	}
+	retrievedCount := len(memories)
 	memories = r.filterRetrievedMemories(memoryPluginConfig, memories, userID)
 	if len(memories) == 0 {
+		reason := "no_results"
+		if retrievedCount > 0 {
+			reason = "filtered"
+		}
+		recordMemoryOutcome(ctx, "missing", reason, false)
 		return requestBody, nil
 	}
 	return r.injectRetrievedMemories(ctx, requestBody, memories), nil
@@ -69,16 +81,19 @@ func (r *OpenAIRouter) resolveMemoryPluginConfig(
 		memoryEnabled = memoryPluginConfig.Enabled
 		if !memoryEnabled {
 			logging.Debugf("Memory: Disabled by per-decision plugin config for decision '%s'", ctx.VSRSelectedDecisionName)
+			recordMemoryOutcome(ctx, "disabled", "decision_config", false)
 			return memoryPluginConfig, false
 		}
 	} else if !memoryEnabled {
 		logging.Debugf("Memory: Disabled in global config, skipping retrieval")
+		recordMemoryOutcome(ctx, "disabled", "global_config", false)
 		return nil, false
 	}
 
 	// Check opt-out header (x-disable-router-memory: true)
-	if ctx.Headers["x-disable-router-memory"] == "true" {
+	if ctx.Headers[headers.DisableRouterMemory] == "true" {
 		logging.Debugf("Memory: Disabled via x-disable-router-memory header (SDK-managed memory opt-out)")
+		recordMemoryOutcome(ctx, "policy_blocked", "request_opt_out", false)
 		return memoryPluginConfig, false
 	}
 
@@ -86,12 +101,14 @@ func (r *OpenAIRouter) resolveMemoryPluginConfig(
 	requestPath := ctx.Headers[":path"]
 	if r.isMemoryDisabledForRoute(requestPath) {
 		logging.Debugf("Memory: Disabled for route %s via config (SDK-managed memory opt-out)", requestPath)
+		recordMemoryOutcome(ctx, "policy_blocked", "route_config", false)
 		return memoryPluginConfig, false
 	}
 
 	// Check config-based per-model disable
 	if ctx.RequestModel != "" && r.isMemoryDisabledForModel(ctx.RequestModel) {
 		logging.Debugf("Memory: Disabled for model %s via config (SDK-managed memory opt-out)", ctx.RequestModel)
+		recordMemoryOutcome(ctx, "policy_blocked", "model_config", false)
 		return memoryPluginConfig, false
 	}
 
@@ -105,6 +122,7 @@ func (r *OpenAIRouter) prepareMemorySearchQuery(
 ) (string, string, bool) {
 	if !ShouldSearchMemory(ctx, userContent) {
 		logging.Debugf("Memory: skipping search (query type not suitable)")
+		recordMemoryOutcome(ctx, "ignored", "query_ineligible", false)
 		return "", "", false
 	}
 
@@ -112,12 +130,15 @@ func (r *OpenAIRouter) prepareMemorySearchQuery(
 	searchQuery, err := BuildSearchQuery(ctx.TraceContext, history, userContent, r.Config)
 	if err != nil {
 		logging.Warnf("Memory: Query rewriting failed, using original query: %v", err)
+		ctx.MemoryFailOpen = true
+		ctx.MemoryFallbackReason = "query_rewrite_error"
 		searchQuery = userContent
 	}
 
 	userID := r.getUserIDFromContext(ctx)
 	if userID == "" {
 		logging.Debugf("Memory: no user ID, skipping search")
+		recordMemoryOutcome(ctx, "missing", "user_id_missing", false)
 		return "", "", false
 	}
 
@@ -212,21 +233,33 @@ func (r *OpenAIRouter) injectRetrievedMemories(
 ) []byte {
 	ctx.MemoryContext = FormatMemoriesAsContext(memories)
 	if ctx.MemoryContext == "" {
+		recordMemoryOutcome(ctx, "missing", "empty_context", false)
 		return requestBody
 	}
 
 	injectedBody, err := injectMemoryMessages(requestBody, ctx.MemoryContext)
 	if err != nil {
 		logging.Warnf("Memory: Failed to inject memory context: %v", err)
-		metrics.RecordPluginExecution("memory", ctx.VSRSelectedDecisionName, "injection_error", 0)
+		recordMemoryOutcome(ctx, "unavailable", "injection_error", true)
 		ctx.MemoryContext = ""
 		return requestBody
 	}
 
-	metrics.RecordPluginExecution("memory", ctx.VSRSelectedDecisionName, "injected", 0)
+	ctx.MemoryResultCount = len(memories)
+	recordMemoryOutcome(ctx, "used", "injected", false)
 	logging.Debugf("Memory: Injected %d memories (decision=%s, context_len=%d)",
 		len(memories), ctx.VSRSelectedDecisionName, len(ctx.MemoryContext))
 	return injectedBody
+}
+
+func recordMemoryOutcome(ctx *RequestContext, status, reason string, failOpen bool) {
+	ctx.MemoryStatus = status
+	ctx.MemoryReason = reason
+	ctx.MemoryFailOpen = ctx.MemoryFailOpen || failOpen
+	if failOpen {
+		ctx.MemoryFallbackReason = reason
+	}
+	metrics.RecordPluginExecution("memory", ctx.VSRSelectedDecisionName, status, 0)
 }
 
 func (r *OpenAIRouter) getMemoryStore() memory.Store {
@@ -291,6 +324,9 @@ func (r *OpenAIRouter) createRateLimitResponse(decision *ratelimit.Decision) *ex
 		}
 	}
 
+	// v0.4 keystone headers: this is the rate-limit path (#2203).
+	respHeaders = append(respHeaders, httputil.KeystoneHeaderOptions(headers.ResponsePathRateLimited)...)
+
 	return &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_ImmediateResponse{
 			ImmediateResponse: &ext_proc.ImmediateResponse{
@@ -317,6 +353,12 @@ func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName stri
 
 	logging.Infof("[FastResponse] Decision '%s' has fast_response plugin, returning immediate response", decisionName)
 	metrics.RecordPluginExecution("fast_response", decisionName, "executed", 0)
+
+	if isResponseAPIRequest(ctx) {
+		if response, ok := r.createResponseAPIFastResponse(ctx, fastCfg.Message, decisionName); ok {
+			return response
+		}
+	}
 
 	return httputil.CreateFastResponse(fastCfg.Message, ctx.ExpectStreamingResponse, decisionName)
 }

@@ -22,6 +22,22 @@ func defaultCanonicalRouterGlobal() CanonicalRouterGlobal {
 		ModelSelection: ModelSelectionConfig{
 			Enabled: true,
 			Method:  "knn",
+			RouterDC: RouterDCSelectionConfig{
+				Temperature:         0.07,
+				DimensionSize:       768,
+				MinSimilarity:       0.3,
+				UseQueryContrastive: true,
+				UseModelContrastive: true,
+				UseCapabilities:     true,
+			},
+			Hybrid: HybridSelectionConfig{
+				ExperienceWeight:    0.3,
+				RouterDCWeight:      0.3,
+				AutoMixWeight:       0.2,
+				CostWeight:          0.2,
+				QualityGapThreshold: 0.1,
+				NormalizeScores:     true,
+			},
 		},
 	}
 }
@@ -101,6 +117,12 @@ func defaultCanonicalIntegrationGlobal() CanonicalIntegrationGlobal {
 			Endpoint:       "http://localhost:8899/v1/chat/completions",
 			TimeoutSeconds: 1200,
 			Headers:        map[string]string{},
+			Flow: FlowRuntimeConfig{
+				State: WorkflowStateRuntimeConfig{
+					StoreBackend: WorkflowStateBackendFile,
+					TTLSeconds:   DefaultWorkflowStateTTLSeconds,
+				},
+			},
 		},
 	}
 }

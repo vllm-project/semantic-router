@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React from 'react'
 import Translate from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import { PillLink, SectionLabel } from '@site/src/components/site/Chrome'
@@ -7,109 +7,10 @@ import styles from './index.module.css'
 
 export default function ResearchPaperCarousel(): JSX.Element {
   const { i18n } = useDocusaurusContext()
-  const trackRef = useRef<HTMLDivElement>(null)
-  const [autoScrollEnabled, setAutoScrollEnabled] = useState(false)
   const orderedPapers = localizeResearchEntries(
     sortResearchEntries(researchPapers),
     i18n.currentLocale,
   )
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return undefined
-    }
-
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const syncPreference = () => {
-      setAutoScrollEnabled(!mediaQuery.matches)
-    }
-
-    syncPreference()
-
-    if (typeof mediaQuery.addEventListener === 'function') {
-      mediaQuery.addEventListener('change', syncPreference)
-      return () => {
-        mediaQuery.removeEventListener('change', syncPreference)
-      }
-    }
-
-    mediaQuery.addListener(syncPreference)
-    return () => {
-      mediaQuery.removeListener(syncPreference)
-    }
-  }, [])
-
-  useEffect(() => {
-    const track = trackRef.current
-    if (!track) {
-      return undefined
-    }
-
-    if (!autoScrollEnabled) {
-      track.style.transform = ''
-      return undefined
-    }
-
-    let animationFrameId = 0
-    let scrollPosition = 0
-    let totalWidth = 0
-    let paused = false
-    const scrollSpeed = 0.35
-
-    const updateTotalWidth = () => {
-      const cards = Array.from(track.children).slice(0, orderedPapers.length)
-      const gap = parseFloat(window.getComputedStyle(track).gap || '0')
-
-      totalWidth = cards.reduce((total, card, index) => {
-        const width = (card as HTMLElement).offsetWidth
-        return total + width + (index < cards.length - 1 ? gap : 0)
-      }, 0)
-    }
-
-    const pause = () => {
-      paused = true
-    }
-
-    const resume = () => {
-      paused = false
-    }
-
-    const scroll = () => {
-      if (!paused && totalWidth > 0) {
-        scrollPosition += scrollSpeed
-
-        if (scrollPosition >= totalWidth) {
-          scrollPosition = 0
-        }
-
-        track.style.transform = `translateX(-${scrollPosition}px)`
-      }
-
-      animationFrameId = window.requestAnimationFrame(scroll)
-    }
-
-    updateTotalWidth()
-    window.addEventListener('resize', updateTotalWidth)
-    track.addEventListener('mouseenter', pause)
-    track.addEventListener('mouseleave', resume)
-    track.addEventListener('focusin', pause)
-    track.addEventListener('focusout', resume)
-    animationFrameId = window.requestAnimationFrame(scroll)
-
-    return () => {
-      window.cancelAnimationFrame(animationFrameId)
-      window.removeEventListener('resize', updateTotalWidth)
-      track.removeEventListener('mouseenter', pause)
-      track.removeEventListener('mouseleave', resume)
-      track.removeEventListener('focusin', pause)
-      track.removeEventListener('focusout', resume)
-      track.style.transform = ''
-    }
-  }, [autoScrollEnabled])
-
-  const displayPapers = autoScrollEnabled
-    ? [...orderedPapers, ...orderedPapers, ...orderedPapers]
-    : orderedPapers
 
   return (
     <section className={styles.section}>
@@ -132,9 +33,9 @@ export default function ResearchPaperCarousel(): JSX.Element {
         </div>
 
         <div className={styles.carouselShell}>
-          <div className={`${styles.carouselContainer} ${!autoScrollEnabled ? styles.carouselContainerStatic : ''}`}>
-            <div className={styles.carouselTrack} ref={trackRef}>
-              {displayPapers.map((paper, index) => {
+          <div className={`${styles.carouselContainer} ${styles.carouselContainerStatic}`}>
+            <div className={styles.carouselTrack}>
+              {orderedPapers.map((paper, index) => {
                 const paperLink = paper.links.find(link => link.type === 'paper') ?? paper.links[0]
                 return (
                   <article

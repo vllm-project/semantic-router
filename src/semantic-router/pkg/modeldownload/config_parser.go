@@ -98,6 +98,7 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	// Extract all model paths from config
 	paths := filterDisabledOptionalModelPaths(cfg, ExtractModelPaths(cfg))
 	requiredFilesByModel := ExtractRequiredFilesByModel(cfg)
+	addEmbeddingModelRequiredFiles(cfg, requiredFilesByModel)
 
 	// Allow empty paths for API-only configurations
 	if len(paths) == 0 {
@@ -134,6 +135,36 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	}
 
 	return specs, nil
+}
+
+// embeddingModelWeightFiles are the files the candle embedding runtime loads to bring a
+// semantic embedding model up. They are deliberately stricter than the nested-weight
+// heuristic in IsModelComplete: a directory holding only config.json + onnx/ (the layout
+// shipped in the image) otherwise satisfies that heuristic via the nested *.onnx files and
+// the safetensors/tokenizer download is never triggered, leaving embedding_ready=false (#2172).
+var embeddingModelWeightFiles = []string{"model.safetensors", "tokenizer.json"}
+
+// addEmbeddingModelRequiredFiles marks the configured semantic embedding model as requiring
+// its safetensors weights and tokenizer so a partial (ONNX-only) directory is detected as
+// incomplete and the full snapshot is re-downloaded.
+func addEmbeddingModelRequiredFiles(cfg *config.RouterConfig, requiredFilesByModel map[string][]string) {
+	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+		return
+	}
+
+	// MmBertModelPath holds the configured semantic embedding model directory.
+	path := cfg.MmBertModelPath
+	if path == "" || !strings.HasPrefix(path, "models/") {
+		return
+	}
+
+	existing := requiredFilesByModel[path]
+	for _, fileName := range embeddingModelWeightFiles {
+		if !slices.Contains(existing, fileName) {
+			existing = append(existing, fileName)
+		}
+	}
+	requiredFilesByModel[path] = existing
 }
 
 // ExtractRequiredFilesByModel derives per-model completeness requirements from

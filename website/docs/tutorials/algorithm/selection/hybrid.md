@@ -2,7 +2,9 @@
 
 ## Overview
 
-`hybrid` is a composite selection algorithm that combines multiple ranking signals — Elo ratings, Router-DC embedding similarity, AutoMix POMDP values, and cost — into one weighted score.
+`hybrid` is a composite selection algorithm that combines multiple ranking
+signals, such as Router-DC embedding similarity, AutoMix value estimates,
+Router Learning evidence, and cost, into one weighted score.
 
 It aligns to `config/algorithm/selection/hybrid.yaml`.
 
@@ -12,14 +14,15 @@ It aligns to `config/algorithm/selection/hybrid.yaml`.
 
 - Blends multiple selectors instead of committing to only one.
 - Makes weighting explicit and easy to audit.
-- Supports gradual migration between ranking policies (e.g., transition from static to Elo).
+- Supports gradual migration between request-time ranking policies and
+  Router Learning evidence.
 - Cost-aware scoring to balance quality and operational expense.
 
 ## Algorithm Principle
 
 Hybrid computes a weighted composite score for each candidate model:
 
-$$S(m) = w_{\text{elo}} \cdot \hat{R}_{\text{elo}}(m) + w_{\text{rdc}} \cdot \hat{R}_{\text{rdc}}(m) + w_{\text{amix}} \cdot \hat{R}_{\text{amix}}(m) - w_{\text{cost}} \cdot \hat{C}(m)$$
+$$S(m) = w_{\text{learning}} \cdot \hat{R}_{\text{learning}}(m) + w_{\text{rdc}} \cdot \hat{R}_{\text{rdc}}(m) + w_{\text{amix}} \cdot \hat{R}_{\text{amix}}(m) - w_{\text{cost}} \cdot \hat{C}(m)$$
 
 When `normalize_scores` is enabled (default), each component is min-max normalized to [0, 1] before combination, ensuring fair weighting regardless of scale differences.
 
@@ -31,7 +34,7 @@ When `normalize_scores` is enabled (default), each component is min-max normaliz
 flowchart TD
     A[Request arrives] --> B[Decision matched]
     B --> C[algorithm.type = hybrid]
-    C --> D[Run Elo: compute Elo scores]
+    C --> D[Read Router Learning evidence]
     C --> E[Run RouterDC: compute embedding similarity]
     C --> F[Run AutoMix: compute POMDP value]
     D --> G[Normalize scores, 0-1]
@@ -48,7 +51,7 @@ The Hybrid selector internally instantiates three sub-selectors:
 
 | Component | Source | What it provides |
 |-----------|--------|-----------------|
-| `EloSelector` | Feedback history | Historical pairwise comparison scores |
+| Router Learning evidence | Learning snapshots | Feedback-derived ratings or reward evidence |
 | `RouterDCSelector` | Model descriptions | Semantic query-model similarity |
 | `AutoMixSelector` | POMDP solver | Cost-quality optimal value estimate |
 
@@ -77,7 +80,7 @@ No single ranking signal is reliable for every workload: pure cost, pure similar
 algorithm:
   type: hybrid
   hybrid:
-    elo_weight: 0.3              # Weight for Elo rating
+    experience_weight: 0.3              # Feedback-derived experience evidence
     router_dc_weight: 0.3        # Weight for embedding similarity
     automix_weight: 0.2          # Weight for POMDP value
     cost_weight: 0.2             # Weight for cost consideration
@@ -89,7 +92,7 @@ algorithm:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `elo_weight` | float | `0.3` | Weight for Elo rating contribution (0–1) |
+| `experience_weight` | float | `0.3` | Weight for feedback-derived experience evidence (0-1) |
 | `router_dc_weight` | float | `0.3` | Weight for RouterDC embedding similarity (0–1) |
 | `automix_weight` | float | `0.2` | Weight for AutoMix POMDP value (0–1) |
 | `cost_weight` | float | `0.2` | Weight for cost consideration (0–1) |
@@ -98,4 +101,6 @@ algorithm:
 
 ## Feedback
 
-Hybrid forwards `UpdateFeedback()` to all three component selectors (Elo, RouterDC, AutoMix) so each can learn independently from the same feedback signal.
+Hybrid does not own feedback state. Online model-choice experience belongs
+under `global.router.learning.adaptation`; Hybrid may consume read-only
+learning evidence when that integration is available.

@@ -1,10 +1,12 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 type ReaskMatch struct {
@@ -17,9 +19,14 @@ type ReaskMatch struct {
 type ReaskClassifier struct {
 	rules     []config.ReaskRule
 	modelType string
+	provider  embedding.Provider
 }
 
 func NewReaskClassifier(rules []config.ReaskRule, modelType string) (*ReaskClassifier, error) {
+	return NewReaskClassifierWithProvider(rules, modelType, nil)
+}
+
+func NewReaskClassifierWithProvider(rules []config.ReaskRule, modelType string, provider embedding.Provider) (*ReaskClassifier, error) {
 	if len(rules) == 0 {
 		return nil, fmt.Errorf("reask rules cannot be empty")
 	}
@@ -29,6 +36,7 @@ func NewReaskClassifier(rules []config.ReaskRule, modelType string) (*ReaskClass
 	return &ReaskClassifier{
 		rules:     append([]config.ReaskRule(nil), rules...),
 		modelType: strings.TrimSpace(modelType),
+		provider:  provider,
 	}, nil
 }
 
@@ -38,12 +46,12 @@ func (c *ReaskClassifier) Classify(currentUserTurn string, priorUserTurns []stri
 		return nil, nil
 	}
 
-	currentOutput, err := getEmbeddingWithModelType(currentUserTurn, c.modelType, 0)
+	currentEmbedding, err := c.embedText(currentUserTurn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute current user turn embedding: %w", err)
 	}
 
-	similarities, err := c.computeSimilarities(currentOutput.Embedding, priorUserTurns)
+	similarities, err := c.computeSimilarities(currentEmbedding, priorUserTurns)
 	if err != nil {
 		return nil, err
 	}
@@ -83,11 +91,11 @@ func (c *ReaskClassifier) computeSimilarities(currentEmbedding []float32, priorU
 
 		priorEmbedding, ok := cache[priorTurn]
 		if !ok {
-			output, err := getEmbeddingWithModelType(priorTurn, c.modelType, 0)
+			embedding, err := c.embedText(priorTurn)
 			if err != nil {
 				return nil, fmt.Errorf("failed to compute prior user turn embedding: %w", err)
 			}
-			priorEmbedding = output.Embedding
+			priorEmbedding = embedding
 			cache[priorTurn] = priorEmbedding
 		}
 
@@ -95,6 +103,17 @@ func (c *ReaskClassifier) computeSimilarities(currentEmbedding []float32, priorU
 	}
 
 	return similarities, nil
+}
+
+func (c *ReaskClassifier) embedText(text string) ([]float32, error) {
+	if c.provider != nil {
+		return c.provider.Embed(context.Background(), text)
+	}
+	output, err := getEmbeddingWithModelType(text, c.modelType, 0)
+	if err != nil {
+		return nil, err
+	}
+	return output.Embedding, nil
 }
 
 func evaluateReaskStreak(similarities []float64, threshold float64, lookbackTurns int) (float64, int) {

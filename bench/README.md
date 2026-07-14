@@ -317,6 +317,35 @@ readiness report blocks GA when the initial-implementation baseline is absent,
 because the release claim must compare the final policy against both the
 non-session-aware path and the first merged agentic-routing implementation.
 
+### Router Learning Architecture Eval
+
+Use the architecture eval when a Router Learning change needs deterministic
+evidence before live AMD validation. It is intentionally fixture-based and
+standard-library-only, so it can run on dev machines and validation hosts
+without benchmark dependencies:
+
+```bash
+python3 bench/agentic_routing_experiment.py \
+  --learning-architecture \
+  --output-dir .agent-harness/experiments/agentic-routing/router-learning-architecture-local
+```
+
+The command writes:
+
+- `learning_architecture_cases.csv`
+- `learning_architecture_summary.json`
+- `learning_architecture_report.md`
+
+The summary reports route correctness, base-versus-final model switches,
+adaptation method/mode/action/reason/scope coverage, cache-token delta,
+estimated cost delta, unnecessary switch rate, privacy/policy bypass
+correctness, replay explainability coverage, and p50/p95 learning overhead.
+It covers session-aware `conversation` and `session` protection, policy
+`bypass`, `observe` behavior, bandit cost switching, Elo rating switching, and
+personalization preference switching. Treat this as an architecture sanity gate;
+it does not replace the live router, replay, dashboard, and AMD deployment
+validation runs.
+
 Generate publication figures from the maintained CSV outputs with the plotting
 companion script. The experiment generator remains standard-library-only for
 AMD hosts; the plotting script is intentionally separate and requires the bench
@@ -720,7 +749,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## 🔗 Links
 
-- **Documentation**: https://vllm-semantic-router.com
+- **Documentation**: https://vllm-sr.ai
 - **GitHub**: https://github.com/vllm-project/semantic-router
 - **Issues**: https://github.com/vllm-project/semantic-router/issues
 - **PyPI**: https://pypi.org/project/vllm-semantic-router-bench/

@@ -4,6 +4,14 @@ export type SetupValidationState = "idle" | "validating" | "valid" | "error";
 export type SetupActivationState = "idle" | "activating" | "error";
 export type SetupRoutingMode = "scratch" | "remote" | "preset";
 export type RemoteImportState = "idle" | "importing" | "imported" | "error";
+export type PresetCatalogState = "loading" | "ready" | "error";
+export type PresetRequestState =
+  | "idle"
+  | "loading"
+  | "ready"
+  | "importing"
+  | "imported"
+  | "error";
 
 export interface ModelDraft {
   id: string;
@@ -17,6 +25,26 @@ export interface ModelDraft {
 export interface ModelDraftFieldErrors {
   name?: string;
   baseUrl?: string;
+}
+
+export interface RemovedModelSnapshot {
+  model: ModelDraft;
+  index: number;
+  wasDefault: boolean;
+}
+
+export interface SetupModelPage {
+  items: ModelDraft[];
+  page: number;
+  pageCount: number;
+  total: number;
+  startIndex: number;
+}
+
+export interface SetupRequestGuard {
+  begin: () => number;
+  invalidate: () => void;
+  isCurrent: (generation: number) => boolean;
 }
 
 interface BuiltModel {
@@ -89,6 +117,104 @@ export const DEFAULT_REMOTE_SETUP_CONFIG_URL =
 
 const DEFAULT_MODEL_NAME = "qwen/qwen3.5-rocm";
 const DEFAULT_VLLM_BASE_URL = "vllm:8000";
+export const SETUP_MODELS_PER_PAGE = 4;
+
+export function createSetupRequestGuard(): SetupRequestGuard {
+  let currentGeneration = 0;
+  return {
+    begin: () => {
+      currentGeneration += 1;
+      return currentGeneration;
+    },
+    invalidate: () => {
+      currentGeneration += 1;
+    },
+    isCurrent: (generation) => generation === currentGeneration,
+  };
+}
+
+export function filterSetupModels(
+  models: ModelDraft[],
+  rawQuery: string,
+): ModelDraft[] {
+  const query = rawQuery.trim().toLowerCase();
+  if (!query) {
+    return models;
+  }
+
+  return models.filter((model) =>
+    [
+      model.name,
+      model.baseUrl,
+      model.endpointName,
+      model.providerKind,
+    ].some((value) => value.toLowerCase().includes(query)),
+  );
+}
+
+export function paginateSetupModels(
+  models: ModelDraft[],
+  requestedPage: number,
+  pageSize = SETUP_MODELS_PER_PAGE,
+): SetupModelPage {
+  const safePageSize = Math.max(1, Math.floor(pageSize));
+  const pageCount = Math.max(1, Math.ceil(models.length / safePageSize));
+  const page = Math.min(Math.max(1, Math.floor(requestedPage)), pageCount);
+  const startIndex = (page - 1) * safePageSize;
+
+  return {
+    items: models.slice(startIndex, startIndex + safePageSize),
+    page,
+    pageCount,
+    total: models.length,
+    startIndex,
+  };
+}
+
+export function removeSetupModel(
+  models: ModelDraft[],
+  modelId: string,
+  defaultModelId: string,
+): {
+  models: ModelDraft[];
+  defaultModelId: string;
+  removed: RemovedModelSnapshot | null;
+} {
+  const index = models.findIndex((model) => model.id === modelId);
+  if (index < 0 || models.length <= 1) {
+    return { models, defaultModelId, removed: null };
+  }
+
+  const model = models[index];
+  const nextModels = models.filter((candidate) => candidate.id !== modelId);
+  const wasDefault = defaultModelId === modelId;
+  return {
+    models: nextModels,
+    defaultModelId: wasDefault ? (nextModels[0]?.id ?? "") : defaultModelId,
+    removed: { model, index, wasDefault },
+  };
+}
+
+export function restoreSetupModel(
+  models: ModelDraft[],
+  removed: RemovedModelSnapshot,
+  defaultModelId: string,
+): { models: ModelDraft[]; defaultModelId: string } {
+  if (models.some((model) => model.id === removed.model.id)) {
+    return { models, defaultModelId };
+  }
+
+  const restoredModels = [...models];
+  restoredModels.splice(
+    Math.min(Math.max(0, removed.index), restoredModels.length),
+    0,
+    removed.model,
+  );
+  return {
+    models: restoredModels,
+    defaultModelId: removed.wasDefault ? removed.model.id : defaultModelId,
+  };
+}
 
 export function createSetupConfigCounts(
   overrides: Partial<SetupConfigCounts> = {},
@@ -386,6 +512,35 @@ export function countConfigSignals(rawSignals: unknown): number {
     },
     0,
   );
+}
+
+export function summarizeSetupConfig(
+  config: Record<string, unknown> | null,
+): SetupConfigCounts {
+  if (!config) {
+    return createSetupConfigCounts();
+  }
+
+  const providers =
+    config.providers && typeof config.providers === "object"
+      ? (config.providers as Record<string, unknown>)
+      : {};
+  const routing =
+    config.routing && typeof config.routing === "object"
+      ? (config.routing as Record<string, unknown>)
+      : {};
+  const models = Array.isArray(providers.models) ? providers.models.length : 0;
+  const decisions = Array.isArray(routing.decisions)
+    ? routing.decisions.length
+    : 0;
+  const signals = countConfigSignals(routing.signals);
+
+  return createSetupConfigCounts({
+    models,
+    decisions,
+    signals,
+    canActivate: models > 0 && decisions > 0,
+  });
 }
 
 export function buildSetupConfig(

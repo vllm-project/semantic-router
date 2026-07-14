@@ -38,14 +38,18 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `models`
   - `providers.defaults` holds `default_model`, `reasoning_families`, and `default_reasoning_effort`
   - `providers.models[*]` holds `provider_model_id`, `backend_refs`, `pricing`, `api_format`, and `external_model_ids`
+  - `providers.models[*].pricing` uses per-million-token rates for prompt, cached input, optional cache writes, and completion; `cache_write_per_1m` defaults to `prompt_per_1m` when omitted
 - `global` owns router-wide runtime overrides.
   - `global.router` groups router-engine control knobs such as config-source selection, route-cache, and model-selection defaults
   - `global.router.config_source` selects whether runtime config comes from the canonical YAML file (`file`) or from in-process Kubernetes CRD reconciliation (`kubernetes`)
-  - `decision.algorithm.type=session_aware` enables agentic stay-vs-switch routing with router-owned session memory, tool-loop and provider-state hard locks, decision-drift and idle-time re-selection, input checkout prefix-cache cost, confidence-gated remaining-turn priors, and replayed policy traces. Cache-cost multipliers must be at least neutral (`max_cache_cost_multiplier >= 1`) and remaining-turn prior horizons must be positive.
+  - `global.router.auto_model_names` declares the request model aliases that enter full automatic routing. Defaults include `vllm-sr/auto`, `auto`, and `MoM`; `auto_model_name` remains the legacy single-name compatibility field.
+  - `global.router.learning.adaptation` enables online model-choice learning after the base decision algorithm. `global.router.learning.protection` protects agentic continuity, cache, tool loops, and handoff cost. `decision.algorithm.type=session_aware|elo|rl_driven|gmtrouter|bandit|personalization` is removed; decisions can use normal base algorithms or omit `algorithm`. Per-decision `adaptations` is strictly validated and should be used only for `mode: apply|observe|bypass`, component modes, optional `adaptation.candidate_set`, and sparse `protection.stability_weight` / `protection.switch_margin` overrides.
   - `global.services` groups shared APIs and control-plane services such as `response_api`, `router_replay`, `observability`, `authz`, and `ratelimit`
   - `global.services.router_replay.enabled` acts as the default replay switch for every decision; route-local `router_replay.enabled: false` is the explicit opt-out
   - `global.stores` groups shared storage-backed services such as `semantic_cache`, `memory`, and `vector_store`
 - `global.integrations` groups helper runtime integrations such as `tools` and `looper`
+- `global.integrations.looper.fusion` defines direct Fusion model slugs. The built-in default is `vllm-sr/fusion`; add aliases such as `openrouter/fusion` explicitly only when you want them. Judge and panel settings stay per-decision under `routing.decisions[].algorithm.fusion`.
+- `global.integrations.looper.flow` defines direct Router Flow model slugs. The built-in default is `vllm-sr/flow`; workflow planning and worker policy stay per-decision under `routing.decisions[].algorithm.workflows`.
 - `global.model_catalog` groups router-owned model assets such as embeddings, system models, external models, reusable classifiers, and model-backed modules
 - `global.model_catalog.embeddings.semantic.embedding_config.top_k` limits how many ranked embedding rules are emitted for routing after scoring; the built-in default is `1`
 - `prototype_scoring` is the shared prototype-aware scoring block for embedding-backed signal families; use it under `global.model_catalog.embeddings.semantic.embedding_config`, `global.model_catalog.modules.classifier.preference`, `global.model_catalog.kbs[]`, and `global.model_catalog.modules.complexity` when you want exemplar banks compressed into representative prototypes
@@ -208,7 +212,7 @@ The repository now separates the exhaustive canonical reference config from reus
 - `config/plugin/`: reusable route-plugin snippets
 
 `config/decision/` is organized by boolean case shape: `single/`, `and/`, `or/`, `not/`, and `composite/`.
-`config/algorithm/` is organized by routing policy family: `looper/` and `selection/`.
+`config/algorithm/` is organized by routing policy family: `looper/` and `selection/`; looper fragments include `confidence`, `ratings`, `remom`, and `fusion`.
 `config/plugin/` is organized one plugin or reusable bundle per directory.
 The repository enforces this fragment catalog in `go test ./pkg/config/...`, so routing-surface changes must update the `config/` tree in the same change.
 
@@ -402,6 +406,36 @@ vllm-sr config import --from openclaw --source openclaw.json --target config.yam
 ```
 
 When `--source` is omitted, the importer checks `OPENCLAW_CONFIG_PATH`, `./openclaw.json`, and `~/.openclaw/openclaw.json` in that order.
+
+## Environment variable substitution
+
+During config load, string values anywhere in the canonical YAML tree can reference environment variables. This is the supported way to keep passwords, API keys, and other secrets out of ConfigMaps while still using a checked-in config skeleton.
+
+Supported forms:
+
+- `${VAR}` and `$VAR`
+- `${VAR:-default}` when `VAR` is unset or empty
+- `${VAR-default}` when `VAR` is unset
+- `$$` for a literal `$`
+
+Example for Router Replay on Kubernetes:
+
+```yaml
+global:
+  services:
+    router_replay:
+      enabled: true
+      store_backend: postgres
+      postgres:
+        host: 10.0.0.1
+        database: vsr
+        user: default
+        password: "${POSTGRES_PASSWORD}"
+        ssl_mode: disable
+        table_name: router_replay
+```
+
+Wire `POSTGRES_PASSWORD` from a Secret into the router Deployment environment, then mount or generate the config that references it. The same pattern works for Milvus, Redis, Valkey, Qdrant, and provider `backend_refs[].api_key` values.
 
 ## Quick guides by environment
 

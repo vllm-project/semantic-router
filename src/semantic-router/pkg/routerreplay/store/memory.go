@@ -143,6 +143,20 @@ func (m *MemoryStore) AttachResponse(ctx context.Context, id string, body string
 	return nil
 }
 
+// AppendOutcome links post-route feedback to a record.
+func (m *MemoryStore) AppendOutcome(ctx context.Context, id string, outcome Outcome) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rec, ok := m.byID[id]
+	if !ok {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	rec.Outcomes = append(rec.Outcomes, cloneOutcome(outcome))
+	return nil
+}
+
 // UpdateHallucinationStatus updates hallucination detection results for a record.
 func (m *MemoryStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error {
 	m.mu.Lock()
@@ -172,6 +186,7 @@ func (m *MemoryStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 
 	rec.PromptTokens = cloneIntPtr(usage.PromptTokens)
 	rec.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
+	rec.CacheWriteTokens = cloneIntPtr(usage.CacheWriteTokens)
 	rec.CompletionTokens = cloneIntPtr(usage.CompletionTokens)
 	rec.TotalTokens = cloneIntPtr(usage.TotalTokens)
 	rec.ActualCost = cloneFloat64Ptr(usage.ActualCost)

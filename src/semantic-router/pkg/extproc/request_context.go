@@ -63,21 +63,53 @@ type RequestContext struct {
 	IsStreamingResponse     bool                   // set from response Content-Type
 	AnthropicStream         *anthropic.StreamState // Anthropic SSE → OpenAI translation state
 
+	// PendingSSEBytes holds a trailing partial SSE frame carried over from a
+	// prior streaming response chunk. Envoy STREAMED mode delivers the
+	// response body split at arbitrary byte offsets, so an SSE frame can
+	// straddle two chunks; the streaming handlers stash the incomplete tail
+	// here and prepend it to the next chunk before parsing (issue #2316).
+	PendingSSEBytes []byte
+
 	// AnthropicPassthrough carries Anthropic-only request fields captured from
 	// the raw inbound body and incoming headers, so the request-body writer
 	// and header builder can replay them on the outbound side.
 	AnthropicPassthrough *anthropic.AnthropicPassthrough
 
 	// Semi-streaming body handler (non-nil when Envoy sends STREAMED body chunks)
-	StreamedBody *StreamedBodyHandler
+	StreamedBody          *StreamedBodyHandler
+	FullDuplexRequestBody bool // true when the data plane negotiated FULL_DUPLEX_STREAMED
 
 	// Streaming accumulation for caching
 	HasStreamingChunks bool                            // True when at least one SSE chunk has been received
 	StreamingContent   string                          // Accumulated content from delta.content
+	StreamingReasoning string                          // Accumulated reasoning from delta.reasoning_content
+	StreamingRefusal   string                          // Accumulated refusal text from delta.refusal
 	StreamingMetadata  map[string]interface{}          // id, model, created from first chunk
 	StreamingToolCalls map[int]*StreamingToolCallState // Accumulated delta.tool_calls keyed by tool index
 	StreamingComplete  bool                            // True when [DONE] marker received
 	StreamingAborted   bool                            // True if stream ended abnormally (EOF, cancel, timeout)
+
+	// Response API streaming translation state. When /v1/responses is backed by
+	// an upstream Chat Completions stream, these fields track the outbound
+	// Responses API event envelope emitted to the client.
+	ResponseAPIStreamStarted              bool
+	ResponseAPIStreamMessageStarted       bool
+	ResponseAPIStreamNextOutputIndex      int
+	ResponseAPIStreamMessageOutputIndex   int
+	ResponseAPIStreamItemID               string
+	ResponseAPIStreamToolCallItemIDs      map[int]string
+	ResponseAPIStreamToolCallOutputIndex  map[int]int
+	ResponseAPIStreamReasoningItemID      string
+	ResponseAPIStreamReasoningOutputIndex int
+	ResponseAPIStreamReasoningStarted     bool
+	ResponseAPIStreamRefusalStarted       bool
+	ResponseAPIStreamCreatedAt            int64
+
+	// UpstreamStatusCode is the HTTP status the upstream returned, captured at
+	// the response-header phase. Zero means the status was never observed for
+	// this request (e.g. response headers not processed). The cache-write path
+	// reads it to avoid caching non-2xx error bodies (cache poisoning).
+	UpstreamStatusCode int
 
 	// TTFT tracking
 	TTFTRecorded bool
@@ -108,17 +140,28 @@ type RequestContext struct {
 	PreviousResponseID string
 
 	// VSR decision tracking
-	VSRSelectedCategory           string                 // The category from domain classification (MMLU category)
-	VSRSelectedDecisionName       string                 // The decision name from DecisionEngine evaluation
-	VSRSelectedDecisionConfidence float64                // Confidence score from DecisionEngine evaluation
-	VSRReasoningMode              string                 // "on" or "off" - whether reasoning mode was determined to be used
-	VSRSelectedModel              string                 // The model selected by VSR
-	VSRSelectionMethod            string                 // Model selection algorithm used (e.g., "elo", "static", "router_dc")
-	VSRSessionPolicy              map[string]interface{} // Session-aware routing policy trace for replay/experiments
-	VSRCacheHit                   bool                   // Whether this request hit the cache
-	VSRCacheSimilarity            float32                // Similarity score from last cache lookup (0 = no lookup performed)
-	VSRInjectedSystemPrompt       bool                   // Whether a system prompt was injected into the request
-	VSRSelectedDecision           *config.Decision       // The decision object selected by DecisionEngine (for plugins)
+	VSRSelectedCategory            string                                      // The category from domain classification (MMLU category)
+	VSRSelectedDecisionName        string                                      // The decision name from DecisionEngine evaluation
+	VSRSelectedDecisionConfidence  float64                                     // Confidence score from DecisionEngine evaluation
+	VSRReasoningMode               string                                      // "on" or "off" - whether reasoning mode was determined to be used
+	VSRSelectedModel               string                                      // The model selected by VSR
+	VSRSelectionMethod             string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
+	VSRLearningPolicy              *routerLearningPolicy                       // Primary Router Learning trace
+	VSRLearningPolicies            routerLearningPolicies                      // Router Learning traces by component
+	VSRLearningProtectionPreflight *routerreplay.LearningProtectionDiagnostics // Protection preflight trace for replay
+	VSRLearningSessionID           string                                      // Router Learning memory key used for this request
+	VSRLearningConversationID      string                                      // Client-declared conversation identity used by Router Learning
+	VSRCacheHit                    bool                                        // Whether this request hit the cache
+	VSRCacheSimilarity             float32                                     // Similarity score from last cache lookup (0 = no lookup performed)
+	VSRInjectedSystemPrompt        bool                                        // Whether a system prompt was injected into the request
+	VSRSelectedDecision            *config.Decision                            // The decision object selected by DecisionEngine (for plugins)
+
+	// ResponsePath records how the final response was produced, surfaced as the
+	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*
+	// values). It defaults to "upstream"; immediate-response paths (cache,
+	// fast_response, looper, rate-limit, error, image generation) set it
+	// explicitly so the emitted path is accurate. See issue #2203.
+	ResponsePath string
 
 	// Modality routing classification result (AR/DIFFUSION/BOTH)
 	ModalityClassification *ModalityClassificationResult // Set by classifyModality()
@@ -233,7 +276,13 @@ type RequestContext struct {
 
 	// Memory retrieval tracking
 	// Stores formatted memory context to be injected after system prompt
-	MemoryContext string // Formatted memory context (empty if no memories retrieved)
+	MemoryContext        string // Formatted memory context (empty if no memories retrieved)
+	MemoryBackend        string
+	MemoryStatus         string
+	MemoryReason         string
+	MemoryFallbackReason string
+	MemoryFailOpen       bool
+	MemoryResultCount    int
 
 	// Note: Per-user API keys from ext_authz / Authorino are read directly from
 	// ctx.Headers by the CredentialResolver (pkg/authz). No separate fields needed.

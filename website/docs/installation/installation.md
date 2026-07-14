@@ -24,7 +24,7 @@ No GPU required - the router runs efficiently on CPU using optimized BERT models
 ### 1. Use the one-line installer (macOS/Linux)
 
 ```bash
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash
+curl -fsSL https://vllm-sr.ai/install.sh | bash
 ```
 
 The installer:
@@ -41,7 +41,7 @@ If `~/.local/bin` is not already on your `PATH`, the installer prints the export
 Need the latest stable release instead? Run:
 
 ```bash
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --channel stable
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable
 ```
 
 Windows users should run the local `vllm-sr serve` workflow from WSL2 or another
@@ -103,6 +103,10 @@ For first-run setup:
 3. Activate the generated config.
 
 After activation, `config.yaml` is written to the current directory and the router exits setup mode.
+
+:::tip[Local models with Ollama]
+If you want to run a local LLM without vLLM or a GPU stack, follow [Configure models with Ollama](ollama) for install, dashboard, and YAML steps with screenshots.
+:::
 
 ### 5. Test the Router
 
@@ -180,6 +184,7 @@ vllm-sr serve --image-pull-policy always
 
 ## Next Steps
 
+- **[Configure models with Ollama](ollama)** - Run a local LLM with Ollama and connect it through the setup dashboard
 - **[Install with Operator](k8s/operator)** - Deploy on Kubernetes or OpenShift with the operator
 - **[Configuration Guide](configuration)** - Advanced routing and signal configuration
 - **[API Documentation](../api/router)** - Complete API reference
@@ -189,4 +194,4 @@ vllm-sr serve --image-pull-policy always
 
 - **Issues**: [GitHub Issues](https://github.com/vllm-project/semantic-router/issues)
 - **Community**: Join `#semantic-router` channel in vLLM Slack
-- **Documentation**: [vllm-semantic-router.com](https://vllm-semantic-router.com/)
+- **Documentation**: [vllm-sr.ai](https://vllm-sr.ai/)

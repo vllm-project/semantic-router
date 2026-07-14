@@ -11,16 +11,17 @@ import (
 const postgresRecordSelectColumns = `
 	id, timestamp, request_id, decision, decision_tier, decision_priority, category,
 	original_model, selected_model, reasoning_mode,
-	signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace, session_policy,
+	signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace, session_policy, route_diagnostics, learning, outcomes,
 	request_body, response_body, response_status,
 	from_cache, streaming, request_body_truncated, response_body_truncated,
 	guardrails_enabled, jailbreak_enabled, pii_enabled,
 	prompt, prompt_truncated, tool_definitions, tool_definitions_truncated,
 	rag_enabled, rag_backend, rag_context_length, rag_similarity_score,
 	hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans,
-	prompt_tokens, cached_prompt_tokens, completion_tokens, total_tokens,
+	prompt_tokens, cached_prompt_tokens, cache_write_tokens, completion_tokens, total_tokens,
 	actual_cost, baseline_cost, cost_savings, currency, baseline_model,
-	session_id, turn_index, previous_response_id, conversation_id
+	session_id, turn_index, previous_response_id, conversation_id,
+	cache_similarity, context_token_count
 `
 
 type postgresRowScanner interface {
@@ -37,6 +38,9 @@ type postgresInsertRecord struct {
 	toolTraceJSON          []byte
 	projectionTraceJSON    []byte
 	sessionPolicyJSON      []byte
+	routeDiagnosticsJSON   []byte
+	learningJSON           []byte
+	outcomesJSON           []byte
 	hallucinationSpansJSON []byte
 }
 
@@ -50,9 +54,13 @@ type postgresRecordRow struct {
 	toolTraceJSON          []byte
 	projectionTraceJSON    []byte
 	sessionPolicyJSON      []byte
+	routeDiagnosticsJSON   []byte
+	learningJSON           []byte
+	outcomesJSON           []byte
 	hallucinationSpansJSON []byte
 	promptTokens           sql.NullInt64
 	cachedPromptTokens     sql.NullInt64
+	cacheWriteTokens       sql.NullInt64
 	completionTokens       sql.NullInt64
 	totalTokens            sql.NullInt64
 	actualCost             sql.NullFloat64
@@ -72,55 +80,40 @@ func newPostgresInsertRecord(record Record) (postgresInsertRecord, error) {
 		return postgresInsertRecord{}, err
 	}
 
-	signalsJSON, err := json.Marshal(prepared.Signals)
-	if err != nil {
-		return postgresInsertRecord{}, fmt.Errorf("failed to marshal signals: %w", err)
+	insertRecord := postgresInsertRecord{record: prepared}
+	if err := marshalPostgresInsertJSON(prepared, &insertRecord); err != nil {
+		return postgresInsertRecord{}, err
 	}
-	projectionsJSON, err := json.Marshal(prepared.Projections)
-	if err != nil {
-		return postgresInsertRecord{}, fmt.Errorf("failed to marshal projections: %w", err)
-	}
-	projectionScoresJSON, err := json.Marshal(prepared.ProjectionScores)
-	if err != nil {
-		return postgresInsertRecord{}, fmt.Errorf("failed to marshal projection scores: %w", err)
-	}
-	signalConfidencesJSON, err := json.Marshal(prepared.SignalConfidences)
-	if err != nil {
-		return postgresInsertRecord{}, fmt.Errorf("failed to marshal signal confidences: %w", err)
-	}
-	signalValuesJSON, err := json.Marshal(prepared.SignalValues)
-	if err != nil {
-		return postgresInsertRecord{}, fmt.Errorf("failed to marshal signal values: %w", err)
-	}
-	toolTraceJSON, err := marshalReplayOptionalJSON(prepared.ToolTrace)
-	if err != nil {
-		return postgresInsertRecord{}, fmt.Errorf("failed to marshal tool trace: %w", err)
-	}
-	projectionTraceJSON, err := marshalReplayOptionalJSON(prepared.ProjectionTrace)
-	if err != nil {
-		return postgresInsertRecord{}, fmt.Errorf("failed to marshal projection trace: %w", err)
-	}
-	sessionPolicyJSON, err := marshalReplayOptionalJSON(prepared.SessionPolicy)
-	if err != nil {
-		return postgresInsertRecord{}, fmt.Errorf("failed to marshal session policy: %w", err)
-	}
-	hallucinationSpansJSON, err := json.Marshal(prepared.HallucinationSpans)
-	if err != nil {
-		return postgresInsertRecord{}, fmt.Errorf("failed to marshal hallucination spans: %w", err)
-	}
+	return insertRecord, nil
+}
 
-	return postgresInsertRecord{
-		record:                 prepared,
-		signalsJSON:            signalsJSON,
-		projectionsJSON:        projectionsJSON,
-		projectionScoresJSON:   projectionScoresJSON,
-		signalConfidencesJSON:  signalConfidencesJSON,
-		signalValuesJSON:       signalValuesJSON,
-		toolTraceJSON:          toolTraceJSON,
-		projectionTraceJSON:    projectionTraceJSON,
-		sessionPolicyJSON:      sessionPolicyJSON,
-		hallucinationSpansJSON: hallucinationSpansJSON,
-	}, nil
+func marshalPostgresInsertJSON(record Record, out *postgresInsertRecord) error {
+	fields := []struct {
+		name    string
+		target  *[]byte
+		marshal func() ([]byte, error)
+	}{
+		{"signals", &out.signalsJSON, func() ([]byte, error) { return json.Marshal(record.Signals) }},
+		{"projections", &out.projectionsJSON, func() ([]byte, error) { return json.Marshal(record.Projections) }},
+		{"projection scores", &out.projectionScoresJSON, func() ([]byte, error) { return json.Marshal(record.ProjectionScores) }},
+		{"signal confidences", &out.signalConfidencesJSON, func() ([]byte, error) { return json.Marshal(record.SignalConfidences) }},
+		{"signal values", &out.signalValuesJSON, func() ([]byte, error) { return json.Marshal(record.SignalValues) }},
+		{"tool trace", &out.toolTraceJSON, func() ([]byte, error) { return marshalReplayOptionalJSON(record.ToolTrace) }},
+		{"projection trace", &out.projectionTraceJSON, func() ([]byte, error) { return marshalReplayOptionalJSON(record.ProjectionTrace) }},
+		{"session policy", &out.sessionPolicyJSON, func() ([]byte, error) { return marshalReplayOptionalJSON(record.SessionPolicy) }},
+		{"route diagnostics", &out.routeDiagnosticsJSON, func() ([]byte, error) { return marshalReplayOptionalJSON(record.RouteDiagnostics) }},
+		{"learning diagnostics", &out.learningJSON, func() ([]byte, error) { return marshalReplayOptionalJSON(record.Learning) }},
+		{"outcomes", &out.outcomesJSON, func() ([]byte, error) { return marshalReplayOptionalJSON(record.Outcomes) }},
+		{"hallucination spans", &out.hallucinationSpansJSON, func() ([]byte, error) { return json.Marshal(record.HallucinationSpans) }},
+	}
+	for _, field := range fields {
+		encoded, err := field.marshal()
+		if err != nil {
+			return fmt.Errorf("failed to marshal %s: %w", field.name, err)
+		}
+		*field.target = encoded
+	}
+	return nil
 }
 
 func preparePostgresInsertRecord(record Record) (Record, error) {
@@ -157,6 +150,9 @@ func (record postgresInsertRecord) args() []interface{} {
 		record.toolTraceJSON,
 		record.projectionTraceJSON,
 		record.sessionPolicyJSON,
+		record.routeDiagnosticsJSON,
+		record.learningJSON,
+		record.outcomesJSON,
 		record.record.RequestBody,
 		record.record.ResponseBody,
 		record.record.ResponseStatus,
@@ -181,6 +177,7 @@ func (record postgresInsertRecord) args() []interface{} {
 		record.hallucinationSpansJSON,
 		nullableIntArg(record.record.PromptTokens),
 		nullableIntArg(record.record.CachedPromptTokens),
+		nullableIntArg(record.record.CacheWriteTokens),
 		nullableIntArg(record.record.CompletionTokens),
 		nullableIntArg(record.record.TotalTokens),
 		nullableFloat64Arg(record.record.ActualCost),
@@ -192,6 +189,8 @@ func (record postgresInsertRecord) args() []interface{} {
 		record.record.TurnIndex,
 		emptyStringSQL(record.record.PreviousResponseID),
 		emptyStringSQL(record.record.ConversationID),
+		record.record.CacheSimilarity,
+		record.record.ContextTokenCount,
 	}
 }
 
@@ -242,6 +241,9 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.toolTraceJSON,
 		&row.projectionTraceJSON,
 		&row.sessionPolicyJSON,
+		&row.routeDiagnosticsJSON,
+		&row.learningJSON,
+		&row.outcomesJSON,
 		&row.record.RequestBody,
 		&row.record.ResponseBody,
 		&row.record.ResponseStatus,
@@ -266,6 +268,7 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.hallucinationSpansJSON,
 		&row.promptTokens,
 		&row.cachedPromptTokens,
+		&row.cacheWriteTokens,
 		&row.completionTokens,
 		&row.totalTokens,
 		&row.actualCost,
@@ -277,6 +280,8 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.turnIndex,
 		&row.previousResponseID,
 		&row.conversationID,
+		&row.record.CacheSimilarity,
+		&row.record.ContextTokenCount,
 	}
 }
 
@@ -291,6 +296,7 @@ func (row *postgresRecordRow) decode() (Record, error) {
 		&row.record,
 		row.promptTokens,
 		row.cachedPromptTokens,
+		row.cacheWriteTokens,
 		row.completionTokens,
 		row.totalTokens,
 		row.actualCost,
@@ -327,6 +333,15 @@ func (row *postgresRecordRow) unmarshalDecodedJSON() error {
 	}
 	if err := unmarshalReplayOptionalJSON(row.sessionPolicyJSON, &row.record.SessionPolicy); err != nil {
 		return fmt.Errorf("failed to unmarshal session policy: %w", err)
+	}
+	if err := unmarshalReplayOptionalJSON(row.routeDiagnosticsJSON, &row.record.RouteDiagnostics); err != nil {
+		return fmt.Errorf("failed to unmarshal route diagnostics: %w", err)
+	}
+	if err := unmarshalReplayOptionalJSON(row.learningJSON, &row.record.Learning); err != nil {
+		return fmt.Errorf("failed to unmarshal learning diagnostics: %w", err)
+	}
+	if err := unmarshalReplayOptionalJSON(row.outcomesJSON, &row.record.Outcomes); err != nil {
+		return fmt.Errorf("failed to unmarshal outcomes: %w", err)
 	}
 	return nil
 }

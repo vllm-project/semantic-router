@@ -4,9 +4,19 @@ import (
 	"encoding/json"
 	"sync"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelpricing"
 )
 
 const routerMemoryTTL = 24 * time.Hour
+
+// maxRouterSessions caps the number of sessions tracked by the router-owned
+// memory store so memory stays bounded under high session cardinality (session
+// IDs are derived from message content, so distinct conversations create
+// distinct entries). Mirrors last_model.go's maxLastModelSessions. It is a var
+// (not a const) so tests can exercise the eviction path without inserting tens
+// of thousands of entries.
+var maxRouterSessions = 50_000
 
 // RouterSessionSnapshot is the router-owned, model-independent memory for a
 // session. It is intentionally about routing state, not prompt-visible user
@@ -25,6 +35,7 @@ type RouterSessionSnapshot struct {
 
 	CumulativePromptTokens          int64
 	CumulativeCachedTokens          int64
+	CumulativeCacheWriteTokens      int64
 	CumulativeEstimatedCachedTokens int64
 	CumulativeCompletionTokens      int64
 	CumulativeCost                  float64
@@ -58,6 +69,7 @@ type SessionUsageParams struct {
 	Model                       string
 	PromptTokens                int
 	CachedPromptTokens          int
+	CacheWriteTokens            int
 	EstimatedCachedPromptTokens int
 	CompletionTokens            int
 	Cost                        float64
@@ -79,6 +91,7 @@ type routerSessionState struct {
 
 	cumulativePrompt                int64
 	cumulativeCached                int64
+	cumulativeCacheWrite            int64
 	cumulativeEstimatedCached       int64
 	cumulativeCompletion            int64
 	cumulativeCost                  float64
@@ -164,10 +177,17 @@ func RecordSessionUsage(p SessionUsageParams) {
 	st := s.sessionLocked(p.SessionID)
 	st.currentModel = p.Model
 	st.lastSeen = now
-	st.cumulativePrompt += int64(p.PromptTokens)
-	st.cumulativeCached += int64(clampCachedPromptTokens(p.PromptTokens, p.CachedPromptTokens))
+	usage := modelpricing.Normalize(modelpricing.Usage{
+		PromptTokens:      p.PromptTokens,
+		CachedInputTokens: p.CachedPromptTokens,
+		CacheWriteTokens:  p.CacheWriteTokens,
+		CompletionTokens:  p.CompletionTokens,
+	})
+	st.cumulativePrompt += int64(usage.PromptTokens)
+	st.cumulativeCached += int64(usage.CachedInputTokens)
+	st.cumulativeCacheWrite += int64(usage.CacheWriteTokens)
 	st.cumulativeEstimatedCached += int64(clampCachedPromptTokens(p.PromptTokens, p.EstimatedCachedPromptTokens))
-	st.cumulativeCompletion += int64(p.CompletionTokens)
+	st.cumulativeCompletion += int64(usage.CompletionTokens)
 	st.cumulativeCost += p.Cost
 	if p.EstimatedCacheSavings > 0 {
 		st.cumulativeEstimatedCacheSavings += p.EstimatedCacheSavings
@@ -212,6 +232,7 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 		ModelTurns:                      cloneIntMap(st.modelTurns),
 		CumulativePromptTokens:          st.cumulativePrompt,
 		CumulativeCachedTokens:          st.cumulativeCached,
+		CumulativeCacheWriteTokens:      st.cumulativeCacheWrite,
 		CumulativeEstimatedCachedTokens: st.cumulativeEstimatedCached,
 		CumulativeCompletionTokens:      st.cumulativeCompletion,
 		CumulativeCost:                  st.cumulativeCost,
@@ -229,6 +250,9 @@ func (s *routerSessionMemoryStore) sessionLocked(sessionID string) *routerSessio
 	if st != nil {
 		return st
 	}
+	if len(s.sessions) >= maxRouterSessions {
+		s.evictOldestLocked()
+	}
 	st = &routerSessionState{
 		sessionID:  sessionID,
 		modelTurns: make(map[string]int),
@@ -242,6 +266,27 @@ func (s *routerSessionMemoryStore) evictExpiredLocked(now time.Time) {
 		if now.Sub(v.lastSeen) > routerMemoryTTL {
 			delete(s.sessions, k)
 		}
+	}
+}
+
+// evictOldestLocked evicts the oldest session among a bounded random sample
+// (approximate LRU — see evictionSampleSize). It is a best-effort safety valve
+// for the size cap when TTL eviction did not free room. Callers must hold s.mu.
+func (s *routerSessionMemoryStore) evictOldestLocked() {
+	var oldestKey string
+	var oldestSeen time.Time
+	sampled := 0
+	for k, v := range s.sessions {
+		if sampled == 0 || v.lastSeen.Before(oldestSeen) {
+			oldestKey, oldestSeen = k, v.lastSeen
+		}
+		sampled++
+		if sampled >= evictionSampleSize {
+			break
+		}
+	}
+	if sampled > 0 {
+		delete(s.sessions, oldestKey)
 	}
 }
 
@@ -287,6 +332,14 @@ func ResetRouterSessionMemoryForTesting() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sessions = make(map[string]*routerSessionState)
+}
+
+// routerSessionCount returns the number of tracked sessions (tests only).
+func routerSessionCount() int {
+	s := globalRouterSessionMemory
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.sessions)
 }
 
 // setRouterSessionMemoryNowForTesting overrides the memory store clock.

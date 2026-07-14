@@ -19,13 +19,18 @@ pip install -e .
 
 ### Usage
 
-Local `vllm-sr serve` requires Docker on Linux, macOS, or WSL2 on Windows.
-Native Windows Python environments can install the CLI for configuration and
-validation tasks, but the local Docker runtime is not supported there.
+Local `vllm-sr serve` requires Docker or Podman on Linux, macOS, or WSL2 on
+Windows. Native Windows Python environments can install the CLI for
+configuration and validation tasks, but the local container runtime is not
+supported there.
 
 ```bash
 # Start the router (includes dashboard, simulator sidecar, and first-run setup)
 HF_TOKEN=hf_xxx vllm-sr serve
+
+# Use Podman instead of Docker (set on the command, in env, or both)
+HF_TOKEN=hf_xxx vllm-sr serve --runtime podman
+HF_TOKEN=hf_xxx CONTAINER_RUNTIME=podman vllm-sr serve
 
 # Start an isolated second local stack on offset host ports
 VLLM_SR_STACK_NAME=lane-b VLLM_SR_PORT_OFFSET=200 HF_TOKEN=hf_xxx vllm-sr serve
@@ -144,6 +149,64 @@ vllm-sr validate config.yaml
 ```
 
 `vllm-sr init` was removed in v0.3. Author `config.yaml` directly using the canonical `version/listeners/providers/routing/global` layout, migrate an older file with `vllm-sr config migrate --config old-config.yaml`, or import supported OpenClaw model providers with `vllm-sr config import --from openclaw`. Router-wide defaults come from the router itself and can be overridden under `global:`.
+
+### Inspect configured models
+
+Use `vllm-sr model list` to print the provider models and routing model cards from your active config without opening the dashboard.
+
+```bash
+# Uses config.yaml in the current directory
+vllm-sr model list
+
+# Inspect a specific config file
+vllm-sr model list --config my-config.yaml
+```
+
+The output is split into two sections:
+
+- **Provider models**: configured model names, the default model marker, provider model IDs, reasoning family, API format, and backend identity fields such as provider, redacted base URL, protocol, and weight.
+- **Model cards**: routing metadata such as modality, parameter size, context window, capabilities, tags, and LoRA names.
+
+Credential fields are intentionally not printed. API keys, API key environment variable names, embedded URL credentials, and sensitive query parameters are omitted or redacted so the command is safe to use in support logs.
+
+### Inspect ingested vector stores
+
+Use `vllm-sr rag list` to list the vector stores created through the router's OpenAI-compatible Vector Stores API (`POST /v1/vector_stores`). The command queries the running router's `GET /v1/vector_stores` endpoint, so the router must be up (`vllm-sr serve`).
+
+```bash
+# Talk to the local router (default: http://localhost:8080, shifted by VLLM_SR_PORT_OFFSET)
+vllm-sr rag list
+
+# Override the endpoint (remote router, port-forwarded stack, or stack started with VLLM_SR_PORT_OFFSET)
+vllm-sr rag list --endpoint http://localhost:8080
+vllm-sr rag list --endpoint http://router.example.com:8080
+```
+
+For each vector store, the output prints name, id, status, backend type, and file counts (total / completed / in-progress / failed):
+
+```
+vLLM Semantic Router - Vector Stores
+============================================================
+Endpoint: http://localhost:8080/v1/vector_stores
+
+Vector stores (2):
+  - docs-prod  (vs_abc123)
+      status:       active
+      backend:      milvus
+      files:        10 total (9 completed, 1 in progress, 0 failed)
+  - support-kb  (vs_def456)
+      status:       active
+      backend:      memory
+      files:        4 total (3 completed, 0 in progress, 1 failed)
+```
+
+Common outcomes:
+
+- **No stores ingested yet**: prints `(none created)`.
+- **Vector store feature disabled**: the router returns `503` and the CLI exits with `Vector store feature is not enabled on the router. Enable a vector store backend in your config to use RAG ingestion and retrieval.`
+- **Router not running / wrong port**: the CLI exits with an actionable message pointing at `vllm-sr serve` or the router API port.
+
+`vllm-sr rag list` only reads; it does not create, modify, or delete stores. Create stores through the Vector Stores API (e.g. `POST /v1/vector_stores`); this command is purely an inspection surface, mirroring how `vllm-sr model list` inspects configured models.
 
 ## Features
 
@@ -385,11 +448,11 @@ routing:
 
 Router replay records are exposed through:
 
-- `GET /v1/router_replay?limit=20&offset=0&search=req-123&decision=foo&model=bar&cache_status=cached` - List recent records with pagination metadata. Default page size is `20`; larger `limit` values are capped at `100`.
+- `GET /v1/router_replay?limit=20&offset=0&search=req-123&decision=foo&model=bar&cache_status=cached` - List recent records with pagination metadata. Default page size is `20`; larger `limit` values are capped at `100`. List rows return summary records (routing metadata without large captured bodies or full tool traces). Fetch `GET /v1/router_replay/{id}` for full payloads. Pass `showDetails=true` only when you explicitly need full bodies embedded in each list row.
 - `GET /v1/router_replay/aggregate?search=req-123&decision=foo&model=bar&cache_status=cached` - Return summary and chart aggregates for the filtered replay set.
 - `GET /v1/router_replay/{id}` - Fetch a single replay record.
 
-If a replay page would exceed the ext-proc gRPC message budget, the router returns `413 Payload Too Large` instead of failing the stream.
+If a replay list page with `showDetails=true` would exceed the ext-proc gRPC message budget, the router returns `413 Payload Too Large` instead of failing the stream. Prefer the default summary list and use the detail endpoint for full request/response bodies.
 
 **Validation Rules:**
 

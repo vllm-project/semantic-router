@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test';
-import { mockAuthenticatedAppShell } from './support/auth';
+import { test, expect } from '@playwright/test'
+import { mockAuthenticatedAppShell } from './support/auth'
 
 /**
  * FeedbackButtons E2E tests.
@@ -10,21 +10,39 @@ import { mockAuthenticatedAppShell } from './support/auth';
  * then test the feedback submission flow.
  */
 
-const MOCK_MODEL = 'llama3.2:3b';
+const MOCK_MODEL = 'llama3.2:3b'
+const MOCK_REPLAY_ID = 'replay_test_123'
 
 function chatStreamBody(content: string, model: string): string {
-  const lines = content.split('').map((char) =>
-    `data: ${JSON.stringify({
-      choices: [{ delta: { content: char } }],
-      model,
-    })}\n\n`
-  );
-  return lines.join('') + 'data: [DONE]\n\n';
+  const lines = content.split('').map(
+    (char) =>
+      `data: ${JSON.stringify({
+        choices: [{ delta: { content: char } }],
+        model,
+      })}\n\n`,
+  )
+  return lines.join('') + 'data: [DONE]\n\n'
 }
 
 test.describe('FeedbackButtons', () => {
   test.beforeEach(async ({ page }) => {
-    await mockAuthenticatedAppShell(page);
+    await mockAuthenticatedAppShell(page)
+
+    await page.route('**/api/router/v1/models*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          object: 'list',
+          data: [{
+            id: 'vllm-sr/auto',
+            object: 'model',
+            owned_by: 'vllm-semantic-router',
+            description: 'Intelligent Router for Mixture-of-Models',
+          }],
+        }),
+      })
+    })
 
     await page.route('**/api/router/v1/chat/completions', async (route) => {
       await route.fulfill({
@@ -34,150 +52,169 @@ test.describe('FeedbackButtons', () => {
           'Cache-Control': 'no-cache',
           'x-vsr-selected-model': MOCK_MODEL,
           'x-vsr-selected-decision': 'tech',
+          'x-vsr-replay-id': MOCK_REPLAY_ID,
         },
         body: chatStreamBody('Hello, this is a test response.', MOCK_MODEL),
-      });
-    });
+      })
+    })
 
-    await page.goto('/playground');
-  });
+    await page.goto('/playground')
+  })
 
   test('thumbs up sends correct feedback payload', async ({ page }) => {
-    let feedbackPayload: Record<string, unknown> | null = null;
+    let feedbackPayload: Record<string, unknown> | null = null
 
-    await page.route('**/api/router/api/v1/feedback', async (route) => {
-      feedbackPayload = route.request().postDataJSON();
+    await page.route('**/api/router/v1/router/outcomes', async (route) => {
+      feedbackPayload = route.request().postDataJSON()
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ success: true, message: 'Feedback recorded' }),
-      });
-    });
+        body: JSON.stringify({ success: true, updated: 1, recorded: true }),
+      })
+    })
 
-    const input = page.getByPlaceholder(/ask me anything|type a message/i);
-    await input.fill('What is machine learning?');
-    await page.getByRole('button', { name: /send|📤/i }).click();
-    await expect(page.getByText('Hello, this is a test response.')).toBeVisible({ timeout: 10000 });
+    const input = page.getByPlaceholder(/ask me anything|type a message/i)
+    await input.fill('What is machine learning?')
+    await page.getByRole('button', { name: /send|📤/i }).click()
+    await expect(page.getByText('Hello, this is a test response.')).toBeVisible({ timeout: 10000 })
 
-    const thumbsUp = page.getByRole('button', { name: /good response/i });
-    await expect(thumbsUp).toBeVisible({ timeout: 5000 });
-    await expect(thumbsUp.locator('svg')).toHaveCount(1);
-    await thumbsUp.click();
+    const thumbsUp = page.getByRole('button', { name: /good response/i })
+    await expect(thumbsUp).toBeVisible({ timeout: 5000 })
+    await expect(thumbsUp.locator('svg')).toHaveCount(1)
+    await thumbsUp.click()
 
-    expect(feedbackPayload).not.toBeNull();
-    expect(feedbackPayload!.winner_model).toBe(MOCK_MODEL);
-    expect(feedbackPayload!.decision_name).toBe('tech');
-    await expect(page.getByText('Feedback Sent!')).toBeVisible({ timeout: 3000 });
-  });
+    expect(feedbackPayload).not.toBeNull()
+    expect(feedbackPayload!.replay_id).toBe(MOCK_REPLAY_ID)
+    expect(feedbackPayload!.source).toBe('user')
+    expect(feedbackPayload!.target).toBe('model')
+    expect(feedbackPayload!.target_ref).toBe(MOCK_MODEL)
+    expect(feedbackPayload!.verdict).toBe('good_fit')
+    expect((feedbackPayload!.metadata as Record<string, unknown>).decision).toBe('tech')
+    await expect(page.getByText('Feedback Sent!')).toBeVisible({ timeout: 3000 })
+  })
 
   test('renders svg icons for both feedback directions', async ({ page }) => {
-    const input = page.getByPlaceholder(/ask me anything|type a message/i);
-    await input.fill('Render feedback icons');
-    await page.getByRole('button', { name: /send|📤/i }).click();
-    await expect(page.getByText('Hello, this is a test response.')).toBeVisible({ timeout: 10000 });
+    const input = page.getByPlaceholder(/ask me anything|type a message/i)
+    await input.fill('Render feedback icons')
+    await page.getByRole('button', { name: /send|📤/i }).click()
+    await expect(page.getByText('Hello, this is a test response.')).toBeVisible({ timeout: 10000 })
 
-    const thumbsUp = page.getByRole('button', { name: /good response/i });
-    const thumbsDown = page.getByRole('button', { name: /bad response/i });
+    const thumbsUp = page.getByRole('button', { name: /good response/i })
+    const thumbsDown = page.getByRole('button', { name: /bad response/i })
 
-    await expect(thumbsUp.locator('svg')).toHaveCount(1);
-    await expect(thumbsDown.locator('svg')).toHaveCount(1);
-  });
+    await expect(thumbsUp.locator('svg')).toHaveCount(1)
+    await expect(thumbsDown.locator('svg')).toHaveCount(1)
+  })
 
   test('handles feedback API error gracefully', async ({ page }) => {
-    await page.route('**/api/router/api/v1/feedback', async (route) => {
+    await page.route('**/api/router/v1/router/outcomes', async (route) => {
       await route.fulfill({
         status: 500,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ error: { message: 'Server unavailable' } }),
-      });
-    });
+      })
+    })
 
-    const input = page.getByPlaceholder(/ask me anything|type a message/i);
-    await input.fill('Test error handling');
-    await page.getByRole('button', { name: /send|📤/i }).click();
-    await expect(page.getByText('Hello, this is a test response.')).toBeVisible({ timeout: 10000 });
+    const input = page.getByPlaceholder(/ask me anything|type a message/i)
+    await input.fill('Test error handling')
+    await page.getByRole('button', { name: /send|📤/i }).click()
+    await expect(page.getByText('Hello, this is a test response.')).toBeVisible({ timeout: 10000 })
 
-    const thumbsUp = page.getByRole('button', { name: /good response/i });
-    await expect(thumbsUp).toBeVisible({ timeout: 5000 });
-    await thumbsUp.click();
+    const thumbsUp = page.getByRole('button', { name: /good response/i })
+    await expect(thumbsUp).toBeVisible({ timeout: 5000 })
+    await thumbsUp.click()
 
-    await expect(page.getByText(/server unavailable/i)).toBeVisible({ timeout: 5000 });
-  });
+    await expect(page.getByText(/server unavailable/i)).toBeVisible({ timeout: 5000 })
+  })
 
-  test('thumbs down in single-model mode selects visually without error', async ({ page }) => {
-    const input = page.getByPlaceholder(/ask me anything|type a message/i);
-    await input.fill('Test thumbs down');
-    await page.getByRole('button', { name: /send|📤/i }).click();
-    await expect(page.getByText('Hello, this is a test response.')).toBeVisible({ timeout: 10000 });
+  test('thumbs down sends underpowered outcome', async ({ page }) => {
+    let feedbackPayload: Record<string, unknown> | null = null
 
-    const thumbsDown = page.getByRole('button', { name: /bad response/i });
-    await expect(thumbsDown).toBeVisible({ timeout: 5000 });
-    await thumbsDown.click();
+    await page.route('**/api/router/v1/router/outcomes', async (route) => {
+      feedbackPayload = route.request().postDataJSON()
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ success: true, updated: 1, recorded: true }),
+      })
+    })
 
-    // Should select visually (aria-pressed=true), no error message
-    await expect(thumbsDown).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('alert')).not.toBeVisible();
-  });
+    const input = page.getByPlaceholder(/ask me anything|type a message/i)
+    await input.fill('Test thumbs down')
+    await page.getByRole('button', { name: /send|📤/i }).click()
+    await expect(page.getByText('Hello, this is a test response.')).toBeVisible({ timeout: 10000 })
+
+    const thumbsDown = page.getByRole('button', { name: /bad response/i })
+    await expect(thumbsDown).toBeVisible({ timeout: 5000 })
+    await thumbsDown.click()
+
+    await expect(thumbsDown).toHaveAttribute('aria-pressed', 'true')
+    expect(feedbackPayload).not.toBeNull()
+    expect(feedbackPayload!.replay_id).toBe(MOCK_REPLAY_ID)
+    expect(feedbackPayload!.target_ref).toBe(MOCK_MODEL)
+    expect(feedbackPayload!.verdict).toBe('underpowered')
+    await expect(page.getByRole('alert')).not.toBeVisible()
+  })
 
   test('can toggle from up to down (only submits once)', async ({ page }) => {
-    let feedbackCallCount = 0;
+    let feedbackCallCount = 0
 
-    await page.route('**/api/router/api/v1/feedback', async (route) => {
-      feedbackCallCount++;
+    await page.route('**/api/router/v1/router/outcomes', async (route) => {
+      feedbackCallCount++
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ success: true }),
-      });
-    });
+      })
+    })
 
-    const input = page.getByPlaceholder(/ask me anything|type a message/i);
-    await input.fill('Test toggle');
-    await page.getByRole('button', { name: /send|📤/i }).click();
-    await expect(page.getByText('Hello, this is a test response.')).toBeVisible({ timeout: 10000 });
+    const input = page.getByPlaceholder(/ask me anything|type a message/i)
+    await input.fill('Test toggle')
+    await page.getByRole('button', { name: /send|📤/i }).click()
+    await expect(page.getByText('Hello, this is a test response.')).toBeVisible({ timeout: 10000 })
 
-    const thumbsUp = page.getByRole('button', { name: /good response/i });
-    const thumbsDown = page.getByRole('button', { name: /bad response/i });
-    await expect(thumbsUp).toBeVisible({ timeout: 5000 });
+    const thumbsUp = page.getByRole('button', { name: /good response/i })
+    const thumbsDown = page.getByRole('button', { name: /bad response/i })
+    await expect(thumbsUp).toBeVisible({ timeout: 5000 })
 
     // Click thumbs up first
-    await thumbsUp.click();
-    await expect(page.getByText('Feedback Sent!')).toBeVisible({ timeout: 3000 });
-    expect(feedbackCallCount).toBe(1);
+    await thumbsUp.click()
+    await expect(page.getByText('Feedback Sent!')).toBeVisible({ timeout: 3000 })
+    expect(feedbackCallCount).toBe(1)
 
     // Now toggle to thumbs down - should change visual but NOT call API again
-    await thumbsDown.click();
-    await expect(thumbsDown).toHaveAttribute('aria-pressed', 'true');
-    await expect(thumbsUp).toHaveAttribute('aria-pressed', 'false');
-    expect(feedbackCallCount).toBe(1); // Still 1 - no second API call
+    await thumbsDown.click()
+    await expect(thumbsDown).toHaveAttribute('aria-pressed', 'true')
+    await expect(thumbsUp).toHaveAttribute('aria-pressed', 'false')
+    expect(feedbackCallCount).toBe(1) // Still 1 - no second API call
 
     // Toggle back to thumbs up - still no extra API call (UP → DOWN → UP)
-    await thumbsUp.click();
-    await expect(thumbsUp).toHaveAttribute('aria-pressed', 'true');
-    await expect(thumbsDown).toHaveAttribute('aria-pressed', 'false');
-    expect(feedbackCallCount).toBe(1); // Still 1 - deterministic single submission
-  });
+    await thumbsUp.click()
+    await expect(thumbsUp).toHaveAttribute('aria-pressed', 'true')
+    await expect(thumbsDown).toHaveAttribute('aria-pressed', 'false')
+    expect(feedbackCallCount).toBe(1) // Still 1 - deterministic single submission
+  })
 
   test('buttons disabled during loading', async ({ page }) => {
-    await page.route('**/api/router/api/v1/feedback', async (route) => {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    await page.route('**/api/router/v1/router/outcomes', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1000))
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ success: true }),
-      });
-    });
+      })
+    })
 
-    const input = page.getByPlaceholder(/ask me anything|type a message/i);
-    await input.fill('Test disabled');
-    await page.getByRole('button', { name: /send|📤/i }).click();
-    await expect(page.getByText('Hello, this is a test response.')).toBeVisible({ timeout: 10000 });
+    const input = page.getByPlaceholder(/ask me anything|type a message/i)
+    await input.fill('Test disabled')
+    await page.getByRole('button', { name: /send|📤/i }).click()
+    await expect(page.getByText('Hello, this is a test response.')).toBeVisible({ timeout: 10000 })
 
-    const thumbsUp = page.getByRole('button', { name: /good response/i });
-    await expect(thumbsUp).toBeVisible({ timeout: 5000 });
-    await thumbsUp.click();
+    const thumbsUp = page.getByRole('button', { name: /good response/i })
+    await expect(thumbsUp).toBeVisible({ timeout: 5000 })
+    await thumbsUp.click()
 
     // During loading, buttons should be disabled
-    await expect(thumbsUp).toBeDisabled();
-  });
-});
+    await expect(thumbsUp).toBeDisabled()
+  })
+})

@@ -120,7 +120,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
 
       - name: Set up Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -129,6 +129,11 @@ jobs:
 
       - name: Install system dependencies
         run: |
+          # The Kubernetes E2E job does not need Chrome. GitHub runners can
+          # carry a preinstalled Chrome apt source, and that external mirror can
+          # fail apt-get update while syncing.
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list \
+            /etc/apt/sources.list.d/google-chrome.sources
           sudo apt-get update
           sudo apt-get install -y \
             make \

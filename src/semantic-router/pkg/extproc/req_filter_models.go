@@ -4,6 +4,8 @@ import (
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // OpenAIModel represents a single model in the OpenAI /v1/models response
@@ -27,54 +29,74 @@ type OpenAIModelList struct {
 func (r *OpenAIRouter) handleModelsRequest(_ string) (*ext_proc.ProcessingResponse, error) {
 	now := time.Now().Unix()
 
-	// Start with the configured auto model name (or default "MoM")
-	// The model list uses the actual configured name, not "auto"
-	// However, "auto" is still accepted as an alias in request handling for backward compatibility
-	models := []OpenAIModel{}
-
-	// Add the effective auto model name (configured or default "MoM")
-	if r.Config != nil {
-		effectiveAutoModelName := r.Config.GetEffectiveAutoModelName()
-		models = append(models, OpenAIModel{
-			ID:          effectiveAutoModelName,
-			Object:      "model",
-			Created:     now,
-			OwnedBy:     "vllm-semantic-router",
-			Description: "Intelligent Router for Mixture-of-Models",
-			LogoURL:     "https://github.com/vllm-project/semantic-router/blob/main/website/static/img/vllm.png", // You can customize this URL
-		})
-	} else {
-		// Fallback if no config
-		models = append(models, OpenAIModel{
-			ID:          "MoM",
-			Object:      "model",
-			Created:     now,
-			OwnedBy:     "vllm-semantic-router",
-			Description: "Intelligent Router for Mixture-of-Models",
-			LogoURL:     "https://github.com/vllm-project/semantic-router/blob/main/website/static/img/vllm.png", // You can customize this URL
-		})
-	}
-
-	// Append underlying models from config (if available and configured to include them)
-	if r.Config != nil && r.Config.IncludeConfigModelsInList {
-		for _, m := range r.Config.GetAllModels() {
-			// Skip if already added as the configured auto model name (avoid duplicates)
-			if m == r.Config.GetEffectiveAutoModelName() {
-				continue
-			}
-			models = append(models, OpenAIModel{
-				ID:      m,
-				Object:  "model",
-				Created: now,
-				OwnedBy: "vllm-semantic-router",
-			})
-		}
-	}
+	builder := newExtProcOpenAIModelListBuilder(now)
+	builder.appendAutoAliases(r.Config)
+	builder.appendLooperAliases(r.Config)
+	builder.appendBackendModels(r.Config)
 
 	resp := OpenAIModelList{
 		Object: "list",
-		Data:   models,
+		Data:   builder.models,
 	}
 
 	return r.createJSONResponse(200, resp), nil
+}
+
+type extProcOpenAIModelListBuilder struct {
+	now    int64
+	models []OpenAIModel
+	seen   map[string]bool
+}
+
+func newExtProcOpenAIModelListBuilder(now int64) *extProcOpenAIModelListBuilder {
+	return &extProcOpenAIModelListBuilder{
+		now:  now,
+		seen: map[string]bool{},
+	}
+}
+
+func (b *extProcOpenAIModelListBuilder) appendAutoAliases(cfg *config.RouterConfig) {
+	autoModelNames := config.DefaultAutoModelNames()
+	if cfg != nil {
+		autoModelNames = cfg.EffectiveAutoModelNames()
+	}
+	for _, model := range autoModelNames {
+		b.append(model, "Intelligent Router for Mixture-of-Models")
+	}
+}
+
+func (b *extProcOpenAIModelListBuilder) appendLooperAliases(cfg *config.RouterConfig) {
+	if cfg == nil || !cfg.Looper.IsEnabled() {
+		return
+	}
+	b.appendAll(cfg.ExposedReMoMModelNames(), "ReMoM multi-round reasoning")
+	b.appendAll(cfg.ExposedFusionModelNames(), "Fusion multi-model deliberation")
+	b.appendAll(cfg.ExposedFlowModelNames(), "Router Flow micro-agent workflows")
+}
+
+func (b *extProcOpenAIModelListBuilder) appendBackendModels(cfg *config.RouterConfig) {
+	if cfg == nil || !cfg.IncludeConfigModelsInList {
+		return
+	}
+	b.appendAll(cfg.GetAllModels(), "")
+}
+
+func (b *extProcOpenAIModelListBuilder) appendAll(models []string, description string) {
+	for _, model := range models {
+		b.append(model, description)
+	}
+}
+
+func (b *extProcOpenAIModelListBuilder) append(id string, description string) {
+	if id == "" || b.seen[id] {
+		return
+	}
+	b.seen[id] = true
+	b.models = append(b.models, OpenAIModel{
+		ID:          id,
+		Object:      "model",
+		Created:     b.now,
+		OwnedBy:     "vllm-semantic-router",
+		Description: description,
+	})
 }

@@ -1,13 +1,26 @@
 import styles from './HeaderDisplay.module.css'
+import { formatLearningHeaderValue, isLearningHeader } from './headerLearningDisplay'
 
 interface HeaderDisplayProps {
   headers: Record<string, string>
 }
 
 // Header metadata for display
-const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'warning' | 'danger' }> = {
+const HEADER_INFO: Record<
+  string,
+  { label: string; type: 'info' | 'success' | 'warning' | 'danger' }
+> = {
+  // Response outcome. The schema version is intentionally not user-facing.
+  'x-vsr-response-path': {
+    label: 'Response Path',
+    type: 'info',
+  },
   'x-vsr-selected-model': {
     label: 'Model',
+    type: 'info',
+  },
+  'x-vsr-selected-algorithm': {
+    label: 'Algorithm',
     type: 'info',
   },
   'x-vsr-selected-decision': {
@@ -26,25 +39,29 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'Reasoning',
     type: 'info',
   },
+  'x-vsr-learning-methods': {
+    label: 'Learning',
+    type: 'info',
+  },
+  'x-vsr-learning-actions': {
+    label: 'Learning Action',
+    type: 'info',
+  },
+  'x-vsr-learning-scopes': {
+    label: 'Learning Scope',
+    type: 'info',
+  },
+  'x-vsr-learning-reasons': {
+    label: 'Learning Reason',
+    type: 'info',
+  },
   'x-vsr-fast-response': {
     label: 'Fast Response',
     type: 'success',
   },
-  'x-vsr-jailbreak-blocked': {
-    label: 'Jailbreak Blocked',
-    type: 'danger',
-  },
-  'x-vsr-pii-violation': {
-    label: 'PII Violation',
-    type: 'danger',
-  },
-  'x-vsr-hallucination-detected': {
-    label: 'Hallucination',
+  'x-vsr-response-warnings': {
+    label: 'Response Warnings',
     type: 'warning',
-  },
-  'x-vsr-fact-check-needed': {
-    label: 'Fact Check',
-    type: 'info',
   },
   'x-vsr-matched-keywords': {
     label: 'Keywords',
@@ -163,13 +180,19 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
 }
 
 function shouldSummarizeHeaderValue(key: string, values: string[]): boolean {
-  return values.length > 1 && (key.startsWith('x-vsr-matched-') || key === 'x-vsr-looper-models-used')
+  return (
+    values.length > 1 && (key.startsWith('x-vsr-matched-') || key === 'x-vsr-looper-models-used')
+  )
 }
 
 function summarizeHeaderValue(key: string, rawValue: string): string {
+  if (isLearningHeader(key)) {
+    return formatLearningHeaderValue(key, rawValue)
+  }
+
   const values = rawValue
     .split(',')
-    .map(value => value.trim())
+    .map((value) => value.trim())
     .filter(Boolean)
 
   if (!shouldSummarizeHeaderValue(key, values)) {
@@ -179,9 +202,30 @@ function summarizeHeaderValue(key: string, rawValue: string): string {
   return `${values[0]} +${values.length - 1}`
 }
 
+function routingHeaderPriority(key: string): number {
+  if (key.startsWith('x-vsr-matched-')) return 0
+  if (key === 'x-vsr-selected-decision') return 1
+  if (key === 'x-vsr-selected-algorithm' || key === 'x-vsr-looper-algorithm') return 2
+  if (
+    key === 'x-vsr-selected-model' ||
+    key === 'x-vsr-looper-model' ||
+    key === 'x-vsr-looper-models-used'
+  )
+    return 3
+  if (key === 'x-vsr-response-path') return 4
+  return 5
+}
+
 const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
   // Filter to only show headers that exist
-  const displayHeaders = Object.entries(headers).filter(([key]) => key in HEADER_INFO)
+  const hasSelectedAlgorithm = Boolean(headers['x-vsr-selected-algorithm'])
+  const displayHeaders = Object.entries(headers)
+    .filter(
+      ([key]) => key in HEADER_INFO && !(hasSelectedAlgorithm && key === 'x-vsr-looper-algorithm'),
+    )
+    .sort(
+      ([leftKey], [rightKey]) => routingHeaderPriority(leftKey) - routingHeaderPriority(rightKey),
+    )
 
   if (displayHeaders.length === 0) {
     return null
@@ -194,7 +238,11 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
           const info = HEADER_INFO[key]
           const displayValue = summarizeHeaderValue(key, value)
           return (
-            <div key={key} className={`${styles.header} ${styles[info.type]}`} title={`${info.label}: ${value}`}>
+            <div
+              key={key}
+              className={`${styles.header} ${styles[info.type]}`}
+              title={`${info.label}: ${value}`}
+            >
               <span className={styles.label}>{info.label}</span>
               <span className={styles.value}>{displayValue}</span>
             </div>

@@ -137,6 +137,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			ConfigSource:              normalizedConfigSource(cfg.ConfigSource),
 			Strategy:                  cfg.Strategy,
 			AutoModelName:             cfg.AutoModelName,
+			AutoModelNames:            append([]string(nil), cfg.AutoModelNames...),
 			IncludeConfigModelsInList: cfg.IncludeConfigModelsInList,
 			ClearRouteCache:           cfg.ClearRouteCache,
 			StreamedBody: CanonicalStreamedBody{
@@ -146,6 +147,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			},
 			SkipProcessing: cfg.SkipProcessing,
 			ModelSelection: cfg.ModelSelection,
+			Learning:       cfg.RouterLearning,
 		},
 		Services: CanonicalServiceGlobal{
 			API:           cfg.API,
@@ -165,66 +167,70 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			Tools:  cfg.Tools,
 			Looper: cfg.Looper,
 		},
-		ModelCatalog: CanonicalModelCatalog{
-			Embeddings: CanonicalEmbeddingModels{
-				Semantic: cfg.EmbeddingModels,
-			},
-			System: CanonicalSystemModels{
-				PromptGuard:            cfg.PromptGuard.ModelID,
-				DomainClassifier:       cfg.CategoryModel.ModelID,
-				PIIClassifier:          cfg.PIIModel.ModelID,
-				FactCheckClassifier:    cfg.HallucinationMitigation.FactCheckModel.ModelID,
-				HallucinationDetector:  cfg.HallucinationMitigation.HallucinationModel.ModelID,
-				HallucinationExplainer: cfg.HallucinationMitigation.NLIModel.ModelID,
-				FeedbackDetector:       cfg.FeedbackDetector.ModelID,
-			},
-			External: append([]ExternalModelConfig(nil), cfg.ExternalModels...),
-			KBs:      append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
-			Modules: CanonicalModelModules{
-				PromptCompression: cfg.PromptCompression,
-				PromptGuard: CanonicalPromptGuardModule{
-					PromptGuardConfig: cfg.PromptGuard,
-					ModelRef:          "prompt_guard",
-				},
-				Classifier: CanonicalClassifierModule{
-					Domain: CanonicalCategoryModule{
-						CategoryModel: cfg.CategoryModel,
-						ModelRef:      "domain_classifier",
-					},
-					MCP: cfg.MCPCategoryModel,
-					PII: CanonicalPIIModule{
-						PIIModel: cfg.PIIModel,
-						ModelRef: "pii_classifier",
-					},
-					Preference: cfg.PreferenceModel.WithDefaults(),
-				},
-				Complexity: cfg.ComplexityModel.WithDefaults(),
-				HallucinationMitigation: CanonicalHallucinationModule{
-					Enabled:                 cfg.HallucinationMitigation.Enabled,
-					OnHallucinationDetected: cfg.HallucinationMitigation.OnHallucinationDetected,
-					FactCheck: CanonicalFactCheckModule{
-						FactCheckModelConfig: cfg.HallucinationMitigation.FactCheckModel,
-						ModelRef:             "fact_check_classifier",
-					},
-					Detector: CanonicalHallucinationDetector{
-						HallucinationModelConfig: cfg.HallucinationMitigation.HallucinationModel,
-						ModelRef:                 "hallucination_detector",
-					},
-					Explainer: CanonicalExplainerModule{
-						NLIModelConfig: cfg.HallucinationMitigation.NLIModel,
-						ModelRef:       "hallucination_explainer",
-					},
-				},
-				FeedbackDetector: CanonicalFeedbackDetectorModule{
-					FeedbackDetectorConfig: cfg.FeedbackDetector,
-					ModelRef:               "feedback_detector",
-				},
-				ModalityDetector: cfg.ModalityDetector,
-			},
-		},
+		ModelCatalog: canonicalModelCatalogFromRouterConfig(cfg),
 	}
 
 	return global
+}
+
+func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCatalog {
+	return CanonicalModelCatalog{
+		Embeddings: CanonicalEmbeddingModels{
+			Semantic: cfg.EmbeddingModels,
+		},
+		System: CanonicalSystemModels{
+			PromptGuard:            cfg.PromptGuard.ModelID,
+			DomainClassifier:       cfg.CategoryModel.ModelID,
+			PIIClassifier:          cfg.PIIModel.ModelID,
+			FactCheckClassifier:    cfg.HallucinationMitigation.FactCheckModel.ModelID,
+			HallucinationDetector:  cfg.HallucinationMitigation.HallucinationModel.ModelID,
+			HallucinationExplainer: cfg.HallucinationMitigation.NLIModel.ModelID,
+			FeedbackDetector:       cfg.FeedbackDetector.ModelID,
+		},
+		External: append([]ExternalModelConfig(nil), cfg.ExternalModels...),
+		KBs:      append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
+		Modules: CanonicalModelModules{
+			PromptCompression: cfg.PromptCompression,
+			PromptGuard: CanonicalPromptGuardModule{
+				PromptGuardConfig: cfg.PromptGuard,
+				ModelRef:          "prompt_guard",
+			},
+			Classifier: CanonicalClassifierModule{
+				Domain: CanonicalCategoryModule{
+					CategoryModel: cfg.CategoryModel,
+					ModelRef:      "domain_classifier",
+				},
+				MCP: cfg.MCPCategoryModel,
+				PII: CanonicalPIIModule{
+					PIIModel: cfg.PIIModel,
+					ModelRef: "pii_classifier",
+				},
+				Preference: cfg.PreferenceModel.WithDefaults(),
+			},
+			Complexity: cfg.ComplexityModel.WithDefaults(),
+			HallucinationMitigation: CanonicalHallucinationModule{
+				Enabled:                 cfg.HallucinationMitigation.Enabled,
+				OnHallucinationDetected: cfg.HallucinationMitigation.OnHallucinationDetected,
+				FactCheck: CanonicalFactCheckModule{
+					FactCheckModelConfig: cfg.HallucinationMitigation.FactCheckModel,
+					ModelRef:             "fact_check_classifier",
+				},
+				Detector: CanonicalHallucinationDetector{
+					HallucinationModelConfig: cfg.HallucinationMitigation.HallucinationModel,
+					ModelRef:                 "hallucination_detector",
+				},
+				Explainer: CanonicalExplainerModule{
+					NLIModelConfig: cfg.HallucinationMitigation.NLIModel,
+					ModelRef:       "hallucination_explainer",
+				},
+			},
+			FeedbackDetector: CanonicalFeedbackDetectorModule{
+				FeedbackDetectorConfig: cfg.FeedbackDetector,
+				ModelRef:               "feedback_detector",
+			},
+			ModalityDetector: cfg.ModalityDetector,
+		},
+	}
 }
 
 func canonicalProviderModelsFromRouterConfig(cfg *RouterConfig) []CanonicalProviderModel {

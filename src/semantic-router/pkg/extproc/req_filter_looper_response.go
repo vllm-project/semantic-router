@@ -10,6 +10,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 // createLooperResponse creates an ImmediateResponse from looper output.
@@ -34,20 +35,37 @@ func buildLooperResponseHeaders(
 	resp *looper.Response,
 	reqCtx *RequestContext,
 ) []*core.HeaderValueOption {
-	setHeaders := baseLooperResponseHeaders(resp)
-	appendLooperSignalHeaders(&setHeaders, reqCtx)
-	appendLooperRoutingHeaders(&setHeaders, resp, reqCtx)
+	// content-type is a real response header for the immediate body and always
+	// rides; the v0.4 keystone headers (#2203) and the final routing facts ride
+	// on the default surface.
+	setHeaders := []*core.HeaderValueOption{
+		newHeaderValueOption("content-type", resp.ContentType),
+	}
+	setHeaders = append(setHeaders, httputil.KeystoneHeaderOptions(headers.ResponsePathLooper)...)
+	appendLooperRoutingFacts(&setHeaders, resp, reqCtx)
+	// The looper execution trace, intermediate decision details and matched
+	// signals are demoted to the x-vsr-debug surface (#2205).
+	if debugHeadersRequested(reqCtx) {
+		appendLooperTraceHeaders(&setHeaders, resp)
+		appendLooperDecisionDetailHeaders(&setHeaders, reqCtx)
+		appendLooperSignalHeaders(&setHeaders, reqCtx)
+	}
 	return setHeaders
 }
 
-func baseLooperResponseHeaders(resp *looper.Response) []*core.HeaderValueOption {
-	return []*core.HeaderValueOption{
-		newHeaderValueOption("content-type", resp.ContentType),
+// appendLooperTraceHeaders adds the looper execution trace (selected model,
+// models used, iteration count, algorithm). Demoted to the x-vsr-debug surface
+// (#2205); the trace stays recoverable from the replay record.
+func appendLooperTraceHeaders(setHeaders *[]*core.HeaderValueOption, resp *looper.Response) {
+	if resp == nil {
+		return
+	}
+	*setHeaders = append(*setHeaders,
 		newHeaderValueOption(headers.VSRLooperModel, resp.Model),
 		newHeaderValueOption(headers.VSRLooperModelsUsed, strings.Join(resp.ModelsUsed, ",")),
 		newHeaderValueOption(headers.VSRLooperIterations, fmt.Sprintf("%d", resp.Iterations)),
 		newHeaderValueOption(headers.VSRLooperAlgorithm, resp.AlgorithmType),
-	}
+	)
 }
 
 func appendLooperSignalHeaders(
@@ -88,7 +106,11 @@ func appendLooperSignalHeaders(
 	}
 }
 
-func appendLooperRoutingHeaders(
+// appendLooperRoutingFacts adds the final routing facts that ride on the default
+// surface: the selected model, decision, confidence, and the replay-id entry
+// point. The looper resolves the model itself, so it falls back to resp.Model
+// when the context did not record an override.
+func appendLooperRoutingFacts(
 	setHeaders *[]*core.HeaderValueOption,
 	resp *looper.Response,
 	reqCtx *RequestContext,
@@ -113,9 +135,21 @@ func appendLooperRoutingHeaders(
 			fmt.Sprintf("%.4f", reqCtx.VSRSelectedDecisionConfidence),
 		)
 	}
+	appendOptionalHeader(setHeaders, headers.RouterReplayID, reqCtx.RouterReplayID)
+}
+
+// appendLooperDecisionDetailHeaders adds the intermediate decision details
+// (selected category, session phase). Demoted to the x-vsr-debug surface
+// (#2205); both remain recoverable from the replay record.
+func appendLooperDecisionDetailHeaders(
+	setHeaders *[]*core.HeaderValueOption,
+	reqCtx *RequestContext,
+) {
+	if reqCtx == nil {
+		return
+	}
 	appendOptionalHeader(setHeaders, headers.VSRSelectedCategory, reqCtx.VSRSelectedCategory)
 	appendOptionalHeader(setHeaders, headers.VSRSessionPhase, sessionPolicyPhase(reqCtx))
-	appendOptionalHeader(setHeaders, headers.RouterReplayID, reqCtx.RouterReplayID)
 }
 
 func appendJoinedHeader(

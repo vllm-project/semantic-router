@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -149,14 +148,14 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 
 // RouterDefaultsHandler returns effective canonical global config merged from
 // router-owned defaults plus any current config.yaml global overrides.
-func RouterDefaultsHandler(configDir string) http.HandlerFunc {
+func RouterDefaultsHandler(configPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		defaults, err := currentGlobalDefaults(configDir)
+		defaults, err := currentGlobalDefaults(configPath)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to load defaults: %v", err), http.StatusInternalServerError)
 			return
@@ -169,7 +168,7 @@ func RouterDefaultsHandler(configDir string) http.HandlerFunc {
 }
 
 // UpdateRouterDefaultsHandler updates the canonical global override block in config.yaml.
-func UpdateRouterDefaultsHandler(configDir string, readonlyMode bool) http.HandlerFunc {
+func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost && r.Method != http.MethodPut {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -195,7 +194,6 @@ func UpdateRouterDefaultsHandler(configDir string, readonlyMode bool) http.Handl
 			return
 		}
 
-		configPath := filepath.Join(configDir, "config.yaml")
 		existingData, err := os.ReadFile(configPath)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)

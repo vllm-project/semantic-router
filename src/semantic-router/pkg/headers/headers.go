@@ -45,6 +45,12 @@ const (
 	// global.router.skip_processing.enabled is true. Value: "true" (case-insensitive).
 	// See https://github.com/vllm-project/semantic-router/issues/1808.
 	VSRSkipProcessing = "x-vsr-skip-processing"
+
+	// VSRDebug opts a request into verbose/debug response headers. Value: "true"
+	// (case-insensitive). When set, headers that the v0.4 contract otherwise
+	// omits or demotes to replay are emitted inline for that request — the
+	// debug/replay-mode trigger for the v0.4 header surface. See issue #2216.
+	VSRDebug = "x-vsr-debug"
 )
 
 // VSR Decision Tracking Headers
@@ -78,13 +84,63 @@ const (
 	// Example values: "deepseek-v31", "phi4", "gpt-4"
 	VSRSelectedModel = "x-vsr-selected-model"
 
-	// VSRSessionPhase indicates the session-aware routing phase used by ACR.
+	// VSRSelectedAlgorithm indicates the model-selection algorithm used after
+	// the routing decision matched. Example values: "static", "elo", "knn",
+	// "router_dc", "fusion", "remom", "workflows".
+	VSRSelectedAlgorithm = "x-vsr-selected-algorithm"
+
+	// VSRSessionPhase indicates the Router Learning protection phase.
 	// Example values: "user_turn", "tool_loop", "provider_state"
 	VSRSessionPhase = "x-vsr-session-phase"
+
+	// VSRLearningMethods names Router Learning methods summarized by the
+	// companion learning headers. Full diagnostics live in Router Replay.
+	// Example: "adaptation" or "adaptation,protection"
+	VSRLearningMethods = "x-vsr-learning-methods"
+
+	// VSRLearningActions contains method-keyed compact learning decisions.
+	// Example: "adaptation=propose_switch,protection=allow_switch"
+	VSRLearningActions = "x-vsr-learning-actions"
+
+	// VSRLearningScopes contains method-keyed identity scopes.
+	// Example: "protection=conversation"
+	VSRLearningScopes = "x-vsr-learning-scopes"
+
+	// VSRLearningReasons contains method-keyed machine-readable reasons.
+	// Example: "adaptation=sampled_win,protection=switch_allowed"
+	VSRLearningReasons = "x-vsr-learning-reasons"
 
 	// VSRInjectedSystemPrompt indicates whether a system prompt was injected into the request.
 	// Values: "true" or "false"
 	VSRInjectedSystemPrompt = "x-vsr-injected-system-prompt"
+
+	// --- v0.4 keystone response-contract headers (issue #2203) ---
+	// These two headers are emitted on every VSR-processed response and form
+	// the foundation of the v0.4 header contract: schema-version stamps the
+	// contract revision and response-path names how the response was produced.
+	// Everything else in the contract keys off response-path.
+
+	// VSRSchemaVersion stamps the response-header contract revision so clients
+	// know which contract they are parsing. Value: SchemaVersionValue.
+	VSRSchemaVersion = "x-vsr-schema-version"
+
+	// VSRResponsePath names the final path that produced the response.
+	// Value is one of the ResponsePath* constants below.
+	VSRResponsePath = "x-vsr-response-path"
+
+	// ResponsePath* are the valid values for VSRResponsePath.
+	ResponsePathUpstream        = "upstream"         // forwarded to and answered by the upstream model
+	ResponsePathCache           = "cache"            // served from semantic cache, no upstream call
+	ResponsePathFastResponse    = "fast_response"    // short-circuited by the fast_response plugin
+	ResponsePathLooper          = "looper"           // produced by the agent looper
+	ResponsePathImageGeneration = "image_generation" // produced by the image-generation path
+	ResponsePathBlocked         = "blocked"          // rejected by a guardrail (e.g. jailbreak/PII)
+	ResponsePathRateLimited     = "rate_limited"     // rejected by rate limiting
+	ResponsePathError           = "error"            // router-side error response
+
+	// SchemaVersionValue is the current response-header contract revision
+	// emitted in VSRSchemaVersion. v0.4 is contract revision "2".
+	SchemaVersionValue = "2"
 
 	// VSRCacheHit indicates that the response was served from cache.
 	// Value: "true"
@@ -213,83 +269,36 @@ const (
 // and 5xx) so clients can always tell which translation cell handled the
 // call and what was lost during translation.
 const (
-	// VSRInboundProtocol describes the wire format of the inbound request
+	// VSRClientProtocol describes the wire format of the inbound request
 	// as seen by the router (e.g. "openai", "anthropic"). Defaults to
 	// "openai" when no other protocol was detected.
-	VSRInboundProtocol = "x-vsr-inbound-protocol"
+	VSRClientProtocol = "x-vsr-client-protocol"
 
-	// VSROutboundProtocol describes the wire format of the outbound
+	// VSRUpstreamProtocol describes the wire format of the outbound
 	// request sent to the upstream backend. Defaults to "openai" when no
 	// explicit APIFormat was resolved.
-	VSROutboundProtocol = "x-vsr-outbound-protocol"
+	VSRUpstreamProtocol = "x-vsr-upstream-protocol"
 
-	// VSRLossinessWarnings carries a structured, comma-separated list
+	// VSRProtocolWarnings carries a structured, comma-separated list
 	// of translation observations emitted by the inbound parser during
 	// a lossy translation. Each entry is "severity;reason;field".
 	// Absent when no warnings were produced.
-	VSRLossinessWarnings = "x-vsr-lossiness-warnings"
+	VSRProtocolWarnings = "x-vsr-protocol-warnings"
 )
 
-// Legacy Security Headers (kept for backward compatibility with replay recorder)
-// New signal-driven architecture uses x-vsr-matched-jailbreak and x-vsr-matched-pii instead.
+// Response Warnings Header (v0.4)
+// VSRResponseWarnings consolidates the response-quality warnings into a single
+// comma-separated header on the default response surface (#2204, #2200). The
+// per-warning detail (hallucination spans, jailbreak type/confidence,
+// fact-check verification context) stays in the replay record, recoverable via
+// x-vsr-replay-id. Absent when no warnings were produced.
 const (
-	// VSRPIIViolation indicates that the request was blocked due to PII policy violation.
-	VSRPIIViolation = "x-vsr-pii-violation"
+	VSRResponseWarnings = "x-vsr-response-warnings"
 
-	// VSRPIITypes contains the comma-separated list of PII types that were detected and denied.
-	VSRPIITypes = "x-vsr-pii-types"
-
-	// VSRJailbreakBlocked indicates that a jailbreak attempt was detected and blocked.
-	VSRJailbreakBlocked = "x-vsr-jailbreak-blocked"
-
-	// VSRJailbreakType specifies the type of jailbreak attempt that was detected.
-	VSRJailbreakType = "x-vsr-jailbreak-type"
-
-	// VSRJailbreakConfidence indicates the confidence level of the jailbreak detection.
-	VSRJailbreakConfidence = "x-vsr-jailbreak-confidence"
-)
-
-// Hallucination Mitigation Headers
-// These headers are added to responses when hallucination detection is enabled
-// and potential hallucinations are detected in the LLM response.
-const (
-	// HallucinationDetected indicates that potential hallucination was detected in the response.
-	// Value: "true"
-	HallucinationDetected = "x-vsr-hallucination-detected"
-
-	// HallucinationSpans contains a summary of unsupported claims found in the response.
-	// Value: semicolon-separated list of claim summaries (truncated if too long)
-	HallucinationSpans = "x-vsr-hallucination-spans"
-
-	// FactCheckNeeded indicates whether the original prompt was classified as needing fact-checking.
-	// Value: "true" or "false"
-	FactCheckNeeded = "x-vsr-fact-check-needed"
-
-	// UnverifiedFactualResponse indicates the response contains factual claims that could not be verified.
-	// This occurs when the prompt was classified as needing fact-checking but no tool/RAG context
-	// was available to verify the response against.
-	// Value: "true"
-	UnverifiedFactualResponse = "x-vsr-unverified-factual-response"
-
-	// VerificationContextMissing indicates that no tool/RAG context was available for verification.
-	// This header is set alongside UnverifiedFactualResponse to explain why verification couldn't occur.
-	// Value: "true"
-	VerificationContextMissing = "x-vsr-verification-context-missing"
-)
-
-// Response Jailbreak Detection Headers
-// These headers are added to responses when response-level jailbreak detection
-// finds adversarial content (e.g., memory poisoning patterns) in the LLM response.
-const (
-	// ResponseJailbreakDetected indicates that jailbreak content was detected in the LLM response.
-	// Value: "true"
-	ResponseJailbreakDetected = "x-vsr-response-jailbreak-detected"
-
-	// ResponseJailbreakType specifies the type of jailbreak detected in the response.
-	ResponseJailbreakType = "x-vsr-response-jailbreak-type"
-
-	// ResponseJailbreakConfidence indicates the confidence level of the response jailbreak detection.
-	ResponseJailbreakConfidence = "x-vsr-response-jailbreak-confidence"
+	// Warning codes carried, in order, in the VSRResponseWarnings value.
+	ResponseWarningHallucination     = "hallucination"
+	ResponseWarningUnverifiedFactual = "unverified_factual"
+	ResponseWarningJailbreak         = "response_jailbreak"
 )
 
 // Auth Backend Injected Headers
@@ -356,6 +365,9 @@ const (
 	// Used by extproc to lookup decision configuration and apply plugins.
 	// Value: decision name (e.g., "remom_low_effort")
 	VSRLooperDecision = "x-vsr-looper-decision"
+
+	// VSRFusionDepth marks internal Fusion subrequests to prevent recursive Fusion execution.
+	VSRFusionDepth = "x-vsr-fusion-depth"
 )
 
 // Looper Response Headers

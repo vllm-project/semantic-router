@@ -1,0 +1,504 @@
+version: v0.3
+
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    timeout: 1200s
+
+global:
+  router:
+    auto_model_names:
+      - vllm-sr/auto
+  integrations:
+    looper:
+      endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
+      timeout_seconds: 1500
+
+providers:
+  defaults:
+    default_model: kimi-k27-code-finalizer
+  models:
+    - name: kimi-k27-code-solver-a
+      provider_model_id: moonshotai/kimi-k2.7-code
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.74
+        cached_input_per_1m: 0.15
+        completion_per_1m: 3.5
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: kimi-k27-code-solver-b
+      provider_model_id: moonshotai/kimi-k2.7-code
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.74
+        cached_input_per_1m: 0.15
+        completion_per_1m: 3.5
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: kimi-k27-code-solver-c
+      provider_model_id: moonshotai/kimi-k2.7-code
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.74
+        cached_input_per_1m: 0.15
+        completion_per_1m: 3.5
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: kimi-k27-code-finalizer
+      provider_model_id: moonshotai/kimi-k2.7-code
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.74
+        cached_input_per_1m: 0.15
+        completion_per_1m: 3.5
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+routing:
+  modelCards:
+    - name: kimi-k27-code-solver-a
+      context_window_size: 262144
+      description: Kimi K2.7 Code solver alias for independent LiveCodeBench sampling.
+      capabilities: [chat, code, reasoning, long-context]
+      quality_score: 0.91
+      modality: text
+      tags: [deployment:openrouter, benchmark:livecodebench, role:worker, base:kimi-k27-code]
+    - name: kimi-k27-code-solver-b
+      context_window_size: 262144
+      description: Kimi K2.7 Code solver alias for independent LiveCodeBench sampling.
+      capabilities: [chat, code, reasoning, long-context]
+      quality_score: 0.91
+      modality: text
+      tags: [deployment:openrouter, benchmark:livecodebench, role:worker, base:kimi-k27-code]
+    - name: kimi-k27-code-solver-c
+      context_window_size: 262144
+      description: Kimi K2.7 Code solver alias for independent LiveCodeBench sampling.
+      capabilities: [chat, code, reasoning, long-context]
+      quality_score: 0.91
+      modality: text
+      tags: [deployment:openrouter, benchmark:livecodebench, role:worker, base:kimi-k27-code]
+    - name: kimi-k27-code-finalizer
+      context_window_size: 262144
+      description: Kimi K2.7 Code final synthesis alias for LiveCodeBench loop recipes.
+      capabilities: [chat, code, reasoning, long-context]
+      quality_score: 0.91
+      modality: text
+      tags: [deployment:openrouter, benchmark:livecodebench, role:synthesis, base:kimi-k27-code]
+
+  signals:
+    keywords:
+      - name: livecode_any
+        operator: OR
+        keywords:
+          - "### Question:"
+          - "### Format:"
+          - "Sample Input"
+          - "Sample Output"
+          - "Examples:"
+          - "Example 1:"
+          - "Input:"
+          - "Output:"
+          - "Constraints:"
+          - "Python"
+      - name: livecode_stdio
+        operator: OR
+        keywords:
+          - "Read the inputs from stdin"
+          - "write the answer to stdout"
+          - "standard input"
+          - "standard output"
+          - "sys.stdin"
+          - "input()"
+      - name: livecode_starter_code
+        operator: OR
+        keywords:
+          - "starter code"
+          - "class Solution"
+          - "def solve"
+          - "def solution"
+          - "You are given a class"
+          - "Implement the"
+      - name: livecode_hard_constraints
+        operator: OR
+        keywords:
+          - "10^5"
+          - "10^6"
+          - "10^9"
+          - "10^12"
+          - "10^{"
+          - "2 * 10^5"
+          - "2 \\times 10^5"
+          - "2e5"
+          - "3e5"
+          - "5e5"
+          - "5 * 10^4"
+          - "100000"
+          - "200000"
+          - "300000"
+          - "500000"
+          - "1000000"
+          - "modulo"
+          - "998244353"
+          - "queries"
+          - "Q queries"
+          - "dynamic programming"
+          - "binary search"
+          - "segment tree"
+          - "Fenwick"
+          - "SCC"
+          - "functional graph"
+          - "graph"
+          - "tree"
+          - "lexicographically"
+      - name: livecode_timeout_risk
+        operator: OR
+        keywords:
+          - "time limit"
+          - "memory limit"
+          - "O(n log n)"
+          - "O(log n)"
+          - "large"
+          - "up to 2e5"
+          - "up to 3e5"
+          - "up to 5e5"
+          - "up to 10^5"
+          - "up to 10^6"
+      - name: livecode_float_tolerance
+        operator: OR
+        keywords:
+          - "absolute error"
+          - "relative error"
+          - "10^-5"
+          - "10^-6"
+          - "1e-5"
+          - "1e-6"
+          - "will be accepted"
+    context:
+      - name: livecode_long_prompt
+        min_tokens: 4K
+        max_tokens: 1M
+        description: Long LiveCodeBench prompt or verbose statement.
+
+  projections:
+    scores:
+      - name: livecode_risk_score
+        method: weighted_sum
+        inputs:
+          - type: keyword
+            name: livecode_hard_constraints
+            weight: 0.35
+          - type: keyword
+            name: livecode_timeout_risk
+            weight: 0.25
+          - type: keyword
+            name: livecode_float_tolerance
+            weight: 0.15
+          - type: keyword
+            name: livecode_starter_code
+            weight: 0.10
+          - type: context
+            name: livecode_long_prompt
+            weight: 0.15
+    mappings:
+      - name: livecode_risk_band
+        source: livecode_risk_score
+        method: threshold_bands
+        outputs:
+          - name: livecode_low_risk
+            lt: 0.35
+          - name: livecode_medium_risk
+            gte: 0.35
+            lt: 0.65
+          - name: livecode_high_risk
+            gte: 0.65
+
+  decisions:
+    - name: livecode_hard_starter_fusion
+      description: Hard starter-code tasks use a Kimi K2.7 Code multi-sample code panel and Kimi K2.7 Code synthesis.
+      priority: 320
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: livecode_starter_code
+          - type: projection
+            name: livecode_high_risk
+      output_contract: >-
+        Return exactly one complete Python solution inside one ```python code
+        block. Preserve any required class or function signature from starter
+        code. Do not add prose outside the code block. Do not use stdin/stdout
+        unless the original prompt explicitly requires it.
+      modelRefs:
+        - model: kimi-k27-code-solver-a
+        - model: kimi-k27-code-solver-b
+        - model: kimi-k27-code-solver-c
+        - model: kimi-k27-code-finalizer
+      algorithm:
+        type: fusion
+        fusion:
+          model: kimi-k27-code-finalizer
+          analysis_models: [kimi-k27-code-solver-a, kimi-k27-code-solver-b]
+          max_concurrent: 1
+          max_completion_tokens: 16384
+          round_timeout_seconds: 900
+          min_successful_responses: 1
+          temperature: 0.2
+          include_analysis: false
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            You are the final LiveCodeBench code judge.
+
+            Original problem:
+            {{original}}
+
+            Candidate solutions:
+            {{responses}}
+
+            Select the candidate most likely to pass hidden tests. Fix only clear
+            syntax, format, signature, or edge-case issues. Return exactly one
+            complete Python code block and no prose.
+          grounding:
+            enabled: false
+            reference: panel
+            policy: weight
+            min_score: 0.0
+            min_keep: 1
+            nli_contradiction_penalty: 1.0
+            on_error: skip
+
+    - name: livecode_hard_stdio_fusion
+      description: Hard stdin/stdout tasks use independent solvers plus strict final synthesis.
+      priority: 310
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: livecode_stdio
+          - type: projection
+            name: livecode_high_risk
+      output_contract: >-
+        Return exactly one complete Python 3 program inside one ```python code
+        block. The program must read from stdin and write to stdout. Do not add
+        prose outside the code block.
+      modelRefs:
+        - model: kimi-k27-code-solver-a
+        - model: kimi-k27-code-solver-b
+        - model: kimi-k27-code-solver-c
+        - model: kimi-k27-code-finalizer
+      algorithm:
+        type: fusion
+        fusion:
+          model: kimi-k27-code-finalizer
+          analysis_models: [kimi-k27-code-solver-a, kimi-k27-code-solver-b]
+          max_concurrent: 1
+          max_completion_tokens: 16384
+          round_timeout_seconds: 900
+          min_successful_responses: 1
+          temperature: 0.2
+          include_analysis: false
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            You are the final LiveCodeBench code judge.
+
+            Original problem:
+            {{original}}
+
+            Candidate solutions:
+            {{responses}}
+
+            Select the candidate most likely to pass hidden tests. Ensure the
+            final program reads from stdin, writes to stdout, handles multiple
+            test cases when required, and closes the Python code fence. Return
+            exactly one complete Python code block and no prose.
+          grounding:
+            enabled: false
+            reference: panel
+            policy: weight
+            min_score: 0.0
+            min_keep: 1
+            nli_contradiction_penalty: 1.0
+            on_error: skip
+
+    - name: livecode_medium_or_float_remom
+      description: Medium-risk or float-tolerance tasks use light ReMoM for format-stable refinement.
+      priority: 240
+      rules:
+        operator: OR
+        conditions:
+          - type: projection
+            name: livecode_medium_risk
+          - type: keyword
+            name: livecode_float_tolerance
+      output_contract: >-
+        Return exactly one complete Python solution inside one ```python code
+        block. Match the original problem's interface: use stdin/stdout only
+        for stdin/stdout prompts, and preserve starter-code signatures for
+        starter-code prompts. Do not add prose outside the code block.
+      modelRefs:
+        - model: kimi-k27-code-solver-a
+        - model: kimi-k27-code-solver-b
+        - model: kimi-k27-code-solver-c
+        - model: kimi-k27-code-finalizer
+      algorithm:
+        type: remom
+        remom:
+          breadth_schedule: [2]
+          model_distribution: round_robin
+          temperature: 0.2
+          include_reasoning: false
+          compaction_strategy: last_n_tokens
+          compaction_tokens: 2000
+          synthesis_model: kimi-k27-code-finalizer
+          max_concurrent: 1
+          round_timeout_seconds: 900
+          min_successful_responses: 1
+          max_responses_per_round: 2
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            You are solving LiveCodeBench. Compare the reference solutions
+            against the original programming problem and return the single most
+            reliable Python solution.
+
+            Original problem:
+            {{.OriginalContent}}
+
+            Reference solutions:
+            {{range $i, $resp := .ReferenceResponses}}
+            Reference {{add $i 1}}{{if $resp.Model}} ({{$resp.Model}}){{end}}:
+            {{$resp.Content}}
+            {{end}}
+
+            Return exactly one complete ```python code block and no prose.
+
+    - name: livecode_low_risk_light_fusion
+      description: Low-risk LiveCodeBench tasks use a lightweight two-sample ReMoM loop for format-stable code.
+      priority: 160
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: livecode_any
+          - type: projection
+            name: livecode_low_risk
+      output_contract: >-
+        Return exactly one complete Python solution inside one ```python code
+        block. Match the original problem's interface: use stdin/stdout only
+        for stdin/stdout prompts, and preserve starter-code signatures for
+        starter-code prompts. Do not add prose outside the code block.
+      modelRefs:
+        - model: kimi-k27-code-solver-a
+        - model: kimi-k27-code-solver-b
+        - model: kimi-k27-code-solver-c
+        - model: kimi-k27-code-finalizer
+      algorithm:
+        type: remom
+        remom:
+          breadth_schedule: [2]
+          model_distribution: round_robin
+          temperature: 0.2
+          include_reasoning: false
+          compaction_strategy: last_n_tokens
+          compaction_tokens: 2000
+          synthesis_model: kimi-k27-code-finalizer
+          max_concurrent: 1
+          round_timeout_seconds: 900
+          min_successful_responses: 1
+          max_responses_per_round: 2
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            You are solving LiveCodeBench. Compare the reference solutions
+            against the original programming problem and return the single most
+            reliable Python solution.
+
+            Original problem:
+            {{.OriginalContent}}
+
+            Reference solutions:
+            {{range $i, $resp := .ReferenceResponses}}
+            Reference {{add $i 1}}{{if $resp.Model}} ({{$resp.Model}}){{end}}:
+            {{$resp.Content}}
+            {{end}}
+
+            Preserve the requested interface exactly. Return exactly one
+            complete ```python code block and no prose.
+
+    - name: livecode_fallback_remom
+      description: Catch-all fallback for unmatched LiveCodeBench traffic.
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      output_contract: >-
+        Preserve the benchmark output format exactly. If the task asks for
+        Python code, return one complete Python solution inside one ```python
+        code block with no prose outside the block.
+      modelRefs:
+        - model: kimi-k27-code-solver-a
+        - model: kimi-k27-code-solver-b
+        - model: kimi-k27-code-solver-c
+        - model: kimi-k27-code-finalizer
+      algorithm:
+        type: remom
+        remom:
+          breadth_schedule: [2]
+          model_distribution: round_robin
+          temperature: 0.2
+          include_reasoning: false
+          compaction_strategy: last_n_tokens
+          compaction_tokens: 2000
+          synthesis_model: kimi-k27-code-finalizer
+          max_concurrent: 1
+          round_timeout_seconds: 900
+          min_successful_responses: 1
+          max_responses_per_round: 2
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            You are solving LiveCodeBench. Compare the reference solutions
+            against the original programming problem and return the single most
+            reliable final answer in the original requested format.
+
+            Original problem:
+            {{.OriginalContent}}
+
+            Reference solutions:
+            {{range $i, $resp := .ReferenceResponses}}
+            Reference {{add $i 1}}{{if $resp.Model}} ({{$resp.Model}}){{end}}:
+            {{$resp.Content}}
+            {{end}}
+
+            If code is requested, return exactly one complete ```python code
+            block and no prose.

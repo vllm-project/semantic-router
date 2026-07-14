@@ -339,7 +339,7 @@ func TestBuilderNLVerifyHandlerReportsResolvedEndpoint(t *testing.T) {
 	}
 }
 
-func TestGenerateBuilderNLDraftDefaultRuntimeUsesMoMGeneratorAndRouterTarget(t *testing.T) {
+func TestGenerateBuilderNLDraftDefaultRuntimeUsesCanonicalAutoGeneratorAndRouterTarget(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
@@ -388,7 +388,7 @@ ROUTE default_route {
 	}
 }
 
-func TestBuilderNLVerifyHandlerDefaultRuntimeUsesMoMGenerator(t *testing.T) {
+func TestBuilderNLVerifyHandlerDefaultRuntimeUsesCanonicalAutoGenerator(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 

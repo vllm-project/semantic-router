@@ -1,0 +1,144 @@
+.mesh {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.mesh::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.55) 0%,
+    rgba(255, 255, 255, 0.18) 42%,
+    rgba(255, 255, 255, 0.92) 100%
+  );
+}
+
+.meshSubtle::after {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.35) 0%,
+    transparent 55%,
+    rgba(255, 255, 255, 0.75) 100%
+  );
+}
+
+.orbViolet,
+.orbBlue,
+.orbCyan,
+.orbIndigo {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(72px);
+  opacity: 0.72;
+  will-change: transform;
+}
+
+.orbViolet {
+  top: -8%;
+  left: 18%;
+  width: min(42vw, 28rem);
+  height: min(42vw, 28rem);
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.55) 0%, rgba(124, 58, 237, 0) 72%);
+  animation: meshFloatA 18s ease-in-out infinite;
+}
+
+.orbBlue {
+  top: 8%;
+  right: 10%;
+  width: min(48vw, 32rem);
+  height: min(48vw, 32rem);
+  background: radial-gradient(circle, rgba(48, 162, 255, 0.5) 0%, rgba(48, 162, 255, 0) 72%);
+  animation: meshFloatB 22s ease-in-out infinite;
+}
+
+.orbCyan {
+  top: 42%;
+  left: 42%;
+  width: min(36vw, 22rem);
+  height: min(36vw, 22rem);
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.38) 0%, rgba(56, 189, 248, 0) 72%);
+  animation: meshFloatC 20s ease-in-out infinite;
+}
+
+.orbIndigo {
+  bottom: -6%;
+  left: 8%;
+  width: min(40vw, 26rem);
+  height: min(40vw, 26rem);
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.42) 0%, rgba(99, 102, 241, 0) 72%);
+  animation: meshFloatD 24s ease-in-out infinite;
+}
+
+@keyframes meshFloatA {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(3%, 4%, 0) scale(1.06);
+  }
+}
+
+@keyframes meshFloatB {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(-4%, 3%, 0) scale(1.04);
+  }
+}
+
+@keyframes meshFloatC {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(-2%, -3%, 0) scale(1.08);
+  }
+}
+
+@keyframes meshFloatD {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(5%, -2%, 0) scale(1.05);
+  }
+}
+
+[data-theme='dark'] .mesh::after {
+  background: linear-gradient(
+    180deg,
+    rgba(7, 7, 15, 0.35) 0%,
+    rgba(7, 7, 15, 0.12) 42%,
+    rgba(7, 7, 15, 0.88) 100%
+  );
+}
+
+[data-theme='dark'] .orbViolet {
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.42) 0%, rgba(124, 58, 237, 0) 72%);
+}
+
+[data-theme='dark'] .orbBlue {
+  background: radial-gradient(circle, rgba(48, 162, 255, 0.36) 0%, rgba(48, 162, 255, 0) 72%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbViolet,
+  .orbBlue,
+  .orbCyan,
+  .orbIndigo {
+    animation: none;
+  }
+}

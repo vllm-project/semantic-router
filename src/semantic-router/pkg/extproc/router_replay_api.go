@@ -29,9 +29,10 @@ type routerReplayFilters struct {
 }
 
 type routerReplayListQuery struct {
-	filters routerReplayFilters
-	limit   int
-	offset  int
+	filters     routerReplayFilters
+	limit       int
+	offset      int
+	showDetails bool
 }
 
 type routerReplayListResponse struct {
@@ -167,7 +168,8 @@ func (r *OpenAIRouter) findRouterReplayRecord(replayID string) (routerreplay.Rou
 
 func parseRouterReplayListQuery(rawQuery string) (routerReplayListQuery, error) {
 	query := routerReplayListQuery{
-		limit: routerReplayDefaultListLimit,
+		limit:       routerReplayDefaultListLimit,
+		showDetails: false,
 	}
 	values, err := url.ParseQuery(rawQuery)
 	if err != nil {
@@ -196,6 +198,15 @@ func parseRouterReplayListQuery(rawQuery string) (routerReplayListQuery, error) 
 			return query, err
 		}
 		query.offset = offset
+	}
+
+	if values.Has("showDetails") {
+		raw := strings.TrimSpace(values.Get("showDetails"))
+		parsed, err := strconv.ParseBool(raw)
+		if err != nil {
+			return query, fmt.Errorf("showDetails must be a boolean")
+		}
+		query.showDetails = parsed
 	}
 
 	return query, nil
@@ -309,6 +320,13 @@ func buildRouterReplayListPayload(
 	}
 
 	page := records[offset:end]
+	if !query.showDetails {
+		summarized := make([]routerreplay.RoutingRecord, len(page))
+		for i := range page {
+			summarized[i] = routerreplay.ListSummaryRecord(page[i])
+		}
+		page = summarized
+	}
 	payload := routerReplayListResponse{
 		Object:  "router_replay.list",
 		Count:   len(page),

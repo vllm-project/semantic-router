@@ -29,7 +29,7 @@ import (
 
 func isLooperAlgorithmType(algorithmType string) bool {
 	switch algorithmType {
-	case "confidence", "ratings", "remom":
+	case "confidence", "ratings", "remom", "fusion", "workflows":
 		return true
 	default:
 		return false
@@ -58,16 +58,8 @@ func (r *OpenAIRouter) shouldUseLooper(decision *config.Decision) bool {
 		return false
 	}
 
-	// ReMoM algorithm can work with single model (first_only strategy)
-	// Other algorithms (confidence, ratings) require multiple models
-	if decision.Algorithm.Type == "remom" {
-		if len(decision.ModelRefs) < 1 {
-			return false
-		}
-	} else {
-		if len(decision.ModelRefs) <= 1 {
-			return false
-		}
+	if !hasLooperModelInputs(decision) {
+		return false
 	}
 
 	if !r.Config.Looper.IsEnabled() {
@@ -75,6 +67,24 @@ func (r *OpenAIRouter) shouldUseLooper(decision *config.Decision) bool {
 		return false
 	}
 	return true
+}
+
+func hasLooperModelInputs(decision *config.Decision) bool {
+	switch decision.Algorithm.Type {
+	case "remom":
+		return len(decision.ModelRefs) >= 1
+	case "fusion":
+		return len(decision.ModelRefs) >= 1 || hasFusionAnalysisModels(decision)
+	case "workflows":
+		return len(decision.ModelRefs) >= 1
+	default:
+		return len(decision.ModelRefs) > 1
+	}
+}
+
+func hasFusionAnalysisModels(decision *config.Decision) bool {
+	return decision.Algorithm.Fusion != nil &&
+		len(decision.Algorithm.Fusion.AnalysisModels) > 0
 }
 
 // handleLooperExecution executes the looper for multi-model decisions
@@ -105,12 +115,21 @@ func (r *OpenAIRouter) handleLooperExecution(
 		"response_api":     isResponseAPIRequest(reqCtx),
 	})
 	looperReq := &looper.Request{
-		OriginalRequest: openAIRequest,
-		ModelRefs:       decision.ModelRefs,
-		ModelParams:     r.getModelParams(),
-		Algorithm:       decision.Algorithm,
-		IsStreaming:     streaming,
-		DecisionName:    decision.Name,
+		OriginalRequest:    openAIRequest,
+		ModelRefs:          decision.ModelRefs,
+		ModelParams:        r.getModelParams(),
+		Algorithm:          decision.Algorithm,
+		IsStreaming:        streaming,
+		DecisionName:       decision.Name,
+		OutputContract:     decision.OutputContract,
+		OutputContractSpec: decision.OutputContractSpec,
+	}
+	if decision.Algorithm.Type == "fusion" {
+		fusionOverride, err := parseFusionRequestConfig(reqCtx.OriginalRequestBody)
+		if err != nil {
+			return r.createErrorResponse(400, "invalid Fusion plugin: "+err.Error()), nil
+		}
+		looperReq.Fusion = fusionOverride
 	}
 
 	// Execute looper

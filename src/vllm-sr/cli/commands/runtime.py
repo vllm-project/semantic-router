@@ -20,6 +20,7 @@ from cli.commands.runtime_config_mutation import (
 from cli.commands.runtime_help import SERVE_HELP
 from cli.commands.runtime_support import (
     append_passthrough_env_vars,
+    apply_container_runtime_override,
     apply_runtime_mode_env_vars,
     configure_runtime_override_env_vars,
     log_bootstrap_result,
@@ -31,7 +32,8 @@ from cli.consts import (
     IMAGE_PULL_POLICY_ALWAYS,
     IMAGE_PULL_POLICY_IF_NOT_PRESENT,
     IMAGE_PULL_POLICY_NEVER,
-    VLLM_SR_DOCKER_IMAGE_DEFAULT,
+    SUPPORTED_CONTAINER_RUNTIMES,
+    VLLM_SR_CONTAINER_IMAGE_DEFAULT,
 )
 from cli.deployment_backend import DEFAULT_TARGET, VALID_TARGETS, resolve_target
 from cli.utils import get_logger
@@ -48,6 +50,12 @@ TARGET_HELP = (
     f"Deployment target: {', '.join(VALID_TARGETS)} (default: {DEFAULT_TARGET})"
 )
 
+RUNTIME_HELP = (
+    "Container runtime for the local Docker target: "
+    f"{', '.join(SUPPORTED_CONTAINER_RUNTIMES)}. "
+    "Equivalent to setting CONTAINER_RUNTIME=<runtime>. Has no effect on the k8s target."
+)
+
 
 def _build_backend(target: str | None, **k8s_kwargs):
     """Instantiate the right DeploymentBackend for *target*."""
@@ -57,9 +65,9 @@ def _build_backend(target: str | None, **k8s_kwargs):
 
         return K8sBackend(**{k: v for k, v in k8s_kwargs.items() if v is not None})
 
-    from cli.docker_backend import DockerBackend  # noqa: PLC0415
+    from cli.container_backend import ContainerBackend  # noqa: PLC0415
 
-    return DockerBackend()
+    return ContainerBackend()
 
 
 def _execute_serve(
@@ -80,8 +88,10 @@ def _execute_serve(
     context: str | None,
     profile: str | None,
     chart_dir: str | None,
+    runtime: str | None,
 ) -> None:
     """Bootstrap workspace, resolve config, and delegate to the deployment backend."""
+    apply_container_runtime_override(runtime)
     requested_config = config
     bootstrap = ensure_bootstrap_workspace(Path(config))
     config_path = bootstrap.config_path
@@ -140,7 +150,7 @@ def _execute_serve(
 @click.option(
     "--image",
     default=None,
-    help=f"Docker image to use (default: {VLLM_SR_DOCKER_IMAGE_DEFAULT})",
+    help=f"Docker image to use (default: {VLLM_SR_CONTAINER_IMAGE_DEFAULT})",
 )
 @click.option(
     "--router-image",
@@ -201,16 +211,18 @@ def _execute_serve(
     default=None,
     help="Platform for GPU deployments: 'amd' enables ROCm passthrough, "
     "'nvidia' enables NVIDIA GPU passthrough (--gpus all). "
-    "When set to amd, serve defaults to the ROCm image and GPU defaults for router internal models "
-    "unless --image or VLLM_SR_IMAGE is provided.",
+    "When set to amd or nvidia, serve defaults to the matching GPU image "
+    "(ROCm / CUDA) and flips use_cpu to false for router internal models under "
+    "global.model_catalog, unless --image or VLLM_SR_IMAGE is provided. "
+    "Set VLLM_SR_<PLATFORM>_PRESERVE_CPU=1 to keep CPU settings.",
 )
 @click.option(
     "--algorithm",
     type=click.Choice(ALGORITHM_TYPES, case_sensitive=False),
     default=None,
-    help="Selection algorithm override: static, elo, router_dc, automix, hybrid, "
-    "latency_aware, knn, kmeans, svm, mlp, multi_factor, rl_driven, gmtrouter, or session_aware. "
-    "Overrides decision.algorithm.type in the config file.",
+    help="Request-time base algorithm override: static, router_dc, automix, hybrid, "
+    "workflows, latency_aware, knn, kmeans, svm, mlp, or multi_factor. "
+    "Cross-request learning uses global.router.learning.adaptation/protection.",
 )
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(
@@ -226,6 +238,12 @@ def _execute_serve(
 )
 @click.option(
     "--chart-dir", default=None, help="Path to Helm chart directory (k8s target only)"
+)
+@click.option(
+    "--runtime",
+    type=click.Choice(SUPPORTED_CONTAINER_RUNTIMES, case_sensitive=False),
+    default=None,
+    help=RUNTIME_HELP,
 )
 @exit_with_logged_error(log, interrupt_message="\nInterrupted by user")
 def serve(
@@ -246,6 +264,7 @@ def serve(
     context: str | None,
     profile: str | None,
     chart_dir: str | None,
+    runtime: str | None,
 ) -> None:
     _execute_serve(
         config,
@@ -265,6 +284,7 @@ def serve(
         context,
         profile,
         chart_dir,
+        runtime,
     )
 
 
@@ -281,12 +301,19 @@ def serve(
 @click.option(
     "--context", default=None, help="kubectl / Helm context (k8s target only)"
 )
+@click.option(
+    "--runtime",
+    type=click.Choice(SUPPORTED_CONTAINER_RUNTIMES, case_sensitive=False),
+    default=None,
+    help=RUNTIME_HELP,
+)
 @exit_with_logged_error(log)
 def status(
     service: str,
     target: str | None,
     namespace: str | None,
     context: str | None,
+    runtime: str | None,
 ) -> None:
     """
     Show status of vLLM Semantic Router services.
@@ -299,6 +326,7 @@ def status(
         vllm-sr status simulator    # Show simulator status
         vllm-sr status --target k8s # Show Kubernetes status
     """
+    apply_container_runtime_override(runtime)
     backend = _build_backend(target, namespace=namespace, context=context)
     backend.status(service)
 
@@ -315,6 +343,12 @@ def status(
 @click.option(
     "--context", default=None, help="kubectl / Helm context (k8s target only)"
 )
+@click.option(
+    "--runtime",
+    type=click.Choice(SUPPORTED_CONTAINER_RUNTIMES, case_sensitive=False),
+    default=None,
+    help=RUNTIME_HELP,
+)
 @exit_with_logged_error(log, interrupt_message="\nLog streaming stopped")
 def logs(
     service: str,
@@ -322,6 +356,7 @@ def logs(
     target: str | None,
     namespace: str | None,
     context: str | None,
+    runtime: str | None,
 ) -> None:
     """
     Show logs from vLLM Semantic Router service.
@@ -336,6 +371,7 @@ def logs(
         vllm-sr logs router --target k8s        # Kubernetes logs
         vllm-sr logs router --target k8s -f     # Follow K8s logs
     """
+    apply_container_runtime_override(runtime)
     backend = _build_backend(target, namespace=namespace, context=context)
     backend.logs(service, follow=follow)
 
@@ -348,11 +384,18 @@ def logs(
 @click.option(
     "--context", default=None, help="kubectl / Helm context (k8s target only)"
 )
+@click.option(
+    "--runtime",
+    type=click.Choice(SUPPORTED_CONTAINER_RUNTIMES, case_sensitive=False),
+    default=None,
+    help=RUNTIME_HELP,
+)
 @exit_with_logged_error(log)
 def stop(
     target: str | None,
     namespace: str | None,
     context: str | None,
+    runtime: str | None,
 ) -> None:
     """
     Stop vLLM Semantic Router.
@@ -361,6 +404,7 @@ def stop(
         vllm-sr stop                # Stop Docker stack
         vllm-sr stop --target k8s   # Uninstall Helm release
     """
+    apply_container_runtime_override(runtime)
     backend = _build_backend(target, namespace=namespace, context=context)
     backend.teardown()
 
@@ -374,12 +418,19 @@ def stop(
 @click.option(
     "--context", default=None, help="kubectl / Helm context (k8s target only)"
 )
+@click.option(
+    "--runtime",
+    type=click.Choice(SUPPORTED_CONTAINER_RUNTIMES, case_sensitive=False),
+    default=None,
+    help=RUNTIME_HELP,
+)
 @exit_with_logged_error(log)
 def dashboard(
     no_open: bool,
     target: str | None,
     namespace: str | None,
     context: str | None,
+    runtime: str | None,
 ) -> None:
     """
     Open the dashboard in your default web browser.
@@ -389,6 +440,7 @@ def dashboard(
         vllm-sr dashboard --target k8s      # Show K8s dashboard URL
         vllm-sr dashboard --no-open
     """
+    apply_container_runtime_override(runtime)
     backend = _build_backend(target, namespace=namespace, context=context)
     if not backend.is_running():
         raise ValueError("vLLM Semantic Router is not running")

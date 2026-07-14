@@ -22,11 +22,24 @@ const (
 )
 
 type (
-	Signal        = store.Signal
-	RoutingRecord = store.Record
-	ToolTrace     = store.ToolTrace
-	ToolTraceStep = store.ToolTraceStep
-	UsageCost     = store.UsageCost
+	Signal                        = store.Signal
+	LearningDiagnostics           = store.LearningDiagnostics
+	LearningAdaptationDiagnostics = store.LearningAdaptationDiagnostics
+	LearningCandidateScore        = store.LearningCandidateScore
+	LearningCandidateTrace        = store.LearningCandidateTrace
+	LearningIdentityDiagnostics   = store.LearningIdentityDiagnostics
+	LearningIdentityHeaders       = store.LearningIdentityHeaders
+	LearningIdentityPart          = store.LearningIdentityPart
+	LearningPolicyDiagnostics     = store.LearningPolicyDiagnostics
+	LearningProtectionDiagnostics = store.LearningProtectionDiagnostics
+	LearningRescueDiagnostics     = store.LearningRescueDiagnostics
+	LearningSamplingDiagnostics   = store.LearningSamplingDiagnostics
+	Outcome                       = store.Outcome
+	RouteDiagnostics              = store.RouteDiagnostics
+	RoutingRecord                 = store.Record
+	ToolTrace                     = store.ToolTrace
+	ToolTraceStep                 = store.ToolTraceStep
+	UsageCost                     = store.UsageCost
 )
 
 type Recorder struct {
@@ -215,6 +228,11 @@ func (r *Recorder) AttachResponse(id string, responseBody []byte) error {
 	return r.storage.AttachResponse(ctx, id, body, truncated)
 }
 
+func (r *Recorder) AppendOutcome(id string, outcome Outcome) error {
+	ctx := context.Background()
+	return r.storage.AppendOutcome(ctx, id, outcome)
+}
+
 // UpdateHallucinationStatus updates hallucination detection results for a record.
 func (r *Recorder) UpdateHallucinationStatus(id string, detected bool, confidence float32, spans []string) error {
 	ctx := context.Background()
@@ -354,6 +372,9 @@ func appendUsageCostLogFields(fields map[string]interface{}, r RoutingRecord) {
 	}
 	if r.CachedPromptTokens != nil {
 		fields["cached_prompt_tokens"] = *r.CachedPromptTokens
+	}
+	if r.CacheWriteTokens != nil {
+		fields["cache_write_tokens"] = *r.CacheWriteTokens
 	}
 	if r.CompletionTokens != nil {
 		fields["completion_tokens"] = *r.CompletionTokens

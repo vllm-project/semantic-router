@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelpricing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
@@ -34,6 +35,7 @@ func (r *OpenAIRouter) sessionTurnPricing(model string) sessiontelemetry.TurnPri
 		PromptPer1M:      p.PromptPer1M,
 		CompletionPer1M:  p.CompletionPer1M,
 		CachedInputPer1M: p.CachedInputPer1M,
+		CacheWritePer1M:  p.CacheWritePer1M,
 	}
 }
 
@@ -54,6 +56,7 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 		Domain:                      domain,
 		PromptTokens:                usage.promptTokens,
 		CachedPromptTokens:          usage.cachedPromptTokens,
+		CacheWriteTokens:            usage.cacheWriteTokens,
 		EstimatedCachedPromptTokens: accounting.estimatedCachedTokens,
 		CompletionTokens:            usage.completionTokens,
 		EstimatedCacheSavings:       accounting.estimatedSavings,
@@ -85,6 +88,7 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 		p.Chat = &sessiontelemetry.ChatInput{UserID: userID, Messages: msgs}
 	}
 	sessiontelemetry.RecordTurn(p)
+	recordRouterLearningUsageFromContext(ctx, usage, pricing, accounting)
 }
 
 func recordRouterSessionUsageFromContext(
@@ -94,6 +98,7 @@ func recordRouterSessionUsageFromContext(
 	accounting routerCacheAccounting,
 ) {
 	if ctx == nil || ctx.SessionID == "" || ctx.RequestModel == "" {
+		recordRouterLearningUsageFromContext(ctx, usage, pricing, accounting)
 		return
 	}
 	sessiontelemetry.RecordSessionUsage(sessiontelemetry.SessionUsageParams{
@@ -101,6 +106,32 @@ func recordRouterSessionUsageFromContext(
 		Model:                       ctx.RequestModel,
 		PromptTokens:                usage.promptTokens,
 		CachedPromptTokens:          usage.cachedPromptTokens,
+		CacheWriteTokens:            usage.cacheWriteTokens,
+		EstimatedCachedPromptTokens: accounting.estimatedCachedTokens,
+		CompletionTokens:            usage.completionTokens,
+		Cost:                        sessionTurnCost(usage, pricing),
+		EstimatedCacheSavings:       accounting.estimatedSavings,
+		CacheAccountingSource:       accounting.source,
+		Timestamp:                   time.Now(),
+	})
+	recordRouterLearningUsageFromContext(ctx, usage, pricing, accounting)
+}
+
+func recordRouterLearningUsageFromContext(
+	ctx *RequestContext,
+	usage responseUsageMetrics,
+	pricing sessiontelemetry.TurnPricing,
+	accounting routerCacheAccounting,
+) {
+	if ctx == nil || ctx.VSRLearningSessionID == "" || ctx.VSRLearningSessionID == ctx.SessionID || ctx.RequestModel == "" {
+		return
+	}
+	sessiontelemetry.RecordSessionUsage(sessiontelemetry.SessionUsageParams{
+		SessionID:                   ctx.VSRLearningSessionID,
+		Model:                       ctx.RequestModel,
+		PromptTokens:                usage.promptTokens,
+		CachedPromptTokens:          usage.cachedPromptTokens,
+		CacheWriteTokens:            usage.cacheWriteTokens,
 		EstimatedCachedPromptTokens: accounting.estimatedCachedTokens,
 		CompletionTokens:            usage.completionTokens,
 		Cost:                        sessionTurnCost(usage, pricing),
@@ -184,17 +215,10 @@ func minInt(a, b int) int {
 }
 
 func sessionTurnCost(usage responseUsageMetrics, pricing sessiontelemetry.TurnPricing) float64 {
-	if pricing.PromptPer1M == 0 &&
-		pricing.CompletionPer1M == 0 &&
-		pricing.CachedInputPer1M == 0 &&
-		pricing.Currency == "" {
+	if !pricing.IsConfigured() {
 		return 0
 	}
-	cached := clampCachedPromptTokensInt(usage.promptTokens, usage.cachedPromptTokens)
-	uncachedPrompt := usage.promptTokens - cached
-	return (float64(uncachedPrompt)*pricing.PromptPer1M +
-		float64(cached)*pricing.CachedInputPer1M +
-		float64(usage.completionTokens)*pricing.CompletionPer1M) / 1_000_000.0
+	return modelpricing.Cost(modelPricingUsage(usage), pricing)
 }
 
 // maybeEmitTransitionEvent records a ModelTransitionEvent on model change.
