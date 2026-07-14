@@ -255,6 +255,9 @@ type FactCheckModelConfig struct {
 }
 
 type HallucinationModelConfig struct {
+	Backend                string  `yaml:"backend,omitempty"`
+	Endpoint               string  `yaml:"endpoint,omitempty"`
+	IncludeExplanation     bool    `yaml:"include_explanation,omitempty"`
 	ModelID                string  `yaml:"model_id"`
 	Threshold              float32 `yaml:"threshold"`
 	UseCPU                 bool    `yaml:"use_cpu"`
