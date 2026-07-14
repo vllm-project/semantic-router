@@ -68,7 +68,7 @@ function readCommitterDirectory() {
   const source = readFileSync(teamMembersPath, 'utf8')
   const blocks = [
     sliceExportBlock(source, 'topNewContributorMembers'),
-    sliceExportBlock(source, 'committerMembers'),
+    sliceExportBlock(source, 'allCommitterMembers'),
   ]
 
   const byLogin = new Map()
