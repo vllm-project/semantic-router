@@ -1,0 +1,78 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(16rem, 0.9fr);
+  gap: clamp(1.25rem, 3vw, 2rem);
+  align-items: center;
+}
+
+.copy {
+  display: grid;
+  gap: 0.85rem;
+  max-width: 36rem;
+}
+
+.copy h2 {
+  margin: 0;
+  font-size: var(--site-text-h1);
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: -0.03em;
+  line-height: var(--site-leading-tight);
+}
+
+.copy p {
+  margin: 0;
+  color: var(--site-muted-bright);
+  line-height: 1.65;
+}
+
+.trackList {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.track {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--site-border);
+  border-radius: 0.85rem;
+  background: var(--site-surface);
+  color: var(--site-muted-bright);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  transition:
+    border-color var(--site-transition-medium),
+    background var(--site-transition-medium),
+    transform var(--site-transition-medium),
+    box-shadow var(--site-transition-medium);
+}
+
+.track:hover {
+  transform: translateY(-2px);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg-soft);
+  box-shadow: var(--site-hover-glow);
+}
+
+.track:hover .trackLabel {
+  color: var(--site-brand-blue);
+}
+
+.trackLabel {
+  color: var(--site-text);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+@media (max-width: 768px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}

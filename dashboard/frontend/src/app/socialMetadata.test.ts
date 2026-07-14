@@ -11,11 +11,11 @@ describe('dashboard social metadata', () => {
 
     expect(html).toContain('property="og:site_name" content="vLLM Semantic Router"')
     expect(html).toMatch(
-      /property="og:image"\s+content="https:\/\/play\.vllm-semantic-router\.com\/vllm-sr-logo\.social\.png"/,
+      /property="og:image"\s+content="https:\/\/app\.vllm-sr\.ai\/vllm-sr-logo\.social\.png"/,
     )
     expect(html).toContain('name="twitter:card" content="summary_large_image"')
     expect(html).toMatch(
-      /name="twitter:image"\s+content="https:\/\/play\.vllm-semantic-router\.com\/vllm-sr-logo\.social\.png"/,
+      /name="twitter:image"\s+content="https:\/\/app\.vllm-sr\.ai\/vllm-sr-logo\.social\.png"/,
     )
     expect(image.slice(1, 4)).toBe('PNG')
     expect(image.length).toBeGreaterThan(100_000)
