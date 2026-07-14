@@ -348,20 +348,25 @@ func TestIsValidDimensionAcceptsNativeMultimodalDimension(t *testing.T) {
 	}
 }
 
-func TestApplyEmbeddingDefaultsImagesUseNativeDimension(t *testing.T) {
+func TestApplyEmbeddingDefaultsImageOnlyUsesNativeDimension(t *testing.T) {
+	// An image-only request has no text side to honor the text default, so it
+	// defaults to the multimodal native dimension (the ceiling MRL can produce).
 	stubMultiModalDim(t, 384)
 	req := EmbeddingRequest{Images: []string{"data:image/png;base64,aGVsbG8="}}
 
 	applyEmbeddingDefaults(&req)
 
 	if req.Dimension != 384 {
-		t.Fatalf("expected image-bearing request to default to native dimension 384, got %d", req.Dimension)
+		t.Fatalf("expected image-only request to default to native dimension 384, got %d", req.Dimension)
 	}
 }
 
-func TestApplyEmbeddingDefaultsMixedUsesNativeDimension(t *testing.T) {
-	// A mixed text+image request defaults to the image native dimension so the
-	// response is uniform (all 384) rather than silently mixing 768 + 384.
+func TestApplyEmbeddingDefaultsMixedUsesTextDefault(t *testing.T) {
+	// A mixed text+image request defaults req.Dimension to the text default
+	// (768). req.Dimension controls the text side only; the image side always
+	// encodes at its native dimension regardless. This preserves text recall
+	// rather than silently downgrading text to 384 for a false-consistency win
+	// (cross-encoder vectors do not align across modalities regardless of dim).
 	stubMultiModalDim(t, 384)
 	req := EmbeddingRequest{
 		Texts:  []string{"hello"},
@@ -370,8 +375,8 @@ func TestApplyEmbeddingDefaultsMixedUsesNativeDimension(t *testing.T) {
 
 	applyEmbeddingDefaults(&req)
 
-	if req.Dimension != 384 {
-		t.Fatalf("expected mixed request to default to native dimension 384, got %d", req.Dimension)
+	if req.Dimension != defaultEmbeddingDimension {
+		t.Fatalf("expected mixed request to default to text default %d, got %d", defaultEmbeddingDimension, req.Dimension)
 	}
 }
 
@@ -385,10 +390,10 @@ func TestApplyEmbeddingDefaultsTextsUseTextDefault(t *testing.T) {
 	}
 }
 
-func TestApplyEmbeddingDefaultsImagesFallBackWhenModelUnloaded(t *testing.T) {
-	// When no multimodal model is loaded the getter reports <= 0; defaulting
-	// falls back to the text default and the encode fails downstream rather than
-	// this layer guessing a native dimension.
+func TestApplyEmbeddingDefaultsImageOnlyFallsBackWhenModelUnloaded(t *testing.T) {
+	// When no multimodal model is loaded the getter reports <= 0; defaulting an
+	// image-only request falls back to the text default and the encode fails
+	// downstream rather than this layer guessing a native dimension.
 	stubMultiModalDim(t, -1)
 	req := EmbeddingRequest{Images: []string{"data:image/png;base64,aGVsbG8="}}
 
@@ -399,7 +404,8 @@ func TestApplyEmbeddingDefaultsImagesFallBackWhenModelUnloaded(t *testing.T) {
 	}
 }
 
-func TestValidateEmbeddingRequestRejectsImageDimensionAboveNative(t *testing.T) {
+func TestValidateEmbeddingRequestRejectsImageOnlyDimensionAboveNative(t *testing.T) {
+	// Image-only: req.Dimension is the image target and must be <= native.
 	stubMultiModalDim(t, 384)
 	req := EmbeddingRequest{
 		Images:    []string{"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"},
@@ -408,13 +414,29 @@ func TestValidateEmbeddingRequestRejectsImageDimensionAboveNative(t *testing.T) 
 
 	code, message, ok := validateEmbeddingRequest(req, nil)
 	if ok {
-		t.Fatalf("expected dimension above the multimodal native dimension to be rejected")
+		t.Fatalf("expected dimension above the multimodal native dimension to be rejected for image-only")
 	}
 	if code != "INVALID_DIMENSION" {
 		t.Fatalf("unexpected error code %q: %q", code, message)
 	}
 	if !strings.Contains(message, "384") {
 		t.Fatalf("error should mention the native dimension, got %q", message)
+	}
+}
+
+func TestValidateEmbeddingRequestAllowsAboveNativeDimensionForMixed(t *testing.T) {
+	// Mixed: req.Dimension controls the text side, and the image side always
+	// encodes at its native dimension regardless. A text-legal req.Dimension
+	// like 768 must be accepted even though it exceeds the image ceiling.
+	stubMultiModalDim(t, 384)
+	req := EmbeddingRequest{
+		Texts:     []string{"hello"},
+		Images:    []string{"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"},
+		Dimension: 768,
+	}
+
+	if _, message, ok := validateEmbeddingRequest(req, nil); !ok {
+		t.Fatalf("expected mixed request with text-legal dimension 768 to be accepted; got %q", message)
 	}
 }
 
@@ -492,6 +514,75 @@ func TestValidateEmbeddingRequestAllowsTextModelForMixed(t *testing.T) {
 
 	if _, _, ok := validateEmbeddingRequest(req, nil); !ok {
 		t.Fatalf("expected mixed text+image request with a text model to be accepted")
+	}
+}
+
+func TestImageTargetDimensionMixedUsesNative(t *testing.T) {
+	// Mixed: req.Dimension is the text-side target, so the image side must be
+	// resolved to the multimodal native dimension regardless of req.Dimension.
+	stubMultiModalDim(t, 384)
+	req := EmbeddingRequest{
+		Texts:     []string{"hello"},
+		Images:    []string{"data:image/png;base64,aGVsbG8="},
+		Dimension: 768,
+	}
+	if got := imageTargetDimension(req); got != 384 {
+		t.Fatalf("expected mixed request image encode dim to be 384 (native), got %d", got)
+	}
+}
+
+func TestImageTargetDimensionImageOnlyPassesThrough(t *testing.T) {
+	// Image-only: req.Dimension IS the image target (already validated <= native).
+	stubMultiModalDim(t, 384)
+	req := EmbeddingRequest{
+		Images:    []string{"data:image/png;base64,aGVsbG8="},
+		Dimension: 128,
+	}
+	if got := imageTargetDimension(req); got != 128 {
+		t.Fatalf("expected image-only request image encode dim to be 128, got %d", got)
+	}
+}
+
+func TestImageTargetDimensionMixedFallsBackWhenModelUnloaded(t *testing.T) {
+	// Mixed with no multimodal model loaded: helper returns req.Dimension so the
+	// downstream encode surfaces "model not loaded" rather than the helper
+	// silently choosing a value.
+	stubMultiModalDim(t, -1)
+	req := EmbeddingRequest{
+		Texts:     []string{"hello"},
+		Images:    []string{"data:image/png;base64,aGVsbG8="},
+		Dimension: 768,
+	}
+	if got := imageTargetDimension(req); got != 768 {
+		t.Fatalf("expected fallback to req.Dimension 768 when multimodal unloaded, got %d", got)
+	}
+}
+
+func TestBuildEmbeddingResultsImageOnlyHonorsRequestDimension(t *testing.T) {
+	// Image-only: req.Dimension is the image target (validated <= native) and
+	// must be passed through to the encoder verbatim.
+	stubMultiModalDim(t, 384)
+
+	var gotImageDim int
+	orig := multiModalEncodeImage
+	defer func() { multiModalEncodeImage = orig }()
+	multiModalEncodeImage = func(_ string, targetDim int) (*candle_binding.MultiModalEmbeddingOutput, error) {
+		gotImageDim = targetDim
+		return &candle_binding.MultiModalEmbeddingOutput{
+			Embedding: make([]float32, targetDim),
+			Modality:  "image",
+		}, nil
+	}
+
+	req := EmbeddingRequest{
+		Images:    []string{"data:image/png;base64,aGVsbG8="},
+		Dimension: 128,
+	}
+	if _, _, err := buildEmbeddingResults(req, "multi-modal-embed-small"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotImageDim != 128 {
+		t.Fatalf("expected image encode to receive image-only request dimension 128, got %d", gotImageDim)
 	}
 }
 
