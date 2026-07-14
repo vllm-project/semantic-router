@@ -219,6 +219,16 @@ manual_profile_rules:
     summary: Llama Stack-backed RAG vector-store and hybrid-search behavior that runs outside the standard CI profile matrix.
     paths:
       - e2e/profiles/rag-hybrid-search/**
+  hallucination:
+    owner: e2e
+    coverage_role: hallucination-detection
+    selection_mode: manual-only
+    summary: Pluggable endpoint hallucination detection backend coverage, verifying fact-check gating and response warnings.
+    paths:
+      - e2e/profiles/hallucination/**
+      - e2e/testcases/hallucination_detection*.go
+      - deploy/kubernetes/hallucination/**
+      - e2e/testcases/testdata/hallucination_detection_cases.json
 
 workflow_suite_rules:
   vllm-sr-cli-integration:

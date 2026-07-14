@@ -130,6 +130,11 @@ var (
 			validate: validatePromptCompressionContracts,
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
 		},
+		{
+			name:     "hallucination",
+			validate: validateHallucinationContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
 	}
 )
 

@@ -8,6 +8,14 @@ This directory holds smoke, demo, and harness manifests that the repository uses
 - response API and hallucination test configs
 - ONNX binding test configs
 
+`config.hallucination-endpoint.yaml` exercises the endpoint-backed hallucination
+detector (`global.model_catalog.modules.hallucination_mitigation.detector.backend:
+endpoint`). It points the detector at an OpenAI-compatible mock served by
+`e2e/testing/mock-hallucination-endpoint.py` (default port `8077`), so the endpoint
+backend can be validated locally without a GPU or the real generative detector
+model. Start the mock detector, the mock chat backend, and the router with this
+config, then send a fact-check query whose answer contains a known unsupported
+claim and confirm the `x-vsr-response-warnings: hallucination` header is set.
 `config.remote-embedding-smoke.yaml` is a manual local smoke config for validating
 `global.model_catalog.embeddings.semantic.embedding_config.backend: openai_compatible`
 without changing the default `config/config.yaml`. It uses mock chat backends on

@@ -1,0 +1,27 @@
+[
+  {
+    "description": "Eiffel Tower construction date",
+    "question": "When was the Eiffel Tower built and how tall is it?",
+    "context": "The Eiffel Tower is located in Paris, France. It was completed in 1889 for the World's Fair. The tower is 330 meters tall."
+  },
+  {
+    "description": "Tokyo population",
+    "question": "What is the population of Tokyo according to the latest census?",
+    "context": "Tokyo is the capital of Japan. As of the latest census the Tokyo metropolitan area has a population of about 14 million people."
+  },
+  {
+    "description": "Apple founders",
+    "question": "Who founded Apple Inc. and in what year?",
+    "context": "Apple Inc. was founded in 1976 by Steve Jobs, Steve Wozniak, and Ronald Wayne in Cupertino, California."
+  },
+  {
+    "description": "Great Wall length",
+    "question": "How long is the Great Wall of China?",
+    "context": "The Great Wall of China is a series of fortifications. Its total length is estimated at about 21,000 kilometers."
+  },
+  {
+    "description": "Speed of light",
+    "question": "What is the speed of light in a vacuum?",
+    "context": "The speed of light in a vacuum is approximately 299,792 kilometers per second."
+  }
+]

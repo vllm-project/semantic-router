@@ -65,6 +65,26 @@ Reply with ONLY a JSON object (no markdown, no code fences):
 If nothing is unsupported, reply {"hallucinated_spans": []}.`
 )
 
+// endpointCategories and endpointSubcategories are the hallucination taxonomy
+// advertised in the structured-output schema. They are the single source of truth
+// for both the request schema and local validation of the returned spans.
+var (
+	endpointCategories    = []string{"contradiction", "fabricated_reference", "unsupported_addition"}
+	endpointSubcategories = []string{"entity", "temporal", "numerical", "value", "relational", "identifier", "section", "attribute", "claim", "behavior", "elaboration", "subjective", "unspecified"}
+)
+
+// normalizeTaxonomyValue lower-cases and trims a returned taxonomy value and
+// returns it only when it is a member of the allowed set; otherwise it returns "".
+func normalizeTaxonomyValue(value string, allowed []string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	for _, candidate := range allowed {
+		if normalized == candidate {
+			return normalized
+		}
+	}
+	return ""
+}
+
 type EndpointHallucinationDetector struct {
 	config      *config.HallucinationModelConfig
 	initialized bool
@@ -112,11 +132,14 @@ func (d *EndpointHallucinationDetector) IsInitialized() bool {
 	return d.initialized
 }
 
-// IsNLIInitialized returns true because the endpoint natively provides explanation when requested
+// IsNLIInitialized always returns false for the endpoint backend. The endpoint
+// does not ship a local NLI explainer model, and HasHallucinationExplainer /
+// the /classify/nli readiness APIs specifically represent that Candle-only NLI
+// capability. Advertising NLI readiness here would let those APIs report ready
+// while the NLI path fails. The endpoint's own generative explanation still flows
+// through DetectWithNLI independently of this flag.
 func (d *EndpointHallucinationDetector) IsNLIInitialized() bool {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	return d.initialized
+	return false
 }
 
 func (d *EndpointHallucinationDetector) buildRequestPayload(reqContext, question, answer string) ([]byte, error) {
@@ -129,8 +152,8 @@ func (d *EndpointHallucinationDetector) buildRequestPayload(reqContext, question
 
 	spanProps := map[string]interface{}{
 		"text":        map[string]interface{}{"type": "string"},
-		"category":    map[string]interface{}{"type": "string", "enum": []string{"contradiction", "fabricated_reference", "unsupported_addition"}},
-		"subcategory": map[string]interface{}{"type": "string", "enum": []string{"entity", "temporal", "numerical", "value", "relational", "identifier", "section", "attribute", "claim", "behavior", "elaboration", "subjective", "unspecified"}},
+		"category":    map[string]interface{}{"type": "string", "enum": endpointCategories},
+		"subcategory": map[string]interface{}{"type": "string", "enum": endpointSubcategories},
 	}
 	requiredFields := []string{"text", "category", "subcategory"}
 
@@ -174,7 +197,14 @@ func (d *EndpointHallucinationDetector) buildRequestPayload(reqContext, question
 	return json.Marshal(reqBody)
 }
 
-func (d *EndpointHallucinationDetector) parseOpenAIResponse(respBytes []byte) ([]EnhancedHallucinationSpan, error) {
+// parseOpenAIResponse parses the OpenAI-compatible response and maps the returned
+// spans onto backend-neutral EnhancedHallucinationSpan values. It returns an error
+// for any malformed response so the caller can fail open via the detection_error
+// path instead of recording a false clean verdict. The taxonomy is validated
+// locally, each span is verified to be a substring of the answer, and deterministic
+// Start/End offsets are populated. NLI fields are left UNKNOWN/0 because the
+// endpoint backend does not produce NLI labels.
+func (d *EndpointHallucinationDetector) parseOpenAIResponse(respBytes []byte, answer string) ([]EnhancedHallucinationSpan, error) {
 	var openaiResp struct {
 		Choices []struct {
 			Message struct {
@@ -183,8 +213,11 @@ func (d *EndpointHallucinationDetector) parseOpenAIResponse(respBytes []byte) ([
 		} `json:"choices"`
 	}
 
-	if err := json.Unmarshal(respBytes, &openaiResp); err != nil || len(openaiResp.Choices) == 0 {
-		return nil, fmt.Errorf("response parsing failed")
+	if err := json.Unmarshal(respBytes, &openaiResp); err != nil {
+		return nil, fmt.Errorf("response parsing failed: %w", err)
+	}
+	if len(openaiResp.Choices) == 0 {
+		return nil, fmt.Errorf("response contained no choices")
 	}
 
 	var parsed struct {
@@ -200,68 +233,97 @@ func (d *EndpointHallucinationDetector) parseOpenAIResponse(respBytes []byte) ([
 		return nil, fmt.Errorf("JSON schema parsing failed: %w", err)
 	}
 
-	var spans []EnhancedHallucinationSpan
+	spans := make([]EnhancedHallucinationSpan, 0, len(parsed.HallucinatedSpans))
 	for _, s := range parsed.HallucinatedSpans {
-		explanation := s.Explanation
-		if explanation == "" {
-			explanation = fmt.Sprintf("Unsupported %s (%s) detected", s.Subcategory, s.Category)
+		if s.Text == "" {
+			continue
 		}
+		// The span must be quoted verbatim from the answer; skip anything that is
+		// not actually present so we never emit fabricated offsets.
+		start := strings.Index(answer, s.Text)
+		if start < 0 {
+			logging.Debugf("Endpoint hallucination span not found in answer, skipping: %q", s.Text)
+			continue
+		}
+
+		category := normalizeTaxonomyValue(s.Category, endpointCategories)
+		subcategory := normalizeTaxonomyValue(s.Subcategory, endpointSubcategories)
 
 		spans = append(spans, EnhancedHallucinationSpan{
 			Text:                    s.Text,
+			Start:                   start,
+			End:                     start + len(s.Text),
 			HallucinationConfidence: 1.0,
-			NLILabel:                NLIContradiction,
-			NLILabelStr:             s.Category,
-			NLIConfidence:           1.0,
-			Severity:                4,
-			Explanation:             explanation,
+			NLILabel:                0,
+			NLILabelStr:             "UNKNOWN",
+			NLIConfidence:           0,
+			Severity:                2,
+			Explanation:             endpointSpanExplanation(s.Explanation, category, subcategory),
 		})
 	}
 	return spans, nil
 }
 
+// endpointSpanExplanation builds a backend-neutral explanation, preferring the
+// model-supplied explanation and falling back to the validated taxonomy.
+func endpointSpanExplanation(explanation, category, subcategory string) string {
+	if explanation != "" {
+		return explanation
+	}
+	switch {
+	case category != "" && subcategory != "":
+		return fmt.Sprintf("Unsupported span (%s / %s) detected by endpoint detector", category, subcategory)
+	case category != "":
+		return fmt.Sprintf("Unsupported span (%s) detected by endpoint detector", category)
+	default:
+		return "Unsupported span detected by endpoint detector"
+	}
+}
+
+// DetectWithNLI runs a single structured detection call against the endpoint.
+// It fails open by returning an error (not a clean verdict) for any transport,
+// status, read, or parse failure: the response filter already passes traffic
+// through on error and records the detection_error path rather than not_detected.
+// A clean result is reserved for an empty answer (nothing to verify) and for a
+// successfully parsed empty span list.
 func (d *EndpointHallucinationDetector) DetectWithNLI(reqContext, question, answer string) (*EnhancedHallucinationResult, error) {
 	if answer == "" {
-		return d.fallbackResult(), nil
+		return d.cleanResult(), nil
 	}
 	if reqContext == "" {
-		logging.Warnf("Endpoint hallucination detection requested with empty context")
-		return d.fallbackResult(), nil
+		return nil, fmt.Errorf("context is required for hallucination detection")
 	}
 
 	bodyBytes, err := d.buildRequestPayload(reqContext, question, answer)
 	if err != nil {
-		return d.fallbackResult(), nil
+		return nil, fmt.Errorf("failed to build hallucination detection request: %w", err)
 	}
 	req, err := http.NewRequestWithContext(context.Background(), "POST", d.endpoint+"/chat/completions", bytes.NewReader(bodyBytes))
 	if err != nil {
-		return d.fallbackResult(), nil
+		return nil, fmt.Errorf("failed to create hallucination detection request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := d.client.Do(req)
 	if err != nil {
-		logging.Warnf("Endpoint hallucination detection failed (fallback to safe): %v", err)
-		return d.fallbackResult(), nil
+		return nil, fmt.Errorf("endpoint hallucination detection request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		logging.Warnf("Endpoint hallucination detection non-200 status: %d", resp.StatusCode)
-		return d.fallbackResult(), nil
+		return nil, fmt.Errorf("endpoint hallucination detection returned non-200 status: %d", resp.StatusCode)
 	}
 
-	// Limit response size to 10MB to prevent OOM
+	// Cap the response read at 10MB to avoid unbounded memory use from a
+	// misbehaving endpoint.
 	respBytes, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
 	if err != nil {
-		logging.Warnf("Endpoint hallucination detection response read failed: %v", err)
-		return d.fallbackResult(), nil
+		return nil, fmt.Errorf("endpoint hallucination detection response read failed: %w", err)
 	}
 
-	spans, err := d.parseOpenAIResponse(respBytes)
+	spans, err := d.parseOpenAIResponse(respBytes, answer)
 	if err != nil {
-		logging.Warnf("Endpoint hallucination detection %v", err)
-		return d.fallbackResult(), nil
+		return nil, fmt.Errorf("endpoint hallucination detection parse failed: %w", err)
 	}
 
 	return &EnhancedHallucinationResult{
@@ -271,7 +333,10 @@ func (d *EndpointHallucinationDetector) DetectWithNLI(reqContext, question, answ
 	}, nil
 }
 
-func (d *EndpointHallucinationDetector) fallbackResult() *EnhancedHallucinationResult {
+// cleanResult is the "nothing to verify" verdict, used only when the answer is
+// empty. Endpoint failures return an error instead so they are never recorded as
+// a clean (not_detected) verdict.
+func (d *EndpointHallucinationDetector) cleanResult() *EnhancedHallucinationResult {
 	return &EnhancedHallucinationResult{
 		HallucinationDetected: false,
 		Confidence:            1.0,

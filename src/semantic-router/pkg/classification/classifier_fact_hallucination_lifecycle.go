@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	candle "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -43,7 +44,7 @@ func (c *Classifier) initializeHallucinationDetector() error {
 		return nil
 	}
 
-	if c.Config.HallucinationMitigation.HallucinationModel.Backend == "endpoint" {
+	if c.Config.HallucinationMitigation.HallucinationModel.NormalizedBackend() == config.HallucinationBackendEndpoint {
 		detector, err := NewEndpointHallucinationDetector(&c.Config.HallucinationMitigation.HallucinationModel)
 		if err != nil {
 			return fmt.Errorf("failed to create endpoint hallucination detector: %w", err)

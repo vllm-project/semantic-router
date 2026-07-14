@@ -486,3 +486,63 @@ def test_parse_user_config_rejects_deprecated_provider_model_loras(tmp_path: Pat
         assert "providers.models[0].loras" in str(exc)
     else:
         raise AssertionError("expected ConfigParseError")
+
+
+def test_migrate_config_data_preserves_hallucination_endpoint_backend():
+    legacy = {
+        "version": "v0.3",
+        "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        "providers": {"defaults": {"default_model": "gpt-4o-mini"}},
+        "routing": {
+            "modelCards": [{"name": "gpt-4o-mini"}],
+            "decisions": [
+                {
+                    "name": "default-route",
+                    "description": "fallback",
+                    "priority": 100,
+                    "rules": {"operator": "AND", "conditions": []},
+                    "modelRefs": [{"model": "gpt-4o-mini"}],
+                }
+            ],
+        },
+        "global": {
+            "hallucination_mitigation": {
+                "enabled": True,
+                "hallucination_model": {
+                    "backend": "endpoint",
+                    "endpoint": "http://127.0.0.1:8077/v1",
+                    "include_explanation": True,
+                    "model_id": "KRLabsOrg/lettucedect-v2-qwen-2b",
+                },
+            }
+        },
+    }
+
+    migrated = migrate_config_data(legacy)
+
+    detector = migrated["global"]["model_catalog"]["modules"][
+        "hallucination_mitigation"
+    ]["detector"]
+    assert detector["backend"] == "endpoint"
+    assert detector["endpoint"] == "http://127.0.0.1:8077/v1"
+    assert detector["include_explanation"] is True
+    assert detector["model_id"] == "KRLabsOrg/lettucedect-v2-qwen-2b"
+    # Legacy detectors are given a stable model_ref during migration.
+    assert detector["model_ref"] == "hallucination_detector"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
