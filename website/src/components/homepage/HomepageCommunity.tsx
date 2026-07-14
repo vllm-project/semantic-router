@@ -7,7 +7,7 @@ import acknowledgementsData from '@site/src/components/AcknowledgementsSection/d
 import {
   committerMembers,
   getTeamMemberBadge,
-  steeringCommitteeMembers,
+  maintainerMembers,
   type TeamMember,
 } from '@site/src/data/teamMembers'
 import shared from './homepageShared.module.css'
@@ -21,7 +21,7 @@ type AckProject = {
 }
 
 const projects = (acknowledgementsData.projects ?? []) as AckProject[]
-const allTeamMembers: TeamMember[] = [...steeringCommitteeMembers, ...committerMembers]
+const allTeamMembers: TeamMember[] = [...maintainerMembers, ...committerMembers]
 const marqueeCopies = [0, 1]
 
 function toAssetUrl(baseUrl: string, path: string): string {
@@ -152,7 +152,7 @@ export default function HomepageCommunity(): JSX.Element {
             </h3>
             <p>
               <Translate id="homepage.community.team.subtitle">
-                Industry and academic leadership tracks alongside committers across research and infrastructure.
+                Maintainers and active committers across research, infrastructure, and model systems.
               </Translate>
             </p>
           </div>

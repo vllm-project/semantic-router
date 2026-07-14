@@ -4,12 +4,12 @@ import { PillLink, SectionLabel } from '@site/src/components/site/Chrome'
 import {
   committerMembers,
   getTeamMemberBadge,
-  steeringCommitteeMembers,
+  maintainerMembers,
   type TeamMember,
 } from '@site/src/data/teamMembers'
 import styles from './styles.module.css'
 
-const teamMembers = [...steeringCommitteeMembers, ...committerMembers]
+const teamMembers = [...maintainerMembers, ...committerMembers]
 
 interface MemberSequenceProps {
   duplicate?: boolean

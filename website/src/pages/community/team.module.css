@@ -1,286 +1,199 @@
 .container {
   width: min(100% - 2.5rem, var(--site-grid-max));
   margin: 0 auto;
-  padding: 2rem 0 4rem;
+  padding: 3rem 0 5rem;
 }
 
-.header {
+.hero {
   display: grid;
-  gap: 1rem;
-  margin-bottom: 2rem;
-  padding-top: 0.5rem;
-}
-
-.header h1 {
-  margin: 0;
-  font-size: 4.2rem;
-  line-height: 0.92;
-  font-weight: 400;
-  letter-spacing: 0;
-}
-
-.subtitle,
-.sectionDescription {
-  max-width: 40rem;
-  margin: 0;
-  color: var(--site-muted-bright);
-  line-height: 1.7;
-}
-
-.main {
-  display: grid;
-  gap: 2rem;
-}
-
-.section {
-  display: grid;
-  gap: 1rem;
-}
-
-.section h2 {
-  margin: 0;
-  font-size: 2.4rem;
-  line-height: 1;
-}
-
-.teamGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.trackList {
-  display: grid;
-  border-top: 1px solid var(--site-border);
-}
-
-.trackSection {
-  display: grid;
-  grid-template-columns: minmax(15rem, 0.75fr) minmax(0, 2fr);
   gap: 1.25rem;
-  padding: 1.25rem 0;
-  border-bottom: 1px solid var(--site-border);
+  padding: 1rem 0 3rem;
+  border-bottom: 1px solid var(--site-border-strong);
 }
 
-.trackIntro {
-  display: grid;
-  align-content: start;
-  gap: 0.75rem;
-  padding: 0.4rem 0.5rem 0.4rem 0;
-}
-
-.trackIndex {
-  color: var(--site-muted);
+.eyebrow,
+.sectionHeader > span {
+  color: #087ac5;
+  font-family: var(--ifm-font-family-monospace);
   font-size: 0.68rem;
+  font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.16em;
 }
 
-.trackIntro h3 {
-  margin: 0;
-  font-size: 1.55rem;
-  line-height: 1;
-}
-
-.trackDescription {
-  margin: 0;
-  color: var(--site-muted-bright);
-  line-height: 1.65;
-}
-
-.trackMembers {
+.heroGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  grid-template-columns: minmax(0, 1.4fr) minmax(20rem, 0.6fr);
+  gap: 3rem;
+  align-items: end;
 }
 
-.memberCard,
-.involvementCard {
-  padding: 1.3rem;
-  border: 1px solid var(--site-border);
-  background: var(--site-surface);
+.hero h1 {
+  max-width: 50rem;
+  margin: 0;
+  color: var(--site-text);
+  font-size: clamp(3.8rem, 9vw, 7.5rem);
+  font-weight: 430;
+  line-height: 0.86;
+  letter-spacing: -0.055em;
 }
 
-.memberCard {
+.heroCopy {
   display: grid;
-  gap: 1rem;
-  align-content: start;
+  gap: 1.35rem;
 }
 
-.memberHeader {
-  display: flex;
-  gap: 0.9rem;
-}
-
-.avatar {
-  width: 3.5rem;
-  height: 3.5rem;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 1px solid var(--site-border-strong);
-}
-
-.memberInfo {
-  min-width: 0;
-}
-
-.nameWithBadge {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.memberName {
+.heroCopy p {
   margin: 0;
-  font-size: 1.1rem;
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 1.6rem;
-  padding: 0.1rem 0.55rem;
-  border: 1px solid var(--site-border);
-  border-radius: 999px;
   color: var(--site-muted-bright);
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-size: 0.95rem;
+  line-height: 1.7;
 }
 
-.steering {
-  border-color: var(--site-text);
-  color: var(--site-text);
+.heroLinks {
+  display: grid;
+  border-top: 1px solid var(--site-border);
 }
 
-.committer,
-.contributor {
-  border-color: var(--site-border-strong);
-}
-
-.memberRole,
-.memberBio {
-  color: var(--site-muted-bright);
-  line-height: 1.65;
-}
-
-.memberRole {
-  margin: 0.35rem 0 0;
-}
-
-.memberBio {
-  margin: 0;
-}
-
-.expertiseList {
+.heroLinks a {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  margin: -0.2rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.expertiseList li {
-  max-width: 100%;
-  padding: 0.35rem 0.6rem;
-  border: 1px solid var(--site-border);
-  color: var(--site-muted-bright);
-  font-size: 0.74rem;
-  line-height: 1.25;
-}
-
-.company {
+  justify-content: space-between;
+  padding: 0.72rem 0;
+  border-bottom: 1px solid var(--site-border);
   color: var(--site-text);
-}
-
-.memberActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-}
-
-.actionLink,
-.actionButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.42rem;
-  min-height: 2.45rem;
-  padding: 0.55rem 0.9rem;
-  border: 1px solid var(--site-border);
-  border-radius: 999px;
-  color: var(--site-text);
-  font-size: 0.74rem;
+  font-size: 0.7rem;
+  font-weight: 650;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  transition:
-    background 180ms ease,
-    color 180ms ease,
-    border-color 180ms ease;
+  letter-spacing: 0.09em;
 }
 
-.actionLink svg,
-.actionButton svg {
-  flex-shrink: 0;
-  font-size: 0.9rem;
-}
-
-.actionLink:hover,
-.actionButton:hover {
-  background: var(--site-text);
-  color: var(--site-bg);
-  border-color: var(--site-text);
+.heroLinks a:hover {
+  color: #087ac5;
   text-decoration: none;
 }
 
-.involvementGrid {
+.roster {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
 }
 
-.involvementCard {
+.section {
   display: grid;
-  gap: 1rem;
+  grid-template-columns: minmax(14rem, 0.26fr) minmax(0, 0.74fr);
+  gap: 2rem;
+  padding: 3rem 0;
+  border-bottom: 1px solid var(--site-border);
+}
+
+.sectionHeader {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.75rem;
   align-content: start;
 }
 
-@media (max-width: 996px) {
-  .trackSection {
+.sectionHeader > span {
+  padding-top: 0.45rem;
+  color: var(--site-muted);
+}
+
+.sectionHeader > div {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.titleLine {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+
+.titleLine h2 {
+  margin: 0;
+  color: var(--site-text);
+  font-size: clamp(1.55rem, 2.6vw, 2.25rem);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.025em;
+}
+
+.count {
+  display: grid;
+  place-items: center;
+  min-width: 1.65rem;
+  height: 1.65rem;
+  border: 1px solid var(--site-border-strong);
+  border-radius: 50%;
+  color: var(--site-muted-bright);
+  font-size: 0.64rem;
+}
+
+.sectionHeader p {
+  max-width: 24rem;
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: 0.82rem;
+  line-height: 1.65;
+}
+
+.gridTwo,
+.gridThree {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.gridTwo {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.gridThree {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 1100px) {
+  .heroGrid {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+
+  .heroCopy {
+    max-width: 34rem;
+  }
+
+  .section {
     grid-template-columns: 1fr;
   }
 
-  .trackMembers,
-  .teamGrid,
-  .involvementGrid {
+  .sectionHeader p {
+    max-width: 42rem;
+  }
+
+  .gridThree {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 700px) {
   .container {
     width: min(100% - 1.4rem, var(--site-grid-max));
     padding-top: 1.5rem;
   }
 
-  .header h1 {
-    font-size: 2.7rem;
+  .hero {
+    padding-bottom: 2rem;
   }
 
-  .section h2 {
-    font-size: 1.8rem;
+  .hero h1 {
+    font-size: clamp(3.1rem, 18vw, 5rem);
   }
 
-  .trackMembers,
-  .teamGrid,
-  .involvementGrid {
+  .section {
+    gap: 1.25rem;
+    padding: 2rem 0;
+  }
+
+  .gridTwo,
+  .gridThree {
     grid-template-columns: 1fr;
-  }
-
-  .memberCard,
-  .involvementCard {
-    padding: 1.1rem;
   }
 }

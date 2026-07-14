@@ -1,5 +1,6 @@
 import React from 'react'
 import Translate from '@docusaurus/Translate'
+import { committerActivityEntries } from './committerActivity.generated'
 
 export interface MemberLink {
   label: string
@@ -16,7 +17,7 @@ export interface TeamMember {
   externalLinks?: MemberLink[]
   bio: React.ReactNode
   expertise?: React.ReactNode[]
-  memberType: 'steering' | 'committer'
+  memberType: 'steering' | 'maintainer' | 'committer' | 'emeritus'
   steeringTrack?: 'industry' | 'academic'
 }
 
@@ -36,7 +37,7 @@ export const steeringCommitteeMembers: TeamMember[] = [
       <Translate id="team.members.XunzhuoLiu.expertise.gateway">Kubernetes AI Gateway</Translate>,
       <Translate id="team.members.XunzhuoLiu.expertise.opensource">Open-source infrastructure</Translate>,
     ],
-    memberType: 'steering',
+    memberType: 'maintainer',
     steeringTrack: 'industry',
   },
   {
@@ -54,7 +55,7 @@ export const steeringCommitteeMembers: TeamMember[] = [
       <Translate id="team.members.HuaminChen.expertise.serving">Model-serving stacks</Translate>,
       <Translate id="team.members.HuaminChen.expertise.ecosystem">Open-source ecosystems</Translate>,
     ],
-    memberType: 'steering',
+    memberType: 'maintainer',
     steeringTrack: 'industry',
   },
   {
@@ -138,17 +139,32 @@ export const academicTrackMembers = steeringCommitteeMembers.filter(
   member => member.steeringTrack === 'academic',
 )
 
-export function getTeamMemberBadge(member: TeamMember): React.ReactNode {
+export const maintainerMembers = steeringCommitteeMembers.filter(
+  member => member.memberType === 'maintainer',
+)
+
+export function getTeamMemberBadge(
+  member: TeamMember,
+  context: 'team' | 'steering' = 'team',
+): React.ReactNode {
+  if (context === 'steering' && member.steeringTrack === 'industry') {
+    return <Translate id="team.track.industry.title">Industry Track</Translate>
+  }
+
+  if (context === 'steering' && member.steeringTrack === 'academic') {
+    return <Translate id="team.track.academic.title">Academic Track</Translate>
+  }
+
+  if (member.memberType === 'maintainer') {
+    return <Translate id="team.badge.maintainer">Maintainer</Translate>
+  }
+
   if (member.memberType === 'committer') {
     return <Translate id="team.badge.committer">Committer</Translate>
   }
 
-  if (member.steeringTrack === 'industry') {
-    return <Translate id="team.track.industry.title">Industry Track</Translate>
-  }
-
-  if (member.steeringTrack === 'academic') {
-    return <Translate id="team.track.academic.title">Academic Track</Translate>
+  if (member.memberType === 'emeritus') {
+    return <Translate id="team.badge.emeritus">Emeritus Committer</Translate>
   }
 
   return <Translate id="team.badge.steering">Steering Committee</Translate>
@@ -226,7 +242,7 @@ export const topNewContributorMembers: TeamMember[] = [
   },
 ]
 
-export const committerMembers: TeamMember[] = [
+export const allCommitterMembers: TeamMember[] = [
   ...topNewContributorMembers,
   {
     name: 'Chen Wang',
@@ -435,3 +451,24 @@ export const committerMembers: TeamMember[] = [
     memberType: 'committer',
   },
 ]
+
+const committerStatusByLogin = new Map(
+  committerActivityEntries.map(entry => [entry.login.toLowerCase(), entry.status]),
+)
+
+function getGithubLogin(member: TeamMember): string | undefined {
+  return member.github?.match(/github\.com\/([^/?#]+)/i)?.[1]?.toLowerCase()
+}
+
+function isEmeritusCommitter(member: TeamMember): boolean {
+  const login = getGithubLogin(member)
+  return login ? committerStatusByLogin.get(login) === 'emeritus' : false
+}
+
+export const committerMembers = allCommitterMembers.filter(
+  member => !isEmeritusCommitter(member),
+)
+
+export const emeritusCommitterMembers = allCommitterMembers
+  .filter(isEmeritusCommitter)
+  .map(member => ({ ...member, memberType: 'emeritus' as const }))
