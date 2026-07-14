@@ -383,29 +383,9 @@ func (p *IngestionPipeline) processJob(ctx context.Context, job IngestionJob) {
 	}
 
 	// Step 5: Embed each chunk.
-	embeddedChunks := make([]EmbeddedChunk, 0, len(chunks))
-	for _, chunk := range chunks {
-		if err := ctx.Err(); err != nil {
-			p.failJob(ctx, job, "cancelled", fmt.Sprintf("ingestion cancelled before embedding chunk %d", chunk.ChunkIndex))
-			return
-		}
-
-		embedding, err := p.embedder.Embed(chunk.Content)
-		if err != nil {
-			p.failJob(ctx, job, "embedding_error", fmt.Sprintf("failed to embed chunk %d: %v", chunk.ChunkIndex, err))
-			return
-		}
-
-		ec := EmbeddedChunk{
-			ID:            fmt.Sprintf("%s_chunk_%d", job.FileID, chunk.ChunkIndex),
-			FileID:        job.FileID,
-			Filename:      record.Filename,
-			Content:       chunk.Content,
-			Embedding:     embedding,
-			ChunkIndex:    chunk.ChunkIndex,
-			VectorStoreID: job.VectorStoreID,
-		}
-		embeddedChunks = append(embeddedChunks, ec)
+	embeddedChunks, ok := p.embedChunks(ctx, job, record.Filename, chunks)
+	if !ok {
+		return
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -425,6 +405,36 @@ func (p *IngestionPipeline) processJob(ctx context.Context, job IngestionJob) {
 		fc.InProgress--
 		fc.Completed++
 	})
+}
+
+// embedChunks embeds each chunk, checking ctx before each embedding call so a
+// cancelled lifecycle context aborts promptly. On any error it fails the job
+// and returns ok=false; the caller should stop processing.
+func (p *IngestionPipeline) embedChunks(ctx context.Context, job IngestionJob, filename string, chunks []TextChunk) ([]EmbeddedChunk, bool) {
+	embeddedChunks := make([]EmbeddedChunk, 0, len(chunks))
+	for _, chunk := range chunks {
+		if err := ctx.Err(); err != nil {
+			p.failJob(ctx, job, "cancelled", fmt.Sprintf("ingestion cancelled before embedding chunk %d", chunk.ChunkIndex))
+			return nil, false
+		}
+
+		embedding, err := p.embedder.Embed(chunk.Content)
+		if err != nil {
+			p.failJob(ctx, job, "embedding_error", fmt.Sprintf("failed to embed chunk %d: %v", chunk.ChunkIndex, err))
+			return nil, false
+		}
+
+		embeddedChunks = append(embeddedChunks, EmbeddedChunk{
+			ID:            fmt.Sprintf("%s_chunk_%d", job.FileID, chunk.ChunkIndex),
+			FileID:        job.FileID,
+			Filename:      filename,
+			Content:       chunk.Content,
+			Embedding:     embedding,
+			ChunkIndex:    chunk.ChunkIndex,
+			VectorStoreID: job.VectorStoreID,
+		})
+	}
+	return embeddedChunks, true
 }
 
 // failJob marks a job as failed and updates file counts.
