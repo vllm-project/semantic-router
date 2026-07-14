@@ -1601,7 +1601,7 @@
     "message": "IBM 研究科学家，专注于 AI 研究和 LLM 推理。"
   },
   "team.members.XunzhuoLiu.role": {
-    "message": "LLM Routing @ AMD"
+    "message": "@AMD"
   },
   "team.members.XunzhuoLiu.bio": {
     "message": "LLM routing builder at vLLM。"
