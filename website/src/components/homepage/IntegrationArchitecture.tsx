@@ -296,10 +296,10 @@ function RouterPipeline({
         <img src={logoSrc} alt="vLLM Semantic Router" />
         <div>
           <span>
-            <Translate id="homepage.integration.pipeline.eyebrow">Semantic routing pipeline</Translate>
+            <Translate id="homepage.integration.pipeline.eyebrow">System Level Intelligence</Translate>
           </span>
           <strong>
-            <Translate id="homepage.integration.pipeline.title">Evidence to model selection</Translate>
+            <Translate id="homepage.integration.pipeline.title">model id: vllm-sr/auto</Translate>
           </strong>
         </div>
       </header>
@@ -666,7 +666,7 @@ export default function IntegrationArchitecture(): JSX.Element {
               <Translate id="homepage.integration.title">Route queries to the right model</Translate>
             </h2>
             <p className={shared.sectionSubtitle}>
-              <Translate id="homepage.integration.extproc.summary">Each request moves from signals through projections, decisions, algorithms, and plugins before reaching the best model pool. Clients keep the same OpenAI-compatible API.</Translate>
+              <Translate id="homepage.integration.extproc.summary">Route each request to the best model pool through one OpenAI-compatible API.</Translate>
             </p>
           </header>
         </ScrollReveal>
