@@ -31,12 +31,13 @@ const multiModalModelFallbackID = "multi-modal-embed-small"
 
 // imageTargetDimension resolves the per-request image encoding dimension.
 //
-// Image-only requests use req.Dimension directly (validated <= native). Mixed
-// text+image requests always encode the image side at the multimodal native
-// dimension: req.Dimension controls the text side and would exceed the image
-// ceiling, and forcing a single uniform dimension across two encoders whose
-// embedding spaces do not align gives no real benefit while silently
-// downgrading text recall.
+// Image-only requests use req.Dimension directly (validated <= native). For
+// mixed text+image requests req.Dimension targets the text side (its default,
+// 768, exceeds the image ceiling); the image side honors it only when it fits
+// within the native ceiling and otherwise caps at native. This keeps an
+// explicitly requested, image-satisfiable dimension (e.g. 256) uniform across
+// both modalities, while a text-scale dimension (e.g. the 768 default) still
+// diverges instead of forcing text recall down to the image width.
 //
 // If no multimodal model is loaded (getter reports <= 0), fall back to
 // req.Dimension so the downstream encode surfaces "model not loaded" rather
@@ -45,10 +46,14 @@ func imageTargetDimension(req EmbeddingRequest) int {
 	if len(req.Texts) == 0 {
 		return req.Dimension
 	}
-	if native := multiModalEmbeddingDim(); native > 0 {
-		return native
+	native := multiModalEmbeddingDim()
+	if native <= 0 {
+		return req.Dimension
 	}
-	return req.Dimension
+	if req.Dimension < native {
+		return req.Dimension
+	}
+	return native
 }
 
 // isMultiModalModelName reports whether an explicit model selector names the
