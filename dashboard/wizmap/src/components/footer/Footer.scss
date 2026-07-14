@@ -17,11 +17,17 @@
   font-size: $font-d2;
   font-variant-numeric: tabular-nums;
 
-  padding: 2px 8px 2px 4px;
+  padding: 5px 10px 5px 7px;
   line-height: 1;
-  border-top-left-radius: 2px;
-  // background-color: change-color($purple-50, $lightness: 94%, $alpha: 0.9);
-  background-color: change-color($gray-50, $alpha: 0.9);
+  border-top: 1px solid var(--wiz-border);
+  border-left: 1px solid var(--wiz-border);
+  border-top-left-radius: 9px;
+  background: var(--wiz-surface-glass);
+  color: var(--wiz-text-secondary);
+  box-shadow: -10px -10px 28px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(14px);
+  max-width: 100vw;
+  overflow-x: auto;
 
   user-select: none;
   -webkit-user-select: none;
@@ -30,13 +36,13 @@
     color: currentColor;
 
     &:hover {
-      color: $purple-600;
+      color: var(--wiz-brand-bright);
     }
   }
 
   button {
     &:hover {
-      color: $purple-600;
+      color: var(--wiz-brand-bright);
       text-decoration: underline;
     }
   }
@@ -47,12 +53,21 @@
     flex-direction: row;
     align-items: center;
     gap: 3px;
+    white-space: nowrap;
+
+    .svg-icon {
+      color: var(--wiz-brand-bright);
+
+      :global(path) {
+        fill: currentColor !important;
+      }
+    }
   }
 
   .splitter {
     height: 12px;
     width: 1px;
-    border-right: 1px solid $gray-400;
+    border-right: 1px solid var(--wiz-border-strong);
   }
 
   .scale-legend {
@@ -73,6 +88,7 @@
     flex-direction: row;
     align-items: center;
     gap: 3px;
+    white-space: nowrap;
 
     .svg-icon {
       width: 1em;
@@ -82,6 +98,11 @@
 
   .count {
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .scale-legend {
+    white-space: nowrap;
   }
 }
 
@@ -108,12 +129,15 @@ $zoom-button-border-radius: 8px;
   pointer-events: all;
   display: flex;
   flex-direction: column;
-  background-color: white;
-  box-shadow: 0 1px 4px hsla(0, 0%, 0%, 0.3);
+  border: 1px solid var(--wiz-border-strong);
+  background: var(--wiz-surface-glass);
+  box-shadow: var(--wiz-shadow);
   margin-right: 10px;
   margin-bottom: 10px;
   border-radius: $zoom-button-border-radius;
   font-size: 14px;
+  color: var(--wiz-text-secondary);
+  backdrop-filter: blur(14px);
 }
 
 .zoom-button {
@@ -123,7 +147,7 @@ $zoom-button-border-radius: 8px;
   justify-content: center;
   align-items: center;
   padding: 4px;
-  color: $gray-700;
+  color: currentColor;
 
   transition: background-color 100ms ease-in-out;
 
@@ -143,12 +167,18 @@ $zoom-button-border-radius: 8px;
   }
 
   &:hover {
-    background-color: $gray-200;
+    background: var(--wiz-surface-raised);
+    color: var(--wiz-text-primary);
   }
 
   &:active {
-    background-color: adjust-color($color: $gray-200, $lightness: -2%);
+    background: var(--wiz-brand-soft);
+    color: var(--wiz-brand-bright);
   }
+}
+
+.zoom-button + .zoom-button {
+  border-top: 1px solid var(--wiz-border);
 }
 
 @keyframes fade-in {
@@ -163,7 +193,10 @@ $zoom-button-border-radius: 8px;
 
 dialog[open] {
   border-radius: 8px;
-  border: none;
+  border: 1px solid var(--wiz-border-strong);
+  background: var(--wiz-surface-raised);
+  color: var(--wiz-text-primary);
+  box-shadow: var(--wiz-shadow);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -182,12 +215,14 @@ dialog[open] {
     line-height: 1;
     font-size: $font-u3;
     font-weight: 600;
-    // background-color: change-color($color: $purple-100, $lightness: 96%);
+    border-top: 2px solid rgba(227, 27, 35, 0.72);
     width: 100%;
   }
 
   button {
-    background-color: $gray-200;
+    border: 1px solid var(--wiz-border);
+    background: var(--wiz-surface);
+    color: var(--wiz-text-primary);
     padding: 3px 8px;
     border-radius: 8px;
     display: flex;
@@ -195,11 +230,11 @@ dialog[open] {
     transition: background-color 150ms ease-in-out;
 
     &:hover {
-      background-color: $gray-300;
+      background: rgba(255, 255, 255, 0.08);
     }
 
     &:active {
-      background-color: $gray-400;
+      background: var(--wiz-brand-soft);
     }
   }
 
@@ -216,12 +251,12 @@ dialog[open] {
     padding: 0px 20px;
 
     .row-name {
-      color: $gray-500;
+      color: var(--wiz-text-muted);
       font-weight: 600;
     }
 
     a {
-      color: $purple-500;
+      color: var(--wiz-brand-bright);
     }
   }
 

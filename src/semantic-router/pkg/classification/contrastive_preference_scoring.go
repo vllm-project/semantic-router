@@ -21,11 +21,10 @@ func (c *ContrastivePreferenceClassifier) ClassifyDetailed(text string) (*Prefer
 	}
 	c.mu.RUnlock()
 
-	out, err := getEmbeddingWithModelType(text, c.modelType, 0)
+	queryEmbedding, err := c.embedText(text)
 	if err != nil {
 		return nil, fmt.Errorf("failed to embed query: %w", err)
 	}
-	queryEmbedding := out.Embedding
 
 	c.mu.RLock()
 	defer c.mu.RUnlock()

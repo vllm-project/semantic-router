@@ -69,12 +69,7 @@ func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime
 
 	liveClassificationSvc := newLiveClassificationService(
 		classificationSvc,
-		func() classificationService {
-			if runtimeRegistry != nil {
-				return runtimeRegistry.ClassificationService()
-			}
-			return services.GetGlobalClassificationService()
-		},
+		buildClassificationResolver(runtimeRegistry),
 	)
 
 	// Create server instance
@@ -157,6 +152,29 @@ func resolveMemoryStore(cfg *config.RouterConfig, runtimeRegistry *routerruntime
 		return runtimeRegistry.MemoryStore()
 	}
 	return initMemoryStore(5, 500*time.Millisecond)
+}
+
+// buildClassificationResolver returns the resolver used by the live
+// classification service. Both sources return a concrete
+// *services.ClassificationService which is nil until the runtime finishes
+// initializing; returning that nil pointer directly would wrap it into a
+// non-nil interface value, defeat the nil check in
+// liveClassificationService.current(), and panic with a nil receiver on the
+// first request. Return an untyped nil instead so current() falls back to
+// the placeholder service.
+func buildClassificationResolver(runtimeRegistry *routerruntime.Registry) func() classificationService {
+	return func() classificationService {
+		if runtimeRegistry != nil {
+			if svc := runtimeRegistry.ClassificationService(); svc != nil {
+				return svc
+			}
+			return nil
+		}
+		if svc := services.GetGlobalClassificationService(); svc != nil {
+			return svc
+		}
+		return nil
+	}
 }
 
 func buildConfigResolver(runtimeRegistry *routerruntime.Registry) func() *config.RouterConfig {

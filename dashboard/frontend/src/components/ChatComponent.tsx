@@ -3,11 +3,10 @@ import styles from './ChatComponent.module.css'
 import ThinkingAnimation from './ThinkingAnimation'
 import HeaderReveal from './HeaderReveal'
 import ClawRoomChat from './ClawRoomChat'
-import { ClawModeToggle } from './ChatComponentControls'
+import ChatComposerAddMenu from './ChatComposerAddMenu'
 import ChatConversationSidebar from './ChatConversationSidebar'
 import ChatComponentConversationViewport from './ChatComponentConversationViewport'
 import ChatComponentInputBar from './ChatComponentInputBar'
-import ChatComponentRoomToggle from './ChatComponentRoomToggle'
 import ChatComponentSidebarShell from './ChatComponentSidebarShell'
 import ChatTaskQueue from './ChatTaskQueue'
 import { runPlaygroundTask } from './chatTaskExecution'
@@ -28,6 +27,7 @@ import { useReadonly } from '../contexts/ReadonlyContext'
 import { usePlaygroundAttachments } from './usePlaygroundAttachments'
 import { useChatConversationState } from './useChatConversationState'
 import { usePlaygroundConversationMessages } from './usePlaygroundConversationMessages'
+import { usePlaygroundRoutingModel } from './usePlaygroundRoutingModel'
 
 interface ChatComponentProps {
   endpoint?: string
@@ -44,7 +44,12 @@ const ChatComponent = ({
   const [conversationId, setConversationId] = useState<string>(() => generateConversationId())
   const [inputValue, setInputValue] = useState('')
   const [activeTasks, setActiveTasks] = useState<Record<string, PlaygroundTask>>({})
-  const model = 'MoM' // Fixed to MoM
+  const {
+    model,
+    retry: retryRoutingModelDiscovery,
+    status: routingModelStatus,
+  } = usePlaygroundRoutingModel(endpoint)
+  const isRoutingModelReady = routingModelStatus === 'ready'
   const {
     conversationErrors,
     conversationThinking,
@@ -305,7 +310,7 @@ const ChatComponent = ({
       enableWebSearch,
       model,
     }),
-    [clawManagementDisabled, enableClawMode, enableWebSearch]
+    [clawManagementDisabled, enableClawMode, enableWebSearch, model]
   )
 
   const buildTaskTools = useCallback(
@@ -425,15 +430,26 @@ const ChatComponent = ({
   ])
 
   const startTask = useCallback((task: PlaygroundTask) => {
-    if (activeTasksRef.current[task.conversationId]) {
+    if (!isRoutingModelReady || activeTasksRef.current[task.conversationId]) {
       return
     }
 
-    setActiveTaskForConversation(task)
-    void executeTask(task)
-  }, [executeTask, setActiveTaskForConversation])
+    const reboundTask = task.requestOptions.model === model
+      ? task
+      : {
+          ...task,
+          requestOptions: {
+            ...task.requestOptions,
+            model,
+          },
+        }
+
+    setActiveTaskForConversation(reboundTask)
+    void executeTask(reboundTask)
+  }, [executeTask, isRoutingModelReady, model, setActiveTaskForConversation])
 
   const handleSend = useCallback(() => {
+    if (!isRoutingModelReady) return
     const trimmedInput = inputValue.trim()
     if (!trimmedInput && pendingAttachments.length === 0) return
 
@@ -468,6 +484,7 @@ const ChatComponent = ({
     enqueueTask,
     getConversationMessagesSnapshot,
     inputValue,
+    isRoutingModelReady,
     pendingAttachments,
     clearPendingAttachments,
     copyPendingAttachmentsForTask,
@@ -477,6 +494,9 @@ const ChatComponent = ({
   ])
 
   useEffect(() => {
+    if (!isRoutingModelReady) {
+      return
+    }
     Object.entries(queues).forEach(([targetConversationId, queue]) => {
       if (queue.length === 0 || activeTasksRef.current[targetConversationId]) {
         return
@@ -492,6 +512,7 @@ const ChatComponent = ({
   }, [
     activeTasks,
     executeTask,
+    isRoutingModelReady,
     queues,
     removeQueuedTask,
     startTask,
@@ -579,9 +600,6 @@ const ChatComponent = ({
     })
   }, [])
 
-  const roomChatToggleControl = enableClawMode
-    ? <ChatComponentRoomToggle disabled={modeToggleDisabled} isTeamRoomView={isTeamRoomView} onToggle={handleToggleTeamView} />
-    : null
   const liveThinkingProcess = messages.reduceRight((thinking, message) =>
     thinking || (message.role === 'assistant' && message.isStreaming ? message.thinkingProcess || '' : ''), '')
   const visibleError = conversationErrors[conversationId] ?? null
@@ -632,31 +650,36 @@ const ChatComponent = ({
                 isSidebarOpen={isSidebarOpen}
                 createRoomRequestToken={teamRoomCreateToken}
                 inputModeControls={(
-                  <>
-                    <button
-                      type="button"
-                      className={`${styles.inputActionButton} ${styles.searchToggleActive}`}
-                      onClick={event => event.preventDefault()}
-                      data-tooltip="Web Search enabled in Room Chat"
-                      aria-label="Web Search enabled in Room Chat"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="M2 12h20" />
-                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                      </svg>
-                    </button>
-                    <ClawModeToggle
-                      enabled={enableClawMode}
-                      onToggle={handleToggleClawMode}
-                      disabled={modeToggleDisabled}
-                    />
-                    {roomChatToggleControl}
-                  </>
+                  <ChatComposerAddMenu
+                    clawModeDisabled={modeToggleDisabled}
+                    clawModeEnabled={enableClawMode}
+                    clawRoom={{
+                      active: true,
+                      disabled: modeToggleDisabled,
+                      onToggle: handleToggleTeamView,
+                    }}
+                    onToggleClawMode={handleToggleClawMode}
+                    webSearchDisabled
+                    webSearchEnabled
+                    webSearchLocked
+                  />
                 )}
               />
             ) : (
               <>
+                {routingModelStatus === 'error' && !visibleError ? (
+                  <div className={styles.error} role="alert">
+                    <span className={styles.errorIcon}>⚠️</span>
+                    <span>The automatic routing model is unavailable.</span>
+                    <button
+                      type="button"
+                      className={styles.errorAction}
+                      onClick={retryRoutingModelDiscovery}
+                    >
+                      Retry discovery
+                    </button>
+                  </div>
+                ) : null}
                 {visibleError && (
                   <div className={styles.error}>
                     <span className={styles.errorIcon}>⚠️</span>
@@ -701,8 +724,13 @@ const ChatComponent = ({
                   onSend={handleSend}
                   onStop={handleStop}
                   onToggleClawMode={handleToggleClawMode}
+                  onToggleClawRoom={handleToggleTeamView}
                   onToggleWebSearch={() => setEnableWebSearch(prev => !prev)}
-                  roomChatToggleControl={roomChatToggleControl}
+                  sendDisabled={!isRoutingModelReady}
+                  sendDisabledReason={routingModelStatus === 'error'
+                    ? 'Retry model discovery before sending'
+                    : 'Discovering an available router model'}
+                  showClawRoom={enableClawMode}
                 />
               </>
             )}

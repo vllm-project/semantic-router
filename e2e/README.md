@@ -138,6 +138,7 @@ The framework includes the following test cases (all in `e2e/testcases/`):
 | `response-api-get` | GET /v1/responses/{id} - Retrieve a response | Response retrieval, ID matching |
 | `response-api-delete` | DELETE /v1/responses/{id} - Delete a response | Deletion confirmation, 404 verification |
 | `response-api-input-items` | GET /v1/responses/{id}/input_items - List input items | Input items list, pagination |
+| `response-api-streaming-sse` | POST /v1/responses with `stream:true` | Responses API SSE event shape, no Chat Completions SSE passthrough |
 | `response-api-conversation-chaining` | Conversation chaining with previous_response_id (3-turn chain) | History preservation, instruction inheritance |
 | `response-api-error-missing-input` | Error handling - Invalid request format (missing input field) | 400 error, error message validation |
 | `response-api-error-nonexistent-previous-response-id` | Error handling - Non-existent previous_response_id | Graceful degradation or 404 error |

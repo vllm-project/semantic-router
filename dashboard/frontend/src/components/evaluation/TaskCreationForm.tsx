@@ -13,7 +13,12 @@ interface TaskCreationFormProps {
 
 export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFormProps) {
   const form = useTaskCreationForm();
-  const { datasets: availableDatasets, loading: datasetsLoading } = useDatasets();
+  const {
+    datasets: availableDatasets,
+    loading: datasetsLoading,
+    error: datasetsError,
+    refresh: refreshDatasets,
+  } = useDatasets();
 
   const handleSubmit = useCallback(() => {
     const config = form.getConfig();
@@ -25,6 +30,7 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
       {[1, 2, 3, 4].map((s) => (
         <button
           key={s}
+          type="button"
           className={`${styles.step} ${form.step === s ? styles.active : ''} ${form.step > s ? styles.completed : ''}`}
           onClick={() => form.goToStep(s)}
           disabled={s > form.step && !form.isStepValid(form.step)}
@@ -146,6 +152,7 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
             {filteredDimensionInfo.map(([dim, info]) => (
               <button
                 key={dim}
+                type="button"
                 className={`${styles.dimensionCard} ${form.dimensions.includes(dim) ? styles.selected : ''}`}
                 onClick={() => form.toggleDimension(dim)}
                 style={{ '--dim-color': info.color } as React.CSSProperties}
@@ -170,6 +177,12 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
 
       {datasetsLoading ? (
         <div className={styles.loading}>Loading datasets...</div>
+      ) : datasetsError ? (
+        <div className={styles.datasetError} role="alert">
+          <h4>Datasets are unavailable</h4>
+          <p>{datasetsError}</p>
+          <button type="button" onClick={() => void refreshDatasets()}>Retry</button>
+        </div>
       ) : (
         <div className={styles.datasetGroups}>
           {form.dimensions.map((dim) => {
@@ -276,17 +289,18 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
       </div>
 
       <div className={styles.footer}>
-        <button className={styles.cancelButton} onClick={onCancel} disabled={loading}>
+        <button type="button" className={styles.cancelButton} onClick={onCancel} disabled={loading}>
           Cancel
         </button>
         <div className={styles.navButtons}>
           {form.step > 1 && (
-            <button className={styles.prevButton} onClick={form.prevStep} disabled={loading}>
+            <button type="button" className={styles.prevButton} onClick={form.prevStep} disabled={loading}>
               Previous
             </button>
           )}
           {form.step < 4 ? (
             <button
+              type="button"
               className={styles.nextButton}
               onClick={form.nextStep}
               disabled={!form.isStepValid(form.step) || loading}
@@ -294,7 +308,7 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
               Next
             </button>
           ) : (
-            <button className={styles.submitButton} onClick={handleSubmit} disabled={loading}>
+            <button type="button" className={styles.submitButton} onClick={handleSubmit} disabled={loading}>
               {loading ? 'Creating...' : 'Create Task'}
             </button>
           )}

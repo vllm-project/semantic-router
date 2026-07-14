@@ -21,6 +21,7 @@ func TestRecorderUpdateUsageCostClonesStoredValues(t *testing.T) {
 
 	promptTokens := 120
 	cachedPromptTokens := 40
+	cacheWriteTokens := 20
 	completionTokens := 45
 	totalTokens := 165
 	actualCost := 0.0012
@@ -31,6 +32,7 @@ func TestRecorderUpdateUsageCostClonesStoredValues(t *testing.T) {
 	usage := UsageCost{
 		PromptTokens:       &promptTokens,
 		CachedPromptTokens: &cachedPromptTokens,
+		CacheWriteTokens:   &cacheWriteTokens,
 		CompletionTokens:   &completionTokens,
 		TotalTokens:        &totalTokens,
 		ActualCost:         &actualCost,
@@ -46,6 +48,7 @@ func TestRecorderUpdateUsageCostClonesStoredValues(t *testing.T) {
 
 	promptTokens = 999
 	cachedPromptTokens = 999
+	cacheWriteTokens = 999
 	completionTokens = 999
 	totalTokens = 1998
 	actualCost = 9.9
@@ -61,6 +64,7 @@ func TestRecorderUpdateUsageCostClonesStoredValues(t *testing.T) {
 
 	assertIntPtr(t, record.PromptTokens, 120, "prompt tokens")
 	assertIntPtr(t, record.CachedPromptTokens, 40, "cached prompt tokens")
+	assertIntPtr(t, record.CacheWriteTokens, 20, "cache write tokens")
 	assertIntPtr(t, record.CompletionTokens, 45, "completion tokens")
 	assertIntPtr(t, record.TotalTokens, 165, "total tokens")
 	assertFloatPtr(t, record.ActualCost, 0.0012, "actual cost")

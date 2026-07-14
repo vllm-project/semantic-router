@@ -96,6 +96,9 @@ parse_benchmark "^BenchmarkCache" "$BASELINE_DIR/cache.json"
 # Extproc baseline (BenchmarkProcess*, BenchmarkHeader*, BenchmarkFull*, BenchmarkDifferent*, BenchmarkConcurrent*)
 parse_benchmark "^BenchmarkProcess|^BenchmarkHeader|^BenchmarkFull|^BenchmarkDifferent|^BenchmarkConcurrent" "$BASELINE_DIR/extproc.json"
 
+# Looper family baseline (BenchmarkReMoM*, BenchmarkFusion*, BenchmarkFlow*, BenchmarkBase*)
+parse_benchmark "^BenchmarkReMoM|^BenchmarkFusion|^BenchmarkFlow|^BenchmarkBase" "$BASELINE_DIR/looper.json"
+
 echo "Baseline files updated successfully"
 echo "  Git commit: $GIT_COMMIT"
 echo "  Git branch: $GIT_BRANCH"

@@ -42,6 +42,27 @@ func TestReMoMDistributeByWeightFallsBackToEqualWhenUnset(t *testing.T) {
 	assert.Equal(t, map[string]int{"model-a": 3, "model-b": 2}, modelCounts(calls))
 }
 
+func TestReMoMShuffleModelCallsIsDeterministicForSeed(t *testing.T) {
+	models := []string{"m0", "m1", "m2", "m3", "m4", "m5", "m6", "m7"}
+	build := func() []ModelCall {
+		calls := make([]ModelCall, len(models))
+		for i, m := range models {
+			calls[i] = ModelCall{Model: m}
+		}
+		return calls
+	}
+
+	a, b := build(), build()
+	shuffleModelCalls(a, 42)
+	shuffleModelCalls(b, 42)
+
+	// The seeded shuffle must stay reproducible: the same seed always yields
+	// the same permutation (this is the contract the ReMoM callers rely on).
+	assert.Equal(t, modelNames(a), modelNames(b), "same seed must produce the same permutation")
+	// And it must remain a permutation — no calls dropped or duplicated.
+	assert.ElementsMatch(t, models, modelNames(a), "shuffle must preserve the multiset of calls")
+}
+
 func TestReMoMDistributeCallsToModelsAcceptsRoundRobinStrategy(t *testing.T) {
 	looper := NewReMoMLooper(&config.LooperConfig{})
 	cfg := &config.ReMoMAlgorithmConfig{

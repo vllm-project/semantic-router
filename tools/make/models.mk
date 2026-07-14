@@ -74,6 +74,37 @@ download-models: ## Download models using router's built-in download logic
 download-models-lora: ## Download LoRA models (same as download-models now)
 	@$(MAKE) download-models
 
+# Minimal model set for perf/benchmarks (CI performance tests).
+# The component benchmarks initialize classifiers/embeddings directly instead
+# of going through the router's startup download, so these must be
+# pre-downloaded:
+# - classification benchmarks auto-discover the intent+pii+jailbreak merged
+#   classifiers (see src/semantic-router/pkg/classification/model_discovery_scan.go)
+# - cache benchmarks need the Qwen3 embedding model at models/mom-embedding-pro
+#   (see perf/benchmarks/cache_bench_test.go and config/registry.go)
+# The onnx/ subdirs are excluded to keep CI download and cache size small.
+PERF_BENCH_CLASSIFIER_MODELS := \
+	mmbert32k-intent-classifier-merged \
+	mmbert32k-pii-detector-merged \
+	mmbert32k-jailbreak-detector-merged
+
+PERF_BENCH_EMBEDDING_REPO := Qwen/Qwen3-Embedding-0.6B
+PERF_BENCH_EMBEDDING_DIR := mom-embedding-pro
+
+download-models-perf: ## Download the minimal model set for performance benchmarks
+	@echo "📦 Downloading perf benchmark models..."
+	@mkdir -p $(MODELS_DIR)
+	@for model in $(PERF_BENCH_CLASSIFIER_MODELS); do \
+		echo ""; \
+		echo "⬇️  Downloading $$model..."; \
+		hf download $(HF_ORG)/$$model --exclude "onnx/*" --local-dir $(MODELS_DIR)/$$model; \
+	done
+	@echo ""
+	@echo "⬇️  Downloading $(PERF_BENCH_EMBEDDING_REPO)..."
+	@hf download $(PERF_BENCH_EMBEDDING_REPO) --local-dir $(MODELS_DIR)/$(PERF_BENCH_EMBEDDING_DIR)
+	@echo ""
+	@echo "Perf benchmark models downloaded to $(MODELS_DIR)/"
+
 download-mmbert: ## Download all mmBERT merged models for Rust inference
 	@echo "📦 Downloading mmBERT merged models from Hugging Face..."
 	@mkdir -p $(MODELS_DIR)

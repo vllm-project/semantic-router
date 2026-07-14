@@ -35,7 +35,7 @@ export const DashboardMiniFlowDiagram: React.FC<FlowDiagramProps> = React.memo((
       preserveAspectRatio="xMidYMid meet"
     >
       <defs>
-        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-auto">
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
           <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--color-text-muted)" />
         </marker>
       </defs>

@@ -267,3 +267,48 @@ func TestObserveRouterLearningUsageTelemetryUsesEffectiveInputCost(t *testing.T)
 		t.Fatalf("expected cached input cost multiplier 0.6, got %#v", exact)
 	}
 }
+
+func TestObserveRouterLearningUsageTelemetryUsesReportedCacheWrites(t *testing.T) {
+	cacheWriteRate := 12.5
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			RouterLearning: config.RouterLearningConfig{Enabled: true},
+			BackendModels: config.BackendModels{
+				ModelConfig: map[string]config.ModelParams{
+					"model-a": {
+						Pricing: config.ModelPricing{
+							PromptPer1M:      10,
+							CachedInputPer1M: 2,
+							CacheWritePer1M:  &cacheWriteRate,
+						},
+					},
+				},
+			},
+		},
+	}
+	router.observeRouterLearningUsageTelemetry(
+		&RequestContext{
+			RequestModel:            "model-a",
+			VSRSelectedDecisionName: "domain_code",
+			VSRSelectedDecision:     &config.Decision{Name: "domain_code", Tier: 4},
+		},
+		800*time.Millisecond,
+		responseUsageMetrics{
+			promptTokens:               100,
+			cachedPromptTokens:         20,
+			cachedPromptTokensReported: true,
+			cacheWriteTokens:           30,
+			cacheWriteTokensReported:   true,
+			completionTokens:           20,
+		},
+		routerreplay.UsageCost{},
+	)
+
+	exact := router.routerLearningRuntimeState().experienceSnapshot("domain_code", 4, "model-a")
+	if exact.CacheHitEWMA != 0.2 || exact.CacheWriteEWMA != 0.3 {
+		t.Fatalf("expected reported cache telemetry update, got %#v", exact)
+	}
+	if exact.InputCostMultiplierEWMA != 0.732 {
+		t.Fatalf("expected cache-write input cost multiplier 0.732, got %#v", exact)
+	}
+}

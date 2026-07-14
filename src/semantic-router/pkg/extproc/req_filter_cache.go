@@ -53,7 +53,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 		return r.handleLooperCacheSkip(ctx, categoryName)
 	}
 
-	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(ctx.OriginalRequestBody)
+	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(cacheRequestBodyForContext(ctx))
 	if err != nil {
 		logging.Errorf("Error extracting query from request: %v", err)
 		return nil, false
@@ -79,7 +79,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 func (r *OpenAIRouter) handleLooperCacheSkip(ctx *RequestContext, categoryName string) (*ext_proc.ProcessingResponse, bool) {
 	logging.Debugf("[Cache] Skipping cache read for looper internal request")
 
-	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(ctx.OriginalRequestBody)
+	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(cacheRequestBodyForContext(ctx))
 	if err != nil {
 		logging.Errorf("Error extracting query from request: %v", err)
 		return nil, false
@@ -164,7 +164,7 @@ func (r *OpenAIRouter) performCacheLookup(
 		// Intermediate cache detail (category, matched keywords, similarity) is
 		// demoted to the x-vsr-debug surface (#2205).
 		cacheCategory, cacheKeywords, cacheSimilarity := cacheDetailForSurface(ctx, categoryName)
-		response := http.CreateCacheHitResponse(cachedResponse, ctx.ExpectStreamingResponse, cacheCategory, ctx.VSRSelectedDecisionName, cacheKeywords, cacheSimilarity)
+		response := r.createCacheHitResponse(ctx, cachedResponse, cacheCategory, ctx.VSRSelectedDecisionName, cacheKeywords, cacheSimilarity)
 		r.updateRouterReplayStatus(ctx, 200, ctx.ExpectStreamingResponse)
 		r.attachRouterReplayResponse(ctx, cachedResponse, true)
 		ctx.TraceContext = spanCtx
@@ -177,6 +177,48 @@ func (r *OpenAIRouter) performCacheLookup(
 	ctx.TraceContext = spanCtx
 
 	return nil, false
+}
+
+func (r *OpenAIRouter) createCacheHitResponse(
+	ctx *RequestContext,
+	cachedResponse []byte,
+	category string,
+	decisionName string,
+	matchedKeywords []string,
+	similarity float32,
+) *ext_proc.ProcessingResponse {
+	response := http.CreateCacheHitResponse(
+		cachedResponse,
+		ctx.ExpectStreamingResponse,
+		category,
+		decisionName,
+		matchedKeywords,
+		similarity,
+	)
+	if !isResponseAPIRequest(ctx) {
+		return response
+	}
+	if responseAPIResponse, ok := r.createResponseAPICacheHitResponse(
+		ctx,
+		cachedResponse,
+		category,
+		decisionName,
+		matchedKeywords,
+		similarity,
+	); ok {
+		return responseAPIResponse
+	}
+	return response
+}
+
+func cacheRequestBodyForContext(ctx *RequestContext) []byte {
+	if ctx != nil && ctx.ResponseAPICtx != nil && len(ctx.ResponseAPICtx.TranslatedBody) > 0 {
+		return ctx.ResponseAPICtx.TranslatedBody
+	}
+	if ctx != nil {
+		return ctx.OriginalRequestBody
+	}
+	return nil
 }
 
 func cacheQueryForContext(ctx *RequestContext) string {

@@ -20,11 +20,31 @@ func (r *OpenAIRouter) handleStreamingResponseBody(
 	recordStreamingTTFT(ctx)
 	ensureStreamingState(ctx)
 
-	chunk := string(responseBody)
-	ctx.HasStreamingChunks = true
+	responseAPIStream := isResponseAPIRequest(ctx)
+	parseBody := responseBody
+	if responseAPIStream {
+		frames, remainder := reassembleSSEFrames(ctx.PendingSSEBytes, responseBody)
+		ctx.PendingSSEBytes = remainder
+		parseBody = frames
+	}
+
+	chunk := string(parseBody)
+	if len(parseBody) > 0 {
+		ctx.HasStreamingChunks = true
+	}
 	r.parseStreamingChunk(chunk, ctx)
 
-	if strings.Contains(chunk, "data: [DONE]") {
+	streamDone := strings.Contains(chunk, "data: [DONE]")
+
+	if responseAPIStream {
+		bodyMutation := r.buildResponseAPIStreamingBodyMutation(parseBody, ctx)
+		if streamDone {
+			r.finalizeStreamingResponse(ctx)
+		}
+		return buildResponseBodyContinueResponse(bodyMutation, responseAPIStreamingHeaderMutation())
+	}
+
+	if streamDone {
 		r.finalizeStreamingResponse(ctx)
 	}
 
@@ -59,6 +79,12 @@ func ensureStreamingState(ctx *RequestContext) {
 	}
 	if ctx.StreamingToolCalls == nil {
 		ctx.StreamingToolCalls = make(map[int]*StreamingToolCallState)
+	}
+	if ctx.ResponseAPIStreamToolCallItemIDs == nil {
+		ctx.ResponseAPIStreamToolCallItemIDs = make(map[int]string)
+	}
+	if ctx.ResponseAPIStreamToolCallOutputIndex == nil {
+		ctx.ResponseAPIStreamToolCallOutputIndex = make(map[int]int)
 	}
 }
 
@@ -105,6 +131,7 @@ func (r *OpenAIRouter) finalizeStreamingResponse(ctx *RequestContext) {
 	}
 
 	r.attachRouterReplayResponse(ctx, replayResponseBody, true)
+	r.maybeStoreResponseAPIStreamingResponse(ctx)
 }
 
 // parseStreamingChunk parses an SSE chunk to extract content and metadata.
@@ -162,18 +189,25 @@ func extractStreamingContent(ctx *RequestContext, chunkData map[string]interface
 			continue
 		}
 		if delta, ok := choice["delta"].(map[string]interface{}); ok {
-			if content, ok := delta["content"].(string); ok && content != "" {
-				ctx.StreamingContent += content
-			}
-			// Reasoning models stream their thinking under delta.reasoning_content.
-			// Accumulate it so the reconstructed (cached) response carries the same
-			// reasoning the live stream delivered, instead of silently dropping it.
-			if reasoning, ok := delta["reasoning_content"].(string); ok && reasoning != "" {
-				ctx.StreamingReasoning += reasoning
-			}
+			extractStreamingDeltaContent(ctx, delta)
 		}
 		if finishReason, ok := choice["finish_reason"].(string); ok && finishReason != "" {
 			ctx.StreamingMetadata["finish_reason"] = finishReason
 		}
+	}
+}
+
+func extractStreamingDeltaContent(ctx *RequestContext, delta map[string]interface{}) {
+	if content, ok := delta["content"].(string); ok && content != "" {
+		ctx.StreamingContent += content
+	}
+	// Reasoning models stream their thinking under delta.reasoning_content.
+	// Accumulate it so the reconstructed (cached) response carries the same
+	// reasoning the live stream delivered, instead of silently dropping it.
+	if reasoning, ok := delta["reasoning_content"].(string); ok && reasoning != "" {
+		ctx.StreamingReasoning += reasoning
+	}
+	if refusal, ok := delta["refusal"].(string); ok && refusal != "" {
+		ctx.StreamingRefusal += refusal
 	}
 }
