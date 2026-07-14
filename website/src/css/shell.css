@@ -198,7 +198,7 @@ html[data-route-kind="blog"] .nav-docs-only {
 
 .footer__links {
   display: grid;
-  grid-template-columns: 1.8fr repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.5rem;
   align-items: start;
 }

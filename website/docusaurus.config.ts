@@ -363,7 +363,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} vLLM Semantic Router Team. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} vLLM Semantic Router Team.`,
     },
     prism: {
       theme: lightCodeTheme,
