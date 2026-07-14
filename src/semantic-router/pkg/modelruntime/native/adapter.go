@@ -30,4 +30,3 @@ type BackendAdapter interface {
 	UnloadModel(ctx context.Context, handle ModelHandle) error
 	Info() []ModelInfo
 }
-

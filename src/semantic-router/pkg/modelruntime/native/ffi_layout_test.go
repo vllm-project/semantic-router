@@ -22,11 +22,14 @@ func TestTaxonomyConstants(t *testing.T) {
 }
 
 type mockAdapter struct{}
-func (m *mockAdapter) Name() Backend { return BackendCandle }
+
+func (m *mockAdapter) Name() Backend               { return BackendCandle }
 func (m *mockAdapter) Capabilities() CapabilitySet { return CapabilitySet{} }
-func (m *mockAdapter) LoadModel(ctx context.Context, req LoadRequest) (ModelHandle, error) { return nil, nil }
+func (m *mockAdapter) LoadModel(ctx context.Context, req LoadRequest) (ModelHandle, error) {
+	return nil, nil
+}
 func (m *mockAdapter) UnloadModel(ctx context.Context, handle ModelHandle) error { return nil }
-func (m *mockAdapter) Info() []ModelInfo { return nil }
+func (m *mockAdapter) Info() []ModelInfo                                         { return nil }
 
 func TestRegistryThreadSafety(t *testing.T) {
 	reg := NewRegistry()
@@ -45,5 +48,3 @@ func TestRegistryThreadSafety(t *testing.T) {
 		<-done
 	}
 }
-
-

@@ -2,17 +2,17 @@ package native
 
 // LoadRequest encapsulates all configuration required to load a model.
 type LoadRequest struct {
-	ModelRef          string
-	ResolvedPath      string
-	Capability        Capability
-	Family            Family
-	ArtifactFormat    ArtifactFormat
-	DevicePolicy      string
-	ProviderPolicy    string
-	BatchingHints     map[string]interface{}
-	TargetDimensions  int
-	TargetLayers      int
-	LabelsMappings    map[string]string
+	ModelRef         string
+	ResolvedPath     string
+	Capability       Capability
+	Family           Family
+	ArtifactFormat   ArtifactFormat
+	DevicePolicy     string
+	ProviderPolicy   string
+	BatchingHints    map[string]interface{}
+	TargetDimensions int
+	TargetLayers     int
+	LabelsMappings   map[string]string
 }
 
 // InferenceRequest encapsulates data sent for inference to any capability.
@@ -26,4 +26,3 @@ type InferenceRequest struct {
 type ModelHandle interface {
 	ID() string
 }
-
