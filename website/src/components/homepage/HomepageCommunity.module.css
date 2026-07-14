@@ -255,7 +255,8 @@
   text-transform: uppercase;
 }
 
-.steering {
+.steering,
+.maintainer {
   background: rgba(48, 162, 255, 0.12);
   color: var(--site-brand-blue);
 }

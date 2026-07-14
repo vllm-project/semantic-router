@@ -250,6 +250,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Proposals',
       items: [
+        'proposals/batch-and-capacity-aware-routing',
         'proposals/unified-config-contract-v0-3',
         'proposals/router-flow-workflows',
         'proposals/hallucination-mitigation-milestone',
