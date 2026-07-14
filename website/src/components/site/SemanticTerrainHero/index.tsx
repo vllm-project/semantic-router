@@ -67,7 +67,7 @@ export default function SemanticTerrainHero(): JSX.Element {
             <div className={styles.actions}>
               <PillLink
                 className={styles.primaryCta}
-                href="https://app.vllm-sr.ai/playground"
+                href="https://app.vllm-sr.ai"
                 rel="noreferrer"
                 target="_blank"
               >

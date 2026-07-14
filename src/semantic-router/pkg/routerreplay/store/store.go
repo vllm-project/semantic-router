@@ -100,8 +100,8 @@ type ToolTraceStep struct {
 	Truncated bool `json:"truncated,omitempty"`
 }
 
-// RouteDiagnostics summarizes the final route and any Router Learning
-// protection outcome in a stable replay-facing shape. Detailed per-candidate
+// RouteDiagnostics summarizes the final route, Router Learning protection,
+// and memory outcome in a stable replay-facing shape. Detailed per-candidate
 // learning diagnostics live in the typed Learning block.
 type RouteDiagnostics struct {
 	Decision             string `json:"decision,omitempty"`
@@ -118,6 +118,12 @@ type RouteDiagnostics struct {
 	SessionReason        string `json:"session_reason,omitempty"`
 	HardLockReason       string `json:"hard_lock_reason,omitempty"`
 	DecisionReason       string `json:"decision_reason,omitempty"`
+	MemoryBackend        string `json:"memory_backend,omitempty"`
+	MemoryStatus         string `json:"memory_status,omitempty"`
+	MemoryReason         string `json:"memory_reason,omitempty"`
+	MemoryFallbackReason string `json:"memory_fallback_reason,omitempty"`
+	MemoryFailOpen       bool   `json:"memory_fail_open,omitempty"`
+	MemoryResultCount    int    `json:"memory_result_count,omitempty"`
 }
 
 // Record represents a routing decision record with metadata and captured payloads.

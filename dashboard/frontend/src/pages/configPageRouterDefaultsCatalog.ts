@@ -198,6 +198,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     bert_model_path: '',
     use_cpu: true,
     embedding_config: {
+      backend: 'candle',
       model_type: 'mmbert',
       preload_embeddings: true,
       target_dimension: 768,
@@ -333,7 +334,7 @@ export const SECTION_META: Record<RouterSystemKey, { title: string; eyebrow: str
   embedding_models: {
     title: 'Embedding Models',
     eyebrow: 'Model Catalog',
-    description: 'Semantic embedding paths and embedding optimization defaults for router-owned models.',
+    description: 'Local or remote semantic embedding provider settings shared by router-owned consumers.',
   },
   prompt_compression: {
     title: 'Prompt Compression',

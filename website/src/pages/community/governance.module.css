@@ -1,0 +1,357 @@
+.container {
+  width: min(100% - 2.5rem, var(--site-grid-max));
+  margin: 0 auto;
+  padding: 3rem 0 5rem;
+}
+
+.hero {
+  display: grid;
+  gap: 1.2rem;
+  padding: 1rem 0 3rem;
+  border-bottom: 1px solid var(--site-border-strong);
+}
+
+.eyebrow,
+.sectionHeader > span,
+.roleCard > span,
+.emeritusLead span,
+.emeritusGrid article > span {
+  color: #087ac5;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.67rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+
+.heroGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(20rem, 0.65fr);
+  gap: 3rem;
+  align-items: end;
+}
+
+.hero h1 {
+  max-width: 60rem;
+  margin: 0;
+  color: var(--site-text);
+  font-size: clamp(3.7rem, 8.5vw, 7rem);
+  font-weight: 430;
+  line-height: 0.88;
+  letter-spacing: -0.055em;
+}
+
+.heroGrid > div {
+  display: grid;
+  gap: 1.15rem;
+}
+
+.heroGrid p {
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+
+.heroGrid a,
+.inlineLink {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--site-border);
+  border-bottom: 1px solid var(--site-border);
+  color: var(--site-text);
+  font-size: 0.68rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.heroGrid a:hover,
+.inlineLink:hover {
+  color: #087ac5;
+  text-decoration: none;
+}
+
+.main {
+  display: grid;
+}
+
+.section {
+  display: grid;
+  grid-template-columns: minmax(14rem, 0.26fr) minmax(0, 0.74fr);
+  gap: 2.5rem;
+  padding: 3rem 0;
+  border-bottom: 1px solid var(--site-border-strong);
+}
+
+.sectionHeader {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.7rem;
+  align-content: start;
+}
+
+.sectionHeader > span {
+  padding-top: 0.35rem;
+  color: var(--site-muted);
+}
+
+.sectionHeader h2 {
+  margin: 0;
+  color: var(--site-text);
+  font-size: clamp(1.55rem, 2.8vw, 2.35rem);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.025em;
+}
+
+.sectionBody {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.sectionIntro,
+.policyNote,
+.auditWindow {
+  max-width: 52rem;
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: 0.84rem;
+  line-height: 1.65;
+}
+
+.principles,
+.roleGrid,
+.promotionGrid,
+.committeeGrid,
+.emeritusGrid {
+  display: grid;
+  gap: 1rem;
+}
+
+.principles,
+.roleGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.principles article,
+.roleCard,
+.committeeGrid > div,
+.emeritusGrid article,
+.promotionCard {
+  padding: 1.2rem;
+  border: 1px solid var(--site-border);
+  background: var(--site-surface);
+}
+
+.principles h3,
+.roleCard h3,
+.committeeGrid h3,
+.emeritusGrid h3 {
+  margin: 0;
+  color: var(--site-text);
+  font-size: 1rem;
+}
+
+.principles p,
+.roleCard p,
+.committeeGrid p,
+.emeritusGrid p {
+  margin: 0.65rem 0 0;
+  color: var(--site-muted-bright);
+  font-size: 0.79rem;
+  line-height: 1.6;
+}
+
+.roleCard {
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+  min-height: 13rem;
+}
+
+.roleCard h3,
+.roleCard p {
+  margin: 0;
+}
+
+.roleCard strong {
+  align-self: end;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--site-border);
+  color: var(--site-text);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.tableWrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--site-border);
+}
+
+.roleTable {
+  width: 100%;
+  min-width: 54rem;
+  margin: 0;
+  border: 0;
+  background: var(--site-surface);
+  font-size: 0.76rem;
+}
+
+.roleTable th,
+.roleTable td {
+  padding: 0.85rem;
+  border: 0;
+  border-right: 1px solid var(--site-border);
+  border-bottom: 1px solid var(--site-border);
+  color: var(--site-muted-bright);
+  line-height: 1.5;
+  text-align: left;
+  vertical-align: top;
+}
+
+.roleTable th {
+  color: var(--site-text);
+  font-weight: 650;
+}
+
+.roleTable thead th {
+  background: var(--site-surface-alt);
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.promotionGrid,
+.committeeGrid,
+.emeritusGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.promotionCard {
+  display: grid;
+  gap: 1rem;
+}
+
+.promotionCard header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0.7rem;
+  align-items: center;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--site-border);
+  color: var(--site-muted-bright);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.promotionCard header strong {
+  color: var(--site-text);
+  text-align: right;
+}
+
+.promotionCard ol {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--site-muted-bright);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.promotionCard > p {
+  margin: 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--site-border);
+  color: var(--site-muted-bright);
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+
+.promotionCard > p strong {
+  color: var(--site-text);
+}
+
+.inlineLink {
+  max-width: 24rem;
+}
+
+.emeritusLead {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  gap: 2rem;
+  padding: 1.3rem;
+  border: 1px solid var(--site-border-strong);
+  background: #111;
+  color: #fff;
+}
+
+.emeritusLead > div {
+  display: grid;
+  gap: 0.4rem;
+  align-content: start;
+}
+
+.emeritusLead span {
+  color: #61b9f3;
+}
+
+.emeritusLead strong {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.emeritusLead p {
+  margin: 0;
+  color: #d4d4d8;
+  font-size: 0.86rem;
+  line-height: 1.65;
+}
+
+@media (max-width: 1050px) {
+  .heroGrid,
+  .section {
+    grid-template-columns: 1fr;
+  }
+
+  .heroGrid > div {
+    max-width: 36rem;
+  }
+
+  .sectionHeader {
+    max-width: 30rem;
+  }
+}
+
+@media (max-width: 760px) {
+  .container {
+    width: min(100% - 1.4rem, var(--site-grid-max));
+    padding-top: 1.5rem;
+  }
+
+  .hero h1 {
+    font-size: clamp(3rem, 17vw, 5rem);
+  }
+
+  .section {
+    gap: 1.25rem;
+    padding: 2rem 0;
+  }
+
+  .principles,
+  .roleGrid,
+  .promotionGrid,
+  .committeeGrid,
+  .emeritusGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .emeritusLead {
+    grid-template-columns: 1fr;
+  }
+}

@@ -22,10 +22,9 @@ const (
 
 // StreamedBodyHandler implements semi-streaming request body processing.
 //
-// In Envoy STREAMED mode, body arrives as multiple HttpBody messages. For each
-// message the handler MUST return exactly one ProcessingResponse. The handler
-// accumulates bytes until the model field can be extracted (via gjson), then
-// branches:
+// In Envoy STREAMED or FULL_DUPLEX_STREAMED mode, body arrives as multiple
+// HttpBody messages. The handler accumulates bytes until the model field can
+// be extracted (via gjson), then branches:
 //
 //   - Passthrough (non-auto model): continue eating chunks (replacing each
 //     with an empty body) so that upstream sees nothing until EOS. On EOS the
@@ -35,8 +34,10 @@ const (
 //   - Accumulate (auto model): same chunk-eating strategy. On EOS the full
 //     classification + body mutation pipeline runs.
 //
-// Both paths eat every chunk and emit the full body only on EOS, so upstream
-// never receives partial/duplicated data regardless of body mutations.
+// In STREAMED mode, both paths eat every non-EOS chunk with a regular empty
+// body mutation. In FULL_DUPLEX_STREAMED mode, intermediate replies are
+// deferred and the complete body is emitted at EOS with StreamedBodyResponse,
+// as required by the ExtProc protocol.
 //
 // Safety:
 //   - MaxBytes: if configured, rejects requests whose accumulated body exceeds
@@ -133,8 +134,15 @@ func (h *StreamedBodyHandler) HandleChunk(body *ext_proc.HttpBody, ctx *RequestC
 	case stateAccumulate:
 		return h.handleAccumulate(eos)
 	default:
-		return sharedContinueEmptyBody, nil
+		return h.intermediateResponse(), nil
 	}
+}
+
+func (h *StreamedBodyHandler) intermediateResponse() *ext_proc.ProcessingResponse {
+	if h.ctx != nil && h.ctx.FullDuplexRequestBody {
+		return nil
+	}
+	return sharedContinueEmptyBody
 }
 
 // checkGuards enforces max-body and deadline limits. Returning an error causes
@@ -164,7 +172,7 @@ func (h *StreamedBodyHandler) handleInit(eos bool) (*ext_proc.ProcessingResponse
 	h.model = extractModelFast(buf)
 
 	if h.model == "" && !eos {
-		return sharedContinueEmptyBody, nil
+		return h.intermediateResponse(), nil
 	}
 
 	h.isStream = extractStreamParamFast(buf)
@@ -197,7 +205,7 @@ func (h *StreamedBodyHandler) handleInit(eos bool) (*ext_proc.ProcessingResponse
 // forwarded intermediate chunks would be duplicated by an EOS body mutation.
 func (h *StreamedBodyHandler) handlePassthrough(eos bool) (*ext_proc.ProcessingResponse, error) {
 	if !eos {
-		return sharedContinueEmptyBody, nil
+		return h.intermediateResponse(), nil
 	}
 
 	h.ctx.ProcessingStartTime = time.Now()
@@ -210,14 +218,15 @@ func (h *StreamedBodyHandler) handlePassthrough(eos bool) (*ext_proc.ProcessingR
 		},
 	}
 
-	return h.router.handleRequestBody(v, h.ctx)
+	response, err := h.router.handleRequestBody(v, h.ctx)
+	return h.finalizeResponse(response), err
 }
 
 // handleAccumulate eats chunks (replaces with empty body). On EOS the full
 // classification + body mutation pipeline runs on the accumulated body.
 func (h *StreamedBodyHandler) handleAccumulate(eos bool) (*ext_proc.ProcessingResponse, error) {
 	if !eos {
-		return sharedContinueEmptyBody, nil
+		return h.intermediateResponse(), nil
 	}
 
 	h.ctx.ProcessingStartTime = time.Now()
@@ -230,5 +239,42 @@ func (h *StreamedBodyHandler) handleAccumulate(eos bool) (*ext_proc.ProcessingRe
 		},
 	}
 
-	return h.router.handleRequestBody(v, h.ctx)
+	response, err := h.router.handleRequestBody(v, h.ctx)
+	return h.finalizeResponse(response), err
+}
+
+// finalizeResponse translates the standard request-body pipeline result to
+// the response shape required by FULL_DUPLEX_STREAMED. Immediate responses are
+// already valid in either mode and pass through unchanged.
+func (h *StreamedBodyHandler) finalizeResponse(response *ext_proc.ProcessingResponse) *ext_proc.ProcessingResponse {
+	if h.ctx == nil || !h.ctx.FullDuplexRequestBody || response == nil || response.GetImmediateResponse() != nil {
+		return response
+	}
+
+	bodyResponse := response.GetRequestBody()
+	if bodyResponse == nil || bodyResponse.Response == nil {
+		return response
+	}
+
+	common := bodyResponse.Response
+	body := h.buf.Bytes()
+	if mutation := common.GetBodyMutation(); mutation != nil {
+		switch mutation := mutation.GetMutation().(type) {
+		case *ext_proc.BodyMutation_Body:
+			body = mutation.Body
+		case *ext_proc.BodyMutation_ClearBody:
+			if mutation.ClearBody {
+				body = nil
+			}
+		}
+	}
+	common.BodyMutation = &ext_proc.BodyMutation{
+		Mutation: &ext_proc.BodyMutation_StreamedResponse{
+			StreamedResponse: &ext_proc.StreamedBodyResponse{
+				Body:        bytes.Clone(body),
+				EndOfStream: true,
+			},
+		},
+	}
+	return response
 }

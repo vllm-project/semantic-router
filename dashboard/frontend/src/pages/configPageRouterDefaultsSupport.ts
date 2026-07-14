@@ -7,6 +7,13 @@ import {
 } from './configPageRouterDefaultsCatalog'
 import { routerStructuredField } from './configPageRouterStructuredFields'
 import { normalizeRouterStructuredFields } from './configPageRouterStructuredSchema'
+import {
+  embeddingModelsBadges,
+  embeddingModelsCatalogValue,
+  embeddingModelsEditData,
+  embeddingModelsFields,
+  embeddingModelsSummary,
+} from './configPageEmbeddingModelsSupport'
 import type {
   CanonicalGlobalConfig,
   ConfigData,
@@ -404,14 +411,7 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
         { label: 'PII', value: compactPathLikeString(section?.pii_classifier) },
       ]
     case 'embedding_models':
-      {
-        const semantic = asObject(section?.semantic)
-        return [
-          { label: 'Semantic path', value: compactPathLikeString(semantic?.mmbert_model_path ?? semantic?.qwen3_model_path ?? semantic?.gemma_model_path ?? semantic?.multimodal_model_path) },
-          { label: 'BERT path', value: compactPathLikeString(semantic?.bert_model_path) },
-          { label: 'Runtime', value: semantic?.use_cpu ? 'CPU' : 'GPU' },
-        ]
-      }
+      return embeddingModelsSummary(data)
     case 'prompt_compression':
       return [
         { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
@@ -482,13 +482,7 @@ function badgesForKey(key: RouterSystemKey, data: unknown, ctx: RouterSectionCon
   }
 
   if (key === 'embedding_models') {
-    const hnsw = asObject(section?.embedding_config)
-    if (hnsw?.preload_embeddings !== undefined) {
-      badges.push({
-        label: hnsw.preload_embeddings ? 'Preload embeddings' : 'Lazy embeddings',
-        tone: hnsw.preload_embeddings ? 'active' : 'info',
-      })
-    }
+    badges.push(...embeddingModelsBadges(data))
   }
 
   if (key === 'system_models') {
@@ -660,15 +654,7 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'feedback_detector', label: 'Feedback Detector Binding', type: 'text', placeholder: 'models/mmbert32k-feedback-detector-merged' },
       ]
     case 'embedding_models':
-      return [
-        { name: 'qwen3_model_path', label: 'Qwen3 Model Path', type: 'text', placeholder: 'models/mom-embedding-pro' },
-        { name: 'gemma_model_path', label: 'Gemma Model Path', type: 'text', placeholder: 'models/mom-embedding-flash' },
-        { name: 'mmbert_model_path', label: 'mmBERT Model Path', type: 'text', placeholder: 'models/mmbert-embed-32k-2d-matryoshka' },
-        { name: 'multimodal_model_path', label: 'Multimodal Model Path', type: 'text', placeholder: 'models/mom-embedding-multimodal' },
-        { name: 'bert_model_path', label: 'BERT Model Path', type: 'text', placeholder: 'models/mom-embedding-bert' },
-        { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
-        routerStructuredField(key, 'embedding_config'),
-      ]
+      return embeddingModelsFields()
     case 'prompt_compression':
       return [
         { name: 'enabled', label: 'Enable Prompt Compression', type: 'boolean' },
@@ -769,13 +755,7 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
     }
   }
   if (key === 'embedding_models') {
-    const embeddings = asObject(data)
-    const semantic = asObject(embeddings?.semantic)
-    return {
-      ...(semantic || {}),
-      bert: asObject(embeddings?.bert) || {},
-      __catalog: embeddings || {},
-    }
+    return embeddingModelsEditData(data)
   }
   if (key === 'model_selection') {
     const selection = asObject(data)
@@ -798,6 +778,12 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
 }
 
 function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<ConfigData> {
+  if (key === 'embedding_models') {
+    return buildNestedPatch(
+      GLOBAL_SECTION_PATHS[key],
+      embeddingModelsCatalogValue(rawData),
+    ) as Partial<ConfigData>
+  }
   const data = normalizeRouterStructuredFields(key, rawData)
   if (key === 'clear_route_cache') {
     return buildNestedPatch(GLOBAL_SECTION_PATHS[key], Boolean(data.value)) as Partial<ConfigData>
@@ -833,18 +819,6 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
       fact_check: asObject(data.fact_check) || {},
       detector: asObject(data.detector) || {},
       explainer: asObject(data.explainer) || {},
-    }) as Partial<ConfigData>
-  }
-  if (key === 'embedding_models') {
-    const { bert, __catalog, ...semanticFields } = data
-    const catalog = asObject(__catalog)
-    return buildNestedPatch(GLOBAL_SECTION_PATHS[key], {
-      ...(catalog || {}),
-      semantic: {
-        ...(asObject(catalog?.semantic) || {}),
-        ...semanticFields,
-      },
-      bert: asObject(bert) || {},
     }) as Partial<ConfigData>
   }
   if (key === 'model_selection') {

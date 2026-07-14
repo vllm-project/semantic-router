@@ -4,7 +4,12 @@ import Translate from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import { PillLink, SectionLabel } from '@site/src/components/site/Chrome'
 import acknowledgementsData from '@site/src/components/AcknowledgementsSection/data.json'
-import { committerMembers, steeringCommitteeMembers, type TeamMember } from '@site/src/data/teamMembers'
+import {
+  committerMembers,
+  getTeamMemberBadge,
+  maintainerMembers,
+  type TeamMember,
+} from '@site/src/data/teamMembers'
 import shared from './homepageShared.module.css'
 import styles from './HomepageCommunity.module.css'
 
@@ -16,7 +21,7 @@ type AckProject = {
 }
 
 const projects = (acknowledgementsData.projects ?? []) as AckProject[]
-const allTeamMembers: TeamMember[] = [...steeringCommitteeMembers, ...committerMembers]
+const allTeamMembers: TeamMember[] = [...maintainerMembers, ...committerMembers]
 const marqueeCopies = [0, 1]
 
 function toAssetUrl(baseUrl: string, path: string): string {
@@ -72,9 +77,7 @@ function MemberCard({
             className={styles.memberAvatar}
           />
           <span className={`${styles.memberBadge} ${styles[member.memberType]}`}>
-            {member.memberType === 'steering'
-              ? <Translate id="team.badge.steering">Steering Committee</Translate>
-              : <Translate id="team.badge.committer">Committer</Translate>}
+            {getTeamMemberBadge(member)}
           </span>
         </div>
         <div className={styles.memberCopy}>
@@ -149,7 +152,7 @@ export default function HomepageCommunity(): JSX.Element {
             </h3>
             <p>
               <Translate id="homepage.community.team.subtitle">
-                Steering committee and committers across research and infrastructure.
+                Maintainers and active committers across research, infrastructure, and model systems.
               </Translate>
             </p>
           </div>
