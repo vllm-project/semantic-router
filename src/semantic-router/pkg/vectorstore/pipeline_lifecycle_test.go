@@ -96,7 +96,7 @@ func newPipelineLifecycleFixture(embedder Embedder) *pipelineLifecycleFixture {
 }
 
 func (f *pipelineLifecycleFixture) cleanup() {
-	f.pipeline.Stop(context.Background())
+	_ = f.pipeline.Stop(context.Background())
 	_ = os.RemoveAll(f.tempDir)
 }
 
@@ -118,7 +118,7 @@ var _ = Describe("IngestionPipeline lifecycle", func() {
 		record, err := f.store.Save("stopped.txt", []byte("content"), "assistants")
 		Expect(err).NotTo(HaveOccurred())
 
-		f.pipeline.Stop(context.Background())
+		_ = f.pipeline.Stop(context.Background())
 		_, err = f.pipeline.AttachFile(vs.ID, record.ID, nil)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("ingestion pipeline is not running"))
@@ -130,7 +130,7 @@ var _ = Describe("IngestionPipeline lifecycle", func() {
 	})
 
 	It("restarts workers after a stop", func() {
-		f.pipeline.Stop(context.Background())
+		_ = f.pipeline.Stop(context.Background())
 		f.pipeline.Start()
 
 		vs, err := f.mgr.CreateStore(f.ctx, CreateStoreRequest{Name: "restarted"})
@@ -193,7 +193,7 @@ var _ = Describe("IngestionPipeline queued shutdown", func() {
 		stopped := make(chan struct{})
 		go func() {
 			defer close(stopped)
-			f.pipeline.Stop(context.Background())
+			_ = f.pipeline.Stop(context.Background())
 		}()
 
 		Eventually(func() string {

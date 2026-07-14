@@ -148,7 +148,7 @@ var _ = Describe("Integration: Full Ingest-to-Search Pipeline", func() {
 	})
 
 	AfterEach(func() {
-		pipeline.Stop(context.Background())
+		_ = pipeline.Stop(context.Background())
 		_ = os.RemoveAll(tempDir)
 	})
 
