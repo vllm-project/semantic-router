@@ -517,9 +517,9 @@ func TestValidateEmbeddingRequestAllowsTextModelForMixed(t *testing.T) {
 	}
 }
 
-func TestImageTargetDimensionMixedUsesNative(t *testing.T) {
-	// Mixed: req.Dimension is the text-side target, so the image side must be
-	// resolved to the multimodal native dimension regardless of req.Dimension.
+func TestImageTargetDimensionMixedCapsAboveNativeAtNative(t *testing.T) {
+	// Mixed with a text-scale dimension (768 > native): the image side cannot
+	// reach it and caps at native, diverging from the text side.
 	stubMultiModalDim(t, 384)
 	req := EmbeddingRequest{
 		Texts:     []string{"hello"},
@@ -527,7 +527,22 @@ func TestImageTargetDimensionMixedUsesNative(t *testing.T) {
 		Dimension: 768,
 	}
 	if got := imageTargetDimension(req); got != 384 {
-		t.Fatalf("expected mixed request image encode dim to be 384 (native), got %d", got)
+		t.Fatalf("expected mixed request image encode dim to cap at 384 (native), got %d", got)
+	}
+}
+
+func TestImageTargetDimensionMixedHonorsSubNativeDimension(t *testing.T) {
+	// Mixed with an explicit image-satisfiable dimension (256 <= native): the
+	// image side honors it so both modalities stay uniform, rather than forcing
+	// the image up to native and ignoring the requested value.
+	stubMultiModalDim(t, 384)
+	req := EmbeddingRequest{
+		Texts:     []string{"hello"},
+		Images:    []string{"data:image/png;base64,aGVsbG8="},
+		Dimension: 256,
+	}
+	if got := imageTargetDimension(req); got != 256 {
+		t.Fatalf("expected mixed request image encode dim to honor 256, got %d", got)
 	}
 }
 
