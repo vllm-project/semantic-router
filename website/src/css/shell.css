@@ -354,6 +354,15 @@ html[data-route-kind="blog"] .nav-docs-only {
     padding: 0.75rem;
   }
 
+  .navbar-sidebar .menu {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
   .navbar-sidebar .menu__link,
   .navbar-sidebar .menu__caret {
     min-height: 2.9rem;
@@ -371,6 +380,7 @@ html[data-route-kind="blog"] .nav-docs-only {
   .navbar-sidebar .menu__link:hover,
   .navbar-sidebar .menu__link--active {
     background: var(--site-accent-soft);
+    box-shadow: inset 2px 0 var(--site-accent);
     color: #ffffff;
   }
 
