@@ -234,11 +234,22 @@ def resolve_runtime_stack(
 
 
 def normalize_stack_name(raw_value: str | None) -> str:
+    """Return the one stack identity shared by every local runtime namespace.
+
+    Missing or blank input selects the default stack. Distinct raw inputs that
+    normalize to the same value intentionally alias one stack; a nonblank value
+    with no usable ASCII identity fails instead of silently selecting default.
+    """
     if raw_value is None:
         return DEFAULT_STACK_NAME
-    cleaned = STACK_NAME_PATTERN.sub("-", raw_value.strip()).strip("-")
-    if not cleaned:
+    stripped = raw_value.strip()
+    if not stripped:
         return DEFAULT_STACK_NAME
+    cleaned = STACK_NAME_PATTERN.sub("-", stripped).strip("._-")
+    if not cleaned:
+        raise ValueError(
+            f"{STACK_NAME_ENV} must contain at least one ASCII letter or digit"
+        )
     return cleaned
 
 
