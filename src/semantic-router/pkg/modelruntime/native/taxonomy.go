@@ -60,3 +60,4 @@ const (
 	ModalityAudio      Modality = "audio"
 	ModalityMultimodal Modality = "multimodal"
 )
+
