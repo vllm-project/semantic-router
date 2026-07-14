@@ -1445,16 +1445,31 @@
     "message": "加入特定的工作组"
   },
   "team.title": {
-    "message": "团队成员"
+    "message": "项目团队"
   },
   "team.subtitle": {
-    "message": "按治理职责和提交职责协作推进 vLLM Semantic Router"
+    "message": "维护者、活跃提交者与荣誉提交者共同保障 vLLM Semantic Router 的长期健康发展"
   },
   "team.steering.title": {
     "message": "指导委员会"
   },
   "team.steering.description": {
-    "message": "指导委员会负责 vLLM Semantic Router 的路线图方向、项目范围和跨社区协作。"
+    "message": "指导委员会内设 Industry Track 与 Academic Track，在工程与研究的交界处协同制定项目方向。"
+  },
+  "team.track.industry.title": {
+    "message": "Industry Track"
+  },
+  "team.track.industry.description": {
+    "message": "负责项目工程侧建设，并与研究团队协作，共同决策前沿研究与工业实践结合的方向，包括项目整体工程化演进。"
+  },
+  "team.track.academic.title": {
+    "message": "Academic Track"
+  },
+  "team.track.academic.description": {
+    "message": "围绕项目开展前沿学术研究，并与工程团队紧密协作，推动研究成果转化为项目能力。"
+  },
+  "homepage.community.team.subtitle": {
+    "message": "维护者与活跃提交者共同推进研究、基础设施与模型系统建设。"
   },
   "team.committers.title": {
     "message": "提交者"
@@ -2440,6 +2455,9 @@
   },
   "team.badge.committer": {
     "message": "提交者"
+  },
+  "team.badge.emeritus": {
+    "message": "荣誉提交者"
   },
   "team.badge.contributor": {
     "message": "贡献者"

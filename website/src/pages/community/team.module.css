@@ -1,243 +1,204 @@
+.page {
+  min-height: 100vh;
+  background: var(--site-bg);
+}
+
 .container {
   width: min(100% - 2.5rem, var(--site-grid-max));
   margin: 0 auto;
-  padding: 2rem 0 4rem;
+  padding: 3rem 0 5rem;
 }
 
-.header {
+.hero {
   display: grid;
-  gap: 1rem;
-  margin-bottom: 2rem;
-  padding-top: 0.5rem;
+  gap: 1.25rem;
+  padding: 1rem 0 3rem;
+  border-bottom: 1px solid var(--site-border-strong);
 }
 
-.header h1 {
+.eyebrow,
+.sectionHeader > span {
+  color: #087ac5;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.68rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
+.heroGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(20rem, 0.6fr);
+  gap: 3rem;
+  align-items: end;
+}
+
+.hero h1 {
+  max-width: 50rem;
   margin: 0;
-  font-size: 4.2rem;
-  line-height: 0.92;
-  font-weight: 400;
-  letter-spacing: 0;
+  color: var(--site-text);
+  font-size: clamp(3.8rem, 9vw, 7.5rem);
+  font-weight: 430;
+  line-height: 0.86;
+  letter-spacing: -0.055em;
 }
 
-.subtitle,
-.sectionDescription {
-  max-width: 40rem;
+.heroCopy {
+  display: grid;
+  gap: 1.35rem;
+}
+
+.heroCopy p {
   margin: 0;
   color: var(--site-muted-bright);
+  font-size: 0.95rem;
   line-height: 1.7;
 }
 
-.main {
+.heroLinks {
   display: grid;
-  gap: 2rem;
+  border-top: 1px solid var(--site-border);
+}
+
+.heroLinks a {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.72rem 0;
+  border-bottom: 1px solid var(--site-border);
+  color: var(--site-text);
+  font-size: 0.7rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.heroLinks a:hover {
+  color: #087ac5;
+  text-decoration: none;
+}
+
+.roster {
+  display: grid;
 }
 
 .section {
   display: grid;
-  gap: 1rem;
+  grid-template-columns: minmax(14rem, 0.26fr) minmax(0, 0.74fr);
+  gap: 2rem;
+  padding: 3rem 0;
+  border-bottom: 1px solid var(--site-border);
 }
 
-.section h2 {
-  margin: 0;
-  font-size: 2.4rem;
-  line-height: 1;
-}
-
-.teamGrid {
+.sectionHeader {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.steeringGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.memberCard,
-.involvementCard {
-  padding: 1.3rem;
-  border: 1px solid var(--site-border);
-  background: var(--site-surface);
-}
-
-.memberCard {
-  display: grid;
-  gap: 1rem;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.75rem;
   align-content: start;
 }
 
-.memberHeader {
-  display: flex;
+.sectionHeader > span {
+  padding-top: 0.45rem;
+  color: var(--site-muted);
+}
+
+.sectionHeader > div {
+  display: grid;
   gap: 0.9rem;
 }
 
-.avatar {
-  width: 3.5rem;
-  height: 3.5rem;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 1px solid var(--site-border-strong);
-}
-
-.memberInfo {
-  min-width: 0;
-}
-
-.nameWithBadge {
+.titleLine {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
+  gap: 0.6rem;
+  align-items: flex-start;
 }
 
-.memberName {
+.titleLine h2 {
   margin: 0;
-  font-size: 1.1rem;
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 1.6rem;
-  padding: 0.1rem 0.55rem;
-  border: 1px solid var(--site-border);
-  border-radius: 999px;
-  color: var(--site-muted-bright);
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.steering {
-  border-color: var(--site-text);
   color: var(--site-text);
+  font-size: clamp(1.55rem, 2.6vw, 2.25rem);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.025em;
 }
 
-.committer,
-.contributor {
-  border-color: var(--site-border-strong);
-}
-
-.memberRole,
-.memberBio {
+.count {
+  display: grid;
+  place-items: center;
+  min-width: 1.65rem;
+  height: 1.65rem;
+  border: 1px solid var(--site-border-strong);
+  border-radius: 50%;
   color: var(--site-muted-bright);
+  font-size: 0.64rem;
+}
+
+.sectionHeader p {
+  max-width: 24rem;
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: 0.82rem;
   line-height: 1.65;
 }
 
-.memberRole {
-  margin: 0.35rem 0 0;
-}
-
-.memberBio {
-  margin: 0;
-}
-
-.expertiseList {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  margin: -0.2rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.expertiseList li {
-  max-width: 100%;
-  padding: 0.35rem 0.6rem;
-  border: 1px solid var(--site-border);
-  color: var(--site-muted-bright);
-  font-size: 0.74rem;
-  line-height: 1.25;
-}
-
-.company {
-  color: var(--site-text);
-}
-
-.memberActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-}
-
-.actionLink,
-.actionButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.42rem;
-  min-height: 2.45rem;
-  padding: 0.55rem 0.9rem;
-  border: 1px solid var(--site-border);
-  border-radius: 999px;
-  color: var(--site-text);
-  font-size: 0.74rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  transition:
-    background 180ms ease,
-    color 180ms ease,
-    border-color 180ms ease;
-}
-
-.actionLink svg,
-.actionButton svg {
-  flex-shrink: 0;
-  font-size: 0.9rem;
-}
-
-.actionLink:hover,
-.actionButton:hover {
-  background: var(--site-text);
-  color: var(--site-bg);
-  border-color: var(--site-text);
-  text-decoration: none;
-}
-
-.involvementGrid {
+.gridTwo,
+.gridThree {
   display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.gridTwo {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.gridThree {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
 }
 
-.involvementCard {
-  display: grid;
-  gap: 1rem;
-  align-content: start;
-}
+@media (max-width: 1100px) {
+  .heroGrid {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
 
-@media (max-width: 996px) {
-  .steeringGrid,
-  .teamGrid,
-  .involvementGrid {
+  .heroCopy {
+    max-width: 34rem;
+  }
+
+  .section {
+    grid-template-columns: 1fr;
+  }
+
+  .sectionHeader p {
+    max-width: 42rem;
+  }
+
+  .gridThree {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 700px) {
   .container {
     width: min(100% - 1.4rem, var(--site-grid-max));
     padding-top: 1.5rem;
   }
 
-  .header h1 {
-    font-size: 2.7rem;
+  .hero {
+    padding-bottom: 2rem;
   }
 
-  .section h2 {
-    font-size: 1.8rem;
+  .hero h1 {
+    font-size: clamp(3.1rem, 18vw, 5rem);
   }
 
-  .steeringGrid,
-  .teamGrid,
-  .involvementGrid {
+  .section {
+    gap: 1.25rem;
+    padding: 2rem 0;
+  }
+
+  .gridTwo,
+  .gridThree {
     grid-template-columns: 1fr;
-  }
-
-  .memberCard,
-  .involvementCard {
-    padding: 1.1rem;
   }
 }

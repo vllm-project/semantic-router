@@ -803,6 +803,29 @@ test.describe('Layout top navigation', () => {
     await expect(routingTab).toHaveAttribute('aria-selected', 'false')
   })
 
+  test('keeps mega-menu links clickable when Safari reports a null blur target', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockCommon(page)
+
+    await page.goto('/dashboard')
+
+    await page
+      .getByRole('group', { name: 'Workflow navigation' })
+      .getByRole('button', { name: 'Build' })
+      .click()
+
+    const buildMenu = page.getByRole('navigation', { name: 'Build' })
+    await buildMenu.evaluate((menu) => {
+      menu.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }))
+    })
+
+    await expect(buildMenu).toBeVisible()
+    await buildMenu.getByRole('link', { name: 'Config Builder' }).click()
+    await expect(page).toHaveURL(/\/builder$/)
+  })
+
   test('keeps every mega-menu category reachable in a short desktop window', async ({ page }) => {
     await page.setViewportSize({ width: 1024, height: 400 })
     await mockCommon(page)

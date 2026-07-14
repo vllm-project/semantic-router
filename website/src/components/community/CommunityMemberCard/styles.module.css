@@ -1,0 +1,156 @@
+.card {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr;
+  gap: 1rem;
+  min-width: 0;
+  padding: 1.25rem;
+  border: 1px solid var(--site-border);
+  background: var(--site-surface);
+  box-shadow: 0 12px 30px rgba(17, 17, 17, 0.035);
+}
+
+.featured {
+  padding: 1.5rem;
+  border-top: 3px solid var(--site-accent);
+}
+
+.muted {
+  background: color-mix(in srgb, var(--site-surface) 72%, #d7d7d4);
+  box-shadow: none;
+}
+
+.header {
+  display: flex;
+  gap: 0.9rem;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.avatar {
+  flex: 0 0 auto;
+  width: 3.5rem;
+  height: 3.5rem;
+  border: 1px solid var(--site-border-strong);
+  border-radius: 50%;
+  object-fit: cover;
+  filter: saturate(0.92);
+}
+
+.identity {
+  min-width: 0;
+}
+
+.nameLine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.nameLine h3 {
+  margin: 0;
+  color: var(--site-text);
+  font-size: 1.02rem;
+  line-height: 1.25;
+}
+
+.badge {
+  display: inline-flex;
+  min-height: 1.4rem;
+  align-items: center;
+  padding: 0.15rem 0.48rem;
+  border: 1px solid var(--site-border-strong);
+  color: var(--site-muted-bright);
+  font-size: 0.58rem;
+  font-weight: 650;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.maintainer,
+.steering {
+  border-color: var(--site-accent);
+  color: #087ac5;
+}
+
+.emeritus {
+  border-color: #a1a1aa;
+  color: #71717a;
+}
+
+.identity p,
+.bio {
+  color: var(--site-muted-bright);
+  line-height: 1.55;
+}
+
+.identity p {
+  margin: 0.3rem 0 0;
+  font-size: 0.8rem;
+}
+
+.identity p span {
+  color: var(--site-text);
+}
+
+.bio {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.expertise {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.38rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.expertise li {
+  padding: 0.28rem 0.48rem;
+  border: 1px solid var(--site-border);
+  color: var(--site-muted-bright);
+  font-size: 0.65rem;
+  line-height: 1.2;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  align-self: end;
+  padding-top: 0.15rem;
+}
+
+.links a {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  color: var(--site-text);
+  font-size: 0.65rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.links a svg {
+  font-size: 0.78rem;
+}
+
+.links a > span:last-child {
+  color: var(--site-muted);
+}
+
+.links a:hover {
+  color: #087ac5;
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .card,
+  .featured {
+    padding: 1.05rem;
+  }
+}
