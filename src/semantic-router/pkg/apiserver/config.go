@@ -92,7 +92,7 @@ type EmbeddingRequest struct {
 	Texts           []string `json:"texts"`
 	Images          []string `json:"images,omitempty"`           // Inline base64 image data URIs (data:image/...;base64,...); encoded via the multi-modal model
 	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
-	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 64/128/256/384/512/768/1024; text default 768. Image inputs cap at the multimodal native dimension (384): image-bearing requests default to it, and an explicit larger value is rejected.
+	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 64/128/256/384/512/768/1024. Applies to the text side (default 768). Image-only requests use this as the image target (default 384, must be <= multimodal native 384). Mixed text+image requests keep the text default and always encode the image side at its native dimension; per-item response.dimension disambiguates.
 	TargetLayer     int      `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert text only): 3, 6, 11, 22 (0=full); not supported for image inputs
 	QualityPriority float32  `json:"quality_priority,omitempty"` // 0.0-1.0, default 0.5 (only used when model="auto")
 	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, default 0.5 (only used when model="auto")
