@@ -1,7 +1,6 @@
 package classification
 
 import (
-	"os"
 	"strings"
 	"sync"
 
@@ -70,12 +69,6 @@ func NewEmbeddingClassifierWithProvider(cfgRules []config.EmbeddingRule, optConf
 
 // getModelType returns the model type to use for embeddings.
 func (c *EmbeddingClassifier) getModelType() string {
-	if model := os.Getenv("EMBEDDING_MODEL_OVERRIDE"); model != "" {
-		logging.ComponentDebugEvent("classifier", "embedding_model_override_enabled", map[string]interface{}{
-			"model_type": model,
-		})
-		return model
-	}
 	return c.modelType
 }
 

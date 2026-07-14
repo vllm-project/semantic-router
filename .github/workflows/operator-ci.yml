@@ -8,16 +8,38 @@ on:
     tags:
       - 'v*'
     paths:
+      - '.dockerignore'
+      - 'Makefile'
+      - 'config/**'
       - 'deploy/operator/**'
-      - 'src/semantic-router/pkg/config/**'
+      - 'scripts/**'
+      - 'src/semantic-router/**'
+      - 'candle-binding/**'
+      - 'onnx-binding/**'
+      - 'ml-binding/**'
+      - 'nlp-binding/**'
+      - 'openvino-binding/**'
+      - 'tools/docker/Dockerfile.extproc'
+      - 'tools/make/**'
       - '.github/workflows/operator-ci.yml'
   pull_request:
     branches:
       - main
       - develop
     paths:
+      - '.dockerignore'
+      - 'Makefile'
+      - 'config/**'
       - 'deploy/operator/**'
-      - 'src/semantic-router/pkg/config/**'
+      - 'scripts/**'
+      - 'src/semantic-router/**'
+      - 'candle-binding/**'
+      - 'onnx-binding/**'
+      - 'ml-binding/**'
+      - 'nlp-binding/**'
+      - 'openvino-binding/**'
+      - 'tools/docker/Dockerfile.extproc'
+      - 'tools/make/**'
       - '.github/workflows/operator-ci.yml'
 
 env:

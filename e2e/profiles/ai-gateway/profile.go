@@ -2,8 +2,14 @@ package aigateway
 
 import (
 	"context"
+	"errors"
+	"fmt"
+
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
 
@@ -19,8 +25,29 @@ var resourceManifests = []string{
 
 // Profile implements the default Kubernetes baseline test profile.
 type Profile struct {
-	stack *gatewaystack.Stack
+	stack                 gatewayStack
+	resolveGatewayService gatewayServiceResolver
+	servicesForNamespace  looperGatewayServicesFactory
 }
+
+type gatewayStack interface {
+	Setup(context.Context, *framework.SetupOptions) error
+	Teardown(context.Context, *framework.TeardownOptions) error
+	ServiceConfig() framework.ServiceConfig
+}
+
+type gatewayServiceResolver func(
+	context.Context,
+	*kubernetes.Clientset,
+	string,
+	string,
+	bool,
+) (string, error)
+
+type looperGatewayServicesFactory func(
+	*kubernetes.Clientset,
+	string,
+) looperGatewayServices
 
 // NewProfile creates the default Kubernetes profile backed by the shared AI Gateway stack.
 func NewProfile() *Profile {
@@ -30,6 +57,10 @@ func NewProfile() *Profile {
 			SemanticRouterValuesFile: valuesFile,
 			ResourceManifests:        resourceManifests,
 		}),
+		resolveGatewayService: helpers.GetServiceByLabelInNamespace,
+		servicesForNamespace: func(client *kubernetes.Clientset, namespace string) looperGatewayServices {
+			return client.CoreV1().Services(namespace)
+		},
 	}
 }
 
@@ -44,13 +75,83 @@ func (p *Profile) Description() string {
 }
 
 // Setup deploys the shared gateway stack.
-func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error {
-	return p.stack.Setup(ctx, opts)
+func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) (setupErr error) {
+	if err := p.stack.Setup(ctx, opts); err != nil {
+		return err
+	}
+	defer func() {
+		if setupErr == nil {
+			return
+		}
+		cleanupErr := p.Teardown(
+			context.WithoutCancel(ctx),
+			teardownOptionsFromSetup(opts),
+		)
+		setupErr = errors.Join(setupErr, cleanupErr)
+	}()
+
+	if opts.KubeClient == nil {
+		return fmt.Errorf("kube client is required for Looper gateway alias setup")
+	}
+
+	gatewayExternalName, err := p.looperGatewayExternalName(ctx, opts.KubeClient, opts.Verbose)
+	if err != nil {
+		return err
+	}
+	return ensureLooperGatewayAlias(
+		ctx,
+		p.servicesForNamespace(opts.KubeClient, helm.SemanticRouterRelease.Namespace),
+		helm.SemanticRouterRelease.Namespace,
+		gatewayExternalName,
+	)
 }
 
 // Teardown removes the shared gateway stack.
 func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions) error {
-	return p.stack.Teardown(ctx, opts)
+	var aliasErr error
+	if opts.KubeClient != nil {
+		aliasErr = deleteOwnedLooperGatewayAlias(
+			ctx,
+			p.servicesForNamespace(opts.KubeClient, helm.SemanticRouterRelease.Namespace),
+			helm.SemanticRouterRelease.Namespace,
+			func() (string, error) {
+				return p.looperGatewayExternalName(ctx, opts.KubeClient, opts.Verbose)
+			},
+		)
+	}
+	return errors.Join(aliasErr, p.stack.Teardown(ctx, opts))
+}
+
+func (p *Profile) looperGatewayExternalName(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	verbose bool,
+) (string, error) {
+	serviceConfig := p.stack.ServiceConfig()
+	gatewayServiceName, err := p.resolveGatewayService(
+		ctx,
+		client,
+		serviceConfig.Namespace,
+		serviceConfig.LabelSelector,
+		verbose,
+	)
+	if err != nil {
+		return "", fmt.Errorf("resolve Looper gateway service: %w", err)
+	}
+	return fmt.Sprintf(
+		"%s.%s.svc.cluster.local",
+		gatewayServiceName,
+		serviceConfig.Namespace,
+	), nil
+}
+
+func teardownOptionsFromSetup(opts *framework.SetupOptions) *framework.TeardownOptions {
+	return &framework.TeardownOptions{
+		KubeClient:  opts.KubeClient,
+		KubeConfig:  opts.KubeConfig,
+		ClusterName: opts.ClusterName,
+		Verbose:     opts.Verbose,
+	}
 }
 
 // GetTestCases returns the list of test cases for this profile.

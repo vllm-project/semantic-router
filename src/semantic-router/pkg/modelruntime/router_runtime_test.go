@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 func TestEmbeddingRuntimeTasksUseOnlyRemoteProviderWhenConfigured(t *testing.T) {
@@ -24,14 +26,103 @@ func TestEmbeddingRuntimeTasksUseOnlyRemoteProviderWhenConfigured(t *testing.T) 
 	}
 }
 
-func TestPrepareRouterRuntimeProbesRemoteEmbeddingProvider(t *testing.T) {
+func TestEmbeddingRuntimeTasksRemoteConfigWithCandleOverrideUsesLocalTask(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", config.EmbeddingBackendCandle)
+	t.Setenv("EMBEDDING_MODEL_TYPE_OVERRIDE", "mmbert")
+	cfg := remoteEmbeddingRuntimeConfig("http://embedding-service:8000/v1")
+	paths := resolveEmbeddingPaths(cfg)
+
+	_, tasks, _ := embeddingRuntimeTasks(cfg, "test", paths)
+	if len(tasks) != 1 || tasks[0].Name != "router.embedding.unified_factory" {
+		t.Fatalf("local override tasks = %+v, want only router.embedding.unified_factory", tasks)
+	}
+}
+
+func TestEmbeddingPathsForRuntimePlanSelectsOnlyResolvedModel(t *testing.T) {
+	configured := embeddingPaths{
+		qwen3:      "configured/qwen3",
+		gemma:      "configured/gemma",
+		mmBert:     "configured/mmbert",
+		multiModal: "configured/multimodal",
+		bert:       "configured/bert",
+	}
+	tests := []struct {
+		name string
+		plan embedding.RuntimePlan
+		want embeddingPaths
+	}{
+		{name: "qwen3", plan: embedding.RuntimePlan{ModelType: "qwen3", ModelPath: "raw/qwen3"}, want: embeddingPaths{qwen3: "configured/qwen3"}},
+		{name: "gemma", plan: embedding.RuntimePlan{ModelType: "gemma", ModelPath: "raw/gemma"}, want: embeddingPaths{gemma: "configured/gemma"}},
+		{name: "mmbert", plan: embedding.RuntimePlan{ModelType: "mmbert", ModelPath: "raw/mmbert"}, want: embeddingPaths{mmBert: "configured/mmbert"}},
+		{name: "multimodal", plan: embedding.RuntimePlan{ModelType: "multimodal", ModelPath: "raw/multimodal"}, want: embeddingPaths{multiModal: "configured/multimodal"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := configured.forRuntimePlan(tt.plan); got != tt.want {
+				t.Fatalf("forRuntimePlan(%+v) = %+v, want %+v", tt.plan, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPrepareRouterRuntimeOpenVINOOverrideDoesNotClaimReadyOrProbeRemote(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", config.EmbeddingBackendOpenVINO)
+	t.Setenv("EMBEDDING_MODEL_TYPE_OVERRIDE", "mmbert")
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		calls.Add(1)
+	}))
+	defer server.Close()
+	cfg := remoteEmbeddingRuntimeConfig(server.URL + "/v1")
+
+	state, err := PrepareRouterRuntime(context.Background(), cfg, PrepareRouterRuntimeOptions{Component: "test"})
+	if err != nil {
+		t.Fatalf("PrepareRouterRuntime: %v", err)
+	}
+	if state.AnyReady || state.ToolsReady || state.EmbeddingProvider != nil {
+		t.Fatalf("OpenVINO handoff state = %+v, want explicitly not-ready without remote provider", state)
+	}
+	if got := calls.Load(); got != 0 {
+		t.Fatalf("remote embedding HTTP calls = %d, want 0", got)
+	}
+}
+
+func TestPrepareRouterRuntimeLocalConfigWithRemoteOverrideProbesEndpointOnce(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", config.EmbeddingBackendOpenAICompatible)
+	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
 		writeRuntimeEmbeddingResponse(t, w, []float64{0.1, 0.2})
 	}))
 	defer server.Close()
-	t.Setenv("REMOTE_EMBEDDING_API_KEY", "test-secret")
 	cfg := remoteEmbeddingRuntimeConfig(server.URL + "/v1")
-	cfg.EmbeddingModels.Endpoint.APIKeyEnv = "REMOTE_EMBEDDING_API_KEY"
+	cfg.EmbeddingModels.EmbeddingConfig.Backend = config.EmbeddingBackendCandle
+	cfg.EmbeddingModels.EmbeddingConfig.ModelType = config.EmbeddingModelTypeQwen3
+	cfg.EmbeddingModels.Qwen3ModelPath = "models/local-qwen3"
+
+	state, err := PrepareRouterRuntime(context.Background(), cfg, PrepareRouterRuntimeOptions{Component: "test", MaxParallelism: 1})
+	if err != nil {
+		t.Fatalf("PrepareRouterRuntime: %v", err)
+	}
+	if !state.AnyReady || !state.ToolsReady || state.EmbeddingProvider == nil {
+		t.Fatalf("remote override state = %+v", state)
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("remote embedding HTTP calls = %d, want 1", got)
+	}
+}
+
+func TestPrepareRouterRuntimeProbesRemoteEmbeddingProvider(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeRuntimeEmbeddingResponse(t, w, []float64{0.1, 0.2})
+	}))
+	defer server.Close()
+	originalDefaultTransport := http.DefaultTransport
+	http.DefaultTransport = server.Client().Transport
+	t.Cleanup(func() { http.DefaultTransport = originalDefaultTransport })
+	t.Setenv(config.EmbeddingAPIKeyEnvName, "test-secret")
+	cfg := remoteEmbeddingRuntimeConfig(server.URL + "/v1")
+	cfg.EmbeddingModels.Endpoint.APIKeyEnv = config.EmbeddingAPIKeyEnvName
 
 	state, err := PrepareRouterRuntime(context.Background(), cfg, PrepareRouterRuntimeOptions{
 		Component:      "test-router",
@@ -84,7 +175,7 @@ func assertReadyRemoteEmbeddingProviderStatus(t *testing.T, provider *EmbeddingP
 	if provider.Model != "BAAI/bge-m3" {
 		t.Fatalf("embedding provider model = %q", provider.Model)
 	}
-	if provider.APIKeyEnv != "REMOTE_EMBEDDING_API_KEY" {
+	if provider.APIKeyEnv != config.EmbeddingAPIKeyEnvName {
 		t.Fatalf("embedding provider api key env = %q", provider.APIKeyEnv)
 	}
 	assertRemoteEmbeddingProviderDimensionAndTimestamp(t, provider)

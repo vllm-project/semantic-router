@@ -14,7 +14,10 @@ func dialRoomWebSocket(t *testing.T, serverURL, roomID string) *websocket.Conn {
 	t.Helper()
 
 	wsURL := "ws" + strings.TrimPrefix(serverURL, "http") + "/api/openclaw/rooms/" + roomID + "/ws"
-	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, resp, err := websocket.DefaultDialer.Dial(
+		wsURL,
+		http.Header{"Origin": []string{serverURL}},
+	)
 	if err != nil {
 		t.Fatalf("failed to connect websocket: %v", err)
 	}

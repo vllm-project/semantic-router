@@ -59,12 +59,22 @@ spec:
           value: "http://{{ include "semantic-router.fullname" . }}:{{ .Values.service.api.port }}"
         - name: TARGET_ROUTER_METRICS_URL
           value: "http://{{ include "semantic-router.fullname" . }}-metrics:{{ .Values.service.metrics.port }}/metrics"
+        - name: DASHBOARD_SECURITY_PROFILE
+          value: {{ .Values.dashboard.securityProfile | quote }}
         {{- if .Values.dashboard.jwtSecret.existingSecret }}
         - name: DASHBOARD_JWT_SECRET
           valueFrom:
             secretKeyRef:
               name: {{ .Values.dashboard.jwtSecret.existingSecret }}
               key: {{ .Values.dashboard.jwtSecret.existingSecretKey }}
+        {{- end }}
+        {{- if .Values.dashboard.passwordBlocklist.existingConfigMap }}
+        - name: DASHBOARD_PASSWORD_BLOCKLIST_PATH
+          value: "/etc/vllm-sr/password-blocklist/passwords.txt"
+        {{- if .Values.dashboard.passwordBlocklist.sha256 }}
+        - name: DASHBOARD_PASSWORD_BLOCKLIST_SHA256
+          value: {{ lower .Values.dashboard.passwordBlocklist.sha256 | quote }}
+        {{- end }}
         {{- end }}
         {{- if .Values.dashboard.readonly }}
         - name: DASHBOARD_READONLY
@@ -108,6 +118,11 @@ spec:
           mountPath: /app/config/tools_db.json
           subPath: tools_db.json
           readOnly: true
+        {{- if .Values.dashboard.passwordBlocklist.existingConfigMap }}
+        - name: password-blocklist
+          mountPath: /etc/vllm-sr/password-blocklist
+          readOnly: true
+        {{- end }}
         {{- if .Values.dashboard.persistence.enabled }}
         - name: dashboard-data
           mountPath: {{ .Values.dashboard.persistence.mountPath }}
@@ -130,6 +145,14 @@ spec:
       - name: config-volume
         configMap:
           name: {{ include "semantic-router.fullname" . }}-config
+      {{- if .Values.dashboard.passwordBlocklist.existingConfigMap }}
+      - name: password-blocklist
+        configMap:
+          name: {{ .Values.dashboard.passwordBlocklist.existingConfigMap | quote }}
+          items:
+          - key: {{ .Values.dashboard.passwordBlocklist.key | quote }}
+            path: passwords.txt
+      {{- end }}
       {{- if .Values.dashboard.persistence.enabled }}
       - name: dashboard-data
         persistentVolumeClaim:

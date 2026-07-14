@@ -96,7 +96,12 @@ func (r *OpenAIRouter) handleLooperExecution(
 	reqCtx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	// Create looper based on algorithm type
-	l := looper.FactoryWithSelectionRegistry(&r.Config.Looper, decision.Algorithm.Type, r.ModelSelector)
+	l := looper.FactoryWithSelectionRegistryAndAuthenticator(
+		&r.Config.Looper,
+		decision.Algorithm.Type,
+		r.ModelSelector,
+		r.looperAuthenticator,
+	)
 
 	// Build looper request.
 	// Response API requests always return JSON, so force non-streaming in the
@@ -139,7 +144,7 @@ func (r *OpenAIRouter) handleLooperExecution(
 			"request_id": reqCtx.RequestID,
 			"decision":   decision.Name,
 			"algorithm":  decision.Algorithm.Type,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 		return r.createErrorResponse(500, "Looper execution failed: "+err.Error()), nil
 	}
@@ -191,7 +196,7 @@ func (r *OpenAIRouter) handleLooperExecution(
 				"request_id": reqCtx.RequestID,
 				"decision":   decision.Name,
 				"algorithm":  resp.AlgorithmType,
-				"error":      err.Error(),
+				"error_type": safeErrorForLog(err),
 			})
 		} else {
 			resp.Body = translated

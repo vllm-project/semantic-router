@@ -1,22 +1,110 @@
 package handlers
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 )
 
-// getDockerContainerStatus checks the status of a Docker container.
-// Returns: "running", "exited", "not found", or other Docker status.
+const dockerStatusProbeTimeout = 2 * time.Second
+
+const dockerStatusProbeOutputLimit = 64 * 1024
+
+type dockerStatusProbe func(context.Context, string) ([]byte, error)
+
+// managedContainerStatusProbe is the process boundary used by status and
+// mutation orchestration. Keeping the runner behind one narrow seam makes
+// orchestration tests deterministic without weakening the production timeout.
+var managedContainerStatusProbe dockerStatusProbe = runDockerStatusProbe
+
+type dockerStatusProbeError struct {
+	err    error
+	stderr []byte
+}
+
+func (e *dockerStatusProbeError) Error() string { return e.err.Error() }
+func (e *dockerStatusProbeError) Unwrap() error { return e.err }
+
+// getDockerContainerStatus checks the status of a Docker container without
+// allowing an unavailable container runtime to block an HTTP request forever.
+// Returns "unknown" when the probe times out, "not found" when Docker rejects
+// the inspect, or the status reported by Docker.
 func getDockerContainerStatus(containerName string) string {
-	cmd := exec.Command("docker", "inspect", "-f", "{{.State.Status}}", containerName)
-	output, err := cmd.Output()
-	if err != nil {
-		return "not found"
+	return getDockerContainerStatusWithProbe(
+		containerName,
+		dockerStatusProbeTimeout,
+		managedContainerStatusProbe,
+	)
+}
+
+func getDockerContainerStatusWithProbe(
+	containerName string,
+	timeout time.Duration,
+	probe dockerStatusProbe,
+) string {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	output, err := probe(ctx, containerName)
+	if ctx.Err() != nil {
+		return "unknown"
 	}
-	return strings.TrimSpace(string(output))
+	if err != nil {
+		if dockerInspectMeansNoManagedRuntime(output, err) {
+			return "not found"
+		}
+		return "unknown"
+	}
+
+	status := strings.TrimSpace(string(output))
+	if status == "" {
+		return "unknown"
+	}
+	return status
+}
+
+func runDockerStatusProbe(ctx context.Context, containerName string) ([]byte, error) {
+	output, err := runBoundedCommandSplit(
+		ctx,
+		"docker",
+		dockerStatusProbeOutputLimit,
+		"inspect",
+		"-f",
+		"{{.State.Status}}",
+		containerName,
+	)
+	if err != nil {
+		return output.stdout, &dockerStatusProbeError{err: err, stderr: output.stderr}
+	}
+	return output.stdout, nil
+}
+
+func dockerInspectMeansNoManagedRuntime(output []byte, err error) bool {
+	message := string(output)
+	var probeErr *dockerStatusProbeError
+	if errors.As(err, &probeErr) {
+		message = string(probeErr.stderr)
+	}
+	message = strings.ToLower(message)
+	return strings.Contains(message, "no such object") ||
+		strings.Contains(message, "no such container")
+}
+
+func managedContainerRunningOrAbsent(status string, component string) (bool, error) {
+	switch status {
+	case "running":
+		return true, nil
+	case "not found":
+		return false, nil
+	case "unknown":
+		return false, fmt.Errorf("managed %s status probe is unavailable", component)
+	default:
+		return false, fmt.Errorf("managed %s is not running (status %s)", component, status)
+	}
 }
 
 // isRunningInContainer checks if the current process is running inside a Docker container.

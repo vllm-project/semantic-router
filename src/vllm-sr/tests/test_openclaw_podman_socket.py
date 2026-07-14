@@ -126,11 +126,13 @@ def test_container_start_vllm_sr_warns_when_podman_socket_missing(
     monkeypatch.delenv("VLLM_SR_CONTAINER_SOCKET", raising=False)
     real_exists = os.path.exists
 
-    def fake_exists(path: str) -> bool:
-        if "podman.sock" in path or "docker.sock" in path:
+    def fake_exists(path: os.PathLike[str] | str) -> bool:
+        path_text = os.fspath(path)
+        if "podman.sock" in path_text or "docker.sock" in path_text:
             return False
         return real_exists(path)
 
+    assert fake_exists(tmp_path / "podman.sock") is False
     monkeypatch.setattr(os.path, "exists", fake_exists)
     _stub_runtime_images(monkeypatch)
     captured = _capture_run_commands(monkeypatch)

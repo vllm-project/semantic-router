@@ -99,14 +99,8 @@ func (c *ContrastivePreferenceClassifier) embedRuleExamples(
 }
 
 func (c *ContrastivePreferenceClassifier) embedText(text string) ([]float32, error) {
-	if c.provider != nil {
-		return c.provider.Embed(context.Background(), text)
-	}
-	output, err := getEmbeddingWithModelType(text, c.modelType, 0)
-	if err != nil {
-		return nil, err
-	}
-	return output.Embedding, nil
+	embedding, _, err := executeTextEmbedding(context.Background(), c.backend, c.provider, text, c.modelType, 0)
+	return embedding, err
 }
 
 func (c *ContrastivePreferenceClassifier) collectEmbeddedResults(

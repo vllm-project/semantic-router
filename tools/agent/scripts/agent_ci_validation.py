@@ -7,6 +7,7 @@ import re
 
 import yaml
 from agent_support import REPO_ROOT
+from select_e2e_profiles import AFFECTED_PROFILE_FLAGS, BASELINE_PROFILES
 
 
 def validate_ci_changes_filters(
@@ -19,7 +20,9 @@ def validate_ci_changes_filters(
     validate_ci_filter_against_task_rule("agent_text", task_matrix, filters, errors)
     validate_ci_filter_against_task_rule("agent_exec", task_matrix, filters, errors)
     validate_ci_profile_filters(e2e_map, filters, errors)
+    validate_full_ci_e2e_triggers(e2e_map, filters, errors)
     validate_e2e_profile_lists(repo_manifest, e2e_map, errors)
+    validate_e2e_profile_selector(e2e_map, errors)
     validate_e2e_inventory(e2e_map, errors)
     validate_workflow_suite_rules(e2e_map, errors)
 
@@ -76,6 +79,21 @@ def validate_ci_profile_filters(
             )
 
 
+def validate_full_ci_e2e_triggers(
+    e2e_map: dict, filters: dict, errors: list[str]
+) -> None:
+    """Keep canonical common-E2E full-CI paths wired into the workflow."""
+    canonical = {
+        path for path in e2e_map.get("full_ci_triggers", []) if path.startswith("e2e/")
+    }
+    workflow = set(filters.get("e2e_common", []))
+    if workflow != canonical:
+        errors.append(
+            "ci-changes filter 'e2e_common' does not match the e2e/** subset "
+            "of e2e-profile-map full_ci_triggers"
+        )
+
+
 def validate_e2e_profile_lists(
     repo_manifest: dict, e2e_map: dict, errors: list[str]
 ) -> None:
@@ -118,6 +136,23 @@ def validate_e2e_profile_lists(
                 errors.append(
                     f"tools/agent/e2e-profile-map.yaml profile '{profile_name}' is missing '{field}'"
                 )
+
+
+def validate_e2e_profile_selector(e2e_map: dict, errors: list[str]) -> None:
+    """Keep the fixed CI selector allowlist aligned with canonical profiles."""
+    mapped_profiles = set(e2e_map.get("profile_rules", {}))
+    selector_profiles = {profile for _, profile in AFFECTED_PROFILE_FLAGS}
+    if selector_profiles != mapped_profiles:
+        errors.append(
+            "select_e2e_profiles.py affected profile allowlist does not match "
+            "tools/agent/e2e-profile-map.yaml"
+        )
+
+    if tuple(e2e_map.get("full_ci_profiles", [])) != BASELINE_PROFILES:
+        errors.append(
+            "select_e2e_profiles.py baseline profiles do not match "
+            "tools/agent/e2e-profile-map.yaml full_ci_profiles"
+        )
 
 
 def combined_profile_rules(e2e_map: dict) -> dict[str, dict]:

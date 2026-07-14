@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -21,6 +20,11 @@ const (
 type runtimeConfigApplyError struct {
 	applyErr   error
 	restoreErr error
+}
+
+type configFileSnapshot struct {
+	data    []byte
+	existed bool
 }
 
 func (e *runtimeConfigApplyError) Error() string {
@@ -40,12 +44,32 @@ func (e *runtimeConfigApplyError) Unwrap() error {
 	return e.applyErr
 }
 
-func applyWrittenConfig(configPath string, configDir string, previousData []byte, restoreOnFailure bool) error {
+func captureConfigFileSnapshot(configPath string) (configFileSnapshot, error) {
+	data, err := os.ReadFile(configPath)
+	if err == nil {
+		return configFileSnapshot{data: data, existed: true}, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return configFileSnapshot{}, nil
+	}
+	return configFileSnapshot{}, err
+}
+
+func existingConfigFileSnapshot(data []byte) configFileSnapshot {
+	return configFileSnapshot{data: append([]byte(nil), data...), existed: true}
+}
+
+func applyWrittenConfig(
+	configPath string,
+	configDir string,
+	previous configFileSnapshot,
+	restoreOnFailure bool,
+) error {
 	if err := propagateConfigToRuntime(configPath, configDir); err != nil {
-		if !restoreOnFailure || len(previousData) == 0 {
+		if !restoreOnFailure {
 			return err
 		}
-		if restoreErr := restorePreviousRuntimeConfig(configPath, configDir, previousData); restoreErr != nil {
+		if restoreErr := restorePreviousRuntimeConfig(configPath, configDir, previous); restoreErr != nil {
 			return &runtimeConfigApplyError{applyErr: err, restoreErr: restoreErr}
 		}
 		return &runtimeConfigApplyError{applyErr: err}
@@ -79,12 +103,23 @@ func writeConfigAtomically(configPath string, yamlData []byte) error {
 	return nil
 }
 
-func restorePreviousRuntimeConfig(configPath string, configDir string, previousData []byte) error {
-	if len(previousData) == 0 {
-		return nil
+func restoreConfigFileSnapshot(configPath string, previous configFileSnapshot) error {
+	if previous.existed {
+		return writeConfigAtomically(configPath, previous.data)
 	}
-	if err := writeConfigAtomically(configPath, previousData); err != nil {
+
+	if err := os.Remove(configPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
+	}
+	return nil
+}
+
+func restorePreviousRuntimeConfig(configPath string, configDir string, previous configFileSnapshot) error {
+	if err := restoreConfigFileSnapshot(configPath, previous); err != nil {
+		return err
+	}
+	if !previous.existed || len(previous.data) == 0 {
+		return nil
 	}
 	return propagateConfigToRuntime(configPath, configDir)
 }
@@ -96,13 +131,27 @@ func propagateConfigToRuntime(configPath string, configDir string) error {
 	}
 
 	if isRunningInContainer() && isManagedContainerConfigPath(configPath) {
-		if getDockerContainerStatus(managedContainerNameForService("envoy")) == "running" {
+		running, statusErr := managedContainerRunningOrAbsent(
+			getDockerContainerStatus(managedContainerNameForService("envoy")),
+			"Envoy",
+		)
+		if statusErr != nil {
+			return statusErr
+		}
+		if running {
 			return regenerateAndReloadManagedSplitEnvoyLocally(effectiveConfigPath)
 		}
 		return nil
 	}
 
-	if getDockerContainerStatus(managedContainerNameForService("envoy")) == "running" {
+	running, statusErr := managedContainerRunningOrAbsent(
+		getDockerContainerStatus(managedContainerNameForService("envoy")),
+		"Envoy",
+	)
+	if statusErr != nil {
+		return statusErr
+	}
+	if running {
 		return propagateConfigToManagedContainer()
 	}
 
@@ -137,8 +186,11 @@ func refreshManagedSplitEnvoyConfig(configPath string) error {
 	if !managedRuntimeUsesSplitContainers() {
 		return nil
 	}
-	if getDockerContainerStatus(managedContainerNameForService("envoy")) == "not found" {
+	switch status := getDockerContainerStatus(managedContainerNameForService("envoy")); status {
+	case "not found":
 		return nil
+	case "unknown":
+		return fmt.Errorf("managed Envoy status probe is unavailable")
 	}
 
 	envoyConfigPath := splitEnvoyConfigPathForRuntimeConfig(configPath)
@@ -212,9 +264,14 @@ print("Regenerated Envoy config: %s")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, pythonBinary, "-c", pythonScript)
-	cmd.Dir = filepath.Dir(configPath)
-	output, err := cmd.CombinedOutput()
+	output, err := runBoundedCommandInDirectory(
+		ctx,
+		filepath.Dir(configPath),
+		pythonBinary,
+		1024*1024,
+		"-c",
+		pythonScript,
+	)
 	return string(output), err
 }
 
@@ -279,8 +336,7 @@ func execInManagedContainer(containerName string, timeout time.Duration, args ..
 
 	commandArgs := append([]string{"exec", containerName}, args...)
 	// #nosec G204 -- commandArgs are validated against a strict allowlist above and the container name is constant.
-	cmd := exec.CommandContext(ctx, "docker", commandArgs...)
-	output, err := cmd.CombinedOutput()
+	output, err := runBoundedCommand(ctx, "docker", 1024*1024, commandArgs...)
 	return string(output), err
 }
 

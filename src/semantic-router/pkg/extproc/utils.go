@@ -9,7 +9,6 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
 // sendResponse sends a response with proper error handling and logging.
@@ -29,16 +28,21 @@ func sendResponse(stream ext_proc.ExternalProcessor_ProcessServer, response *ext
 		}
 	}
 
-	// Redact credentials (Authorization / x-api-key / ...) before dumping the
-	// mutation: the credential resolver injects the upstream provider key as a
-	// set-header, so a verbatim %+v would leak it to the log (CWE-532). Gate on
-	// the debug level so the clone+redact cost is paid only when it is logged.
+	// A ProcessingResponse may contain prompts, tool/RAG/memory content, and
+	// credential-bearing header mutations. Log only typed transport metadata.
 	if logging.DebugEnabled() {
-		logging.Debugf("Processing at stage [%s]: %+v", msgType, redactResponseForLog(response))
+		logging.ComponentDebugEvent(
+			"extproc",
+			"processing_response_ready",
+			processingResponseLogFields(msgType, response),
+		)
 	}
 
 	if err := stream.Send(response); err != nil {
-		logging.Errorf("Error sending %s response: %v", msgType, err)
+		logging.ComponentErrorEvent("extproc", "processing_response_send_failed", map[string]interface{}{
+			"stage":      msgType,
+			"error_type": safeErrorForLog(err),
+		})
 		return err
 	}
 	return nil
@@ -185,17 +189,6 @@ func statusCodeToEnum(statusCode int) typev3.StatusCode {
 		return code
 	}
 	return typev3.StatusCode_OK
-}
-
-// isSafeImageDataURL returns true only for inline base64-encoded image data URIs
-// with an allowlisted MIME type (e.g. "data:image/png;base64,...").
-// HTTP(S) URLs, non-image data URIs, and file paths are rejected to prevent
-// SSRF, local file access, and decode errors on non-image payloads.
-//
-// The implementation lives in the shared imageurl package so the ExtProc path
-// and the HTTP classification API enforce an identical gate.
-func isSafeImageDataURL(url string) bool {
-	return imageurl.IsSafeImageDataURL(url)
 }
 
 // rewriteRequestModel rewrites the model field in the request body JSON.

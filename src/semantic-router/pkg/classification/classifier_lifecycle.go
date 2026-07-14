@@ -18,6 +18,9 @@ func BuildClassifier(
 	piiMapping *PIIMapping,
 	jailbreakMapping *JailbreakMapping,
 ) (*Classifier, error) {
+	if err := validateOpenVINOTextPlanConsistency(cfg); err != nil {
+		return nil, err
+	}
 	jailbreakInitializer, jailbreakInference, err := buildJailbreakDependencies(cfg)
 	if err != nil {
 		return nil, err
@@ -106,7 +109,7 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 	appendTask("classifier.fact_check", true, c.IsFactCheckEnabled(), c.initializeFactCheckClassifier)
 	appendTask("classifier.hallucination", true, c.IsHallucinationDetectionEnabled(), c.initializeHallucinationDetector)
 	appendTask("classifier.feedback", true, c.IsFeedbackDetectorEnabled(), c.initializeFeedbackDetector)
-	appendTask("classifier.preference", true, c.IsPreferenceClassifierEnabled(), c.initializePreferenceClassifier)
+	appendTask("classifier.preference", !c.Config.PreferenceModel.ContrastiveEnabled(), c.IsPreferenceClassifierEnabled(), c.initializePreferenceClassifier)
 	appendTask("classifier.language", true, len(c.Config.LanguageRules) > 0, c.initializeLanguageClassifier)
 
 	return tasks

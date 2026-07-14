@@ -38,6 +38,7 @@ type ContrastiveJailbreakClassifier struct {
 	benignEmbeddings    map[string][]float32 // pattern text → embedding
 
 	modelType string
+	backend   string
 	provider  embedding.Provider
 }
 
@@ -61,6 +62,10 @@ func NewContrastiveJailbreakClassifier(rule config.JailbreakRule, defaultModelTy
 }
 
 func NewContrastiveJailbreakClassifierWithProvider(rule config.JailbreakRule, defaultModelType string, provider embedding.Provider) (*ContrastiveJailbreakClassifier, error) {
+	return newContrastiveJailbreakClassifierWithBackend(rule, defaultModelType, "", provider)
+}
+
+func newContrastiveJailbreakClassifierWithBackend(rule config.JailbreakRule, defaultModelType string, backend string, provider embedding.Provider) (*ContrastiveJailbreakClassifier, error) {
 	modelType := defaultModelType
 	if modelType == "" {
 		modelType = "qwen3"
@@ -71,6 +76,7 @@ func NewContrastiveJailbreakClassifierWithProvider(rule config.JailbreakRule, de
 		jailbreakEmbeddings: make(map[string][]float32),
 		benignEmbeddings:    make(map[string][]float32),
 		modelType:           modelType,
+		backend:             normalizeTextEmbeddingBackend(backend),
 		provider:            provider,
 	}
 
@@ -84,6 +90,13 @@ func NewContrastiveJailbreakClassifierWithProvider(rule config.JailbreakRule, de
 // the result with the maximum score (multi-turn chain detection).
 // If messages is empty the returned MaxScore is -1.
 func (c *ContrastiveJailbreakClassifier) AnalyzeMessages(messages []string) ContrastiveJailbreakResult {
+	result, _ := c.AnalyzeMessagesWithError(messages)
+	return result
+}
+
+// AnalyzeMessagesWithError preserves inference failures so security routing
+// cannot silently interpret a broken embedding backend as a benign no-match.
+func (c *ContrastiveJailbreakClassifier) AnalyzeMessagesWithError(messages []string) (ContrastiveJailbreakResult, error) {
 	start := time.Now()
 	result := ContrastiveJailbreakResult{
 		MaxScore:      -1,
@@ -97,8 +110,7 @@ func (c *ContrastiveJailbreakClassifier) AnalyzeMessages(messages []string) Cont
 		}
 		msgEmb, err := c.embedText(msg)
 		if err != nil {
-			logging.Warnf("[Contrastive Jailbreak] Failed to embed message %d: %v", i, err)
-			continue
+			return result, fmt.Errorf("contrastive jailbreak embedding failed: %w", err)
 		}
 
 		// max similarity to jailbreak KB
@@ -128,18 +140,12 @@ func (c *ContrastiveJailbreakClassifier) AnalyzeMessages(messages []string) Cont
 	}
 
 	result.ProcessingTime = time.Since(start)
-	return result
+	return result, nil
 }
 
 func (c *ContrastiveJailbreakClassifier) embedText(text string) ([]float32, error) {
-	if c.provider != nil {
-		return c.provider.Embed(context.Background(), text)
-	}
-	output, err := getEmbeddingWithModelType(text, c.modelType, 0)
-	if err != nil {
-		return nil, err
-	}
-	return output.Embedding, nil
+	embedding, _, err := executeTextEmbedding(context.Background(), c.backend, c.provider, text, c.modelType, 0)
+	return embedding, err
 }
 
 // preloadKBEmbeddings concurrently computes embeddings for jailbreak and benign

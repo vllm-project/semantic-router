@@ -15,6 +15,11 @@ type BootstrapOptions = {
   settings?: Record<string, unknown>
 }
 
+type LoggedOutOptions = {
+  canRegister?: boolean
+  setupState?: Record<string, unknown>
+}
+
 const defaultUser: SessionUser = {
   id: 'user-admin-1',
   email: 'admin@example.com',
@@ -34,6 +39,7 @@ const defaultUser: SessionUser = {
     'mlpipeline.manage',
     'openclaw.manage',
     'openclaw.read',
+    'openclaw.use',
     'replay.read',
     'security.manage',
     'tools.use',
@@ -61,17 +67,35 @@ const defaultSettings = {
   routerEvalEndpoint: '',
 }
 
+export async function mockLoggedOutAuthShell(
+  page: Page,
+  { canRegister = false, setupState: setupStateOverrides = {} }: LoggedOutOptions = {},
+): Promise<void> {
+  const setupState = { ...defaultSetupState, ...setupStateOverrides }
+
+  await page.route('**/api/setup/state', async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(setupState),
+    })
+  })
+  await page.route('**/api/auth/bootstrap/can-register', async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ canRegister }),
+    })
+  })
+  await page.route('**/api/auth/me', async (route) => {
+    await route.fulfill({ status: 401, body: 'Unauthorized' })
+  })
+}
+
 export async function mockAuthenticatedSession(
   page: Page,
   { token = 'test-auth-token', user = defaultUser }: BootstrapOptions = {},
 ): Promise<{ token: string; user: SessionUser }> {
-  await page.addInitScript(
-    ({ storedToken }) => {
-      window.localStorage.setItem('vsr_auth_token', storedToken)
-    },
-    { storedToken: token },
-  )
-
   await page.route('**/api/auth/me', async (route) => {
     await route.fulfill({
       status: 200,

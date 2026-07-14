@@ -4,28 +4,31 @@
   import Footer from '../footer/Footer.svelte';
   import SearchPanel from '../search-panel/SearchPanel.svelte';
   import { getFooterStore, getSearchBarStore } from '../../stores';
+  import { resolveHostedDataURLs } from './hostedDataPolicy';
 
   let component: HTMLElement | null = null;
   let view = 'prompt-embedding';
   let datasetName = 'diffusiondb';
   let mapTitle = 'Knowledge Map';
   let mapDataURLs: DataURLs | null = null;
+  let invalidHostedDataSource = false;
 
   if (window.location.search !== '') {
     const searchParams = new URLSearchParams(window.location.search);
     const title = searchParams.get('title')?.trim();
-    const metadata = searchParams.get('metadataURL')?.trim();
-    const point = searchParams.get('dataURL')?.trim();
     if (title) {
       mapTitle = title;
     }
-    if (point) {
-      mapDataURLs = {
-        metadata,
-        point,
-        grid: undefined,
-        topic: undefined
-      };
+    const hostedData = resolveHostedDataURLs(
+      searchParams,
+      window.location.origin
+    );
+    if (hostedData.requested) {
+      if (hostedData.dataURLs === null) {
+        invalidHostedDataSource = true;
+      } else {
+        mapDataURLs = hostedData.dataURLs;
+      }
     }
     if (searchParams.has('dataset')) {
       datasetName = searchParams.get('dataset')!;
@@ -58,12 +61,19 @@
         class="main-app-container"
         class:hidden="{view !== 'prompt-embedding'}"
       >
-        <Embedding
-          datasetName="{datasetName}"
-          dataURLs="{mapDataURLs}"
-          footerStore="{footerStore}"
-          searchBarStore="{searchBarStore}"
-        />
+        {#if invalidHostedDataSource}
+          <div class="data-source-error" role="alert">
+            Knowledge map data URLs must be complete, same-origin HTTP(S)
+            URLs.
+          </div>
+        {:else}
+          <Embedding
+            datasetName="{datasetName}"
+            dataURLs="{mapDataURLs}"
+            footerStore="{footerStore}"
+            searchBarStore="{searchBarStore}"
+          />
+        {/if}
       </div>
     </div>
   </div>

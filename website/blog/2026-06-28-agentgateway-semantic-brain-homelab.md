@@ -151,14 +151,7 @@ routing:
         - model: gpt-4o
         - model: gemini-flash
       algorithm:
-        type: multi_factor
-        multi_factor:
-          weights:
-            quality: 0.1
-            latency: 0.4
-            cost: 0.5
-          slo:
-            max_cost_per_1m: 0.5
+        type: router_dc
 ```
 
 The key insight: each model is described in natural language, and Semantic Router uses those descriptions as semantic anchors. When a new prompt arrives, the router embeds it and compares it against these descriptions using cosine similarity. The closest match wins.
@@ -183,7 +176,7 @@ policies:
         requestBodyMode: buffered
         responseBodyMode: none
         requestHeaderMode: send
-      failureMode: failOpen
+      failureMode: failClosed
 
 binds:
 - port: 3000
@@ -241,7 +234,12 @@ binds:
 
 Notice the separation of concerns: **Semantic Router never touches API keys**. It classifies the prompt and mutates a header. AgentGateway owns downstream auth. That is exactly how production gateways are designed — routing intelligence decoupled from security posture.
 
-The `failureMode: failOpen` setting means if the SR container crashes or restarts, AgentGateway falls through to the default Gemini route. During SR container restarts, client requests still get answered without interruption.
+The `failureMode: failClosed` setting is a routing-integrity boundary. If the
+Semantic Router container is unavailable, AgentGateway returns an error instead
+of continuing with a client-supplied `x-selected-model` header or silently
+falling through to Gemini. Restore the processor before retrying traffic; use
+health checks and multiple router replicas when the deployment needs higher
+availability.
 
 ## ARM64 on Apple Silicon: Two Bugs, Two PRs
 
@@ -332,12 +330,19 @@ On container boot, the full pipeline appears in the logs:
 ```json
 {"msg":"embedding_models_init_started","mmbert_configured":true,"use_cpu":true}
 {"msg":"embedding_models_initialized","use_batched":false}
-{"msg":"selection_factory_initialized","selector_count":14}
 {"msg":"startup_complete","embedding_ready":true,"sem_cache_enabled":true,
  "model_selection":true,"extproc_port":50051,"decisions":"MoM"}
 ```
 
-Fourteen selection algorithms are registered out of the box — multi-factor, ELO, RL-driven, hybrid, latency-aware, session-aware, KNN, SVM, K-means, and more. The reference configuration uses `multi_factor` with cost-heavy weighting, but switching algorithms is a single YAML change.
+The current public configuration surface exposes ten single-model selectors and
+five Looper orchestration algorithms. The supported single-model set includes
+`multi_factor`, `router_dc`, `latency_aware`, `hybrid`, `automix`, `knn`,
+`kmeans`, `svm`, `mlp`, and `static`; legacy internal implementations such as
+ELO and RL-driven are not valid `algorithm.type` values. The reference
+configuration uses `router_dc` so the model-card descriptions participate in
+selection. Choose another
+algorithm only from the versioned routing-surface catalog validated by the
+configuration loader.
 
 ## Measured Results
 
@@ -347,7 +352,7 @@ Fourteen selection algorithms are registered out of the box — multi-factor, EL
 | Routing latency | ~45ms (HTTP proxy) | 1–3ms (gRPC ExtProc) |
 | Monthly estimated API cost | ~$24 | ~$14 |
 | Maintenance effort | Weekly keyword updates | Zero (model descriptions are stable) |
-| Failover behavior | Manual restart | Automatic `failOpen` to Gemini |
+| Routing outage behavior | Manual restart | Fail closed; restore Semantic Router |
 | Language support | English keywords only | Multi-language (embedding-based) |
 | Config | 100 lines of Python | 2 YAML files |
 
@@ -357,7 +362,7 @@ The cost savings come from fewer misroutes. When "explain the async/await patter
 
 Whether the deployment runs on a single host or a production fleet in Kubernetes, agents benefit from a routing layer that understands prompts:
 
-1. **Cost control is the primary agent problem.** Agents generate a lot of requests. Without intelligent routing, every request goes to the most expensive model. Semantic Router's `multi_factor` algorithm explicitly weighs cost, latency, and quality.
+1. **Cost control is a primary agent problem.** Agents generate a lot of requests. In this example, `router_dc` keeps specialist coding work on the local model when its description is the closest semantic fit. It is not a price optimizer: use `multi_factor` only when the model catalog supplies real pricing and quality data and the runtime has useful latency observations.
 
 2. **Keyword routing does not scale.** The moment an agent handles a domain that was not anticipated, keyword-based routing silently fails.
 
@@ -378,7 +383,8 @@ AgentGateway plus vLLM Semantic Router turns a keyword-based proxy into an ML-po
 
 - [Install with agentgateway](/docs/installation/k8s/agentgateway) — Kubernetes integration guide
 - [Gateway API Inference Extension with agentgateway](/docs/installation/k8s/gateway-api-inference-extension) — route to InferencePools with header-based selection
-- [Multi-factor selection algorithm](/docs/tutorials/algorithm/selection/multi-factor) — cost, latency, and quality weighting
+- [RouterDC selection algorithm](/docs/tutorials/algorithm/selection/router-dc) — semantic query-to-model matching
+- [Multi-factor selection algorithm](/docs/tutorials/algorithm/selection/multi-factor) — cost, latency, and quality weighting when those inputs are populated
 - [Community write-up on DEV](https://dev.to/anup_sharma_86fa94612fe3c/giving-agentgateway-a-semantic-brain-with-vllm-semantic-router-inside-my-homelab-542f) — extended narrative by Anup Sharma
 
 ---

@@ -41,25 +41,12 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		return newContinueRequestBodyResponse(), nil
 	}
 
-	requestBody, earlyResponse := r.translateResponseAPIRequest(ctx.OriginalRequestBody, ctx)
-	if earlyResponse != nil {
-		return earlyResponse, nil
-	}
-	if validationResp := r.validateRequestBody(requestBody, ctx); validationResp != nil {
-		return validationResp, nil
-	}
-
-	fast, err := r.extractFastRequestState(requestBody, ctx)
-	if validationResp := r.validationResponseFromRequestError(err); validationResp != nil {
-		return validationResp, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	originalModel := strings.TrimSpace(fast.Model)
-	if ctx.RequestModel == "" {
-		ctx.RequestModel = originalModel
+	requestBody, fast, originalModel, earlyResponse, err := r.prepareFastRoutingState(
+		ctx.OriginalRequestBody,
+		ctx,
+	)
+	if earlyResponse != nil || err != nil {
+		return earlyResponse, err
 	}
 	if r.isLooperRequest(ctx) {
 		logging.ComponentDebugEvent("extproc", "looper_internal_request_detected", map[string]interface{}{
@@ -69,23 +56,18 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		return r.handleLooperInternalRequestWithPlugins(originalModel, ctx)
 	}
 
-	ctx.UserContent = fast.UserContent
-	ctx.RequestImageURL = fast.FirstImageURL
-
 	decisionState, earlyResponse := r.runRequestPreRoutingStages(originalModel, fast, ctx)
 	if earlyResponse != nil {
 		return earlyResponse, nil
 	}
 
-	openAIRequest, earlyResponse, err := r.prepareRequestForModelRouting(requestBody, fast.UserContent, ctx)
-	if earlyResponse != nil {
-		return earlyResponse, nil
-	}
-	if validationResp := r.validationResponseFromRequestError(err); validationResp != nil {
-		return validationResp, nil
-	}
-	if err != nil {
-		return nil, err
+	openAIRequest, earlyResponse, err := r.prepareOpenAIRequestForModelRouting(
+		requestBody,
+		fast.UserContent,
+		ctx,
+	)
+	if earlyResponse != nil || err != nil {
+		return earlyResponse, err
 	}
 
 	return r.handleModelRouting(
@@ -96,6 +78,52 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		decisionState.selectedModel,
 		ctx,
 	)
+}
+
+func (r *OpenAIRouter) prepareFastRoutingState(
+	originalRequestBody []byte,
+	ctx *RequestContext,
+) ([]byte, *FastExtractResult, string, *ext_proc.ProcessingResponse, error) {
+	requestBody, earlyResponse := r.translateResponseAPIRequest(originalRequestBody, ctx)
+	if earlyResponse != nil {
+		return nil, nil, "", earlyResponse, nil
+	}
+	if validationResponse := r.validateRequestBody(requestBody, ctx); validationResponse != nil {
+		return nil, nil, "", validationResponse, nil
+	}
+
+	fast, err := r.extractFastRequestState(requestBody, ctx)
+	if validationResponse := r.validationResponseFromRequestError(err); validationResponse != nil {
+		return nil, nil, "", validationResponse, nil
+	}
+	if err != nil {
+		return nil, nil, "", nil, err
+	}
+
+	originalModel := strings.TrimSpace(fast.Model)
+	if ctx.RequestModel == "" {
+		ctx.RequestModel = originalModel
+	}
+	ctx.UserContent = fast.UserContent
+	if imageResponse := r.validateFastRequestImages(fast, ctx); imageResponse != nil {
+		return nil, nil, "", imageResponse, nil
+	}
+	return requestBody, fast, originalModel, nil, nil
+}
+
+func (r *OpenAIRouter) prepareOpenAIRequestForModelRouting(
+	requestBody []byte,
+	userContent string,
+	ctx *RequestContext,
+) (*openai.ChatCompletionNewParams, *ext_proc.ProcessingResponse, error) {
+	openAIRequest, earlyResponse, err := r.prepareRequestForModelRouting(requestBody, userContent, ctx)
+	if earlyResponse != nil {
+		return nil, earlyResponse, nil
+	}
+	if validationResponse := r.validationResponseFromRequestError(err); validationResponse != nil {
+		return nil, validationResponse, nil
+	}
+	return openAIRequest, nil, err
 }
 
 // handleModelRouting handles model selection and routing logic
@@ -242,11 +270,6 @@ func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompleti
 	// Log routing decision
 	r.logRoutingDecision(ctx, "auto_routing", originalModel, matchedModel, decisionName, reasoningDecision.UseReasoning)
 
-	// Handle route cache clearing
-	if r.shouldClearRouteCache() {
-		r.setClearRouteCache(response)
-	}
-
 	// Save the actual model for token tracking
 	ctx.RequestModel = matchedModel
 
@@ -300,11 +323,6 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 
 	// Create response with headers (and body mutation if model name changed)
 	response := r.createSpecifiedModelResponse(originalModel, upstreamModel, backendAddress, backendName, ctx)
-
-	// Handle route cache clearing
-	if r.shouldClearRouteCache() {
-		r.setClearRouteCache(response)
-	}
 
 	// Log routing decision
 	r.logRoutingDecision(ctx, "model_specified", originalModel, originalModel, decisionName, false)

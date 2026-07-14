@@ -71,6 +71,12 @@ func newCoreSignalMappingGateConfig(t *testing.T) *config.RouterConfig {
 	missingRoot := filepath.Join(t.TempDir(), "missing-model-assets")
 	return &config.RouterConfig{
 		InlineModels: config.InlineModels{
+			EmbeddingModels: config.EmbeddingModels{
+				Qwen3ModelPath: "models/test-qwen3",
+				EmbeddingConfig: config.HNSWConfig{
+					ModelType: config.EmbeddingModelTypeQwen3,
+				},
+			},
 			Classifier: config.Classifier{
 				CategoryModel: config.CategoryModel{
 					ModelID:             "models/mmbert32k-intent-classifier-merged",

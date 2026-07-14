@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -19,16 +18,22 @@ import (
 
 // DB handles SQLite database operations for evaluations.
 type DB struct {
-	db *sql.DB
-	mu sync.RWMutex
+	db     *sql.DB
+	dbPath string
+	mu     sync.RWMutex
 }
 
 // NewDB creates a new database connection and initializes the schema.
 func NewDB(dbPath string) (*DB, error) {
-	// Ensure directory exists
 	dir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := ensurePrivateEvaluationDir(dir); err != nil {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
+	}
+	if err := rejectEvaluationSidecarLinks(dbPath); err != nil {
+		return nil, fmt.Errorf("unsafe database sidecar: %w", err)
+	}
+	if err := preparePrivateEvaluationFile(dbPath); err != nil {
+		return nil, fmt.Errorf("failed to prepare database file: %w", err)
 	}
 
 	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
@@ -38,15 +43,21 @@ func NewDB(dbPath string) (*DB, error) {
 
 	// Test connection
 	if err := db.Ping(); err != nil {
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	evalDB := &DB{db: db}
+	evalDB := &DB{db: db, dbPath: dbPath}
 	if err := evalDB.initSchema(); err != nil {
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
+	if err := protectEvaluationDBFiles(dbPath); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to protect database files: %w", err)
+	}
 
-	log.Printf("Evaluation database initialized at: %s", dbPath)
+	log.Printf("Evaluation database initialized")
 	return evalDB, nil
 }
 
@@ -105,7 +116,12 @@ func (d *DB) initSchema() error {
 
 // Close closes the database connection.
 func (d *DB) Close() error {
-	return d.db.Close()
+	err := d.db.Close()
+	protectErr := protectEvaluationDBFiles(d.dbPath)
+	if err != nil {
+		return err
+	}
+	return protectErr
 }
 
 // RecoverRunningTasks marks all tasks with status "running" as "failed" with the given message.

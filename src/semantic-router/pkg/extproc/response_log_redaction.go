@@ -1,102 +1,100 @@
 package extproc
 
 import (
-	"strings"
-
-	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	"google.golang.org/protobuf/proto"
 )
 
-const redactedHeaderValue = "[REDACTED]"
-
-// sensitiveHeaderKeys lists header names whose values are credentials and must
-// never be written to logs. The credential resolver injects the upstream
-// provider key under one of these (Authorization for OpenAI, x-api-key for
-// Anthropic, custom names via provider profiles), so a verbatim dump of the
-// ext_proc header mutation would otherwise leak it (CWE-532).
-var sensitiveHeaderKeys = map[string]bool{
-	"authorization":       true,
-	"proxy-authorization": true,
-	"x-api-key":           true,
-	"api-key":             true,
-	"x-goog-api-key":      true,
-}
-
-// isSensitiveHeaderKey reports whether a header's value should be redacted from
-// logs. It matches the explicit credential headers above and, defensively, any
-// header whose name carries a credential by convention (a "*-key" suffix or a
-// name containing "api-key", "token", or "secret") so custom provider auth
-// headers are covered without enumerating every one.
-func isSensitiveHeaderKey(key string) bool {
-	k := strings.ToLower(strings.TrimSpace(key))
-	if sensitiveHeaderKeys[k] {
-		return true
+// processingResponseLogFields deliberately exposes only transport metadata.
+// ProcessingResponse can contain request/response bodies and credential-bearing
+// header mutations, so it must never be formatted or marshaled for logs.
+func processingResponseLogFields(
+	stage string,
+	response *ext_proc.ProcessingResponse,
+) map[string]interface{} {
+	fields := map[string]interface{}{
+		"stage":         stage,
+		"response_type": "none",
 	}
-	return strings.HasSuffix(k, "-key") ||
-		strings.Contains(k, "api-key") ||
-		strings.Contains(k, "token") ||
-		strings.Contains(k, "secret")
-}
-
-// redactResponseForLog returns a deep copy of response with the
-// values of sensitive headers masked, so a debug-level dump of the ext_proc
-// mutation never writes the upstream provider credential to the log. The
-// original response (the one actually sent to Envoy) is left untouched.
-func redactResponseForLog(response *ext_proc.ProcessingResponse) *ext_proc.ProcessingResponse {
 	if response == nil {
-		return nil
+		return fields
 	}
-	clone, ok := proto.Clone(response).(*ext_proc.ProcessingResponse)
-	if !ok || clone == nil {
-		// Cloning failed: never fall back to the unredacted original.
-		return nil
-	}
-	redactHeaderMutation(responseHeaderMutation(clone))
-	if imm := clone.GetImmediateResponse(); imm != nil {
-		redactHeaderMutation(imm.GetHeaders())
-	}
-	return clone
-}
 
-// responseHeaderMutation returns the HeaderMutation carried by whichever
-// request/response phase variant the ProcessingResponse holds, or nil.
-func responseHeaderMutation(r *ext_proc.ProcessingResponse) *ext_proc.HeaderMutation {
-	switch v := r.Response.(type) {
+	var common *ext_proc.CommonResponse
+	switch typed := response.Response.(type) {
 	case *ext_proc.ProcessingResponse_RequestHeaders:
-		return v.RequestHeaders.GetResponse().GetHeaderMutation()
-	case *ext_proc.ProcessingResponse_ResponseHeaders:
-		return v.ResponseHeaders.GetResponse().GetHeaderMutation()
+		fields["response_type"] = "request_headers"
+		common = typed.RequestHeaders.GetResponse()
 	case *ext_proc.ProcessingResponse_RequestBody:
-		return v.RequestBody.GetResponse().GetHeaderMutation()
+		fields["response_type"] = "request_body"
+		common = typed.RequestBody.GetResponse()
+	case *ext_proc.ProcessingResponse_ResponseHeaders:
+		fields["response_type"] = "response_headers"
+		common = typed.ResponseHeaders.GetResponse()
 	case *ext_proc.ProcessingResponse_ResponseBody:
-		return v.ResponseBody.GetResponse().GetHeaderMutation()
+		fields["response_type"] = "response_body"
+		common = typed.ResponseBody.GetResponse()
+	case *ext_proc.ProcessingResponse_ImmediateResponse:
+		fields["response_type"] = "immediate_response"
+		appendImmediateResponseLogFields(fields, typed.ImmediateResponse)
+		return fields
 	}
-	return nil
+
+	appendCommonResponseLogFields(fields, common)
+	return fields
 }
 
-// redactHeaderMutation masks the value of every sensitive set-header in place.
-// It operates on a clone, so the mutation sent to Envoy is unaffected.
-func redactHeaderMutation(hm *ext_proc.HeaderMutation) {
-	if hm == nil {
+func appendCommonResponseLogFields(fields map[string]interface{}, common *ext_proc.CommonResponse) {
+	if common == nil {
 		return
 	}
-	for _, opt := range hm.SetHeaders {
-		redactHeaderValueOption(opt)
+	fields["status"] = common.GetStatus().String()
+	fields["clear_route_cache"] = common.GetClearRouteCache()
+	appendHeaderMutationLogFields(fields, common.GetHeaderMutation())
+	if trailers := common.GetTrailers(); trailers != nil {
+		fields["trailer_count"] = len(trailers.GetHeaders())
 	}
+	appendBodyMutationLogFields(fields, common.GetBodyMutation())
 }
 
-func redactHeaderValueOption(opt *core.HeaderValueOption) {
-	if opt == nil || opt.Header == nil {
+func appendImmediateResponseLogFields(
+	fields map[string]interface{},
+	immediate *ext_proc.ImmediateResponse,
+) {
+	if immediate == nil {
 		return
 	}
-	if !isSensitiveHeaderKey(opt.Header.Key) {
+	fields["body_bytes"] = len(immediate.GetBody())
+	if status := immediate.GetStatus(); status != nil {
+		fields["http_status"] = status.GetCode().String()
+	}
+	if grpcStatus := immediate.GetGrpcStatus(); grpcStatus != nil {
+		fields["grpc_status"] = grpcStatus.GetStatus()
+	}
+	appendHeaderMutationLogFields(fields, immediate.GetHeaders())
+}
+
+func appendHeaderMutationLogFields(fields map[string]interface{}, mutation *ext_proc.HeaderMutation) {
+	if mutation == nil {
 		return
 	}
-	if opt.Header.Value != "" {
-		opt.Header.Value = redactedHeaderValue
+	fields["set_header_count"] = len(mutation.GetSetHeaders())
+	fields["remove_header_count"] = len(mutation.GetRemoveHeaders())
+}
+
+func appendBodyMutationLogFields(fields map[string]interface{}, mutation *ext_proc.BodyMutation) {
+	if mutation == nil {
+		return
 	}
-	if len(opt.Header.RawValue) > 0 {
-		opt.Header.RawValue = []byte(redactedHeaderValue)
+	switch typed := mutation.Mutation.(type) {
+	case *ext_proc.BodyMutation_Body:
+		fields["body_mutation"] = "replace"
+		fields["body_bytes"] = len(typed.Body)
+	case *ext_proc.BodyMutation_ClearBody:
+		fields["body_mutation"] = "clear"
+		fields["body_bytes"] = 0
+	case *ext_proc.BodyMutation_StreamedResponse:
+		fields["body_mutation"] = "streamed_response"
+		fields["body_bytes"] = len(typed.StreamedResponse.GetBody())
+		fields["end_of_stream"] = typed.StreamedResponse.GetEndOfStream()
 	}
 }

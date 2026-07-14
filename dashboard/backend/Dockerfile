@@ -1,9 +1,12 @@
 ARG IMAGE_REGISTRY=docker.io/
 # Stage 0: Build DSL compiler WASM assets
 FROM ${IMAGE_REGISTRY}library/golang:1.25-alpine AS wasm-builder
+ARG GOPROXY=https://proxy.golang.org,direct
+ARG GOSUMDB=sum.golang.org
 WORKDIR /app/src/semantic-router
 
-ENV GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY="${GOPROXY}" \
+    GOSUMDB="${GOSUMDB}"
 
 COPY src/semantic-router/go.mod src/semantic-router/go.sum ./
 COPY src/semantic-router/ ./
@@ -28,7 +31,7 @@ RUN CGO_ENABLED=0 GOOS=js GOARCH=wasm go build \
     fi
 
 # Stage 1: Build frontend with Node.js
-FROM ${IMAGE_REGISTRY}library/node:20-alpine AS frontend-builder
+FROM ${IMAGE_REGISTRY}library/node:24-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json dashboard/frontend/tsconfig.json dashboard/frontend/tsconfig.node.json dashboard/frontend/vite.config.ts ./
 COPY dashboard/frontend/src ./src
@@ -40,7 +43,7 @@ RUN npm config set registry https://registry.npmjs.org/ && \
     npm ci --include=dev  # Use npm ci for deterministic, lockfile-based installs in CI
 RUN npm run build
 
-FROM ${IMAGE_REGISTRY}library/node:20-alpine AS wizmap-builder
+FROM ${IMAGE_REGISTRY}library/node:24-alpine AS wizmap-builder
 WORKDIR /app/wizmap
 COPY dashboard/wizmap/package.json dashboard/wizmap/package-lock.json ./
 RUN npm config set registry https://registry.npmjs.org/ && \
@@ -50,10 +53,13 @@ RUN npm run build -- --outDir /app/wizmap-dist
 
 # Stage 2: Build backend with Go
 FROM ${IMAGE_REGISTRY}library/golang:1.25-bookworm AS backend-builder
+ARG GOPROXY=https://proxy.golang.org,direct
+ARG GOSUMDB=sum.golang.org
 WORKDIR /app
 
-# Use Go proxy for reliable downloads
-ENV GOPROXY=https://proxy.golang.org,direct
+# Use caller-selected Go module services for restricted network environments.
+ENV GOPROXY="${GOPROXY}" \
+    GOSUMDB="${GOSUMDB}"
 
 # Accept build arguments for target architecture
 ARG TARGETARCH
@@ -86,6 +92,7 @@ COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modeli
 COPY src/semantic-router/pkg/nlgen/ /app/src/semantic-router/pkg/nlgen/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
 COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startupstatus/
+COPY src/semantic-router/pkg/utils/jsonunicode/ /app/src/semantic-router/pkg/utils/jsonunicode/
 
 # Copy go.mod and go.sum first for better caching
 COPY dashboard/backend/go.mod dashboard/backend/go.sum /app/dashboard/backend/

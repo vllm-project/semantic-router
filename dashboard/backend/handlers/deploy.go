@@ -62,8 +62,8 @@ func DeployPreviewHandler(configPath string) http.HandlerFunc {
 		}
 
 		var req DeployRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		if status, err := decodeBoundedJSON(w, r, deployJSONRequestBodyLimit, &req); err != nil {
+			http.Error(w, "Invalid request body", status)
 			return
 		}
 
@@ -133,8 +133,8 @@ func DeployHandler(configPath string, readonlyMode bool, configDir string) http.
 		}
 
 		var req DeployRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		if status, err := decodeBoundedJSON(w, r, deployJSONRequestBodyLimit, &req); err != nil {
+			http.Error(w, "Invalid request body", status)
 			return
 		}
 
@@ -172,12 +172,16 @@ func RollbackHandler(configPath string, readonlyMode bool, configDir string) htt
 		var rollbackReq struct {
 			Version string `json:"version"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&rollbackReq); err != nil {
-			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		if status, err := decodeBoundedJSON(w, r, smallJSONRequestBodyLimit, &rollbackReq); err != nil {
+			http.Error(w, "Invalid request body", status)
 			return
 		}
 		if rollbackReq.Version == "" {
 			http.Error(w, "version is required", http.StatusBadRequest)
+			return
+		}
+		if !validConfigBackupVersion(rollbackReq.Version) {
+			http.Error(w, "invalid backup version", http.StatusBadRequest)
 			return
 		}
 
@@ -224,10 +228,12 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 		return
 	}
 
-	existingData, err := os.ReadFile(configPath)
+	previous, err := captureConfigFileSnapshot(configPath)
 	if err != nil {
-		existingData = nil
+		http.Error(w, fmt.Sprintf("Failed to read current config: %v", err), http.StatusInternalServerError)
+		return
 	}
+	existingData := previous.data
 
 	// Step 2: Deep merge the routing fragment into the deploy base.
 	yamlBytes, err := mergeDeployPayload(existingData, req)
@@ -266,7 +272,7 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 	log.Printf("[Deploy] Config written to %s: version=%s, size=%d bytes", configPath, version, len(yamlBytes))
 
 	// Step 6: Propagate the new config to the managed runtime before returning.
-	if err := applyWrittenConfig(configPath, configDir, existingData, true); err != nil {
+	if err := applyWrittenConfig(configPath, configDir, previous, true); err != nil {
 		http.Error(w, formatRuntimeApplyError("Failed to apply deployed config to runtime", err), http.StatusInternalServerError)
 		return
 	}
@@ -461,7 +467,11 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 	}
 
 	// Back up current config before rollback
-	existingData := snapshotCurrentConfigBeforeRollback(configPath, configDir)
+	previous, err := snapshotCurrentConfigBeforeRollback(configPath, configDir)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to snapshot current config: %v", err), http.StatusInternalServerError)
+		return
+	}
 
 	// Atomic write to config.yaml
 	if err := writeConfigAtomically(configPath, backupData); err != nil {
@@ -471,7 +481,7 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 
 	log.Printf("[Rollback] Config rolled back to version %s, written to %s", version, configPath)
 
-	if err := applyWrittenConfig(configPath, configDir, existingData, true); err != nil {
+	if err := applyWrittenConfig(configPath, configDir, previous, true); err != nil {
 		http.Error(w, formatRuntimeApplyError("Failed to apply rolled back config to runtime", err), http.StatusInternalServerError)
 		return
 	}

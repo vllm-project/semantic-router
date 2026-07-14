@@ -25,7 +25,8 @@ jobs:
       ${{ !github.event.pull_request.draft
           && needs.changes.outputs.dashboard == 'true' }}
     runs-on: ubuntu-latest
-    name: Dashboard Lint and Type Check
+    timeout-minutes: 30
+    name: Dashboard Build and Test
 
     steps:
       - name: Check out the repo
@@ -34,12 +35,17 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: "23"
+          node-version: "24"
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: "1.25"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Cache Node.js dependencies
         uses: actions/cache@v4
@@ -67,8 +73,25 @@ jobs:
           install-mode: binary
           args: --help
 
+      - name: Install dashboard runtime test dependencies
+        run: python -m pip install -e ./src/vllm-sr
+
       - name: Run dashboard checks
         run: make dashboard-check
+
+      - name: Audit deployed frontend dependencies
+        working-directory: dashboard/frontend
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Run dashboard backend race tests
+        run: make dashboard-test-backend-race
+
+      - name: Install Playwright Chromium
+        working-directory: dashboard/frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run focused dashboard authentication browser tests
+        run: make dashboard-test-auth-e2e
 
       - name: Build dashboard
         run: make dashboard-build
@@ -80,6 +103,8 @@ jobs:
           echo ""
           echo "To run checks locally:"
           echo "  make dashboard-check"
+          echo "  make dashboard-test-backend-race"
+          echo "  make dashboard-test-auth-e2e"
           echo ""
           echo "To auto-fix lint issues:"
           echo "  make dashboard-lint-fix"

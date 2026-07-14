@@ -27,7 +27,14 @@ func syncRuntimeConfigForCurrentRuntime(configPath string) (string, error) {
 		return syncRuntimeConfigLocally(configPath)
 	}
 
-	if getDockerContainerStatus(managedRuntimeSyncContainerName()) == "running" {
+	running, err := managedContainerRunningOrAbsent(
+		getDockerContainerStatus(managedRuntimeSyncContainerName()),
+		"dashboard",
+	)
+	if err != nil {
+		return "", err
+	}
+	if running {
 		return syncRuntimeConfigInManagedContainer()
 	}
 
@@ -97,14 +104,14 @@ func runRuntimeSyncPython(timeout time.Duration, cliRoot string, configPath stri
 	}
 
 	// #nosec G204 -- pythonBinary is resolved through LookPath and constrained to python interpreters; the script is repository-owned.
-	cmd := exec.CommandContext(
+	output, err := runBoundedCommandInDirectory(
 		ctx,
+		workDir,
 		pythonBinary,
+		1024*1024,
 		"-c",
 		buildRuntimeSyncPythonScript(cliRoot, configPath),
 	)
-	cmd.Dir = workDir
-	output, err := cmd.CombinedOutput()
 	return string(output), err
 }
 

@@ -67,6 +67,8 @@ func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mu
 
 	mu.Lock()
 	defer mu.Unlock()
+	results.recordImageEvaluationError(imageErr)
+	results.recordTextEvaluationError(textErr)
 
 	// Track the best confidence across both modalities for the metric.
 	// Per-rule extraction-latency observations use modality-specific elapsed

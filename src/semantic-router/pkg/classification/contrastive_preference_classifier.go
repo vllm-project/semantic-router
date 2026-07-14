@@ -16,6 +16,7 @@ var ErrPreferenceBelowThreshold = errors.New("preference below threshold")
 // the route whose support set is most similar to the incoming query.
 type ContrastivePreferenceClassifier struct {
 	modelType string
+	backend   string
 
 	rules []config.PreferenceRule
 
@@ -55,6 +56,10 @@ func NewContrastivePreferenceClassifier(rules []config.PreferenceRule, modelType
 }
 
 func NewContrastivePreferenceClassifierWithProvider(rules []config.PreferenceRule, modelType string, provider embedding.Provider) (*ContrastivePreferenceClassifier, error) {
+	return newContrastivePreferenceClassifierWithBackend(rules, modelType, "", provider)
+}
+
+func newContrastivePreferenceClassifierWithBackend(rules []config.PreferenceRule, modelType string, backend string, provider embedding.Provider) (*ContrastivePreferenceClassifier, error) {
 	if len(rules) == 0 {
 		return nil, fmt.Errorf("contrastive preference rules cannot be empty")
 	}
@@ -70,6 +75,7 @@ func NewContrastivePreferenceClassifierWithProvider(rules []config.PreferenceRul
 
 	c := &ContrastivePreferenceClassifier{
 		modelType:      modelType,
+		backend:        normalizeTextEmbeddingBackend(backend),
 		rules:          rules,
 		ruleEmbeddings: make(map[string][][]float32),
 		ruleBanks:      make(map[string]*prototypeBank),
@@ -95,7 +101,23 @@ func NewContrastivePreferenceClassifierWithConfig(
 	if len(providers) > 0 {
 		provider = providers[0]
 	}
-	classifier, err := NewContrastivePreferenceClassifierWithProvider(rules, modelType, provider)
+	classifier, err := newContrastivePreferenceClassifierWithBackend(rules, modelType, "", provider)
+	if err != nil {
+		return nil, err
+	}
+	classifier.prototypeCfg = prototypeCfg.WithDefaults()
+	classifier.rebuildRuleBanks()
+	return classifier, nil
+}
+
+func newContrastivePreferenceClassifierWithBackendAndConfig(
+	rules []config.PreferenceRule,
+	modelType string,
+	prototypeCfg config.PrototypeScoringConfig,
+	backend string,
+	provider embedding.Provider,
+) (*ContrastivePreferenceClassifier, error) {
+	classifier, err := newContrastivePreferenceClassifierWithBackend(rules, modelType, backend, provider)
 	if err != nil {
 		return nil, err
 	}

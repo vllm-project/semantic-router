@@ -387,7 +387,7 @@
     "message": "Mixture-of-Models"
   },
   "homepage.hero.description": {
-    "message": "将信号与偏好转化为跨异构 LLM 的可执行模型路径。"
+    "message": "面向异构 LLM 推理的系统级智能"
   },
   "homepage.hero.primaryCta": {
     "message": "体验 Playground"

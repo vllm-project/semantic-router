@@ -112,9 +112,9 @@ def test_embedding_models_config_accepts_remote_endpoint() -> None:
             "target_dimension": 1024,
         },
         endpoint={
-            "base_url": "http://embedding-service:8000/v1",
+            "base_url": "https://embedding-service:8000/v1",
             "model": "BAAI/bge-m3",
-            "api_key_env": "EMBEDDING_API_KEY",
+            "api_key_env": "VLLM_SR_EMBEDDING_API_KEY",
             "timeout_seconds": 5,
             "max_retries": 2,
             "dimensions": 1024,
@@ -124,8 +124,8 @@ def test_embedding_models_config_accepts_remote_endpoint() -> None:
     dumped = config.model_dump(exclude_none=True)
     assert dumped["embedding_config"]["backend"] == "openai_compatible"
     assert dumped["embedding_config"]["model_type"] == "remote"
-    assert dumped["endpoint"]["base_url"] == "http://embedding-service:8000/v1"
-    assert dumped["endpoint"]["api_key_env"] == "EMBEDDING_API_KEY"
+    assert dumped["endpoint"]["base_url"] == "https://embedding-service:8000/v1"
+    assert dumped["endpoint"]["api_key_env"] == "VLLM_SR_EMBEDDING_API_KEY"
 
 
 def test_parse_user_config_accepts_decision_learning_controls(

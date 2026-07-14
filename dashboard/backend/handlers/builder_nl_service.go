@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -22,6 +23,7 @@ const (
 	builderNLProviderAnthropic        builderNLProviderKind = "anthropic"
 
 	builderNLFallbackModelAlias = "vllm-sr/auto"
+	builderNLMaxCurrentDSLBytes = 512 << 10
 )
 
 type BuilderNLGenerateRequest struct {
@@ -167,15 +169,24 @@ func generateBuilderNLDraftWithProgress(
 	if len(prompt) > 12000 {
 		return BuilderNLGenerateResponse{}, fmt.Errorf("routing request is too large")
 	}
+	if len([]byte(req.CurrentDSL)) > builderNLMaxCurrentDSLBytes {
+		return BuilderNLGenerateResponse{}, fmt.Errorf("current DSL context is too large")
+	}
+	connectionMode, err := builderNLConnectionModeOrDefault(req.ConnectionMode)
+	if err != nil {
+		return BuilderNLGenerateResponse{}, err
+	}
+	if connectionMode == builderNLConnectionModeCustom {
+		if req.CustomConnection == nil {
+			return BuilderNLGenerateResponse{}, errors.New("custom connection details are missing")
+		}
+		normalized, normalizeErr := normalizeBuilderNLConnection(*req.CustomConnection)
+		if normalizeErr != nil {
+			return BuilderNLGenerateResponse{}, normalizeErr
+		}
+		req.CustomConnection = &normalized
+	}
 	reportBuilderNLProgress(reporter, "request", builderNLProgressInfo, "Accepted Builder NL request and prepared staged draft generation.", 0)
-
-	connectionMode := req.ConnectionMode
-	if connectionMode == "" {
-		connectionMode = builderNLConnectionModeDefault
-	}
-	if connectionMode != builderNLConnectionModeDefault && connectionMode != builderNLConnectionModeCustom {
-		return BuilderNLGenerateResponse{}, fmt.Errorf("unsupported connectionMode %q", connectionMode)
-	}
 	reportBuilderNLProgress(reporter, "context", builderNLProgressInfo, fmt.Sprintf("Using %s generation connection.", connectionMode), 0)
 
 	generationContext, err := prepareBuilderNLGenerationContext(
@@ -221,8 +232,11 @@ func generateBuilderNLDraftWithProgress(
 }
 
 func normalizeBuilderNLBaseURL(raw string, providerKind builderNLProviderKind) (*url.URL, error) {
+	if containsUnicodeControl(raw) {
+		return nil, fmt.Errorf("invalid custom connection baseUrl")
+	}
 	trimmed := strings.TrimSpace(strings.TrimRight(raw, "/"))
-	if trimmed == "" {
+	if trimmed == "" || len([]byte(trimmed)) > outboundMaxURLBytes {
 		return nil, fmt.Errorf("custom connection baseUrl is required")
 	}
 	if !strings.Contains(trimmed, "://") {
@@ -230,13 +244,17 @@ func normalizeBuilderNLBaseURL(raw string, providerKind builderNLProviderKind) (
 	}
 	parsed, err := url.Parse(trimmed)
 	if err != nil {
-		return nil, fmt.Errorf("invalid custom connection baseUrl: %w", err)
+		return nil, fmt.Errorf("invalid custom connection baseUrl")
 	}
+	parsed.Scheme = strings.ToLower(parsed.Scheme)
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return nil, fmt.Errorf("custom connection baseUrl must use http or https")
 	}
-	if parsed.Host == "" {
+	if parsed.Opaque != "" || parsed.Host == "" || parsed.Hostname() == "" || parsed.User != nil || parsed.Fragment != "" || parsed.RawQuery != "" {
 		return nil, fmt.Errorf("custom connection baseUrl must include a host")
+	}
+	if _, err := url.ParseRequestURI(parsed.String()); err != nil {
+		return nil, fmt.Errorf("invalid custom connection baseUrl")
 	}
 	return parsed, nil
 }
@@ -333,7 +351,7 @@ func builderNLConnectionEndpoint(envoyURL string, req BuilderNLGenerateRequest) 
 	if req.ConnectionMode == builderNLConnectionModeCustom && req.CustomConnection != nil {
 		parsedBaseURL, err := normalizeBuilderNLBaseURL(req.CustomConnection.BaseURL, req.CustomConnection.ProviderKind)
 		if err != nil {
-			return strings.TrimSpace(req.CustomConnection.BaseURL)
+			return ""
 		}
 		switch req.CustomConnection.ProviderKind {
 		case builderNLProviderAnthropic:

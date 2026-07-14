@@ -36,22 +36,13 @@ func (b *classifierOptionBuilder) buildEmbeddingClassifierOption() (option, erro
 			return nil, err
 		}
 	}
-	// Eagerly initialize the OpenVINO embedding model so that
-	// NewEmbeddingClassifier's preload step can use it. Skip if
-	// EMBEDDING_BACKEND_OVERRIDE forces a different backend at runtime.
-	backendOverride := embeddingBackendOverride()
-	if backendOverride == "" {
-		backendOverride = strings.ToLower(strings.TrimSpace(optConfig.Backend))
+	plan, err := b.initTextEmbeddingBackendIfNeeded("embedding rules", optConfig.ModelType)
+	if err != nil {
+		return nil, err
 	}
-	if backendOverride == "openvino" {
-		modelType := strings.ToLower(strings.TrimSpace(optConfig.ModelType))
-		if err := initOpenVINOModel(modelType, b.cfg.MmBertModelPath, b.cfg.Qwen3ModelPath, b.cfg.UseCPU); err != nil {
-			logging.ComponentWarnEvent("classifier", "openvino_eager_init_failed", map[string]interface{}{
-				"error": err.Error(),
-			})
-		}
-	}
-	provider, err := b.embeddingProviderForRules()
+	optConfig.ModelType = plan.ModelType
+	optConfig.Backend = plan.Backend
+	provider, err := b.embeddingProviderForRules(plan)
 	if err != nil {
 		return nil, err
 	}
@@ -65,15 +56,20 @@ func (b *classifierOptionBuilder) buildEmbeddingClassifierOption() (option, erro
 	return withKeywordEmbeddingClassifier(createEmbeddingInitializer(), keywordEmbeddingClassifier), nil
 }
 
-func (b *classifierOptionBuilder) embeddingProviderForRules() (embedding.Provider, error) {
-	if b.cfg == nil || !b.cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+func (b *classifierOptionBuilder) embeddingProviderForRules(plan embedding.RuntimePlan) (embedding.Provider, error) {
+	if b.cfg == nil {
+		return nil, nil
+	}
+	if plan.Backend != config.EmbeddingBackendOpenAICompatible {
 		return nil, nil
 	}
 	b.providerInitOnce.Do(func() {
-		b.provider, b.providerErr = embedding.NewProvider(b.cfg.EmbeddingModels, embedding.ProviderOptions{})
+		b.provider, b.providerErr = embedding.NewProvider(b.cfg.EmbeddingModels, embedding.ProviderOptions{
+			BackendOverride: plan.Backend,
+		})
 		if b.providerErr != nil {
 			logging.ComponentErrorEvent("classifier", "embedding_provider_create_failed", map[string]interface{}{
-				"backend": b.cfg.EmbeddingModels.EmbeddingBackend(),
+				"backend": plan.Backend,
 				"error":   b.providerErr.Error(),
 			})
 		}
@@ -114,11 +110,22 @@ func (b *classifierOptionBuilder) buildReaskClassifierOption() (option, error) {
 	if len(b.cfg.ReaskRules) == 0 {
 		return nil, nil
 	}
-	provider, err := b.embeddingProviderForRules()
+	modelType := b.defaultEmbeddingModelType()
+	plan, err := b.initTextEmbeddingBackendIfNeeded("reask rules", modelType)
 	if err != nil {
 		return nil, err
 	}
-	reaskClassifier, err := NewReaskClassifierWithProvider(b.cfg.ReaskRules, b.defaultEmbeddingModelType(), provider)
+	modelType = plan.ModelType
+	provider, err := b.embeddingProviderForRules(plan)
+	if err != nil {
+		return nil, err
+	}
+	reaskClassifier, err := newReaskClassifierWithBackend(
+		b.cfg.ReaskRules,
+		modelType,
+		plan.Backend,
+		provider,
+	)
 	if err != nil {
 		logging.Errorf("Failed to create reask classifier: %v", err)
 		return nil, err
@@ -141,14 +148,20 @@ func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, err
 			return nil, err
 		}
 	}
-	provider, err := b.embeddingProviderForRules()
+	plan, err := b.initTextEmbeddingBackendIfNeeded("complexity rules", modelType)
 	if err != nil {
 		return nil, err
 	}
-	complexityClassifier, err := NewComplexityClassifier(
+	modelType = plan.ModelType
+	provider, err := b.embeddingProviderForRules(plan)
+	if err != nil {
+		return nil, err
+	}
+	complexityClassifier, err := newComplexityClassifierWithBackend(
 		b.cfg.ComplexityRules,
 		modelType,
 		b.cfg.ComplexityModel.WithDefaults().PrototypeScoring,
+		plan.Backend,
 		provider,
 	)
 	if err != nil {
@@ -162,6 +175,15 @@ func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, err
 }
 
 func (b *classifierOptionBuilder) buildContrastiveJailbreakClassifiersOption() (option, error) {
+	contrastiveRules := make([]config.JailbreakRule, 0, len(b.cfg.JailbreakRules))
+	for _, rule := range b.cfg.JailbreakRules {
+		if rule.Method == "contrastive" {
+			contrastiveRules = append(contrastiveRules, rule)
+		}
+	}
+	if len(contrastiveRules) == 0 {
+		return nil, nil
+	}
 	contrastiveClassifiers := make(map[string]*ContrastiveJailbreakClassifier)
 	defaultModelType := b.cfg.EmbeddingConfig.ModelType
 	if strings.EqualFold(strings.TrimSpace(defaultModelType), "multimodal") {
@@ -169,21 +191,28 @@ func (b *classifierOptionBuilder) buildContrastiveJailbreakClassifiersOption() (
 			return nil, err
 		}
 	}
+	plan, err := b.initTextEmbeddingBackendIfNeeded("contrastive jailbreak rules", defaultModelType)
+	if err != nil {
+		return nil, err
+	}
+	defaultModelType = plan.ModelType
 
 	var mu sync.Mutex
 	var group errgroup.Group
-	group.SetLimit(classifierBuildParallelism(len(b.cfg.JailbreakRules)))
+	group.SetLimit(classifierBuildParallelism(len(contrastiveRules)))
 
-	for _, rule := range b.cfg.JailbreakRules {
-		if rule.Method != "contrastive" {
-			continue
-		}
+	for _, rule := range contrastiveRules {
 		group.Go(func() error {
-			provider, err := b.embeddingProviderForRules()
+			provider, err := b.embeddingProviderForRules(plan)
 			if err != nil {
 				return err
 			}
-			cjc, err := NewContrastiveJailbreakClassifierWithProvider(rule, defaultModelType, provider)
+			cjc, err := newContrastiveJailbreakClassifierWithBackend(
+				rule,
+				defaultModelType,
+				plan.Backend,
+				provider,
+			)
 			if err != nil {
 				logging.ComponentErrorEvent("classifier", "contrastive_jailbreak_classifier_create_failed", map[string]interface{}{
 					"rule":       rule.Name,
@@ -234,6 +263,11 @@ func (b *classifierOptionBuilder) buildKBClassifiersOption() (option, error) {
 	if modelType == "" {
 		modelType = "qwen3"
 	}
+	plan, err := b.initTextEmbeddingBackendIfNeeded("knowledge bases", modelType)
+	if err != nil {
+		return nil, err
+	}
+	modelType = plan.ModelType
 	classifiers := make(map[string]*KnowledgeBaseClassifier, len(b.cfg.KnowledgeBases))
 
 	var mu sync.Mutex
@@ -242,18 +276,24 @@ func (b *classifierOptionBuilder) buildKBClassifiersOption() (option, error) {
 
 	for _, kb := range b.cfg.KnowledgeBases {
 		group.Go(func() error {
-			provider, err := b.embeddingProviderForRules()
+			provider, err := b.embeddingProviderForRules(plan)
 			if err != nil {
 				return err
 			}
-			classifier, err := NewKnowledgeBaseClassifierWithProvider(kb, modelType, b.cfg.ConfigBaseDir, provider)
+			classifier, err := newKnowledgeBaseClassifierWithBackend(
+				kb,
+				modelType,
+				b.cfg.ConfigBaseDir,
+				plan.Backend,
+				provider,
+			)
 			if err != nil {
 				logging.ComponentWarnEvent("classifier", "knowledge_base_classifier_create_failed", map[string]interface{}{
 					"knowledge_base":     kb.Name,
 					"error":              err.Error(),
 					"kb_signals_enabled": false,
 				})
-				return nil
+				return fmt.Errorf("failed to create knowledge base classifier %q: %w", kb.Name, err)
 			}
 			mu.Lock()
 			classifiers[kb.Name] = classifier

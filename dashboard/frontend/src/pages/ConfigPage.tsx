@@ -5,7 +5,7 @@ import EditModal, { type EditFormData, FieldConfig } from '../components/EditMod
 import ViewModal, { ViewSection } from '../components/ViewModal'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { useAuth } from '../contexts/AuthContext'
-import { canWriteConfig } from '../utils/accessControl'
+import { canDeployConfig, canWriteConfig } from '../utils/accessControl'
 import ConfigPageRouterConfigSection from './ConfigPageRouterConfigSection'
 import ConfigPageModelsSection from './ConfigPageModelsSection'
 import ConfigPageSignalsSection from './ConfigPageSignalsSection'
@@ -41,7 +41,11 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const { isReadonly } = useReadonly()
   const { user } = useAuth()
   const isMCPSection = activeSection === 'mcp'
-  const configReadonly = isReadonly || !canWriteConfig(user)
+  // Every save path synchronously applies the resulting runtime config. A
+  // caller who can choose a provider endpoint can cause runtime-owned provider
+  // credentials to be used there, so editing requires both draft-write and the
+  // explicit deploy authority.
+  const configReadonly = isReadonly || !canWriteConfig(user) || !canDeployConfig(user)
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(!isMCPSection)
   const [error, setError] = useState<string | null>(null)
@@ -171,7 +175,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const saveConfig = async (updatedConfig: ConfigData) => {
     // Prevent save in read-only mode
     if (configReadonly) {
-      throw new Error('Dashboard is in read-only mode. Configuration editing is disabled.')
+      throw new Error('Runtime configuration editing requires config.write and config.deploy permissions.')
     }
 
     try {

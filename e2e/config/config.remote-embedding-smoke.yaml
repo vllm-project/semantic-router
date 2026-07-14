@@ -2,7 +2,7 @@
 # provider with embedding-signal routing.
 #
 # Defaults are safe for generic OpenAI-compatible providers:
-#   - put the secret in OPENAI_API_KEY
+#   - put the secret in VLLM_SR_EMBEDDING_API_KEY
 #   - edit global.model_catalog.embeddings.semantic.endpoint.base_url when using
 #     Azure OpenAI-compatible endpoints, for example:
 #     https://<resource>.openai.azure.com/openai/v1
@@ -99,7 +99,7 @@ global:
         endpoint:
           base_url: https://api.openai.com/v1
           model: text-embedding-3-small
-          api_key_env: OPENAI_API_KEY
+          api_key_env: VLLM_SR_EMBEDDING_API_KEY
           timeout_seconds: 10
           max_retries: 1
           dimensions: 1536

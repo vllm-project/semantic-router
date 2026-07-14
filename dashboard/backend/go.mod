@@ -11,6 +11,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/vllm-project/semantic-router/src/semantic-router v0.0.0
 	golang.org/x/crypto v0.45.0
+	golang.org/x/text v0.37.0
 	gopkg.in/yaml.v3 v3.0.1
 	sigs.k8s.io/yaml v1.6.0
 )

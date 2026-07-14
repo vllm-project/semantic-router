@@ -154,14 +154,8 @@ func (c *ComplexityClassifier) computeCandidateEmbedding(task complexityCandidat
 	if task.isImage {
 		return getMultiModalImageEmbedding(task.candidate, 0)
 	}
-	if c.provider != nil {
-		return c.provider.Embed(context.Background(), task.candidate)
-	}
-	output, err := getEmbeddingWithModelType(task.candidate, c.modelType, 0)
-	if err != nil {
-		return nil, err
-	}
-	return output.Embedding, nil
+	embedding, _, err := executeTextEmbedding(context.Background(), c.backend, c.provider, task.candidate, c.modelType, 0)
+	return embedding, err
 }
 
 func (c *ComplexityClassifier) collectCandidateEmbeddingResults(

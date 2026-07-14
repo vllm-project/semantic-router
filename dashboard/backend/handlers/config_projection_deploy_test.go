@@ -32,6 +32,7 @@ func setupTestConfigProjectionStore(t *testing.T) *configprojection.Store {
 }
 
 func TestDeployHandler_PersistsConfigProjectionAfterSuccessfulDeploy(t *testing.T) {
+	useMissingManagedDockerCLI(t)
 	store := setupTestConfigProjectionStore(t)
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
@@ -97,6 +98,7 @@ func TestDeployHandler_PersistsConfigProjectionAfterSuccessfulDeploy(t *testing.
 }
 
 func TestRollbackHandler_RefreshesConfigProjectionAfterSuccessfulRollback(t *testing.T) {
+	useMissingManagedDockerCLI(t)
 	store := setupTestConfigProjectionStore(t)
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
@@ -188,6 +190,7 @@ func TestRollbackHandler_RefreshesConfigProjectionAfterSuccessfulRollback(t *tes
 }
 
 func TestUpdateConfigHandler_PersistsConfigProjectionAfterSuccessfulUpdate(t *testing.T) {
+	useMissingManagedDockerCLI(t)
 	store := setupTestConfigProjectionStore(t)
 	tempDir := t.TempDir()
 	configPath := createLegacyTestConfig(t, tempDir)

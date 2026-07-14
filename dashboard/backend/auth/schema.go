@@ -31,6 +31,7 @@ const (
 	PermTopologyRead   = "topology.read"
 	PermLogsRead       = "logs.read"
 	PermOpenClawRead   = "openclaw.read"
+	PermOpenClawUse    = "openclaw.use"
 	PermOpenClaw       = "openclaw.manage"
 	PermMcpRead        = "mcp.read"
 	PermMcpManage      = "mcp.manage"
@@ -42,8 +43,8 @@ const (
 )
 
 var DefaultRolePermissions = map[string][]string{
-	RoleAdmin: {PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermSecurityManage},
-	RoleWrite: {PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead},
+	RoleAdmin: {PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClawUse, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermSecurityManage},
+	RoleWrite: {PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClawUse, PermMcpRead, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead},
 	RoleRead:  {PermConfigRead, PermEvalRead, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermMcpRead, PermToolsUse, PermFeedbackSubmit, PermReplayRead},
 }
 
@@ -58,7 +59,7 @@ var legacyRoleAliases = map[string]string{
 
 var AllPermissions = []string{
 	PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy,
-	PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead,
+	PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClawUse,
 	PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline,
 	PermFeedbackSubmit, PermReplayRead, PermSecurityManage,
 }
@@ -134,6 +135,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   password_hash TEXT NOT NULL,
+  auth_generation INTEGER NOT NULL DEFAULT 0 CHECK(auth_generation >= 0),
   role TEXT NOT NULL DEFAULT 'read',
   status TEXT NOT NULL DEFAULT 'active',
   created_at INTEGER NOT NULL,
@@ -181,6 +183,7 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_issued_at ON auth_sessions(user_id, issued_at DESC);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at ON auth_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked_at ON auth_sessions(revoked_at);
 CREATE INDEX IF NOT EXISTS idx_users_status_created_at ON users(status, created_at DESC);

@@ -6,9 +6,13 @@
 use crate::ffi::types::MultiModalEmbeddingResult;
 use crate::model_architectures::embedding::multimodal_embedding::MultiModalEmbeddingModel;
 use std::ffi::{c_char, CStr};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
-static GLOBAL_MULTIMODAL: OnceLock<MultiModalEmbeddingModel> = OnceLock::new();
+use super::embedding_error_status;
+use super::init_once::{initialize_once_with_identity, InitializedModel, ModelInitIdentity};
+
+static GLOBAL_MULTIMODAL: OnceLock<InitializedModel<MultiModalEmbeddingModel>> = OnceLock::new();
+static MULTIMODAL_INIT_LOCK: Mutex<()> = Mutex::new(());
 
 /// Initialize multi-modal embedding model.
 ///
@@ -33,26 +37,26 @@ pub extern "C" fn init_multimodal_embedding_model(
             }
         }
     };
-    if GLOBAL_MULTIMODAL.get().is_some() {
-        eprintln!("WARNING: multi-modal model already initialized");
-        return true;
+    let identity = ModelInitIdentity {
+        model_path: path.clone(),
+        use_cpu,
+    };
+    let result =
+        initialize_once_with_identity(&GLOBAL_MULTIMODAL, &MULTIMODAL_INIT_LOCK, identity, || {
+            MultiModalEmbeddingModel::load(&path, use_cpu)
+                .map_err(|error| format!("failed to load multi-modal model: {error:?}"))
+        });
+    if let Err(error) = result {
+        eprintln!("ERROR: multi-modal model initialization failed: {error}");
+        return false;
     }
-    match MultiModalEmbeddingModel::load(&path, use_cpu) {
-        Ok(model) => match GLOBAL_MULTIMODAL.set(model) {
-            Ok(()) => true,
-            Err(_) => {
-                eprintln!("WARNING: multi-modal model already initialized by another thread");
-                true
-            }
-        },
-        Err(e) => {
-            eprintln!("ERROR: Failed to load multi-modal model: {:?}", e);
-            false
-        }
-    }
+    true
 }
 
 /// Encode text into a multi-modal embedding.
+///
+/// Returns 0 on success, -3 when the tokenizer context is exceeded, and -1
+/// for invalid FFI arguments, unavailable models, or internal failures.
 #[no_mangle]
 pub extern "C" fn multimodal_encode_text(
     text: *const c_char,
@@ -72,7 +76,7 @@ pub extern "C" fn multimodal_encode_text(
     *res = MultiModalEmbeddingResult::default();
 
     let model = match GLOBAL_MULTIMODAL.get() {
-        Some(m) => m,
+        Some(m) => &m.value,
         None => {
             eprintln!("Error: multi-modal model not initialized");
             return -1;
@@ -100,7 +104,7 @@ pub extern "C" fn multimodal_encode_text(
         }
         Err(e) => {
             eprintln!("Error encoding text: {:?}", e);
-            -1
+            embedding_error_status(&e)
         }
     }
 }
@@ -132,9 +136,16 @@ pub extern "C" fn multimodal_encode_image(
     }
     let h = height as usize;
     let w = width as usize;
+    const MAX_IMAGE_SIDE: usize = 8192;
+    const MAX_IMAGE_PIXELS: usize = 16_777_216;
+    if h > MAX_IMAGE_SIDE || w > MAX_IMAGE_SIDE || h.saturating_mul(w) > MAX_IMAGE_PIXELS {
+        eprintln!("Error: image dimensions exceed the native input budget");
+        res.error = true;
+        return -1;
+    }
     let len = match 3usize.checked_mul(h).and_then(|v| v.checked_mul(w)) {
-        Some(l) => l,
-        None => {
+        Some(l) if l <= (isize::MAX as usize) / std::mem::size_of::<f32>() => l,
+        _ => {
             eprintln!(
                 "Error: image size overflow for height={}, width={}",
                 height, width
@@ -146,7 +157,7 @@ pub extern "C" fn multimodal_encode_image(
     let pixels = unsafe { std::slice::from_raw_parts(pixel_data, len) };
 
     let model = match GLOBAL_MULTIMODAL.get() {
-        Some(m) => m,
+        Some(m) => &m.value,
         None => {
             eprintln!("Error: multi-modal model not initialized");
             return -1;
@@ -207,8 +218,8 @@ pub extern "C" fn multimodal_encode_audio(
     let nm = n_mels as usize;
     let tf = time_frames as usize;
     let len = match nm.checked_mul(tf) {
-        Some(l) => l,
-        None => {
+        Some(l) if l <= (isize::MAX as usize) / std::mem::size_of::<f32>() => l,
+        _ => {
             eprintln!(
                 "Error: overflow computing mel spectrogram length (n_mels={}, time_frames={})",
                 n_mels, time_frames
@@ -220,7 +231,7 @@ pub extern "C" fn multimodal_encode_audio(
     let mel = unsafe { std::slice::from_raw_parts(mel_data, len) };
 
     let model = match GLOBAL_MULTIMODAL.get() {
-        Some(m) => m,
+        Some(m) => &m.value,
         None => {
             eprintln!("Error: multi-modal model not initialized");
             return -1;
@@ -261,5 +272,38 @@ pub extern "C" fn free_multimodal_embedding(data: *mut f32, length: i32) {
             let _ =
                 Box::from_raw(std::slice::from_raw_parts_mut(data, length as usize) as *mut [f32]);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn direct_tensor_ffi_rejects_unsafe_dimensions_before_slice_creation() {
+        let one_value = 0_f32;
+        let mut result = MultiModalEmbeddingResult::default();
+
+        assert_eq!(
+            multimodal_encode_image(&one_value, -1, -1, 0, &mut result),
+            -1
+        );
+        assert!(result.error);
+        assert_eq!(
+            multimodal_encode_image(&one_value, 8193, 1, 0, &mut result),
+            -1
+        );
+        assert!(result.error);
+
+        assert_eq!(
+            multimodal_encode_audio(&one_value, -1, -1, 0, &mut result),
+            -1
+        );
+        assert!(result.error);
+        assert_eq!(
+            multimodal_encode_audio(&one_value, i32::MAX, i32::MAX, 0, &mut result),
+            -1
+        );
+        assert!(result.error);
     }
 }

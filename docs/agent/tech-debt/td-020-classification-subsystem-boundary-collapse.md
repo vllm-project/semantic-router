@@ -29,7 +29,9 @@ signal-family work can reopen the same hotspots.
 The valuable remaining work is not another broad audit. It is to keep
 request-time signal orchestration, service assembly, classifier construction,
 model discovery, and native-backend wiring from growing back into one central
-orchestrator.
+orchestrator. Runtime refresh also needs to publish one immutable
+config/classifier snapshot and retire the previous snapshot through an owned
+lifecycle instead of mutating and replacing fields independently.
 
 ## Evidence
 
@@ -41,6 +43,7 @@ orchestrator.
 - [src/semantic-router/pkg/classification/hallucination_detector.go](../../../src/semantic-router/pkg/classification/hallucination_detector.go)
 - [src/semantic-router/pkg/classification/unified_classifier.go](../../../src/semantic-router/pkg/classification/unified_classifier.go)
 - [src/semantic-router/pkg/services/classification.go](../../../src/semantic-router/pkg/services/classification.go)
+- [src/semantic-router/pkg/services/classification_runtime_config.go](../../../src/semantic-router/pkg/services/classification_runtime_config.go)
 - [tools/agent/structure-rules.yaml](../../../tools/agent/structure-rules.yaml)
 
 ## Why It Matters
@@ -50,6 +53,9 @@ orchestrator.
 - Broad request-time dispatch makes signal behavior harder to test in isolation.
 - Native backend and unified-classifier wiring should not leak into every
   classifier feature.
+- Unsynchronized refresh/read paths can expose a mixed config/classifier
+  generation, while replaced keyword/MCP/native resources have no retirement
+  owner.
 
 ## Desired End State
 
@@ -59,6 +65,10 @@ orchestrator.
 - New signal families extend family-owned evaluators and tests without touching
   unrelated classifier construction.
 - Structure-rule exceptions for classification shrink as hotspots are split.
+- Requests load one immutable classification snapshot; refresh builds off-path,
+  atomically publishes it, and retires the old snapshot after readers drain.
+- Classifier construction and retirement close every successfully created
+  native or MCP child exactly once, including partial-build failures.
 
 ## Exit Criteria
 
@@ -68,3 +78,5 @@ orchestrator.
   for routine signal or backend changes.
 - Service-layer classification endpoints consume narrow classifier APIs instead
   of duplicating discovery or bootstrap ownership.
+- Refresh versus every request entrypoint is race-free and every response is
+  wholly old-generation or new-generation.

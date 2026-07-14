@@ -182,9 +182,14 @@ const Layout: React.FC<LayoutProps> = ({
   }
 
   const handleLogout = () => {
-    logout()
-    closeMenus()
-    navigate('/login', { replace: true })
+    void logout()
+      .then(() => {
+        closeMenus()
+        navigate('/login', { replace: true })
+      })
+      .catch((error) => {
+        console.warn('Failed to end the dashboard session:', error)
+      })
   }
 
   const renderTopNavLink = (link: LayoutNavLink) => (

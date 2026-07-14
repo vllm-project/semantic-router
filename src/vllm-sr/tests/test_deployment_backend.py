@@ -1,8 +1,8 @@
-"""Tests for the deployment backend abstraction and K8s / Docker wiring."""
+"""Tests for deployment target resolution, config translation, and containers."""
 
+import stat
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 import yaml
@@ -18,7 +18,6 @@ from cli.config_translator import (  # noqa: E402
 )
 from cli.container_backend import ContainerBackend  # noqa: E402
 from cli.deployment_backend import DEFAULT_TARGET, resolve_target  # noqa: E402
-from cli.k8s_backend import K8sBackend  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # resolve_target
@@ -180,6 +179,34 @@ class TestConfigTranslator:
 
         written = yaml.safe_load(Path(path).read_text())
         assert written["replicaCount"] == expected_replicas
+        assert stat.S_IMODE(Path(path).stat().st_mode) == 0o600
+
+    def test_write_helm_values_file_keeps_caller_directory(self, tmp_path):
+        caller_directory = tmp_path / "caller-owned"
+        caller_directory.mkdir(mode=0o755)
+        caller_directory.chmod(0o755)
+        existing_values_path = caller_directory / "values-override.yaml"
+        existing_values_path.write_text("replicaCount: 99\n")
+        existing_values_path.chmod(0o644)
+
+        values_path = Path(
+            write_helm_values_file({"replicaCount": 1}, str(caller_directory))
+        )
+
+        assert caller_directory.is_dir()
+        assert stat.S_IMODE(caller_directory.stat().st_mode) == 0o755
+        assert stat.S_IMODE(values_path.stat().st_mode) == 0o600
+        assert yaml.safe_load(values_path.read_text())["replicaCount"] == 1
+
+    def test_write_helm_values_file_creates_private_directory(self):
+        values_path = Path(write_helm_values_file({"replicaCount": 1}))
+        values_directory = values_path.parent
+        try:
+            assert stat.S_IMODE(values_directory.stat().st_mode) == 0o700
+            assert stat.S_IMODE(values_path.stat().st_mode) == 0o600
+        finally:
+            values_path.unlink(missing_ok=True)
+            values_directory.rmdir()
 
     def test_sensitive_env_vars_excluded_from_plain_env(self, tmp_path):
         """Sensitive vars (masked=True in PASSTHROUGH_ENV_RULES) must not leak into plain env."""
@@ -220,6 +247,20 @@ class TestConfigTranslator:
         )
         assert "my-secret" in values["envFromSecrets"]
 
+    def test_profile_env_secrets_are_preserved_before_cli_secret_append(self, tmp_path):
+        config = tmp_path / "config.yaml"
+        config.write_text(yaml.safe_dump({"listeners": []}))
+
+        values = translate_config_to_helm_values(
+            str(config),
+            profile_values={
+                "envFromSecrets": ["operator-managed", "cli-runtime"],
+            },
+            env_secret_name="cli-runtime",
+        )
+
+        assert values["envFromSecrets"] == ["operator-managed", "cli-runtime"]
+
     def test_env_vars_none_produces_no_env_key(self, tmp_path):
         config = tmp_path / "config.yaml"
         config.write_text(yaml.safe_dump({"listeners": []}))
@@ -233,129 +274,3 @@ class TestConfigTranslator:
         overrides = {"a": {"b": 99}, "e": 4}
         merged = _deep_merge(base, overrides)
         assert merged == {"a": {"b": 99, "c": 2}, "d": 3, "e": 4}
-
-
-# ---------------------------------------------------------------------------
-# K8sBackend (unit tests — no real cluster needed)
-# ---------------------------------------------------------------------------
-
-
-class TestK8sBackend:
-    def test_require_tool_raises_when_missing(self, monkeypatch):
-        monkeypatch.setattr("shutil.which", lambda name: None)
-        with pytest.raises(SystemExit):
-            K8sBackend._require_tool("helm")
-
-    def test_helm_base_cmd_includes_context(self):
-        backend = K8sBackend.__new__(K8sBackend)
-        backend.context = "my-ctx"
-        assert backend._helm_base_cmd() == ["helm", "--kube-context", "my-ctx"]
-
-    def test_helm_base_cmd_without_context(self):
-        backend = K8sBackend.__new__(K8sBackend)
-        backend.context = None
-        assert backend._helm_base_cmd() == ["helm"]
-
-    def test_label_for_service_router(self):
-        backend = K8sBackend.__new__(K8sBackend)
-        backend.release_name = "sr"
-        assert "semantic-router" in backend._label_for_service("router")
-
-    def test_label_for_service_all(self):
-        backend = K8sBackend.__new__(K8sBackend)
-        backend.release_name = "sr"
-        assert "sr" in backend._label_for_service("all")
-
-    def test_sync_env_secret_returns_none_when_no_sensitive_vars(self, monkeypatch):
-        backend = K8sBackend.__new__(K8sBackend)
-        backend.namespace = "test-ns"
-        backend.context = None
-        result = backend._sync_env_secret({"HF_ENDPOINT": "https://hf.co"})
-        assert result is None
-
-    def test_sync_env_secret_returns_none_when_empty(self):
-        backend = K8sBackend.__new__(K8sBackend)
-        backend.namespace = "test-ns"
-        backend.context = None
-        assert backend._sync_env_secret(None) is None
-        assert backend._sync_env_secret({}) is None
-
-    def test_sync_env_secret_creates_secret(self, monkeypatch):
-        cmds_run = []
-
-        def fake_run(cmd, **kwargs):
-            cmds_run.append(cmd)
-            return MagicMock(returncode=0, stdout="")
-
-        monkeypatch.setattr("subprocess.run", fake_run)
-
-        backend = K8sBackend.__new__(K8sBackend)
-        backend.namespace = "test-ns"
-        backend.context = None
-        result = backend._sync_env_secret({"HF_TOKEN": "hf_secret123"})
-
-        assert result == "vllm-sr-env-secrets"
-        create_cmds = [c for c in cmds_run if "create" in c and "secret" in c]
-        assert len(create_cmds) == 1
-        assert "--from-literal=HF_TOKEN=hf_secret123" in create_cmds[0]
-
-
-# ---------------------------------------------------------------------------
-# CLI integration — serve --target routes to correct backend
-# ---------------------------------------------------------------------------
-
-
-from cli.commands import runtime as rt  # noqa: E402
-from cli.main import main  # noqa: E402
-from click.testing import CliRunner  # noqa: E402
-
-
-class TestCLITargetRouting:
-    def test_serve_default_target_builds_docker_backend(self, monkeypatch):
-        built = []
-
-        class _FakeDocker:
-            def deploy(self, **kw):
-                pass
-
-        def _fake_build(target, **kw):
-            built.append(resolve_target(target))
-            return _FakeDocker()
-
-        monkeypatch.setattr(rt, "_build_backend", _fake_build)
-        monkeypatch.setattr(
-            rt,
-            "ensure_bootstrap_workspace",
-            lambda _: MagicMock(config_path=Path("/dev/null"), setup_mode=False),
-        )
-        monkeypatch.setattr(
-            rt,
-            "resolve_effective_config_path",
-            lambda *a: Path("/dev/null"),
-        )
-
-        runner = CliRunner()
-        runner.invoke(
-            main,
-            ["serve", "--config", "/dev/null", "--image-pull-policy", "never"],
-        )
-
-        assert built and built[0] == "docker"
-
-    def test_stop_target_k8s_builds_k8s_backend(self, monkeypatch):
-        built = []
-
-        class _FakeK8s:
-            def teardown(self):
-                pass
-
-        def _fake_build(target, **kw):
-            built.append(resolve_target(target))
-            return _FakeK8s()
-
-        monkeypatch.setattr(rt, "_build_backend", _fake_build)
-
-        runner = CliRunner()
-        runner.invoke(main, ["stop", "--target", "k8s"])
-
-        assert built and built[0] == "k8s"

@@ -78,6 +78,8 @@ def start_observability_stack(
     config_dir: str,
     env_vars: dict[str, str],
     stack_layout: RuntimeStackLayout,
+    *,
+    bind_address: str | None = None,
 ) -> str | None:
     """Start Jaeger, Prometheus, and Grafana when observability is enabled."""
     if not enable_observability:
@@ -86,18 +88,28 @@ def start_observability_stack(
     log.info("Starting observability stack (Jaeger + Prometheus + Grafana)...")
     _start_named_service(
         "Jaeger",
-        lambda: container_start_jaeger(shared_network_name, stack_layout=stack_layout),
+        lambda: container_start_jaeger(
+            shared_network_name,
+            stack_layout=stack_layout,
+            bind_address=bind_address,
+        ),
     )
     _start_named_service(
         "Prometheus",
         lambda: container_start_prometheus(
-            shared_network_name, config_dir, stack_layout=stack_layout
+            shared_network_name,
+            config_dir,
+            stack_layout=stack_layout,
+            bind_address=bind_address,
         ),
     )
     _start_named_service(
         "Grafana",
         lambda: container_start_grafana(
-            shared_network_name, config_dir, stack_layout=stack_layout
+            shared_network_name,
+            config_dir,
+            stack_layout=stack_layout,
+            bind_address=bind_address,
         ),
     )
 
@@ -118,6 +130,7 @@ def start_fleet_sim_sidecar(
     stack_layout: RuntimeStackLayout,
     sim_image: str | None = None,
     pull_policy: str | None = None,
+    bind_address: str | None = None,
 ) -> bool:
     """Start the local simulator sidecar unless an external URL is configured."""
     external_url = env_vars.get("TARGET_FLEET_SIM_URL") or os.getenv(
@@ -144,6 +157,7 @@ def start_fleet_sim_sidecar(
             config_dir=config_dir,
             stack_layout=stack_layout,
             pull_policy=pull_policy,
+            bind_address=bind_address,
         ),
     )
     env_vars["TARGET_FLEET_SIM_URL"] = stack_layout.fleet_sim_service_url

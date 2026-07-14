@@ -2,6 +2,8 @@ package router
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -18,21 +20,34 @@ var dashboardAuthRouteSpecs = []authRouteSpec{
 	{path: "/api/auth/login", method: http.MethodPost},
 	{path: "/api/auth/logout", method: http.MethodPost},
 	{path: "/api/auth/me", method: http.MethodGet},
+	{path: "/api/auth/password", method: http.MethodPost},
 	{path: "/api/auth/bootstrap/can-register", method: http.MethodGet},
 	{path: "/api/auth/bootstrap/register", method: http.MethodPost},
 }
 
-const authUnavailableResponse = `{"error":"Service not available","message":"Authentication service is not configured"}`
-
-func setupAuthRoutes(mux *http.ServeMux, cfg *config.Config) *auth.Service {
+func setupAuthRoutes(mux *http.ServeMux, cfg *config.Config) (*auth.Service, error) {
 	store, err := auth.NewStore(cfg.AuthDBPath)
 	if err != nil {
-		log.Printf("failed to init auth store: %v", err)
-		registerAuthUnavailableRoutes(mux)
-		return nil
+		return nil, fmt.Errorf("initialize auth store: %w", err)
+	}
+	blocklist, blocklistMetadata, err := auth.LoadPasswordBlocklistForProfile(
+		auth.PasswordBlocklistLoadConfig{
+			Profile:        cfg.SecurityProfile,
+			Path:           cfg.PasswordBlocklistPath,
+			ExpectedSHA256: cfg.PasswordBlocklistSHA256,
+		},
+	)
+	if err != nil {
+		_ = store.Close()
+		return nil, fmt.Errorf("load password blocklist: %w", err)
 	}
 
-	authSvc := auth.NewService(store, cfg.JWTSecret, cfg.JWTExpiryHours)
+	authSvc, err := auth.NewService(store, cfg.JWTSecret, cfg.JWTExpiryHours)
+	if err != nil {
+		_ = store.Close()
+		return nil, fmt.Errorf("initialize authentication service: %w", err)
+	}
+	authSvc.SetPasswordPolicy(auth.NewPasswordPolicy(blocklist))
 	authSvc.SetAllowOpenBootstrap(cfg.AllowOpenBootstrap)
 	authSvc.SetSetupMode(cfg.SetupMode)
 	if err := authSvc.EnsureBootstrapAdmin(
@@ -41,20 +56,31 @@ func setupAuthRoutes(mux *http.ServeMux, cfg *config.Config) *auth.Service {
 		cfg.BootstrapAdminPassword,
 		cfg.BootstrapAdminName,
 	); err != nil {
-		log.Printf("failed to ensure bootstrap admin: %v", err)
+		_ = store.Close()
+		return nil, fmt.Errorf("ensure bootstrap admin: %w", err)
 	}
 
 	registerAuthProxyRoutes(mux, authSvc)
+	registerPasswordPolicyMetadataRoute(mux, blocklistMetadata)
 	auth.RegisterAdminRoutes(mux, authSvc)
-	return authSvc
+	return authSvc, nil
 }
 
-func registerAuthUnavailableRoutes(mux *http.ServeMux) {
-	for _, spec := range dashboardAuthRouteSpecs {
-		registerAuthMethodRoute(mux, spec.path, spec.method, func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, authUnavailableResponse, http.StatusServiceUnavailable)
-		})
-	}
+func registerPasswordPolicyMetadataRoute(
+	mux *http.ServeMux,
+	metadata auth.PasswordBlocklistMetadata,
+) {
+	registerAuthMethodRoute(
+		mux,
+		"/api/auth/password-policy",
+		http.MethodGet,
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(metadata); err != nil {
+				log.Printf("encode password policy metadata: %v", err)
+			}
+		},
+	)
 }
 
 func registerAuthProxyRoutes(mux *http.ServeMux, authSvc *auth.Service) {
@@ -78,6 +104,13 @@ func registerAuthMethodRoute(
 	handler http.HandlerFunc,
 ) {
 	wrapped := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		if r.URL.Path != path && r.URL.Path != path+"/" {
+			http.NotFound(w, r)
+			return
+		}
 		if r.Method != method {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return

@@ -32,9 +32,36 @@ Inside canonical `config.yaml`:
 - built-in knowledge base defaults keep `source.path` aligned with the steady-state `knowledge_bases/<dir>/` contract; local/dev runtime seeds missing built-ins from `config/knowledge_bases/<dir>/` into `.vllm-sr/knowledge_bases/<dir>/` once, and router reads the shared runtime KB store from there
 - `global.router.config_source` selects the router's steady-state config source; the exhaustive reference uses `file`, while Kubernetes CRD reconciliation uses `kubernetes`
 - `global.router.auto_model_names` declares the request model aliases that enter full vLLM-SR automatic routing. Defaults include `vllm-sr/auto`, `auto`, and `MoM`; `auto_model_name` remains the legacy single-name compatibility field.
+- `global.router.clear_route_cache` controls route-cache invalidation for optional auxiliary request mutations. Client `x-selected-model` removal and router-owned selected-model writes always invalidate the cache; this setting cannot weaken that routing trust boundary.
 - `global.router.skip_processing.enabled` opts the router into honoring the `x-vsr-skip-processing` request header; defaults to `false` so an arbitrary upstream caller cannot bypass router policy by injecting the header. Enable only when an authenticated upstream filter (ext_authz, etc.) is responsible for setting or stripping the header (see [#1808](https://github.com/vllm-project/semantic-router/issues/1808))
 - router-owned model-backed module config lives under `global.model_catalog.modules`
 - `global.model_catalog.modules.prompt_compression.profile` selects built-in signal-compression scoring defaults (`default`, `coding`, `medical`, `security`, or `multi_turn`); `multi-turn` is accepted as an alias, unknown names fail validation, and explicit weight/preserve fields override the profile.
+
+## Runtime Embedding Overrides
+
+Embedding overrides resolve into the effective backend, canonical model type,
+and local model path used by both runtime preparation and
+classification execution:
+
+- `EMBEDDING_BACKEND_OVERRIDE` selects `candle`, `openvino`, or
+  `openai_compatible` instead of the configured backend.
+- `EMBEDDING_MODEL_TYPE_OVERRIDE` is the preferred explicit local model
+  selector. Supported local types are `qwen3`, `gemma`, `mmbert`, and
+  Candle-only `multimodal`; `modernbert` is canonicalized to `mmbert`.
+- `EMBEDDING_MODEL_OVERRIDE` remains supported as a lower-precedence
+  compatibility alias because existing Helm and E2E profiles deploy it. New
+  configurations should use `EMBEDDING_MODEL_TYPE_OVERRIDE`.
+
+Changing a remote `openai_compatible` configuration to a local backend fails
+closed unless the selected local model has a configured path. If no model-type
+override is set, the runtime may infer the type only when exactly one local
+model path is configured; zero or multiple paths are an error. Unsupported
+backend/model combinations are also startup errors, including multimodal
+OpenVINO. One classifier generation can use only one effective OpenVINO text
+model type across embedding-backed signal families; conflicting plans fail
+before a second model is built or initialized. This prevents a local override
+from silently continuing to send signal text to a remote provider or from
+running admission checks against a different backend than execution.
 
 `config/decision/` is organized by boolean rule shape:
 

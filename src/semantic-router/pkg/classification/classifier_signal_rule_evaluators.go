@@ -182,6 +182,9 @@ func (c *Classifier) evaluateReaskSignal(results *SignalResults, mu *sync.Mutex,
 	logging.Debugf("[Signal Computation] Reask signal evaluation completed in %v", elapsed)
 	if err != nil {
 		logging.Errorf("reask rule evaluation failed: %v", err)
+		mu.Lock()
+		results.recordTextEvaluationError(err)
+		mu.Unlock()
 		return
 	}
 	if len(matchedRules) == 0 {

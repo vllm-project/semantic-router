@@ -1,31 +1,72 @@
 package router
 
 import (
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"sync"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
+	"github.com/vllm-project/semantic-router/dashboard/backend/mcp"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
 // Server bundles the dashboard mux with lifecycle hooks for durable stores.
 type Server struct {
-	Handler http.Handler
-	Close   func() error
+	Handler    http.Handler
+	auth       *auth.Service
+	workflow   *workflowstore.Store
+	projection *configprojection.Store
+	mcp        *mcp.Manager
+	closeOnce  sync.Once
+	closeErr   error
+}
+
+// Close releases every durable store owned by the server. It is idempotent.
+func (s *Server) Close() error {
+	if s == nil {
+		return nil
+	}
+	s.closeOnce.Do(func() {
+		var authErr, workflowErr, projectionErr error
+		if s.mcp != nil {
+			s.mcp.Close()
+		}
+		if s.auth != nil {
+			authErr = s.auth.Close()
+		}
+		if s.workflow != nil {
+			workflowErr = s.workflow.Close()
+		}
+		if s.projection != nil {
+			projectionErr = s.projection.Close()
+		}
+		s.closeErr = errors.Join(authErr, workflowErr, projectionErr)
+	})
+	return s.closeErr
 }
 
 // Setup configures all routes and returns the dashboard server bundle.
-func Setup(cfg *config.Config) *Server {
+func Setup(cfg *config.Config) (*Server, error) {
 	mux := http.NewServeMux()
-	authSvc := setupAuthRoutes(mux, cfg)
+	authSvc, err := setupAuthRoutes(mux, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("setup authentication: %w", err)
+	}
 
 	wf, err := workflowstore.Open(cfg.WorkflowDBPath, workflowstore.Options{
 		LegacyOpenClawDir: cfg.OpenClawDataDir,
 	})
 	if err != nil {
-		log.Fatalf("workflow store: %v", err)
+		closeErr := authSvc.Close()
+		return nil, errors.Join(
+			fmt.Errorf("open workflow store: %w", err),
+			closeErr,
+		)
 	}
 
 	var cp *configprojection.Store
@@ -47,7 +88,14 @@ func Setup(cfg *config.Config) *Server {
 
 	registerCoreRoutes(mux, cfg)
 	registerEvaluationRoutes(mux, cfg)
-	SetupMCP(mux, cfg, wf, openClawHandler)
+	mcpManager, err := SetupMCP(mux, cfg, wf, openClawHandler)
+	if err != nil {
+		var projectionErr error
+		if cp != nil {
+			projectionErr = cp.Close()
+		}
+		return nil, errors.Join(err, wf.Close(), authSvc.Close(), projectionErr)
+	}
 	registerMLPipelineRoutes(mux, cfg, wf)
 	registerOpenClawRoutes(mux, cfg, openClawHandler)
 	registerProxyRoutes(mux, cfg)
@@ -55,12 +103,10 @@ func Setup(cfg *config.Config) *Server {
 	// Static frontend must be registered last.
 	mux.Handle("/", handlers.StaticFileServer(cfg.StaticDir))
 	return &Server{
-		Handler: wrapWithAuth(mux, authSvc),
-		Close: func() error {
-			if cp == nil {
-				return nil
-			}
-			return cp.Close()
-		},
-	}
+		Handler:    withBrowserSecurityHeaders(wrapWithAuth(mux, authSvc)),
+		auth:       authSvc,
+		workflow:   wf,
+		projection: cp,
+		mcp:        mcpManager,
+	}, nil
 }

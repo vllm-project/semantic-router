@@ -150,6 +150,9 @@ jobs:
       - name: Build Rust library (CPU-only, no CUDA)
         run: make rust-ci
 
+      - name: Run focused CGO-disabled binding contracts
+        run: make test-binding-cgo0-contract
+
       - name: Install HuggingFace CLI
         run: |
           pip install -U "huggingface_hub[cli]" hf_transfer

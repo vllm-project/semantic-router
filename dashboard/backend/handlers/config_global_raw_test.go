@@ -111,6 +111,7 @@ func TestGlobalConfigYAMLHandler_ReturnsDefaultsWhenGlobalMissing(t *testing.T) 
 }
 
 func TestUpdateGlobalConfigYAMLHandler_ReplacesGlobalOverride(t *testing.T) {
+	useMissingManagedDockerCLI(t)
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
@@ -191,6 +192,7 @@ router:
 }
 
 func TestUpdateGlobalConfigYAMLHandler_EmptyBodyClearsGlobalOverride(t *testing.T) {
+	useMissingManagedDockerCLI(t)
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
@@ -255,5 +257,37 @@ global:
 	}
 	if strings.Contains(string(updatedData), "\nglobal:") {
 		t.Fatalf("expected empty raw save to remove global override, got:\n%s", string(updatedData))
+	}
+}
+
+func TestUpdateGlobalConfigYAMLHandler_RestoresConfigWhenRuntimeStatusIsUnknown(t *testing.T) {
+	useUnknownManagedDockerCLI(t)
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	before, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read original config: %v", err)
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/router/config/global/raw/update",
+		bytes.NewBufferString("router:\n  clear_route_cache: true\n"),
+	)
+	req.Header.Set("Content-Type", "text/yaml")
+	w := httptest.NewRecorder()
+
+	UpdateGlobalConfigYAMLHandler(configPath, false, tempDir)(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for an unavailable runtime status probe, got %d: %s", w.Code, w.Body.String())
+	}
+	after, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read restored config: %v", err)
+	}
+	if !bytes.Equal(after, before) {
+		t.Fatalf("config was not restored after runtime probe failure\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 }

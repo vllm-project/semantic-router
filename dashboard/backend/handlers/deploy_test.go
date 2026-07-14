@@ -484,6 +484,7 @@ func TestDeployHandler_InvalidYAMLSyntax(t *testing.T) {
 }
 
 func TestDeployHandler_SuccessfulDeploy(t *testing.T) {
+	useMissingManagedDockerCLI(t)
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
@@ -570,6 +571,7 @@ func TestDeployHandler_SuccessfulDeploy(t *testing.T) {
 }
 
 func TestDeployHandler_DeepMergePreservesExistingFields(t *testing.T) {
+	useMissingManagedDockerCLI(t)
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
@@ -618,6 +620,7 @@ func TestDeployHandler_DeepMergePreservesExistingFields(t *testing.T) {
 }
 
 func TestDeployHandler_UsesImportedCanonicalBaseConfig(t *testing.T) {
+	useMissingManagedDockerCLI(t)
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
@@ -845,6 +848,7 @@ func TestMergeDeployPayload_RoundTripsMaintainedAMDConfig(t *testing.T) {
 }
 
 func TestDeployHandler_NoDSLSource(t *testing.T) {
+	useMissingManagedDockerCLI(t)
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
@@ -962,6 +966,7 @@ func TestRollbackHandler_VersionNotFound(t *testing.T) {
 }
 
 func TestRollbackHandler_SuccessfulRollback(t *testing.T) {
+	useMissingManagedDockerCLI(t)
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
@@ -1230,6 +1235,7 @@ func TestCleanupBackups(t *testing.T) {
 // ============================================================
 
 func TestDeployAndRollback_Integration(t *testing.T) {
+	useMissingManagedDockerCLI(t)
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
@@ -1309,6 +1315,7 @@ func TestDeployAndRollback_Integration(t *testing.T) {
 }
 
 func TestUpdateConfigHandler_ReplacesLegacyConfigWithCanonicalPayload(t *testing.T) {
+	useMissingManagedDockerCLI(t)
 	tempDir := t.TempDir()
 	configPath := createLegacyTestConfig(t, tempDir)
 	updateBody := canonicalConfigBody("127.0.0.1:8000")

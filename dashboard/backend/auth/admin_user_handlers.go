@@ -1,8 +1,7 @@
 package auth
 
 import (
-	"context"
-	"encoding/json"
+	"database/sql"
 	"errors"
 	"net/http"
 	"strconv"
@@ -94,18 +93,21 @@ func handleAdminUsersCreate(w http.ResponseWriter, r *http.Request, svc *Service
 		Password string `json:"password"`
 		Role     string `json:"role"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+	if err := decodeAuthJSON(w, r, &req); err != nil {
+		writeAuthDecodeError(w, err)
 		return
 	}
+	req.Email = strings.TrimSpace(req.Email)
 	if req.Email == "" || req.Password == "" {
 		http.Error(w, "email and password are required", http.StatusBadRequest)
 		return
 	}
 
-	hash, err := svc.HashPassword(req.Password)
+	hash, err := svc.HashPasswordForUser(req.Email, req.Password)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if !writePasswordPolicyError(w, err) {
+			http.Error(w, "password hashing failed", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -115,9 +117,17 @@ func handleAdminUsersCreate(w http.ResponseWriter, r *http.Request, svc *Service
 		return
 	}
 
-	user, err := svc.store.CreateUser(r.Context(), req.Email, req.Name, hash, normalizedRole, "active")
+	user, err := svc.store.createUserAuthorized(
+		r.Context(),
+		usersManageAuthorization(ac),
+		req.Email,
+		req.Name,
+		hash,
+		normalizedRole,
+		defaultUserStatusActive,
+	)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeUserMutationError(w, err, "creation")
 		return
 	}
 
@@ -161,7 +171,7 @@ func adminUserItemHandler(svc *Service) http.HandlerFunc {
 func handleAdminUserGet(w http.ResponseWriter, r *http.Request, svc *Service, userID string) {
 	user, err := svc.store.GetUserByID(r.Context(), userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeUserLookupError(w, err)
 		return
 	}
 
@@ -182,13 +192,13 @@ func handleAdminUserPatch(
 
 	target, err := svc.store.GetUserByID(r.Context(), userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeUserLookupError(w, err)
 		return
 	}
 
 	var req UpdateUserRequest
-	if decodeErr := json.NewDecoder(r.Body).Decode(&req); decodeErr != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+	if decodeErr := decodeAuthJSON(w, r, &req); decodeErr != nil {
+		writeAuthDecodeError(w, decodeErr)
 		return
 	}
 
@@ -202,22 +212,20 @@ func handleAdminUserPatch(
 		return
 	}
 
-	if validationErr := validateRemainingUserManagers(
+	user, err := svc.store.updateUserRoleOrStatusAuthorizedIfCurrent(
 		r.Context(),
-		svc,
-		target,
+		usersManageAuthorization(ac),
+		userID,
+		target.Role,
+		target.Status,
 		normalizedRole,
 		normalizedStatus,
-	); validationErr != nil {
-		http.Error(w, validationErr.Error(), http.StatusConflict)
-		return
-	}
-
-	user, err := svc.store.UpdateUserRoleOrStatus(r.Context(), userID, normalizedRole, normalizedStatus)
+	)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeUserMutationError(w, err, "update")
 		return
 	}
+	svc.invalidateUserAuthorization(userID)
 
 	writeAudit(r, svc, "user.update", "/api/admin/users/", ac.UserID)
 	respondJSON(w, user)
@@ -241,43 +249,43 @@ func handleAdminUserDelete(
 
 	target, err := svc.store.GetUserByID(r.Context(), userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeUserLookupError(w, err)
 		return
 	}
 
-	if err := validateRemainingUserManagers(
+	if err := svc.store.deleteUserAuthorizedIfCurrent(
 		r.Context(),
-		svc,
-		target,
+		usersManageAuthorization(ac),
+		userID,
 		target.Role,
-		"inactive",
+		target.Status,
 	); err != nil {
-		http.Error(w, err.Error(), http.StatusConflict)
+		writeUserMutationError(w, err, "delete")
 		return
 	}
-
-	if err := svc.store.DeleteUser(r.Context(), userID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	svc.invalidateUserAuthorization(userID)
 
 	writeAudit(r, svc, "user.delete", "/api/admin/users/", ac.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func normalizeUserUpdate(target *User, req UpdateUserRequest) (string, string, error) {
-	nextRole := strings.TrimSpace(req.Role)
-	if nextRole == "" {
-		nextRole = target.Role
+	nextRole := target.Role
+	if req.Role != nil {
+		if requestedRole := strings.TrimSpace(*req.Role); requestedRole != "" {
+			nextRole = requestedRole
+		}
 	}
 	normalizedRole, err := normalizeRole(nextRole)
 	if err != nil {
 		return "", "", err
 	}
 
-	nextStatus := strings.TrimSpace(req.Status)
-	if nextStatus == "" {
-		nextStatus = target.Status
+	nextStatus := target.Status
+	if req.Status != nil {
+		if requestedStatus := strings.TrimSpace(*req.Status); requestedStatus != "" {
+			nextStatus = requestedStatus
+		}
 	}
 	if nextStatus != "active" && nextStatus != "inactive" {
 		return "", "", errors.New("status must be active or inactive")
@@ -286,44 +294,23 @@ func normalizeUserUpdate(target *User, req UpdateUserRequest) (string, string, e
 	return normalizedRole, nextStatus, nil
 }
 
-func validateRemainingUserManagers(
-	ctx context.Context,
-	svc *Service,
-	target *User,
-	nextRole string,
-	nextStatus string,
-) error {
-	currentlyManagesUsers, err := userHasPermission(
-		ctx,
-		svc,
-		target.ID,
-		target.Role,
-		target.Status,
-		PermUsersManage,
-	)
-	if err != nil || !currentlyManagesUsers {
-		return err
+func writeUserMutationError(w http.ResponseWriter, err error, action string) {
+	switch {
+	case errors.Is(err, ErrUserStateChanged):
+		http.Error(w, "user state changed concurrently; reload and retry", http.StatusConflict)
+	case errors.Is(err, ErrLastActiveUserManager):
+		http.Error(w, ErrLastActiveUserManager.Error(), http.StatusConflict)
+	case errors.Is(err, ErrAuthorizationChanged):
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	default:
+		http.Error(w, "user "+action+" failed", http.StatusInternalServerError)
 	}
+}
 
-	willManageUsers, err := userHasPermission(
-		ctx,
-		svc,
-		target.ID,
-		nextRole,
-		nextStatus,
-		PermUsersManage,
-	)
-	if err != nil || willManageUsers {
-		return err
+func writeUserLookupError(w http.ResponseWriter, err error) {
+	if errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
 	}
-
-	remainingManagers, err := svc.store.CountActiveUsersWithPermission(ctx, PermUsersManage, target.ID)
-	if err != nil {
-		return err
-	}
-	if remainingManagers == 0 {
-		return errors.New("cannot remove the last active user manager")
-	}
-
-	return nil
+	http.Error(w, "user lookup failed", http.StatusInternalServerError)
 }

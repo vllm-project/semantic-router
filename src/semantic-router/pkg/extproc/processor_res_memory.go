@@ -34,7 +34,7 @@ func (r *OpenAIRouter) scheduleResponseMemoryStore(ctx *RequestContext, response
 		bgCtx := context.Background()
 		sessionID, userID, history, err := extractMemoryInfo(ctx)
 		if err != nil {
-			logging.Errorf("Memory store failed: %v", err)
+			logging.Errorf("Memory store failed: %s", safeErrorForLog(err))
 			return
 		}
 
@@ -55,7 +55,7 @@ func (r *OpenAIRouter) scheduleResponseMemoryStore(ctx *RequestContext, response
 			currentAssistantResponse,
 			history,
 		); err != nil {
-			logging.Warnf("Memory store failed: %v", err)
+			logging.Warnf("Memory store failed: %s", safeErrorForLog(err))
 		}
 	})
 }

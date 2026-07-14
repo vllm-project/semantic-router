@@ -3,10 +3,8 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"time"
 )
 
@@ -31,6 +29,10 @@ type FetchRawResponse struct {
 // truncation. Designed for fetching YAML/JSON config files from remote URLs,
 // bypassing browser CORS restrictions.
 func FetchRawHandler() http.HandlerFunc {
+	return fetchRawHandlerWithClient(newPublicOutboundHTTPClient(fetchRawTimeout))
+}
+
+func fetchRawHandlerWithClient(client outboundHTTPClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
@@ -41,42 +43,31 @@ func FetchRawHandler() http.HandlerFunc {
 		}
 
 		var req FetchRawRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
+		if status, err := decodeBoundedJSON(w, r, outboundMaxRequestBodyBytes, &req); err != nil {
+			w.WriteHeader(status)
 			_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: "invalid request body"})
 			return
 		}
 
-		targetURL := req.URL
-		if targetURL == "" {
+		parsedURL, err := parseOutboundHTTPURL(req.URL)
+		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: "url is required"})
+			_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: "invalid URL, must be public http or https"})
 			return
 		}
-
-		parsed, err := url.Parse(targetURL)
-		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		targetURL := parsedURL.String()
+		if validationErr := client.ValidateURL(r.Context(), targetURL); validationErr != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: "invalid URL, must be http or https"})
+			_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: "invalid URL, must be public http or https"})
 			return
 		}
 
 		log.Printf("[FetchRaw] Fetching: %s", redactURLForLog(targetURL))
 
-		client := &http.Client{
-			Timeout: fetchRawTimeout,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if len(via) >= 10 {
-					return fmt.Errorf("too many redirects")
-				}
-				return nil
-			},
-		}
-
-		httpReq, err := http.NewRequest("GET", targetURL, nil)
+		httpReq, err := http.NewRequestWithContext(r.Context(), http.MethodGet, targetURL, nil)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: fmt.Sprintf("failed to create request: %v", err)})
+			_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: "failed to create request"})
 			return
 		}
 
@@ -86,21 +77,21 @@ func FetchRawHandler() http.HandlerFunc {
 		resp, err := client.Do(httpReq)
 		if err != nil {
 			w.WriteHeader(http.StatusBadGateway)
-			_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: fmt.Sprintf("fetch failed: %v", err)})
+			_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: "fetch failed"})
 			return
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			w.WriteHeader(http.StatusBadGateway)
-			_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: fmt.Sprintf("remote returned HTTP %d: %s", resp.StatusCode, resp.Status)})
+			_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: fmt.Sprintf("remote returned HTTP %d", resp.StatusCode)})
 			return
 		}
 
-		body, err := io.ReadAll(io.LimitReader(resp.Body, fetchRawMaxSize))
+		body, err := readBoundedOutboundBody(resp.Body, fetchRawMaxSize)
 		if err != nil {
 			w.WriteHeader(http.StatusBadGateway)
-			_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: fmt.Sprintf("failed to read response: %v", err)})
+			_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: "failed to read response"})
 			return
 		}
 

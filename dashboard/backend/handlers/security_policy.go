@@ -237,9 +237,9 @@ func HandleGetSecurityPolicy(w http.ResponseWriter, r *http.Request) {
 // router config fragment, and applies it to the running router config.
 func HandleUpdateSecurityPolicy(w http.ResponseWriter, r *http.Request) {
 	var policy SecurityPolicyConfig
-	if err := json.NewDecoder(r.Body).Decode(&policy); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "invalid request body: " + err.Error(),
+	if status, err := decodeBoundedJSON(w, r, smallJSONRequestBodyLimit, &policy); err != nil {
+		writeJSON(w, status, map[string]string{
+			"error": "invalid request body",
 		})
 		return
 	}
@@ -274,9 +274,9 @@ func HandleUpdateSecurityPolicy(w http.ResponseWriter, r *http.Request) {
 // given security policy without applying it.
 func HandlePreviewSecurityFragment(w http.ResponseWriter, r *http.Request) {
 	var policy SecurityPolicyConfig
-	if err := json.NewDecoder(r.Body).Decode(&policy); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "invalid request body: " + err.Error(),
+	if status, err := decodeBoundedJSON(w, r, smallJSONRequestBodyLimit, &policy); err != nil {
+		writeJSON(w, status, map[string]string{
+			"error": "invalid request body",
 		})
 		return
 	}

@@ -123,6 +123,14 @@ func (s *liveClassificationService) HasClassifier() bool {
 	return s.current().HasClassifier()
 }
 
+func (s *liveClassificationService) UsesLocalNativeEmbeddings(hasImage bool) bool {
+	if capability, ok := s.current().(localNativeEmbeddingCapability); ok {
+		return capability.UsesLocalNativeEmbeddings(hasImage)
+	}
+	// Unknown implementations fail closed into the process admission budget.
+	return true
+}
+
 func (s *liveClassificationService) HasFactCheckClassifier() bool {
 	return s.current().HasFactCheckClassifier()
 }

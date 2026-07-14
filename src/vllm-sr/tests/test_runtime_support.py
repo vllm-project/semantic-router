@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 import yaml
 from cli.bootstrap import build_bootstrap_config
 from cli.commands.runtime_support import (
@@ -65,6 +66,78 @@ def test_append_passthrough_env_vars_includes_router_logging_settings(monkeypatc
 
     assert env_vars["SR_LOG_LEVEL"] == "debug"
     assert env_vars["SR_LOG_ENCODING"] == "console"
+
+
+def test_append_passthrough_env_vars_masks_looper_shared_secret(monkeypatch, caplog):
+    shared_secret = "0123456789abcdef" * 4
+    monkeypatch.setenv("VLLM_SR_LOOPER_SHARED_SECRET", shared_secret)
+
+    env_vars: dict[str, str] = {}
+    with caplog.at_level("INFO", logger="cli.commands.runtime_support"):
+        append_passthrough_env_vars(env_vars)
+
+    assert env_vars["VLLM_SR_LOOPER_SHARED_SECRET"] == shared_secret
+    assert shared_secret not in caplog.text
+    assert "VLLM_SR_LOOPER_SHARED_SECRET=***" in caplog.text
+
+
+def test_append_passthrough_env_vars_collects_dashboard_auth_and_masks_secrets(
+    monkeypatch, caplog
+):
+    values = {
+        "DASHBOARD_JWT_SECRET": "jwt-secret-value",
+        "DASHBOARD_JWT_EXPIRY_HOURS": "12",
+        "DASHBOARD_ADMIN_EMAIL": "admin@example.com",
+        "DASHBOARD_ADMIN_PASSWORD": "admin-password-value",
+        "DASHBOARD_ADMIN_NAME": "Local Admin",
+        "DASHBOARD_SECURITY_PROFILE": "production",
+        "DASHBOARD_PASSWORD_BLOCKLIST_PATH": "/tmp/password-blocklist.txt",
+        "DASHBOARD_PASSWORD_BLOCKLIST_SHA256": "a" * 64,
+        "DASHBOARD_ALLOW_OPEN_BOOTSTRAP": "false",
+    }
+    for name, value in values.items():
+        monkeypatch.setenv(name, value)
+
+    env_vars: dict[str, str] = {}
+    with caplog.at_level("INFO", logger="cli.commands.runtime_support"):
+        append_passthrough_env_vars(env_vars)
+
+    assert {name: env_vars[name] for name in values} == values
+    assert "jwt-secret-value" not in caplog.text
+    assert "admin-password-value" not in caplog.text
+    assert "DASHBOARD_JWT_SECRET=***" in caplog.text
+    assert "DASHBOARD_ADMIN_PASSWORD=***" in caplog.text
+
+
+def test_append_passthrough_env_vars_excludes_dashboard_auth_for_nonlocal_target(
+    monkeypatch,
+):
+    monkeypatch.setenv("DASHBOARD_JWT_SECRET", "jwt-secret-value")
+    monkeypatch.setenv("DASHBOARD_ADMIN_EMAIL", "admin@example.com")
+
+    env_vars: dict[str, str] = {}
+    append_passthrough_env_vars(env_vars, include_dashboard_auth=False)
+
+    assert "DASHBOARD_JWT_SECRET" not in env_vars
+    assert "DASHBOARD_ADMIN_EMAIL" not in env_vars
+
+
+@pytest.mark.parametrize(
+    "invalid_secret",
+    ["", "too-short", "g" * 64],
+    ids=["empty", "wrong-length", "non-hexadecimal"],
+)
+def test_append_passthrough_env_vars_rejects_invalid_looper_shared_secret(
+    monkeypatch, invalid_secret
+):
+    monkeypatch.setenv("VLLM_SR_LOOPER_SHARED_SECRET", invalid_secret)
+
+    with pytest.raises(ValueError) as exc_info:
+        append_passthrough_env_vars({})
+
+    assert "must be exactly 64 hexadecimal characters" in str(exc_info.value)
+    if invalid_secret:
+        assert invalid_secret not in str(exc_info.value)
 
 
 def test_resolve_effective_config_path_enables_amd_gpu_by_default(

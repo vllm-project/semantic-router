@@ -22,6 +22,13 @@ describe('dashboard route manifest', () => {
     })
   })
 
+  it('registers password management as an authenticated account route', () => {
+    expect(shellRouteDefinitions).toContainEqual({
+      path: '/account/security',
+      page: 'account-security',
+    })
+  })
+
   it('keeps legacy redirects pointed at canonical dashboard routes', () => {
     expect(redirectRouteDefinitions).toContainEqual({
       path: '/knowledge-bases',

@@ -1,15 +1,12 @@
 package embedding
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"math"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -18,11 +15,40 @@ import (
 )
 
 const (
-	maxErrorBodyBytes     = 4096
-	defaultTimeoutSeconds = 10
-	baseRetryDelay        = 50 * time.Millisecond
-	maxRetryDelay         = 500 * time.Millisecond
+	maxErrorBodyDrainBytes             = 64 << 10
+	maxEmbeddingResponseBytes          = 32 << 20
+	embeddingResponseBaseBytes         = 16 << 10
+	embeddingResponsePerVectorBytes    = 256
+	embeddingResponsePerValueBytes     = 32
+	unknownEmbeddingDimensionForBudget = 8192
+	defaultTimeoutSeconds              = 10
+	baseRetryDelay                     = 50 * time.Millisecond
+	maxRetryDelay                      = 500 * time.Millisecond
 )
+
+type embeddingResponseErrorKind string
+
+const (
+	embeddingResponseTooLarge     embeddingResponseErrorKind = "too_large"
+	embeddingResponseReadFailure  embeddingResponseErrorKind = "read_failure"
+	embeddingResponseInvalidJSON  embeddingResponseErrorKind = "invalid_json"
+	embeddingResponseTrailingData embeddingResponseErrorKind = "trailing_data"
+	embeddingResponseInvalidData  embeddingResponseErrorKind = "invalid_data"
+)
+
+type embeddingResponseError struct {
+	kind    embeddingResponseErrorKind
+	message string
+	cause   error
+}
+
+func (e *embeddingResponseError) Error() string {
+	return e.message
+}
+
+func (e *embeddingResponseError) Unwrap() error {
+	return e.cause
+}
 
 type OpenAICompatibleConfig struct {
 	BaseURL           string
@@ -58,7 +84,7 @@ type embeddingsResponse struct {
 }
 
 type embeddingDatum struct {
-	Index     int       `json:"index"`
+	Index     *int      `json:"index,omitempty"`
 	Embedding []float64 `json:"embedding"`
 }
 
@@ -69,19 +95,9 @@ type providerError struct {
 }
 
 func NewOpenAICompatibleProvider(cfg OpenAICompatibleConfig) (*OpenAICompatibleProvider, error) {
-	endpoint, err := embeddingsEndpoint(cfg.BaseURL)
+	endpoint, model, err := validateOpenAICompatibleConfig(cfg)
 	if err != nil {
 		return nil, err
-	}
-	model := strings.TrimSpace(cfg.Model)
-	if model == "" {
-		return nil, fmt.Errorf("embedding endpoint model is required for backend %q", config.EmbeddingBackendOpenAICompatible)
-	}
-	if cfg.ExpectedDimension > 0 && cfg.Dimensions > 0 && cfg.ExpectedDimension != cfg.Dimensions {
-		return nil, fmt.Errorf("embedding endpoint dimensions (%d) must match target_dimension (%d)", cfg.Dimensions, cfg.ExpectedDimension)
-	}
-	if cfg.TimeoutSeconds < 0 {
-		return nil, fmt.Errorf("embedding endpoint timeout_seconds must be non-negative")
 	}
 
 	timeoutSeconds := cfg.TimeoutSeconds
@@ -89,13 +105,18 @@ func NewOpenAICompatibleProvider(cfg OpenAICompatibleConfig) (*OpenAICompatibleP
 		timeoutSeconds = defaultTimeoutSeconds
 	}
 	timeout := time.Duration(timeoutSeconds) * time.Second
-	client := cfg.HTTPClient
-	if client == nil {
-		client = &http.Client{Timeout: timeout}
-	} else if client.Timeout == 0 && timeout > 0 {
-		copyClient := *client
-		copyClient.Timeout = timeout
-		client = &copyClient
+	client := &http.Client{Transport: newNoProxyEmbeddingTransport()}
+	if cfg.HTTPClient != nil {
+		*client = *cfg.HTTPClient
+		if client.Transport == nil {
+			client.Transport = newNoProxyEmbeddingTransport()
+		}
+	}
+	if client.Timeout == 0 && timeout > 0 {
+		client.Timeout = timeout
+	}
+	client.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
 	}
 
 	return &OpenAICompatibleProvider{
@@ -150,10 +171,7 @@ func (p *OpenAICompatibleProvider) EmbedBatch(ctx context.Context, texts []strin
 }
 
 func waitBeforeRetry(ctx context.Context, attempt int) error {
-	delay := baseRetryDelay << max(0, attempt-1)
-	if delay > maxRetryDelay {
-		delay = maxRetryDelay
-	}
+	delay := retryDelay(attempt)
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
 	select {
@@ -162,6 +180,22 @@ func waitBeforeRetry(ctx context.Context, attempt int) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func retryDelay(attempt int) time.Duration {
+	delay := baseRetryDelay
+	if attempt <= 1 {
+		return delay
+	}
+	// The loop is bounded by the fixed base/max ratio, not by attempt. This
+	// keeps even an extreme attempt value cheap and avoids overflowing shifts.
+	for remaining := attempt - 1; remaining > 0 && delay < maxRetryDelay; remaining-- {
+		if delay > maxRetryDelay/2 {
+			return maxRetryDelay
+		}
+		delay *= 2
+	}
+	return min(delay, maxRetryDelay)
 }
 
 func (p *OpenAICompatibleProvider) Dimension() int {
@@ -176,32 +210,15 @@ func (p *OpenAICompatibleProvider) Backend() string {
 }
 
 func (p *OpenAICompatibleProvider) embedBatchOnce(ctx context.Context, texts []string, apiKey string) ([][]float32, error) {
-	body, err := json.Marshal(embeddingsRequest{Model: p.model, Input: texts, Dimensions: p.dimensions})
+	req, cancel, err := p.newEmbeddingBatchRequest(ctx, texts, apiKey)
 	if err != nil {
 		return nil, err
 	}
-
-	attemptCtx := ctx
-	var cancel context.CancelFunc
-	if p.timeout > 0 {
-		attemptCtx, cancel = context.WithTimeout(ctx, p.timeout)
-	}
-	if cancel != nil {
-		defer cancel()
-	}
-
-	req, err := http.NewRequestWithContext(attemptCtx, http.MethodPost, p.endpoint, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+apiKey)
-	}
+	defer cancel()
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, redactEmbeddingTransportError(err)
 	}
 	defer resp.Body.Close()
 
@@ -209,14 +226,22 @@ func (p *OpenAICompatibleProvider) embedBatchOnce(ctx context.Context, texts []s
 		return nil, responseError(resp)
 	}
 
-	var decoded embeddingsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return nil, fmt.Errorf("decode embedding response: %w", err)
+	decoded, err := decodeEmbeddingResponse(resp, p.responseByteLimit(len(texts)))
+	if err != nil {
+		return nil, err
 	}
 	if decoded.Error != nil && decoded.Error.Message != "" {
-		return nil, fmt.Errorf("embedding provider error: %s", decoded.Error.Message)
+		return nil, newEmbeddingResponseError(
+			embeddingResponseInvalidData,
+			"embedding provider returned an error response",
+			nil,
+		)
 	}
-	return p.parseEmbeddings(decoded.Data, len(texts))
+	embeddings, err := p.parseEmbeddings(decoded.Data, len(texts))
+	if err != nil {
+		return nil, newEmbeddingResponseError(embeddingResponseInvalidData, err.Error(), err)
+	}
+	return embeddings, nil
 }
 
 func (p *OpenAICompatibleProvider) parseEmbeddings(data []embeddingDatum, expectedCount int) ([][]float32, error) {
@@ -246,15 +271,12 @@ func (p *OpenAICompatibleProvider) parseEmbeddings(data []embeddingDatum, expect
 }
 
 func resolveEmbeddingIndex(item embeddingDatum, sequentialIndex int, expectedCount int) (int, error) {
-	index := item.Index
-	if expectedCount == 1 && index == 0 {
-		return 0, nil
-	}
-	if index == 0 && sequentialIndex > 0 {
-		index = sequentialIndex
+	index := sequentialIndex
+	if item.Index != nil {
+		index = *item.Index
 	}
 	if index < 0 || index >= expectedCount {
-		return 0, fmt.Errorf("embedding provider returned invalid embedding index %d", item.Index)
+		return 0, fmt.Errorf("embedding provider returned invalid embedding index %d", index)
 	}
 	return index, nil
 }
@@ -277,7 +299,17 @@ func (p *OpenAICompatibleProvider) convertEmbedding(values []float64) ([]float32
 	}
 	embedding := make([]float32, len(values))
 	for i, value := range values {
-		embedding[i] = float32(value)
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return nil, fmt.Errorf("embedding value at position %d is not finite", i)
+		}
+		if math.Abs(value) > math.MaxFloat32 {
+			return nil, fmt.Errorf("embedding value at position %d is outside the float32 range", i)
+		}
+		converted := float32(value)
+		if math.IsNaN(float64(converted)) || math.IsInf(float64(converted), 0) {
+			return nil, fmt.Errorf("embedding value at position %d is not finite after float32 conversion", i)
+		}
+		embedding[i] = converted
 	}
 	return embedding, nil
 }
@@ -291,54 +323,6 @@ func (p *OpenAICompatibleProvider) resolveAPIKey() (string, error) {
 		return "", fmt.Errorf("embedding API key env %q is not set", p.apiKeyEnv)
 	}
 	return value, nil
-}
-
-func embeddingsEndpoint(baseURL string) (string, error) {
-	baseURL = strings.TrimSpace(baseURL)
-	if baseURL == "" {
-		return "", fmt.Errorf("embedding endpoint base_url is required for backend %q", config.EmbeddingBackendOpenAICompatible)
-	}
-	parsed, err := url.Parse(baseURL)
-	if err != nil {
-		return "", fmt.Errorf("invalid embedding endpoint base_url %q: %w", baseURL, err)
-	}
-	if parsed.Scheme == "" || parsed.Host == "" {
-		return "", fmt.Errorf("embedding endpoint base_url %q must include scheme and host", baseURL)
-	}
-	path := strings.TrimRight(parsed.Path, "/")
-	if !strings.HasSuffix(path, "/embeddings") {
-		path += "/embeddings"
-	}
-	parsed.Path = path
-	parsed.RawQuery = ""
-	return parsed.String(), nil
-}
-
-type embeddingHTTPError struct {
-	statusCode int
-	message    string
-	retryable  bool
-}
-
-func (e *embeddingHTTPError) Error() string {
-	return e.message
-}
-
-func responseError(resp *http.Response) error {
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
-	bodyText := strings.TrimSpace(string(body))
-	if bodyText == "" {
-		bodyText = http.StatusText(resp.StatusCode)
-	}
-	message := fmt.Sprintf("embedding provider returned status %d: %s", resp.StatusCode, bodyText)
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		message = fmt.Sprintf("embedding provider authentication failed with status %d: %s", resp.StatusCode, bodyText)
-	}
-	return &embeddingHTTPError{
-		statusCode: resp.StatusCode,
-		message:    message,
-		retryable:  resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= http.StatusInternalServerError,
-	}
 }
 
 func shouldRetryEmbeddingError(err error) bool {

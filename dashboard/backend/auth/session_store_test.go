@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -61,6 +62,93 @@ func TestSessionStoreMissingSessionIsInactive(t *testing.T) {
 	}
 }
 
+func TestCreateSessionRejectsMissingIdentifiers(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestAuthService(t)
+	now := time.Now().Unix()
+	for _, test := range []struct {
+		name      string
+		sessionID string
+		userID    string
+	}{
+		{name: "empty session", sessionID: "", userID: "user-id"},
+		{name: "blank session", sessionID: "   ", userID: "user-id"},
+		{name: "empty user", sessionID: "session-id", userID: ""},
+		{name: "blank user", sessionID: "session-id", userID: "\t"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := svc.store.CreateSession(
+				context.Background(),
+				test.sessionID,
+				test.userID,
+				now,
+				now+60,
+			)
+			if err == nil || !strings.Contains(err.Error(), "required") {
+				t.Fatalf("CreateSession() error = %v, want safe required-field error", err)
+			}
+		})
+	}
+}
+
+func TestSessionIssuanceBoundsActiveAndRetainedRowsPerUser(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestAuthService(t)
+	user := newTestUser(t, svc, "bounded-sessions@example.com", RoleRead, "active")
+	issuedTokens := make([]string, 0, maxRetainedAuthSessionsPerUser+20)
+	for range maxRetainedAuthSessionsPerUser + 20 {
+		token, err := svc.issueToken(user)
+		if err != nil {
+			t.Fatalf("issueToken() error = %v", err)
+		}
+		issuedTokens = append(issuedTokens, token)
+	}
+
+	now := time.Now().Unix()
+	var activeCount, totalCount int
+	if err := svc.store.db.QueryRowContext(
+		context.Background(),
+		`SELECT COUNT(*) FROM auth_sessions
+		 WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?`,
+		user.ID,
+		now,
+	).Scan(&activeCount); err != nil {
+		t.Fatalf("count active sessions: %v", err)
+	}
+	if err := svc.store.db.QueryRowContext(
+		context.Background(),
+		`SELECT COUNT(*) FROM auth_sessions WHERE user_id = ?`,
+		user.ID,
+	).Scan(&totalCount); err != nil {
+		t.Fatalf("count retained sessions: %v", err)
+	}
+	if activeCount != maxActiveAuthSessionsPerUser {
+		t.Fatalf("active session count = %d, want %d", activeCount, maxActiveAuthSessionsPerUser)
+	}
+	if totalCount != maxRetainedAuthSessionsPerUser {
+		t.Fatalf("retained session count = %d, want %d", totalCount, maxRetainedAuthSessionsPerUser)
+	}
+
+	// The newest token must survive eviction even when many tokens share the
+	// same second-level issued_at timestamp.
+	newestClaims, err := svc.ParseToken(issuedTokens[len(issuedTokens)-1])
+	if err != nil {
+		t.Fatalf("parse newest token: %v", err)
+	}
+	if _, _, resolveErr := svc.ResolveSessionUser(context.Background(), newestClaims); resolveErr != nil {
+		t.Fatalf("newest token is not active: %v", resolveErr)
+	}
+	oldestClaims, err := svc.ParseToken(issuedTokens[0])
+	if err != nil {
+		t.Fatalf("parse oldest token: %v", err)
+	}
+	if _, _, err := svc.ResolveSessionUser(context.Background(), oldestClaims); err == nil {
+		t.Fatal("oldest excess token remained active")
+	}
+}
+
 func TestPruneInactiveSessionsKeepsRecentInactiveRecords(t *testing.T) {
 	t.Parallel()
 
@@ -85,9 +173,7 @@ func TestPruneInactiveSessionsKeepsRecentInactiveRecords(t *testing.T) {
 	}
 
 	for _, session := range sessions {
-		if err := svc.store.CreateSession(context.Background(), session.id, user.ID, now.Unix(), session.expiresAt); err != nil {
-			t.Fatalf("CreateSession(%q) error = %v", session.id, err)
-		}
+		insertSessionWithoutEnforcement(t, svc.store, session.id, user.ID, now.Unix(), session.expiresAt)
 		if session.revokedAt != nil {
 			if _, err := svc.store.db.ExecContext(context.Background(), `UPDATE auth_sessions SET revoked_at = ? WHERE id = ?`, *session.revokedAt, session.id); err != nil {
 				t.Fatalf("mark revoked %q: %v", session.id, err)
@@ -129,12 +215,20 @@ func TestNewStorePrunesInactiveSessionsOnOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
-	svc := NewService(initialStore, "test-secret", 1)
+	svc, err := NewService(initialStore, testJWTSecret, 1)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
 	user := newTestUser(t, svc, "startup-prune@example.com", RoleRead, "active")
 	oldCutoff := time.Now().Add(-inactiveAuthSessionRetention - time.Hour)
-	if err := svc.store.CreateSession(context.Background(), "old-expired", user.ID, oldCutoff.Add(-time.Hour).Unix(), oldCutoff.Unix()); err != nil {
-		t.Fatalf("CreateSession() error = %v", err)
-	}
+	insertSessionWithoutEnforcement(
+		t,
+		svc.store,
+		"old-expired",
+		user.ID,
+		oldCutoff.Add(-time.Hour).Unix(),
+		oldCutoff.Unix(),
+	)
 	if err := initialStore.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
 	}
@@ -167,6 +261,28 @@ func sessionExists(t *testing.T, store *Store, sessionID string) bool {
 		t.Fatalf("count session %q: %v", sessionID, err)
 	}
 	return count > 0
+}
+
+func insertSessionWithoutEnforcement(
+	t *testing.T,
+	store *Store,
+	sessionID string,
+	userID string,
+	issuedAt int64,
+	expiresAt int64,
+) {
+	t.Helper()
+	if _, err := store.db.ExecContext(
+		context.Background(),
+		`INSERT INTO auth_sessions(id, user_id, issued_at, expires_at)
+		 VALUES (?, ?, ?, ?)`,
+		sessionID,
+		userID,
+		issuedAt,
+		expiresAt,
+	); err != nil {
+		t.Fatalf("insert session fixture %q: %v", sessionID, err)
+	}
 }
 
 func int64Ptr(value int64) *int64 {

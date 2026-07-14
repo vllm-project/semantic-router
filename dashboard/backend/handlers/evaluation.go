@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,8 +23,12 @@ type EvaluationHandler struct {
 	readonlyMode bool
 	routerAPIURL string   // Router API URL for signal evaluation
 	envoyURL     string   // Envoy URL for model evaluation
-	sseClients   sync.Map // map[taskID]map[clientID]chan models.ProgressUpdate
 	cancelFuncs  sync.Map // map[taskID]context.CancelFunc
+	runMu        sync.Mutex
+	activeRuns   map[string]struct{}
+	sseMu        sync.Mutex
+	sseClients   map[string]*evaluationSSETaskRegistry
+	sseTotal     int
 }
 
 // NewEvaluationHandler creates a new evaluation handler.
@@ -34,6 +39,8 @@ func NewEvaluationHandler(db *evaluation.DB, runner *evaluation.Runner, readonly
 		readonlyMode: readonlyMode,
 		routerAPIURL: routerAPIURL,
 		envoyURL:     envoyURL,
+		activeRuns:   make(map[string]struct{}),
+		sseClients:   make(map[string]*evaluationSSETaskRegistry),
 	}
 
 	// Start background goroutine to forward progress updates to SSE clients
@@ -51,18 +58,7 @@ func (h *EvaluationHandler) forwardProgressUpdates() {
 
 // broadcastProgress sends a progress update to all subscribed clients for a task.
 func (h *EvaluationHandler) broadcastProgress(update models.ProgressUpdate) {
-	if clientsMap, ok := h.sseClients.Load(update.TaskID); ok {
-		clients := clientsMap.(*sync.Map)
-		clients.Range(func(key, value interface{}) bool {
-			ch := value.(chan models.ProgressUpdate)
-			select {
-			case ch <- update:
-			default:
-				// Client channel full, skip
-			}
-			return true
-		})
-	}
+	h.broadcastEvaluationProgress(update)
 }
 
 // ListTasksHandler returns all evaluation tasks.
@@ -77,11 +73,15 @@ func (h *EvaluationHandler) ListTasksHandler() http.HandlerFunc {
 			return
 		}
 
-		status := r.URL.Query().Get("status")
+		status := strings.TrimSpace(r.URL.Query().Get("status"))
+		if !validEvaluationStatusFilter(status) {
+			http.Error(w, "Invalid task status", http.StatusBadRequest)
+			return
+		}
 		tasks, err := h.db.ListTasks(status)
 		if err != nil {
-			log.Printf("Failed to list tasks: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to list tasks: %v", err), http.StatusInternalServerError)
+			log.Printf("Evaluation task list failed (%T)", err)
+			http.Error(w, "Failed to list tasks", http.StatusInternalServerError)
 			return
 		}
 
@@ -91,7 +91,7 @@ func (h *EvaluationHandler) ListTasksHandler() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(tasks); err != nil {
-			log.Printf("Error encoding response: %v", err)
+			log.Printf("Evaluation response encoding failed (%T)", err)
 		}
 	}
 }
@@ -108,18 +108,16 @@ func (h *EvaluationHandler) GetTaskHandler() http.HandlerFunc {
 			return
 		}
 
-		// Extract task ID from URL path: /api/evaluation/tasks/{id}
-		pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/evaluation/tasks/"), "/")
-		if len(pathParts) == 0 || pathParts[0] == "" {
-			http.Error(w, "Task ID required", http.StatusBadRequest)
+		taskID, ok := evaluationTaskIDFromPath(r.URL.Path, "/api/evaluation/tasks/")
+		if !ok {
+			http.Error(w, "Invalid task ID", http.StatusBadRequest)
 			return
 		}
-		taskID := pathParts[0]
 
 		task, err := h.db.GetTask(taskID)
 		if err != nil {
-			log.Printf("Failed to get task: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to get task: %v", err), http.StatusInternalServerError)
+			log.Printf("Evaluation task %s lookup failed (%T)", taskID, err)
+			http.Error(w, "Failed to get task", http.StatusInternalServerError)
 			return
 		}
 
@@ -130,7 +128,7 @@ func (h *EvaluationHandler) GetTaskHandler() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(task); err != nil {
-			log.Printf("Error encoding response: %v", err)
+			log.Printf("Evaluation response encoding failed (%T)", err)
 		}
 	}
 }
@@ -145,9 +143,13 @@ func (h *EvaluationHandler) CreateTaskHandler() http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if h.readonlyMode {
+			http.Error(w, "Operation not allowed in readonly mode", http.StatusForbidden)
+			return
+		}
 		var req models.CreateTaskRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		if status, err := decodeBoundedJSON(w, r, smallJSONRequestBodyLimit, &req); err != nil {
+			http.Error(w, "Invalid request body", status)
 			return
 		}
 		normalizeEvaluationCreateConfig(&req.Config)
@@ -162,14 +164,14 @@ func (h *EvaluationHandler) CreateTaskHandler() http.HandlerFunc {
 			Config:      req.Config,
 		}
 		if err := h.db.CreateTask(task); err != nil {
-			log.Printf("Failed to create task: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to create task: %v", err), http.StatusInternalServerError)
+			log.Printf("Evaluation task creation failed (%T)", err)
+			http.Error(w, "Failed to create task", http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		if err := json.NewEncoder(w).Encode(task); err != nil {
-			log.Printf("Error encoding response: %v", err)
+			log.Printf("Evaluation response encoding failed (%T)", err)
 		}
 	}
 }
@@ -185,22 +187,44 @@ func (h *EvaluationHandler) DeleteTaskHandler() http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-
-		// Extract task ID from URL path
-		pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/evaluation/tasks/"), "/")
-		if len(pathParts) == 0 || pathParts[0] == "" {
-			http.Error(w, "Task ID required", http.StatusBadRequest)
+		if h.readonlyMode {
+			http.Error(w, "Operation not allowed in readonly mode", http.StatusForbidden)
 			return
 		}
-		taskID := pathParts[0]
 
+		taskID, ok := evaluationTaskIDFromPath(r.URL.Path, "/api/evaluation/tasks/")
+		if !ok {
+			http.Error(w, "Invalid task ID", http.StatusBadRequest)
+			return
+		}
+
+		h.runMu.Lock()
+		defer h.runMu.Unlock()
+		if _, running := h.activeRuns[taskID]; running {
+			http.Error(w, "Cannot delete a running task", http.StatusConflict)
+			return
+		}
+		task, err := h.db.GetTask(taskID)
+		if err != nil {
+			log.Printf("Evaluation task %s lookup before delete failed (%T)", taskID, err)
+			http.Error(w, "Failed to delete task", http.StatusInternalServerError)
+			return
+		}
+		if task == nil {
+			http.Error(w, "Task not found", http.StatusNotFound)
+			return
+		}
+		if task.Status == models.StatusRunning {
+			http.Error(w, "Cannot delete a running task", http.StatusConflict)
+			return
+		}
 		if err := h.db.DeleteTask(taskID); err != nil {
 			if strings.Contains(err.Error(), "not found") {
 				http.Error(w, "Task not found", http.StatusNotFound)
 				return
 			}
-			log.Printf("Failed to delete task: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to delete task: %v", err), http.StatusInternalServerError)
+			log.Printf("Evaluation task %s deletion failed (%T)", taskID, err)
+			http.Error(w, "Failed to delete task", http.StatusInternalServerError)
 			return
 		}
 
@@ -220,23 +244,38 @@ func (h *EvaluationHandler) RunTaskHandler() http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if h.readonlyMode {
+			http.Error(w, "Operation not allowed in readonly mode", http.StatusForbidden)
+			return
+		}
 
 		var req models.RunTaskRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		if status, err := decodeBoundedJSON(w, r, smallJSONRequestBodyLimit, &req); err != nil {
+			http.Error(w, "Invalid request body", status)
 			return
 		}
 
-		if req.TaskID == "" {
-			http.Error(w, "Task ID is required", http.StatusBadRequest)
+		req.TaskID = strings.TrimSpace(req.TaskID)
+		if !validEvaluationTaskID(req.TaskID) {
+			http.Error(w, "Invalid task ID", http.StatusBadRequest)
 			return
 		}
 
-		// Check if task exists and is in pending state
+		h.runMu.Lock()
+		defer h.runMu.Unlock()
+		if _, running := h.activeRuns[req.TaskID]; running {
+			http.Error(w, "Task is already running", http.StatusConflict)
+			return
+		}
+		if len(h.activeRuns) >= h.runner.MaxConcurrent() {
+			http.Error(w, "Too many evaluation tasks are running", http.StatusTooManyRequests)
+			return
+		}
+
 		task, err := h.db.GetTask(req.TaskID)
 		if err != nil {
-			log.Printf("Failed to get task: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to get task: %v", err), http.StatusInternalServerError)
+			log.Printf("Evaluation task %s lookup before run failed (%T)", req.TaskID, err)
+			http.Error(w, "Failed to get task", http.StatusInternalServerError)
 			return
 		}
 		if task == nil {
@@ -244,33 +283,39 @@ func (h *EvaluationHandler) RunTaskHandler() http.HandlerFunc {
 			return
 		}
 		if task.Status != models.StatusPending && task.Status != models.StatusFailed {
-			http.Error(w, fmt.Sprintf("Task is already %s", task.Status), http.StatusConflict)
+			http.Error(w, "Task cannot be started in its current state", http.StatusConflict)
 			return
 		}
 
 		// Transition the task before returning so reruns do not briefly show the previous failed state.
 		if err := h.db.UpdateTaskStatus(req.TaskID, models.StatusRunning, ""); err != nil {
-			log.Printf("Failed to mark task %s as running: %v", req.TaskID, err)
-			http.Error(w, fmt.Sprintf("Failed to start task: %v", err), http.StatusInternalServerError)
+			log.Printf("Evaluation task %s running transition failed (%T)", req.TaskID, err)
+			http.Error(w, "Failed to start task", http.StatusInternalServerError)
 			return
 		}
 		if err := h.db.UpdateTaskProgress(req.TaskID, 0, "Starting evaluation"); err != nil {
-			log.Printf("Failed to reset task %s progress: %v", req.TaskID, err)
-			http.Error(w, fmt.Sprintf("Failed to initialize task progress: %v", err), http.StatusInternalServerError)
+			log.Printf("Evaluation task %s progress reset failed (%T)", req.TaskID, err)
+			_ = h.db.UpdateTaskStatus(req.TaskID, models.StatusFailed, "Failed to initialize evaluation")
+			http.Error(w, "Failed to initialize task progress", http.StatusInternalServerError)
 			return
 		}
 
-		// Create cancellation context
 		ctx, cancel := context.WithCancel(context.Background())
 		h.cancelFuncs.Store(req.TaskID, cancel)
+		h.activeRuns[req.TaskID] = struct{}{}
 
-		// Run task in background
-		go func() {
-			defer h.cancelFuncs.Delete(req.TaskID)
-			if err := h.runner.RunTask(ctx, req.TaskID); err != nil {
-				log.Printf("Task %s failed: %v", req.TaskID, err)
+		go func(taskID string) {
+			defer h.finishEvaluationRun(taskID)
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					log.Printf("Evaluation task %s panicked (panic_type=%T)", taskID, recovered)
+					_ = h.db.UpdateTaskStatus(taskID, models.StatusFailed, "Evaluation failed")
+				}
+			}()
+			if err := h.runner.RunTask(ctx, taskID); err != nil {
+				log.Printf("Evaluation task %s failed (error_type=%T)", taskID, err)
 			}
-		}()
+		}(req.TaskID)
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -291,27 +336,43 @@ func (h *EvaluationHandler) CancelTaskHandler() http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-
-		// Extract task ID from URL path
-		pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/evaluation/cancel/"), "/")
-		if len(pathParts) == 0 || pathParts[0] == "" {
-			http.Error(w, "Task ID required", http.StatusBadRequest)
+		if h.readonlyMode {
+			http.Error(w, "Operation not allowed in readonly mode", http.StatusForbidden)
 			return
 		}
-		taskID := pathParts[0]
 
-		// Cancel the context
+		taskID, ok := evaluationTaskIDFromPath(r.URL.Path, "/api/evaluation/cancel/")
+		if !ok {
+			http.Error(w, "Invalid task ID", http.StatusBadRequest)
+			return
+		}
+
+		h.runMu.Lock()
+		defer h.runMu.Unlock()
+		task, err := h.db.GetTask(taskID)
+		if err != nil {
+			log.Printf("Evaluation task %s lookup before cancellation failed (%T)", taskID, err)
+			http.Error(w, "Failed to cancel task", http.StatusInternalServerError)
+			return
+		}
+		if task == nil {
+			http.Error(w, "Task not found", http.StatusNotFound)
+			return
+		}
+		if task.Status != models.StatusRunning {
+			http.Error(w, "Task is not running", http.StatusConflict)
+			return
+		}
 		if cancelFunc, ok := h.cancelFuncs.Load(taskID); ok {
 			cancelFunc.(context.CancelFunc)()
-			h.cancelFuncs.Delete(taskID)
 		}
 
-		// Also tell the runner to cancel
 		if err := h.runner.CancelTask(taskID); err != nil {
-			log.Printf("Failed to cancel task: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to cancel task: %v", err), http.StatusInternalServerError)
+			log.Printf("Evaluation task %s cancellation failed (%T)", taskID, err)
+			http.Error(w, "Failed to cancel task", http.StatusInternalServerError)
 			return
 		}
+		h.finishEvaluationSSETask(taskID, models.StatusCancelled)
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "cancelled"})
@@ -324,20 +385,50 @@ func (h *EvaluationHandler) StreamProgressHandler() http.HandlerFunc {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
-
-		// Extract task ID from URL path
-		pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/evaluation/stream/"), "/")
-		if len(pathParts) == 0 || pathParts[0] == "" {
-			http.Error(w, "Task ID required", http.StatusBadRequest)
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		taskID := pathParts[0]
 
-		// Set SSE headers
+		taskID, ok := evaluationTaskIDFromPath(r.URL.Path, "/api/evaluation/stream/")
+		if !ok {
+			http.Error(w, "Invalid task ID", http.StatusBadRequest)
+			return
+		}
+
+		// Serialize terminal-state observation with task completion. If a stream
+		// registers first, completion will detach and notify it; if completion
+		// wins, the terminal state is observed here and no registry is created.
+		h.runMu.Lock()
+		task, err := h.db.GetTask(taskID)
+		if err != nil {
+			h.runMu.Unlock()
+			log.Printf("Evaluation task %s lookup before stream failed (%T)", taskID, err)
+			http.Error(w, "Failed to open progress stream", http.StatusInternalServerError)
+			return
+		}
+		if task == nil {
+			h.runMu.Unlock()
+			http.Error(w, "Task not found", http.StatusNotFound)
+			return
+		}
+		if task.Status == models.StatusCompleted || task.Status == models.StatusFailed || task.Status == models.StatusCancelled {
+			h.runMu.Unlock()
+			http.Error(w, "Task is already finished", http.StatusConflict)
+			return
+		}
+		clientID, client, err := h.registerEvaluationSSEClient(taskID)
+		h.runMu.Unlock()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusTooManyRequests)
+			return
+		}
+		defer h.unregisterEvaluationSSEClient(taskID, clientID, client)
+
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("X-Accel-Buffering", "no")
 
 		flusher, ok := w.(http.Flusher)
 		if !ok {
@@ -345,54 +436,32 @@ func (h *EvaluationHandler) StreamProgressHandler() http.HandlerFunc {
 			return
 		}
 
-		// Create client channel
-		clientID := fmt.Sprintf("%d", time.Now().UnixNano())
-		clientChan := make(chan models.ProgressUpdate, 10)
-
-		// Register client
-		var clients *sync.Map
-		if existing, ok := h.sseClients.Load(taskID); ok {
-			clients = existing.(*sync.Map)
-		} else {
-			clients = &sync.Map{}
-			h.sseClients.Store(taskID, clients)
-		}
-		clients.Store(clientID, clientChan)
-
-		// Clean up on disconnect
-		defer func() {
-			clients.Delete(clientID)
-			close(clientChan)
-		}()
-
-		// Send initial connection message
 		_, _ = fmt.Fprintf(w, "event: connected\ndata: {\"task_id\":\"%s\"}\n\n", taskID)
 		flusher.Flush()
 
-		// Stream updates
 		ctx := r.Context()
+		heartbeat := time.NewTicker(15 * time.Second)
+		defer heartbeat.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case update, ok := <-clientChan:
-				if !ok {
-					return
-				}
+			case <-heartbeat.C:
+				_, _ = fmt.Fprint(w, ": heartbeat\n\n")
+				flusher.Flush()
+			case status := <-client.terminal:
+				data, _ := json.Marshal(map[string]string{"task_id": taskID, "status": string(status)})
+				_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", status, data)
+				flusher.Flush()
+				return
+			case update := <-client.updates:
 				data, err := json.Marshal(update)
 				if err != nil {
-					log.Printf("Error marshaling progress update: %v", err)
+					log.Printf("Evaluation progress encoding failed (%T)", err)
 					continue
 				}
 				_, _ = fmt.Fprintf(w, "event: progress\ndata: %s\n\n", data)
 				flusher.Flush()
-
-				// Close stream if task completed
-				if update.ProgressPercent >= 100 {
-					_, _ = fmt.Fprintf(w, "event: completed\ndata: {\"task_id\":\"%s\"}\n\n", taskID)
-					flusher.Flush()
-					return
-				}
 			}
 		}
 	}
@@ -410,19 +479,17 @@ func (h *EvaluationHandler) GetResultsHandler() http.HandlerFunc {
 			return
 		}
 
-		// Extract task ID from URL path
-		pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/evaluation/results/"), "/")
-		if len(pathParts) == 0 || pathParts[0] == "" {
-			http.Error(w, "Task ID required", http.StatusBadRequest)
+		taskID, ok := evaluationTaskIDFromPath(r.URL.Path, "/api/evaluation/results/")
+		if !ok {
+			http.Error(w, "Invalid task ID", http.StatusBadRequest)
 			return
 		}
-		taskID := pathParts[0]
 
 		// Get task to check status
 		task, err := h.db.GetTask(taskID)
 		if err != nil {
-			log.Printf("Failed to get task: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to get task: %v", err), http.StatusInternalServerError)
+			log.Printf("Evaluation task %s result lookup failed (%T)", taskID, err)
+			http.Error(w, "Failed to get task", http.StatusInternalServerError)
 			return
 		}
 		if task == nil {
@@ -433,8 +500,8 @@ func (h *EvaluationHandler) GetResultsHandler() http.HandlerFunc {
 		// Get results
 		results, err := h.db.GetResults(taskID)
 		if err != nil {
-			log.Printf("Failed to get results: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to get results: %v", err), http.StatusInternalServerError)
+			log.Printf("Evaluation task %s result query failed (%T)", taskID, err)
+			http.Error(w, "Failed to get results", http.StatusInternalServerError)
 			return
 		}
 
@@ -449,7 +516,7 @@ func (h *EvaluationHandler) GetResultsHandler() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(response); err != nil {
-			log.Printf("Error encoding response: %v", err)
+			log.Printf("Evaluation response encoding failed (%T)", err)
 		}
 	}
 }
@@ -466,23 +533,25 @@ func (h *EvaluationHandler) ExportResultsHandler() http.HandlerFunc {
 			return
 		}
 
-		// Extract task ID from URL path
-		pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/evaluation/export/"), "/")
-		if len(pathParts) == 0 || pathParts[0] == "" {
-			http.Error(w, "Task ID required", http.StatusBadRequest)
+		taskID, ok := evaluationTaskIDFromPath(r.URL.Path, "/api/evaluation/export/")
+		if !ok {
+			http.Error(w, "Invalid task ID", http.StatusBadRequest)
 			return
 		}
-		taskID := pathParts[0]
 
-		format := models.ExportFormat(r.URL.Query().Get("format"))
+		format := models.ExportFormat(strings.TrimSpace(r.URL.Query().Get("format")))
 		if format == "" {
 			format = models.ExportJSON
+		}
+		if format != models.ExportJSON && format != models.ExportCSV {
+			http.Error(w, "Unsupported export format", http.StatusBadRequest)
+			return
 		}
 
 		data, contentType, err := h.runner.ExportResults(taskID, format)
 		if err != nil {
-			log.Printf("Failed to export results: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to export results: %v", err), http.StatusInternalServerError)
+			log.Printf("Evaluation task %s export failed (%T)", taskID, err)
+			http.Error(w, "Failed to export results", http.StatusInternalServerError)
 			return
 		}
 
@@ -512,7 +581,7 @@ func GetDatasetsHandler() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(datasets); err != nil {
-			log.Printf("Error encoding response: %v", err)
+			log.Printf("Evaluation response encoding failed (%T)", err)
 		}
 	}
 }
@@ -529,21 +598,30 @@ func (h *EvaluationHandler) GetHistoryHandler() http.HandlerFunc {
 			return
 		}
 
-		metricName := r.URL.Query().Get("metric")
+		metricName := strings.TrimSpace(r.URL.Query().Get("metric"))
 		if metricName == "" {
 			http.Error(w, "Metric name is required", http.StatusBadRequest)
+			return
+		}
+		if len([]byte(metricName)) > 128 || containsUnicodeControl(metricName) {
+			http.Error(w, "Invalid metric name", http.StatusBadRequest)
 			return
 		}
 
 		limit := 100 // Default limit
 		if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-			_, _ = fmt.Sscanf(limitStr, "%d", &limit)
+			parsed, err := strconv.Atoi(limitStr)
+			if err != nil || parsed < 1 || parsed > 1000 {
+				http.Error(w, "limit must be between 1 and 1000", http.StatusBadRequest)
+				return
+			}
+			limit = parsed
 		}
 
 		entries, err := h.db.GetHistoryForMetric(metricName, limit)
 		if err != nil {
-			log.Printf("Failed to get history: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to get history: %v", err), http.StatusInternalServerError)
+			log.Printf("Evaluation history query failed (%T)", err)
+			http.Error(w, "Failed to get history", http.StatusInternalServerError)
 			return
 		}
 
@@ -553,7 +631,7 @@ func (h *EvaluationHandler) GetHistoryHandler() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(entries); err != nil {
-			log.Printf("Error encoding response: %v", err)
+			log.Printf("Evaluation response encoding failed (%T)", err)
 		}
 	}
 }

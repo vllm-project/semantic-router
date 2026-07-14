@@ -14,6 +14,7 @@ export interface RoomBridgeEnvelope {
 
 export type RoomEventListener = (event: WSOutboundMessage) => void
 export type SurfaceEventListener = (roomId: string, payload: Record<string, unknown>) => void
+export type RoomBridgeSourceResolver = () => MessageEventSource | null
 
 export interface RoomSurfaceEventSender {
   senderType?: string
@@ -31,15 +32,23 @@ export const isRoomBridgeEnvelope = (data: unknown): data is RoomBridgeEnvelope 
     return false
   }
   const candidate = data as Partial<RoomBridgeEnvelope>
-  return candidate.source === CLAWOS_ROOM_BRIDGE_SOURCE
-    && typeof candidate.type === 'string'
-    && typeof candidate.roomId === 'string'
+  const validType =
+    candidate.type === 'room_event' ||
+    candidate.type === 'surface_event' ||
+    candidate.type === 'room_context'
+  return (
+    candidate.source === CLAWOS_ROOM_BRIDGE_SOURCE &&
+    validType &&
+    typeof candidate.roomId === 'string' &&
+    candidate.roomId.length > 0 &&
+    candidate.roomId.length <= 256
+  )
 }
 
 export const buildRoomBridgeEnvelope = (
   type: RoomBridgeMessageType,
   roomId: string,
-  details: Pick<RoomBridgeEnvelope, 'event' | 'payload'> = {}
+  details: Pick<RoomBridgeEnvelope, 'event' | 'payload'> = {},
 ): RoomBridgeEnvelope => ({
   source: CLAWOS_ROOM_BRIDGE_SOURCE,
   type,
@@ -50,13 +59,16 @@ export const buildRoomBridgeEnvelope = (
 export const postRoomEventToFrame = (
   iframe: HTMLIFrameElement,
   roomId: string,
-  event: WSOutboundMessage
+  event: WSOutboundMessage,
 ): void => {
   const target = iframe.contentWindow
   if (!target) {
     return
   }
-  target.postMessage(buildRoomBridgeEnvelope('room_event', roomId, { event }), '*')
+  target.postMessage(
+    buildRoomBridgeEnvelope('room_event', roomId, { event }),
+    window.location.origin,
+  )
 }
 
 export const postRoomContextToFrame = (iframe: HTMLIFrameElement, roomId: string): void => {
@@ -64,16 +76,19 @@ export const postRoomContextToFrame = (iframe: HTMLIFrameElement, roomId: string
   if (!target) {
     return
   }
-  target.postMessage(buildRoomBridgeEnvelope('room_context', roomId), '*')
+  target.postMessage(buildRoomBridgeEnvelope('room_context', roomId), window.location.origin)
 }
 
 export const publishSurfaceEvent = (roomId: string, payload: Record<string, unknown>): void => {
-  window.parent.postMessage(buildRoomBridgeEnvelope('surface_event', roomId, { payload }), '*')
+  window.parent.postMessage(
+    buildRoomBridgeEnvelope('surface_event', roomId, { payload }),
+    window.location.origin,
+  )
 }
 
 export const buildRoomSurfaceWSMessage = (
   payload: Record<string, unknown>,
-  sender: RoomSurfaceEventSender = {}
+  sender: RoomSurfaceEventSender = {},
 ): WSInboundMessage => ({
   type: 'surface_event',
   payload,
@@ -84,13 +99,13 @@ export const buildRoomSurfaceWSMessage = (
 
 export const subscribeRoomEvents = (
   roomId: string,
-  onEvent: RoomEventListener
+  onEvent: RoomEventListener,
 ): RoomWebSocketSubscription => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const wsUrl = `${protocol}//${window.location.host}/api/openclaw/rooms/${encodeURIComponent(roomId)}/ws`
   const ws = new WebSocket(wsUrl)
 
-  ws.onmessage = event => {
+  ws.onmessage = (event) => {
     try {
       const payload = JSON.parse(event.data) as WSOutboundMessage
       onEvent(payload)
@@ -99,7 +114,10 @@ export const subscribeRoomEvents = (
     }
   }
 
-  const sendSurfaceEvent = (payload: Record<string, unknown>, sender: RoomSurfaceEventSender = {}) => {
+  const sendSurfaceEvent = (
+    payload: Record<string, unknown>,
+    sender: RoomSurfaceEventSender = {},
+  ) => {
     if (ws.readyState !== WebSocket.OPEN) {
       return
     }
@@ -118,9 +136,18 @@ export const subscribeRoomEvents = (
 
 export const listenForSurfaceEvents = (
   roomId: string,
-  onSurfaceEvent: SurfaceEventListener
+  onSurfaceEvent: SurfaceEventListener,
+  resolveExpectedSource: RoomBridgeSourceResolver,
 ): (() => void) => {
   const handleMessage = (event: MessageEvent) => {
+    const expectedSource = resolveExpectedSource()
+    if (
+      event.origin !== window.location.origin ||
+      expectedSource === null ||
+      event.source !== expectedSource
+    ) {
+      return
+    }
     if (!isRoomBridgeEnvelope(event.data) || event.data.type !== 'surface_event') {
       return
     }

@@ -24,90 +24,176 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Get changed files
         id: changed-files
         uses: actions/github-script@v7
         with:
-          result-encoding: string
           script: |
             // Retrieve changed files via GitHub API to avoid relying on fork
-            // refs.
+            // refs. Keep filenames as JSON so whitespace and metacharacters
+            // never become JavaScript source in the privileged follow-up step.
             const files = await github.paginate(github.rest.pulls.listFiles, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number,
               per_page: 100,
             });
-            const filenames = files.map(f => f.filename);
-            core.setOutput('all_changed_files', filenames.join(' '));
+            const filenames = files.map(file => file.filename);
+            core.setOutput('filenames_json', JSON.stringify(filenames));
 
       - name: Find owners and notify
         uses: actions/github-script@v7
+        env:
+          CHANGED_FILES_JSON: ${{ steps.changed-files.outputs.filenames_json }}
         with:
           script: |
             const fs = require('fs');
             const path = require('path');
 
-            // Get changed files
-            const changedFiles =
-              `${{ steps.changed-files.outputs.all_changed_files }}`.split(' ');
-            console.log('Changed files:', changedFiles);
+            let changedFilePayload;
+            try {
+              changedFilePayload = JSON.parse(
+                process.env.CHANGED_FILES_JSON || '[]'
+              );
+            } catch {
+              core.setFailed('Changed-file metadata was not valid JSON');
+              return;
+            }
+            if (
+              !Array.isArray(changedFilePayload) ||
+              !changedFilePayload.every(file => typeof file === 'string')
+            ) {
+              core.setFailed('Changed-file metadata was not a string array');
+              return;
+            }
 
-            function readOwners(ownerPath) {
-              if (!fs.existsSync(ownerPath)) {
+            const repoRoot = fs.realpathSync(process.env.GITHUB_WORKSPACE);
+
+            function isInsideRepository(candidate) {
+              const relative = path.relative(repoRoot, candidate);
+              return relative === '' || (
+                relative !== '..' &&
+                !relative.startsWith(`..${path.sep}`) &&
+                !path.isAbsolute(relative)
+              );
+            }
+
+            function normalizeRepositoryPath(filePath) {
+              if (
+                !filePath ||
+                path.posix.isAbsolute(filePath) ||
+                /[\p{Cc}\p{Cf}]/u.test(filePath)
+              ) {
+                return null;
+              }
+              const parts = filePath.split('/');
+              if (parts.some(part => !part || part === '.' || part === '..')) {
+                return null;
+              }
+              const normalized = path.posix.normalize(filePath);
+              const absolute = path.resolve(repoRoot, ...parts);
+              if (normalized !== filePath || !isInsideRepository(absolute)) {
+                return null;
+              }
+              return normalized;
+            }
+
+            function readOwners(relativeOwnerPath) {
+              const ownerPath = path.resolve(
+                repoRoot,
+                ...relativeOwnerPath.split('/')
+              );
+              if (!isInsideRepository(ownerPath) || !fs.existsSync(ownerPath)) {
+                return [];
+              }
+              const ownerStat = fs.lstatSync(ownerPath);
+              if (ownerStat.isSymbolicLink() || !ownerStat.isFile()) {
+                return [];
+              }
+              const realOwnerPath = fs.realpathSync(ownerPath);
+              if (!isInsideRepository(realOwnerPath)) {
                 return [];
               }
 
-              return fs.readFileSync(ownerPath, 'utf8')
+              return fs.readFileSync(realOwnerPath, 'utf8')
                 .split('\n')
                 .map(line => line.trim())
-                .filter(line => line.startsWith('@'));
+                .filter(line => (
+                  /^@[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(line)
+                ));
             }
 
-            // Find the nearest OWNER file by walking from the changed file's
-            // directory back toward the repository root.
             function findOwnerFile(filePath) {
-               let currentDir = path.dirname(filePath);
+              let currentDir = path.posix.dirname(filePath);
 
-               while (currentDir && currentDir !== '.') {
-                 const ownerPath = path.join(currentDir, 'OWNER');
-                 const owners = readOwners(ownerPath);
-                 if (owners.length > 0) {
-                   return { path: currentDir, owners };
-                 }
-
-                 const parentDir = path.dirname(currentDir);
-                 if (parentDir === currentDir) {
-                   break;
-                 }
-                 currentDir = parentDir;
-               }
-
-               const rootOwners = readOwners('OWNER');
-               if (rootOwners.length > 0) {
-                 return { path: '.', owners: rootOwners };
-               }
-
-               return null;
-             }
-
-            // Collect all owners for changed files
-            const ownerMap = new Map();
-
-            for (const file of changedFiles) {
-              if (!file.trim()) continue;
-
-              const ownerInfo = findOwnerFile(file);
-              if (ownerInfo) {
-                if (!ownerMap.has(ownerInfo.path)) {
-                  ownerMap.set(ownerInfo.path, {
-                    owners: ownerInfo.owners,
-                    files: []
-                  });
+              while (true) {
+                const ownerPath = currentDir === '.'
+                  ? 'OWNER'
+                  : `${currentDir}/OWNER`;
+                const owners = readOwners(ownerPath);
+                if (owners.length > 0) {
+                  return { path: currentDir, owners };
                 }
-                ownerMap.get(ownerInfo.path).files.push(file);
+                if (currentDir === '.') {
+                  return null;
+                }
+                const parentDir = path.posix.dirname(currentDir);
+                if (parentDir === currentDir) {
+                  return null;
+                }
+                currentDir = parentDir;
               }
+            }
+
+            function escapeHtml(value) {
+              return String(value)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+            }
+
+            function inlineCode(value) {
+              const displayValue = String(value).replace(
+                /[\p{Cc}\p{Cf}]/gu,
+                '\uFFFD'
+              );
+              return `<code>${escapeHtml(displayValue)}</code>`;
+            }
+
+            const changedFiles = [];
+            let rejectedFileCount = 0;
+            for (const rawFile of changedFilePayload) {
+              const normalized = normalizeRepositoryPath(rawFile);
+              if (normalized === null) {
+                rejectedFileCount += 1;
+              } else {
+                changedFiles.push(normalized);
+              }
+            }
+            console.log(`Processing ${changedFiles.length} safe changed path(s)`);
+            if (rejectedFileCount > 0) {
+              core.warning(
+                `${rejectedFileCount} unsafe changed path(s) were ignored`
+              );
+            }
+
+            const ownerMap = new Map();
+            for (const file of new Set(changedFiles)) {
+              const ownerInfo = findOwnerFile(file);
+              if (!ownerInfo) {
+                continue;
+              }
+              if (!ownerMap.has(ownerInfo.path)) {
+                ownerMap.set(ownerInfo.path, {
+                  owners: ownerInfo.owners,
+                  files: [],
+                });
+              }
+              ownerMap.get(ownerInfo.path).files.push(file);
             }
 
             if (ownerMap.size === 0) {
@@ -115,16 +201,13 @@ jobs:
               return;
             }
 
-            // Collect all unique owners for assignment
             const allOwners = new Set();
             for (const [, info] of ownerMap) {
               for (const owner of info.owners) {
-                // Remove @ prefix for API call
-                allOwners.add(owner.replace('@', ''));
+                allOwners.add(owner.slice(1));
               }
             }
 
-            // Assign owners to the PR
             if (allOwners.size > 0) {
               const requestedOwners = Array.from(allOwners);
               const assigneeUsers = await github.paginate(
@@ -132,7 +215,7 @@ jobs:
                 {
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  per_page: 100
+                  per_page: 100,
                 }
               );
               const assignableLogins = new Set(
@@ -147,7 +230,7 @@ jobs:
 
               if (skippedOwners.length > 0) {
                 console.log(
-                  `Skipping non-assignable owners: ${skippedOwners.join(', ')}`
+                  `Skipping ${skippedOwners.length} non-assignable owner(s)`
                 );
               }
 
@@ -157,36 +240,51 @@ jobs:
                     owner: context.repo.owner,
                     repo: context.repo.repo,
                     issue_number: context.issue.number,
-                    assignees: assignableOwners
+                    assignees: assignableOwners,
                   });
-                  console.log(
-                    `Assigned PR to: ${assignableOwners.join(', ')}`
-                  );
+                  console.log(`Assigned ${assignableOwners.length} owner(s)`);
                 } else {
                   console.log('No assignable owners found for changed files');
                 }
-              } catch (error) {
-                console.log(`Failed to assign PR: ${error.message}`);
-                // Continue with comment creation even if assignment fails
+              } catch {
+                console.log('Failed to assign one or more owners');
               }
             }
 
-            // Create comment content
             let commentBody = '## 👥 vLLM Semantic Team Notification\n\n';
             commentBody +=
               'The following members have been identified for the changed ' +
               'files in this PR and have been automatically assigned when ' +
               'their GitHub accounts are assignable in this repository:\n\n';
 
+            const maxFilesPerSection = 100;
+            const maxCommentBytes = 56000;
+            let renderedSections = 0;
             for (const [dirPath, info] of ownerMap) {
-              commentBody +=
-                `### 📁 \`${dirPath === '.' ? 'Root Directory' : dirPath}\`\n`;
-              commentBody += `**Owners:** ${info.owners.join(', ')}\n`;
-              commentBody += `**Files changed:**\n`;
-              for (const file of info.files) {
-                commentBody += `- \`${file}\`\n`;
+              const displayPath = dirPath === '.' ? 'Root Directory' : dirPath;
+              let section = `### 📁 ${inlineCode(displayPath)}\n`;
+              section += `**Owners:** ${info.owners.join(', ')}\n`;
+              section += '**Files changed:**\n';
+              for (const file of info.files.slice(0, maxFilesPerSection)) {
+                section += `- ${inlineCode(file)}\n`;
               }
-              commentBody += '\n';
+              if (info.files.length > maxFilesPerSection) {
+                section +=
+                  `_...and ${info.files.length - maxFilesPerSection} more file(s)_\n`;
+              }
+              section += '\n';
+              if (
+                Buffer.byteLength(commentBody + section, 'utf8') >
+                maxCommentBytes
+              ) {
+                break;
+              }
+              commentBody += section;
+              renderedSections += 1;
+            }
+            if (renderedSections < ownerMap.size) {
+              commentBody +=
+                '_Additional owner sections were omitted; see the workflow logs._\n\n';
             }
 
             commentBody += '---\n';
@@ -194,43 +292,37 @@ jobs:
             commentBody +=
               '<img src="https://raw.githubusercontent.com/' +
               'vllm-project/semantic-router/main/website/static/' +
-              'img/repo.png" ' +
-              'alt="vLLM" width="80%"/>';
+              'img/repo.png" alt="vLLM" width="80%"/>';
             commentBody += '</div>\n\n';
             commentBody += '## 🎉 Thanks for your contributions!\n\n';
             commentBody +=
               '*This comment was automatically generated based on the OWNER ' +
               'files in the repository.*';
 
-            // Get existing comments
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
-
-            // Check if we already have an owner notification comment
             const existingComment = comments.find(comment =>
               comment.user.login === 'github-actions[bot]' &&
               comment.body.includes('## 👥 vLLM Semantic Team Notification')
             );
 
             if (existingComment) {
-              // Update existing comment
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 comment_id: existingComment.id,
-                body: commentBody
+                body: commentBody,
               });
               console.log('Updated existing owner notification comment');
             } else {
-              // Create new comment
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                body: commentBody
+                body: commentBody,
               });
               console.log('Created new owner notification comment');
             }

@@ -1,6 +1,50 @@
 package classification
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
+import (
+	"errors"
+
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
+)
+
+var (
+	// ErrImageSignalEvaluation identifies a request image that could not be
+	// evaluated by an enabled image-dependent signal.
+	ErrImageSignalEvaluation = errors.New("image signal evaluation failed")
+	// ErrInvalidImageSignalInput distinguishes caller-controlled malformed or
+	// unsupported image bytes from an internal model/runtime failure.
+	ErrInvalidImageSignalInput = errors.New("invalid image signal input")
+	// ErrTextSignalEvaluation identifies a model-backed text signal that could
+	// not be evaluated. Callers must fail closed instead of treating it as a
+	// no-match/default-route result.
+	ErrTextSignalEvaluation = errors.New("text signal evaluation failed")
+)
+
+type imageSignalEvaluationError struct {
+	cause error
+}
+
+type textSignalEvaluationError struct{ cause error }
+
+func (e *textSignalEvaluationError) Error() string { return ErrTextSignalEvaluation.Error() }
+func (e *textSignalEvaluationError) Unwrap() error { return e.cause }
+func (e *textSignalEvaluationError) Is(target error) bool {
+	return target == ErrTextSignalEvaluation
+}
+
+func (e *imageSignalEvaluationError) Error() string { return ErrImageSignalEvaluation.Error() }
+func (e *imageSignalEvaluationError) Unwrap() error { return e.cause }
+func (e *imageSignalEvaluationError) Is(target error) bool {
+	return target == ErrImageSignalEvaluation ||
+		(target == ErrInvalidImageSignalInput && errors.Is(e.cause, candle_binding.ErrInvalidImageInput))
+}
+
+func newImageSignalEvaluationError(err error) error {
+	if err == nil || errors.Is(err, ErrImageSignalEvaluation) {
+		return err
+	}
+	return &imageSignalEvaluationError{cause: err}
+}
 
 // SignalMetrics contains performance and probability metrics for a single signal.
 type SignalMetrics struct {
@@ -50,6 +94,55 @@ type SignalResults struct {
 
 	// Signal metrics (only populated in eval mode)
 	Metrics *SignalMetricsCollection
+
+	// imageEvaluationErr is deliberately not exported or serialized. Transport
+	// callers inspect it through ImageEvaluationError after all signal workers
+	// have joined, so image-dependent routing cannot silently fail open.
+	imageEvaluationErr error
+	textEvaluationErr  error
+}
+
+// EvaluationError returns the first model-backed signal failure that makes
+// the routing result unsafe to consume.
+func (r *SignalResults) EvaluationError() error {
+	if r == nil {
+		return nil
+	}
+	if r.imageEvaluationErr != nil {
+		return r.imageEvaluationErr
+	}
+	return r.textEvaluationErr
+}
+
+// ImageEvaluationError returns the first failure produced by an enabled
+// image-dependent signal during this evaluation.
+func (r *SignalResults) ImageEvaluationError() error {
+	if r == nil {
+		return nil
+	}
+	return r.imageEvaluationErr
+}
+
+// recordImageEvaluationError must be called while holding the SignalResults
+// evaluation mutex shared by signal workers.
+func (r *SignalResults) recordImageEvaluationError(err error) {
+	if r == nil || err == nil || r.imageEvaluationErr != nil {
+		return
+	}
+	r.imageEvaluationErr = newImageSignalEvaluationError(err)
+}
+
+// recordTextEvaluationError must be called while holding the shared signal
+// evaluation mutex.
+func (r *SignalResults) recordTextEvaluationError(err error) {
+	if r == nil || err == nil || r.textEvaluationErr != nil {
+		return
+	}
+	if errors.Is(err, ErrTextSignalEvaluation) {
+		r.textEvaluationErr = err
+		return
+	}
+	r.textEvaluationErr = &textSignalEvaluationError{cause: err}
 }
 
 // SignalMetricsCollection contains metrics for all signal types.

@@ -384,6 +384,7 @@ export interface FeedbackDetectorConfig {
 }
 
 export interface EmbeddingOptimizationConfig {
+  backend?: string
   model_type?: string
   preload_embeddings?: boolean
   target_dimension?: number
@@ -391,6 +392,15 @@ export interface EmbeddingOptimizationConfig {
   enable_soft_matching?: boolean
   top_k?: number
   min_score_threshold?: number
+}
+
+export interface EmbeddingEndpointConfig {
+  base_url?: string
+  model?: string
+  api_key_env?: string
+  timeout_seconds?: number
+  max_retries?: number
+  dimensions?: number
 }
 
 export interface EmbeddingModelsConfig {
@@ -401,6 +411,7 @@ export interface EmbeddingModelsConfig {
   bert_model_path?: string
   use_cpu?: boolean
   embedding_config?: EmbeddingOptimizationConfig
+  endpoint?: EmbeddingEndpointConfig
 }
 
 export interface ObservabilityConfig {
@@ -632,9 +643,9 @@ export interface ModelSelectionConfig {
 }
 
 export interface CanonicalClassifierConfig {
-  domain?: (ModelConfig & { model_ref?: string; fallback_category?: string })
+  domain?: ModelConfig & { model_ref?: string; fallback_category?: string }
   mcp?: MCPCategoryModel
-  pii?: (ModelConfig & { model_ref?: string })
+  pii?: ModelConfig & { model_ref?: string }
   preference?: {
     use_contrastive?: boolean
     embedding_model?: string
@@ -695,10 +706,10 @@ export interface CanonicalIntegrationGlobalConfig {
 
 export interface CanonicalModelModulesConfig {
   prompt_compression?: PromptCompressionConfig
-  prompt_guard?: (ModelConfig & { enabled?: boolean; model_ref?: string; use_vllm?: boolean })
+  prompt_guard?: ModelConfig & { enabled?: boolean; model_ref?: string; use_vllm?: boolean }
   classifier?: CanonicalClassifierConfig
   hallucination_mitigation?: CanonicalHallucinationModuleConfig
-  feedback_detector?: (FeedbackDetectorConfig & { model_ref?: string })
+  feedback_detector?: FeedbackDetectorConfig & { model_ref?: string }
   modality_detector?: ModalityDetectorConfig
 }
 
@@ -1237,7 +1248,7 @@ export const formatThreshold = (value: number): string => {
 }
 
 export const normalizeModelScores = (
-  modelScores: ModelScore[] | Record<string, number> | undefined
+  modelScores: ModelScore[] | Record<string, number> | undefined,
 ): ModelScore[] => {
   if (!modelScores) return []
   if (Array.isArray(modelScores)) return modelScores
@@ -1253,7 +1264,7 @@ export const normalizeEndpointProtocol = (protocol: unknown): Endpoint['protocol
 
 export const normalizeEndpoint = (
   endpoint: Partial<Endpoint> | undefined,
-  index: number
+  index: number,
 ): Endpoint => ({
   name: endpoint?.name?.trim() || `endpoint-${index + 1}`,
   endpoint: endpoint?.endpoint?.trim() || '',
@@ -1263,14 +1274,14 @@ export const normalizeEndpoint = (
 })
 
 export const normalizeEndpoints = (endpoints: Partial<Endpoint>[] | undefined): Endpoint[] =>
-  Array.isArray(endpoints) ? endpoints.map((endpoint, index) => normalizeEndpoint(endpoint, index)) : []
+  Array.isArray(endpoints)
+    ? endpoints.map((endpoint, index) => normalizeEndpoint(endpoint, index))
+    : []
 
-export const normalizeProviderModelEndpoints = (
-  model: {
-    endpoints?: Partial<Endpoint>[]
-    backend_refs?: BackendRefEntry[]
-  }
-): Endpoint[] => {
+export const normalizeProviderModelEndpoints = (model: {
+  endpoints?: Partial<Endpoint>[]
+  backend_refs?: BackendRefEntry[]
+}): Endpoint[] => {
   if (Array.isArray(model.backend_refs) && model.backend_refs.length > 0) {
     return model.backend_refs.map((backend, index) => {
       const baseURL = typeof backend.base_url === 'string' ? backend.base_url.trim() : ''
@@ -1278,15 +1289,16 @@ export const normalizeProviderModelEndpoints = (
         typeof backend.endpoint === 'string' && backend.endpoint.trim()
           ? backend.endpoint.trim()
           : baseURL
-      const protocol =
-        backend.protocol ||
-        (baseURL.startsWith('https://') ? 'https' : 'http')
-      return normalizeEndpoint({
-        name: backend.name,
-        endpoint,
-        protocol,
-        weight: backend.weight,
-      }, index)
+      const protocol = backend.protocol || (baseURL.startsWith('https://') ? 'https' : 'http')
+      return normalizeEndpoint(
+        {
+          name: backend.name,
+          endpoint,
+          protocol,
+          weight: backend.weight,
+        },
+        index,
+      )
     })
   }
   return normalizeEndpoints(model.endpoints)
@@ -1295,14 +1307,12 @@ export const normalizeProviderModelEndpoints = (
 export const mergeProviderBackendRefs = (
   existingRefs: BackendRefEntry[] | undefined,
   endpoints: Endpoint[],
-  accessKey?: string
+  accessKey?: string,
 ): BackendRefEntry[] => {
   const existing = Array.isArray(existingRefs) ? existingRefs : []
 
   return endpoints.map((ep, index) => {
-    const matched =
-      existing.find((ref) => ref.name === ep.name) ||
-      existing[index]
+    const matched = existing.find((ref) => ref.name === ep.name) || existing[index]
 
     const merged: BackendRefEntry = {
       ...(matched || {}),
@@ -1347,10 +1357,7 @@ export const TABLE_COLUMN_WIDTH = {
 
 export type ConfigDecisionConditionType = DecisionConditionType
 
-export const getDefaultModelName = (
-  config: ConfigData | null,
-  isPythonCLI: boolean
-): string => {
+export const getDefaultModelName = (config: ConfigData | null, isPythonCLI: boolean): string => {
   if (isPythonCLI) {
     return config?.providers?.defaults?.default_model || ''
   }
@@ -1359,7 +1366,7 @@ export const getDefaultModelName = (
 
 export const getReasoningFamiliesMap = (
   config: ConfigData | null,
-  isPythonCLI: boolean
+  isPythonCLI: boolean,
 ): Record<string, ReasoningFamily> => {
   if (isPythonCLI) {
     return config?.providers?.defaults?.reasoning_families || {}
@@ -1369,29 +1376,31 @@ export const getReasoningFamiliesMap = (
 
 export const getNormalizedModels = (
   config: ConfigData | null,
-  isPythonCLI: boolean
+  isPythonCLI: boolean,
 ): NormalizedModel[] => {
   if (isPythonCLI && config?.providers?.models) {
     const cards = config?.routing?.modelCards || []
     const cardByName = new Map(cards.map((card) => [card.name, card]))
-    const models = config.providers.models.map((m): NormalizedModel => ({
-      name: m.name,
-      reasoning_family: m.reasoning_family,
-      provider_model_id: m.provider_model_id,
-      api_format: m.api_format,
-      external_model_ids: m.external_model_ids,
-      backend_refs: m.backend_refs,
-      endpoints: normalizeProviderModelEndpoints(m),
-      param_size: cardByName.get(m.name)?.param_size,
-      context_window_size: cardByName.get(m.name)?.context_window_size,
-      description: cardByName.get(m.name)?.description,
-      capabilities: cardByName.get(m.name)?.capabilities,
-      loras: cardByName.get(m.name)?.loras,
-      tags: cardByName.get(m.name)?.tags,
-      quality_score: cardByName.get(m.name)?.quality_score,
-      modality: cardByName.get(m.name)?.modality,
-      pricing: m.pricing,
-    }))
+    const models = config.providers.models.map(
+      (m): NormalizedModel => ({
+        name: m.name,
+        reasoning_family: m.reasoning_family,
+        provider_model_id: m.provider_model_id,
+        api_format: m.api_format,
+        external_model_ids: m.external_model_ids,
+        backend_refs: m.backend_refs,
+        endpoints: normalizeProviderModelEndpoints(m),
+        param_size: cardByName.get(m.name)?.param_size,
+        context_window_size: cardByName.get(m.name)?.context_window_size,
+        description: cardByName.get(m.name)?.description,
+        capabilities: cardByName.get(m.name)?.capabilities,
+        loras: cardByName.get(m.name)?.loras,
+        tags: cardByName.get(m.name)?.tags,
+        quality_score: cardByName.get(m.name)?.quality_score,
+        modality: cardByName.get(m.name)?.modality,
+        pricing: m.pricing,
+      }),
+    )
 
     for (const card of cards) {
       if (models.some((model) => model.name === card.name)) {
@@ -1421,21 +1430,33 @@ export const getNormalizedModels = (
   }
 
   if (config?.model_config) {
-    return (Object.entries(config.model_config) as [string, ModelConfigEntry][]).map(([name, cfg]) => ({
-      name,
-      reasoning_family: cfg.reasoning_family,
-      endpoints: cfg.preferred_endpoints?.map((ep: string) => {
-        const endpoint = config.vllm_endpoints?.find((entry: VLLMEndpoint) => entry.name === ep)
-        return endpoint ? normalizeEndpoint({
-          name: ep,
-          weight: endpoint.weight || 1,
-          endpoint: `${endpoint.address}:${endpoint.port}`,
-          protocol: 'http',
-        }, 0) : null
-      }).filter((entry): entry is NonNullable<typeof entry> => entry !== null) || [],
-      access_key: undefined,
-      pricing: cfg.pricing,
-    }))
+    return (Object.entries(config.model_config) as [string, ModelConfigEntry][]).map(
+      ([name, cfg]) => ({
+        name,
+        reasoning_family: cfg.reasoning_family,
+        endpoints:
+          cfg.preferred_endpoints
+            ?.map((ep: string) => {
+              const endpoint = config.vllm_endpoints?.find(
+                (entry: VLLMEndpoint) => entry.name === ep,
+              )
+              return endpoint
+                ? normalizeEndpoint(
+                    {
+                      name: ep,
+                      weight: endpoint.weight || 1,
+                      endpoint: `${endpoint.address}:${endpoint.port}`,
+                      protocol: 'http',
+                    },
+                    0,
+                  )
+                : null
+            })
+            .filter((entry): entry is NonNullable<typeof entry> => entry !== null) || [],
+        access_key: undefined,
+        pricing: cfg.pricing,
+      }),
+    )
   }
 
   return []

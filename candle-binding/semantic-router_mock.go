@@ -3,7 +3,12 @@
 package candle_binding
 
 import (
+	"context"
+	"encoding/base64"
+	"fmt"
 	"log"
+	"net/netip"
+	urlpkg "net/url"
 	"runtime"
 	"strings"
 	"sync"
@@ -101,7 +106,7 @@ type SafetyClassificationResult struct {
 // EmbeddingOutput represents the complete embedding generation result with metadata
 type EmbeddingOutput struct {
 	Embedding        []float32 // The embedding vector
-	ModelType        string    // Model used: "qwen3", "gemma", or "unknown"
+	ModelType        string    // Model used: "qwen3", "gemma", "mmbert", "multimodal", or "unknown"
 	SequenceLength   int       // Sequence length in tokens
 	ProcessingTimeMs float32   // Processing time in milliseconds
 }
@@ -109,7 +114,7 @@ type EmbeddingOutput struct {
 // SimilarityOutput represents the result of embedding similarity calculation
 type SimilarityOutput struct {
 	Similarity       float32 // Cosine similarity score (-1.0 to 1.0)
-	ModelType        string  // Model used: "qwen3", "gemma", or "unknown"
+	ModelType        string  // Model used: "qwen3", "gemma", "mmbert", "multimodal", or "unknown"
 	ProcessingTimeMs float32 // Processing time in milliseconds
 }
 
@@ -122,7 +127,7 @@ type BatchSimilarityMatch struct {
 // BatchSimilarityOutput holds the result of batch similarity matching
 type BatchSimilarityOutput struct {
 	Matches          []BatchSimilarityMatch // Top-k matches, sorted by similarity (descending)
-	ModelType        string                 // Model used: "qwen3", "gemma", or "unknown"
+	ModelType        string                 // Model used: "qwen3", "gemma", "mmbert", "multimodal", or "unknown"
 	ProcessingTimeMs float32                // Processing time in milliseconds
 }
 
@@ -149,6 +154,12 @@ func InitModel(modelID string, useCPU bool) error {
 
 // TokenizeText tokenizes the given text
 func TokenizeText(text string, maxLength int) (TokenizeResult, error) {
+	if err := validateNonNegativeCInt("maximum token length", maxLength); err != nil {
+		return TokenizeResult{}, err
+	}
+	if err := validateCStringInputs(cStringInput{"tokenization text", text}); err != nil {
+		return TokenizeResult{}, err
+	}
 	return TokenizeResult{
 		TokenIDs: []int32{1, 2, 3},
 		Tokens:   []string{"mock", "token", "s"},
@@ -161,6 +172,12 @@ func TokenizeTextDefault(text string) (TokenizeResult, error) {
 
 // GetEmbedding gets the embedding vector for a text
 func GetEmbedding(text string, maxLength int) ([]float32, error) {
+	if err := validateNonNegativeCInt("maximum token length", maxLength); err != nil {
+		return nil, err
+	}
+	if err := validateCStringInputs(cStringInput{"embedding text", text}); err != nil {
+		return nil, err
+	}
 	// Return a dummy embedding of length 384 (standard for all-MiniLM-L6-v2)
 	emb := make([]float32, 384)
 	for i := range emb {
@@ -175,21 +192,52 @@ func GetEmbeddingDefault(text string) ([]float32, error) {
 
 // GetEmbeddingSmart intelligently selects the optimal embedding model
 func GetEmbeddingSmart(text string, qualityPriority, latencyPriority float32) ([]float32, error) {
-	return GetEmbedding(text, 512)
+	if err := validateEmbeddingPriorities(qualityPriority, latencyPriority); err != nil {
+		return nil, err
+	}
+	if err := validateCStringInputs(cStringInput{"smart embedding text", text}); err != nil {
+		return nil, err
+	}
+	dim := 768
+	if qualityPriority > latencyPriority {
+		dim = 1024
+	}
+	return mockEmbedding(dim), nil
 }
 
 // InitEmbeddingModelsBatched initializes Qwen3 embedding model
 func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWaitMs uint64, useCPU bool) error {
+	if qwen3ModelPath == "" {
+		return fmt.Errorf("qwen3ModelPath cannot be empty for batched initialization")
+	}
+	if maxBatchSize <= 0 {
+		return fmt.Errorf("maximum batch size must be positive")
+	}
+	if err := validateNonNegativeCInt("maximum batch size", maxBatchSize); err != nil {
+		return err
+	}
 	log.Printf("[MOCK] Initializing Batched Embedding Models")
 	return nil
 }
 
 // GetEmbeddingBatched generates an embedding using the continuous batching model
 func GetEmbeddingBatched(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
-	emb, _ := GetEmbedding(text, 512)
+	if err := validateNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
+	}
+	if err := validateCStringInputs(
+		cStringInput{"batched embedding text", text},
+		cStringInput{"batched embedding model type", modelType},
+	); err != nil {
+		return nil, err
+	}
+	dim, err := mockModelEmbeddingDimension(modelType, targetDim)
+	if err != nil {
+		return nil, err
+	}
 	return &EmbeddingOutput{
-		Embedding:        emb,
-		ModelType:        "mock-qwen3",
+		Embedding:        mockEmbedding(dim),
+		ModelType:        modelType,
 		SequenceLength:   10,
 		ProcessingTimeMs: 1.0,
 	}, nil
@@ -203,20 +251,24 @@ func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, mmBertModelPath 
 
 // GetEmbeddingWithDim generates an embedding with intelligent model selection
 func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, targetDim int) ([]float32, error) {
-	dim := targetDim
-	if dim == 0 {
-		dim = 768
+	if err := validateEmbeddingPriorities(qualityPriority, latencyPriority); err != nil {
+		return nil, err
 	}
-	emb := make([]float32, dim)
-	for i := range emb {
-		emb[i] = 0.1
+	if err := validateNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
 	}
-	return emb, nil
+	if err := validateCStringInputs(cStringInput{"embedding text", text}); err != nil {
+		return nil, err
+	}
+	return mockEmbedding(mockAutoEmbeddingDimension(targetDim)), nil
 }
 
 // GetEmbeddingWithMetadata generates an embedding with full metadata
 func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority float32, targetDim int) (*EmbeddingOutput, error) {
-	emb, _ := GetEmbeddingWithDim(text, qualityPriority, latencyPriority, targetDim)
+	emb, err := GetEmbeddingWithDim(text, qualityPriority, latencyPriority, targetDim)
+	if err != nil {
+		return nil, err
+	}
 	return &EmbeddingOutput{
 		Embedding:        emb,
 		ModelType:        "mock-auto",
@@ -227,9 +279,21 @@ func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority floa
 
 // GetEmbeddingWithModelType generates an embedding with a manually specified model type
 func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
-	emb, _ := GetEmbeddingWithDim(text, 0, 0, targetDim)
+	if err := validateNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
+	}
+	if err := validateCStringInputs(
+		cStringInput{"embedding text", text},
+		cStringInput{"embedding model type", modelType},
+	); err != nil {
+		return nil, err
+	}
+	dim, err := mockModelEmbeddingDimension(modelType, targetDim)
+	if err != nil {
+		return nil, err
+	}
 	return &EmbeddingOutput{
-		Embedding:        emb,
+		Embedding:        mockEmbedding(dim),
 		ModelType:        modelType,
 		SequenceLength:   10,
 		ProcessingTimeMs: 1.0,
@@ -243,6 +307,24 @@ func InitMmBertEmbeddingModel(modelPath string, useCPU bool) error {
 	return nil
 }
 
+// InitMmBert32KModalityClassifier initializes the mock modality classifier.
+func InitMmBert32KModalityClassifier(modelPath string, useCPU bool) error {
+	if strings.TrimSpace(modelPath) == "" {
+		return fmt.Errorf("modality classifier model path is required")
+	}
+	log.Printf("[MOCK] Initializing mmBERT-32K Modality Classifier: %s", modelPath)
+	_ = useCPU
+	return nil
+}
+
+// ClassifyMmBert32KModality returns a deterministic mock modality result.
+func ClassifyMmBert32KModality(text string) (ModalityResult, error) {
+	if strings.IndexByte(text, 0) >= 0 {
+		return ModalityResult{}, fmt.Errorf("modality classification text contains an embedded NUL byte")
+	}
+	return ModalityResult{Modality: "AR", ClassID: 0, Confidence: 1}, nil
+}
+
 // InitMultiModalEmbeddingModel initializes multi-modal embedding model
 func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
 	log.Printf("[MOCK] Initializing Multi-Modal Embedding Model: %s", modelPath)
@@ -252,12 +334,17 @@ func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
 
 // MultiModalEncodeText encodes text using multi-modal model (mock)
 func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	dim := 384
-	if targetDim > 0 {
-		dim = targetDim
+	if err := validateNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
+	}
+	if text == "" {
+		return nil, fmt.Errorf("text cannot be empty")
+	}
+	if err := validateCStringInputs(cStringInput{"multi-modal text", text}); err != nil {
+		return nil, err
 	}
 	return &MultiModalEmbeddingOutput{
-		Embedding:        make([]float32, dim),
+		Embedding:        make([]float32, mockMultiModalDimension(targetDim)),
 		Modality:         "text",
 		ProcessingTimeMs: 1.0,
 	}, nil
@@ -265,12 +352,14 @@ func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutpu
 
 // MultiModalEncodeImage encodes image using multi-modal model (mock)
 func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	dim := 384
-	if targetDim > 0 {
-		dim = targetDim
+	if err := validateNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
+	}
+	if err := validateCandleImageTensor(pixelData, width, height); err != nil {
+		return nil, err
 	}
 	return &MultiModalEmbeddingOutput{
-		Embedding:        make([]float32, dim),
+		Embedding:        make([]float32, mockMultiModalDimension(targetDim)),
 		Modality:         "image",
 		ProcessingTimeMs: 1.0,
 	}, nil
@@ -278,12 +367,18 @@ func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*
 
 // MultiModalEncodeAudio encodes audio using multi-modal model (mock)
 func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	dim := 384
-	if targetDim > 0 {
-		dim = targetDim
+	if err := validateNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
+	}
+	if len(melData) == 0 {
+		return nil, fmt.Errorf("melData cannot be empty")
+	}
+	if nMels <= 0 || timeFrames <= 0 || nMels > 1<<31-1 || timeFrames > 1<<31-1 ||
+		nMels > len(melData)/timeFrames || len(melData) != nMels*timeFrames {
+		return nil, fmt.Errorf("melData length %d does not match %d×%d", len(melData), nMels, timeFrames)
 	}
 	return &MultiModalEmbeddingOutput{
-		Embedding:        make([]float32, dim),
+		Embedding:        make([]float32, mockMultiModalDimension(targetDim)),
 		Modality:         "audio",
 		ProcessingTimeMs: 1.0,
 	}, nil
@@ -291,12 +386,14 @@ func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) 
 
 // MultiModalEncodeImageFromBytes decodes image bytes and encodes to embedding (mock)
 func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	dim := 384
-	if targetDim > 0 {
-		dim = targetDim
+	if err := validateNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
+	}
+	if err := validateCandleEncodedImage(imageBytes); err != nil {
+		return nil, err
 	}
 	return &MultiModalEmbeddingOutput{
-		Embedding:        make([]float32, dim),
+		Embedding:        make([]float32, mockMultiModalDimension(targetDim)),
 		Modality:         "image",
 		ProcessingTimeMs: 1.0,
 	}, nil
@@ -304,25 +401,46 @@ func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiMod
 
 // MultiModalEncodeImageFromBase64 decodes a base64-encoded image and encodes to embedding (mock)
 func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	dim := 384
-	if targetDim > 0 {
-		dim = targetDim
+	if err := validateNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
 	}
-	return &MultiModalEmbeddingOutput{
-		Embedding:        make([]float32, dim),
-		Modality:         "image",
-		ProcessingTimeMs: 1.0,
-	}, nil
+	if base64Str == "" {
+		return nil, fmt.Errorf("%w: base64Str cannot be empty", ErrInvalidImageInput)
+	}
+	payload := base64Str
+	if index := strings.Index(base64Str, ";base64,"); index >= 0 {
+		payload = base64Str[index+len(";base64,"):]
+	}
+	if len(payload) > base64.StdEncoding.EncodedLen(MaxMultiModalImageEncodedBytes)+4 {
+		return nil, fmt.Errorf("%w: image payload exceeds %d bytes", ErrInvalidImageInput, MaxMultiModalImageEncodedBytes)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return nil, fmt.Errorf("%w: base64 decode failed", ErrInvalidImageInput)
+	}
+	return MultiModalEncodeImageFromBytes(decoded, targetDim)
 }
 
 // MultiModalEncodeImageFromURL downloads and encodes an image from URL (mock)
 func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	dim := 384
-	if targetDim > 0 {
-		dim = targetDim
+	if err := validateNonNegativeCInt("target dimension", targetDim); err != nil {
+		return nil, err
+	}
+	parsed, err := urlpkg.Parse(url)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
+		return nil, fmt.Errorf("%w: a credential-free https URL with a host is required", ErrInvalidImageInput)
+	}
+	if address, err := netip.ParseAddr(parsed.Hostname()); err == nil {
+		if !candleImageDestinationsArePublic(
+			context.Background(),
+			[]netip.Addr{address},
+			candleImagePref64Cache,
+		) {
+			return nil, fmt.Errorf("%w: image destination is not public", ErrInvalidImageInput)
+		}
 	}
 	return &MultiModalEmbeddingOutput{
-		Embedding:        make([]float32, dim),
+		Embedding:        make([]float32, mockMultiModalDimension(targetDim)),
 		Modality:         "image",
 		ProcessingTimeMs: 1.0,
 	}, nil
@@ -330,21 +448,24 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 
 // GetEmbedding2DMatryoshka generates an embedding using mock 2D Matryoshka API
 func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
-	_ = text
-	_ = targetLayer
-	dim := targetDim
-	if dim <= 0 {
-		dim = 768
+	if err := validateEmbeddingControls(targetLayer, targetDim); err != nil {
+		return nil, err
 	}
-	emb := make([]float32, dim)
-	for i := range emb {
-		emb[i] = 0.1
+	if err := validateCStringInputs(
+		cStringInput{"2D matryoshka embedding text", text},
+		cStringInput{"2D matryoshka model type", modelType},
+	); err != nil {
+		return nil, err
+	}
+	dim, err := mockModelEmbeddingDimension(modelType, targetDim)
+	if err != nil {
+		return nil, err
 	}
 	if modelType == "" {
 		modelType = "mock"
 	}
 	return &EmbeddingOutput{
-		Embedding:        emb,
+		Embedding:        mockEmbedding(dim),
 		ModelType:        modelType,
 		SequenceLength:   10,
 		ProcessingTimeMs: 1.0,
@@ -353,6 +474,15 @@ func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, ta
 
 // CalculateSimilarity calculates the similarity between two texts
 func CalculateSimilarity(text1, text2 string, maxLength int) float32 {
+	if err := validateNonNegativeCInt("maximum token length", maxLength); err != nil {
+		return -1.0
+	}
+	if err := validateCStringInputs(
+		cStringInput{"similarity text1", text1},
+		cStringInput{"similarity text2", text2},
+	); err != nil {
+		return -1.0
+	}
 	return 0.85 // Dummy high similarity
 }
 
@@ -362,17 +492,77 @@ func CalculateSimilarityDefault(text1, text2 string) float32 {
 
 // CalculateEmbeddingSimilarity calculates cosine similarity
 func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetDim int) (*SimilarityOutput, error) {
+	return CalculateEmbeddingSimilarityWithOptions(text1, text2, SimilarityOptions{
+		ModelType:       modelType,
+		TargetDim:       targetDim,
+		QualityPriority: 0.5,
+		LatencyPriority: 0.5,
+	})
+}
+
+// CalculateEmbeddingSimilarityWithOptions validates the native routing contract
+// before returning a deterministic mock result.
+func CalculateEmbeddingSimilarityWithOptions(text1, text2 string, options SimilarityOptions) (*SimilarityOutput, error) {
+	normalized, err := normalizeSimilarityOptions(options)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateCStringInputs(
+		cStringInput{"embedding similarity text1", text1},
+		cStringInput{"embedding similarity text2", text2},
+		cStringInput{"embedding similarity model type", normalized.ModelType},
+	); err != nil {
+		return nil, err
+	}
 	return &SimilarityOutput{
 		Similarity:       0.85,
-		ModelType:        "mock",
+		ModelType:        normalized.ModelType,
 		ProcessingTimeMs: 1.0,
 	}, nil
 }
 
 // CalculateSimilarityBatch finds top-k most similar candidates
 func CalculateSimilarityBatch(query string, candidates []string, topK int, modelType string, targetDim int) (*BatchSimilarityOutput, error) {
-	matches := make([]BatchSimilarityMatch, len(candidates))
-	for i := range candidates {
+	return CalculateSimilarityBatchWithOptions(query, candidates, topK, SimilarityOptions{
+		ModelType:       modelType,
+		TargetDim:       targetDim,
+		QualityPriority: 0.5,
+		LatencyPriority: 0.5,
+	})
+}
+
+// CalculateSimilarityBatchWithOptions validates the native routing contract
+// before returning deterministic mock matches.
+func CalculateSimilarityBatchWithOptions(query string, candidates []string, topK int, options SimilarityOptions) (*BatchSimilarityOutput, error) {
+	normalized, err := normalizeSimilarityOptions(options)
+	if err != nil {
+		return nil, err
+	}
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("candidates array cannot be empty")
+	}
+	if err := validateNonNegativeCInt("top-k", topK); err != nil {
+		return nil, err
+	}
+	if err := validateNonNegativeCInt("candidate count", len(candidates)); err != nil {
+		return nil, err
+	}
+	inputs := []cStringInput{
+		{"batch similarity query", query},
+		{"batch similarity model type", normalized.ModelType},
+	}
+	for i, candidate := range candidates {
+		inputs = append(inputs, cStringInput{fmt.Sprintf("batch similarity candidates[%d]", i), candidate})
+	}
+	if err := validateCStringInputs(inputs...); err != nil {
+		return nil, err
+	}
+	matchCount := len(candidates)
+	if topK > 0 && topK < matchCount {
+		matchCount = topK
+	}
+	matches := make([]BatchSimilarityMatch, matchCount)
+	for i := range matches {
 		matches[i] = BatchSimilarityMatch{
 			Index:      i,
 			Similarity: 0.85,
@@ -380,9 +570,52 @@ func CalculateSimilarityBatch(query string, candidates []string, topK int, model
 	}
 	return &BatchSimilarityOutput{
 		Matches:          matches,
-		ModelType:        "mock",
+		ModelType:        normalized.ModelType,
 		ProcessingTimeMs: 1.0,
 	}, nil
+}
+
+func mockEmbedding(dim int) []float32 {
+	embedding := make([]float32, dim)
+	for i := range embedding {
+		embedding[i] = 0.1
+	}
+	return embedding
+}
+
+func mockAutoEmbeddingDimension(targetDim int) int {
+	if targetDim <= 0 {
+		return 768
+	}
+	if targetDim > 1024 {
+		return 1024
+	}
+	return targetDim
+}
+
+func mockModelEmbeddingDimension(modelType string, targetDim int) (int, error) {
+	fullDimension := 0
+	switch modelType {
+	case "qwen3":
+		fullDimension = 1024
+	case "gemma", "mmbert":
+		fullDimension = 768
+	case "multimodal":
+		fullDimension = 384
+	default:
+		return 0, fmt.Errorf("invalid model type: %s", modelType)
+	}
+	if targetDim <= 0 || targetDim > fullDimension {
+		return fullDimension, nil
+	}
+	return targetDim, nil
+}
+
+func mockMultiModalDimension(targetDim int) int {
+	if targetDim <= 0 || targetDim > 384 {
+		return 384
+	}
+	return targetDim
 }
 
 // GetEmbeddingModelsInfo retrieves information about all loaded embedding models
@@ -396,6 +629,19 @@ func GetEmbeddingModelsInfo() (*ModelsInfoOutput, error) {
 
 // FindMostSimilar finds the most similar text
 func FindMostSimilar(query string, candidates []string, maxLength int) SimResult {
+	if err := validateNonNegativeCInt("maximum token length", maxLength); err != nil {
+		return SimResult{Index: -1, Score: -1.0}
+	}
+	if err := validateNonNegativeCInt("candidate count", len(candidates)); err != nil {
+		return SimResult{Index: -1, Score: -1.0}
+	}
+	inputs := []cStringInput{{"similarity query", query}}
+	for i, candidate := range candidates {
+		inputs = append(inputs, cStringInput{fmt.Sprintf("similarity candidates[%d]", i), candidate})
+	}
+	if err := validateCStringInputs(inputs...); err != nil {
+		return SimResult{Index: -1, Score: -1.0}
+	}
 	if len(candidates) == 0 {
 		return SimResult{Index: -1, Score: -1.0}
 	}
@@ -637,11 +883,16 @@ func GetQwen3LoadedAdapters() ([]string, error) {
 
 // ClassifyZeroShotQwen3 classifies zero-shot
 func ClassifyZeroShotQwen3(text string, categories []string) (*Qwen3LoRAResult, error) {
+	if len(categories) == 0 {
+		return nil, fmt.Errorf("categories list cannot be empty")
+	}
+	probabilities := make([]float32, len(categories))
+	probabilities[0] = 1
 	return &Qwen3LoRAResult{
 		ClassID:       0,
-		Confidence:    0.9,
+		Confidence:    1,
 		CategoryName:  categories[0],
-		Probabilities: []float32{0.9, 0.1},
+		Probabilities: probabilities,
 		NumCategories: len(categories),
 	}, nil
 }

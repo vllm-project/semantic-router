@@ -173,6 +173,119 @@ func TestRoomsHandler_CreateAndMessageFlowWithoutAutomation(t *testing.T) {
 	}
 }
 
+func TestOpenClawRoomMutationsRejectUnboundedOrAmbiguousJSON(t *testing.T) {
+	h := newTestOpenClawHandler(t, t.TempDir(), false)
+	team := newTestTeam("team-input", "Input Team", "")
+	room := seedTeamAndRoom(t, h, team, nil)
+
+	tests := []struct {
+		name       string
+		path       string
+		body       string
+		handler    http.HandlerFunc
+		wantStatus int
+	}{
+		{
+			name:       "room unknown field",
+			path:       "/api/openclaw/rooms",
+			body:       `{"teamId":"team-input","unexpected":true}`,
+			handler:    h.RoomsHandler(),
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "room trailing value",
+			path:       "/api/openclaw/rooms",
+			body:       `{"teamId":"team-input"}{}`,
+			handler:    h.RoomsHandler(),
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "room name limit",
+			path:       "/api/openclaw/rooms",
+			body:       `{"teamId":"team-input","name":"` + strings.Repeat("x", maximumOpenClawRoomNameBytes+1) + `"}`,
+			handler:    h.RoomsHandler(),
+			wantStatus: http.StatusRequestEntityTooLarge,
+		},
+		{
+			name:       "message unknown field",
+			path:       "/api/openclaw/rooms/" + room.ID + "/messages",
+			body:       `{"content":"hello","unexpected":true}`,
+			handler:    h.RoomByIDHandler(),
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "message trailing value",
+			path:       "/api/openclaw/rooms/" + room.ID + "/messages",
+			body:       `{"content":"hello"}{}`,
+			handler:    h.RoomByIDHandler(),
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "message content limit",
+			path:       "/api/openclaw/rooms/" + room.ID + "/messages",
+			body:       `{"content":"` + strings.Repeat("x", maximumOpenClawRoomMessageBytes+1) + `"}`,
+			handler:    h.RoomByIDHandler(),
+			wantStatus: http.StatusRequestEntityTooLarge,
+		},
+		{
+			name:       "message sender limit",
+			path:       "/api/openclaw/rooms/" + room.ID + "/messages",
+			body:       `{"content":"hello","senderName":"` + strings.Repeat("x", maximumOpenClawSenderFieldBytes+1) + `"}`,
+			handler:    h.RoomByIDHandler(),
+			wantStatus: http.StatusRequestEntityTooLarge,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
+			resp := httptest.NewRecorder()
+			tc.handler.ServeHTTP(resp, req)
+			if resp.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d: %s", resp.Code, tc.wantStatus, resp.Body.String())
+			}
+		})
+	}
+
+	invalidUnicode := []byte(`{"content":"`)
+	invalidUnicode = append(invalidUnicode, 0xff)
+	invalidUnicode = append(invalidUnicode, []byte(`"}`)...)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/openclaw/rooms/"+room.ID+"/messages",
+		strings.NewReader(string(invalidUnicode)),
+	)
+	resp := httptest.NewRecorder()
+	h.RoomByIDHandler().ServeHTTP(resp, req)
+	if resp.Code != http.StatusBadRequest || !strings.Contains(resp.Body.String(), "invalid Unicode") {
+		t.Fatalf("invalid Unicode response = %d: %s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestOpenClawRoomMessageLimitMapsToConflict(t *testing.T) {
+	h := newTestOpenClawHandler(t, t.TempDir(), false)
+	room := seedTeamAndRoom(t, h, newTestTeam("team-full", "Full Team", ""), nil)
+	rows := make([][2]string, 0, maximumOpenClawRoomMessages)
+	for index := 0; index < maximumOpenClawRoomMessages; index++ {
+		id := fmt.Sprintf("message-%04d", index)
+		rows = append(rows, [2]string{id, fmt.Sprintf(`{"id":%q}`, id)})
+	}
+	if err := h.wf.ReplaceOpenClawRoomMessages(room.ID, rows); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/openclaw/rooms/"+room.ID+"/messages",
+		strings.NewReader(`{"content":"one too many","senderType":"system"}`),
+	)
+	resp := httptest.NewRecorder()
+	h.RoomByIDHandler().ServeHTTP(resp, req)
+	if resp.Code != http.StatusConflict || !strings.Contains(resp.Body.String(), "room message limit reached") {
+		t.Fatalf("response = %d: %s", resp.Code, resp.Body.String())
+	}
+}
+
 func TestOpenClawReadonlyBlocksManagementMutations(t *testing.T) {
 	h := newTestOpenClawHandler(t, t.TempDir(), true)
 

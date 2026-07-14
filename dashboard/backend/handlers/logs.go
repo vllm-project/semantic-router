@@ -2,9 +2,10 @@ package handlers
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -58,9 +59,9 @@ func LogsHandler(routerAPIURL string) http.HandlerFunc {
 		}
 
 		if isRunningInContainer() {
-			populateRunningContainerLogs(&response, component, lines)
+			populateRunningContainerLogs(r.Context(), &response, component, lines)
 		} else {
-			populateExternalLogs(&response, component, lines, routerAPIURL)
+			populateExternalLogs(r.Context(), &response, component, lines, routerAPIURL)
 		}
 
 		response.Count = len(response.Logs)
@@ -73,19 +74,19 @@ func LogsHandler(routerAPIURL string) http.HandlerFunc {
 }
 
 func populateRunningContainerLogs(
-	response *LogsResponse, component string, lines int,
+	ctx context.Context, response *LogsResponse, component string, lines int,
 ) {
 	response.DeploymentType = "docker"
-	populateFetchedLogs(response, component, lines)
+	populateFetchedLogs(ctx, response, component, lines)
 }
 
 func populateExternalLogs(
-	response *LogsResponse, component string, lines int, routerAPIURL string,
+	ctx context.Context, response *LogsResponse, component string, lines int, routerAPIURL string,
 ) {
 	switch containerStatus := runtimeContainerStatusForLogs(); containerStatus {
 	case "running", "exited":
 		response.DeploymentType = "docker"
-		populateFetchedLogs(response, component, lines)
+		populateFetchedLogs(ctx, response, component, lines)
 	case "not found":
 		populateDirectRuntimeMessage(response, routerAPIURL)
 	default:
@@ -94,8 +95,8 @@ func populateExternalLogs(
 	}
 }
 
-func populateFetchedLogs(response *LogsResponse, component string, lines int) {
-	logs, err := fetchContainerLogs(component, lines)
+func populateFetchedLogs(ctx context.Context, response *LogsResponse, component string, lines int) {
+	logs, err := fetchContainerLogs(ctx, component, lines)
 	if err != nil {
 		response.Error = err.Error()
 		return
@@ -131,17 +132,34 @@ func runtimeContainerStatusForLogs() string {
 	return managedRuntimeContainerStatus()
 }
 
-func fetchContainerLogs(component string, lines int) ([]string, error) {
-	return fetchLogsFromManagedDocker(component, lines)
+func fetchContainerLogs(ctx context.Context, component string, lines int) ([]string, error) {
+	return fetchLogsFromManagedDocker(ctx, component, lines)
 }
 
-func fetchLogsFromManagedDocker(component string, lines int) ([]string, error) {
+func fetchLogsFromManagedDocker(parent context.Context, component string, lines int) ([]string, error) {
 	var result []string
+	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+	defer cancel()
+	remainingOutputBytes := 4 * 1024 * 1024
 
 	for _, containerName := range managedContainerNamesForComponent(component) {
 		// #nosec G204 -- containerName is repository-managed and lines is converted from int.
-		cmd := exec.Command("docker", "logs", "--tail", strconv.Itoa(lines), containerName)
-		output, err := cmd.CombinedOutput()
+		output, err := runBoundedCommand(
+			ctx,
+			"docker",
+			remainingOutputBytes,
+			"logs",
+			"--tail",
+			strconv.Itoa(lines),
+			containerName,
+		)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if errors.Is(err, errCommandOutputLimit) {
+			return nil, err
+		}
+		remainingOutputBytes -= len(output)
 		if err != nil && len(output) == 0 {
 			continue
 		}

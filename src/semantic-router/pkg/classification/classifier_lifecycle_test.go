@@ -41,6 +41,14 @@ func (i *countingPIIInitializer) Init(string, bool, int) error {
 
 func TestNewClassifierWithOptionsDefersRuntimeInitialization(t *testing.T) {
 	cfg := &config.RouterConfig{
+		InlineModels: config.InlineModels{
+			EmbeddingModels: config.EmbeddingModels{
+				Qwen3ModelPath: "models/test-qwen3",
+				EmbeddingConfig: config.HNSWConfig{
+					ModelType: config.EmbeddingModelTypeQwen3,
+				},
+			},
+		},
 		IntelligentRouting: config.IntelligentRouting{
 			Signals: config.Signals{
 				EmbeddingRules: []config.EmbeddingRule{
@@ -101,6 +109,7 @@ func TestInitializeRuntimeWarmsEmbeddingCandidatesAfterBackendInit(t *testing.T)
 		},
 		InlineModels: config.InlineModels{
 			EmbeddingModels: config.EmbeddingModels{
+				MmBertModelPath: "models/test-mmbert",
 				EmbeddingConfig: config.HNSWConfig{
 					ModelType:         "mmbert",
 					PreloadEmbeddings: true,

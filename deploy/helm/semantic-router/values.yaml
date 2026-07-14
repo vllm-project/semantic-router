@@ -10,6 +10,13 @@ global:
   imageRegistry: ""
 # -- Number of replicas for the deployment
 replicaCount: 1
+# CLI-managed runtime credential rollout metadata. Credential material is held
+# only in a release-scoped Kubernetes Secret and never written into Helm values.
+runtimeCredentials:
+  # -- Opaque random generation identifier used to trigger a pod-template update
+  generation: ""
+  # -- Persist Recreate for CLI-managed runtime credential revisions
+  recreateForLooperRotation: false
 # Image configuration
 image:
   # -- Image repository
@@ -530,6 +537,9 @@ extraEnv: []
 dashboard:
   # -- Enable the vLLM-SR dashboard
   enabled: false
+  # -- Dashboard security posture. Development permits the built-in lightweight
+  # password denylist; production requires a verified external breach corpus.
+  securityProfile: development
   # -- Dashboard replica count. Must stay 1 until the dashboard auth/session store
   # supports a shared multi-replica backend.
   replicaCount: 1
@@ -565,6 +575,16 @@ dashboard:
     existingSecret: ""
     # -- Key within existingSecret holding the JWT signing secret.
     existingSecretKey: "jwt-secret"
+  # -- Optional existing ConfigMap containing a newline-delimited password
+  # blocklist. The chart mounts only the selected key; corpus contents never
+  # enter Helm values, Secrets, or rendered manifests.
+  passwordBlocklist:
+    # -- Name of an existing ConfigMap. Leave empty to use the built-in policy.
+    existingConfigMap: ""
+    # -- ConfigMap key containing the newline-delimited blocklist.
+    key: "passwords.txt"
+    # -- SHA-256 of the exact mounted file bytes. Required in production.
+    sha256: ""
   # -- Extra environment variables for the dashboard container, appended after the
   # chart-managed TARGET_* vars. Use this to set optional integration env the chart
   # does not expose explicitly (for example OPENCLAW_*, TARGET_ENVOY_URL, or

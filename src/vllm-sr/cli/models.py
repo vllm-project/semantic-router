@@ -13,6 +13,7 @@ from pydantic import (
 )
 
 from .algorithms import AlgorithmConfig, ModelRef
+from .embedding_endpoint_security import validate_embedding_endpoint_security
 
 
 class Listener(BaseModel):
@@ -299,12 +300,20 @@ class EmbeddingClassifierConfig(BaseModel):
 class EmbeddingEndpointConfig(BaseModel):
     """External embedding provider endpoint configuration."""
 
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     base_url: Optional[str] = None
     model: Optional[str] = None
-    api_key_env: Optional[str] = None
-    timeout_seconds: Optional[int] = Field(default=None, ge=0)
-    max_retries: Optional[int] = Field(default=None, ge=0)
+    api_key_env: Optional[Literal["", "VLLM_SR_EMBEDDING_API_KEY"]] = None
+    timeout_seconds: Optional[int] = Field(default=None, ge=0, le=3600)
+    max_retries: Optional[int] = Field(default=None, ge=0, le=10)
     dimensions: Optional[int] = Field(default=None, ge=1)
+
+    @model_validator(mode="after")
+    def validate_endpoint_security(self):
+        """Keep credentials out of cleartext transport and URL authority."""
+        validate_embedding_endpoint_security(self.base_url, self.api_key_env)
+        return self
 
 
 class ComplexityRule(BaseModel):
@@ -1155,7 +1164,7 @@ class EmbeddingModelsConfig(BaseModel):
     """Embedding models configuration for memory and semantic features."""
 
     # Preserve advanced nested fields when users pass through custom config blocks.
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow", hide_input_in_errors=True)
 
     qwen3_model_path: Optional[str] = Field(
         None, description="Path to Qwen3-Embedding model"

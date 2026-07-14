@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -9,6 +8,7 @@ import (
 
 func bootstrapCanRegisterHandler(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		setAuthNoStoreHeaders(w)
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -24,7 +24,7 @@ func bootstrapCanRegisterHandler(svc *Service) http.HandlerFunc {
 
 		canRegister, err := svc.CanBootstrap(r.Context())
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, "authentication service unavailable", http.StatusInternalServerError)
 			return
 		}
 
@@ -34,14 +34,20 @@ func bootstrapCanRegisterHandler(svc *Service) http.HandlerFunc {
 
 // hashBootstrapPassword is an indirection over Service.HashPassword so tests
 // can observe that no bcrypt work happens once the bootstrap window is closed.
-var hashBootstrapPassword = func(svc *Service, password string) (string, error) {
-	return svc.HashPassword(password)
+var hashBootstrapPassword = func(svc *Service, email, password string) (string, error) {
+	return svc.HashPasswordForUser(email, password)
 }
 
 func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		setAuthNoStoreHeaders(w)
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		cookieOnly, modeErr := cookieOnlyAuthResponse(r)
+		if modeErr != nil {
+			http.Error(w, modeErr.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -51,11 +57,12 @@ func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 		}
 
 		var req BootstrapRegistrationRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid body", http.StatusBadRequest)
+		if err := decodeAuthJSON(w, r, &req); err != nil {
+			writeAuthDecodeError(w, err)
 			return
 		}
-		if strings.TrimSpace(req.Email) == "" || strings.TrimSpace(req.Password) == "" {
+		req.Email = strings.TrimSpace(req.Email)
+		if req.Email == "" || req.Password == "" {
 			http.Error(w, "email and password are required", http.StatusBadRequest)
 			return
 		}
@@ -68,7 +75,7 @@ func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 		// correctness gate for concurrent requests.
 		canBootstrap, err := svc.CanBootstrap(r.Context())
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, "registration unavailable", http.StatusInternalServerError)
 			return
 		}
 		if !canBootstrap {
@@ -76,9 +83,18 @@ func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 			return
 		}
 
-		hash, err := hashBootstrapPassword(svc, req.Password)
+		attempt, retryAfter := svc.limiter.Reserve(req.Email, loginRequestSource(r))
+		if attempt == nil {
+			writeLoginRateLimit(w, &LoginRateLimitError{RetryAfter: retryAfter})
+			return
+		}
+		defer attempt.Cancel()
+		hash, err := hashBootstrapPassword(svc, req.Email, req.Password)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			if writePasswordPolicyError(w, err) {
+				return
+			}
+			http.Error(w, "password hashing failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -86,64 +102,91 @@ func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 		// under concurrent requests (see Service.BootstrapRegister).
 		user, err := svc.BootstrapRegister(r.Context(), req.Email, req.Name, hash)
 		if errors.Is(err, ErrBootstrapClosed) {
+			attempt.Finish()
 			http.Error(w, "bootstrap is disabled", http.StatusConflict)
 			return
 		}
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			attempt.Finish()
+			http.Error(w, "registration failed", http.StatusInternalServerError)
 			return
 		}
+		attempt.Succeed()
 
 		token, err := svc.issueTokenForContext(r.Context(), user)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, "authentication service unavailable", http.StatusInternalServerError)
 			return
 		}
 
 		perms, err := svc.store.GetEffectivePermissions(r.Context(), user.Role, user.ID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, "authentication service unavailable", http.StatusInternalServerError)
 			return
 		}
 
-		setAuthSessionCookie(w, r, token, svc.ttlDuration)
+		if cookieOnly {
+			setAuthSessionCookie(w, r, token, svc.ttlDuration)
+		}
 		writeAudit(r, svc, "user.bootstrap", "/api/auth/bootstrap/register", "")
-		respondJSON(w, LoginResponse{Token: token, User: cloneSessionUser(user, perms)})
+		respondJSON(w, loginResponse(token, cloneSessionUser(user, perms), cookieOnly))
 	}
 }
 
 func loginHandler(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		setAuthNoStoreHeaders(w)
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-
-		var req LoginRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid body", http.StatusBadRequest)
+		cookieOnly, modeErr := cookieOnlyAuthResponse(r)
+		if modeErr != nil {
+			http.Error(w, modeErr.Error(), http.StatusBadRequest)
 			return
 		}
 
-		token, user, err := svc.Login(r.Context(), strings.TrimSpace(req.Email), req.Password)
+		var req LoginRequest
+		if err := decodeAuthJSON(w, r, &req); err != nil {
+			writeAuthDecodeError(w, err)
+			return
+		}
+
+		token, user, err := svc.LoginWithSource(
+			r.Context(),
+			strings.TrimSpace(req.Email),
+			req.Password,
+			loginRequestSource(r),
+		)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+			var rateErr *LoginRateLimitError
+			switch {
+			case errors.As(err, &rateErr):
+				writeLoginRateLimit(w, rateErr)
+			case errors.Is(err, ErrInvalidCredentials):
+				http.Error(w, "invalid credentials", http.StatusUnauthorized)
+			default:
+				http.Error(w, "authentication service unavailable", http.StatusInternalServerError)
+			}
 			return
 		}
 
 		perms, err := svc.store.GetEffectivePermissions(r.Context(), user.Role, user.ID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, "authentication service unavailable", http.StatusInternalServerError)
 			return
 		}
 
-		setAuthSessionCookie(w, r, token, svc.ttlDuration)
-		respondJSON(w, LoginResponse{Token: token, User: cloneSessionUser(user, perms)})
+		if cookieOnly {
+			setAuthSessionCookie(w, r, token, svc.ttlDuration)
+		}
+		respondJSON(w, loginResponse(token, cloneSessionUser(user, perms), cookieOnly))
 	}
 }
 
 func meHandler(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		setAuthNoStoreHeaders(w)
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -160,7 +203,71 @@ func meHandler(svc *Service) http.HandlerFunc {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
+		if ac.CredentialSource == CredentialSourceCookie {
+			reissueSessionCookie(w, r, svc)
+		}
 
 		respondJSON(w, map[string]any{"user": cloneSessionUser(user, ac.Perms)})
+	}
+}
+
+func changePasswordHandler(svc *Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		setAuthNoStoreHeaders(w)
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		cookieOnly, modeErr := cookieOnlyAuthResponse(r)
+		if modeErr != nil {
+			http.Error(w, modeErr.Error(), http.StatusBadRequest)
+			return
+		}
+		ac, ok := AuthFromContext(r)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		var req ChangePasswordRequest
+		if err := decodeAuthJSON(w, r, &req); err != nil {
+			writeAuthDecodeError(w, err)
+			return
+		}
+		if req.CurrentPassword == "" || req.NewPassword == "" {
+			http.Error(w, "currentPassword and newPassword are required", http.StatusBadRequest)
+			return
+		}
+
+		token, user, err := svc.ChangePasswordWithSource(
+			r.Context(),
+			ac.UserID,
+			req.CurrentPassword,
+			req.NewPassword,
+			loginRequestSource(r),
+		)
+		if err != nil {
+			var rateErr *LoginRateLimitError
+			switch {
+			case errors.As(err, &rateErr):
+				writeLoginRateLimit(w, rateErr)
+			case errors.Is(err, ErrCurrentPasswordFailed):
+				// Reserve 401 for middleware session failure. The frontend treats a
+				// protected API 401 as logout, so a password typo must be 403.
+				http.Error(w, "current password is invalid", http.StatusForbidden)
+			case errors.Is(err, ErrPasswordChanged):
+				http.Error(w, "password changed concurrently; retry", http.StatusConflict)
+			case writePasswordPolicyError(w, err):
+			default:
+				http.Error(w, "password change failed", http.StatusInternalServerError)
+			}
+			return
+		}
+
+		if cookieOnly {
+			setAuthSessionCookie(w, r, token, svc.ttlDuration)
+		}
+		writeAudit(r, svc, "user.password.self", "/api/auth/password", ac.UserID)
+		respondJSON(w, loginResponse(token, cloneSessionUser(user, ac.Perms), cookieOnly))
 	}
 }

@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
@@ -54,13 +55,14 @@ var (
 
 // Server represents a gRPC server for the Envoy ExtProc
 type Server struct {
-	configPath string
-	service    *RouterService
-	server     *grpc.Server
-	port       int
-	secure     bool
-	certPath   string
-	runtime    *routerruntime.Registry
+	configPath          string
+	service             *RouterService
+	server              *grpc.Server
+	port                int
+	secure              bool
+	certPath            string
+	runtime             *routerruntime.Registry
+	looperAuthenticator *looper.RequestAuthenticator
 }
 
 // NewServer creates a new ExtProc gRPC server
@@ -71,7 +73,15 @@ func NewServer(
 	certPath string,
 	runtimeRegistry *routerruntime.Registry,
 ) (*Server, error) {
-	router, err := newOpenAIRouterForServer(configPath, runtimeRegistry)
+	looperAuthenticator, err := newLooperRequestAuthenticatorFromEnvironment()
+	if err != nil {
+		return nil, fmt.Errorf("initialize looper request authentication: %w", err)
+	}
+	router, err := newOpenAIRouterForServer(
+		configPath,
+		runtimeRegistry,
+		looperAuthenticator,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -80,12 +90,13 @@ func NewServer(
 
 	service := NewRouterService(router)
 	return &Server{
-		configPath: configPath,
-		service:    service,
-		port:       port,
-		secure:     secure,
-		certPath:   certPath,
-		runtime:    runtimeRegistry,
+		configPath:          configPath,
+		service:             service,
+		port:                port,
+		secure:              secure,
+		certPath:            certPath,
+		runtime:             runtimeRegistry,
+		looperAuthenticator: looperAuthenticator,
 	}, nil
 }
 
@@ -173,8 +184,8 @@ func (s *Server) Start() error {
 	case err := <-serverErrCh:
 		if err != nil {
 			logging.ComponentErrorEvent("extproc", "server_stopped_with_error", map[string]interface{}{
-				"port":  s.port,
-				"error": err.Error(),
+				"port":       s.port,
+				"error_type": safeErrorForLog(err),
 			})
 			return err
 		}
@@ -252,6 +263,7 @@ func (s *Server) reloadRouterFromConfig(
 	if err != nil {
 		return err
 	}
+	s.preserveLooperAuthenticator(newRouter)
 	attachRuntimeRegistry(newRouter, s.runtime)
 	if err := warmupReloadRouter(newRouter, runtimeState); err != nil {
 		_ = newRouter.Close()
@@ -272,6 +284,21 @@ func (s *Server) reloadRouterFromConfig(
 	}
 	publishRouterState(candidateCfg, newRouter, s.runtime)
 	return nil
+}
+
+func (s *Server) preserveLooperAuthenticator(newRouter *OpenAIRouter) {
+	if s == nil || newRouter == nil {
+		return
+	}
+	if s.looperAuthenticator == nil && s.service != nil {
+		if current := s.service.GetRouter(); current != nil {
+			s.looperAuthenticator = current.looperAuthenticator
+		}
+	}
+	if s.looperAuthenticator == nil {
+		s.looperAuthenticator = newRouter.looperAuthenticator
+	}
+	newRouter.looperAuthenticator = s.looperAuthenticator
 }
 
 func (s *Server) configuredGRPCMaxMessageSize() int {
@@ -309,7 +336,7 @@ func logReloadRuntimeLifecycleEvent(event modelruntime.Event) {
 		"best_effort": event.BestEffort,
 	}
 	if event.Error != nil {
-		payload["error"] = event.Error.Error()
+		payload["error_type"] = safeErrorForLog(event.Error)
 	}
 	if event.Status == modelruntime.TaskSkipped {
 		logging.ComponentWarnEvent("extproc", "runtime_lifecycle_task_skipped", payload)

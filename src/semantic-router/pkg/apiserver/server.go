@@ -16,6 +16,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
+var newAutoClassificationService = services.NewClassificationServiceWithAutoDiscovery
+
 // Init starts the API server.
 func Init(configPath string, port int) error {
 	return InitWithRuntime(configPath, port, nil)
@@ -33,7 +35,10 @@ func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime
 	}
 
 	classificationSvc := resolveClassificationService(cfg, runtimeRegistry)
-	classificationSvc = ensureClassificationService(cfg, runtimeRegistry, classificationSvc)
+	classificationSvc, err := ensureClassificationServiceForStartup(cfg, runtimeRegistry, classificationSvc)
+	if err != nil {
+		return err
+	}
 
 	// Initialize batch metrics configuration
 	if cfg.API.BatchClassification.Metrics.Enabled {
@@ -121,30 +126,38 @@ func ensureClassificationService(
 	runtimeRegistry *routerruntime.Registry,
 	svc *services.ClassificationService,
 ) *services.ClassificationService {
+	resolved, _ := ensureClassificationServiceForStartup(cfg, runtimeRegistry, svc)
+	return resolved
+}
+
+func ensureClassificationServiceForStartup(
+	cfg *config.RouterConfig,
+	runtimeRegistry *routerruntime.Registry,
+	svc *services.ClassificationService,
+) (*services.ClassificationService, error) {
 	if svc != nil {
-		return svc
+		return svc, nil
 	}
 
 	if runtimeRegistry != nil {
 		logging.ComponentEvent("apiserver", "classification_service_waiting_for_runtime", map[string]interface{}{
 			"using_placeholder": true,
 		})
-		return services.NewPlaceholderClassificationService()
+		return services.NewPlaceholderClassificationService(), nil
 	}
 
 	// If no global service exists, try auto-discovery unified classifier.
 	logging.ComponentEvent("apiserver", "classification_service_autodiscovery_started", map[string]interface{}{})
-	autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
+	autoSvc, err := newAutoClassificationService(cfg)
 	if err != nil {
 		logging.ComponentWarnEvent("apiserver", "classification_service_autodiscovery_failed", map[string]interface{}{
-			"error":             err.Error(),
-			"using_placeholder": true,
+			"error": err.Error(),
 		})
-		return services.NewPlaceholderClassificationService()
+		return nil, fmt.Errorf("classification service startup failed: %w", err)
 	}
 
 	logging.ComponentEvent("apiserver", "classification_service_autodiscovery_succeeded", map[string]interface{}{})
-	return autoSvc
+	return autoSvc, nil
 }
 
 func resolveMemoryStore(cfg *config.RouterConfig, runtimeRegistry *routerruntime.Registry) memory.Store {

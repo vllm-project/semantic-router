@@ -27,7 +27,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 	var selectedModel string
 
 	// Check if there's content to evaluate
-	if len(history.nonUserMessages) == 0 && history.currentUserMessage == "" {
+	if !hasDecisionSignalInput(history, ctx.RequestImageURL) {
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
@@ -42,9 +42,14 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 
 	signalInput := r.prepareSignalEvaluationInput(history)
 	ctx.VSRConversationFacts = signalInput.conversationFacts
-	if signalInput.evaluationText == "" {
+	if signalInput.evaluationText == "" && ctx.RequestImageURL == "" {
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
+	release, admissionErr := r.admitDecisionEvaluation(ctx.TraceContext, originalModel, ctx.RequestImageURL)
+	if admissionErr != nil {
+		return "", 0, entropy.ReasoningDecision{}, "", admissionErr
+	}
+	defer release()
 
 	signals, authzErr := r.evaluateSignalsForDecision(originalModel, signalInput, history.nonUserMessages, ctx)
 	if authzErr != nil {
@@ -65,6 +70,10 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 	return decisionName, evaluationConfidence, reasoningDecision, selectedModel, nil
 }
 
+func hasDecisionSignalInput(history signalConversationHistory, imageURL string) bool {
+	return len(history.nonUserMessages) > 0 || history.currentUserMessage != "" || imageURL != ""
+}
+
 // selectModelFromCandidates uses the configured selection algorithm to choose the best model
 // from the decision's candidate models. If selection cannot produce a valid
 // candidate, the first valid configured candidate is used as the default.
@@ -78,7 +87,7 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 		return nil, ""
 	}
 	if err := selection.ValidateSelectionContext(selCtx); err != nil {
-		logging.Warnf("[ModelSelection] Invalid selection context: %v, using default candidate", err)
+		logging.Warnf("[ModelSelection] Invalid selection context: %s, using default candidate", safeErrorForLog(err))
 		recordAgenticSessionDecision(selCtx, nil, defaultCandidateModelRef, ctx)
 		return defaultCandidateModelRef, ""
 	}
@@ -104,12 +113,12 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 	// Perform selection
 	result, err := selector.Select(context.Background(), selCtx)
 	if err != nil {
-		logging.Warnf("[ModelSelection] Selection failed: %v, using default candidate", err)
+		logging.Warnf("[ModelSelection] Selection failed: %s, using default candidate", safeErrorForLog(err))
 		recordAgenticSessionDecision(selCtx, nil, defaultCandidateModelRef, ctx)
 		return defaultCandidateModelRef, string(method)
 	}
 	if err := selection.ValidateSelectionResult(selCtx, result); err != nil {
-		logging.Warnf("[ModelSelection] Invalid selection result: %v, using default candidate", err)
+		logging.Warnf("[ModelSelection] Invalid selection result: %s, using default candidate", safeErrorForLog(err))
 		recordAgenticSessionDecision(selCtx, result, defaultCandidateModelRef, ctx)
 		return defaultCandidateModelRef, string(method)
 	}
@@ -222,12 +231,12 @@ func selectedModelRefFromResult(selCtx *selection.SelectionContext, result *sele
 
 func logSelectionResult(method selection.SelectionMethod, result *selection.SelectionResult, selected *config.ModelRef, learningApplied bool) {
 	if learningApplied {
-		logging.Infof("[ModelSelection] Router Learning adjusted selection to %s (base_method=%s, score=%.4f, confidence=%.2f): %s",
-			selected.Model, method, result.Score, result.Confidence, result.Reasoning)
+		logging.Infof("[ModelSelection] Router Learning adjusted selection to %s (base_method=%s, score=%.4f, confidence=%.2f)",
+			selected.Model, method, result.Score, result.Confidence)
 		return
 	}
-	logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f): %s",
-		selected.Model, method, result.Score, result.Confidence, result.Reasoning)
+	logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f)",
+		selected.Model, method, result.Score, result.Confidence)
 }
 
 func firstValidCandidateModelRef(selCtx *selection.SelectionContext) *config.ModelRef {

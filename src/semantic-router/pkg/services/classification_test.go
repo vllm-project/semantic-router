@@ -31,6 +31,27 @@ func TestNewUnifiedClassificationService(t *testing.T) {
 	}
 }
 
+func TestAutoDiscoveryFailsClosedWhenConfiguredClassifierCannotBuild(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", config.EmbeddingBackendOpenVINO)
+	t.Setenv("EMBEDDING_MODEL_TYPE_OVERRIDE", "")
+	cfg := &config.RouterConfig{
+		InlineModels: config.InlineModels{EmbeddingModels: config.EmbeddingModels{
+			EmbeddingConfig: config.HNSWConfig{
+				Backend:   config.EmbeddingBackendOpenAICompatible,
+				ModelType: config.EmbeddingModelTypeRemote,
+			},
+			Endpoint: config.EmbeddingEndpointConfig{BaseURL: "https://embedding.invalid/v1", Model: "remote"},
+		}},
+		IntelligentRouting: config.IntelligentRouting{Signals: config.Signals{
+			ReaskRules: []config.ReaskRule{{Name: "repeat", LookbackTurns: 1}},
+		}},
+	}
+	service, err := NewClassificationServiceWithAutoDiscovery(cfg)
+	if service != nil || err == nil || !strings.Contains(err.Error(), "configured classifier initialization failed") {
+		t.Fatalf("auto-discovery = service %v err %v, want startup failure", service, err)
+	}
+}
+
 func TestNewUnifiedClassificationService_WithBothClassifiers(t *testing.T) {
 	// Test with both unified and legacy classifiers
 	config := &config.RouterConfig{}

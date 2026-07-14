@@ -19,6 +19,21 @@ func StaticFileServer(staticDir string) http.Handler {
 		// Never serve index.html for API or embedded proxy routes
 		// These should be handled by their respective handlers
 		p := r.URL.Path
+		if p == "/.well-known/change-password" {
+			if r.Method != http.MethodGet && r.Method != http.MethodHead {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			http.Redirect(w, r, "/account/security", http.StatusFound)
+			return
+		}
+		// Password managers probe a reserved nonexistent path to determine
+		// whether this server returns real 404s. Do not let the SPA fallback
+		// turn unknown well-known resources into misleading 200 responses.
+		if strings.HasPrefix(p, "/.well-known/") {
+			http.NotFound(w, r)
+			return
+		}
 		// Never serve static files for proxy routes
 		if strings.HasPrefix(p, "/api/") || strings.HasPrefix(p, "/embedded/") ||
 			strings.HasPrefix(p, "/metrics/") || strings.HasPrefix(p, "/public/") ||

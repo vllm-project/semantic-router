@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 )
 
 func TestUpdateConfigHandler_ValidUpdates(t *testing.T) {
+	useMissingManagedDockerCLI(t)
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
@@ -159,6 +161,7 @@ func TestUpdateConfigHandler_MethodNotAllowed(t *testing.T) {
 }
 
 func TestUpdateConfigHandler_ReplacesLegacyLayout(t *testing.T) {
+	useMissingManagedDockerCLI(t)
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 	createLegacyTestConfig(t, tempDir)
@@ -198,6 +201,7 @@ func TestUpdateConfigHandler_ReplacesLegacyLayout(t *testing.T) {
 }
 
 func TestUpdateConfigHandler_WritesBackendEndpoint(t *testing.T) {
+	useMissingManagedDockerCLI(t)
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
@@ -248,6 +252,7 @@ func TestUpdateConfigHandler_WritesBackendEndpoint(t *testing.T) {
 }
 
 func TestUpdateConfigHandler_UpdatesModTime(t *testing.T) {
+	useMissingManagedDockerCLI(t)
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
@@ -300,5 +305,37 @@ func TestUpdateConfigHandler_ValidationIntegration(t *testing.T) {
 	}
 	if !contains(w.Body.String(), "Config validation failed") {
 		t.Errorf("Expected validation error message, got: %s", w.Body.String())
+	}
+}
+
+func TestUpdateRouterDefaultsHandlerRestoresConfigWhenRuntimeApplyFails(t *testing.T) {
+	useUnknownManagedDockerCLI(t)
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+	before, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read original config: %v", err)
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/api/router/config/global/update",
+		bytes.NewBufferString("router:\n  clear_route_cache: true\n"),
+	)
+	w := httptest.NewRecorder()
+	UpdateRouterDefaultsHandler(tempDir, false)(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500: %s", w.Code, w.Body.String())
+	}
+	after, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read restored config: %v", err)
+	}
+	if !bytes.Equal(after, before) {
+		t.Fatalf("router defaults failure persisted candidate config\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+	if !strings.Contains(w.Body.String(), "Failed to restore previous config") {
+		t.Fatalf("runtime rollback uncertainty was not reported: %s", w.Body.String())
 	}
 }

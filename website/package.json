@@ -21,8 +21,9 @@
     "serve": "npm run sync:install && docusaurus serve",
     "write-translations": "docusaurus write-translations",
     "write-heading-ids": "docusaurus write-heading-ids",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint": "npm run test:i18n && eslint .",
+    "lint:fix": "eslint . --fix",
+    "test:i18n": "node --test scripts/hero-copy-contract.test.mjs"
   },
   "keywords": [
     "llm",

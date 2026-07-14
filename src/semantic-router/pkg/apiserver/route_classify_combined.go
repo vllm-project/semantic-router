@@ -35,6 +35,11 @@ func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWr
 	}
 
 	start := time.Now()
+	release, admitted := s.admitIntentClassificationNative(w, r.Context(), services.IntentRequest{Text: req.Text})
+	if !admitted {
+		return
+	}
+	defer release()
 
 	intentResp, err := s.classificationSvc.ClassifyIntent(services.IntentRequest{
 		Text:    req.Text,

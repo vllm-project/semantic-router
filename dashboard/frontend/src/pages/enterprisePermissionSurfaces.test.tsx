@@ -127,6 +127,8 @@ describe('enterprise permission surfaces', () => {
 
     expect(configSource).toContain("const isMCPSection = activeSection === 'mcp'")
     expect(configSource).toContain('{isMCPSection && (')
+    expect(configSource).toContain('!canWriteConfig(user) || !canDeployConfig(user)')
+    expect(configSource).toContain('config.write and config.deploy permissions')
 
     for (const source of mutationSources) {
       expect(source).toContain('<ConfirmDialog')

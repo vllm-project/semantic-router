@@ -2,8 +2,11 @@ package mcp
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -13,23 +16,42 @@ import (
 // Manager is the MCP client manager. Server configs are persisted in workflowstore;
 // active client connections remain in memory only.
 type Manager struct {
-	mu      sync.RWMutex
-	clients map[string]*Client
-	configs map[string]*ServerConfig
-	store   *workflowstore.Store
+	mu              sync.RWMutex
+	clients         map[string]*Client
+	configs         map[string]*ServerConfig
+	ephemeral       map[string]bool
+	serverLocks     sync.Map
+	store           *workflowstore.Store
+	allowStdio      bool
+	lifecycleCtx    context.Context
+	lifecycleCancel context.CancelFunc
+	closed          bool
 }
 
-// NewManager loads persisted server configs from store and returns a new manager.
+// NewManager loads persisted server configs with the production-safe default:
+// local subprocess execution is disabled.
 func NewManager(store *workflowstore.Store) (*Manager, error) {
+	return NewManagerWithOptions(store, ManagerOptions{})
+}
+
+// NewManagerWithOptions loads persisted server configs and installs immutable
+// process-level transport policy before any connection can be attempted.
+func NewManagerWithOptions(store *workflowstore.Store, options ManagerOptions) (*Manager, error) {
+	lifecycleCtx, lifecycleCancel := context.WithCancel(context.Background())
 	m := &Manager{
-		clients: make(map[string]*Client),
-		configs: make(map[string]*ServerConfig),
-		store:   store,
+		clients:         make(map[string]*Client),
+		configs:         make(map[string]*ServerConfig),
+		ephemeral:       make(map[string]bool),
+		store:           store,
+		allowStdio:      options.AllowStdio,
+		lifecycleCtx:    lifecycleCtx,
+		lifecycleCancel: lifecycleCancel,
 	}
 	if store == nil {
 		return m, nil
 	}
 	if err := m.loadConfigs(); err != nil {
+		lifecycleCancel()
 		return nil, fmt.Errorf("load MCP server configs: %w", err)
 	}
 	return m, nil
@@ -51,13 +73,13 @@ func (m *Manager) loadConfigs() error {
 		if config.ID == "" {
 			continue
 		}
-		m.configs[config.ID] = &config
+		m.configs[config.ID] = cloneServerConfig(&config)
 	}
 	return nil
 }
 
 func (m *Manager) persistConfig(config *ServerConfig) error {
-	if m.store == nil {
+	if m.store == nil || m.ephemeral[config.ID] {
 		return nil
 	}
 	data, err := json.Marshal(config)
@@ -67,36 +89,28 @@ func (m *Manager) persistConfig(config *ServerConfig) error {
 	return m.store.PutMCPServerJSON(config.ID, string(data))
 }
 
-// GetServers returns all server configurations
-func (m *Manager) GetServers() []*ServerConfig {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	servers := make([]*ServerConfig, 0, len(m.configs))
-	for _, config := range m.configs {
-		servers = append(servers, config)
-	}
-	return servers
-}
-
 // GetServer returns a single server configuration
 func (m *Manager) GetServer(id string) (*ServerConfig, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	config, ok := m.configs[id]
-	return config, ok
+	return cloneServerConfig(config), ok
 }
 
 // AddServer adds a server configuration and persists it.
 func (m *Manager) AddServer(config *ServerConfig) error {
+	if err := m.validateRuntimePolicy(config); err != nil {
+		return err
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if _, exists := m.configs[config.ID]; exists {
-		return fmt.Errorf("server with ID %s already exists", config.ID)
+		return fmt.Errorf("%w: %s", ErrServerExists, config.ID)
 	}
-	m.configs[config.ID] = config
-	if err := m.persistConfig(config); err != nil {
+	stored := cloneServerConfig(config)
+	m.configs[config.ID] = stored
+	if err := m.persistConfig(stored); err != nil {
 		delete(m.configs, config.ID)
 		return err
 	}
@@ -105,25 +119,80 @@ func (m *Manager) AddServer(config *ServerConfig) error {
 
 // UpsertServer inserts or replaces a server configuration and persists it.
 func (m *Manager) UpsertServer(config *ServerConfig) error {
+	if err := m.validateRuntimePolicy(config); err != nil {
+		return err
+	}
+	unlock := m.lockServer(config.ID)
+	defer unlock()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	previous, hadPrevious := m.configs[config.ID]
+	wasEphemeral := m.ephemeral[config.ID]
 	if client, ok := m.clients[config.ID]; ok {
 		_ = client.Disconnect()
 		delete(m.clients, config.ID)
 	}
 
-	m.configs[config.ID] = config
-	return m.persistConfig(config)
+	delete(m.ephemeral, config.ID)
+	stored := cloneServerConfig(config)
+	m.configs[config.ID] = stored
+	if err := m.persistConfig(stored); err != nil {
+		if hadPrevious {
+			m.configs[config.ID] = previous
+		} else {
+			delete(m.configs, config.ID)
+		}
+		if wasEphemeral {
+			m.ephemeral[config.ID] = true
+		}
+		return err
+	}
+	return nil
+}
+
+// UpsertEphemeralServer installs a process-local server without persisting its
+// connection credentials. It is used for the built-in OpenClaw MCP endpoint,
+// whose per-process capability must never be written to workflow storage.
+func (m *Manager) UpsertEphemeralServer(config *ServerConfig) error {
+	if err := m.validateRuntimePolicy(config); err != nil {
+		return err
+	}
+	unlock := m.lockServer(config.ID)
+	defer unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Remove any durable row left by an older release before installing the
+	// process-local credentials. This guarantees a capability can never survive
+	// restart through stale workflow storage.
+	if m.store != nil {
+		if err := m.store.DeleteMCPServer(config.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+	}
+	if client, ok := m.clients[config.ID]; ok {
+		_ = client.Disconnect()
+		delete(m.clients, config.ID)
+	}
+	m.ephemeral[config.ID] = true
+	m.configs[config.ID] = cloneServerConfig(config)
+	return nil
 }
 
 // UpdateServer updates a server configuration and persists it.
 func (m *Manager) UpdateServer(config *ServerConfig) error {
+	if err := m.validateRuntimePolicy(config); err != nil {
+		return err
+	}
+	unlock := m.lockServer(config.ID)
+	defer unlock()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.configs[config.ID]; !exists {
-		return fmt.Errorf("server with ID %s not found", config.ID)
+	previous, exists := m.configs[config.ID]
+	if !exists {
+		return fmt.Errorf("%w: %s", ErrServerNotFound, config.ID)
 	}
 
 	if client, ok := m.clients[config.ID]; ok {
@@ -131,18 +200,25 @@ func (m *Manager) UpdateServer(config *ServerConfig) error {
 		delete(m.clients, config.ID)
 	}
 
-	m.configs[config.ID] = config
-	return m.persistConfig(config)
+	stored := cloneServerConfig(config)
+	m.configs[config.ID] = stored
+	if err := m.persistConfig(stored); err != nil {
+		m.configs[config.ID] = previous
+		return err
+	}
+	return nil
 }
 
 // DeleteServer deletes a server configuration and removes it from the store.
 func (m *Manager) DeleteServer(id string) error {
+	unlock := m.lockServer(id)
+	defer unlock()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	config, exists := m.configs[id]
 	if !exists {
-		return fmt.Errorf("server with ID %s not found", id)
+		return fmt.Errorf("%w: %s", ErrServerNotFound, id)
 	}
 
 	if client, ok := m.clients[id]; ok {
@@ -151,7 +227,9 @@ func (m *Manager) DeleteServer(id string) error {
 	}
 
 	delete(m.configs, id)
-	if m.store == nil {
+	wasEphemeral := m.ephemeral[id]
+	delete(m.ephemeral, id)
+	if m.store == nil || wasEphemeral {
 		return nil
 	}
 	if err := m.store.DeleteMCPServer(id); err != nil {
@@ -163,11 +241,21 @@ func (m *Manager) DeleteServer(id string) error {
 
 // Connect establishes connection to the specified server
 func (m *Manager) Connect(ctx context.Context, id string) error {
+	unlock := m.lockServer(id)
+	defer unlock()
 	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return ErrManagerClosed
+	}
 	config, ok := m.configs[id]
 	if !ok {
 		m.mu.Unlock()
-		return fmt.Errorf("server with ID %s not found", id)
+		return fmt.Errorf("%w: %s", ErrServerNotFound, id)
+	}
+	if err := m.validateRuntimePolicy(config); err != nil {
+		m.mu.Unlock()
+		return err
 	}
 
 	// Disconnect existing client if any
@@ -176,7 +264,7 @@ func (m *Manager) Connect(ctx context.Context, id string) error {
 	}
 
 	// Create new client
-	client, err := NewClient(config)
+	client, err := NewClientWithContext(cloneServerConfig(config), m.lifecycleCtx)
 	if err != nil {
 		m.mu.Unlock()
 		return err
@@ -185,12 +273,22 @@ func (m *Manager) Connect(ctx context.Context, id string) error {
 	m.clients[id] = client
 	m.mu.Unlock()
 
-	// Connect
-	return client.Connect(ctx)
+	// A request timeout controls the handshake while manager shutdown also
+	// cancels in-flight setup. Persistent transport resources remain tied to the
+	// manager lifecycle rather than the request.
+	connectContext, cancel := context.WithCancel(ctx)
+	stopLifecycleCancellation := context.AfterFunc(m.lifecycleCtx, cancel)
+	defer func() {
+		stopLifecycleCancellation()
+		cancel()
+	}()
+	return client.Connect(connectContext)
 }
 
 // Disconnect disconnects from the specified server
 func (m *Manager) Disconnect(id string) error {
+	unlock := m.lockServer(id)
+	defer unlock()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -212,18 +310,20 @@ func (m *Manager) GetServerStatus(id string) (*ServerState, error) {
 
 	config, ok := m.configs[id]
 	if !ok {
-		return nil, fmt.Errorf("server with ID %s not found", id)
+		return nil, fmt.Errorf("%w: %s", ErrServerNotFound, id)
 	}
 
 	client, ok := m.clients[id]
 	if !ok {
 		return &ServerState{
-			Config: config,
+			Config: cloneServerConfig(config),
 			Status: StatusDisconnected,
 		}, nil
 	}
 
-	return client.GetState(), nil
+	state := client.GetState()
+	state.Config = cloneServerConfig(state.Config)
+	return state, nil
 }
 
 // GetAllServerStates returns all server states
@@ -234,10 +334,12 @@ func (m *Manager) GetAllServerStates() []*ServerState {
 	states := make([]*ServerState, 0, len(m.configs))
 	for id, config := range m.configs {
 		if client, ok := m.clients[id]; ok {
-			states = append(states, client.GetState())
+			state := client.GetState()
+			state.Config = cloneServerConfig(state.Config)
+			states = append(states, state)
 		} else {
 			states = append(states, &ServerState{
-				Config: config,
+				Config: cloneServerConfig(config),
 				Status: StatusDisconnected,
 			})
 		}
@@ -291,7 +393,7 @@ func (m *Manager) ExecuteTool(ctx context.Context, serverID, toolName string, ar
 	if err != nil {
 		return &ToolResult{
 			Success:         false,
-			Error:           err.Error(),
+			Error:           "tool execution failed",
 			ExecutionTimeMs: elapsed.Milliseconds(),
 		}, nil
 	}
@@ -332,7 +434,10 @@ func (m *Manager) ExecuteToolStreaming(ctx context.Context, serverID, toolName s
 
 // TestConnection tests the connection
 func (m *Manager) TestConnection(ctx context.Context, config *ServerConfig) error {
-	client, err := NewClient(config)
+	if err := m.validateRuntimePolicy(config); err != nil {
+		return err
+	}
+	client, err := NewClientWithContext(cloneServerConfig(config), ctx)
 	if err != nil {
 		return err
 	}
@@ -347,17 +452,21 @@ func (m *Manager) ConnectEnabled(ctx context.Context) {
 	configs := make([]*ServerConfig, 0)
 	for _, config := range m.configs {
 		if config.Enabled {
-			configs = append(configs, config)
+			configs = append(configs, cloneServerConfig(config))
 		}
 	}
 	m.mu.RUnlock()
 
 	for _, config := range configs {
+		if err := m.validateRuntimePolicy(config); err != nil {
+			log.Printf("MCP auto-connect skipped by runtime policy")
+			continue
+		}
 		go func(c *ServerConfig) {
 			if err := m.Connect(ctx, c.ID); err != nil {
-				fmt.Printf("Failed to connect to MCP server %s: %v\n", c.Name, err)
+				log.Printf("MCP auto-connect failed")
 			} else {
-				fmt.Printf("Connected to MCP server %s\n", c.Name)
+				log.Printf("MCP auto-connect succeeded")
 			}
 		}(config)
 	}
@@ -365,11 +474,37 @@ func (m *Manager) ConnectEnabled(ctx context.Context) {
 
 // DisconnectAll disconnects all connections
 func (m *Manager) DisconnectAll() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	for id, client := range m.clients {
-		_ = client.Disconnect()
-		delete(m.clients, id)
+	m.mu.RLock()
+	ids := make([]string, 0, len(m.clients))
+	for id := range m.clients {
+		ids = append(ids, id)
 	}
+	m.mu.RUnlock()
+	for _, id := range ids {
+		_ = m.Disconnect(id)
+	}
+}
+
+// Close permanently stops the manager, cancels in-flight handshakes and stdio
+// subprocesses, and disconnects every client. It is safe to call repeatedly.
+func (m *Manager) Close() {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return
+	}
+	m.closed = true
+	m.lifecycleCancel()
+	m.mu.Unlock()
+	m.DisconnectAll()
+}
+
+func (m *Manager) lockServer(id string) func() {
+	value, _ := m.serverLocks.LoadOrStore(id, &sync.Mutex{})
+	lock := value.(*sync.Mutex)
+	lock.Lock()
+	return lock.Unlock
 }

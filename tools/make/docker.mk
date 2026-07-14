@@ -19,6 +19,13 @@
 # ────────────────────────────────────────────────────────────────────────────
 DOCKER_REGISTRY ?= ghcr.io/vllm-project/semantic-router
 DOCKER_TAG ?= latest
+GOPROXY ?= https://proxy.golang.org,direct
+GOSUMDB ?= sum.golang.org
+# Pass the values through the process environment instead of interpolating them
+# into a shell command. This preserves valid GOPROXY pipe separators and avoids
+# treating caller-provided values as shell syntax.
+export GOPROXY GOSUMDB
+GO_MODULE_BUILD_ARGS := --build-arg GOPROXY --build-arg GOSUMDB
 
 # Build all Docker images
 # Note: extproc-rocm is excluded because it requires x86_64 + ROCm hardware.
@@ -31,14 +38,14 @@ docker-build-extproc: ## Build extproc Docker image
 docker-build-extproc:
 	@$(LOG_TARGET)
 	@echo "Building extproc Docker image..."
-	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.extproc -t $(DOCKER_REGISTRY)/extproc:$(DOCKER_TAG) .
+	@$(CONTAINER_RUNTIME) build $(GO_MODULE_BUILD_ARGS) -f tools/docker/Dockerfile.extproc -t $(DOCKER_REGISTRY)/extproc:$(DOCKER_TAG) .
 
 # Build extproc-rocm Docker image (AMD GPU / ROCm, x86_64 only)
 docker-build-extproc-rocm: ## Build extproc-rocm Docker image (AMD GPU)
 docker-build-extproc-rocm:
 	@$(LOG_TARGET)
 	@echo "Building extproc-rocm Docker image (x86_64 only, ROCm 7.0)..."
-	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.extproc-rocm -t $(DOCKER_REGISTRY)/extproc-rocm:$(DOCKER_TAG) .
+	@$(CONTAINER_RUNTIME) build $(GO_MODULE_BUILD_ARGS) -f tools/docker/Dockerfile.extproc-rocm -t $(DOCKER_REGISTRY)/extproc-rocm:$(DOCKER_TAG) .
 
 
 # Build openvino-binding Docker image (OpenVINO inference backend, x86_64 only)
@@ -198,6 +205,8 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 	@echo "  CONTAINER_RUNTIME - Container runtime: docker (default) or podman"
 	@echo "  DOCKER_REGISTRY   - Docker registry (default: ghcr.io/vllm-project/semantic-router)"
 	@echo "  DOCKER_TAG        - Docker tag (default: latest)"
+	@echo "  GOPROXY           - Go module proxy passed to router/extproc image builds"
+	@echo "  GOSUMDB           - Go checksum database passed to router/extproc image builds"
 	@echo "  SKIP_ROUTER_IMAGE - set to 1 only when the local router image is already up to date"
 	@echo "  SERVED_NAME       - Served model name for custom runs"
 	@echo "  VLLM_SR_PLATFORM  - vllm-sr platform hint (set to amd for ROCm defaults, nvidia for CUDA defaults)"
@@ -305,8 +314,9 @@ VLLM_SR_BUILDPLATFORM := linux/amd64
 endif
 endif
 
-# Default 1 so vllm-sr build works behind corporate proxies; set GIT_SSL_NO_VERIFY=0 for strict SSL verification.
-GIT_SSL_NO_VERIFY ?= 1
+# Keep Git TLS verification enabled by default. Restricted environments may opt
+# out explicitly for a one-off build, but the insecure setting is never implied.
+GIT_SSL_NO_VERIFY ?= 0
 # Auto-detect: if Podman can resolve unqualified short names (search chain
 # configured in registries.conf), use unqualified FROM lines so the configured
 # registry priority is honoured.  Otherwise fall back to fully-qualified
@@ -322,7 +332,7 @@ IMAGE_REGISTRY ?= $(shell \
   else \
     printf "docker.io/"; \
   fi)
-VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM) --build-arg IMAGE_REGISTRY=$(IMAGE_REGISTRY)
+VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM) --build-arg IMAGE_REGISTRY=$(IMAGE_REGISTRY) $(GO_MODULE_BUILD_ARGS)
 ifeq ($(GIT_SSL_NO_VERIFY),1)
 VLLM_SR_BUILD_ARGS += --build-arg GIT_SSL_NO_VERIFY=1
 endif
@@ -366,7 +376,8 @@ vllm-sr-dev:
 	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_RUNTIME_CONTAINERS) 2>/dev/null || echo "  No runtime containers to remove"
 	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_SIM_CONTAINER) 2>/dev/null || echo "  No simulator container to remove"
 	@echo ""
-	@if [ "$(SKIP_ROUTER_IMAGE_EFFECTIVE)" = "1" ]; then \
+	@set -e; \
+	if [ "$(SKIP_ROUTER_IMAGE_EFFECTIVE)" = "1" ]; then \
 		echo "2. Reusing existing vLLM-SR router Docker image (SKIP_ROUTER_IMAGE=1)"; \
 		echo "   Only use this when the local router image already includes your latest code changes."; \
 		echo ""; \
@@ -384,7 +395,8 @@ vllm-sr-dev:
 		echo "Router image built: $(VLLM_SR_IMAGE)"; \
 		echo ""; \
 	fi
-	@if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
+	@set -e; \
+	if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
 		echo "3. Ensuring official Envoy image is available..."; \
 		echo "  Image: $(VLLM_SR_ENVOY_IMAGE)"; \
 		echo ""; \

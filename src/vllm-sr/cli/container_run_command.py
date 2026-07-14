@@ -3,6 +3,7 @@
 import os
 
 from cli.consts import PLATFORM_AMD
+from cli.container_host_ports import format_port_mapping
 from cli.container_images import _normalize_platform
 from cli.utils import get_logger
 
@@ -90,14 +91,19 @@ def append_mount_specs(cmd, mount_specs: list[str]):
         cmd.extend(["-v", mount_spec])
 
 
-def append_port_mappings(cmd, port_mappings: list[tuple[int, int]]):
-    for host_port, container_port in port_mappings:
-        cmd.extend(["-p", f"{host_port}:{container_port}"])
+def append_port_mappings(cmd, port_mappings: list[tuple[str, int, int]]):
+    for bind_address, host_port, container_port in port_mappings:
+        cmd.extend(["-p", format_port_mapping(bind_address, host_port, container_port)])
 
 
-def append_env_vars(cmd, env_vars: dict[str, str]):
+def append_env_vars(
+    cmd,
+    env_vars: dict[str, str],
+    inherit_from_process: frozenset[str] = frozenset(),
+):
     for key, value in env_vars.items():
-        cmd.extend(["-e", f"{key}={value}"])
+        assignment = key if key in inherit_from_process else f"{key}={value}"
+        cmd.extend(["-e", assignment])
 
 
 def maybe_append_amd_gpu_passthrough(cmd, enable_amd_gpu: bool):

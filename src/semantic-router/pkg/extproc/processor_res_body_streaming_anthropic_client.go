@@ -74,7 +74,7 @@ func (r *OpenAIRouter) handleAnthropicClientStreamingResponseBody(
 
 	openAIBytes, err := r.translateUpstreamToOpenAI(frames, ctx)
 	if err != nil {
-		logging.Errorf("Failed to translate upstream streaming chunk to OpenAI: %v", err)
+		logging.Errorf("Failed to translate upstream streaming chunk to OpenAI: %s", safeErrorForLog(err))
 		return emptyAnthropicBodyMutation()
 	}
 
@@ -88,7 +88,7 @@ func (r *OpenAIRouter) handleAnthropicClientStreamingResponseBody(
 		openAIBytes, ctx.AnthropicStream, ctx.IRExtensions, ctx.RequestModel,
 	)
 	if err != nil {
-		logging.Errorf("Failed to emit Anthropic SSE chunk: %v", err)
+		logging.Errorf("Failed to emit Anthropic SSE chunk: %s", safeErrorForLog(err))
 		return emptyAnthropicBodyMutation()
 	}
 

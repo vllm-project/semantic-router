@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 )
@@ -56,8 +55,7 @@ func execManagedContainerLifecycleAction(containerName string, action string, ti
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "docker", action, containerName)
-	output, err := cmd.CombinedOutput()
+	output, err := runBoundedCommand(ctx, "docker", 1024*1024, action, containerName)
 	return string(output), err
 }
 

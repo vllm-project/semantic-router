@@ -18,10 +18,21 @@ func TestRequiresAuthentication(t *testing.T) {
 		{path: "/dashboard", expected: false},
 		{path: "/login", expected: false},
 		{path: "/api/auth/login", expected: false},
+		{path: "/api/auth/login/", expected: false},
+		{path: "/api/auth/login-anything", expected: true},
+		{path: "/api/auth/login/anything", expected: true},
 		{path: "/api/auth/logout", expected: false},
+		{path: "/api/auth/logout-anything", expected: true},
+		{path: "/api/auth/logout/anything", expected: true},
 		{path: "/api/auth/bootstrap/can-register", expected: false},
+		{path: "/api/auth/bootstrap/can-register/", expected: false},
+		{path: "/api/auth/bootstrap/register", expected: false},
+		{path: "/api/auth/bootstrap/register/", expected: false},
+		{path: "/api/auth/bootstrap/unknown", expected: true},
 		{path: "/api/setup/state", expected: false},
+		{path: "/api/setup/state-anything", expected: true},
 		{path: "/api/auth/me", expected: true},
+		{path: "/api/auth/password", expected: true},
 		{path: "/api/status", expected: true},
 		{path: "/embedded/grafana/", expected: true},
 		{path: "/embedded/wizmap/", expected: true},
@@ -51,6 +62,9 @@ func TestServiceUnavailableGuard(t *testing.T) {
 		{name: "admin denied", path: "/api/admin/users", wantCode: http.StatusServiceUnavailable, wantNext: false},
 		{name: "embedded denied", path: "/embedded/grafana/", wantCode: http.StatusServiceUnavailable, wantNext: false},
 		{name: "login public", path: "/api/auth/login", wantCode: http.StatusOK, wantNext: true},
+		{name: "login suffix denied", path: "/api/auth/login-anything", wantCode: http.StatusServiceUnavailable, wantNext: false},
+		{name: "bootstrap trailing slash public", path: "/api/auth/bootstrap/can-register/", wantCode: http.StatusOK, wantNext: true},
+		{name: "bootstrap suffix denied", path: "/api/auth/bootstrap/unknown", wantCode: http.StatusServiceUnavailable, wantNext: false},
 		{name: "setup state public", path: "/api/setup/state", wantCode: http.StatusOK, wantNext: true},
 		{name: "static frontend public", path: "/dashboard", wantCode: http.StatusOK, wantNext: true},
 	}
@@ -76,6 +90,63 @@ func TestServiceUnavailableGuard(t *testing.T) {
 			if nextCalled != tc.wantNext {
 				t.Fatalf("next handler called = %v, want %v", nextCalled, tc.wantNext)
 			}
+			wantCacheControl := ""
+			if requiresAuthentication(tc.path) {
+				wantCacheControl = "no-store"
+			}
+			if got := rec.Header().Get("Cache-Control"); got != wantCacheControl {
+				t.Fatalf("Cache-Control = %q, want %q", got, wantCacheControl)
+			}
+		})
+	}
+}
+
+func TestRuntimeConfigApplyRequiresDeployAuthority(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestAuthService(t)
+	user := newTestUser(t, svc, "config-write-only@example.com", RoleRead, "active")
+	if _, err := svc.store.db.Exec(
+		`INSERT INTO user_permissions(user_id, permission_key, allowed) VALUES(?,?,1)`,
+		user.ID,
+		PermConfigWrite,
+	); err != nil {
+		t.Fatalf("grant config.write: %v", err)
+	}
+	token, err := svc.issueToken(user)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+
+	paths := []string{
+		"/api/setup/activate",
+		"/api/router/config/update",
+		"/api/router/config/global/update",
+		"/api/router/config/global/raw/update",
+		"/api/router/config/defaults/update",
+	}
+	for _, path := range paths {
+		t.Run(path, func(t *testing.T) {
+			called := false
+			handler := AuthenticateRequest(svc)(http.HandlerFunc(func(
+				w http.ResponseWriter,
+				_ *http.Request,
+			) {
+				called = true
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			req := httptest.NewRequest(http.MethodPost, path, nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+			}
+			if called {
+				t.Fatal("runtime apply handler ran without config.deploy")
+			}
 		})
 	}
 }
@@ -93,16 +164,16 @@ func TestExtractAccessToken(t *testing.T) {
 		}
 	})
 
-	t.Run("falls back to query token", func(t *testing.T) {
+	t.Run("rejects query token", func(t *testing.T) {
 		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/embedded/grafana/?authToken=query-token", nil)
 
-		if token := extractAccessToken(req); token != "query-token" {
-			t.Fatalf("extractAccessToken() = %q, want query-token", token)
+		if token := extractAccessToken(req); token != "" {
+			t.Fatalf("extractAccessToken() = %q, want empty", token)
 		}
 	})
 
-	t.Run("falls back to cookie token before query token", func(t *testing.T) {
+	t.Run("uses cookie while ignoring query token", func(t *testing.T) {
 		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/embedded/grafana/?authToken=query-token", nil)
 		req.AddCookie(&http.Cookie{Name: authSessionCookieName, Value: "cookie-token"})
@@ -171,12 +242,13 @@ func TestRequiredPermission(t *testing.T) {
 		expected string
 	}{
 		{method: http.MethodGet, path: "/api/admin/users", expected: PermUsersView},
+		{method: http.MethodPost, path: "/api/auth/password", expected: ""},
 		{method: http.MethodPatch, path: "/api/admin/users/user-1", expected: PermUsersManage},
 		{method: http.MethodGet, path: "/api/admin/audit-logs", expected: PermUsersManage},
 		{method: http.MethodGet, path: "/api/status", expected: PermLogsRead},
 		{method: http.MethodGet, path: "/embedded/grafana/", expected: PermLogsRead},
 		{method: http.MethodGet, path: "/embedded/wizmap/", expected: PermConfigRead},
-		{method: http.MethodPost, path: "/api/setup/activate", expected: PermConfigWrite},
+		{method: http.MethodPost, path: "/api/setup/activate", expected: PermConfigDeploy},
 		{method: http.MethodPost, path: "/api/setup/import-remote", expected: PermConfigWrite},
 		{method: http.MethodGet, path: "/api/mcp/servers", expected: PermMcpRead},
 		{method: http.MethodPost, path: "/api/mcp/servers", expected: PermMcpManage},
@@ -184,6 +256,10 @@ func TestRequiredPermission(t *testing.T) {
 		{method: http.MethodPost, path: "/api/mcp/servers/server-1/connect", expected: PermMcpManage},
 		{method: http.MethodPost, path: "/api/router/config/deploy", expected: PermConfigDeploy},
 		{method: http.MethodPost, path: "/api/router/config/deploy/preview", expected: PermConfigDeploy},
+		{method: http.MethodPost, path: "/api/router/config/update", expected: PermConfigDeploy},
+		{method: http.MethodPost, path: "/api/router/config/global/update", expected: PermConfigDeploy},
+		{method: http.MethodPost, path: "/api/router/config/global/raw/update", expected: PermConfigDeploy},
+		{method: http.MethodPost, path: "/api/router/config/defaults/update", expected: PermConfigDeploy},
 		{method: http.MethodGet, path: "/api/router/config/deployments", expected: PermConfigRead},
 		{method: http.MethodPost, path: "/api/evaluation/tasks", expected: PermEvalWrite},
 		{method: http.MethodPost, path: "/api/evaluation/run", expected: PermEvalRun},
@@ -192,7 +268,11 @@ func TestRequiredPermission(t *testing.T) {
 		{method: http.MethodPost, path: "/api/fleet-sim/api/jobs", expected: PermConfigWrite},
 		{method: http.MethodGet, path: "/api/openclaw/teams", expected: PermOpenClawRead},
 		{method: http.MethodPost, path: "/api/openclaw/teams", expected: PermOpenClaw},
-		{method: http.MethodPost, path: "/api/openclaw/rooms/room-1/messages", expected: PermOpenClawRead},
+		{method: http.MethodPost, path: "/api/openclaw/mcp", expected: PermOpenClaw},
+		{method: http.MethodPost, path: "/api/openclaw/rooms/room-1/messages", expected: PermOpenClawUse},
+		{method: http.MethodGet, path: "/api/openclaw/rooms/room-1/messages", expected: PermOpenClawRead},
+		{method: http.MethodGet, path: "/api/openclaw/token", expected: PermOpenClaw},
+		{method: http.MethodGet, path: "/embedded/openclaw/worker-1/", expected: PermOpenClaw},
 		{method: http.MethodPost, path: "/api/router/v1/chat/completions", expected: PermConfigRead},
 		{method: http.MethodGet, path: "/api/security/policy", expected: PermConfigRead},
 		{method: http.MethodPut, path: "/api/security/policy", expected: PermSecurityManage},

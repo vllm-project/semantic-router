@@ -60,7 +60,6 @@ RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false |
 
 # Copy real source and rebuild (dependencies are cached from above)
 COPY candle-binding/src/ ./src/
-COPY candle-binding/go.mod candle-binding/semantic-router.go ./
 
 # Delete stale library from dummy build so cargo relinks with real FFI symbols
 RUN find target -name "libcandle_semantic_router.so" -delete 2>/dev/null; \
@@ -71,6 +70,10 @@ RUN find target -name "libcandle_semantic_router.so" -delete 2>/dev/null; \
     else \
       cargo build --release --no-default-features; \
     fi
+
+# Go package files do not affect the native library. Copy them after the
+# expensive Rust build so Go-only edits preserve the Cargo cache.
+COPY candle-binding/go.mod candle-binding/*.go ./
 
 # Normalize output: copy built artifacts to /build/out/
 RUN mkdir -p /build/out && \
@@ -123,7 +126,6 @@ RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false |
 
 # Copy real source and rebuild
 COPY ml-binding/src/ ./src/
-COPY ml-binding/go.mod ml-binding/ml_binding.go ./
 
 RUN find target -name "libml_semantic_router.so" -delete 2>/dev/null; \
     find target -name "libml_semantic_router.a" -delete 2>/dev/null; \
@@ -132,6 +134,9 @@ RUN find target -name "libml_semantic_router.so" -delete 2>/dev/null; \
     else \
       cargo build --release; \
     fi
+
+# Keep Go-only package changes out of the expensive Rust build cache key.
+COPY ml-binding/go.mod ml-binding/*.go ./
 
 # Normalize output
 RUN mkdir -p /build/out && \
@@ -187,6 +192,10 @@ RUN find target -name "libnlp_binding.so" -delete 2>/dev/null; \
       cargo build --release; \
     fi
 
+# Preserve the complete Go package for the later router build without
+# invalidating the Rust layer when only Go wrappers change.
+COPY nlp-binding/go.mod nlp-binding/*.go ./
+
 RUN mkdir -p /build/out && \
     if [ "$TARGETARCH" = "arm64" ]; then \
       cp target/aarch64-unknown-linux-gnu/release/libnlp_binding.so /build/out/ && \
@@ -201,6 +210,8 @@ RUN mkdir -p /build/out && \
 # Stage 2: Build Go semantic router
 FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${GO_RUNTIME_COMPAT_IMAGE} AS go-builder
 ARG TARGETARCH
+ARG GOPROXY=https://proxy.golang.org,direct
+ARG GOSUMDB=sum.golang.org
 WORKDIR /build
 
 # Copy Rust libraries from all builders
@@ -208,18 +219,20 @@ COPY --from=rust-builder /build/out/ /usr/local/lib/
 COPY --from=ml-builder /build/out/ /usr/local/lib/
 COPY --from=nlp-builder /build/out/ /usr/local/lib/
 
-ENV LD_LIBRARY_PATH=/usr/local/lib
+ENV LD_LIBRARY_PATH=/usr/local/lib \
+    GOPROXY="${GOPROXY}" \
+    GOSUMDB="${GOSUMDB}"
 
 # Copy candle-binding Go files (needed for go.mod replace directive)
-COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candle-binding/
+COPY --from=rust-builder /build/go.mod /build/*.go /build/../candle-binding/
 
-# Copy ml-binding Go files (needed for go.mod replace directive)
+# Copy complete binding Go packages (needed for go.mod replace directives).
 # Also copy the built library to ml-binding/target/release/ for CGO linking
-COPY ml-binding/go.mod ml-binding/ml_binding.go /build/../ml-binding/
+COPY --from=ml-builder /build/go.mod /build/*.go /build/../ml-binding/
 COPY --from=ml-builder /build/out/ /build/../ml-binding/target/release/
 
 # Copy nlp-binding Go files (needed for go.mod replace directive)
-COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go /build/../nlp-binding/
+COPY --from=nlp-builder /build/go.mod /build/*.go /build/../nlp-binding/
 COPY --from=nlp-builder /build/out/ /build/../nlp-binding/target/release/
 
 # Create openvino-binding stub (needed for go.mod replace directive)

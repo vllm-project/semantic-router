@@ -69,7 +69,7 @@ func (r *OpenAIRouter) translateResponseBodyForClient(
 	if ctx.ClientProtocol == config.ClientProtocolAnthropic {
 		translated, err := anthropic.EmitAnthropicResponse(responseBody, ctx.IRExtensions, ctx.RequestModel)
 		if err != nil {
-			logging.Errorf("Anthropic outbound emit failed: %v", err)
+			logging.Errorf("Anthropic outbound emit failed: %s", safeErrorForLog(err))
 			return anthropic.EmitAnthropicError("api_error", err.Error()), true
 		}
 		return translated, true
@@ -85,7 +85,7 @@ func (r *OpenAIRouter) translateResponseBodyForClient(
 		responseBody,
 	)
 	if err != nil {
-		logging.Errorf("Response API translation error: %v", err)
+		logging.Errorf("Response API translation error: %s", safeErrorForLog(err))
 		return responseBody, false
 	}
 

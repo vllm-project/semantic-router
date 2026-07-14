@@ -18,9 +18,14 @@ import (
 )
 
 func TestFusionLooperExecutesPanelJudgeAndFinal(t *testing.T) {
-	var seenModels []string
+	var (
+		seenModelsMu sync.Mutex
+		seenModels   []string
+	)
 	server := newFusionStubServer(t, func(model, prompt string) (string, int) {
+		seenModelsMu.Lock()
 		seenModels = append(seenModels, model)
+		seenModelsMu.Unlock()
 		switch model {
 		case "panel-a":
 			return "panel a answer", http.StatusOK
@@ -54,7 +59,10 @@ func TestFusionLooperExecutesPanelJudgeAndFinal(t *testing.T) {
 	assert.Equal(t, "judge", resp.Model)
 	assert.Equal(t, []string{"panel-a", "panel-b", "judge"}, resp.ModelsUsed)
 	assert.Equal(t, 4, resp.Iterations)
-	assert.ElementsMatch(t, []string{"panel-a", "panel-b", "judge", "judge"}, seenModels)
+	seenModelsMu.Lock()
+	seenModelsSnapshot := append([]string(nil), seenModels...)
+	seenModelsMu.Unlock()
+	assert.ElementsMatch(t, []string{"panel-a", "panel-b", "judge", "judge"}, seenModelsSnapshot)
 	expectedUsage := TokenUsage{PromptTokens: 90, CompletionTokens: 13, TotalTokens: 103}
 	assert.Equal(t, expectedUsage, resp.Usage)
 

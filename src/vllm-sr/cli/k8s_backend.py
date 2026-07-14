@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 import shutil
 import subprocess
 from typing import Any
@@ -12,16 +13,32 @@ from cli.config_translator import (
     translate_config_to_helm_values,
     write_helm_values_file,
 )
+from cli.dashboard_auth_runtime import without_dashboard_auth_env
+from cli.k8s_release_lifecycle import (
+    deploy_release,
+    teardown_release,
+)
+from cli.k8s_release_lock import K8sReleaseLockMixin
+from cli.k8s_resource_inspection import K8sResourceInspectionMixin
+from cli.k8s_secret_lifecycle import (
+    ENV_SECRET_NAME as _ENV_SECRET_NAME,
+)
+from cli.k8s_secret_lifecycle import (
+    HELM_HISTORY_MAX as _HELM_HISTORY_MAX,
+)
+from cli.k8s_secret_lifecycle import (
+    K8sSecretLifecycleMixin,
+)
 from cli.logo import print_vllm_logo
 from cli.utils import get_logger
 
 log = get_logger(__name__)
 
+ENV_SECRET_NAME = _ENV_SECRET_NAME
+HELM_HISTORY_MAX = _HELM_HISTORY_MAX
 HELM_RELEASE_NAME = "semantic-router"
 DEFAULT_NAMESPACE = "vllm-semantic-router-system"
 CHART_REL_PATH = os.path.join("deploy", "helm", "semantic-router")
-ENV_SECRET_NAME = "vllm-sr-env-secrets"
-
 K8S_SERVICE_TO_LABEL: dict[str, str] = {
     "router": "app.kubernetes.io/name=semantic-router",
     "dashboard": "app.kubernetes.io/component=dashboard",
@@ -29,7 +46,11 @@ K8S_SERVICE_TO_LABEL: dict[str, str] = {
 }
 
 
-class K8sBackend:
+class K8sBackend(
+    K8sReleaseLockMixin,
+    K8sSecretLifecycleMixin,
+    K8sResourceInspectionMixin,
+):
     """DeploymentBackend implementation for Kubernetes via Helm."""
 
     def __init__(
@@ -59,68 +80,22 @@ class K8sBackend:
         enable_observability: bool = True,
         **kwargs: Any,
     ) -> None:
-        self._require_tool("helm")
-        self._require_tool("kubectl")
-
-        print_vllm_logo()
-        log.info("Deploying vLLM Semantic Router to Kubernetes")
-        log.info(f"  Release:   {self.release_name}")
-        log.info(f"  Namespace: {self.namespace}")
-        log.info(f"  Chart:     {self.chart_dir}")
-        if self.context:
-            log.info(f"  Context:   {self.context}")
-
-        secret_name = self._sync_env_secret(env_vars)
-
-        profile_values = load_profile_values(self.profile, self.chart_dir)
-        values = translate_config_to_helm_values(
+        deploy_release(
+            self,
             config_file,
+            env_vars,
             image=image,
             pull_policy=pull_policy,
             enable_observability=enable_observability,
-            profile_values=profile_values,
-            env_vars=env_vars,
-            env_secret_name=secret_name,
+            strip_dashboard_auth=without_dashboard_auth_env,
+            print_logo=print_vllm_logo,
+            load_profile=load_profile_values,
+            translate_values=translate_config_to_helm_values,
+            write_values_file=write_helm_values_file,
         )
-        values_path = write_helm_values_file(values)
-
-        cmd = [
-            *self._helm_base_cmd(),
-            "upgrade",
-            "--install",
-            self.release_name,
-            self.chart_dir,
-            "--namespace",
-            self.namespace,
-            "--create-namespace",
-            "-f",
-            values_path,
-            "--wait",
-            "--timeout",
-            "10m",
-        ]
-
-        log.info("Running helm upgrade --install ...")
-        self._run(cmd)
-        log.info("Helm release deployed successfully")
-
-        self._wait_for_pods()
-        self._log_k8s_summary()
 
     def teardown(self) -> None:
-        self._require_tool("helm")
-
-        log.info(f"Uninstalling Helm release: {self.release_name}")
-        cmd = [
-            *self._helm_base_cmd(),
-            "uninstall",
-            self.release_name,
-            "--namespace",
-            self.namespace,
-        ]
-        self._run(cmd, check=False)
-        self._delete_secret_if_exists(ENV_SECRET_NAME)
-        log.info("Helm release uninstalled")
+        teardown_release(self)
 
     def logs(self, service: str, follow: bool = False) -> None:
         self._require_tool("kubectl")
@@ -208,66 +183,18 @@ class K8sBackend:
 
     # -- helpers --------------------------------------------------------------
 
-    def _sync_env_secret(self, env_vars: dict[str, str] | None) -> str | None:
-        """Create or update a K8s Secret with sensitive env vars; return the secret name or None."""
-        if not env_vars:
-            return None
+    @property
+    def _helm_history_max(self) -> int:
+        """Preserve the module-level history-limit override seam."""
+        return HELM_HISTORY_MAX
 
-        from cli.commands.runtime_support import PASSTHROUGH_ENV_RULES  # noqa: PLC0415
-
-        sensitive_names = {name for name, masked in PASSTHROUGH_ENV_RULES if masked}
-        secret_data = {k: v for k, v in env_vars.items() if k in sensitive_names and v}
-
-        if not secret_data:
-            return None
-
-        self._ensure_namespace()
-        self._delete_secret_if_exists(ENV_SECRET_NAME)
-
-        cmd = [
-            *self._kubectl_base_cmd(),
-            "create",
-            "secret",
-            "generic",
-            ENV_SECRET_NAME,
-            "--namespace",
-            self.namespace,
-        ]
-        for key, value in sorted(secret_data.items()):
-            cmd.append(f"--from-literal={key}={value}")
-
-        log.info(
-            f"Creating K8s secret '{ENV_SECRET_NAME}' with {len(secret_data)} key(s)"
-        )
-        self._run(cmd)
+    @property
+    def _legacy_env_secret_name(self) -> str:
+        """Preserve the module-level legacy Secret compatibility seam."""
         return ENV_SECRET_NAME
 
-    def _ensure_namespace(self) -> None:
-        cmd = [
-            *self._kubectl_base_cmd(),
-            "create",
-            "namespace",
-            self.namespace,
-            "--dry-run=client",
-            "-o",
-            "yaml",
-        ]
-        pipe_cmd = [*self._kubectl_base_cmd(), "apply", "-f", "-"]
-        log.debug(f"Ensuring namespace {self.namespace}")
-        ns_yaml = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        subprocess.run(pipe_cmd, input=ns_yaml.stdout, text=True, check=True)
-
-    def _delete_secret_if_exists(self, name: str) -> None:
-        cmd = [
-            *self._kubectl_base_cmd(),
-            "delete",
-            "secret",
-            name,
-            "--namespace",
-            self.namespace,
-            "--ignore-not-found",
-        ]
-        self._run(cmd, check=False)
+    def _new_secret_name(self) -> str:
+        return f"{self._release_secret_prefix()}-{secrets.token_hex(6)}"
 
     def _helm_base_cmd(self) -> list[str]:
         cmd = ["helm"]
@@ -346,9 +273,19 @@ class K8sBackend:
         )
 
     @staticmethod
-    def _run(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess:
+    def _run(
+        cmd: list[str],
+        check: bool = True,
+        *,
+        input_text: str | None = None,
+    ) -> subprocess.CompletedProcess:
         log.debug(f"Running: {' '.join(cmd)}")
-        return subprocess.run(cmd, check=check)
+        return subprocess.run(
+            cmd,
+            check=check,
+            input=input_text,
+            text=input_text is not None,
+        )
 
     @staticmethod
     def _run_display(cmd: list[str]) -> None:

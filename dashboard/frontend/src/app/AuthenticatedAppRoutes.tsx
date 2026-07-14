@@ -17,6 +17,7 @@ import {
 import RecoverableLazyRoute from './RecoverableLazyRoute'
 import { canAccessDashboardPath, type PermissionUser } from '../utils/accessControl'
 import {
+  loadAccountSecurityPage,
   loadBuilderPage,
   loadDashboardPage,
   loadEvaluationPage,
@@ -50,6 +51,9 @@ interface AuthenticatedAppRoutesProps {
 }
 
 const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
+  'account-security': (
+    <RecoverableLazyRoute loader={loadAccountSecurityPage} routeLabel="Password & security" />
+  ),
   builder: <RecoverableLazyRoute loader={loadBuilderPage} routeLabel="Config Builder" />,
   clawos: <RecoverableLazyRoute loader={loadOpenClawPage} routeLabel="ClawOS" />,
   dashboard: <RecoverableLazyRoute loader={loadDashboardPage} routeLabel="Dashboard" />,

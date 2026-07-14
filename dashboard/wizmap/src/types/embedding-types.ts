@@ -4,10 +4,14 @@
 import type { Point, Rect } from './common-types';
 
 export interface SearchResult {
-  shortText: string;
-  fullText: string;
+  segments: SearchTextSegment[];
   isSummary: boolean;
   point: PromptPoint;
+}
+
+export interface SearchTextSegment {
+  text: string;
+  highlighted: boolean;
 }
 
 /**

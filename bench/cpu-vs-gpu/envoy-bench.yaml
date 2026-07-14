@@ -41,7 +41,9 @@ static_resources:
                 response_body_mode: "BUFFERED"
                 request_trailer_mode: "SKIP"
                 response_trailer_mode: "SKIP"
-              failure_mode_allow: true
+              # A router outage must invalidate the benchmark request rather
+              # than silently measuring an ExtProc-bypassed request.
+              failure_mode_allow: false
               message_timeout: 300s
           - name: envoy.filters.http.router
             typed_config:

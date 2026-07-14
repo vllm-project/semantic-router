@@ -107,7 +107,7 @@
                 )}
             Search Results
           </div>
-          {#each mySearchPanel.formattedResults.slice(0, maxListLength) as result, i}
+          {#each mySearchPanel.formattedResults.slice(0, maxListLength) as result}
             <div
               class="item"
               on:keypress="{() => {
@@ -122,7 +122,13 @@
               }}"
               class:clamp-line="{result.isSummary}"
             >
-              {@html result.fullText}
+              {#each result.segments as segment}
+                {#if segment.highlighted}
+                  <em>{segment.text}</em>
+                {:else}
+                  {segment.text}
+                {/if}
+              {/each}
             </div>
           {/each}
 

@@ -66,10 +66,11 @@ type Classifier struct {
 	// authzFailOpen: cfg.Authz.FailOpen; see applyAuthzFailOpenOnClassifyError.
 	authzFailOpen bool
 
-	Config           *config.RouterConfig
-	CategoryMapping  *CategoryMapping
-	PIIMapping       *PIIMapping
-	JailbreakMapping *JailbreakMapping
+	Config             *config.RouterConfig
+	CategoryMapping    *CategoryMapping
+	PIIMapping         *PIIMapping
+	JailbreakMapping   *JailbreakMapping
+	textBackendRuntime *textEmbeddingRuntime
 
 	// Category name mapping layer to support generic categories in config
 	// Maps MMLU-Pro category names -> generic category names (as defined in config.Categories)
@@ -79,6 +80,12 @@ type Classifier struct {
 }
 
 type option func(*Classifier)
+
+func withTextEmbeddingRuntime(runtime *textEmbeddingRuntime) option {
+	return func(c *Classifier) {
+		c.textBackendRuntime = runtime
+	}
+}
 
 func withCategory(categoryMapping *CategoryMapping, categoryInitializer CategoryInitializer, categoryInference CategoryInference) option {
 	return func(c *Classifier) {

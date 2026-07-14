@@ -56,6 +56,11 @@ func (c *Classifier) evaluateJailbreakSignal(results *SignalResults, mu *sync.Mu
 	for _, content := range classifierContents {
 		result, err := c.jailbreakInference.Classify(content)
 		jailbreakCache[content] = cachedJailbreakResult{result, err}
+		if err != nil {
+			mu.Lock()
+			results.recordTextEvaluationError(err)
+			mu.Unlock()
+		}
 	}
 
 	// Step 3: Evaluate all rules concurrently.
@@ -112,7 +117,14 @@ func (c *Classifier) evaluateContrastiveJailbreakRule(rule config.JailbreakRule,
 		logging.Errorf("[Signal Computation] Contrastive jailbreak classifier not found for rule %q", rule.Name)
 		return
 	}
-	analysisResult := cjc.AnalyzeMessages(contentToAnalyze)
+	analysisResult, err := cjc.AnalyzeMessagesWithError(contentToAnalyze)
+	if err != nil {
+		logging.Errorf("[Signal Computation] Contrastive jailbreak rule %q failed", rule.Name)
+		mu.Lock()
+		results.recordTextEvaluationError(err)
+		mu.Unlock()
+		return
+	}
 	threshold := rule.Threshold
 	if threshold <= 0 {
 		threshold = 0.10

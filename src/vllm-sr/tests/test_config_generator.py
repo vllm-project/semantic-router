@@ -34,6 +34,60 @@ def _cluster_by_name(rendered_config, cluster_name):
     raise AssertionError(f"cluster {cluster_name!r} not found")
 
 
+def _ext_proc_filter(rendered_config):
+    listener = rendered_config["static_resources"]["listeners"][0]
+    hcm = listener["filter_chains"][0]["filters"][0]["typed_config"]
+    for http_filter in hcm["http_filters"]:
+        if http_filter.get("name") == "envoy.filters.http.ext_proc":
+            return http_filter["typed_config"]
+    raise AssertionError("ExtProc HTTP filter not found")
+
+
+def test_generate_envoy_config_fails_closed_when_extproc_is_unavailable(
+    tmp_path, monkeypatch
+):
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.3
+listeners:
+  - name: "http-8899"
+    address: "0.0.0.0"
+    port: 8899
+providers:
+  defaults:
+    default_model: "test-model"
+  models:
+    - name: "test-model"
+      backend_refs:
+        - name: "primary"
+          endpoint: "127.0.0.1:8000"
+          protocol: "http"
+          weight: 100
+routing:
+  modelCards:
+    - name: "test-model"
+  decisions:
+    - name: "default-route"
+      description: "default route"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "test-model"
+          use_reasoning: false
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+
+    ext_proc = _ext_proc_filter(rendered)
+    assert "failure_mode_allow" in ext_proc
+    assert ext_proc["failure_mode_allow"] is False
+
+
 def test_generate_envoy_config_uses_logical_dns_for_split_extproc_host(
     tmp_path, monkeypatch
 ):

@@ -1,12 +1,14 @@
 package extproc
 
 import (
+	"net/url"
 	"strings"
 
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
 // FastExtractResult holds fields extracted from the request body via gjson
@@ -19,6 +21,9 @@ type FastExtractResult struct {
 	NonUserMessages   []string
 	HasAssistantReply bool
 	FirstImageURL     string
+	ImagePartPresent  bool
+	InvalidImagePart  bool
+	InlineImageURLs   []string
 
 	// Conversation-shape fields for the conversation signal family.
 	HasDeveloperMessage     bool
@@ -141,9 +146,7 @@ func countAssistantToolCalls(msg gjson.Result, result *FastExtractResult) {
 }
 
 func recordFastExtractUserMessage(result *FastExtractResult, text string, content gjson.Result) {
-	if result.FirstImageURL == "" {
-		result.FirstImageURL = extractImageURLFromContent(content)
-	}
+	recordOpenAIImageParts(result, content)
 	if text == "" {
 		return
 	}
@@ -188,25 +191,50 @@ func extractTextFromContent(content gjson.Result) string {
 	return strings.Join(parts, " ")
 }
 
-// extractImageURLFromContent returns the first safe base64 image data URI
-// from content parts. Only inline data URIs are accepted (no HTTP URLs).
-func extractImageURLFromContent(content gjson.Result) string {
+func recordOpenAIImageParts(result *FastExtractResult, content gjson.Result) {
 	if !content.IsArray() {
-		return ""
+		return
 	}
-	var found string
 	content.ForEach(func(_, part gjson.Result) bool {
 		if part.Get("type").String() != "image_url" {
 			return true
 		}
-		url := part.Get("image_url.url").String()
-		if isSafeImageDataURL(url) {
-			found = url
-			return false
+		result.ImagePartPresent = true
+		imageURL := part.Get("image_url.url")
+		if !imageURL.Exists() || imageURL.Type != gjson.String {
+			result.InvalidImagePart = true
+			return true
 		}
+		recordImageReference(result, imageURL.String())
 		return true
 	})
-	return found
+}
+
+func recordImageReference(result *FastExtractResult, reference string) {
+	reference = strings.TrimSpace(reference)
+	if canonical, ok := imageurl.CanonicalDataURL(reference); ok {
+		if len(result.InlineImageURLs) >= imageurl.MaxImagePartsPerRequest {
+			result.InvalidImagePart = true
+			return
+		}
+		result.InlineImageURLs = append(result.InlineImageURLs, canonical)
+		if result.FirstImageURL == "" {
+			result.FirstImageURL = canonical
+		}
+		return
+	}
+	if isValidRemoteImageURL(reference) {
+		return
+	}
+	result.InvalidImagePart = true
+}
+
+func isValidRemoteImageURL(reference string) bool {
+	parsed, err := url.ParseRequestURI(reference)
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+	return strings.EqualFold(parsed.Scheme, "http") || strings.EqualFold(parsed.Scheme, "https")
 }
 
 // extractStreamParamFast extracts the "stream" boolean from raw JSON without

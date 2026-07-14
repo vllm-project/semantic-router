@@ -9,6 +9,20 @@
       "minimum": 0,
       "description": "Number of Semantic Router pod replicas when autoscaling is disabled."
     },
+    "runtimeCredentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "generation": {
+          "type": "string",
+          "description": "Opaque CLI-managed runtime credential generation identifier."
+        },
+        "recreateForLooperRotation": {
+          "type": "boolean",
+          "description": "Request a Recreate rollout strategy for CLI-managed runtime credential revisions."
+        }
+      }
+    },
     "autoscaling": {
       "type": "object",
       "additionalProperties": true,
@@ -154,9 +168,36 @@
     "dashboard": {
       "type": "object",
       "additionalProperties": true,
+      "required": [
+        "securityProfile"
+      ],
       "properties": {
         "enabled": {
           "type": "boolean"
+        },
+        "securityProfile": {
+          "type": "string",
+          "enum": [
+            "development",
+            "production"
+          ]
+        },
+        "image": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "tag": {
+              "type": "string"
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ]
+            }
+          }
         },
         "allowOpenBootstrap": {
           "type": "boolean"
@@ -211,13 +252,141 @@
             }
           }
         },
+        "passwordBlocklist": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "existingConfigMap"
+          ],
+          "properties": {
+            "existingConfigMap": {
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[A-Za-z0-9._-]+$"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^$|^[A-Fa-f0-9]{64}$"
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "existingConfigMap": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "existingConfigMap"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "key": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "key"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "sha256": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "sha256"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "existingConfigMap": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "existingConfigMap"
+                ]
+              }
+            }
+          ]
+        },
         "extraEnv": {
           "type": "array"
         },
         "envFrom": {
           "type": "array"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "securityProfile": {
+                "const": "production"
+              }
+            },
+            "required": [
+              "securityProfile"
+            ]
+          },
+          "then": {
+            "required": [
+              "image",
+              "passwordBlocklist"
+            ],
+            "properties": {
+              "image": {
+                "required": [
+                  "tag",
+                  "pullPolicy"
+                ],
+                "properties": {
+                  "tag": {
+                    "minLength": 1,
+                    "not": {
+                      "enum": [
+                        "latest"
+                      ]
+                    }
+                  },
+                  "pullPolicy": {
+                    "const": "Always"
+                  }
+                }
+              },
+              "passwordBlocklist": {
+                "required": [
+                  "existingConfigMap",
+                  "key",
+                  "sha256"
+                ],
+                "properties": {
+                  "existingConfigMap": {
+                    "minLength": 1
+                  },
+                  "sha256": {
+                    "minLength": 64,
+                    "maxLength": 64,
+                    "pattern": "^[A-Fa-f0-9]{64}$"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

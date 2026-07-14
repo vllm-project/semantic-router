@@ -1,11 +1,17 @@
 package handlers
 
-func collectInContainerStatus(runtimePath, routerAPIURL string) SystemStatus {
-	return collectManagedDockerStatus(runtimePath, routerAPIURL)
+import "context"
+
+func collectInContainerStatusWithContext(ctx context.Context, runtimePath, routerAPIURL string) SystemStatus {
+	return collectManagedDockerStatus(ctx, runtimePath, routerAPIURL)
 }
 
 func collectHostStatus(runtimePath, routerAPIURL string) SystemStatus {
-	if status, ok := collectSplitManagedHostStatus(runtimePath, routerAPIURL); ok {
+	return collectHostStatusWithContext(context.Background(), runtimePath, routerAPIURL)
+}
+
+func collectHostStatusWithContext(ctx context.Context, runtimePath, routerAPIURL string) SystemStatus {
+	if status, ok := collectSplitManagedHostStatus(ctx, runtimePath, routerAPIURL); ok {
 		return status
 	}
 
@@ -15,14 +21,14 @@ func collectHostStatus(runtimePath, routerAPIURL string) SystemStatus {
 	return collectDashboardOnlyHostStatus(routerAPIURL)
 }
 
-func collectSplitManagedHostStatus(runtimePath, routerAPIURL string) (SystemStatus, bool) {
+func collectSplitManagedHostStatus(ctx context.Context, runtimePath, routerAPIURL string) (SystemStatus, bool) {
 	if !managedRuntimeUsesSplitContainers() {
 		return SystemStatus{}, false
 	}
 
 	switch managedStatus := managedRuntimeContainerStatus(); managedStatus {
 	case "running", "exited":
-		return collectManagedDockerStatus(runtimePath, routerAPIURL), true
+		return collectManagedDockerStatus(ctx, runtimePath, routerAPIURL), true
 	case "not found":
 		return SystemStatus{}, false
 	default:
@@ -30,13 +36,13 @@ func collectSplitManagedHostStatus(runtimePath, routerAPIURL string) (SystemStat
 	}
 }
 
-func collectManagedDockerStatus(runtimePath, routerAPIURL string) SystemStatus {
+func collectManagedDockerStatus(ctx context.Context, runtimePath, routerAPIURL string) SystemStatus {
 	status := baseSystemStatus()
 	status.DeploymentType = "docker"
 	status.Overall = "healthy"
 	status.Endpoints = []string{"http://localhost:8899"}
 
-	routerLogContent := getContainerLogsTailForContainer(managedContainerNameForService("router"), 500)
+	routerLogContent := getContainerLogsTailForContainerWithContext(ctx, managedContainerNameForService("router"), 500)
 	routerHealthy, routerMsg := resolveManagedRouterStatus(routerAPIURL, routerLogContent)
 	envoyHealthy, envoyMsg := resolveManagedEnvoyStatus()
 	dashboardHealthy, dashboardMsg := resolveManagedDashboardStatus()

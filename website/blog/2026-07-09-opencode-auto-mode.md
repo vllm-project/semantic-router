@@ -23,7 +23,7 @@ That gap matters more than it sounds. Teams everywhere are standing up **local a
 
 [OpenCode](https://opencode.ai) ships without a built-in Auto mode, but it does expose an open provider interface — enough to bolt intelligent routing on behind a single OpenAI-compatible endpoint.
 
-This guide walks through building Auto mode for OpenCode (or any OpenAI-compatible client) with [vLLM Semantic Router](https://github.com/vllm-project/semantic-router) and [AgentGateway](https://github.com/agentgateway/agentgateway): one endpoint, one model name, and an ML router choosing among the fleet per request. The configs below are complete; the failure modes are the ones that typically surface first in production setups.
+This guide walks through building Auto mode for OpenCode (or any OpenAI-compatible client) with [vLLM Semantic Router](https://github.com/vllm-project/semantic-router) and [AgentGateway](https://github.com/agentgateway/agentgateway): one endpoint, one model name, and an ML router choosing among the fleet per request. The fragments below cover the routing path; a production deployment must also enforce the pre-routing header boundary described in the architecture section.
 
 <iframe
   width="100%"
@@ -40,19 +40,34 @@ This guide walks through building Auto mode for OpenCode (or any OpenAI-compatib
 
 ## First, Know Your Options: The Routing Algorithms in vLLM Semantic Router
 
-"Auto mode" means different things to different teams. vLLM Semantic Router ships **more than a dozen selection algorithms**, each answering a different operational question:
+"Auto mode" means different things to different teams. The current public decision surface has **10 single-model selection algorithms** and **5 Looper algorithms** for multi-model orchestration. The status below comes from the same catalog enforced by configuration validation.
 
-| Algorithm | What it optimizes | Reach for it when... |
+### Single-model selection (10)
+
+| Algorithm | Status | What it does | Reach for it when... |
+|---|---|---|---|
+| `static` | Supported | Always chooses the first configured candidate | Determinism and curated ordering matter more than dynamic ranking. |
+| `router_dc` | Supported | Compares the prompt with model descriptions in a dual-contrastive embedding space | Models are **specialists** — a coder, a reasoner, a generalist — and prompt intent should decide. This is the closest analogue to Cursor's Auto. |
+| `multi_factor` | Supported | Scores quality, latency, cost, and load, with optional SLO filters | Models are interchangeable deployments and operational trade-offs should decide. |
+| `latency_aware` | Supported | Selects from observed TTFT/TPOT percentiles | A hard responsiveness SLO dominates the routing decision. |
+| `hybrid` | Supported | Blends several request-time ranking signals | One signal is insufficient and the fleet needs an auditable composite score. |
+| `automix` | Experimental | Uses a cost-quality cascade with self-verification | Spending more only after a cheaper attempt lacks confidence is acceptable. |
+| `knn` | Experimental | Routes from nearby labeled examples | An interpretable offline-trained example policy is available. |
+| `kmeans` | Experimental | Maps embedding-space clusters to models | Prompt traffic forms stable clusters with known model winners. |
+| `svm` | Experimental | Applies an offline-trained decision boundary | A compact classifier can separate prompt-to-model assignments. |
+| `mlp` | Experimental | Applies a non-linear neural selector | Offline data supports more complex decision boundaries and the extra runtime dependency is acceptable. |
+
+### Looper orchestration (5)
+
+| Algorithm | Status | What it does |
 |---|---|---|
-| `router_dc` | Prompt ↔ model-description similarity (dual-contrastive embeddings) | Models are **specialists** — a coder, a reasoner, a generalist — and the prompt's *intent* should decide. The closest analogue to Cursor's Auto. |
-| `multi_factor` | Weighted quality / latency / cost / load score with SLO filters | Models are **interchangeable** (same capability, different deployments) and the goal is balancing budget and latency guardrails across a fleet. |
-| `latency_aware` | Live TTFT/TPOT percentiles | Hard latency SLAs apply — user-facing chat where p95 time-to-first-token is the metric that pages on-call. |
-| `automix` | Cost, via cascade + self-verification (POMDP, from the AutoMix paper) | Maximum savings with tolerated escalation: try the cheap model, verify its answer, escalate only on low confidence. Strong fit for batch/offline work. |
-| `elo` | Feedback-driven ranking | User feedback (thumbs, regenerations) should continuously improve rankings in production. |
-| `knn` / `svm` / `mlp` / `kmeans` | Learned routing from labeled examples | Historical data exists for "this prompt type → this model worked" and a trained policy is preferred over hand-written rules. |
-| `rl_driven` | Long-run reward | A reward signal is defined and the router should optimize it over time. |
-| `hybrid` | Intent + operational signals combined | Large fleets with both specialists *and* replicas, where "what is this prompt" and "which deployment is healthy" both matter. |
-| `static` | Determinism | Compliance and predictability: category X always routes to model Y, auditable, no surprises. |
+| `confidence` | Supported | Escalates from a smaller model when confidence is insufficient. |
+| `ratings` | Supported | Runs a bounded candidate panel and aggregates ratings. |
+| `remom` | Supported | Performs multi-round parallel reasoning followed by synthesis. |
+| `fusion` | Experimental | Runs parallel deliberation with judge analysis and final synthesis. |
+| `workflows` | Experimental | Executes Router Flow static role plans or dynamic planner-generated workflows. |
+
+Legacy `elo` and `rl_driven` selectors are **not** public configuration options: current config loading rejects both algorithm types. Long-running feedback and adaptation belong in [Router Learning](/docs/tutorials/learning/adaptations), where the current `routing_sampling` adaptation strategy operates over candidates supplied by a supported base selection algorithm such as `router_dc` or `multi_factor`.
 
 Decisions can also be gated by **signal rules** — classifiers for intent, PII, and jailbreak detection. "Anything containing PII stays on the on-prem model" is enforceable as routing policy, not just documentation. When the primary need is *governance* rather than *optimization*, signal rules are the right layer.
 
@@ -113,7 +128,7 @@ Why this pattern qualifies as true Auto mode:
 
 1. **The client stays simple.** OpenCode holds no routing logic and no upstream API keys. Swap models, retune descriptions, add candidates — the client config stays fixed.
 2. **Cost control is structural.** In a coding agent, code-shaped traffic lands on the $0 local model; only prompts that genuinely need frontier reasoning incur frontier pricing.
-3. **It fails soft.** With gateway policy `failureMode: failOpen`, a dead router process lets traffic fall through to a default route. Users see answers, not hard outages.
+3. **It fails closed by default.** If the router is unavailable, the gateway rejects the request instead of accepting an untrusted model-selection header. This protects the routing and credential boundary even though it trades some availability for integrity.
 
 ---
 
@@ -144,9 +159,12 @@ binds:
           name: ollama
           hostOverride: localhost:11434
     # ... gpt-4o → OpenAI (with backendAuth),
-    #     gemini-flash → Gemini (with backendAuth),
-    #     plus a failOpen fallback route
+    #     gemini-flash → Gemini (with backendAuth)
 ```
+
+Treat `x-selected-model` as an internal control-plane header, never as client input. The secure default is fail-closed ExtProc handling. At the listener or another true **pre-routing** stage, unconditionally remove every client-supplied occurrence of `x-selected-model` before route matching; only a successful ExtProc call may reconstruct it. A normal Gateway API `HTTPRoute` `RequestHeaderModifier` runs after route matching and is therefore too late to sanitize a header that participates in selecting the route.
+
+An operator may explicitly choose fail-open only after that pre-routing strip-and-rebuild invariant is enforced and tested with spoofed, duplicated, and differently cased headers as well as an ExtProc outage. Without that invariant, fail-open lets an external caller choose an upstream and potentially cross the gateway's credential boundary.
 
 A critical security split: **the router never holds API keys.** It classifies and sets a header; AgentGateway owns `backendAuth` and injects credentials per upstream. The component making ML decisions on untrusted input should hold zero secrets — especially when the endpoint serves a team rather than a single laptop.
 
@@ -182,17 +200,9 @@ The Semantic Router intercepts `/v1/models` and **advertises the virtual model**
 ![AgentGateway UI — one OpenCode session fanning out across qwen2.5-coder, gpt-4o, and gemini-2.5-flash, with per-request tokens and cost](/img/blog/opencode_gateway.png)
 -->
 
-For observability, AgentGateway ships a built-in UI (build with `--features ui`, served at `:15000/ui`) and can persist every request to SQLite with cost attribution:
+For observability, AgentGateway ships a built-in UI (build with `--features ui`, served at `:15000/ui`). Keep routine diagnostics **content-free**: an opaque request ID and timestamp, selected decision and model, status, latency, token counts, and derived cost are normally enough to explain routing and spend. Do not include request bodies, prompts, completions, authorization headers, or tool arguments in the default log path.
 
-```yaml
-config:
-  modelCatalog:
-  - file: base-costs.json
-  database:
-    url: sqlite://agentgateway.db
-```
-
-Enable request persistence early — it pays off the first time routing behavior needs debugging.
+If SQLite backs the UI, treat it as a **bounded metadata trail**, not a payload archive. Apply least-privilege file access, an approved encrypted volume or database layer, a short retention window, size or row limits, and automatic pruning. A database URL alone is not a retention or data-classification policy; define and test those controls before enabling persistence in production.
 
 ---
 
@@ -249,19 +259,18 @@ interpreted programming language...","filePath":"python_language.md"}}
 
 OpenCode replays history on every request, so malformed JSON from earlier turns becomes part of the context and the session self-reinforces the wrong format. Teams running compact local models alongside agentic clients should expect some variant of this behavior.
 
-**Diagnosis requires payload capture.** AgentGateway can log the full messages array:
+Start diagnosis with content-free metadata: correlate one request ID across OpenCode, the gateway, and the router; verify the selected decision and model, advertised tool capability, response status, token counts, and any structured-output parse error code. Reproduce in a fresh session before inspecting content, because poisoned history often disappears there.
 
-```yaml
-frontendPolicies:
-  http:
-    accessLog:
-      database:
-        add:
-          gen_ai.prompt: llm.prompt
-          gen_ai.completion: 'llm.completion.map(c, {"role":"assistant", "content": c})'
-```
+Full payload capture is an exceptional incident-response tool, not a normal observability setting. If metadata cannot isolate the fault, use a separately reviewed, time-bounded capture that:
 
-A single SQL query against the access log reveals the exact prompt the model received — agent preamble, poisoned history, and all. Debugging LLM pipelines without payload capture is guesswork.
+- is explicitly opted in and allowlisted to the minimum set of request IDs;
+- is accessible only to the incident responders who need it and is encrypted in transit and at rest;
+- redacts PII, credentials, authorization data, secrets, and sensitive tool arguments **before** persistence;
+- expires through a short TTL with automatic deletion;
+- audits capture activation, reads, exports, and deletion; and
+- is disabled as soon as the incident is resolved.
+
+Do not publish a reusable production configuration that stores complete prompts and completions by default.
 
 **Mitigation:** define a custom OpenCode agent whose prompt **replaces** the built-in agentic system prompt:
 
@@ -291,7 +300,7 @@ Three prompts, one OpenCode session, one provider, one model name:
 | "Compare utilitarian and deontological ethics for AI decision making..." | `gpt-4o` | OpenAI | ~$0.03 |
 | "What is the capital of Japan?" | `gemini-2.5-flash` | Google | ~$0.001 |
 
-Routing overhead stays in the **1–18ms** range on CPU. The gateway UI surfaces per-hop tokens and cost; the SQLite log retains the payload trail for post-incident review.
+Routing overhead stays in the **1–18ms** range on CPU. The gateway UI surfaces per-hop tokens and cost; a bounded SQLite metadata trail supports post-incident correlation without turning normal diagnostics into a content store.
 
 The outcome that matters: no model dropdown, no accidental frontier spend on trivial prompts, and no routing logic in the client — only English model descriptions and an embedding model that routes on semantic fit.
 
@@ -302,7 +311,8 @@ The outcome that matters: no model dropdown, no accidental frontier spend on tri
 - **Auto mode is a gateway feature, not a client feature.** Build it once behind an OpenAI-compatible endpoint and every compatible tool inherits it.
 - **Match the algorithm to the business need.** Specialist models → `router_dc`. Interchangeable replicas → `multi_factor` / `latency_aware`. Maximum savings with escalation → `automix`. Governance → signal rules (PII, jailbreak).
 - **A virtual model inherits the weakest backend's limits.** Context, output, tool calling — intersection, not average.
-- **Payload logging is non-negotiable.** Silent misroutes and poisoned agent sessions are invisible without the actual bytes on the wire.
+- **Content-free telemetry is non-negotiable; full payload capture is exceptional.** Correlate decisions, models, latency, tokens, cost, and errors by request ID. Capture content only under the narrow, short-lived incident controls described above.
+- **Fail closed at the model-selection boundary.** Strip client-supplied `x-selected-model` before route matching and let only successful ExtProc processing rebuild it.
 - **Keep keys out of the router.** The component reading untrusted prompts should hold zero secrets; let the gateway own auth.
 
 Teams standing up internal model serving and wanting Cursor-style Auto mode can get there with two YAML files and a JSON block, using [AgentGateway](https://github.com/agentgateway/agentgateway) and [vLLM Semantic Router](https://github.com/vllm-project/semantic-router).

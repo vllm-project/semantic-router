@@ -123,23 +123,68 @@ vllm-sr stop --target k8s
 vllm-sr chat --base-url http://localhost:8080 "hello"
 ```
 
-**Credential handling:** Sensitive environment variables (`HF_TOKEN`, `OPENAI_API_KEY`,
-`ANTHROPIC_API_KEY`) are automatically stored in a Kubernetes Secret
-(`vllm-sr-env-secrets`) and mounted via `envFrom`. They never appear as
-plain-text values in Helm overrides or the Deployment spec. Non-sensitive
-variables (`HF_ENDPOINT`, `HF_HOME`, etc.) are passed as standard `env`
-entries.
+**Credential handling:** The CLI writes sensitive environment variables
+(`HF_TOKEN`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and the Looper shared key)
+to a release-scoped, immutable Kubernetes Secret through `kubectl` standard
+input. Credential values never enter command arguments, logs, Helm values, or
+the Deployment manifest. Non-sensitive variables (`HF_ENDPOINT`, `HF_HOME`,
+etc.) remain ordinary `env` entries.
 
-The secret is created before `helm upgrade --install` and cleaned up by
-`vllm-sr stop --target k8s`.
+Every CLI-managed Kubernetes release gets one 256-bit Looper key shared by all
+router replicas. If `VLLM_SR_LOOPER_SHARED_SECRET` is unset, the first deploy
+generates it with a cryptographically secure RNG and later deploys reuse only
+that key from the currently referenced CLI-managed Secret. Other omitted API
+keys are not carried forward. Set exactly 64 hexadecimal characters to rotate
+the Looper key explicitly. Router revisions use `Recreate` so two credential
+generations never overlap.
+
+Release mutations are serialized with a renewable Kubernetes Lease. An exact,
+immutable current generation is reused when the complete credential set is
+unchanged; any change creates the Secret before atomic `helm upgrade
+--install`. Secrets needed by the ten retained Helm revisions remain available
+for rollback. `vllm-sr stop --target k8s` quarantines release-owned generations
+before uninstall, releases the Lease during the bounded 15-minute rollback
+window so an emergency redeploy is not blocked, then reacquires it and rechecks
+live references before deletion. If any release reappears, cleanup defers the
+entire pre-uninstall batch so its live and retained-history rollback references
+remain valid. Interrupting the wait is safe; a later deploy or stop retries
+expired cleanup. Unverifiable or partial cleanup makes
+`stop` fail after the remaining best-effort deletions.
+
+The CLI identity needs namespace-scoped `get`, `create`, and `update` on
+`coordination.k8s.io/v1` Leases in addition to its existing Helm workload and
+Secret permissions (including `get`, `list`, `create`, `patch`, and `delete` on
+Secrets). It needs `get` on the target Namespace and `create` only when that
+Namespace is absent; an existing Namespace is never applied or updated. Check
+the added Lease boundary before deployment:
+
+```bash
+kubectl auth can-i get leases.coordination.k8s.io --namespace NAMESPACE
+kubectl auth can-i create leases.coordination.k8s.io --namespace NAMESPACE
+kubectl auth can-i update leases.coordination.k8s.io --namespace NAMESPACE
+```
+
+A retry removes release-labelled generations only after Helm proves the release
+is absent and Kubernetes proves the generation has no live router reference.
+The historical namespace-global `vllm-sr-env-secrets` Secret is never deleted
+automatically because it may still be required by another release's retained
+Helm revision. An operator may remove it only after manually auditing every
+live workload and every retained revision of every Helm release in the
+namespace; a current Deployment scan alone is not sufficient. See the
+[chart rollback guidance](../../deploy/helm/semantic-router/README.md#credential-aware-rollbacks)
+for the complete retirement checklist.
 
 If you start in an empty directory, `vllm-sr serve` bootstraps a minimal workspace and opens the dashboard in setup mode. Configure your first model there, then activate routing.
 
 Local dashboard state is persisted under `.vllm-sr/dashboard-data/` and bind-mounted into the container at `/app/data`. User accounts, evaluation history, and ML pipeline artifacts survive `vllm-sr stop` followed by a new `vllm-sr serve` as long as that workspace directory is kept.
 
+For a production-like local dashboard, set `DASHBOARD_JWT_SECRET` and, when unattended bootstrap is required, `DASHBOARD_ADMIN_EMAIL`, `DASHBOARD_ADMIN_PASSWORD`, and optionally `DASHBOARD_ADMIN_NAME` before `vllm-sr serve`. `DASHBOARD_JWT_EXPIRY_HOURS` and `DASHBOARD_ALLOW_OPEN_BOOTSTRAP` retain their dashboard meanings. These values are scoped to the dashboard container; JWT and administrator-password values are inherited by name and are not embedded in container command arguments or debug logs. Set `DASHBOARD_PASSWORD_BLOCKLIST_PATH` to a host regular file to mount it read-only at the dashboard's fixed internal path. A missing or non-regular path fails before local runtime state is changed. `--minimal` does not start the dashboard and ignores all of these dashboard-only settings.
+
 The fleet simulator sidecar is started on the same runtime network by default. The dashboard backend proxies it at `/api/fleet-sim/*`, and the dashboard exposes its workflows under the `Fleet Sim` top-bar dropdown.
 
 To run parallel local stacks from the same machine or multiple worktrees, set `VLLM_SR_STACK_NAME` and `VLLM_SR_PORT_OFFSET` before `vllm-sr serve`, `vllm-sr status`, `vllm-sr dashboard`, and `vllm-sr stop`. The stack name isolates container and network names, and the port offset shifts the published host ports while keeping internal container ports unchanged.
+
+Local container ports are published with a safe-by-default host boundary. Router extproc/API/metrics, the dashboard, Redis, Postgres, Milvus, Fleet Sim, and the observability services bind to `127.0.0.1`. Envoy gateway host ports follow each `listeners[].address`: use `127.0.0.1` for a host-local gateway or explicitly set `0.0.0.0` to accept traffic on every host interface. In the split-container runtime only, Envoy listens on `0.0.0.0` inside its own network namespace so Docker/Podman forwarding remains reachable; the explicit host publish address is the external security boundary. If a trusted-network deployment intentionally needs the internal ports on another interface, set `VLLM_SR_INTERNAL_BIND_ADDRESS` to an IPv4 or IPv6 address literal. Non-loopback values produce a security warning and should be paired with host firewall controls, authentication, and transport security; malformed values, invalid listener addresses, and derived host ports outside `1..65535` fail before containers, networks, services, or generated runtime files are changed. This host-only setting does not alter container-network service URLs.
 
 ### Advanced YAML-first setup
 

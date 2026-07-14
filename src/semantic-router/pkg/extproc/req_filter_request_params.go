@@ -51,7 +51,7 @@ func (r *OpenAIRouter) buildRequestParamsMutations(
 
 	var body map[string]interface{}
 	if err := json.Unmarshal(requestBody, &body); err != nil {
-		logging.Warnf("Failed to parse request body: %v", err)
+		logging.Warnf("Failed to parse request body: %s", safeErrorForLog(err))
 		return requestBody, nil
 	}
 
@@ -66,7 +66,7 @@ func (r *OpenAIRouter) buildRequestParamsMutations(
 
 	modifiedBody, err := json.Marshal(body)
 	if err != nil {
-		logging.Warnf("Failed to serialize modified request body: %v", err)
+		logging.Warnf("Failed to serialize modified request body: %s", safeErrorForLog(err))
 		return requestBody, err
 	}
 

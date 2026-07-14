@@ -51,6 +51,26 @@ config:
           - type: fast_response
             configuration:
               message: Your request contains personal information. Please remove any sensitive data and try again.
+      - name: looper_auth_probe_decision
+        description: Authenticated Looper reentry E2E.
+        priority: 700
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_auth_probe_keywords
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+          - model: base-model
+            lora_name: math-expert
+            use_reasoning: false
+        algorithm:
+          type: ratings
+          ratings:
+            max_concurrent: 2
+            on_error: fail
       - name: retention_probe_decision
         description: Deterministic keyword-gated route used by the retention-directive E2E to assert x-vsr-retention-* response headers (issue #2009).
         priority: 600
@@ -582,6 +602,11 @@ config:
           keywords:
             - __RETENTION_PROBE__
           case_sensitive: false
+        - name: looper_auth_probe_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_AUTH_PROBE__
+          case_sensitive: false
       domains:
         - name: business
           description: Business, corporate strategy, management, finance, marketing
@@ -705,6 +730,9 @@ config:
       vector_store:
         embedding_model: mmbert
     integrations:
+      looper:
+        endpoint: http://semantic-router-looper/v1/chat/completions
+        timeout_seconds: 60
       tools:
         enabled: true
         top_k: 3

@@ -1,12 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"log"
+	"net"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -27,16 +28,26 @@ type jinaReaderResponse struct {
 	Content string `json:"content"`
 }
 
-func fetchWebWithJina(targetURL string, timeout time.Duration, outputFormat string, maxLength int, withImages bool) (*OpenWebResponse, error) {
+func fetchWebWithJina(
+	ctx context.Context,
+	client outboundHTTPClient,
+	targetURL string,
+	timeout time.Duration,
+	outputFormat string,
+	maxLength int,
+	withImages bool,
+) (*OpenWebResponse, error) {
 	log.Printf("[OpenWeb:Jina] Starting fetch: %s", redactURLForLog(targetURL))
 	startTime := time.Now()
 
-	req, err := newJinaRequest(targetURL, timeout, outputFormat, withImages)
+	requestCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	req, err := newJinaRequest(requestCtx, targetURL, timeout, outputFormat, withImages)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, errOutboundURLInvalid
 	}
 
-	resp, err := (&http.Client{Timeout: timeout}).Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, wrapOpenWebRequestError(err)
 	}
@@ -45,16 +56,18 @@ func fetchWebWithJina(targetURL string, timeout time.Duration, outputFormat stri
 	log.Printf("[OpenWeb:Jina] Response status: %d, elapsed: %v", resp.StatusCode, time.Since(startTime))
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("remote returned HTTP %d", resp.StatusCode)
 	}
 
-	fetchedContent, err := parseJinaResponse(resp.Body, outputFormat, targetURL)
+	body, err := readBoundedOutboundBody(resp.Body, openWebMaxResponseSize)
+	if err != nil {
+		return nil, err
+	}
+	fetchedContent, err := parseJinaResponse(body, outputFormat, targetURL)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Printf("[OpenWeb:Jina] Got title: %s", fetchedContent.title)
 	log.Printf("[OpenWeb:Jina] Original content length: %d characters", len(fetchedContent.content))
 
 	result := buildOpenWebResponse(fetchedContent, maxLength, "jina")
@@ -66,11 +79,17 @@ func fetchWebWithJina(targetURL string, timeout time.Duration, outputFormat stri
 	return result, nil
 }
 
-func newJinaRequest(targetURL string, timeout time.Duration, outputFormat string, withImages bool) (*http.Request, error) {
+func newJinaRequest(
+	ctx context.Context,
+	targetURL string,
+	timeout time.Duration,
+	outputFormat string,
+	withImages bool,
+) (*http.Request, error) {
 	jinaURL := fmt.Sprintf("%s/%s", jinaReaderBaseURL, targetURL)
 	log.Printf("[OpenWeb:Jina] Jina target: %s", redactURLForLog(targetURL))
 
-	req, err := http.NewRequest("GET", jinaURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, jinaURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -87,17 +106,17 @@ func newJinaRequest(targetURL string, timeout time.Duration, outputFormat string
 	return req, nil
 }
 
-func parseJinaResponse(body io.Reader, outputFormat string, targetURL string) (openWebFetchedContent, error) {
+func parseJinaResponse(body []byte, outputFormat string, targetURL string) (openWebFetchedContent, error) {
 	if outputFormat == "json" {
 		return parseJinaJSONResponse(body, targetURL)
 	}
 	return parseJinaMarkdownResponse(body, targetURL)
 }
 
-func parseJinaJSONResponse(body io.Reader, targetURL string) (openWebFetchedContent, error) {
+func parseJinaJSONResponse(body []byte, targetURL string) (openWebFetchedContent, error) {
 	var result jinaReaderResponse
-	if err := json.NewDecoder(body).Decode(&result); err != nil {
-		return openWebFetchedContent{}, fmt.Errorf("failed to parse response: %w", err)
+	if err := json.Unmarshal(body, &result); err != nil {
+		return openWebFetchedContent{}, fmt.Errorf("failed to parse response")
 	}
 
 	content := result.Data.Content
@@ -127,13 +146,8 @@ func parseJinaJSONResponse(body io.Reader, targetURL string) (openWebFetchedCont
 	}, nil
 }
 
-func parseJinaMarkdownResponse(body io.Reader, targetURL string) (openWebFetchedContent, error) {
-	contentBytes, err := io.ReadAll(body)
-	if err != nil {
-		return openWebFetchedContent{}, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	content := string(contentBytes)
+func parseJinaMarkdownResponse(body []byte, targetURL string) (openWebFetchedContent, error) {
+	content := string(body)
 	if content == "" {
 		return openWebFetchedContent{}, fmt.Errorf("response content is empty")
 	}
@@ -167,11 +181,18 @@ func wrapOpenWebRequestError(err error) error {
 		return nil
 	}
 	if containsOpenWebTimeout(err) {
-		return fmt.Errorf("request timeout")
+		return errOutboundRequestTimeout
 	}
-	return fmt.Errorf("request failed: %w", err)
+	return errOutboundRequestFailed
 }
 
 func containsOpenWebTimeout(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "timeout")
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, errOutboundRequestTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }

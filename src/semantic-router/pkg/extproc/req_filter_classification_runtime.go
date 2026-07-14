@@ -54,7 +54,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 		logging.ComponentErrorEvent("extproc", "signal_evaluation_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"stage":      "authz",
-			"error":      authzErr.Error(),
+			"error_type": safeErrorForLog(authzErr),
 		})
 		return nil, authzErr
 	}
@@ -152,7 +152,7 @@ func (r *OpenAIRouter) runDecisionEngine(
 		logging.ComponentErrorEvent("extproc", "decision_evaluation_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"strategy":   r.Config.Strategy,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
 		ctx.TraceContext = decisionCtx

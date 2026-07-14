@@ -258,6 +258,42 @@
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
 }
 
+.passwordInputShell {
+  position: relative;
+}
+
+.passwordInput {
+  padding-right: 5.75rem;
+}
+
+.passwordVisibilityButton {
+  position: absolute;
+  top: 50%;
+  right: 0.55rem;
+  min-width: 4.25rem;
+  min-height: 42px;
+  padding: 0 0.7rem;
+  transform: translateY(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 5px;
+  background: #18181b;
+  color: rgba(255, 255, 255, 0.86);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.passwordVisibilityButton:hover {
+  border-color: rgba(255, 255, 255, 0.42);
+  background: #202024;
+}
+
+.passwordVisibilityButton:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
 .summaryDetail {
   color: rgba(255, 255, 255, 0.72);
   font-size: 0.92rem;

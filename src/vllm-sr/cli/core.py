@@ -15,7 +15,16 @@ from cli.container_cli import (
     container_stop_container,
     load_openclaw_registry,
 )
+from cli.container_host_ports import (
+    HostPortPublicationPlan,
+    build_host_port_publication_plan,
+)
 from cli.container_images import get_fleet_sim_container_image, get_runtime_images
+from cli.dashboard_auth_runtime import (
+    DashboardAuthRuntimePlan,
+    build_dashboard_auth_runtime_plan,
+    without_dashboard_auth_env,
+)
 from cli.logo import print_vllm_logo
 from cli.runtime_lifecycle import (
     connect_runtime_container,
@@ -149,7 +158,7 @@ def start_vllm_sr(
     runtime_config_file=None,
 ):
     """Start vLLM Semantic Router."""
-    env_vars = env_vars if env_vars is not None else {}
+    env_vars = dict(env_vars or {})
     stack_layout = resolve_runtime_stack()
     runtime_topology = resolve_runtime_topology(topology)
 
@@ -157,13 +166,18 @@ def start_vllm_sr(
     source_config_file = source_config_file or config_file
     runtime_config_file = runtime_config_file or config_file
     user_config, listeners = _load_runtime_config(runtime_config_file)
+    host_port_plan = build_host_port_publication_plan(stack_layout, listeners)
+    dashboard_disabled = env_vars.get("DISABLE_DASHBOARD") == "true"
+    dashboard_auth_plan = build_dashboard_auth_runtime_plan(
+        env_vars, dashboard_enabled=not dashboard_disabled
+    )
+    env_vars = without_dashboard_auth_env(env_vars)
 
     log_startup_banner(source_config_file, listeners, stack_layout)
     log.info(f"Runtime topology: {runtime_topology}")
     for container_name in stack_layout.runtime_container_names:
         ensure_clean_runtime_container(container_name)
 
-    dashboard_disabled = env_vars.get("DISABLE_DASHBOARD") == "true"
     shared_network_name, state_root_dir = _prepare_runtime_network(
         source_config_file,
         env_vars,
@@ -186,6 +200,7 @@ def start_vllm_sr(
         sim_image,
         pull_policy,
         enable_observability,
+        host_port_plan,
     )
 
     setup_mode = str(env_vars.get("VLLM_SR_SETUP_MODE", "")).lower() == "true"
@@ -205,6 +220,8 @@ def start_vllm_sr(
         envoy_image,
         dashboard_image,
         pull_policy,
+        dashboard_auth_plan,
+        host_port_plan,
     )
     if return_code != 0:
         log.error(f"Failed to start container: {stderr}")
@@ -236,9 +253,14 @@ def _start_support_services(
     sim_image,
     pull_policy,
     enable_observability,
+    host_port_plan: HostPortPublicationPlan,
 ):
     started_backends = provision_storage_backends(
-        user_config, shared_network_name, stack_layout, state_root_dir=state_root_dir
+        user_config,
+        shared_network_name,
+        stack_layout,
+        state_root_dir=state_root_dir,
+        bind_address=host_port_plan.internal_bind_address,
     )
     observability_network_name = start_observability_stack(
         enable_observability,
@@ -246,6 +268,7 @@ def _start_support_services(
         state_root_dir,
         env_vars,
         stack_layout,
+        bind_address=host_port_plan.internal_bind_address,
     )
     runtime_network_name = observability_network_name or shared_network_name
     fleet_sim_enabled = start_fleet_sim_sidecar(
@@ -254,6 +277,7 @@ def _start_support_services(
         stack_layout,
         sim_image=sim_image,
         pull_policy=pull_policy,
+        bind_address=host_port_plan.internal_bind_address,
     )
     if fleet_sim_enabled:
         env_vars.setdefault("TARGET_FLEET_SIM_URL", stack_layout.fleet_sim_service_url)
@@ -276,6 +300,8 @@ def _start_runtime_containers(
     envoy_image,
     dashboard_image,
     pull_policy,
+    dashboard_auth_plan: DashboardAuthRuntimePlan,
+    host_port_plan: HostPortPublicationPlan,
 ):
     return container_start_vllm_sr(
         config_file=source_config_file,
@@ -293,6 +319,8 @@ def _start_runtime_containers(
         stack_layout=stack_layout,
         state_root_dir=state_root_dir,
         runtime_config_file=runtime_config_file,
+        host_port_plan=host_port_plan,
+        dashboard_auth_plan=dashboard_auth_plan,
     )
 
 

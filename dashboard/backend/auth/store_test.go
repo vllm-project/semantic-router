@@ -16,8 +16,12 @@ func TestNewStoreNormalizesLegacyRolesAndSyncsDefaultPermissions(t *testing.T) {
 		t.Fatalf("NewStore() error = %v", err)
 	}
 
-	admin := newTestUser(t, NewService(store, "test-secret", 1), "admin@example.com", RoleAdmin, "active")
-	reader := newTestUser(t, NewService(store, "test-secret", 1), "reader@example.com", RoleRead, "active")
+	svc, err := NewService(store, testJWTSecret, 1)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	admin := newTestUser(t, svc, "admin@example.com", RoleAdmin, "active")
+	reader := newTestUser(t, svc, "reader@example.com", RoleRead, "active")
 
 	if _, execErr := store.db.ExecContext(
 		context.Background(),

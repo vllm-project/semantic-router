@@ -128,7 +128,8 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     threshold: 0.7,
     use_cpu: true,
     use_mmbert_32k: true,
-    jailbreak_mapping_path: 'models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json',
+    jailbreak_mapping_path:
+      'models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json',
   },
   classifier: {
     domain: {
@@ -254,21 +255,27 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   } satisfies APIConfig,
 }
 
-export const SECTION_META: Record<RouterSystemKey, { title: string; eyebrow: string; description: string }> = {
+export const SECTION_META: Record<
+  RouterSystemKey,
+  { title: string; eyebrow: string; description: string }
+> = {
   router_core: {
     title: 'Router Core',
     eyebrow: 'Router',
-    description: 'Core router behavior, config source, startup cache handling, and model selection strategy.',
+    description:
+      'Core router behavior, config source, startup cache handling, and model selection strategy.',
   },
   response_api: {
     title: 'Response API',
     eyebrow: 'Services',
-    description: 'Conversation chaining and persistence defaults for the OpenAI Responses API surface.',
+    description:
+      'Conversation chaining and persistence defaults for the OpenAI Responses API surface.',
   },
   router_replay: {
     title: 'Router Replay',
     eyebrow: 'Services',
-    description: 'Persistence policy for replay records written by replay-enabled decision plugins.',
+    description:
+      'Persistence policy for replay records written by replay-enabled decision plugins.',
   },
   authz: {
     title: 'Authorization',
@@ -283,7 +290,8 @@ export const SECTION_META: Record<RouterSystemKey, { title: string; eyebrow: str
   memory: {
     title: 'Agentic Memory',
     eyebrow: 'Stores',
-    description: 'Cross-session memory extraction, storage, retrieval thresholds, and reflection policy.',
+    description:
+      'Cross-session memory extraction, storage, retrieval thresholds, and reflection policy.',
   },
   semantic_cache: {
     title: 'Semantic Cache',
@@ -293,12 +301,14 @@ export const SECTION_META: Record<RouterSystemKey, { title: string; eyebrow: str
   vector_store: {
     title: 'Vector Store',
     eyebrow: 'Stores',
-    description: 'Document ingestion, vector backend selection, and file-backed knowledge-store defaults.',
+    description:
+      'Document ingestion, vector backend selection, and file-backed knowledge-store defaults.',
   },
   tools: {
     title: 'Tool Selection',
     eyebrow: 'Integrations',
-    description: 'Automatic tool ranking, similarity thresholds, and tool database lookup settings.',
+    description:
+      'Automatic tool ranking, similarity thresholds, and tool database lookup settings.',
   },
   prompt_guard: {
     title: 'Prompt Guard',
@@ -333,7 +343,8 @@ export const SECTION_META: Record<RouterSystemKey, { title: string; eyebrow: str
   embedding_models: {
     title: 'Embedding Models',
     eyebrow: 'Model Catalog',
-    description: 'Semantic embedding paths and embedding optimization defaults for router-owned models.',
+    description:
+      'Semantic embedding paths and embedding optimization defaults for router-owned models.',
   },
   prompt_compression: {
     title: 'Prompt Compression',
@@ -343,7 +354,8 @@ export const SECTION_META: Record<RouterSystemKey, { title: string; eyebrow: str
   modality_detector: {
     title: 'Modality Detector',
     eyebrow: 'Model Catalog',
-    description: 'Prompt modality detection strategy, classifier settings, and keyword fallback behavior.',
+    description:
+      'Prompt modality detection strategy, classifier settings, and keyword fallback behavior.',
   },
   observability: {
     title: 'Observability',
@@ -358,7 +370,8 @@ export const SECTION_META: Record<RouterSystemKey, { title: string; eyebrow: str
   clear_route_cache: {
     title: 'Route Cache Reset',
     eyebrow: 'Router',
-    description: 'Controls whether the route cache is cleared on startup or config reload.',
+    description:
+      'Controls cache invalidation for optional auxiliary request mutations. Model-routing header transitions always invalidate the route cache.',
   },
   model_selection: {
     title: 'Model Selection',

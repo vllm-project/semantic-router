@@ -24,12 +24,12 @@ import (
 func (r *OpenAIRouter) handleToolSelectionForRequest(openAIRequest *openai.ChatCompletionNewParams, response *ext_proc.ProcessingResponse, ctx *RequestContext) {
 	userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
 	if err := r.handleToolSelection(openAIRequest, userContent, nonUserMessages, &response, ctx); err != nil {
-		logging.Errorf("Error in tool selection: %v", err)
+		logging.Errorf("Error in tool selection: %s", safeErrorForLog(err))
 		// Continue without failing the request
 	}
 	if clearToolChoiceWhenNoTools(openAIRequest) {
 		if err := r.updateRequestWithTools(openAIRequest, &response, ctx); err != nil {
-			logging.Errorf("Error clearing invalid tool_choice without tools: %v", err)
+			logging.Errorf("Error clearing invalid tool_choice without tools: %s", safeErrorForLog(err))
 		}
 	}
 }
@@ -64,8 +64,8 @@ func (r *OpenAIRouter) applySelectedTools(
 		return err
 	}
 	openAIRequest.Tools = sdkTools
-	logging.Infof("Auto-selected %d tools via strategy %q (confidence=%.3f, latency=%s) for query: %s",
-		len(sdkTools), strategyID, confidence, latency.Round(time.Millisecond), classificationText)
+	logging.Infof("Auto-selected %d tools via strategy %q (confidence=%.3f, latency=%s, query_chars=%d)",
+		len(sdkTools), strategyID, confidence, latency.Round(time.Millisecond), len(classificationText))
 	return nil
 }
 
@@ -140,7 +140,7 @@ func (r *OpenAIRouter) handleToolSelectionError(
 	fallbackToEmpty bool,
 ) error {
 	if fallbackToEmpty {
-		logging.Warnf("Tool selection failed, falling back to no tools: %v", toolErr)
+		logging.Warnf("Tool selection failed, falling back to no tools: %s", safeErrorForLog(toolErr))
 		openAIRequest.Tools = nil
 		return r.updateRequestWithTools(openAIRequest, response, ctx)
 	}
@@ -626,7 +626,7 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 	}
 	ensureHeaderRemoved(commonResponse.HeaderMutation, "content-length")
 	setHeaderValue(commonResponse.HeaderMutation, "content-length", fmt.Sprintf("%d", len(modifiedBody)))
-	if r.shouldClearRouteCache() {
+	if r.shouldClearRouteCacheForAuxiliaryMutation() {
 		commonResponse.ClearRouteCache = true
 		logging.Debugf("Setting ClearRouteCache=true (feature enabled) in updateRequestWithTools")
 	}

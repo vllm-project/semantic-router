@@ -13,7 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
 
-func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Reader) (*selection.Registry, lookuptable.LookupTableStorage, func()) {
+func createModelSelectorRegistry(cfg *config.RouterConfig, plan embedding.RuntimePlan, replayReader store.Reader) (*selection.Registry, lookuptable.LookupTableStorage, func()) {
 	modelSelectionCfg := buildModelSelectionConfig(cfg)
 	backendModels := cfg.BackendModels
 	selectionFactory := selection.NewFactory(modelSelectionCfg)
@@ -24,7 +24,7 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Re
 	if len(cfg.Categories) > 0 {
 		selectionFactory = selectionFactory.WithCategories(cfg.Categories)
 	}
-	selectionFactory = selectionFactory.WithEmbeddingFunc(resolveSelectionEmbeddingFunc(cfg))
+	selectionFactory = selectionFactory.WithEmbeddingFunc(resolveSelectionEmbeddingFuncForPlan(cfg, plan))
 
 	lt, cancel := buildLookupTable(cfg, replayReader)
 	if lt != nil {
@@ -48,7 +48,17 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Re
 }
 
 func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) func(string) ([]float32, error) {
-	provider, err := resolveSelectionEmbeddingProvider(cfg)
+	plan, err := resolveRouterEmbeddingRuntimePlan(cfg)
+	if err != nil {
+		return func(string) ([]float32, error) {
+			return nil, err
+		}
+	}
+	return resolveSelectionEmbeddingFuncForPlan(cfg, plan)
+}
+
+func resolveSelectionEmbeddingFuncForPlan(cfg *config.RouterConfig, plan embedding.RuntimePlan) func(string) ([]float32, error) {
+	provider, err := resolveSelectionEmbeddingProvider(cfg, plan)
 	if err != nil {
 		return func(string) ([]float32, error) {
 			return nil, err
@@ -59,20 +69,18 @@ func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) func(string) ([]flo
 	}
 }
 
-func resolveSelectionEmbeddingProvider(cfg *config.RouterConfig) (embedding.Provider, error) {
-	backend := embedding.BackendOverrideFromEnv()
-	if backend == "" {
-		backend = cfg.EmbeddingModels.EmbeddingBackend()
-	}
-	if backend == config.EmbeddingBackendOpenAICompatible {
-		return embedding.NewProvider(cfg.EmbeddingModels, embedding.ProviderOptions{})
+func resolveSelectionEmbeddingProvider(cfg *config.RouterConfig, plan embedding.RuntimePlan) (embedding.Provider, error) {
+	if plan.Backend == config.EmbeddingBackendOpenAICompatible {
+		return embedding.NewProvider(cfg.EmbeddingModels, embedding.ProviderOptions{
+			BackendOverride: plan.Backend,
+		})
 	}
 
-	modelType := selectionEmbeddingModelType(cfg, backend)
-	switch backend {
+	modelType := plan.ModelType
+	switch plan.Backend {
 	case config.EmbeddingBackendOpenVINO:
 		openvinoEmbed := openvinoEmbeddingFunc(modelType)
-		return embedding.NewFuncProvider(backend, 0, func(_ context.Context, text string) ([]float32, error) {
+		return embedding.NewFuncProvider(plan.Backend, 0, func(_ context.Context, text string) ([]float32, error) {
 			return openvinoEmbed(text)
 		})
 	default:
@@ -91,17 +99,6 @@ func resolveSelectionEmbeddingProvider(cfg *config.RouterConfig) (embedding.Prov
 			return output.Embedding, nil
 		})
 	}
-}
-
-func selectionEmbeddingModelType(cfg *config.RouterConfig, backend string) string {
-	modelType := cfg.EmbeddingConfig.ModelType
-	if modelType != "" {
-		return modelType
-	}
-	if backend == config.EmbeddingBackendOpenAICompatible {
-		return config.EmbeddingModelTypeRemote
-	}
-	return config.EmbeddingModelTypeQwen3
 }
 
 func selectionEmbeddingDimension(cfg *config.RouterConfig, modelType string) int {
@@ -534,12 +531,12 @@ func buildLookupTableStorage(ltCfg config.LookupTableConfig) (lookuptable.Lookup
 
 	fs, err := lookuptable.NewFileStorage(ltCfg.StoragePath)
 	if err != nil {
-		logging.Errorf("[RouterSelection] Failed to create lookup table file storage: %v", err)
+		logging.Errorf("[RouterSelection] Failed to create lookup table file storage: %s", safeErrorForLog(err))
 		return lookuptable.NewMemoryStorage(), nil
 	}
 
 	if err := fs.Load(); err != nil {
-		logging.Warnf("[RouterSelection] Failed to load lookup table from %s: %v", ltCfg.StoragePath, err)
+		logging.Warnf("[RouterSelection] Failed to load lookup table from %s: %s", ltCfg.StoragePath, safeErrorForLog(err))
 	}
 
 	cancel := func() { _ = fs.Close() }
@@ -547,7 +544,7 @@ func buildLookupTableStorage(ltCfg config.LookupTableConfig) (lookuptable.Lookup
 		if interval, err := time.ParseDuration(ltCfg.AutoSaveInterval); err == nil {
 			fs.StartAutoSave(interval)
 		} else {
-			logging.Warnf("[RouterSelection] Invalid lookup table auto_save_interval %q: %v", ltCfg.AutoSaveInterval, err)
+			logging.Warnf("[RouterSelection] Invalid lookup table auto_save_interval %q: %s", ltCfg.AutoSaveInterval, safeErrorForLog(err))
 		}
 	}
 	return fs, cancel
@@ -571,7 +568,7 @@ func maybePopulateFromReplay(
 	}
 	interval, err := time.ParseDuration(ltCfg.PopulateInterval)
 	if err != nil {
-		logging.Warnf("[RouterSelection] Invalid lookup table populate_interval %q: %v", ltCfg.PopulateInterval, err)
+		logging.Warnf("[RouterSelection] Invalid lookup table populate_interval %q: %s", ltCfg.PopulateInterval, safeErrorForLog(err))
 		return
 	}
 	*cancelFuncs = append(*cancelFuncs, startLookupTablePopulator(storage, reader, interval))
@@ -599,7 +596,7 @@ func applyLookupTableOverrides(ltCfg config.LookupTableConfig, storage lookuptab
 func populateFromReplay(storage lookuptable.LookupTableStorage, reader store.Reader) {
 	records, err := reader.List(context.Background())
 	if err != nil {
-		logging.Errorf("[RouterSelection] Failed to list replay records for lookup table population: %v", err)
+		logging.Errorf("[RouterSelection] Failed to list replay records for lookup table population: %s", safeErrorForLog(err))
 		return
 	}
 	if len(records) == 0 {
@@ -608,7 +605,7 @@ func populateFromReplay(storage lookuptable.LookupTableStorage, reader store.Rea
 	}
 	builder := lookuptable.NewBuilder(storage)
 	if err := builder.PopulateFromRecords(records); err != nil {
-		logging.Errorf("[RouterSelection] Failed to populate lookup table from replay records: %v", err)
+		logging.Errorf("[RouterSelection] Failed to populate lookup table from replay records: %s", safeErrorForLog(err))
 		return
 	}
 	logging.ComponentEvent("extproc", "lookuptable_populated_from_replay", map[string]interface{}{

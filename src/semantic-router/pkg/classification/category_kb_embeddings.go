@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -25,7 +26,6 @@ type embeddingResult struct {
 func (c *KnowledgeBaseClassifier) collectExemplarRefs() []exemplarRef {
 	refs := make([]exemplarRef, 0)
 	for label, data := range c.labels {
-		data.Embeddings = make([][]float32, len(data.Exemplars))
 		for i, text := range data.Exemplars {
 			refs = append(refs, exemplarRef{label: label, index: i, text: text})
 		}
@@ -34,42 +34,22 @@ func (c *KnowledgeBaseClassifier) collectExemplarRefs() []exemplarRef {
 }
 
 func (c *KnowledgeBaseClassifier) embedOneExemplar(backend, modelType string, targetDim int, ref exemplarRef) embeddingResult {
-	if c.provider != nil {
-		embedding, err := c.embedText(ref.text)
-		if err != nil {
-			return embeddingResult{ref: ref, err: err}
-		}
-		return embeddingResult{ref: ref, embedding: embedding}
-	}
-	if backend == "openvino" {
-		embedding, err := getOpenVINOEmbedding(modelType, ref.text, targetDim)
-		if err != nil {
-			return embeddingResult{ref: ref, err: err}
-		}
-		return embeddingResult{ref: ref, embedding: embedding}
-	}
-	output, err := getEmbeddingWithModelType(ref.text, modelType, targetDim)
+	embedding, _, err := executeTextEmbedding(context.Background(), backend, c.provider, ref.text, modelType, targetDim)
 	if err != nil {
 		return embeddingResult{ref: ref, err: err}
 	}
-	return embeddingResult{ref: ref, embedding: output.Embedding}
+	return embeddingResult{ref: ref, embedding: embedding}
 }
 
 func (c *KnowledgeBaseClassifier) embedText(text string) ([]float32, error) {
-	if c.provider != nil {
-		return c.provider.Embed(context.Background(), text)
-	}
-	output, err := getEmbeddingWithModelType(text, c.modelType, 0)
-	if err != nil {
-		return nil, err
-	}
-	return output.Embedding, nil
+	embedding, _, err := executeTextEmbedding(context.Background(), c.backend, c.provider, text, c.modelType, 0)
+	return embedding, err
 }
 
 func (c *KnowledgeBaseClassifier) embedExemplarsParallel(refs []exemplarRef) <-chan embeddingResult {
 	numWorkers := runtime.NumCPU()
-	backend := embeddingBackendOverride()
-	if backend == "candle" {
+	backend := c.currentBackend()
+	if backend == config.EmbeddingBackendCandle {
 		numWorkers = 1
 	} else if numWorkers > 8 {
 		numWorkers = 8
@@ -119,20 +99,35 @@ func (c *KnowledgeBaseClassifier) preloadEmbeddings() error {
 	})
 	refs := c.collectExemplarRefs()
 	resultChan := c.embedExemplarsParallel(refs)
+	stagedEmbeddings := make(map[string][][]float32, len(c.labels))
+	for label, data := range c.labels {
+		stagedEmbeddings[label] = make([][]float32, len(data.Exemplars))
+	}
 
 	failCount := 0
 	for res := range resultChan {
-		if res.err != nil {
+		if res.err != nil || len(res.embedding) == 0 {
 			failCount++
-			logging.Warnf("[KnowledgeBase:%s] Failed to embed exemplar %q in %s: %v", c.rule.Name, res.ref.text, res.ref.label, res.err)
 			continue
 		}
-		c.labels[res.ref.label].Embeddings[res.ref.index] = res.embedding
+		stagedEmbeddings[res.ref.label][res.ref.index] = res.embedding
+	}
+	if failCount > 0 {
+		logging.ComponentWarnEvent("classifier", "knowledge_base_embeddings_preload_failed", map[string]interface{}{
+			"knowledge_base":   c.rule.Name,
+			"failed_exemplars": failCount,
+			"total_exemplars":  len(refs),
+		})
+		return fmt.Errorf("knowledge base embedding preload failed: %d of %d exemplars could not be embedded", failCount, len(refs))
+	}
+
+	for label, embeddings := range stagedEmbeddings {
+		c.labels[label].Embeddings = embeddings
 	}
 
 	logging.ComponentEvent("classifier", "knowledge_base_embeddings_preloaded", map[string]interface{}{
 		"knowledge_base": c.rule.Name,
-		"exemplars":      len(refs) - failCount,
+		"exemplars":      len(refs),
 		"labels":         len(c.labels),
 		"latency_ms":     time.Since(startTime).Milliseconds(),
 	})

@@ -167,6 +167,55 @@ helm-safety-validate: helm-ci-setup
 		-f "$(HELM_CHART_PATH)/values-prod.yaml" \
 		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/prod.yaml"; \
 	grep -q "kind: HorizontalPodAutoscaler" "$$tmp_dir/prod.yaml"; \
+	grep -q 'name: DASHBOARD_SECURITY_PROFILE' "$$tmp_dir/prod.yaml"; \
+	grep -q 'value: "production"' "$$tmp_dir/prod.yaml"; \
+	grep -q 'name: DASHBOARD_PASSWORD_BLOCKLIST_SHA256' "$$tmp_dir/prod.yaml"; \
+	grep -q 'imagePullPolicy: Always' "$$tmp_dir/prod.yaml"; \
+	echo "Validating production dashboard security-profile schema..."; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set dashboard.enabled=true \
+		--set dashboard.securityProfile=production \
+		--set dashboard.image.tag=release-a \
+		--set dashboard.image.pullPolicy=Always \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/prod-missing-corpus.out" 2>&1; then \
+		echo "Expected production dashboard without an external corpus to fail schema validation"; \
+		exit 1; \
+	fi; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set dashboard.enabled=true \
+		--set dashboard.securityProfile=production \
+		--set dashboard.image.tag=release-a \
+		--set dashboard.image.pullPolicy=Always \
+		--set dashboard.passwordBlocklist.existingConfigMap=production-passwords \
+		--set-string dashboard.passwordBlocklist.sha256=not-a-digest \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/prod-invalid-digest.out" 2>&1; then \
+		echo "Expected malformed production password blocklist digest to fail schema validation"; \
+		exit 1; \
+	fi; \
+	for invalid_tag in latest ''; do \
+		if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+			--set dashboard.enabled=true \
+			--set dashboard.securityProfile=production \
+			--set-string dashboard.image.tag="$$invalid_tag" \
+			--set dashboard.image.pullPolicy=Always \
+			--set dashboard.passwordBlocklist.existingConfigMap=production-passwords \
+			--set-string dashboard.passwordBlocklist.sha256=$$(printf a%.0s $$(seq 1 64)) \
+			--namespace $(HELM_NAMESPACE) > "$$tmp_dir/prod-invalid-image-tag.out" 2>&1; then \
+			echo "Expected production dashboard image tag '$$invalid_tag' to fail schema validation"; \
+			exit 1; \
+		fi; \
+	done; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set dashboard.enabled=true \
+		--set dashboard.securityProfile=production \
+		--set dashboard.image.tag=release-a \
+		--set dashboard.image.pullPolicy=IfNotPresent \
+		--set dashboard.passwordBlocklist.existingConfigMap=production-passwords \
+		--set-string dashboard.passwordBlocklist.sha256=$$(printf a%.0s $$(seq 1 64)) \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/prod-mutable-pull-policy.out" 2>&1; then \
+		echo "Expected mutable production dashboard pull policy to fail schema validation"; \
+		exit 1; \
+	fi; \
 	echo "Validating schema rejection for invalid learning guard type..."; \
 	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		--set safetyGuards.rejectMultiReplicaLocalLearningState=maybe \
@@ -185,6 +234,78 @@ helm-safety-validate: helm-ci-setup
 		exit 1; \
 	fi; \
 	grep -Eq "replicaCount.*(Invalid type|want integer)" "$$tmp_dir/invalid-replica.out"; \
+	echo "Validating runtime credential generation schema type..."; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set-json 'runtimeCredentials.generation=7' \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/invalid-credential-generation.out" 2>&1; then \
+		echo "Expected non-string runtime credential generation to fail schema validation"; \
+		cat "$$tmp_dir/invalid-credential-generation.out"; \
+		exit 1; \
+	fi; \
+	grep -Eq "runtimeCredentials.generation.*(Invalid type|want string)" "$$tmp_dir/invalid-credential-generation.out"; \
+	echo "Validating runtime credential rotation schema type..."; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set-string runtimeCredentials.recreateForLooperRotation=maybe \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/invalid-credential-rotation.out" 2>&1; then \
+		echo "Expected non-boolean runtime credential rotation to fail schema validation"; \
+		cat "$$tmp_dir/invalid-credential-rotation.out"; \
+		exit 1; \
+	fi; \
+	grep -Eq "runtimeCredentials.recreateForLooperRotation.*(Invalid type|want boolean)" "$$tmp_dir/invalid-credential-rotation.out"; \
+	echo "Validating CLI runtime credential revisions persist Recreate..."; \
+	helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set runtimeCredentials.generation=release-a-vsr-env-generation \
+		--set runtimeCredentials.recreateForLooperRotation=true \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/shared-looper.yaml"; \
+	awk '/^# Source: semantic-router\/templates\/deployment.yaml$$/ { capture=1 } capture { print } capture && /^---$$/ { exit }' \
+		"$$tmp_dir/shared-looper.yaml" > "$$tmp_dir/shared-looper-router.yaml"; \
+	grep -q "type: Recreate" "$$tmp_dir/shared-looper-router.yaml"; \
+	grep -q 'semantic-router.vllm.ai/runtime-credential-generation: "release-a-vsr-env-generation"' \
+		"$$tmp_dir/shared-looper-router.yaml"; \
+	echo "Validating default dashboard render omits password blocklist wiring..."; \
+	helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set dashboard.enabled=true \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/dashboard-default.yaml"; \
+	if grep -q "DASHBOARD_PASSWORD_BLOCKLIST_PATH\|password-blocklist" "$$tmp_dir/dashboard-default.yaml"; then \
+		echo "Default dashboard render unexpectedly contains password blocklist wiring"; \
+		exit 1; \
+	fi; \
+	echo "Validating existing password blocklist ConfigMap wiring..."; \
+	helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set dashboard.enabled=true \
+		--set dashboard.passwordBlocklist.existingConfigMap=production-passwords \
+		--set dashboard.passwordBlocklist.key=compromised.txt \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/dashboard-blocklist.yaml"; \
+	test "$$(grep -c 'name: DASHBOARD_PASSWORD_BLOCKLIST_PATH' "$$tmp_dir/dashboard-blocklist.yaml")" -eq 1; \
+	grep -q 'value: "/etc/vllm-sr/password-blocklist/passwords.txt"' "$$tmp_dir/dashboard-blocklist.yaml"; \
+	test "$$(grep -c 'name: password-blocklist' "$$tmp_dir/dashboard-blocklist.yaml")" -eq 2; \
+	grep -q 'mountPath: /etc/vllm-sr/password-blocklist' "$$tmp_dir/dashboard-blocklist.yaml"; \
+	grep -q 'name: "production-passwords"' "$$tmp_dir/dashboard-blocklist.yaml"; \
+	grep -q 'key: "compromised.txt"' "$$tmp_dir/dashboard-blocklist.yaml"; \
+	grep -q 'path: passwords.txt' "$$tmp_dir/dashboard-blocklist.yaml"; \
+	echo "Validating password blocklist schema types and conditional key..."; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set-string dashboard.passwordBlocklist=invalid \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/invalid-blocklist-config.out" 2>&1; then \
+		echo "Expected scalar passwordBlocklist config to fail schema validation"; \
+		exit 1; \
+	fi; \
+	grep -Eq "dashboard.passwordBlocklist.*(Invalid type|want object)" "$$tmp_dir/invalid-blocklist-config.out"; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set-json 'dashboard.passwordBlocklist.key=7' \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/invalid-blocklist-key-type.out" 2>&1; then \
+		echo "Expected non-string password blocklist key to fail schema validation"; \
+		exit 1; \
+	fi; \
+	grep -Eq "dashboard.passwordBlocklist.key.*(Invalid type|want string)" "$$tmp_dir/invalid-blocklist-key-type.out"; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set dashboard.passwordBlocklist.existingConfigMap=production-passwords \
+		--set-string dashboard.passwordBlocklist.key= \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/invalid-blocklist-empty-key.out" 2>&1; then \
+		echo "Expected empty configured password blocklist key to fail schema validation"; \
+		exit 1; \
+	fi; \
+	grep -Eq "dashboard.passwordBlocklist.key.*(length|at least 1)" "$$tmp_dir/invalid-blocklist-empty-key.out"; \
 	echo "Validating Router Learning local-state multi-replica rejection..."; \
 	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		--set autoscaling.enabled=false \

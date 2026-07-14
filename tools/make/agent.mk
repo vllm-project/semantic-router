@@ -96,19 +96,28 @@ agent-serve-local: agent-venv-install ## Start vllm-sr with the canonical local 
 	if [ -n "$$CONFIG_PATH" ]; then \
 		CONFIG_ARGS="--config $$CONFIG_PATH"; \
 	fi; \
+	VLLM_SR_CLI="$(AGENT_VENV)/bin/vllm-sr"; \
+	if [ ! -x "$$VLLM_SR_CLI" ]; then \
+		echo "Agent vllm-sr CLI is missing; run 'make agent-dev ENV=$(ENV)' first."; \
+		exit 1; \
+	fi; \
 	if [ "$(ENV)" = "amd" ]; then \
 		echo "Starting local AMD workflow..."; \
 		VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" VLLM_SR_STATE_ROOT_DIR="$$(pwd)" VLLM_SR_TOPOLOGY="$(VLLM_SR_TOPOLOGY)" \
-		vllm-sr serve --image-pull-policy never --platform amd $$CONFIG_ARGS $(AGENT_SERVE_ARGS); \
+		"$$VLLM_SR_CLI" serve --image-pull-policy never --platform amd $$CONFIG_ARGS $(AGENT_SERVE_ARGS); \
 	else \
 		echo "Starting local CPU workflow..."; \
 		VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" VLLM_SR_STATE_ROOT_DIR="$$(pwd)" VLLM_SR_TOPOLOGY="$(VLLM_SR_TOPOLOGY)" \
-		vllm-sr serve --image-pull-policy never $$CONFIG_ARGS $(AGENT_SERVE_ARGS); \
+		"$$VLLM_SR_CLI" serve --image-pull-policy never $$CONFIG_ARGS $(AGENT_SERVE_ARGS); \
 	fi
 
 agent-stop-local: ## Stop local vllm-sr services
 	@$(LOG_TARGET)
-	@VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" vllm-sr stop || true
+	@if [ ! -x "$(AGENT_VENV)/bin/vllm-sr" ]; then \
+		echo "Agent vllm-sr CLI is missing; run 'make agent-bootstrap' first."; \
+		exit 1; \
+	fi; \
+	VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" "$(AGENT_VENV)/bin/vllm-sr" stop
 
 agent-lint: agent-bootstrap ## Run lint and structure gates for changed files
 	@$(LOG_TARGET)

@@ -29,6 +29,8 @@ This document defines the harness-side validation ladder for repository changes.
   - runs the CI gate, feature tests, local smoke when required, and a final report
 - `make agent-e2e-affected CHANGED_FILES="..."`
   - explicit manual local E2E path for affected profiles when debugging or additional local confidence is needed
+- `make test-onnx-binding-ci`
+  - runs the model-free ONNX Rust and Go binding contracts, then reuses the built native library for `go.onnx.mod` plus the `onnx` build tag against the router API package in normal, race, and vet modes
 
 `CHANGED_FILES` accepts comma-separated, whitespace-separated, or newline-separated
 paths. For long changed-file lists or paths that need exact shell preservation, write
@@ -67,6 +69,7 @@ See [environments.md](environments.md) for the concrete commands.
 - Behavior-visible routing, startup, config, Docker, CLI, or API changes require updated or new E2E coverage unless the change is a pure refactor.
 - Documentation-only changes should not trigger local smoke or heavy E2E unless the task matrix escalates them.
 - Core, common, startup-chain, Docker, or agent-execution changes may expand CI profile coverage beyond the locally affected set.
+- GitHub's Kubernetes E2E matrix takes the stable, de-duplicated union of those baseline profiles and every path-affected standard profile; selecting a baseline must never discard a simultaneously affected profile. The selector accepts only repository-owned profile names, and `make agent-validate` keeps that allowlist aligned with `tools/agent/e2e-profile-map.yaml`.
 - Local E2E remains available, but it is an explicit manual path instead of part of the default `agent-feature-gate`.
 - Workflow-driven integration suites are part of the canonical validation story when they are listed in `tools/agent/e2e-profile-map.yaml`.
 - The current workflow-driven suites are:

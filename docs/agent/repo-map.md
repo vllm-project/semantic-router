@@ -10,7 +10,7 @@
   - Python CLI, config generation, Docker orchestration, local bootstrap flow
 - `src/fleet-sim/`
   - Fleet simulator package, HTTP service, data sets, examples, and service image used by the dashboard sidecar
-- `candle-binding/`, `ml-binding/`, `nlp-binding/`
+- `candle-binding/`, `ml-binding/`, `nlp-binding/`, `onnx-binding/`
   - Rust-backed inference and ML bindings used by the router
 - `dashboard/`
   - Dashboard frontend and backend

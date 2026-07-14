@@ -33,8 +33,10 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+        manualChunks(id) {
+          if (/\/node_modules\/(react|react-dom|react-router|react-router-dom)\//.test(id)) {
+            return 'react-vendor'
+          }
         },
       },
     },

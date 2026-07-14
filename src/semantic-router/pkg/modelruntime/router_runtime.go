@@ -3,34 +3,12 @@ package modelruntime
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
-	"sync"
-	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
-
-type EmbeddingRuntimeState struct {
-	AnyReady          bool
-	ToolsReady        bool
-	EmbeddingProvider *EmbeddingProviderRuntimeState
-}
-
-type EmbeddingProviderRuntimeState struct {
-	Mode           string
-	Backend        string
-	Model          string
-	Dimension      int
-	APIKeyEnv      string
-	APIKeyEnvSet   *bool
-	Healthy        *bool
-	LastProbeError string
-	LastCheckedAt  string
-}
 
 type PrepareRouterRuntimeOptions struct {
 	Component                  string
@@ -53,15 +31,6 @@ type embeddingPaths struct {
 	bert       string
 }
 
-type embeddingStateTracker struct {
-	mu    sync.Mutex
-	state EmbeddingRuntimeState
-}
-
-func newEmbeddingStateTracker(state EmbeddingRuntimeState) *embeddingStateTracker {
-	return &embeddingStateTracker{state: cloneEmbeddingRuntimeState(state)}
-}
-
 func PrepareRouterRuntime(
 	ctx context.Context,
 	cfg *config.RouterConfig,
@@ -73,32 +42,41 @@ func PrepareRouterRuntime(
 	}
 
 	paths := resolveEmbeddingPaths(cfg)
-	state, embeddingTasks, tracker := embeddingRuntimeTasks(cfg, component, paths)
-	if !embeddingRuntimeConfigured(cfg, paths) {
+	plan, err := embedding.ResolveRuntimePlan(
+		cfg.EmbeddingModels,
+		embedding.BackendOverrideFromEnv(),
+		embedding.ModelTypeOverrideFromEnv(),
+	)
+	if err != nil {
+		return EmbeddingRuntimeState{}, fmt.Errorf("invalid embedding runtime plan: %w", err)
+	}
+	planPaths := paths.forRuntimePlan(plan)
+	state, embeddingTasks, tracker, err := routerRuntimeEmbeddingTasks(cfg, component, paths, plan)
+	if err != nil {
+		return EmbeddingRuntimeState{}, fmt.Errorf("invalid local consumer embedding runtime: %w", err)
+	}
+	if !embeddingRuntimeConfigured(plan, planPaths) {
 		logMissingEmbeddingModelsConfig(component)
 	}
 
 	tasks := append([]Task{}, embeddingTasks...)
-	tasks = append(tasks, semanticCacheBERTTask(cfg, component)...)
-	tasks = append(tasks, vectorStoreBERTTask(cfg, component)...)
-	tasks = append(tasks, memoryBERTTask(cfg, component)...)
 	tasks = append(tasks, modalityClassifierTask(cfg, component, options.InitModalityClassifierFunc)...)
 	if len(tasks) == 0 {
 		return state, nil
 	}
 
-	_, err := Execute(ctx, tasks, Options{
+	_, err = Execute(ctx, tasks, Options{
 		MaxParallelism: options.MaxParallelism,
 		OnEvent:        options.OnEvent,
 	})
 	if tracker != nil {
 		state = tracker.snapshot()
 	}
-	if embeddingRuntimeConfigured(cfg, paths) {
+	if embeddingRuntimeConfigured(plan, planPaths) {
 		logging.ComponentEvent(component, "embedding_models_init_completed", map[string]interface{}{
 			"embedding_ready": state.AnyReady,
 			"tools_ready":     state.ToolsReady,
-			"tools_model":     cfg.EmbeddingConfig.ModelType,
+			"tools_model":     plan.ModelType,
 		})
 	}
 	return state, err
@@ -152,105 +130,77 @@ func embeddingRuntimeTasks(
 	component string,
 	paths embeddingPaths,
 ) (EmbeddingRuntimeState, []Task, *embeddingStateTracker) {
-	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+	plan, err := embedding.ResolveRuntimePlan(
+		cfg.EmbeddingModels,
+		embedding.BackendOverrideFromEnv(),
+		embedding.ModelTypeOverrideFromEnv(),
+	)
+	if err != nil {
+		return EmbeddingRuntimeState{}, nil, nil
+	}
+	return embeddingRuntimeTasksForPlan(cfg, component, paths.forRuntimePlan(plan), plan)
+}
+
+func embeddingRuntimeTasksForPlan(
+	cfg *config.RouterConfig,
+	component string,
+	paths embeddingPaths,
+	plan embedding.RuntimePlan,
+) (EmbeddingRuntimeState, []Task, *embeddingStateTracker) {
+	return embeddingRuntimeTasksForPlanAndConsumers(cfg, component, paths, plan, embeddingPaths{})
+}
+
+func embeddingRuntimeTasksForPlanAndConsumers(
+	cfg *config.RouterConfig,
+	component string,
+	paths embeddingPaths,
+	plan embedding.RuntimePlan,
+	consumerPaths embeddingPaths,
+) (EmbeddingRuntimeState, []Task, *embeddingStateTracker) {
+	if plan.Backend == config.EmbeddingBackendOpenAICompatible {
 		tracker := newEmbeddingStateTracker(EmbeddingRuntimeState{
-			EmbeddingProvider: remoteEmbeddingProviderRuntimeStateFromConfig(cfg),
+			EmbeddingProvider: remoteEmbeddingProviderRuntimeStateFromConfig(cfg, plan),
 		})
-		logEmbeddingRuntimeStart(component, cfg, paths)
-		return tracker.snapshot(), remoteEmbeddingRuntimeTask(cfg, component, tracker), tracker
+		logEmbeddingRuntimeStart(component, cfg, paths, plan)
+		return tracker.snapshot(), remoteEmbeddingRuntimeTask(cfg, component, plan, tracker), tracker
+	}
+	// OpenVINO lifecycle is owned by the classification runtime because its
+	// binding is build-tagged there. The shared plan still prevents the remote
+	// provider task (or Candle initializer) from running for an OpenVINO override.
+	if plan.Backend == config.EmbeddingBackendOpenVINO {
+		logEmbeddingRuntimeStart(component, cfg, paths, plan)
+		return EmbeddingRuntimeState{}, nil, nil
 	}
 	if !paths.hasConfiguredModels() {
 		return EmbeddingRuntimeState{}, nil, nil
 	}
 
-	logEmbeddingRuntimeStart(component, cfg, paths)
-	requiresMultimodalTools := toolsUseMultiModalEmbeddings(cfg)
+	logEmbeddingRuntimeStart(component, cfg, paths, plan)
+	requiresMultimodalTools := toolsUseMultiModalEmbeddings(plan)
 	tracker := newEmbeddingStateTracker(EmbeddingRuntimeState{})
-	return tracker.snapshot(), buildEmbeddingRuntimeTasks(cfg, component, paths, requiresMultimodalTools, tracker), tracker
+	return tracker.snapshot(), buildEmbeddingRuntimeTasks(
+		cfg,
+		component,
+		paths,
+		consumerPaths,
+		requiresMultimodalTools,
+		tracker,
+	), tracker
 }
 
-func semanticCacheBERTTask(cfg *config.RouterConfig, component string) []Task {
-	if !semanticCacheNeedsBERT(cfg) {
-		return nil
+func (p embeddingPaths) forRuntimePlan(plan embedding.RuntimePlan) embeddingPaths {
+	selected := embeddingPaths{}
+	switch plan.ModelType {
+	case config.EmbeddingModelTypeQwen3:
+		selected.qwen3 = p.qwen3
+	case "gemma":
+		selected.gemma = p.gemma
+	case "mmbert", "modernbert":
+		selected.mmBert = p.mmBert
+	case "multimodal":
+		selected.multiModal = p.multiModal
 	}
-
-	bertModelID := resolveBertModelID(cfg.BertModelPath)
-	return []Task{{
-		Name: "router.semantic_cache.bert",
-		Run: func(context.Context) error {
-			logging.ComponentEvent(component, "semantic_cache_bert_init_started", map[string]interface{}{
-				"model_ref": bertModelID,
-				"use_cpu":   cfg.UseCPU,
-			})
-			if err := candle_binding.InitModel(bertModelID, cfg.UseCPU); err != nil {
-				logging.ComponentErrorEvent(component, "semantic_cache_bert_init_failed", map[string]interface{}{
-					"model_ref": bertModelID,
-					"error":     err.Error(),
-				})
-				return fmt.Errorf("failed to initialize semantic cache bert model: %w", err)
-			}
-			logging.ComponentEvent(component, "semantic_cache_bert_initialized", map[string]interface{}{
-				"model_ref": bertModelID,
-			})
-			return nil
-		},
-	}}
-}
-
-func vectorStoreBERTTask(cfg *config.RouterConfig, component string) []Task {
-	if !vectorStoreNeedsBERT(cfg) {
-		return nil
-	}
-
-	bertModelID := resolveBertModelID(cfg.BertModelPath)
-	return []Task{{
-		Name: "router.vector_store.bert",
-		Run: func(context.Context) error {
-			logging.ComponentEvent(component, "vector_store_bert_init_started", map[string]interface{}{
-				"model_ref": bertModelID,
-				"use_cpu":   cfg.UseCPU,
-			})
-			if err := candle_binding.InitModel(bertModelID, cfg.UseCPU); err != nil {
-				logging.ComponentErrorEvent(component, "vector_store_bert_init_failed", map[string]interface{}{
-					"model_ref": bertModelID,
-					"error":     err.Error(),
-				})
-				return fmt.Errorf("failed to initialize vector store bert model: %w", err)
-			}
-			logging.ComponentEvent(component, "vector_store_bert_initialized", map[string]interface{}{
-				"model_ref": bertModelID,
-			})
-			return nil
-		},
-	}}
-}
-
-func memoryBERTTask(cfg *config.RouterConfig, component string) []Task {
-	if !memoryNeedsBERT(cfg) || semanticCacheNeedsBERT(cfg) || vectorStoreNeedsBERT(cfg) {
-		return nil
-	}
-
-	bertModelID := resolveBertModelID(cfg.BertModelPath)
-	return []Task{{
-		Name: "router.memory.bert",
-		Run: func(context.Context) error {
-			logging.ComponentEvent(component, "memory_bert_init_started", map[string]interface{}{
-				"model_ref": bertModelID,
-				"use_cpu":   cfg.UseCPU,
-			})
-			if err := candle_binding.InitModel(bertModelID, cfg.UseCPU); err != nil {
-				logging.ComponentErrorEvent(component, "memory_bert_init_failed", map[string]interface{}{
-					"model_ref": bertModelID,
-					"error":     err.Error(),
-				})
-				return fmt.Errorf("failed to initialize memory bert model: %w", err)
-			}
-			logging.ComponentEvent(component, "memory_bert_initialized", map[string]interface{}{
-				"model_ref": bertModelID,
-			})
-			return nil
-		},
-	}}
+	return selected
 }
 
 func modalityClassifierTask(
@@ -325,303 +275,21 @@ func (p embeddingPaths) hasUnifiedModels() bool {
 	return p.qwen3 != "" || p.gemma != "" || p.mmBert != ""
 }
 
-func initializeUnifiedEmbeddingModels(cfg *config.RouterConfig, component string, paths embeddingPaths) bool {
-	if !paths.hasUnifiedModels() {
-		return false
-	}
-
-	semanticCacheNeedsBatched, mlSelectionNeedsBatched := batchedEmbeddingNeeds(cfg, paths.qwen3)
-	useBatched := semanticCacheNeedsBatched || mlSelectionNeedsBatched
-	logBatchedEmbeddingNeeds(component, semanticCacheNeedsBatched, mlSelectionNeedsBatched)
-	if err := initUnifiedEmbeddingModelFactory(cfg, paths, useBatched); err != nil {
-		logging.ComponentErrorEvent(component, "embedding_models_init_failed", map[string]interface{}{
-			"use_batched": useBatched,
-			"error":       err.Error(),
-		})
-		logging.ComponentWarnEvent(component, "embedding_runtime_degraded", map[string]interface{}{
-			"embedding_api_placeholder": true,
-			"tools_database_disabled":   true,
-		})
-		return false
-	}
-
-	logging.ComponentEvent(component, "embedding_models_initialized", map[string]interface{}{
-		"use_batched": useBatched,
-	})
-	return true
-}
-
-func batchedEmbeddingNeeds(cfg *config.RouterConfig, qwen3Path string) (bool, bool) {
-	semanticCacheNeedsBatched := cfg.Enabled &&
-		strings.ToLower(strings.TrimSpace(cfg.EmbeddingModel)) == "qwen3" &&
-		qwen3Path != ""
-	mlSelectionNeedsBatched := cfg.ModelSelection.Enabled &&
-		cfg.ModelSelection.ML.ModelsPath != "" &&
-		cfg.Qwen3ModelPath != ""
-	return semanticCacheNeedsBatched, mlSelectionNeedsBatched
-}
-
-func logBatchedEmbeddingNeeds(component string, semanticCacheNeedsBatched bool, mlSelectionNeedsBatched bool) {
-	if !semanticCacheNeedsBatched && !mlSelectionNeedsBatched {
-		return
-	}
-	logging.ComponentDebugEvent(component, "batched_embedding_mode_required", map[string]interface{}{
-		"semantic_cache":  semanticCacheNeedsBatched,
-		"model_selection": mlSelectionNeedsBatched,
-	})
-}
-
-func initUnifiedEmbeddingModelFactory(cfg *config.RouterConfig, paths embeddingPaths, useBatched bool) error {
-	if !useBatched {
-		return candle_binding.InitEmbeddingModels(paths.qwen3, paths.gemma, paths.mmBert, cfg.UseCPU)
-	}
-
-	if err := candle_binding.InitEmbeddingModelsBatched(paths.qwen3, 64, 10, cfg.UseCPU); err != nil {
-		return err
-	}
-	return candle_binding.InitEmbeddingModels(paths.qwen3, paths.gemma, paths.mmBert, cfg.UseCPU)
-}
-
-func initializeBERTModel(component string, useCPU bool, bertPath string, eventPrefix string) bool {
-	if bertPath == "" {
-		return false
-	}
-
-	logging.ComponentEvent(component, eventPrefix+"_init_started", map[string]interface{}{
-		"model_ref": bertPath,
-		"use_cpu":   useCPU,
-	})
-	if err := candle_binding.InitModel(bertPath, useCPU); err != nil {
-		logging.ComponentWarnEvent(component, eventPrefix+"_init_failed", map[string]interface{}{
-			"model_ref": bertPath,
-			"error":     err.Error(),
-		})
-		return false
-	}
-	logging.ComponentEvent(component, eventPrefix+"_initialized", map[string]interface{}{
-		"model_ref": bertPath,
-	})
-	return true
-}
-
-func initializeMultiModalEmbeddingModel(component string, useCPU bool, multiModalPath string) bool {
-	if multiModalPath == "" {
-		return false
-	}
-
-	logging.ComponentEvent(component, "multimodal_embedding_init_started", map[string]interface{}{
-		"model_ref": multiModalPath,
-		"use_cpu":   useCPU,
-	})
-	if err := candle_binding.InitMultiModalEmbeddingModel(multiModalPath, useCPU); err != nil {
-		logging.ComponentWarnEvent(component, "multimodal_embedding_init_failed", map[string]interface{}{
-			"model_ref":               multiModalPath,
-			"error":                   err.Error(),
-			"multimodal_routes_ready": false,
-		})
-		return false
-	}
-	logging.ComponentEvent(component, "multimodal_embedding_initialized", map[string]interface{}{
-		"model_ref": multiModalPath,
-	})
-	return true
-}
-
 func logMissingEmbeddingModelsConfig(component string) {
 	logging.ComponentEvent(component, "embedding_models_not_configured", map[string]interface{}{
 		"hint": "model_catalog.embeddings.semantic",
 	})
 }
 
-func toolsUseMultiModalEmbeddings(cfg *config.RouterConfig) bool {
-	return strings.EqualFold(strings.TrimSpace(cfg.EmbeddingConfig.ModelType), "multimodal")
+func toolsUseMultiModalEmbeddings(plan embedding.RuntimePlan) bool {
+	return strings.EqualFold(strings.TrimSpace(plan.ModelType), "multimodal")
 }
 
-func semanticCacheNeedsBERT(cfg *config.RouterConfig) bool {
-	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
-		return false
-	}
-	return cfg.Enabled && resolveSemanticCacheEmbeddingModel(cfg) == "bert"
-}
-
-func vectorStoreNeedsBERT(cfg *config.RouterConfig) bool {
-	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
-		return false
-	}
-	return cfg.VectorStore != nil && cfg.VectorStore.Enabled && cfg.VectorStore.EmbeddingModel == "bert" && !cfg.Enabled
-}
-
-func memoryNeedsBERT(cfg *config.RouterConfig) bool {
-	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
-		return false
-	}
-	if !memoryConfigured(cfg) {
-		return false
-	}
-	return resolveMemoryEmbeddingModel(cfg) == "bert"
-}
-
-func memoryConfigured(cfg *config.RouterConfig) bool {
-	if cfg.Memory.Enabled {
-		return true
-	}
-	for _, decision := range cfg.Decisions {
-		if decision.HasPlugin("memory") {
-			return true
-		}
-	}
-	return false
-}
-
-func resolveSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
-	embeddingModel := strings.ToLower(strings.TrimSpace(cfg.EmbeddingModel))
-	if embeddingModel != "" {
-		return embeddingModel
-	}
-
-	switch {
-	case cfg.MmBertModelPath != "":
-		return "mmbert"
-	case cfg.MultiModalModelPath != "":
-		return "multimodal"
-	case cfg.Qwen3ModelPath != "":
-		return "qwen3"
-	case cfg.GemmaModelPath != "":
-		return "gemma"
-	default:
-		return "bert"
-	}
-}
-
-func resolveMemoryEmbeddingModel(cfg *config.RouterConfig) string {
-	embeddingModel := strings.ToLower(strings.TrimSpace(cfg.Memory.EmbeddingModel))
-	if embeddingModel != "" {
-		return embeddingModel
-	}
-
-	switch {
-	case cfg.MmBertModelPath != "":
-		return "mmbert"
-	case cfg.MultiModalModelPath != "":
-		return "multimodal"
-	case cfg.Qwen3ModelPath != "":
-		return "qwen3"
-	case cfg.GemmaModelPath != "":
-		return "gemma"
-	default:
-		return "bert"
-	}
-}
-
-func resolveBertModelID(modelID string) string {
-	if modelID == "" {
-		modelID = "sentence-transformers/all-MiniLM-L6-v2"
-	}
-	return config.ResolveModelPath(modelID)
-}
-
-func (t *embeddingStateTracker) markAnyReady() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.state.AnyReady = true
-}
-
-func (t *embeddingStateTracker) markToolsReady() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.state.AnyReady = true
-	t.state.ToolsReady = true
-}
-
-func (t *embeddingStateTracker) markEmbeddingProvider(status *EmbeddingProviderRuntimeState) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.state.EmbeddingProvider = cloneEmbeddingProviderRuntimeState(status)
-}
-
-func (t *embeddingStateTracker) snapshot() EmbeddingRuntimeState {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return cloneEmbeddingRuntimeState(t.state)
-}
-
-func cloneEmbeddingRuntimeState(state EmbeddingRuntimeState) EmbeddingRuntimeState {
-	state.EmbeddingProvider = cloneEmbeddingProviderRuntimeState(state.EmbeddingProvider)
-	return state
-}
-
-func cloneEmbeddingProviderRuntimeState(status *EmbeddingProviderRuntimeState) *EmbeddingProviderRuntimeState {
-	if status == nil {
-		return nil
-	}
-	clone := *status
-	if status.APIKeyEnvSet != nil {
-		value := *status.APIKeyEnvSet
-		clone.APIKeyEnvSet = &value
-	}
-	if status.Healthy != nil {
-		value := *status.Healthy
-		clone.Healthy = &value
-	}
-	return &clone
-}
-
-func remoteEmbeddingProviderRuntimeStateFromConfig(cfg *config.RouterConfig) *EmbeddingProviderRuntimeState {
-	if cfg == nil || !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
-		return nil
-	}
-
-	apiKeyEnv := strings.TrimSpace(cfg.EmbeddingModels.Endpoint.APIKeyEnv)
-	var apiKeyEnvSet *bool
-	if apiKeyEnv != "" {
-		value := os.Getenv(apiKeyEnv) != ""
-		apiKeyEnvSet = &value
-	}
-
-	dimension := cfg.EmbeddingModels.Endpoint.Dimensions
-	if dimension == 0 {
-		dimension = cfg.EmbeddingModels.EmbeddingConfig.TargetDimension
-	}
-
-	return &EmbeddingProviderRuntimeState{
-		Mode:         "remote",
-		Backend:      cfg.EmbeddingModels.EmbeddingBackend(),
-		Model:        strings.TrimSpace(cfg.EmbeddingModels.Endpoint.Model),
-		Dimension:    dimension,
-		APIKeyEnv:    apiKeyEnv,
-		APIKeyEnvSet: apiKeyEnvSet,
-	}
-}
-
-func remoteEmbeddingProviderProbeStatus(
-	cfg *config.RouterConfig,
-	provider embedding.Provider,
-	dimension int,
-	probeErr error,
-) *EmbeddingProviderRuntimeState {
-	status := remoteEmbeddingProviderRuntimeStateFromConfig(cfg)
-	if status == nil {
-		status = &EmbeddingProviderRuntimeState{Mode: "remote"}
-	}
-	if provider != nil {
-		status.Backend = provider.Backend()
-	}
-	if dimension > 0 {
-		status.Dimension = dimension
-	}
-	healthy := probeErr == nil
-	status.Healthy = &healthy
-	status.LastCheckedAt = time.Now().UTC().Format(time.RFC3339)
-	if probeErr != nil {
-		status.LastProbeError = probeErr.Error()
-	}
-	return status
-}
-
-func logEmbeddingRuntimeStart(component string, cfg *config.RouterConfig, paths embeddingPaths) {
+func logEmbeddingRuntimeStart(component string, cfg *config.RouterConfig, paths embeddingPaths, plan embedding.RuntimePlan) {
 	logging.ComponentEvent(component, "embedding_models_init_started", map[string]interface{}{
 		"use_cpu":               cfg.UseCPU,
-		"backend":               cfg.EmbeddingModels.EmbeddingBackend(),
+		"backend":               plan.Backend,
+		"model_type":            plan.ModelType,
 		"qwen3_configured":      paths.qwen3 != "",
 		"gemma_configured":      paths.gemma != "",
 		"mmbert_configured":     paths.mmBert != "",
@@ -630,140 +298,6 @@ func logEmbeddingRuntimeStart(component string, cfg *config.RouterConfig, paths 
 	})
 }
 
-func embeddingRuntimeConfigured(cfg *config.RouterConfig, paths embeddingPaths) bool {
-	return cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() || paths.hasConfiguredModels()
-}
-
-func buildEmbeddingRuntimeTasks(
-	cfg *config.RouterConfig,
-	component string,
-	paths embeddingPaths,
-	requiresMultimodalTools bool,
-	tracker *embeddingStateTracker,
-) []Task {
-	tasks := make([]Task, 0, 3)
-	tasks = append(tasks, unifiedEmbeddingRuntimeTask(cfg, component, paths, requiresMultimodalTools, tracker)...)
-	tasks = append(tasks, bertEmbeddingRuntimeTask(cfg, component, paths, tracker)...)
-	tasks = append(tasks, multiModalEmbeddingRuntimeTask(cfg, component, paths, requiresMultimodalTools, tracker)...)
-	return tasks
-}
-
-func remoteEmbeddingRuntimeTask(
-	cfg *config.RouterConfig,
-	component string,
-	tracker *embeddingStateTracker,
-) []Task {
-	return []Task{{
-		Name:       "router.embedding.remote_provider",
-		BestEffort: true,
-		Run: func(ctx context.Context) error {
-			logging.ComponentEvent(component, "remote_embedding_init_started", map[string]interface{}{
-				"backend": cfg.EmbeddingModels.EmbeddingBackend(),
-				"model":   cfg.EmbeddingModels.Endpoint.Model,
-			})
-			provider, err := embedding.NewProvider(cfg.EmbeddingModels, embedding.ProviderOptions{})
-			if err != nil {
-				tracker.markEmbeddingProvider(remoteEmbeddingProviderProbeStatus(cfg, nil, 0, err))
-				logging.ComponentErrorEvent(component, "remote_embedding_init_failed", map[string]interface{}{
-					"error": err.Error(),
-				})
-				return fmt.Errorf("failed to initialize remote embedding provider: %w", err)
-			}
-			embeddingVector, err := provider.Embed(ctx, "semantic router embedding probe")
-			if err != nil {
-				tracker.markEmbeddingProvider(remoteEmbeddingProviderProbeStatus(cfg, provider, 0, err))
-				logging.ComponentErrorEvent(component, "remote_embedding_init_failed", map[string]interface{}{
-					"backend": provider.Backend(),
-					"error":   err.Error(),
-				})
-				return fmt.Errorf("failed to probe remote embedding provider: %w", err)
-			}
-			tracker.markEmbeddingProvider(remoteEmbeddingProviderProbeStatus(cfg, provider, len(embeddingVector), nil))
-			logging.ComponentEvent(component, "remote_embedding_initialized", map[string]interface{}{
-				"backend":   provider.Backend(),
-				"dimension": len(embeddingVector),
-			})
-			tracker.markToolsReady()
-			return nil
-		},
-	}}
-}
-
-func unifiedEmbeddingRuntimeTask(
-	cfg *config.RouterConfig,
-	component string,
-	paths embeddingPaths,
-	requiresMultimodalTools bool,
-	tracker *embeddingStateTracker,
-) []Task {
-	if !paths.hasUnifiedModels() {
-		return nil
-	}
-
-	return []Task{{
-		Name:       "router.embedding.unified_factory",
-		BestEffort: true,
-		Run: func(context.Context) error {
-			if !initializeUnifiedEmbeddingModels(cfg, component, paths) {
-				return fmt.Errorf("failed to initialize unified embedding models")
-			}
-			if requiresMultimodalTools {
-				tracker.markAnyReady()
-			} else {
-				tracker.markToolsReady()
-			}
-			return nil
-		},
-	}}
-}
-
-func bertEmbeddingRuntimeTask(
-	cfg *config.RouterConfig,
-	component string,
-	paths embeddingPaths,
-	tracker *embeddingStateTracker,
-) []Task {
-	if paths.bert == "" {
-		return nil
-	}
-
-	return []Task{{
-		Name:       "router.embedding.bert",
-		BestEffort: true,
-		Run: func(context.Context) error {
-			if !initializeBERTModel(component, cfg.UseCPU, paths.bert, "memory_bert") {
-				return fmt.Errorf("failed to initialize bert embedding model")
-			}
-			tracker.markAnyReady()
-			return nil
-		},
-	}}
-}
-
-func multiModalEmbeddingRuntimeTask(
-	cfg *config.RouterConfig,
-	component string,
-	paths embeddingPaths,
-	requiresMultimodalTools bool,
-	tracker *embeddingStateTracker,
-) []Task {
-	if paths.multiModal == "" {
-		return nil
-	}
-
-	return []Task{{
-		Name:       "router.embedding.multimodal",
-		BestEffort: true,
-		Run: func(context.Context) error {
-			if !initializeMultiModalEmbeddingModel(component, cfg.UseCPU, paths.multiModal) {
-				return fmt.Errorf("failed to initialize multimodal embedding model")
-			}
-			if requiresMultimodalTools {
-				tracker.markToolsReady()
-			} else {
-				tracker.markAnyReady()
-			}
-			return nil
-		},
-	}}
+func embeddingRuntimeConfigured(plan embedding.RuntimePlan, paths embeddingPaths) bool {
+	return plan.Backend == config.EmbeddingBackendOpenAICompatible || plan.Backend == config.EmbeddingBackendOpenVINO || paths.hasConfiguredModels()
 }

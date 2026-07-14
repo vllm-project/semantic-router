@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,16 +17,7 @@ type fakeLifecycleDocker struct {
 	envoyStatusPath  string
 }
 
-func writeFakeLifecycleDockerCLI(t *testing.T) fakeLifecycleDocker {
-	t.Helper()
-
-	tempDir := t.TempDir()
-	dockerPath := filepath.Join(tempDir, "docker")
-	logPath := filepath.Join(tempDir, "docker.log")
-	routerStatusPath := filepath.Join(tempDir, "router.status")
-	envoyStatusPath := filepath.Join(tempDir, "envoy.status")
-
-	script := `#!/bin/sh
+const fakeLifecycleDockerScript = `#!/bin/sh
 status_file_for() {
   container="$1"
   case "$container" in
@@ -43,6 +36,7 @@ case "$1" in
   inspect)
     status_file=$(status_file_for "$4")
     if [ -z "$status_file" ] || [ ! -f "$status_file" ]; then
+	  printf "Error: No such object: %s\n" "$4" >&2
       exit 1
     fi
     cat "$status_file"
@@ -53,6 +47,17 @@ case "$1" in
     if [ -z "$status_file" ]; then
       exit 1
     fi
+    if [ "$2" = "$TEST_DOCKER_FAIL_CONTAINER" ]; then
+      if [ "$TEST_DOCKER_FAIL_MODE" = "always" ]; then
+        printf "injected lifecycle failure for %s\n" "$2" >&2
+        exit 1
+      fi
+      if [ "$TEST_DOCKER_FAIL_MODE" = "once" ] && [ ! -f "$TEST_DOCKER_FAIL_MARKER" ]; then
+        : > "$TEST_DOCKER_FAIL_MARKER"
+        printf "injected lifecycle failure for %s\n" "$2" >&2
+        exit 1
+      fi
+    fi
     printf "running\n" > "$status_file"
     printf "%s\n" "$2"
     exit 0
@@ -62,15 +67,71 @@ esac
 exit 1
 `
 
-	if err := os.WriteFile(dockerPath, []byte(script), 0o755); err != nil {
+func writeFakeLifecycleDockerCLI(t *testing.T) fakeLifecycleDocker {
+	t.Helper()
+
+	tempDir := t.TempDir()
+	dockerPath := filepath.Join(tempDir, "docker")
+	logPath := filepath.Join(tempDir, "docker.log")
+	routerStatusPath := filepath.Join(tempDir, "router.status")
+	envoyStatusPath := filepath.Join(tempDir, "envoy.status")
+
+	if err := os.WriteFile(dockerPath, []byte(fakeLifecycleDockerScript), 0o755); err != nil {
 		t.Fatalf("failed to write fake docker CLI: %v", err)
 	}
 
-	return fakeLifecycleDocker{
+	fakeDocker := fakeLifecycleDocker{
 		path:             dockerPath,
 		logPath:          logPath,
 		routerStatusPath: routerStatusPath,
 		envoyStatusPath:  envoyStatusPath,
+	}
+	installFakeManagedContainerStatusProbe(t)
+	return fakeDocker
+}
+
+func installFakeManagedContainerStatusProbe(t *testing.T) {
+	t.Helper()
+
+	// Keep status observation in-process. The lifecycle action still crosses the
+	// fake Docker CLI boundary, but spawning another shell for every poll makes
+	// these orchestration tests depend on host process scheduling and can exhaust
+	// the production two-second status deadline under a loaded test runner.
+	previousProbe := managedContainerStatusProbe
+	managedContainerStatusProbe = fakeManagedContainerStatusProbe
+	t.Cleanup(func() {
+		managedContainerStatusProbe = previousProbe
+	})
+}
+
+func fakeManagedContainerStatusProbe(_ context.Context, containerName string) ([]byte, error) {
+	statusPath := fakeManagedContainerStatusPath(containerName)
+	if statusPath == "" {
+		return nil, &dockerStatusProbeError{
+			err:    errors.New("docker inspect failed"),
+			stderr: []byte("Error: No such object: " + containerName),
+		}
+	}
+	status, err := os.ReadFile(statusPath)
+	if err != nil {
+		return nil, &dockerStatusProbeError{
+			err:    err,
+			stderr: []byte("Error: No such object: " + containerName),
+		}
+	}
+	return status, nil
+}
+
+func fakeManagedContainerStatusPath(containerName string) string {
+	switch containerName {
+	case os.Getenv("TEST_ROUTER_CONTAINER"):
+		return os.Getenv("TEST_ROUTER_STATUS_FILE")
+	case os.Getenv("TEST_ENVOY_CONTAINER"):
+		return os.Getenv("TEST_ENVOY_STATUS_FILE")
+	case os.Getenv("TEST_DASHBOARD_CONTAINER"):
+		return os.Getenv("TEST_DASHBOARD_STATUS_FILE")
+	default:
+		return ""
 	}
 }
 

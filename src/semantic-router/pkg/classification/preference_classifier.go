@@ -38,6 +38,16 @@ func NewPreferenceClassifierWithProvider(
 	localCfg *config.PreferenceModelConfig,
 	provider embedding.Provider,
 ) (*PreferenceClassifier, error) {
+	return newPreferenceClassifierWithBackend(externalCfg, rules, localCfg, "", provider)
+}
+
+func newPreferenceClassifierWithBackend(
+	externalCfg *config.ExternalModelConfig,
+	rules []config.PreferenceRule,
+	localCfg *config.PreferenceModelConfig,
+	backend string,
+	provider embedding.Provider,
+) (*PreferenceClassifier, error) {
 	resolvedLocalCfg := config.PreferenceModelConfig{}
 	if localCfg != nil {
 		resolvedLocalCfg = *localCfg
@@ -46,7 +56,7 @@ func NewPreferenceClassifierWithProvider(
 
 	// Contrastive few-shot preference routing
 	if resolvedLocalCfg.ContrastiveEnabled() {
-		return newContrastivePreferenceClassifier(rules, resolvedLocalCfg, provider)
+		return newContrastivePreferenceClassifier(rules, resolvedLocalCfg, backend, provider)
 	}
 
 	return newExternalPreferenceClassifier(externalCfg, rules)

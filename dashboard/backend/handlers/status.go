@@ -49,7 +49,7 @@ func StatusHandler(routerAPIURL, configDir string) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		status := detectSystemStatus(routerAPIURL, configDir)
+		status := detectSystemStatusWithContext(r.Context(), routerAPIURL, configDir)
 
 		if err := json.NewEncoder(w).Encode(status); err != nil {
 			http.Error(w, `{"error":"Failed to encode response"}`, http.StatusInternalServerError)

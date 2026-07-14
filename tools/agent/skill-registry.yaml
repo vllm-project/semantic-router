@@ -82,6 +82,7 @@ surfaces:
     - onnx-binding/**
     task_rules:
     - rust-bindings
+    - onnx-binding
     - router-core
   response_headers:
     description: '`x-vsr-*` header constants, router emission, dashboard reveal/display allowlists, and user-visible header contracts.'

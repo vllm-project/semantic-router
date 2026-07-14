@@ -32,13 +32,29 @@ func registerOpenClawRoutes(
 	if cfg.OpenClawEnabled && openClawHandler != nil {
 		registerEnabledOpenClawRoutes(mux, openClawHandler)
 		log.Printf("OpenClaw API endpoints registered: /api/openclaw/*")
-		registerOpenClawProxyRoute(mux, openClawHandler)
-		log.Printf("OpenClaw dynamic proxy configured: /embedded/openclaw/{name}/ (WebSocket enabled)")
+		if cfg.SecurityProfile == config.DashboardSecurityProfileProduction {
+			registerProductionOpenClawProxyBoundary(mux)
+			log.Printf("OpenClaw embedded UI disabled by the production origin-isolation policy")
+		} else {
+			registerOpenClawProxyRoute(mux, openClawHandler)
+			log.Printf("OpenClaw dynamic proxy configured for trusted development use: /embedded/openclaw/{name}/ (WebSocket enabled)")
+		}
 		return
 	}
 
 	registerDisabledOpenClawRoutes(mux)
 	log.Printf("OpenClaw feature disabled")
+}
+
+// The OpenClaw image owns active HTML and JavaScript. Serving that application
+// beneath the Dashboard origin would give a compromised image the ambient
+// HttpOnly Dashboard session. Production therefore fails closed until the UI
+// has a separately hosted origin and a short-lived, audience-scoped browser
+// capability instead of the Dashboard cookie.
+func registerProductionOpenClawProxyBoundary(mux *http.ServeMux) {
+	mux.HandleFunc("/embedded/openclaw/", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "OpenClaw embedded UI requires an isolated origin", http.StatusForbidden)
+	})
 }
 
 func registerEnabledOpenClawRoutes(mux *http.ServeMux, openClawHandler *handlers.OpenClawHandler) {

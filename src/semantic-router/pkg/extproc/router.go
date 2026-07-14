@@ -12,7 +12,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -31,6 +33,8 @@ type OpenAIRouter struct {
 	CategoryDescriptions  []string
 	Classifier            *classification.Classifier
 	ClassificationService *services.ClassificationService
+	embeddingAdmission    *embedding.ProcessAdmission
+	embeddingRuntimePlan  embedding.RuntimePlan
 	Cache                 cache.CacheBackend
 	ToolsDatabase         *tools.ToolsDatabase
 	ToolsRegistry         *tools.Registry // retriever strategy registry
@@ -62,6 +66,7 @@ type OpenAIRouter struct {
 	routerLearningMu      sync.Mutex
 	routerLearningRuntime *routerLearningRuntime
 	lookupTableCancel     func()
+	looperAuthenticator   *looper.RequestAuthenticator
 }
 
 // Close releases background resources held by the router (e.g. lookup table
@@ -150,7 +155,7 @@ func (r *OpenAIRouter) createSSEResponseWithBody(statusCode int, sseBody []byte,
 func (r *OpenAIRouter) createJSONResponse(statusCode int, data interface{}) *ext_proc.ProcessingResponse {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		logging.Errorf("Failed to marshal JSON response: %v", err)
+		logging.Errorf("Failed to marshal JSON response: %s", safeErrorForLog(err))
 		return r.createErrorResponse(500, "Internal server error")
 	}
 
@@ -171,7 +176,7 @@ func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_
 
 	jsonData, err := json.Marshal(errorResp)
 	if err != nil {
-		logging.Errorf("Failed to marshal error response: %v", err)
+		logging.Errorf("Failed to marshal error response: %s", safeErrorForLog(err))
 		jsonData = []byte(`{"error":{"message":"Internal server error","type":"internal_error","code":500}}`)
 		statusCode = 500
 	}
@@ -179,8 +184,10 @@ func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_
 	return r.createJSONResponseWithBody(statusCode, jsonData, headers.ResponsePathError)
 }
 
-// shouldClearRouteCache checks if route cache should be cleared.
-func (r *OpenAIRouter) shouldClearRouteCache() bool {
+// shouldClearRouteCacheForAuxiliaryMutation reports whether optional
+// non-routing body mutations should invalidate Envoy's route cache. Trusted
+// selected-model transitions are mandatory and do not consult this setting.
+func (r *OpenAIRouter) shouldClearRouteCacheForAuxiliaryMutation() bool {
 	return r.Config.ClearRouteCache
 }
 

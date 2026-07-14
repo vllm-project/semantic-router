@@ -770,10 +770,9 @@ func TestHandleLooperInternalRequestWithPluginsResolvesProviderModelAlias(t *tes
 	}
 	router.CredentialResolver = newTestCredentialResolver(router.Config)
 	ctx := &RequestContext{
-		LooperRequest: true,
-		Headers: map[string]string{
-			headers.VSRLooperDecision: "fusion_alias",
-		},
+		LooperRequest:       true,
+		LooperDecision:      "fusion_alias",
+		Headers:             map[string]string{},
 		OriginalRequestBody: []byte(`{"model":"panel-a","messages":[{"role":"user","content":"hi"}]}`),
 	}
 

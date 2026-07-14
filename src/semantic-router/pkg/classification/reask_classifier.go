@@ -19,6 +19,7 @@ type ReaskMatch struct {
 type ReaskClassifier struct {
 	rules     []config.ReaskRule
 	modelType string
+	backend   string
 	provider  embedding.Provider
 }
 
@@ -27,6 +28,10 @@ func NewReaskClassifier(rules []config.ReaskRule, modelType string) (*ReaskClass
 }
 
 func NewReaskClassifierWithProvider(rules []config.ReaskRule, modelType string, provider embedding.Provider) (*ReaskClassifier, error) {
+	return newReaskClassifierWithBackend(rules, modelType, "", provider)
+}
+
+func newReaskClassifierWithBackend(rules []config.ReaskRule, modelType string, backend string, provider embedding.Provider) (*ReaskClassifier, error) {
 	if len(rules) == 0 {
 		return nil, fmt.Errorf("reask rules cannot be empty")
 	}
@@ -36,6 +41,7 @@ func NewReaskClassifierWithProvider(rules []config.ReaskRule, modelType string, 
 	return &ReaskClassifier{
 		rules:     append([]config.ReaskRule(nil), rules...),
 		modelType: strings.TrimSpace(modelType),
+		backend:   normalizeTextEmbeddingBackend(backend),
 		provider:  provider,
 	}, nil
 }
@@ -106,14 +112,8 @@ func (c *ReaskClassifier) computeSimilarities(currentEmbedding []float32, priorU
 }
 
 func (c *ReaskClassifier) embedText(text string) ([]float32, error) {
-	if c.provider != nil {
-		return c.provider.Embed(context.Background(), text)
-	}
-	output, err := getEmbeddingWithModelType(text, c.modelType, 0)
-	if err != nil {
-		return nil, err
-	}
-	return output.Embedding, nil
+	embedding, _, err := executeTextEmbedding(context.Background(), c.backend, c.provider, text, c.modelType, 0)
+	return embedding, err
 }
 
 func evaluateReaskStreak(similarities []float64, threshold float64, lookbackTurns int) (float64, int) {

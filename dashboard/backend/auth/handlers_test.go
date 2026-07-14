@@ -22,7 +22,11 @@ func newTestAuthService(t *testing.T) *Service {
 		_ = store.Close()
 	})
 
-	return NewService(store, "test-secret", 1)
+	svc, err := NewService(store, testJWTSecret, 1)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	return svc
 }
 
 func newTestUser(t *testing.T, svc *Service, email, role, status string) *User {
@@ -56,6 +60,43 @@ func newAuthenticatedRequest(t *testing.T, svc *Service, user *User, method, pat
 	return req
 }
 
+func TestAuthRoutesServeBootstrapTrailingSlash(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestAuthService(t)
+	handler := AuthRoutes(svc)
+
+	canRegister := httptest.NewRecorder()
+	handler.ServeHTTP(
+		canRegister,
+		httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/can-register/", nil),
+	)
+	if canRegister.Code != http.StatusOK {
+		t.Fatalf("can-register trailing slash status = %d, want %d", canRegister.Code, http.StatusOK)
+	}
+
+	register := httptest.NewRecorder()
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/auth/bootstrap/register/",
+		strings.NewReader(`{}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	handler.ServeHTTP(register, req)
+	if register.Code != http.StatusForbidden {
+		t.Fatalf("register trailing slash status = %d, want %d", register.Code, http.StatusForbidden)
+	}
+
+	suffix := httptest.NewRecorder()
+	handler.ServeHTTP(
+		suffix,
+		httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/can-register/suffix", nil),
+	)
+	if suffix.Code != http.StatusNotFound {
+		t.Fatalf("can-register suffix status = %d, want %d", suffix.Code, http.StatusNotFound)
+	}
+}
+
 func TestAuthenticateRequestUsesCurrentDatabaseState(t *testing.T) {
 	t.Parallel()
 
@@ -64,6 +105,7 @@ func TestAuthenticateRequestUsesCurrentDatabaseState(t *testing.T) {
 
 		svc := newTestAuthService(t)
 		user := newTestUser(t, svc, "admin@example.com", "admin", "active")
+		newTestUser(t, svc, "backup-admin@example.com", RoleAdmin, defaultUserStatusActive)
 		if _, err := svc.store.UpdateUserRoleOrStatus(context.Background(), user.ID, RoleRead, ""); err != nil {
 			t.Fatalf("UpdateUserRoleOrStatus() error = %v", err)
 		}
@@ -85,6 +127,7 @@ func TestAuthenticateRequestUsesCurrentDatabaseState(t *testing.T) {
 
 		svc := newTestAuthService(t)
 		user := newTestUser(t, svc, "inactive@example.com", "admin", "active")
+		newTestUser(t, svc, "active-admin@example.com", RoleAdmin, defaultUserStatusActive)
 		if _, err := svc.store.UpdateUserRoleOrStatus(context.Background(), user.ID, "", "inactive"); err != nil {
 			t.Fatalf("UpdateUserRoleOrStatus() error = %v", err)
 		}
@@ -197,6 +240,7 @@ func TestLoginHandlerReturnsEffectivePermissions(t *testing.T) {
 		strings.NewReader(`{"email":"login@example.com","password":"secret-password"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(authResponseModeHeader, authResponseModeBearer)
 	mux.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusOK {

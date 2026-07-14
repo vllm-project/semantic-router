@@ -112,6 +112,8 @@ func (p *Profile) GetTestCases() []string {
 		testmatrix.RouterSmoke,
 		[]string{
 			"embedding-signal-image-routing",
+			"apiserver-embedding-input-limits",
+			"apiserver-malformed-image-input",
 		},
 	)
 }

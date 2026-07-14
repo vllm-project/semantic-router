@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 )
@@ -22,16 +23,21 @@ var expectedAMDModelPaths = []string{
 func TestReloadRouterFromFileEnsuresAMDModelsBeforeSwap(t *testing.T) {
 	configPath := amdDeployConfigPath(t)
 	candidateCfg := loadRouterConfigFixture(t, configPath)
+	authenticator, err := looper.NewRequestAuthenticator()
+	if err != nil {
+		t.Fatalf("NewRequestAuthenticator() error = %v", err)
+	}
 
 	restoreReloadSeams := stubReloadSeams(t)
 	defer restoreReloadSeams()
 
 	oldRouter := &OpenAIRouter{Config: &config.RouterConfig{
 		BackendModels: config.BackendModels{DefaultModel: "old-model"},
-	}}
+	}, looperAuthenticator: authenticator}
 	server := &Server{
-		configPath: configPath,
-		service:    NewRouterService(oldRouter),
+		configPath:          configPath,
+		service:             NewRouterService(oldRouter),
+		looperAuthenticator: authenticator,
 	}
 
 	order := make([]string, 0, 6)
@@ -43,6 +49,9 @@ func TestReloadRouterFromFileEnsuresAMDModelsBeforeSwap(t *testing.T) {
 
 	if got := server.service.GetRouter(); got == oldRouter || got.Config != candidateCfg {
 		t.Fatalf("router swap did not install candidate config")
+	}
+	if got := server.service.GetRouter().looperAuthenticator; got != authenticator {
+		t.Fatal("router reload replaced the process-owned looper authenticator")
 	}
 
 	wantOrder := []string{"parse", "ensure", "prepare", "build", "warmup", "replace"}

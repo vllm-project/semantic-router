@@ -1,7 +1,9 @@
 package proxy
 
 import (
+	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"log"
@@ -11,6 +13,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+)
+
+const (
+	webSocketHandshakeTimeout   = 10 * time.Second
+	webSocketHandshakeByteLimit = 64 * 1024
 )
 
 // NewWebSocketAwareHandler returns an http.Handler that proxies both regular HTTP
@@ -23,7 +30,29 @@ func NewWebSocketAwareHandler(targetBase, stripPrefix string) (http.Handler, err
 // NewWebSocketAwareHandlerWithHeaders behaves like NewWebSocketAwareHandler but
 // also injects static headers into all proxied HTTP and WebSocket upgrade requests.
 func NewWebSocketAwareHandlerWithHeaders(targetBase, stripPrefix string, staticHeaders map[string]string) (http.Handler, error) {
-	targetURL, err := url.Parse(targetBase)
+	return newWebSocketAwareHandlerWithHeaders(
+		targetBase,
+		stripPrefix,
+		staticHeaders,
+		webSocketHandshakeTimeout,
+	)
+}
+
+func newWebSocketAwareHandlerWithHeaders(
+	targetBase string,
+	stripPrefix string,
+	staticHeaders map[string]string,
+	handshakeTimeout time.Duration,
+) (http.Handler, error) {
+	targetURL, err := parseProxyTarget(targetBase)
+	if err != nil {
+		return nil, err
+	}
+	if targetErr := validateWebSocketTarget(targetURL); targetErr != nil {
+		return nil, targetErr
+	}
+
+	effectiveStaticHeaders, err := normalizeStaticHeaders(staticHeaders)
 	if err != nil {
 		return nil, err
 	}
@@ -32,19 +61,14 @@ func NewWebSocketAwareHandlerWithHeaders(targetBase, stripPrefix string, staticH
 	if err != nil {
 		return nil, err
 	}
-	if len(staticHeaders) > 0 {
+	if len(effectiveStaticHeaders) > 0 {
 		origDirector := httpProxy.Director
 		httpProxy.Director = func(r *http.Request) {
 			origDirector(r)
-			for key, value := range staticHeaders {
-				normalizedKey := strings.TrimSpace(key)
-				normalizedValue := strings.TrimSpace(value)
-				if normalizedKey == "" || normalizedValue == "" {
-					continue
-				}
+			for key, value := range effectiveStaticHeaders {
 				// Static headers are authoritative in embedded mode to avoid stale
 				// client-side gateway tokens causing auth mismatch loops.
-				r.Header.Set(normalizedKey, normalizedValue)
+				r.Header.Set(key, value)
 			}
 		}
 	}
@@ -58,11 +82,13 @@ func NewWebSocketAwareHandlerWithHeaders(targetBase, stripPrefix string, staticH
 
 		// Rewrite control-ui-config.json to set basePath for embedded mode.
 		if strings.HasSuffix(resp.Request.URL.Path, "/__openclaw/control-ui-config.json") {
-			body, err := io.ReadAll(resp.Body)
+			body, err := readBoundedProxyResponseBody(
+				resp.Body,
+				openClawControlConfigResponseByteLimit,
+			)
 			if err != nil {
 				return err
 			}
-			_ = resp.Body.Close()
 
 			var cfg map[string]interface{}
 			if err := json.Unmarshal(body, &cfg); err == nil {
@@ -97,7 +123,7 @@ func NewWebSocketAwareHandlerWithHeaders(targetBase, stripPrefix string, staticH
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isWebSocketUpgrade(r) {
-			proxyWebSocket(w, r, targetURL, stripPrefix, staticHeaders)
+			proxyWebSocket(w, r, targetURL, stripPrefix, effectiveStaticHeaders, handshakeTimeout)
 			return
 		}
 		httpProxy.ServeHTTP(w, r)
@@ -117,115 +143,159 @@ func isWebSocketUpgrade(r *http.Request) bool {
 	return false
 }
 
-func proxyWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL, stripPrefix string, staticHeaders map[string]string) {
-	// Build the target address
-	targetHost := target.Host
-	if !strings.Contains(targetHost, ":") {
-		if target.Scheme == "https" || target.Scheme == "wss" {
-			targetHost += ":443"
-		} else {
-			targetHost += ":80"
-		}
-	}
-
-	// Strip prefix from path
-	path := r.URL.Path
-	path = strings.TrimPrefix(path, stripPrefix)
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-
-	// Connect to target
-	targetConn, err := net.DialTimeout("tcp", targetHost, 10*time.Second)
+func proxyWebSocket(
+	w http.ResponseWriter,
+	r *http.Request,
+	target *url.URL,
+	stripPrefix string,
+	staticHeaders map[string]string,
+	handshakeTimeout time.Duration,
+) {
+	path := joinProxyTargetPath(
+		target.Path,
+		stripProxyPath(r.URL.Path, stripPrefix),
+	)
+	upgradeRequest, err := buildWebSocketUpgradeRequest(r, target, path, staticHeaders)
 	if err != nil {
-		log.Printf("WebSocket proxy: failed to connect to %s: %v", targetHost, err)
+		logProxyEvent("WebSocket proxy rejected invalid request", r, target, path)
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	targetConn, err := dialWebSocketTarget(r.Context(), target, webSocketHandshakeTimeout)
+	if err != nil {
+		logProxyEvent("WebSocket proxy target connection failed", r, target, path)
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		return
 	}
 	defer targetConn.Close()
+	_ = targetConn.SetDeadline(time.Now().Add(handshakeTimeout))
 
-	// Hijack the client connection
+	clientConn, clientBuf, ok := hijackWebSocketClient(w)
+	if !ok {
+		return
+	}
+	defer clientConn.Close()
+	// net/http no longer owns a hijacked connection. Bind both halves to the
+	// request/auth context so cancellation cannot leave an authorized tunnel alive.
+	stopContextClose := context.AfterFunc(r.Context(), func() {
+		_ = clientConn.Close()
+		_ = targetConn.Close()
+	})
+	defer stopContextClose()
+
+	if _, writeErr := targetConn.Write(upgradeRequest); writeErr != nil {
+		logProxyEvent("WebSocket proxy upgrade write failed", r, target, path)
+		return
+	}
+
+	logProxyEvent("WebSocket proxy connected", r, target, path)
+	targetReader, ok := forwardWebSocketHandshake(targetConn, clientConn, r, handshakeTimeout)
+	if !ok {
+		return
+	}
+	relayWebSocketConnections(clientConn, clientBuf, targetConn, targetReader)
+}
+
+func hijackWebSocketClient(w http.ResponseWriter) (net.Conn, *bufio.ReadWriter, bool) {
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
 		log.Printf("WebSocket proxy: hijacking not supported")
 		http.Error(w, "WebSocket proxy error", http.StatusInternalServerError)
-		return
+		return nil, nil, false
 	}
 	clientConn, clientBuf, err := hijacker.Hijack()
 	if err != nil {
-		log.Printf("WebSocket proxy: hijack failed: %v", err)
+		log.Printf("WebSocket proxy hijack failed")
 		http.Error(w, "WebSocket proxy error", http.StatusInternalServerError)
-		return
+		return nil, nil, false
 	}
-	defer clientConn.Close()
+	return clientConn, clientBuf, true
+}
 
-	// Rebuild the original HTTP request and forward to target
-	reqURL := path
-	if r.URL.RawQuery != "" {
-		reqURL += "?" + r.URL.RawQuery
+func forwardWebSocketHandshake(
+	targetConn net.Conn,
+	clientConn net.Conn,
+	r *http.Request,
+	handshakeTimeout time.Duration,
+) (*bufio.Reader, bool) {
+	handshakeDeadline := time.Now().Add(handshakeTimeout)
+	_ = targetConn.SetDeadline(handshakeDeadline)
+	_ = clientConn.SetDeadline(handshakeDeadline)
+	limitedTarget := &io.LimitedReader{R: targetConn, N: webSocketHandshakeByteLimit}
+	targetReader := bufio.NewReader(limitedTarget)
+	upgradeResponse, err := http.ReadResponse(targetReader, r)
+	if err != nil {
+		log.Printf("WebSocket proxy failed to read upgrade response")
+		return nil, false
 	}
+	if limitedTarget.N == 0 {
+		log.Printf("WebSocket proxy: upgrade response exceeded header limit")
+		return nil, false
+	}
+	stripDashboardSessionSetCookies(upgradeResponse.Header)
+	if !validWebSocketUpgradeResponse(upgradeResponse) {
+		_ = upgradeResponse.Body.Close()
+		_, _ = io.WriteString(clientConn, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+		return nil, false
+	}
+	canonicalizeWebSocketUpgradeResponseHeaders(upgradeResponse.Header)
+	if err := upgradeResponse.Write(clientConn); err != nil {
+		log.Printf("WebSocket proxy failed to write upgrade response")
+		return nil, false
+	}
+	_ = targetConn.SetDeadline(time.Time{})
+	_ = clientConn.SetDeadline(time.Time{})
+	return targetReader, true
+}
 
-	var reqBuf strings.Builder
-	reqBuf.WriteString(r.Method + " " + reqURL + " HTTP/1.1\r\n")
-	reqBuf.WriteString("Host: " + target.Host + "\r\n")
-
-	effectiveStaticHeaders := map[string]string{}
-	for key, value := range staticHeaders {
-		normalizedKey := strings.TrimSpace(key)
-		normalizedValue := strings.TrimSpace(value)
-		if normalizedKey == "" || normalizedValue == "" {
-			continue
+func canonicalizeWebSocketUpgradeResponseHeaders(header http.Header) {
+	connectionHeaders := connectionNominatedHeaders(header.Values("Connection"))
+	for key := range header {
+		normalizedKey := strings.ToLower(strings.TrimSpace(key))
+		_, nominated := connectionHeaders[normalizedKey]
+		if nominated || normalizedKey == "connection" || normalizedKey == "upgrade" ||
+			normalizedKey == "keep-alive" || normalizedKey == "proxy-authenticate" ||
+			normalizedKey == "proxy-authorization" || normalizedKey == "proxy-connection" ||
+			normalizedKey == "te" || normalizedKey == "trailer" ||
+			normalizedKey == "transfer-encoding" || normalizedKey == "content-length" {
+			header.Del(key)
 		}
-		effectiveStaticHeaders[normalizedKey] = normalizedValue
 	}
+	header.Set("Connection", "Upgrade")
+	header.Set("Upgrade", "websocket")
+}
 
-	normalizedStaticHeaderKeys := map[string]struct{}{}
-	for key := range effectiveStaticHeaders {
-		trimmed := strings.ToLower(strings.TrimSpace(key))
-		if trimmed != "" {
-			normalizedStaticHeaderKeys[trimmed] = struct{}{}
-		}
-	}
+func validWebSocketUpgradeResponse(response *http.Response) bool {
+	return response.StatusCode == http.StatusSwitchingProtocols &&
+		headerHasToken(response.Header, "Connection", "upgrade") &&
+		headerHasToken(response.Header, "Upgrade", "websocket")
+}
 
-	for key, vals := range r.Header {
-		if strings.EqualFold(key, "Host") {
-			continue
-		}
-		if _, overridden := normalizedStaticHeaderKeys[strings.ToLower(strings.TrimSpace(key))]; overridden {
-			continue
-		}
-		for _, val := range vals {
-			reqBuf.WriteString(key + ": " + val + "\r\n")
-		}
-	}
-	for key, value := range effectiveStaticHeaders {
-		normalizedKey := strings.TrimSpace(key)
-		normalizedValue := strings.TrimSpace(value)
-		if normalizedKey == "" || normalizedValue == "" {
-			continue
-		}
-		reqBuf.WriteString(normalizedKey + ": " + normalizedValue + "\r\n")
-	}
-	reqBuf.WriteString("\r\n")
-
-	if _, err := targetConn.Write([]byte(reqBuf.String())); err != nil {
-		log.Printf("WebSocket proxy: failed to write upgrade request: %v", err)
-		return
-	}
-
-	log.Printf("WebSocket proxy: %s %s -> %s%s", r.Method, r.URL.Path, target.Host, path)
-
-	// Bidirectional copy
+func relayWebSocketConnections(
+	clientConn net.Conn,
+	clientBuf *bufio.ReadWriter,
+	targetConn net.Conn,
+	targetReader *bufio.Reader,
+) {
 	done := make(chan struct{}, 2)
-
 	go func() {
 		_, _ = io.Copy(targetConn, clientBuf)
 		done <- struct{}{}
 	}()
 	go func() {
-		_, _ = io.Copy(clientConn, targetConn)
+		_, _ = io.Copy(clientConn, io.MultiReader(targetReader, targetConn))
 		done <- struct{}{}
 	}()
-
 	<-done
+}
+
+func headerHasToken(header http.Header, name string, want string) bool {
+	for _, value := range header.Values(name) {
+		for _, token := range strings.Split(value, ",") {
+			if strings.EqualFold(strings.TrimSpace(token), want) {
+				return true
+			}
+		}
+	}
+	return false
 }

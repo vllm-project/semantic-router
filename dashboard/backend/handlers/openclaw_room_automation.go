@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -49,34 +50,29 @@ func roomMessageAutomationProcessed(message ClawRoomMessage) bool {
 }
 
 func (h *OpenClawHandler) markRoomMessageAutomationProcessed(roomID, messageID string) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	messages, err := h.loadRoomMessages(roomID)
+	payload, found, err := h.wf.GetOpenClawRoomMessageJSON(roomID, messageID)
 	if err != nil {
 		return err
 	}
-
-	changed := false
-	for i := range messages {
-		if messages[i].ID != messageID {
-			continue
-		}
-		if roomMessageAutomationProcessed(messages[i]) {
-			return nil
-		}
-		if messages[i].Metadata == nil {
-			messages[i].Metadata = map[string]string{}
-		}
-		messages[i].Metadata[roomAutomationProcessedAtKey] = time.Now().UTC().Format(time.RFC3339Nano)
-		changed = true
-		break
-	}
-
-	if !changed {
+	if !found {
 		return nil
 	}
-	return h.saveRoomMessages(roomID, messages)
+	var message ClawRoomMessage
+	if decodeErr := json.Unmarshal([]byte(payload), &message); decodeErr != nil {
+		return decodeErr
+	}
+	if roomMessageAutomationProcessed(message) {
+		return nil
+	}
+	if message.Metadata == nil {
+		message.Metadata = map[string]string{}
+	}
+	message.Metadata[roomAutomationProcessedAtKey] = time.Now().UTC().Format(time.RFC3339Nano)
+	updated, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+	return h.wf.UpdateOpenClawRoomMessageJSON(roomID, messageID, string(updated))
 }
 
 func (h *OpenClawHandler) processRoomUserMessage(roomID string, triggerMessageID string) {
@@ -131,7 +127,7 @@ func (h *OpenClawHandler) loadRoomAutomationContext(roomID string) (roomAutomati
 	rooms, roomErr := h.loadRooms()
 	teams, teamErr := h.loadTeams()
 	entries, entryErr := h.loadRegistry()
-	messages, msgErr := h.loadRoomMessages(roomID)
+	messages, msgErr := h.loadRecentRoomMessages(roomID, maximumOpenClawAutomationHistory)
 	h.mu.RUnlock()
 	if roomErr != nil || teamErr != nil || entryErr != nil || msgErr != nil {
 		return roomAutomationContext{}, fmt.Errorf("room automation prefetch failed: %w", errors.Join(roomErr, teamErr, entryErr, msgErr))
@@ -335,13 +331,17 @@ func (h *OpenClawHandler) collectRoomAutomationReplies(
 	return next
 }
 
-func (h *OpenClawHandler) appendRoomAutomationError(room ClawRoomEntry, target ContainerEntry, replyErr error) {
+func (h *OpenClawHandler) appendRoomAutomationError(room ClawRoomEntry, target ContainerEntry, _ error) {
+	// Upstream errors can contain response bodies, URLs, tokens, or user
+	// content. Keep both the persisted room message and server log
+	// content-free while retaining stable identifiers for correlation.
+	log.Printf("openclaw: worker reply unavailable (room=%s worker=%s)", room.ID, target.Name)
 	errMsg := newRoomMessage(
 		room,
 		"system",
 		"clawos-system",
 		"ClawOS",
-		fmt.Sprintf("@%s is unavailable: %v", target.Name, replyErr),
+		fmt.Sprintf("@%s is unavailable. Try again later.", target.Name),
 		map[string]string{"worker": target.Name, "phase": "reply"},
 	)
 	if appendErr := h.appendRoomMessage(room.ID, errMsg); appendErr != nil {

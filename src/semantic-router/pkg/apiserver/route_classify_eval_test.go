@@ -17,13 +17,25 @@ import (
 type evalCaptureClassificationService struct {
 	lastEvalReq services.IntentRequest
 	evalResp    *services.EvalResponse
+	intentCalls int
+	evalCalls   int
+	intentErr   error
+	evalErr     error
 }
 
 func (s *evalCaptureClassificationService) ClassifyIntent(req services.IntentRequest) (*services.IntentResponse, error) {
+	s.intentCalls++
+	if s.intentErr != nil {
+		return nil, s.intentErr
+	}
 	return &services.IntentResponse{}, nil
 }
 
 func (s *evalCaptureClassificationService) ClassifyIntentForEval(req services.IntentRequest) (*services.EvalResponse, error) {
+	s.evalCalls++
+	if s.evalErr != nil {
+		return nil, s.evalErr
+	}
 	s.lastEvalReq = req
 	if s.evalResp != nil {
 		return s.evalResp, nil

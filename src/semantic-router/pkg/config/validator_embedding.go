@@ -41,22 +41,51 @@ func validateRemoteEmbeddingProviderConfig(models EmbeddingModels) error {
 
 func validateRemoteEmbeddingEndpoint(endpoint EmbeddingEndpointConfig) []string {
 	var problems []string
-	baseURL := strings.TrimSpace(endpoint.BaseURL)
-	if baseURL == "" {
-		problems = append(problems, "endpoint.base_url is required")
-	} else if parsed, err := url.Parse(baseURL); err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		problems = append(problems, fmt.Sprintf("endpoint.base_url must include a valid scheme and host, got %q", endpoint.BaseURL))
+	if problem := remoteEmbeddingBaseURLProblem(endpoint.BaseURL, endpoint.APIKeyEnv != ""); problem != "" {
+		problems = append(problems, problem)
 	}
 	if strings.TrimSpace(endpoint.Model) == "" {
 		problems = append(problems, "endpoint.model is required")
 	}
+	if endpoint.APIKeyEnv != "" && !IsValidEmbeddingAPIKeyEnv(endpoint.APIKeyEnv) {
+		problems = append(problems, "endpoint.api_key_env must be VLLM_SR_EMBEDDING_API_KEY when set")
+	}
 	if endpoint.TimeoutSeconds < 0 {
 		problems = append(problems, "endpoint.timeout_seconds must be non-negative")
+	} else if endpoint.TimeoutSeconds > EmbeddingEndpointMaxTimeoutSeconds {
+		problems = append(problems, fmt.Sprintf("endpoint.timeout_seconds must not exceed %d", EmbeddingEndpointMaxTimeoutSeconds))
 	}
 	if endpoint.MaxRetries < 0 {
 		problems = append(problems, "endpoint.max_retries must be non-negative")
+	} else if endpoint.MaxRetries > EmbeddingEndpointMaxRetries {
+		problems = append(problems, fmt.Sprintf("endpoint.max_retries must not exceed %d", EmbeddingEndpointMaxRetries))
 	}
 	return problems
+}
+
+func remoteEmbeddingBaseURLProblem(rawURL string, requireHTTPS bool) string {
+	baseURL := strings.TrimSpace(rawURL)
+	if baseURL == "" {
+		return "endpoint.base_url is required"
+	}
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return "endpoint.base_url must be a valid URL"
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if parsed.Host == "" || (scheme != "http" && scheme != "https") {
+		return "endpoint.base_url must use http or https and include a valid host"
+	}
+	if parsed.User != nil {
+		return "endpoint.base_url must not include userinfo credentials"
+	}
+	if parsed.RawQuery != "" || parsed.ForceQuery || strings.Contains(baseURL, "#") {
+		return "endpoint.base_url must not include query or fragment components"
+	}
+	if requireHTTPS && scheme != "https" {
+		return "endpoint.base_url must use https when endpoint.api_key_env is set"
+	}
+	return ""
 }
 
 func validateRemoteEmbeddingDimensions(models EmbeddingModels) []string {

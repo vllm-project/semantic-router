@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -124,6 +125,116 @@ func TestRoomCollaborationBus_WSDisconnectDoesNotBreakSSE(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("expected sse client to receive event after websocket disconnect")
+	}
+}
+
+func TestRoomCollaborationBus_ConcurrentWSDisconnectAndFanOut(t *testing.T) {
+	tempDir := t.TempDir()
+	h := newTestOpenClawHandler(t, tempDir, false)
+	room := seedCollaborationTestRoom(t, h)
+
+	server := httptest.NewServer(h.RoomByIDHandler())
+	defer server.Close()
+
+	victimConn := dialRoomWebSocket(t, server.URL, room.ID)
+	readWSConnected(t, victimConn)
+	victim := waitForOnlyRoomWSClient(t, h, room.ID)
+
+	survivorConn := dialRoomWebSocket(t, server.URL, room.ID)
+	readWSConnected(t, survivorConn)
+
+	sseEvents := make(chan clawRoomStreamEvent, 1)
+	sseClientID := "sse-during-ws-close"
+	h.roomSSEClientMap(room.ID).Store(sseClientID, sseEvents)
+	t.Cleanup(func() {
+		h.roomSSEClientMap(room.ID).Delete(sseClientID)
+	})
+
+	event := newMessageCollaborationEvent(ClawRoomMessage{
+		ID:         "msg-concurrent-close",
+		RoomID:     room.ID,
+		TeamID:     room.TeamID,
+		SenderType: "system",
+		SenderID:   "clawos-system",
+		SenderName: "ClawOS",
+		Content:    "survives concurrent close",
+		CreatedAt:  time.Now().UTC().Format(time.RFC3339),
+	})
+
+	// Force both operations to contend on the ownership lock. Whichever wins
+	// after the barrier, enqueue and channel close must complete serially.
+	victim.closeMu.Lock()
+	start := make(chan struct{})
+	ready := sync.WaitGroup{}
+	done := sync.WaitGroup{}
+	ready.Add(2)
+	done.Add(2)
+	go func() {
+		defer done.Done()
+		ready.Done()
+		<-start
+		h.publishRoomCollaborationEvent(room.ID, event)
+	}()
+	go func() {
+		defer done.Done()
+		ready.Done()
+		<-start
+		victim.close()
+	}()
+	ready.Wait()
+	close(start)
+	victim.closeMu.Unlock()
+
+	completed := make(chan struct{})
+	go func() {
+		done.Wait()
+		close(completed)
+	}()
+	select {
+	case <-completed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("concurrent websocket close and fan-out did not complete")
+	}
+
+	if got := victim.enqueue(WSOutboundMessage{Type: WSTypePong}); got != wsEnqueueClosed {
+		t.Fatalf("expected closed client to reject enqueue, got %v", got)
+	}
+	if _, exists := h.roomWSClientMap(room.ID).Load(victim.clientID); exists {
+		t.Fatal("closed websocket client remained registered")
+	}
+
+	_ = survivorConn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	waitForWSOutboundMessage(t, survivorConn, "surviving websocket event", func(outbound WSOutboundMessage) bool {
+		return outbound.Type == WSTypeNewMessage &&
+			outbound.Message != nil &&
+			outbound.Message.Content == "survives concurrent close"
+	})
+	select {
+	case sseEvent := <-sseEvents:
+		if sseEvent.Message == nil || sseEvent.Message.Content != "survives concurrent close" {
+			t.Fatalf("unexpected SSE event during websocket close: %+v", sseEvent)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("SSE fan-out stalled during concurrent websocket close")
+	}
+}
+
+func TestWSClientEnqueue_BufferFullDoesNotBlock(t *testing.T) {
+	client := &WSClient{send: make(chan WSOutboundMessage, 1)}
+	client.send <- WSOutboundMessage{Type: WSTypeConnected}
+
+	result := make(chan wsEnqueueResult, 1)
+	go func() {
+		result <- client.enqueue(WSOutboundMessage{Type: WSTypePong})
+	}()
+
+	select {
+	case got := <-result:
+		if got != wsEnqueueFull {
+			t.Fatalf("expected full result, got %v", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("enqueue blocked on a full websocket buffer")
 	}
 }
 
@@ -357,6 +468,27 @@ func TestWorkerStreamChunkCollaborationEvent_IncludesParticipantIdentity(t *test
 func seedCollaborationTestRoom(t *testing.T, h *OpenClawHandler) ClawRoomEntry {
 	t.Helper()
 	return seedCollaborationTestRoomWithID(t, h, "room-collab", "team-collab")
+}
+
+func waitForOnlyRoomWSClient(t *testing.T, h *OpenClawHandler, roomID string) *WSClient {
+	t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		var clients []*WSClient
+		h.roomWSClientMap(roomID).Range(func(_, value any) bool {
+			if client, ok := value.(*WSClient); ok {
+				clients = append(clients, client)
+			}
+			return true
+		})
+		if len(clients) == 1 {
+			return clients[0]
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("timed out waiting for websocket client registration")
+	return nil
 }
 
 func seedCollaborationTestRoomWithID(t *testing.T, h *OpenClawHandler, roomID, teamID string) ClawRoomEntry {

@@ -74,7 +74,7 @@ func TestStartupEmbeddingProviderStatusMapsRedactedRuntimeState(t *testing.T) {
 			Backend:       config.EmbeddingBackendOpenAICompatible,
 			Model:         "text-embedding-3-small",
 			Dimension:     1536,
-			APIKeyEnv:     "OPENAI_API_KEY",
+			APIKeyEnv:     config.EmbeddingAPIKeyEnvName,
 			APIKeyEnvSet:  &apiKeyEnvSet,
 			Healthy:       &healthy,
 			LastCheckedAt: "2026-07-08T00:00:00Z",
@@ -84,7 +84,7 @@ func TestStartupEmbeddingProviderStatusMapsRedactedRuntimeState(t *testing.T) {
 	if status == nil {
 		t.Fatal("expected startup embedding provider status")
 	}
-	if status.APIKeyEnv != "OPENAI_API_KEY" {
+	if status.APIKeyEnv != config.EmbeddingAPIKeyEnvName {
 		t.Fatalf("api key env = %q", status.APIKeyEnv)
 	}
 	if status.APIKeyEnvSet == nil || !*status.APIKeyEnvSet {

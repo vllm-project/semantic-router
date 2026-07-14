@@ -79,18 +79,29 @@ The CLI translates your `config.yaml` into Helm values and runs
 #### Credential Handling (Secrets)
 
 Sensitive environment variables (`HF_TOKEN`, `OPENAI_API_KEY`,
-`ANTHROPIC_API_KEY`) are **never** written as plain-text Helm values.
-Instead, the CLI:
+`ANTHROPIC_API_KEY`, and the Looper shared key) are **never** written as
+plain-text Helm values. The CLI sends a release-scoped, immutable Kubernetes
+Secret to `kubectl` over standard input and references only its generated name
+through `envFrom`. Values do not enter command arguments, logs, Helm values, or
+the rendered Deployment manifest. Non-sensitive variables (`HF_ENDPOINT`,
+`HF_HOME`, etc.) remain standard `env` entries.
 
-1. Creates a Kubernetes Secret named `vllm-sr-env-secrets` containing only
-   the sensitive keys.
-2. References the secret via `envFrom` / `secretRef` in the Deployment so
-   the pod receives the values at runtime.
-3. Non-sensitive variables (`HF_ENDPOINT`, `HF_HOME`, etc.) are passed as
-   standard `env` entries in the Helm values override.
-
-The secret is recreated on every deploy (idempotent) and removed on
-`vllm-sr stop --target k8s`.
+The first CLI deploy generates a 256-bit `VLLM_SR_LOOPER_SHARED_SECRET` when
+one is not explicitly provided. Later deploys reuse that key only from the
+currently referenced CLI-managed Secret; other omitted credentials are not
+carried forward. An explicit 64-hex-character value rotates the Looper key.
+The CLI retains credential generations referenced by the ten retained Helm
+revisions and garbage-collects only generations proven unreferenced. A
+successful `vllm-sr stop --target k8s` removes release-owned generations after
+Helm uninstall completes. If any deletion cannot be verified or completed, the
+command exits nonzero after attempting the remaining release-owned generations.
+A retry cleans up only after Helm proves that the release is absent and
+Kubernetes proves that no current router Deployment still references the
+generation. An ambiguous Helm release state or initial Kubernetes inventory
+retains every Secret; a failed per-generation recheck retains that generation
+and makes the command fail. See the chart's
+[credential-aware rollback procedure](semantic-router/README.md#credential-aware-rollbacks)
+before a manual rollback or Secret cleanup.
 
 To provide credentials, export them before running the CLI:
 
@@ -99,20 +110,30 @@ export HF_TOKEN=hf_xxx
 vllm-sr serve --target k8s --profile dev
 ```
 
-If you deploy with Helm directly (bypassing the CLI), create the secret
-manually:
+If you deploy with Helm directly (bypassing the CLI), create and lifecycle the
+Secret yourself. Multi-replica deployments must share one 256-bit Looper key:
 
 ```bash
-kubectl create secret generic vllm-sr-env-secrets \
-  --namespace vllm-semantic-router-system \
-  --from-literal=HF_TOKEN=hf_xxx
+LOOPER_SHARED_SECRET="$(openssl rand -hex 32)"
+kubectl create --namespace vllm-semantic-router-system -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: semantic-router-runtime-env
+immutable: true
+type: Opaque
+stringData:
+  HF_TOKEN: "${HF_TOKEN}"
+  VLLM_SR_LOOPER_SHARED_SECRET: "${LOOPER_SHARED_SECRET}"
+EOF
+unset LOOPER_SHARED_SECRET
 ```
 
 Then reference it in your values file:
 
 ```yaml
 envFromSecrets:
-  - vllm-sr-env-secrets
+  - semantic-router-runtime-env
 ```
 
 ### Install with Helm directly

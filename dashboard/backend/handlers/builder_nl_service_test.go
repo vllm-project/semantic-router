@@ -277,7 +277,6 @@ ROUTE fallback_route {
 			ProviderKind: builderNLProviderOpenAICompatible,
 			ModelName:    "gpt-4o-mini",
 			BaseURL:      server.URL,
-			AccessKey:    "secret",
 			EndpointName: "nl-custom",
 		},
 	})
@@ -302,10 +301,10 @@ ROUTE fallback_route {
 	}
 }
 
-func TestBuilderNLVerifyHandlerReportsResolvedEndpoint(t *testing.T) {
-	var gotAuthorization string
+func TestBuilderNLVerifyHandlerRejectsCredentialOverHTTP(t *testing.T) {
+	var requestCount atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotAuthorization = r.Header.Get("Authorization")
+		requestCount.Add(1)
 		writeBuilderNLTestChatResponse(t, w, "Connection verified.")
 	}))
 	defer server.Close()
@@ -317,25 +316,14 @@ func TestBuilderNLVerifyHandlerReportsResolvedEndpoint(t *testing.T) {
 
 	BuilderNLVerifyHandler("", "")(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d: %s", w.Code, w.Body.String())
 	}
-	if gotAuthorization != "Bearer secret" {
-		t.Fatalf("expected verify request to forward the custom access key, got %q", gotAuthorization)
+	if requestCount.Load() != 0 {
+		t.Fatalf("HTTP credential endpoint received %d requests, want 0", requestCount.Load())
 	}
-
-	var resp BuilderNLVerifyResponse
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("expected JSON response, got error: %v", err)
-	}
-	if !resp.Ready {
-		t.Fatalf("expected verify response to be ready, got %#v", resp)
-	}
-	if resp.ModelName != "gpt-4o-mini" {
-		t.Fatalf("unexpected model name: %q", resp.ModelName)
-	}
-	if resp.Endpoint != server.URL+"/v1/chat/completions" {
-		t.Fatalf("unexpected resolved endpoint: %q", resp.Endpoint)
+	if strings.Contains(w.Body.String(), "secret") || strings.Contains(w.Body.String(), server.URL) {
+		t.Fatalf("response leaked custom connection material: %s", w.Body.String())
 	}
 }
 

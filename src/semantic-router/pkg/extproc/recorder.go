@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"time"
 
-	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -80,16 +79,6 @@ func (r *OpenAIRouter) trackVSRDecision(ctx *RequestContext, categoryName string
 		ctx.VSRReasoningMode = "on"
 	} else {
 		ctx.VSRReasoningMode = "off"
-	}
-}
-
-// setClearRouteCache sets the ClearRouteCache flag on the response
-func (r *OpenAIRouter) setClearRouteCache(response *ext_proc.ProcessingResponse) {
-	if response.GetRequestBody() != nil && response.GetRequestBody().GetResponse() != nil {
-		response.GetRequestBody().GetResponse().ClearRouteCache = true
-		logging.ComponentDebugEvent("extproc", "route_cache_clear_enabled", map[string]interface{}{
-			"feature": "clear_route_cache",
-		})
 	}
 }
 
@@ -346,7 +335,7 @@ func persistReplayRecord(
 		logging.ComponentErrorEvent("extproc", "router_replay_persist_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"decision":   record.Decision,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 		return false
 	}
@@ -357,7 +346,7 @@ func persistReplayRecord(
 		logging.ComponentEvent(
 			"extproc",
 			"router_replay_start",
-			routerreplay.LogFields(stored, "router_replay_start"),
+			safeRouterReplayLogFields(stored, "router_replay_start"),
 		)
 	}
 	return true
@@ -382,7 +371,7 @@ func (r *OpenAIRouter) updateRouterReplayStatus(ctx *RequestContext, status int,
 		logging.ComponentErrorEvent("extproc", "router_replay_status_update_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"replay_id":  ctx.RouterReplayID,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 	}
 }
@@ -418,7 +407,7 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 			logging.ComponentEvent(
 				"extproc",
 				"router_replay_complete",
-				routerreplay.LogFields(rec, "router_replay_complete"),
+				safeRouterReplayLogFields(rec, "router_replay_complete"),
 			)
 		}
 	}
@@ -457,7 +446,7 @@ func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext
 		logging.ComponentErrorEvent("extproc", "router_replay_hallucination_update_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"replay_id":  ctx.RouterReplayID,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 	}
 }
@@ -479,7 +468,7 @@ func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage ro
 		logging.ComponentErrorEvent("extproc", "router_replay_usage_update_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"replay_id":  ctx.RouterReplayID,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 	}
 }

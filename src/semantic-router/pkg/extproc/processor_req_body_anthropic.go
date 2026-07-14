@@ -68,7 +68,7 @@ func (r *OpenAIRouter) prepareAnthropicRoutingRequest(
 	// without re-parsing.
 	passthrough, ptErr := anthropic.BuildPassthroughFromAnthropicBody(ctx.OriginalRequestBody)
 	if ptErr != nil {
-		logging.Debugf("Anthropic passthrough capture skipped: %v", ptErr)
+		logging.Debugf("Anthropic passthrough capture skipped: %s", safeErrorForLog(ptErr))
 	}
 	if passthrough != nil {
 		passthrough.SetHeadersFromIncoming(ctx.Headers)
@@ -77,13 +77,13 @@ func (r *OpenAIRouter) prepareAnthropicRoutingRequest(
 
 	anthropicBody, err := anthropic.ToAnthropicRequestBodyWithPassthrough(openAIRequest, passthrough)
 	if err != nil {
-		logging.Errorf("Failed to transform request to Anthropic format: %v", err)
+		logging.Errorf("Failed to transform request to Anthropic format: %s", safeErrorForLog(err))
 		return "", nil, r.createErrorResponse(500, fmt.Sprintf("Request transformation error: %v", err))
 	}
 	if streaming {
 		anthropicBody, err = anthropic.WithStreamingRequestBody(anthropicBody)
 		if err != nil {
-			logging.Errorf("Failed to enable Anthropic streaming on request: %v", err)
+			logging.Errorf("Failed to enable Anthropic streaming on request: %s", safeErrorForLog(err))
 			return "", nil, r.createErrorResponse(500, fmt.Sprintf("Request transformation error: %v", err))
 		}
 	}
@@ -109,7 +109,7 @@ func (r *OpenAIRouter) buildAnthropicRoutingResponse(
 ) *ext_proc.ProcessingResponse {
 	backendAddress, backendName, err := r.resolveBackendForModel(ctx, targetModel)
 	if err != nil {
-		logging.Errorf("Anthropic routing backend resolution failed for model %s: %v", targetModel, err)
+		logging.Errorf("Anthropic routing backend resolution failed for model %s: %s", targetModel, safeErrorForLog(err))
 		return r.createErrorResponse(500, fmt.Sprintf("Backend resolution error: %v", err))
 	}
 	if accessKey == "" && backendName != "" {
@@ -121,16 +121,16 @@ func (r *OpenAIRouter) buildAnthropicRoutingResponse(
 	messagesPath := anthropic.AnthropicMessagesPath
 	profile, profileErr := r.Config.GetProviderProfileForEndpoint(backendName)
 	if profileErr != nil {
-		logging.Errorf("Anthropic routing profile resolution failed for backend %s: %v", backendName, profileErr)
+		logging.Errorf("Anthropic routing profile resolution failed for backend %s: %s", backendName, safeErrorForLog(profileErr))
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
 	if profile != nil {
 		if chatPath, pathErr := profile.ResolveChatPath(); pathErr != nil {
-			logging.Errorf("Anthropic routing chat path resolution failed for backend %s: %v", backendName, pathErr)
+			logging.Errorf("Anthropic routing chat path resolution failed for backend %s: %s", backendName, safeErrorForLog(pathErr))
 			return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 		} else if chatPath != "" {
 			messagesPath = chatPath
-			logging.Infof("Anthropic upstream path for model %s: %s", targetModel, messagesPath)
+			logging.Infof("Anthropic upstream path resolved for model %s", targetModel)
 		}
 	}
 

@@ -24,6 +24,8 @@ func TestExtractContentFast_SimpleRequest(t *testing.T) {
 	assert.Empty(t, r.NonUserMessages)
 	assert.False(t, r.HasAssistantReply)
 	assert.Empty(t, r.FirstImageURL)
+	assert.False(t, r.ImagePartPresent)
+	assert.False(t, r.InvalidImagePart)
 }
 
 func TestExtractContentFast_MultiRole(t *testing.T) {
@@ -96,6 +98,9 @@ func TestExtractContentFast_UnsafeImageURL(t *testing.T) {
 	r, err := extractContentFast(body)
 	require.NoError(t, err)
 	assert.Empty(t, r.FirstImageURL, "HTTP URLs must be rejected")
+	assert.True(t, r.ImagePartPresent)
+	assert.False(t, r.InvalidImagePart, "valid remote URLs must remain compatible with full request parsing")
+	assert.Empty(t, r.InlineImageURLs)
 }
 
 func TestExtractContentFast_SystemContentParts(t *testing.T) {

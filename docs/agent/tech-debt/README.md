@@ -65,10 +65,17 @@ Every debt entry should include:
 - [TD027 Fleet Sim Optimizer and Public Surface Boundaries Still Collapse Analytical Sizing, DES Verification, and Export Policy](td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md)
 - [TD042 FFI Embedding File Carries Pre-Existing Structure-Rules Debt](td-042-ffi-embedding-structure-debt.md)
 - [TD043 candle-binding/semantic-router.go Carries Pre-Existing Cyclomatic Complexity Debt](td-043-semantic-router-go-cyclop-debt.md)
+- [TD045 Router Runtime Resources Lack Generation Ownership and Bounded Shutdown](td-045-runtime-generation-ownership-gap.md)
+- [TD046 Control Planes Do Not Share One Strict, Transactional Router Contract](td-046-control-plane-contract-convergence-gap.md)
 
 ### PL0035 Router Flow Workflows
 
 - [TD044 Flow Tool State Durability Follow-Up](td-044-flow-tool-state-durability-gap.md)
+
+### PL0038 Router Hardening Audit
+
+- [TD047 ONNX FFI Exports Lack an Enforced Unsafe-Boundary Contract](td-047-onnx-ffi-clippy-safety-contract-gap.md)
+- [TD048 Dashboard Jobs Lack Aggregate Lifecycle Ownership](td-048-dashboard-job-lifecycle-ownership-gap.md)
 
 ## Retired Debt Policy
 

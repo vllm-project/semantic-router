@@ -30,6 +30,9 @@ func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText stri
 	if err := c.appendAuthzFromHeaders(results, headers, forceEvaluateAll); err != nil {
 		return nil, err
 	}
+	if err := results.EvaluationError(); err != nil {
+		return nil, err
+	}
 	return results, nil
 }
 

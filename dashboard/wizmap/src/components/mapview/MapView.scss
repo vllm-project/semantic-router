@@ -60,6 +60,20 @@
   }
 }
 
+.data-source-error {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  max-width: 36rem;
+  padding: 16px 20px;
+  border: 1px solid var(--wiz-border-strong);
+  border-radius: 8px;
+  background: var(--wiz-surface-raised);
+  color: var(--wiz-text-primary);
+  box-shadow: var(--wiz-shadow);
+  text-align: center;
+}
+
 .popper-tooltip {
   position: absolute;
   width: max-content;

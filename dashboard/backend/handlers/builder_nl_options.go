@@ -75,12 +75,13 @@ func clampBuilderNLTimeout(raw *int) time.Duration {
 	if raw == nil {
 		return builderNLDefaultTimeout
 	}
-	timeout := time.Duration(*raw) * time.Second
-	if timeout < builderNLMinTimeout {
+	minSeconds := int(builderNLMinTimeout / time.Second)
+	maxSeconds := int(builderNLMaxTimeout / time.Second)
+	if *raw < minSeconds {
 		return builderNLMinTimeout
 	}
-	if timeout > builderNLMaxTimeout {
+	if *raw > maxSeconds {
 		return builderNLMaxTimeout
 	}
-	return timeout
+	return time.Duration(*raw) * time.Second
 }

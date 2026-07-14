@@ -18,8 +18,13 @@ type BootstrapRegistrationRequest struct {
 }
 
 type LoginResponse struct {
-	Token string `json:"token"`
+	Token string `json:"token,omitempty"`
 	User  *User  `json:"user"`
+}
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
 }
 
 type ListUsersResponse struct {
@@ -36,34 +41,44 @@ type BootstrapStatusResponse struct {
 }
 
 type UpdateUserRequest struct {
-	Role   string `json:"role"`
-	Status string `json:"status"`
+	Role   *string `json:"role"`
+	Status *string `json:"status"`
 }
 
 func AuthRoutes(svc *Service) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/auth/bootstrap/can-register", bootstrapCanRegisterHandler(svc))
-	mux.HandleFunc("/api/auth/bootstrap/register", bootstrapRegisterHandler(svc))
-	mux.HandleFunc("/api/auth/login", loginHandler(svc))
-	mux.HandleFunc("/api/auth/login/", loginHandler(svc))
-	mux.HandleFunc("/api/auth/logout", logoutHandler(svc))
-	mux.HandleFunc("/api/auth/logout/", logoutHandler(svc))
-	mux.HandleFunc("/api/auth/me", meHandler(svc))
-	mux.HandleFunc("/api/auth/me/", meHandler(svc))
+	registerExactAuthHandler(mux, "/api/auth/bootstrap/can-register", bootstrapCanRegisterHandler(svc))
+	registerExactAuthHandler(mux, "/api/auth/bootstrap/register", bootstrapRegisterHandler(svc))
+	registerExactAuthHandler(mux, "/api/auth/login", loginHandler(svc))
+	registerExactAuthHandler(mux, "/api/auth/logout", logoutHandler(svc))
+	registerExactAuthHandler(mux, "/api/auth/me", meHandler(svc))
+	registerExactAuthHandler(mux, "/api/auth/password", changePasswordHandler(svc))
 
 	return mux
 }
 
+func registerExactAuthHandler(mux *http.ServeMux, path string, handler http.HandlerFunc) {
+	wrapper := withAuthNoStore(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != path && r.URL.Path != path+"/" {
+			http.NotFound(w, r)
+			return
+		}
+		handler(w, r)
+	})
+	mux.HandleFunc(path, wrapper)
+	mux.HandleFunc(path+"/", wrapper)
+}
+
 func RegisterAdminRoutes(mux *http.ServeMux, svc *Service) {
-	mux.HandleFunc("/api/admin/users", adminUsersCollectionHandler(svc))
-	mux.HandleFunc("/api/admin/users/", adminUserItemHandler(svc))
-	mux.HandleFunc("/api/admin/permissions", adminPermissionsHandler(svc))
-	mux.HandleFunc("/api/admin/audit-logs", adminAuditLogsHandler(svc))
-	mux.HandleFunc("/api/admin/users/password", adminUserPasswordHandler(svc))
+	mux.HandleFunc("/api/admin/users", withAuthNoStore(adminUsersCollectionHandler(svc)))
+	mux.HandleFunc("/api/admin/users/", withAuthNoStore(adminUserItemHandler(svc)))
+	mux.HandleFunc("/api/admin/permissions", withAuthNoStore(adminPermissionsHandler(svc)))
+	mux.HandleFunc("/api/admin/audit-logs", withAuthNoStore(adminAuditLogsHandler(svc)))
+	mux.HandleFunc("/api/admin/users/password", withAuthNoStore(adminUserPasswordHandler(svc)))
 }
 
 func writeAudit(r *http.Request, svc *Service, action, resource, actorID string) {
-	_ = svc.store.AddAuditLog(r.Context(), AuditLog{
+	err := svc.store.AddAuditLog(r.Context(), AuditLog{
 		UserID:     actorID,
 		Action:     action,
 		Resource:   resource,
@@ -74,9 +89,11 @@ func writeAudit(r *http.Request, svc *Service, action, resource, actorID string)
 		StatusCode: http.StatusOK,
 		CreatedAt:  time.Now().Unix(),
 	})
+	reportAuditPersistenceError(err)
 }
 
 func respondJSON(w http.ResponseWriter, payload interface{}) {
+	setAuthNoStoreHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
 	enc := json.NewEncoder(w)
 	if err := enc.Encode(payload); err != nil {

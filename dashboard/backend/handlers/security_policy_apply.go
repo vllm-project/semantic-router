@@ -1,10 +1,6 @@
 package handlers
 
-import (
-	"errors"
-	"log"
-	"os"
-)
+import "log"
 
 // applySecurityFragment merges the generated fragment into config.yaml and
 // triggers a runtime hot-reload. Returns true if the apply succeeded.
@@ -22,14 +18,12 @@ func applySecurityFragment(fragment *GeneratedRouterFragment) bool {
 		return false
 	}
 
-	existingData, err := os.ReadFile(securityPolicyConfigPath)
+	previous, err := captureConfigFileSnapshot(securityPolicyConfigPath)
 	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			log.Printf("[SecurityPolicy] failed to read config file %s: %v", securityPolicyConfigPath, err)
-			return false
-		}
-		existingData = nil
+		log.Printf("[SecurityPolicy] failed to read config file %s: %v", securityPolicyConfigPath, err)
+		return false
 	}
+	existingData := previous.data
 
 	merged, err := mergeDeployPayload(existingData, DeployRequest{YAML: string(yamlBytes)})
 	if err != nil {
@@ -49,7 +43,7 @@ func applySecurityFragment(fragment *GeneratedRouterFragment) bool {
 
 	log.Printf("[SecurityPolicy] Config written to %s (%d bytes)", securityPolicyConfigPath, len(merged))
 
-	if err := applyWrittenConfig(securityPolicyConfigPath, securityPolicyConfigDir, existingData, true); err != nil {
+	if err := applyWrittenConfig(securityPolicyConfigPath, securityPolicyConfigDir, previous, true); err != nil {
 		log.Printf("[SecurityPolicy] failed to apply config to runtime: %v", err)
 		return false
 	}

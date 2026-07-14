@@ -54,4 +54,22 @@ describe('ConfigPageRouterStructuredEditor', () => {
     expect(markup).toContain('1 additional advanced field')
     expect(markup).toContain('Enabled')
   })
+
+  it('offers an explicit removal control for the optional embedding endpoint', () => {
+    const schema = ROUTER_STRUCTURED_FIELDS.embedding_models?.endpoint.schema
+    expect(schema).toBeDefined()
+    const markup = renderToStaticMarkup(
+      <ConfigPageRouterStructuredEditor
+        schema={schema!}
+        value={{
+          base_url: 'https://embeddings.example/v1',
+          model: 'embedding-model',
+          api_key_env: 'VLLM_SR_EMBEDDING_API_KEY',
+        }}
+        onChange={vi.fn()}
+      />,
+    )
+
+    expect(markup).toContain('Remove endpoint')
+  })
 })

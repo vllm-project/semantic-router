@@ -17,7 +17,9 @@ spec:
         name: envoy.filters.http.ext_proc
         typed_config:
           '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
-          failure_mode_allow: true
+          # Routing depends on headers emitted by ExtProc. Never continue with
+          # client-supplied routing metadata when ExtProc is down.
+          failure_mode_allow: false
           allow_mode_override: true
           message_timeout: 300s
           processing_mode:

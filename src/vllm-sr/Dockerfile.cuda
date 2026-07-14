@@ -62,7 +62,6 @@ RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false |
     rm -rf src
 
 COPY candle-binding/src/ ./src/
-COPY candle-binding/go.mod candle-binding/semantic-router.go ./
 
 RUN find target -name "libcandle_semantic_router.so" -delete 2>/dev/null; \
     find target -name "libcandle_semantic_router.a" -delete 2>/dev/null; \
@@ -72,6 +71,10 @@ RUN find target -name "libcandle_semantic_router.so" -delete 2>/dev/null; \
     else \
       cargo build --release --no-default-features; \
     fi
+
+# Go package files do not affect the native library. Copy them after the
+# expensive Rust build so Go-only edits preserve the Cargo cache.
+COPY candle-binding/go.mod candle-binding/*.go ./
 
 RUN mkdir -p /build/out && \
     if [ "$TARGETARCH" = "arm64" ]; then \
@@ -118,7 +121,6 @@ RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false |
     rm -rf src
 
 COPY ml-binding/src/ ./src/
-COPY ml-binding/go.mod ml-binding/ml_binding.go ./
 
 RUN find target -name "libml_semantic_router.so" -delete 2>/dev/null; \
     find target -name "libml_semantic_router.a" -delete 2>/dev/null; \
@@ -127,6 +129,9 @@ RUN find target -name "libml_semantic_router.so" -delete 2>/dev/null; \
     else \
       cargo build --release; \
     fi
+
+# Keep Go-only package changes out of the expensive Rust build cache key.
+COPY ml-binding/go.mod ml-binding/*.go ./
 
 RUN mkdir -p /build/out && \
     if [ "$TARGETARCH" = "arm64" ]; then \
@@ -180,6 +185,10 @@ RUN find target -name "libnlp_binding.so" -delete 2>/dev/null; \
     else \
       cargo build --release; \
     fi
+
+# Preserve the complete Go package for the later router build without
+# invalidating the Rust layer when only Go wrappers change.
+COPY nlp-binding/go.mod nlp-binding/*.go ./
 
 RUN mkdir -p /build/out && \
     if [ "$TARGETARCH" = "arm64" ]; then \
@@ -242,7 +251,6 @@ RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false |
     rm -rf src
 
 COPY onnx-binding/src/ ./src/
-COPY onnx-binding/go.mod onnx-binding/semantic-router.go ./
 
 RUN find target -name "libonnx_semantic_router.so" -delete 2>/dev/null; \
     find target -name "libonnx_semantic_router.a" -delete 2>/dev/null; \
@@ -251,6 +259,8 @@ RUN find target -name "libonnx_semantic_router.so" -delete 2>/dev/null; \
       --no-default-features \
       --features "cuda,ort/load-dynamic" \
       --target x86_64-unknown-linux-gnu
+
+COPY onnx-binding/go.mod onnx-binding/*.go ./
 
 RUN mkdir -p /build/out && \
     cp target/x86_64-unknown-linux-gnu/release/libonnx_semantic_router.so /build/out/ && \
@@ -263,6 +273,8 @@ RUN mkdir -p /build/out && \
 # onnx build tag and go.onnx.mod.
 FROM --platform=$BUILDPLATFORM ${GO_RUNTIME_COMPAT_IMAGE} AS go-builder
 ARG TARGETARCH
+ARG GOPROXY=https://proxy.golang.org,direct
+ARG GOSUMDB=sum.golang.org
 WORKDIR /build
 
 COPY --from=rust-builder /build/out/ /usr/local/lib/
@@ -270,16 +282,18 @@ COPY --from=onnx-builder /build/out/ /usr/local/lib/
 COPY --from=ml-builder /build/out/ /usr/local/lib/
 COPY --from=nlp-builder /build/out/ /usr/local/lib/
 
-ENV LD_LIBRARY_PATH=/usr/local/lib
+ENV LD_LIBRARY_PATH=/usr/local/lib \
+    GOPROXY="${GOPROXY}" \
+    GOSUMDB="${GOSUMDB}"
 
-COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candle-binding/
-COPY --from=onnx-builder /build/go.mod /build/semantic-router.go /build/../onnx-binding/
+COPY --from=rust-builder /build/go.mod /build/*.go /build/../candle-binding/
+COPY --from=onnx-builder /build/go.mod /build/*.go /build/../onnx-binding/
 COPY --from=onnx-builder /build/out/ /build/../onnx-binding/target/release/
 
-COPY ml-binding/go.mod ml-binding/ml_binding.go /build/../ml-binding/
+COPY --from=ml-builder /build/go.mod /build/*.go /build/../ml-binding/
 COPY --from=ml-builder /build/out/ /build/../ml-binding/target/release/
 
-COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go /build/../nlp-binding/
+COPY --from=nlp-builder /build/go.mod /build/*.go /build/../nlp-binding/
 COPY --from=nlp-builder /build/out/ /build/../nlp-binding/target/release/
 
 COPY src/semantic-router/ .

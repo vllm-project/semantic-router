@@ -18,13 +18,18 @@ export default function PlaygroundRailAccountControl() {
   }
 
   const handleToggle = () => {
-    setIsOpen(prev => !prev)
+    setIsOpen((prev) => !prev)
   }
 
   const handleLogout = () => {
-    logout()
-    setIsOpen(false)
-    navigate('/login', { replace: true })
+    void logout()
+      .then(() => {
+        setIsOpen(false)
+        navigate('/login', { replace: true })
+      })
+      .catch((error) => {
+        console.warn('Failed to end the dashboard session:', error)
+      })
   }
 
   return (

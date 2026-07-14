@@ -44,6 +44,29 @@ func TestBatchClassificationConfiguration(t *testing.T) {
 	}
 }
 
+func TestBatchClassificationUsesLiveMaxBatchSize(t *testing.T) {
+	current := batchClassificationConfigWithMax(2)
+	apiServer := newBatchClassificationTestServer(nil)
+	apiServer.runtimeConfig = newLiveRuntimeConfig(nil, func() *config.RouterConfig {
+		return current
+	}, nil)
+
+	runBatchClassificationHTTPCase(t, apiServer, batchClassificationHTTPCase{
+		name:           "exact live max",
+		requestBody:    marshalBatchTexts(2),
+		expectedStatus: http.StatusServiceUnavailable,
+		expectedError:  batchClassifierUnavailableMessage,
+	})
+
+	current = batchClassificationConfigWithMax(1)
+	runBatchClassificationHTTPCase(t, apiServer, batchClassificationHTTPCase{
+		name:           "updated live max plus one",
+		requestBody:    marshalBatchTexts(2),
+		expectedStatus: http.StatusRequestEntityTooLarge,
+		expectedError:  "texts array exceeds the maximum batch size",
+	})
+}
+
 func invalidBatchClassificationCases() []batchClassificationHTTPCase {
 	return []batchClassificationHTTPCase{
 		{
@@ -123,10 +146,16 @@ func unavailableBatchClassificationCases() []batchClassificationHTTPCase {
 			expectedError:  batchClassifierUnavailableMessage,
 		},
 		{
-			name:           "Batch too large still checks classifier availability first",
-			requestBody:    marshalBatchTexts(101),
+			name:           "Default max batch size exact",
+			requestBody:    marshalBatchTexts(defaultBatchClassificationMaxBatchSize),
 			expectedStatus: http.StatusServiceUnavailable,
 			expectedError:  batchClassifierUnavailableMessage,
+		},
+		{
+			name:           "Default max batch size plus one",
+			requestBody:    marshalBatchTexts(101),
+			expectedStatus: http.StatusRequestEntityTooLarge,
+			expectedError:  "texts array exceeds the maximum batch size",
 		},
 	}
 }
@@ -151,10 +180,19 @@ func batchClassificationConfigCases() []batchClassificationConfigCase {
 			batchClassificationHTTPCase: batchClassificationHTTPCase{
 				name:           "Default config when config is nil",
 				requestBody:    marshalBatchTexts(101),
-				expectedStatus: http.StatusServiceUnavailable,
-				expectedError:  batchClassifierUnavailableMessage,
+				expectedStatus: http.StatusRequestEntityTooLarge,
+				expectedError:  "texts array exceeds the maximum batch size",
 			},
 			config: nil,
+		},
+		{
+			batchClassificationHTTPCase: batchClassificationHTTPCase{
+				name:           "Custom max batch size plus one",
+				requestBody:    marshalBatchTexts(5),
+				expectedStatus: http.StatusRequestEntityTooLarge,
+				expectedError:  "texts array exceeds the maximum batch size",
+			},
+			config: batchClassificationMetricsConfig(),
 		},
 		{
 			batchClassificationHTTPCase: batchClassificationHTTPCase{
@@ -169,11 +207,16 @@ func batchClassificationConfigCases() []batchClassificationConfigCase {
 }
 
 func batchClassificationMetricsConfig() *config.RouterConfig {
+	return batchClassificationConfigWithMax(4)
+}
+
+func batchClassificationConfigWithMax(maxBatchSize int) *config.RouterConfig {
 	return &config.RouterConfig{
 		APIServer: config.APIServer{
 			API: config.APIConfig{
 				BatchClassification: config.BatchClassificationConfig{
-					Metrics: config.BatchClassificationMetricsConfig{Enabled: true},
+					MaxBatchSize: maxBatchSize,
+					Metrics:      config.BatchClassificationMetricsConfig{Enabled: true},
 				},
 			},
 		},

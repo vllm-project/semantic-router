@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -157,6 +158,19 @@ func TestEnsureClassificationServiceWaitsForRuntimeRegistry(t *testing.T) {
 	}
 	if got := registry.ClassificationService(); got != nil {
 		t.Fatalf("runtime registry classification service = %v, want nil before router runtime publication", got)
+	}
+}
+
+func TestStandaloneClassificationServiceStartupDoesNotFallbackOnBuildError(t *testing.T) {
+	original := newAutoClassificationService
+	newAutoClassificationService = func(*config.RouterConfig) (*services.ClassificationService, error) {
+		return nil, errors.New("configured classifier failed")
+	}
+	t.Cleanup(func() { newAutoClassificationService = original })
+
+	service, err := ensureClassificationServiceForStartup(&config.RouterConfig{}, nil, nil)
+	if service != nil || err == nil {
+		t.Fatalf("standalone startup = service %v err %v, want fail-closed error", service, err)
 	}
 }
 

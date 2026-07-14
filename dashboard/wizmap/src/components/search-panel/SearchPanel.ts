@@ -1,8 +1,8 @@
 import type { Writable } from 'svelte/store';
-import d3 from '../../utils/d3-import';
 import type { SearchResult, PromptPoint } from '../../types/embedding-types';
 import type { SearchBarStoreValue } from '../../stores';
 import { getSearchBarStoreDefaultValue } from '../../stores';
+import { buildSearchTextSegments } from './searchSecurity';
 
 export class SearchPanel {
   component: HTMLElement;
@@ -55,42 +55,12 @@ export class SearchPanel {
     const query = this.searchBarStoreValue.query;
 
     for (const resultPoint of results) {
-      // Try to avoid XSS attack
       const result = resultPoint.prompt;
-      if (result.includes('iframe')) continue;
-      if (result.includes('<script')) continue;
-
-      const searchWords = new Set(query.split(/\s+/));
       const newResult: SearchResult = {
-        fullText: result,
-        shortText: result,
+        segments: buildSearchTextSegments(result, query),
         isSummary: true,
         point: resultPoint
       };
-
-      newResult.fullText = result;
-
-      for (const word of searchWords) {
-        if (word === '') continue;
-        const re = new RegExp('\\b' + word + '\\b', 'ig');
-        newResult.fullText = newResult.fullText.replaceAll(
-          re,
-          `<em>${word}</em>`
-        );
-      }
-
-      // Truncate the text if it is too long
-      if (newResult.fullText.length > 300) {
-        newResult.shortText = newResult.fullText.slice(0, 300);
-        newResult.shortText = newResult.shortText.slice(
-          0,
-          newResult.shortText.lastIndexOf(' ')
-        );
-        newResult.shortText = newResult.shortText.concat('...');
-        newResult.isSummary = true;
-      } else {
-        newResult.shortText = newResult.fullText;
-      }
 
       formattedResults.push(newResult);
     }

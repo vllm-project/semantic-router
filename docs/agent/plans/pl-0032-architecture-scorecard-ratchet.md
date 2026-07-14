@@ -15,6 +15,10 @@
   - [TD017](../tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md)
   - [TD020](../tech-debt/td-020-classification-subsystem-boundary-collapse.md)
   - [TD027](../tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md)
+  - [TD042](../tech-debt/td-042-ffi-embedding-structure-debt.md)
+  - [TD043](../tech-debt/td-043-semantic-router-go-cyclop-debt.md)
+  - [TD045](../tech-debt/td-045-runtime-generation-ownership-gap.md)
+  - [TD046](../tech-debt/td-046-control-plane-contract-convergence-gap.md)
 - [../architecture-scorecard.md](../architecture-scorecard.md)
 - Harness scoring and validation logic that decides what is current.
 
@@ -45,6 +49,12 @@ Out of scope:
   seams that are still doing request-time policy work.
 - [ ] `ADC006` Retire or narrow TD027 by splitting fleet-sim optimizer analysis,
   verification, and export ownership.
+- [ ] `ADC007` Retire or narrow TD042 and TD043 while preserving diff-scoped
+  native binding gates.
+- [ ] `ADC008` Introduce runtime-generation ownership, leases, rollback, and
+  bounded actor shutdown to retire TD045.
+- [ ] `ADC009` Converge config ingress and mutation on one strict canonical
+  contract and transactional writer to retire TD046.
 
 ## Next Action
 

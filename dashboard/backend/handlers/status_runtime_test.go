@@ -19,7 +19,7 @@ func TestRuntimeStatusFromStateIncludesEmbeddingProviderStatus(t *testing.T) {
 			Backend:        config.EmbeddingBackendOpenAICompatible,
 			Model:          "text-embedding-3-small",
 			Dimension:      1536,
-			APIKeyEnv:      "OPENAI_API_KEY",
+			APIKeyEnv:      "VLLM_SR_EMBEDDING_API_KEY",
 			APIKeyEnvSet:   &apiKeyEnvSet,
 			Healthy:        &healthy,
 			LastProbeError: "embedding API key env is not set",
@@ -34,7 +34,7 @@ func TestRuntimeStatusFromStateIncludesEmbeddingProviderStatus(t *testing.T) {
 	if runtime.EmbeddingProvider == state.EmbeddingProvider {
 		t.Fatal("expected embedding provider status to be cloned")
 	}
-	if runtime.EmbeddingProvider.APIKeyEnv != "OPENAI_API_KEY" {
+	if runtime.EmbeddingProvider.APIKeyEnv != "VLLM_SR_EMBEDDING_API_KEY" {
 		t.Fatalf("api key env = %q", runtime.EmbeddingProvider.APIKeyEnv)
 	}
 	if runtime.EmbeddingProvider.APIKeyEnvSet == nil || *runtime.EmbeddingProvider.APIKeyEnvSet {

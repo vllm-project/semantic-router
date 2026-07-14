@@ -2,69 +2,103 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
 	"time"
-	"unicode"
 )
 
 type contextKey string
 
-const (
-	authContextKey contextKey = "dashboardAuthContext"
-
-	authSessionCookieName = "vsr_session"
-	maxAccessTokenBytes   = 8192
-)
+const authContextKey contextKey = "dashboardAuthContext"
 
 // AuthContext contains authenticated user metadata.
 type AuthContext struct {
-	UserID string
-	Email  string
-	Role   string
-	Perms  map[string]bool
+	UserID           string
+	SessionID        string
+	Email            string
+	Name             string
+	Role             string
+	Perms            map[string]bool
+	CredentialSource CredentialSource
 }
 
 func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if err := validateCredentialTransport(r); err != nil {
+				setProtectedResponseCachePolicy(w)
+				http.Error(w, "Invalid authentication transport", http.StatusBadRequest)
+				return
+			}
 			if !requiresAuthentication(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}
-			token := extractAccessToken(r)
+			protectedWriter := newProtectedResponseWriter(w)
+			// Enforce before authentication failures and after a header-only
+			// handler returns. The writer also enforces at every commit boundary.
+			protectedWriter.enforceCachePolicy()
+			defer protectedWriter.enforceCachePolicy()
+			if IsWebSocketUpgradeRequest(r) && !ValidWebSocketOrigin(r) {
+				http.Error(protectedWriter, "Forbidden", http.StatusForbidden)
+				return
+			}
+			token, credentialSource := extractAccessTokenWithSource(r)
 			if token == "" {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				http.Error(protectedWriter, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			if !validUnsafeRequestOrigin(r, credentialSource) {
+				http.Error(protectedWriter, "Forbidden", http.StatusForbidden)
 				return
 			}
 
 			claims, err := service.ParseToken(token)
 			if err != nil {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				http.Error(protectedWriter, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
 
 			user, perms, err := service.ResolveSessionUser(r.Context(), claims)
 			if err != nil {
 				log.Printf("permission load failed for user %s: %v", claims.UserID, err)
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				http.Error(protectedWriter, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
 
 			required := RequiredPermission(r.Method, r.URL.Path)
 			if required != "" && !perms[required] {
-				http.Error(w, "Forbidden", http.StatusForbidden)
+				http.Error(protectedWriter, "Forbidden", http.StatusForbidden)
 				return
 			}
 
 			ctx := context.WithValue(r.Context(), authContextKey, AuthContext{
-				UserID: user.ID,
-				Email:  user.Email,
-				Role:   user.Role,
-				Perms:  perms,
+				UserID:           user.ID,
+				SessionID:        claims.ID,
+				Email:            user.Email,
+				Name:             user.Name,
+				Role:             user.Role,
+				Perms:            perms,
+				CredentialSource: credentialSource,
 			})
-			next.ServeHTTP(w, r.WithContext(ctx))
+			ctx = withLiveAuthorization(ctx, service, claims, credentialSource)
+			if shouldMonitorLiveAuthorization(r) {
+				monitoredContext, stop, monitorErr := service.monitorAuthorization(ctx, claims, required)
+				if monitorErr != nil {
+					if errors.Is(monitorErr, ErrLiveAuthorizationCapacity) {
+						protectedWriter.Header().Set("Retry-After", "1")
+						http.Error(protectedWriter, "Live connection capacity reached", http.StatusServiceUnavailable)
+						return
+					}
+					http.Error(protectedWriter, "Unauthorized", http.StatusUnauthorized)
+					return
+				}
+				defer stop()
+				ctx = monitoredContext
+			}
+			next.ServeHTTP(protectedWriter, r.WithContext(ctx))
 		})
 	}
 }
@@ -83,6 +117,7 @@ func ServiceUnavailableGuard() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if requiresAuthentication(r.URL.Path) {
+				setProtectedResponseCachePolicy(w)
 				http.Error(w, "Authentication service is not configured", http.StatusServiceUnavailable)
 				return
 			}
@@ -91,8 +126,21 @@ func ServiceUnavailableGuard() func(http.Handler) http.Handler {
 	}
 }
 
+// setProtectedResponseCachePolicy prevents browser and intermediary caches
+// from retaining cookie-authenticated control-plane data or authentication
+// failures. Public static assets keep their handler-specific cache policy.
+func setProtectedResponseCachePolicy(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
+}
+
 func RequiredPermission(method, path string) string {
 	path = strings.TrimSpace(strings.ToLower(path))
+	if path == "/api/auth/password" || path == "/api/auth/password/" {
+		// Every authenticated active user may change their own password. The
+		// handler derives the target user from AuthContext and never from JSON.
+		return ""
+	}
 	for _, resolver := range []func(string, string) (string, bool){
 		adminPermission,
 		settingsPermission,
@@ -109,7 +157,10 @@ func RequiredPermission(method, path string) string {
 	}
 
 	if strings.HasPrefix(path, "/api/") {
-		return PermConfigRead
+		// Any API route that reaches the smart observability proxy is read-only.
+		// Unknown unsafe methods still need write authority, and the router then
+		// rejects them instead of forwarding to Grafana's anonymous admin API.
+		return readOrManagePermission(method, PermLogsRead, PermConfigWrite)
 	}
 
 	return ""
@@ -140,8 +191,11 @@ func settingsPermission(method, path string) (string, bool) {
 			return PermConfigWrite, true
 		}
 		return PermConfigRead, true
+	case path == "/api/setup/activate":
+		// Activation writes and immediately starts a caller-selected runtime
+		// config. Treat it as provider-credential use, not a draft-only edit.
+		return PermConfigDeploy, true
 	case strings.HasPrefix(path, "/api/setup/validate"),
-		strings.HasPrefix(path, "/api/setup/activate"),
 		strings.HasPrefix(path, "/api/setup/import-remote"):
 		return PermConfigWrite, true
 	default:
@@ -153,7 +207,15 @@ func routerPermission(method, path string) (string, bool) {
 	switch {
 	case path == "/api/router/config/deploy",
 		path == "/api/router/config/deploy/preview",
-		path == "/api/router/config/rollback":
+		path == "/api/router/config/rollback",
+		path == "/api/router/config/update",
+		path == "/api/router/config/global/update",
+		path == "/api/router/config/global/raw/update",
+		path == "/api/router/config/defaults/update":
+		// These write handlers synchronously apply the resulting config. A
+		// caller who can choose provider endpoints can cause process-owned
+		// provider credentials to be sent there, so config.deploy is the
+		// explicit credential-use authority for every runtime apply path.
 		return PermConfigDeploy, true
 	case strings.HasPrefix(path, "/api/router/config/"):
 		if method == http.MethodGet {
@@ -253,9 +315,11 @@ func securityPermission(method string) string {
 func openclawPermission(method, path string) (string, bool) {
 	switch {
 	case strings.HasPrefix(path, "/embedded/openclaw/"):
-		return PermOpenClawRead, true
+		// The embedded gateway receives an injected management credential, so
+		// viewing it is itself a management capability.
+		return PermOpenClaw, true
 	case strings.HasPrefix(path, "/api/openclaw/mcp"):
-		return PermMcpManage, true
+		return PermOpenClaw, true
 	case hasAnyPrefix(path,
 		"/api/openclaw/provision",
 		"/api/openclaw/start",
@@ -264,12 +328,15 @@ func openclawPermission(method, path string) (string, bool) {
 		"/api/openclaw/next-port",
 	):
 		return PermOpenClaw, true
-	case strings.HasPrefix(path, "/api/openclaw/rooms/") && (strings.HasSuffix(path, "/messages") || strings.HasSuffix(path, "/stream") || strings.HasSuffix(path, "/ws")):
+	case strings.HasPrefix(path, "/api/openclaw/rooms/") && strings.HasSuffix(path, "/messages"):
+		return readOrManagePermission(method, PermOpenClawRead, PermOpenClawUse), true
+	case strings.HasPrefix(path, "/api/openclaw/rooms/") && (strings.HasSuffix(path, "/stream") || strings.HasSuffix(path, "/ws")):
 		return PermOpenClawRead, true
+	case strings.HasPrefix(path, "/api/openclaw/token"):
+		return PermOpenClaw, true
 	case hasAnyPrefix(path,
 		"/api/openclaw/status",
 		"/api/openclaw/skills",
-		"/api/openclaw/token",
 	):
 		return PermOpenClawRead, true
 	case hasAnyPrefix(path,
@@ -333,7 +400,7 @@ func AuditMiddleware(store *Store, action, resource string, next http.HandlerFun
 		if ok {
 			uid = ac.UserID
 		}
-		_ = store.AddAuditLog(r.Context(), AuditLog{
+		err := store.AddAuditLog(r.Context(), AuditLog{
 			UserID:     uid,
 			Action:     action,
 			Resource:   resource,
@@ -344,63 +411,27 @@ func AuditMiddleware(store *Store, action, resource string, next http.HandlerFun
 			StatusCode: rw.statusCodeOr200(),
 			CreatedAt:  time.Now().Unix(),
 		})
+		reportAuditPersistenceError(err)
 	}
-}
-
-func extractBearer(raw string) string {
-	if raw == "" {
-		return ""
-	}
-	parts := strings.SplitN(raw, " ", 2)
-	if len(parts) != 2 {
-		return ""
-	}
-	if !strings.EqualFold(parts[0], "bearer") {
-		return ""
-	}
-	return normalizeAccessToken(parts[1])
-}
-
-func extractAccessToken(r *http.Request) string {
-	if token := extractBearer(r.Header.Get("Authorization")); token != "" {
-		return token
-	}
-
-	if cookie, err := r.Cookie(authSessionCookieName); err == nil {
-		if token := normalizeAccessToken(cookie.Value); token != "" {
-			return token
-		}
-	}
-
-	return normalizeAccessToken(r.URL.Query().Get("authToken"))
-}
-
-func normalizeAccessToken(raw string) string {
-	token := strings.TrimSpace(raw)
-	if token == "" || len(token) > maxAccessTokenBytes {
-		return ""
-	}
-	for _, r := range token {
-		if r == ';' || unicode.IsControl(r) || unicode.IsSpace(r) {
-			return ""
-		}
-	}
-	return token
 }
 
 func requiresAuthentication(path string) bool {
 	path = strings.TrimSpace(strings.ToLower(path))
 
 	switch {
-	case strings.HasPrefix(path, "/api/auth/login"):
+	case path == "/api/auth/login" || path == "/api/auth/login/":
 		return false
-	case strings.HasPrefix(path, "/api/auth/logout"):
+	case path == "/api/auth/logout" || path == "/api/auth/logout/":
 		return false
-	case strings.HasPrefix(path, "/api/auth/bootstrap/"):
+	case path == "/api/auth/bootstrap/can-register":
 		return false
-	case strings.HasPrefix(path, "/api/auth/me"):
-		return true
-	case strings.HasPrefix(path, "/api/setup/state"):
+	case path == "/api/auth/bootstrap/can-register/":
+		return false
+	case path == "/api/auth/bootstrap/register":
+		return false
+	case path == "/api/auth/bootstrap/register/":
+		return false
+	case path == "/api/setup/state":
 		return false
 	case strings.HasPrefix(path, "/embedded/wizmap/assets/"):
 		return false

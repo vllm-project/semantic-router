@@ -2,6 +2,7 @@ export type RouteLoader = () => Promise<unknown>
 
 export const loadLandingPage = () => import('../pages/LandingPage')
 export const loadLoginPage = () => import('../pages/LoginPage')
+export const loadAccountSecurityPage = () => import('../pages/AccountSecurityPage')
 export const loadBuilderPage = () => import('../pages/BuilderPage')
 export const loadConfigPage = () => import('../pages/ConfigPage')
 export const loadDashboardPage = () => import('../pages/DashboardPage')
@@ -30,6 +31,10 @@ export const loadUsersPage = () => import('../pages/UsersPage')
 const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteLoader }> = [
   { matches: (pathname) => pathname === '/', load: loadLandingPage },
   { matches: (pathname) => pathname.startsWith('/login'), load: loadLoginPage },
+  {
+    matches: (pathname) => pathname.startsWith('/account/security'),
+    load: loadAccountSecurityPage,
+  },
   { matches: (pathname) => pathname.startsWith('/setup'), load: loadSetupWizardPage },
   { matches: (pathname) => pathname.startsWith('/dashboard'), load: loadDashboardPage },
   {

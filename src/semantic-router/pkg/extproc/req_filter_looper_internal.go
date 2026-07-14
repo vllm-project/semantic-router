@@ -101,7 +101,7 @@ func (r *OpenAIRouter) modifyRequestBodyForLooper(
 		logging.ComponentErrorEvent("extproc", "looper_request_serialize_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"model":      upstreamModel,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 		return nil, fmt.Errorf("error serializing modified request: %w", err)
 	}
@@ -121,7 +121,7 @@ func (r *OpenAIRouter) modifyRequestBodyForLooper(
 			"model":             modelName,
 			"decision":          decisionName,
 			"reasoning_enabled": useReasoning,
-			"error":             err.Error(),
+			"error_type":        safeErrorForLog(err),
 		})
 		return nil, fmt.Errorf("error setting reasoning mode: %w", err)
 	}
@@ -137,7 +137,7 @@ func (r *OpenAIRouter) modifyRequestBodyForLooper(
 			"request_id": ctx.RequestID,
 			"model":      modelName,
 			"decision":   decisionName,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 		return nil, fmt.Errorf("error adding system prompt: %w", err)
 	}
@@ -221,7 +221,7 @@ func (r *OpenAIRouter) handleLooperInternalRequest(
 		logging.ComponentErrorEvent("extproc", "looper_request_backend_resolve_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"model":      modelName,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 		return r.createErrorResponse(500, "Failed to process looper request: "+err.Error()), nil
 	}
@@ -232,7 +232,7 @@ func (r *OpenAIRouter) handleLooperInternalRequest(
 			"request_id": ctx.RequestID,
 			"model":      modelName,
 			"upstream":   route.upstreamModel,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 		return r.createErrorResponse(500, "Failed to process looper request: "+err.Error()), nil
 	}
@@ -249,7 +249,7 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	modelName string,
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
-	decisionName := ctx.Headers[headers.VSRLooperDecision]
+	decisionName := ctx.LooperDecision
 	decision, fallback := r.resolveLooperDecision(modelName, decisionName, ctx)
 	if fallback != nil {
 		return fallback, nil
@@ -274,7 +274,7 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 			"request_id": ctx.RequestID,
 			"model":      modelName,
 			"decision":   decisionName,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 		return r.createErrorResponse(500, "Failed to process looper request"), nil
 	}
@@ -292,7 +292,7 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 			"request_id": ctx.RequestID,
 			"model":      modelName,
 			"decision":   decisionName,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 		return r.createErrorResponse(500, "Failed to process looper request"), nil
 	}
@@ -419,7 +419,7 @@ func (r *OpenAIRouter) parseLooperRequestForPlugins(
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "looper_request_parse_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
-			"error":      err.Error(),
+			"error_type": safeErrorForLog(err),
 		})
 		return nil, err
 	}

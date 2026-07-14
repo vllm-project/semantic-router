@@ -25,6 +25,8 @@ export interface RouterStructuredSchema {
   itemLabelKey?: string
   addLabel?: string
   emptyLabel?: string
+  removable?: boolean
+  removeLabel?: string
   defaultValue?: unknown
 }
 

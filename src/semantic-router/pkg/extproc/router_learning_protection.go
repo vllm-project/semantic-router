@@ -362,11 +362,11 @@ func (r *OpenAIRouter) selectProtectionResult(
 
 	result, err := selector.Select(context.Background(), learningCtx)
 	if err != nil {
-		logging.Warnf("[RouterLearning] protection failed: %v", err)
+		logging.Warnf("[RouterLearning] protection failed: %s", safeErrorForLog(err))
 		return nil, false
 	}
 	if err := selection.ValidateSelectionResult(learningCtx, result); err != nil {
-		logging.Warnf("[RouterLearning] protection produced invalid result: %v", err)
+		logging.Warnf("[RouterLearning] protection produced invalid result: %s", safeErrorForLog(err))
 		return nil, false
 	}
 	return result, true

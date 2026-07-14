@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -63,9 +62,9 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 			return
 		}
 
-		rawBody, err := io.ReadAll(r.Body)
+		rawBody, status, err := readBoundedRequestBody(w, r, documentRequestBodyLimit)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to read request body: %v", err), http.StatusBadRequest)
+			http.Error(w, "Invalid request body", status)
 			return
 		}
 
@@ -81,7 +80,11 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 		}
 
 		if err := propagateConfigToRuntime(configPath, configDir); err != nil {
-			if restoreErr := restorePreviousRuntimeConfig(configPath, configDir, existingData); restoreErr != nil {
+			if restoreErr := restorePreviousRuntimeConfig(
+				configPath,
+				configDir,
+				existingConfigFileSnapshot(existingData),
+			); restoreErr != nil {
 				http.Error(w, fmt.Sprintf("Failed to apply config to runtime: %v. Failed to restore previous config: %v", err, restoreErr), http.StatusInternalServerError)
 				return
 			}
@@ -201,7 +204,12 @@ func mergeGlobalOverridePatchYAML(existingData, rawPatch []byte) ([]byte, error)
 	if existingGlobal.Kind != yaml.MappingNode {
 		return nil, fmt.Errorf("config.yaml global block must be a YAML mapping")
 	}
-	if err := mergeMappingNodes(existingGlobal, patchRoot); err != nil {
+	if err := mergeMappingNodesWithNullDeletePolicy(
+		existingGlobal,
+		patchRoot,
+		nil,
+		isRemoteEmbeddingEndpointDelete,
+	); err != nil {
 		return nil, err
 	}
 

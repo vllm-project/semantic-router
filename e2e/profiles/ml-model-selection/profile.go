@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -77,6 +76,7 @@ func (p *Profile) GetTestCases() []string {
 		"model-selection",
 		"domain-classify",
 		"chat-completions-request",
+		"selected-model-header-security",
 	}
 }
 
@@ -315,171 +315,6 @@ func (p *Profile) log(format string, args ...interface{}) {
 	if p.verbose {
 		fmt.Printf("[ml-model-selection] "+format+"\n", args...)
 	}
-}
-
-// prepareMLModels ensures ML models are downloaded and available for the pod
-// Flow: Check local models → Download pretrained models from HuggingFace
-func (p *Profile) prepareMLModels(ctx context.Context) error {
-	// Source directory where trained models should exist (also used as mount source)
-	// Using .cache/ml-models to keep models outside of source tree
-	sourceDir := ".cache/ml-models"
-	trainingDir := "src/training/model_selection/ml_model_selection"
-
-	// Get absolute path for the source directory (needed for Kind mount)
-	absSourceDir, err := filepath.Abs(sourceDir)
-	if err != nil {
-		return fmt.Errorf("failed to get absolute path: %w", err)
-	}
-	p.log("ML models directory: %s", absSourceDir)
-
-	modelFiles := []string{"knn_model.json", "kmeans_model.json", "svm_model.json", "mlp_model.json"}
-
-	// Check if models exist in source
-	modelsExist := true
-	for _, f := range modelFiles {
-		if _, err := os.Stat(sourceDir + "/" + f); os.IsNotExist(err) {
-			modelsExist = false
-			break
-		}
-	}
-
-	if !modelsExist {
-		p.log("ML models not found locally, downloading from HuggingFace...")
-
-		// Ensure huggingface-hub is installed for downloading models
-		p.log("Ensuring huggingface-hub is installed...")
-		pipInstall := exec.CommandContext(ctx, "pip", "install", "--quiet", "huggingface-hub>=0.20.0")
-		pipInstall.Stdout = os.Stdout
-		pipInstall.Stderr = os.Stderr
-		if err := pipInstall.Run(); err != nil {
-			// Try pip3 if pip fails
-			pipInstall = exec.CommandContext(ctx, "pip3", "install", "--quiet", "huggingface-hub>=0.20.0")
-			pipInstall.Stdout = os.Stdout
-			pipInstall.Stderr = os.Stderr
-			if err := pipInstall.Run(); err != nil {
-				p.log("Warning: could not install huggingface-hub: %v", err)
-			}
-		}
-
-		// Download pretrained models from HuggingFace
-		p.log("Downloading pretrained ML models from HuggingFace...")
-		os.MkdirAll(sourceDir, 0755)
-
-		downloadCmd := exec.CommandContext(ctx, "python3", "download_model.py",
-			"--output-dir", "../../../../.cache/ml-models",
-			"--repo-id", "abdallah1008/semantic-router-ml-models",
-		)
-		downloadCmd.Dir = trainingDir
-		downloadCmd.Stdout = os.Stdout
-		downloadCmd.Stderr = os.Stderr
-
-		if err := downloadCmd.Run(); err != nil {
-			// Try with python if python3 fails
-			downloadCmd = exec.CommandContext(ctx, "python", "download_model.py",
-				"--output-dir", "../../../../.cache/ml-models",
-				"--repo-id", "abdallah1008/semantic-router-ml-models",
-			)
-			downloadCmd.Dir = trainingDir
-			downloadCmd.Stdout = os.Stdout
-			downloadCmd.Stderr = os.Stderr
-			if err := downloadCmd.Run(); err != nil {
-				return fmt.Errorf("failed to download ML models from HuggingFace: %w\nPlease ensure models are uploaded to abdallah1008/semantic-router-ml-models", err)
-			}
-		}
-		p.log("✓ ML models downloaded from HuggingFace")
-	} else {
-		p.log("✓ ML models found in %s", sourceDir)
-	}
-
-	// Step 1: Copy models to host directory for Linux CI (where hostPath works)
-	// This is the standard approach that works on native Linux
-	hostDir := "/tmp/kind-ml-models"
-	p.log("Copying models to host directory %s...", hostDir)
-	if err := os.MkdirAll(hostDir, 0755); err != nil {
-		p.log("  Warning: could not create host directory: %v (may need sudo on some systems)", err)
-	} else {
-		for _, f := range modelFiles {
-			src := sourceDir + "/" + f
-			dst := hostDir + "/" + f
-			data, err := os.ReadFile(src)
-			if err != nil {
-				return fmt.Errorf("failed to read %s: %w", src, err)
-			}
-			if err := os.WriteFile(dst, data, 0644); err != nil {
-				p.log("  Warning: could not write %s: %v", dst, err)
-			} else {
-				p.log("  ✓ Copied %s to host", f)
-			}
-		}
-	}
-
-	// Step 2: Also copy models directly into Kind containers
-	// This is required for WSL2/Docker Desktop where hostPath mounts are broken
-	// It's harmless on Linux CI (just overwrites the same files)
-	p.log("Copying models into Kind node containers...")
-
-	// Get actual Kind node names dynamically
-	kindNodes, err := p.getKindNodes(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get Kind nodes: %w", err)
-	}
-	p.log("  Found %d Kind nodes: %v", len(kindNodes), kindNodes)
-
-	for _, node := range kindNodes {
-		// First ensure the target directory exists in the container
-		mkdirCmd := exec.CommandContext(ctx, "docker", "exec", node, "mkdir", "-p", "/tmp/ml-models")
-		if err := mkdirCmd.Run(); err != nil {
-			p.log("  Warning: could not create directory in %s: %v", node, err)
-			continue
-		}
-
-		// Copy each model file by piping content through stdin
-		for _, f := range modelFiles {
-			src := sourceDir + "/" + f
-			dst := "/tmp/ml-models/" + f
-
-			// Read file content
-			data, err := os.ReadFile(src)
-			if err != nil {
-				return fmt.Errorf("failed to read %s: %w", src, err)
-			}
-
-			// Pipe content to container using docker exec with stdin
-			cpCmd := exec.CommandContext(ctx, "docker", "exec", "-i", node, "tee", dst)
-			cpCmd.Stdin = strings.NewReader(string(data))
-			// Suppress stdout (tee echoes input)
-			cpCmd.Stdout = nil
-			if err := cpCmd.Run(); err != nil {
-				p.log("  Warning: failed to copy %s to %s: %v", f, node, err)
-			}
-		}
-		p.log("  ✓ Copied models to %s", node)
-	}
-
-	p.log("✓ ML models ready in Kind containers")
-	return nil
-}
-
-// getKindNodes returns the list of node names for the Kind cluster
-func (p *Profile) getKindNodes(ctx context.Context) ([]string, error) {
-	cmd := exec.CommandContext(ctx, "kind", "get", "nodes", "--name", "semantic-router-e2e")
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("kind get nodes failed: %w", err)
-	}
-
-	var nodes []string
-	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
-		if line != "" {
-			nodes = append(nodes, line)
-		}
-	}
-
-	if len(nodes) == 0 {
-		return nil, fmt.Errorf("no Kind nodes found")
-	}
-
-	return nodes, nil
 }
 
 // Note: We use mock-vllm for E2E testing, so no real LLM models are needed.

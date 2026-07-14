@@ -45,7 +45,7 @@ func (r *OpenAIRouter) performResponseJailbreakDetection(ctx *RequestContext, re
 	}
 
 	if err != nil {
-		logging.Errorf("Response jailbreak detection failed: %v", err)
+		logging.Errorf("Response jailbreak detection failed: %s", safeErrorForLog(err))
 		metrics.RecordPluginError("response_jailbreak", "detection_error")
 		return nil
 	}

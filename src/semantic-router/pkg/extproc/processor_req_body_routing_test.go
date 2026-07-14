@@ -15,6 +15,11 @@ import (
 
 func TestHandleAutoModelRoutingPreservesSelectedModelHeaderAndRewritesUpstreamModel(t *testing.T) {
 	cfg := &config.RouterConfig{
+		RouterOptions: config.RouterOptions{
+			// The selected-model provenance boundary must not depend on this
+			// optional knob.
+			ClearRouteCache: false,
+		},
 		BackendModels: config.BackendModels{
 			DefaultModel: "qwen14b-dev",
 			ModelConfig: map[string]config.ModelParams{
@@ -77,6 +82,9 @@ func TestHandleAutoModelRoutingPreservesSelectedModelHeaderAndRewritesUpstreamMo
 	requestBodyResponse := response.GetRequestBody()
 	if requestBodyResponse == nil {
 		t.Fatal("expected request body response")
+	}
+	if !requestBodyResponse.Response.GetClearRouteCache() {
+		t.Fatal("trusted selected-model mutation must recompute the route even when clear_route_cache is false")
 	}
 	headerMap := headerValuesByName(requestBodyResponse.Response.HeaderMutation.SetHeaders)
 	if got := headerMap[headers.SelectedModel]; got != "qwen14b-dev" {

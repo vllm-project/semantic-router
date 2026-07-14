@@ -143,7 +143,7 @@ func TestValidateEmbeddingContracts_AcceptsRemoteEmbeddingProvider(t *testing.T)
 				Endpoint: EmbeddingEndpointConfig{
 					BaseURL:    "https://example.test/v1",
 					Model:      "text-embedding-3-small",
-					APIKeyEnv:  "OPENAI_API_KEY",
+					APIKeyEnv:  EmbeddingAPIKeyEnvName,
 					Dimensions: 1536,
 				},
 			},
