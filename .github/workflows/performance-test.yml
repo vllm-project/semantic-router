@@ -167,7 +167,7 @@ jobs:
           blocked=""
           advisory=""
           if [ -f reports/comparison.json ]; then
-            blocked=$(jq -r '.results[]? | select(.RegressionDetected==true) | "- \(.BenchmarkName): allocs/op \(.AllocsPerOpChange|round)%, B/op \(.BytesPerOpChange|round)%"' reports/comparison.json 2>/dev/null || true)
+            blocked=$(jq -r '.results[]? | select(.RegressionDetected==true) | "- \(.BenchmarkName): allocs/op \(.Baseline.allocs_per_op // 0)→\(.Current.allocs_per_op // 0) \(if (.Baseline.allocs_per_op // 0) > 0 then "(\(if .AllocsPerOpChange>=0 then "+" else "" end)\(.AllocsPerOpChange|round)%)" else "(new)" end), B/op \(.Baseline.bytes_per_op // 0)→\(.Current.bytes_per_op // 0) \(if (.Baseline.bytes_per_op // 0) > 0 then "(\(if .BytesPerOpChange>=0 then "+" else "" end)\(.BytesPerOpChange|round)%)" else "(new)" end)"' reports/comparison.json 2>/dev/null || true)
             advisory=$(jq -r '.results[]? | select(.NsAdvisory==true) | "- \(.BenchmarkName): ns/op \(.NsPerOpChange|round)% slower"' reports/comparison.json 2>/dev/null || true)
           fi
           cat > reports/summary.md <<EOF
