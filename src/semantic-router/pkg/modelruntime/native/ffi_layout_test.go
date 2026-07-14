@@ -20,20 +20,28 @@ func TestTaxonomyConstants(t *testing.T) {
 	}
 }
 
+type mockAdapter struct{}
+func (m *mockAdapter) Name() Backend { return BackendCandle }
+func (m *mockAdapter) Capabilities() CapabilitySet { return CapabilitySet{} }
+func (m *mockAdapter) LoadModel(ctx context.Context, req LoadRequest) (ModelHandle, error) { return nil, nil }
+func (m *mockAdapter) UnloadModel(ctx context.Context, handle ModelHandle) error { return nil }
+func (m *mockAdapter) Info() []ModelInfo { return nil }
+
 func TestRegistryThreadSafety(t *testing.T) {
 	reg := NewRegistry()
-	
+
 	// Quick smoke test for concurrent access
 	done := make(chan bool)
 	for i := 0; i < 10; i++ {
 		go func() {
-			reg.Register(nil) // just writing to lock
+			reg.Register(&mockAdapter{}) // Use mock instead of nil
 			reg.List()
 			done <- true
 		}()
 	}
-	
+
 	for i := 0; i < 10; i++ {
 		<-done
 	}
 }
+
