@@ -169,7 +169,7 @@ func (r *OpenAIRouter) findRouterReplayRecord(replayID string) (routerreplay.Rou
 func parseRouterReplayListQuery(rawQuery string) (routerReplayListQuery, error) {
 	query := routerReplayListQuery{
 		limit:       routerReplayDefaultListLimit,
-		showDetails: true,
+		showDetails: false,
 	}
 	values, err := url.ParseQuery(rawQuery)
 	if err != nil {

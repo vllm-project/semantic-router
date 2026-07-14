@@ -10,17 +10,17 @@ const HEADER_INFO: Record<
   string,
   { label: string; type: 'info' | 'success' | 'warning' | 'danger' }
 > = {
-  // v0.4 keystone headers (#2203)
-  'x-vsr-schema-version': {
-    label: 'Schema Version',
-    type: 'info',
-  },
+  // Response outcome. The schema version is intentionally not user-facing.
   'x-vsr-response-path': {
     label: 'Response Path',
     type: 'info',
   },
   'x-vsr-selected-model': {
     label: 'Model',
+    type: 'info',
+  },
+  'x-vsr-selected-algorithm': {
+    label: 'Algorithm',
     type: 'info',
   },
   'x-vsr-selected-decision': {
@@ -202,9 +202,30 @@ function summarizeHeaderValue(key: string, rawValue: string): string {
   return `${values[0]} +${values.length - 1}`
 }
 
+function routingHeaderPriority(key: string): number {
+  if (key.startsWith('x-vsr-matched-')) return 0
+  if (key === 'x-vsr-selected-decision') return 1
+  if (key === 'x-vsr-selected-algorithm' || key === 'x-vsr-looper-algorithm') return 2
+  if (
+    key === 'x-vsr-selected-model' ||
+    key === 'x-vsr-looper-model' ||
+    key === 'x-vsr-looper-models-used'
+  )
+    return 3
+  if (key === 'x-vsr-response-path') return 4
+  return 5
+}
+
 const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
   // Filter to only show headers that exist
-  const displayHeaders = Object.entries(headers).filter(([key]) => key in HEADER_INFO)
+  const hasSelectedAlgorithm = Boolean(headers['x-vsr-selected-algorithm'])
+  const displayHeaders = Object.entries(headers)
+    .filter(
+      ([key]) => key in HEADER_INFO && !(hasSelectedAlgorithm && key === 'x-vsr-looper-algorithm'),
+    )
+    .sort(
+      ([leftKey], [rightKey]) => routingHeaderPriority(leftKey) - routingHeaderPriority(rightKey),
+    )
 
   if (displayHeaders.length === 0) {
     return null

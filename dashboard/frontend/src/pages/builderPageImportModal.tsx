@@ -1,4 +1,6 @@
-import React from "react";
+import React, { useId } from "react";
+
+import useAccessibleDialog from "@/hooks/useAccessibleDialog";
 
 import styles from "./BuilderPage.module.css";
 
@@ -35,14 +37,43 @@ const BuilderImportModal: React.FC<BuilderImportModalProps> = ({
   onLoadFromRouter,
   onConfirm,
 }) => {
+  const dialogId = useId();
+  const titleId = `${dialogId}-title`;
+  const descriptionId = `${dialogId}-description`;
+  const dialogRef = useAccessibleDialog<HTMLDivElement>({
+    isOpen: open,
+    onClose,
+  });
+
   if (!open) return null;
 
   return (
-    <div className={styles.modalOverlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(event) => event.stopPropagation()}>
+    <div
+      className={styles.modalOverlay}
+      role="presentation"
+      onMouseDown={onClose}
+    >
+      <div
+        ref={dialogRef}
+        className={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        aria-busy={importUrlLoading || loadingFromRouter}
+        tabIndex={-1}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <div className={styles.modalHeader}>
-          <h3 className={styles.modalTitle}>Import Config</h3>
-          <button className={styles.modalClose} onClick={onClose}>
+          <h3 id={titleId} className={styles.modalTitle}>
+            Import Config
+          </h3>
+          <button
+            type="button"
+            className={styles.modalClose}
+            onClick={onClose}
+            aria-label="Close import dialog"
+          >
             <svg
               width="14"
               height="14"
@@ -56,15 +87,16 @@ const BuilderImportModal: React.FC<BuilderImportModalProps> = ({
           </button>
         </div>
         <div className={styles.modalBody}>
-          <p className={styles.modalHint}>
-            Paste a full router config YAML or routing fragment below, load
-            from a file, fetch from a URL, or load the current router config
+          <p id={descriptionId} className={styles.modalHint}>
+            Paste a full router config YAML or routing fragment below, load from
+            a file, fetch from a URL, or load the current router config
             directly. Only the routing section will be decompiled into DSL.
           </p>
           <div className={styles.importUrlRow}>
             <input
               className={styles.importUrlInput}
               type="url"
+              aria-label="Router config URL"
               value={importUrl}
               onChange={(event) => onImportUrlChange(event.target.value)}
               placeholder="https://example.com/config.yaml"
@@ -73,6 +105,7 @@ const BuilderImportModal: React.FC<BuilderImportModalProps> = ({
               }}
             />
             <button
+              type="button"
               className={styles.toolbarBtn}
               onClick={onImportUrl}
               disabled={importUrlLoading || !importUrl.trim()}
@@ -104,16 +137,26 @@ const BuilderImportModal: React.FC<BuilderImportModalProps> = ({
           <textarea
             ref={importTextareaRef}
             className={styles.importTextarea}
+            aria-label="Router config YAML"
             value={importText}
             onChange={(event) => onImportTextChange(event.target.value)}
             placeholder="Paste YAML config here..."
             spellCheck={false}
+            data-dialog-initial-focus
           />
-          {importError && <div className={styles.importError}>{importError}</div>}
+          {importError && (
+            <div className={styles.importError} role="alert">
+              {importError}
+            </div>
+          )}
         </div>
         <div className={styles.modalFooter}>
           <div className={styles.modalFooterImportActions}>
-            <button className={styles.toolbarBtn} onClick={onSelectFile}>
+            <button
+              type="button"
+              className={styles.toolbarBtn}
+              onClick={onSelectFile}
+            >
               <svg
                 width="12"
                 height="12"
@@ -131,6 +174,7 @@ const BuilderImportModal: React.FC<BuilderImportModalProps> = ({
               Load File
             </button>
             <button
+              type="button"
               className={styles.toolbarBtnPrimary}
               onClick={onLoadFromRouter}
               disabled={loadingFromRouter}
@@ -155,10 +199,15 @@ const BuilderImportModal: React.FC<BuilderImportModalProps> = ({
             </button>
           </div>
           <div className={styles.modalFooterPrimaryActions}>
-            <button className={styles.toolbarBtn} onClick={onClose}>
+            <button
+              type="button"
+              className={styles.toolbarBtn}
+              onClick={onClose}
+            >
               Cancel
             </button>
             <button
+              type="button"
               className={styles.toolbarBtnPrimary}
               onClick={onConfirm}
               disabled={!importText.trim()}

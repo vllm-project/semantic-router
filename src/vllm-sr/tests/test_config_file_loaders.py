@@ -81,7 +81,7 @@ def test_parse_user_config_rejects_empty_file(tmp_path: Path) -> None:
         parse_user_config(str(config_path))
 
 
-def test_parse_user_config_preserves_cached_input_pricing(tmp_path: Path) -> None:
+def test_parse_user_config_preserves_cache_pricing(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
@@ -89,6 +89,7 @@ def test_parse_user_config_preserves_cached_input_pricing(tmp_path: Path) -> Non
         "currency": "USD",
         "prompt_per_1m": 2.0,
         "cached_input_per_1m": 0.25,
+        "cache_write_per_1m": 2.5,
         "completion_per_1m": 6.0,
     }
     config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
@@ -98,7 +99,9 @@ def test_parse_user_config_preserves_cached_input_pricing(tmp_path: Path) -> Non
     pricing = parsed.providers.models[0].pricing
     assert pricing is not None
     assert pricing.cached_input_per_1m == 0.25
+    assert pricing.cache_write_per_1m == 2.5
     assert pricing.model_dump()["cached_input_per_1m"] == 0.25
+    assert pricing.model_dump()["cache_write_per_1m"] == 2.5
 
 
 def test_parse_user_config_preserves_backend_identity_hints(tmp_path: Path) -> None:

@@ -100,6 +100,7 @@ func RequiredPermission(method, path string) string {
 		knowledgePermission,
 		toolsPermission,
 		observabilityPermission,
+		fleetSimPermission,
 		featurePermission,
 	} {
 		if permission, ok := resolver(method, path); ok {
@@ -150,6 +151,10 @@ func settingsPermission(method, path string) (string, bool) {
 
 func routerPermission(method, path string) (string, bool) {
 	switch {
+	case path == "/api/router/config/deploy",
+		path == "/api/router/config/deploy/preview",
+		path == "/api/router/config/rollback":
+		return PermConfigDeploy, true
 	case strings.HasPrefix(path, "/api/router/config/"):
 		if method == http.MethodGet {
 			return PermConfigRead, true
@@ -171,16 +176,16 @@ func knowledgePermission(_ string, path string) (string, bool) {
 	}
 }
 
-func toolsPermission(_ string, path string) (string, bool) {
+func toolsPermission(method string, path string) (string, bool) {
 	switch {
 	case strings.HasPrefix(path, "/api/mcp/tools/execute"):
 		return PermToolsUse, true
 	case path == "/api/mcp/tools":
-		return PermMcpRead, true
+		return readOrManagePermission(method, PermMcpRead, PermMcpManage), true
 	case path == "/api/mcp/servers":
-		return PermMcpRead, true
+		return readOrManagePermission(method, PermMcpRead, PermMcpManage), true
 	case strings.HasPrefix(path, "/api/mcp/servers/") && strings.HasSuffix(path, "/status"):
-		return PermMcpRead, true
+		return readOrManagePermission(method, PermMcpRead, PermMcpManage), true
 	case strings.HasPrefix(path, "/api/tools"):
 		return PermToolsUse, true
 	case strings.HasPrefix(path, "/api/mcp/"):
@@ -188,6 +193,13 @@ func toolsPermission(_ string, path string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+func readOrManagePermission(method, readPermission, managePermission string) string {
+	if method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions {
+		return readPermission
+	}
+	return managePermission
 }
 
 func observabilityPermission(_ string, path string) (string, bool) {
@@ -203,9 +215,19 @@ func observabilityPermission(_ string, path string) (string, bool) {
 	}
 }
 
+func fleetSimPermission(method, path string) (string, bool) {
+	if !strings.HasPrefix(path, "/api/fleet-sim/") && path != "/api/fleet-sim" {
+		return "", false
+	}
+	return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
+}
+
 func featurePermission(method, path string) (string, bool) {
 	switch {
 	case strings.HasPrefix(path, "/api/evaluation"):
+		if path == "/api/evaluation/run" || strings.HasPrefix(path, "/api/evaluation/cancel/") {
+			return PermEvalRun, true
+		}
 		if method == http.MethodPost || method == http.MethodDelete {
 			return PermEvalWrite, true
 		}

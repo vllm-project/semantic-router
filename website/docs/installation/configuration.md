@@ -38,6 +38,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `models`
   - `providers.defaults` holds `default_model`, `reasoning_families`, and `default_reasoning_effort`
   - `providers.models[*]` holds `provider_model_id`, `backend_refs`, `pricing`, `api_format`, and `external_model_ids`; each backend ref can include optional `backend_id` and `engine_kind` identity hints for backend telemetry adapters
+  - `providers.models[*].pricing` uses per-million-token rates for prompt, cached input, optional cache writes, and completion; `cache_write_per_1m` defaults to `prompt_per_1m` when omitted
 - `global` owns router-wide runtime overrides.
   - `global.router` groups router-engine control knobs such as config-source selection, route-cache, and model-selection defaults
   - `global.router.config_source` selects whether runtime config comes from the canonical YAML file (`file`) or from in-process Kubernetes CRD reconciliation (`kubernetes`)
@@ -405,6 +406,36 @@ vllm-sr config import --from openclaw --source openclaw.json --target config.yam
 ```
 
 When `--source` is omitted, the importer checks `OPENCLAW_CONFIG_PATH`, `./openclaw.json`, and `~/.openclaw/openclaw.json` in that order.
+
+## Environment variable substitution
+
+During config load, string values anywhere in the canonical YAML tree can reference environment variables. This is the supported way to keep passwords, API keys, and other secrets out of ConfigMaps while still using a checked-in config skeleton.
+
+Supported forms:
+
+- `${VAR}` and `$VAR`
+- `${VAR:-default}` when `VAR` is unset or empty
+- `${VAR-default}` when `VAR` is unset
+- `$$` for a literal `$`
+
+Example for Router Replay on Kubernetes:
+
+```yaml
+global:
+  services:
+    router_replay:
+      enabled: true
+      store_backend: postgres
+      postgres:
+        host: 10.0.0.1
+        database: vsr
+        user: default
+        password: "${POSTGRES_PASSWORD}"
+        ssl_mode: disable
+        table_name: router_replay
+```
+
+Wire `POSTGRES_PASSWORD` from a Secret into the router Deployment environment, then mount or generate the config that references it. The same pattern works for Milvus, Redis, Valkey, Qdrant, and provider `backend_refs[].api_key` values.
 
 ## Quick guides by environment
 

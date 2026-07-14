@@ -749,7 +749,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## 🔗 Links
 
-- **Documentation**: https://vllm-semantic-router.com
+- **Documentation**: https://vllm-sr.ai
 - **GitHub**: https://github.com/vllm-project/semantic-router
 - **Issues**: https://github.com/vllm-project/semantic-router/issues
 - **PyPI**: https://pypi.org/project/vllm-semantic-router-bench/

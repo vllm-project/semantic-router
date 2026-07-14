@@ -66,7 +66,7 @@ export const PluginChainNode = memo<NodeProps<PluginChainNodeData>>(({ data }) =
             <>
               <div
                 className={styles.chainPlugin}
-                style={{ background: ALGORITHM_COLORS[algorithm.type]?.background || '#76b900' }}
+                style={{ background: ALGORITHM_COLORS[algorithm.type]?.background || '#8f949c' }}
                 title={algorithm.type}
               >
                 <span>{ALGORITHM_ICONS[algorithm.type] || '🔄'}</span>

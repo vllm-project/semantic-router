@@ -39,7 +39,11 @@ global:
 
 Keep `max_bytes` high enough for your largest prompt or multimodal payload. Keep `timeout_sec` greater than the expected upload time between the first body chunk and end-of-stream.
 
-The default reference config shows the same structure in `config/config.yaml`, and the streaming e2e profile uses it in `e2e/profiles/streaming/values.yaml`.
+The 10 MiB and 30-second values above are example guardrails matching the
+streaming e2e profile in `e2e/profiles/streaming/values.yaml`; they are not
+runtime defaults or experimentally calibrated limits. Omitting either value or
+setting it to zero disables that guard. The reference `config/config.yaml`
+demonstrates a smaller 1 MiB and 15-second policy.
 
 ## Envoy AI Gateway / Envoy Gateway
 
@@ -89,6 +93,13 @@ A complete Kubernetes example is available in `deploy/kubernetes/streaming/aigw-
 
 agentgateway uses the Gateway API `AgentgatewayPolicy` abstraction rather than raw Envoy `processing_mode` names. For streamed bodies use `FullDuplexStreamed`.
 
+Buffered request bodies remain common in proxy defaults and other deployment
+examples. The bundled agentgateway example opts into streaming explicitly in
+`deploy/kubernetes/agentgateway/extproc-policy.yaml`; the Helm command in the
+[agentgateway installation guide](./agentgateway.md) explicitly enables
+`global.router.streamed_body`. Use both settings together when adopting that
+example.
+
 ```yaml
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -111,10 +122,18 @@ spec:
         requestBodyMode: FullDuplexStreamed
         responseHeaderMode: Send
         responseBodyMode: Buffered
+        requestTrailerMode: Send
+        responseTrailerMode: Send
         allowModeOverride: true
 ```
 
 agentgateway does not support a separate `Streamed` request-body mode. Use `FullDuplexStreamed` for streamed request bodies and enable `global.router.streamed_body` in Semantic Router.
+
+Semantic Router detects the negotiated ExtProc body mode. With
+`FullDuplexStreamed`, it buffers intermediate request chunks without emitting
+body replacements, then sends the complete processed request as one
+end-of-stream `StreamedBodyResponse`. With Envoy `STREAMED`, it retains the
+one-response-per-chunk behavior required by that mode.
 
 ## Configure an immediate streamed looper response
 

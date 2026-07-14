@@ -26,6 +26,7 @@ providers:
         currency: USD
         prompt_per_1m: 0.18
         cached_input_per_1m: 0.04
+        cache_write_per_1m: 0.225
         completion_per_1m: 0.42
       external_model_ids:
         openai: qwen3-8b
@@ -1499,7 +1500,7 @@ global:
           endpoint: jaeger:4317
           insecure: true
         sampling:
-          type: traceidratio
+          type: probabilistic
           rate: 0.5
         resource:
           service_name: vllm-sr

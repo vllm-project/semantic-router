@@ -46,7 +46,7 @@ func main() {
 	server := newExtProcServerOrFatal(opts, startupWriter, runtimeRegistry)
 
 	warmupRouterRuntime(server, embeddingRuntime)
-	markRouterReady(startupWriter)
+	markRouterReady(startupWriter, startupEmbeddingProviderStatus(embeddingRuntime))
 	logStartupSummary(cfg, opts, embeddingRuntime.AnyReady)
 	startKubernetesControllerIfNeeded(cfg, opts.kubeconfig, opts.namespace)
 	startExtProcServerOrFatal(server, startupWriter)

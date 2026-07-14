@@ -93,9 +93,17 @@ test.describe('Users page', () => {
 
     await page.goto('/users')
 
-    await page.getByRole('button', { name: 'Create user' }).click()
+    const createUserButton = page.getByRole('button', { name: 'Create user' })
+    const overflowBeforeDialog = await page.evaluate(() => document.body.style.overflow)
+    await createUserButton.click()
 
     const dialog = page.getByRole('dialog', { name: 'Create user' })
+    const emailInput = dialog.getByLabel('Email')
+    const passwordInput = dialog.getByLabel('Password')
+    await expect(emailInput).toBeFocused()
+    await expect(emailInput).toHaveAttribute('autocomplete', 'username')
+    await expect(passwordInput).toHaveAttribute('autocomplete', 'new-password')
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe('hidden')
     await expect(dialog.getByText('Permissions', { exact: true })).toBeVisible()
     await expect(dialog.getByText('config.read')).toBeVisible()
     await expect(dialog.getByText('users.manage')).toHaveCount(0)
@@ -107,5 +115,18 @@ test.describe('Users page', () => {
     await dialog.getByLabel('Role').selectOption('write')
     await expect(dialog.getByText('config.deploy')).toBeVisible()
     await expect(dialog.getByText('users.manage')).toHaveCount(0)
+
+    const closeButton = dialog.getByRole('button', { name: 'Close user dialog' })
+    const submitButton = dialog.getByRole('button', { name: 'Create user' })
+    await closeButton.focus()
+    await page.keyboard.press('Shift+Tab')
+    await expect(submitButton).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(closeButton).toBeFocused()
+
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+    await expect(createUserButton).toBeFocused()
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe(overflowBeforeDialog)
   })
 })

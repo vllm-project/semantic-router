@@ -44,5 +44,10 @@ export interface UnifiedTool {
 }
 
 export type ServerFilter = 'all' | 'connected' | 'disconnected'
+export type ServerSort = 'name-asc' | 'status' | 'tools-desc'
+export type ToolSourceFilter = 'all' | UnifiedTool['sourceType']
+export type ToolSort = 'name-asc' | 'source-asc' | 'parameters-desc'
 
-export const TOOLS_GRID_MAX_HEIGHT = 320
+export const MCP_TOOLS_PAGE_SIZE = 12
+export const MCP_SERVERS_PAGE_SIZE = 8
+export const MCP_NESTED_TOOLS_PAGE_SIZE = 6

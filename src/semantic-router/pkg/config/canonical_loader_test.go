@@ -460,6 +460,8 @@ providers:
       pricing:
         currency: USD
         prompt_per_1m: 0.24
+        cached_input_per_1m: 0.06
+        cache_write_per_1m: 0.30
         completion_per_1m: 0.96
       backend_refs:
         - endpoint: 127.0.0.1:8000
@@ -485,7 +487,7 @@ routing:
 	}
 
 	pricing := cfg.ModelConfig["qwen3"].Pricing
-	if pricing.PromptPer1M != 0.24 || pricing.CompletionPer1M != 0.96 || pricing.Currency != "USD" {
+	if pricing.PromptPer1M != 0.24 || pricing.CachedInputPer1M != 0.06 || pricing.CacheWritePer1M == nil || *pricing.CacheWritePer1M != 0.30 || pricing.CompletionPer1M != 0.96 || pricing.Currency != "USD" {
 		t.Fatalf("expected provider pricing to be preserved in model config, got %#v", pricing)
 	}
 

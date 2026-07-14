@@ -106,6 +106,8 @@ export interface ReasoningFamily {
 export interface ModelPricing {
   currency?: string
   prompt_per_1m?: number
+  cached_input_per_1m?: number
+  cache_write_per_1m?: number
   completion_per_1m?: number
 }
 
@@ -222,6 +224,7 @@ export interface DecisionConfig {
   rules: DecisionRuleSet
   modelRefs: DecisionModelRef[]
   plugins?: DecisionPluginConfig[]
+  algorithm?: Record<string, unknown>
 }
 
 export interface RoutingConfig {
@@ -250,6 +253,8 @@ export interface NormalizedModel {
   pricing?: {
     currency?: string
     prompt_per_1m?: number
+    cached_input_per_1m?: number
+    cache_write_per_1m?: number
     completion_per_1m?: number
   }
 }
@@ -383,6 +388,7 @@ export interface FeedbackDetectorConfig {
 }
 
 export interface EmbeddingOptimizationConfig {
+  backend?: 'candle' | 'openvino' | 'openai_compatible'
   model_type?: string
   preload_embeddings?: boolean
   target_dimension?: number
@@ -390,6 +396,15 @@ export interface EmbeddingOptimizationConfig {
   enable_soft_matching?: boolean
   top_k?: number
   min_score_threshold?: number
+}
+
+export interface EmbeddingEndpointConfig {
+  base_url?: string
+  model?: string
+  api_key_env?: string
+  timeout_seconds?: number
+  max_retries?: number
+  dimensions?: number
 }
 
 export interface EmbeddingModelsConfig {
@@ -400,6 +415,7 @@ export interface EmbeddingModelsConfig {
   bert_model_path?: string
   use_cpu?: boolean
   embedding_config?: EmbeddingOptimizationConfig
+  endpoint?: EmbeddingEndpointConfig
 }
 
 export interface ObservabilityConfig {
@@ -1197,33 +1213,33 @@ export interface AddSignalFormState {
   name: string
   description: string
   operator: 'AND' | 'OR'
-  keywords: string
+  keywords: string[]
   case_sensitive: boolean
   threshold: number
-  candidates: string
+  candidates: string[]
   aggregation_method: string
-  mmlu_categories: string
+  mmlu_categories: string[]
   min_tokens?: string
   max_tokens?: string
-  preference_examples?: string
+  preference_examples?: string[]
   preference_threshold?: number
   lookback_turns?: number
   complexity_threshold?: number
-  structure_feature?: string
-  structure_predicate?: string
+  structure_feature?: StructureFeature
+  structure_predicate?: NumericPredicate
   role?: string
-  subjects?: string
-  hard_candidates?: string
-  easy_candidates?: string
+  subjects?: Subject[]
+  hard_candidates?: string[]
+  easy_candidates?: string[]
   composer_operator?: 'AND' | 'OR' | 'NOT'
-  composer_conditions?: string
+  composer_conditions?: DecisionCondition[]
   jailbreak_threshold?: number
   jailbreak_method?: string
   include_history?: boolean
-  jailbreak_patterns?: string
-  benign_patterns?: string
+  jailbreak_patterns?: string[]
+  benign_patterns?: string[]
   pii_threshold?: number
-  pii_types_allowed?: string
+  pii_types_allowed?: string[]
   pii_include_history?: boolean
   kb_name?: string
   target_kind?: 'label' | 'group'

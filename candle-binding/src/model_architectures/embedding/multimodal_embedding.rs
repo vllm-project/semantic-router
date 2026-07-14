@@ -605,7 +605,7 @@ struct SigLIPVisionEncoder {
     patch_embedding: SigLIPPatchEmbedding,
     layers: Vec<SigLIPEncoderLayer>,
     post_layernorm: LayerNorm,
-    head: Option<SigLIPHead>,
+    head: SigLIPHead,
 }
 
 /// MultiheadAttention compatible with PyTorch's nn.MultiheadAttention combined-QKV
@@ -754,7 +754,7 @@ impl SigLIPVisionEncoder {
             )?);
         }
         let post_layernorm = layer_norm(config.image_hidden_size, 1e-6, vb.pp("post_layernorm"))?;
-        let head = SigLIPHead::load(vb.pp("head"), config).ok();
+        let head = SigLIPHead::load(vb.pp("head"), config)?;
         Ok(Self {
             patch_embedding,
             layers,
@@ -770,14 +770,13 @@ impl SigLIPVisionEncoder {
     /// BERT-style `mean + Linear + tanh` which produced garbage cosines.
     /// Mirrors candle-transformers/src/models/siglip.rs:373.
     ///
-    /// The mean-pool path on the `head: None` branch is intentional
-    /// defense-in-depth. It should not trigger on a genuine SigLIP checkpoint
-    /// (the head weights are always present). If this branch ever fires in
-    /// production, that is a misload to investigate, not a silently-acceptable
-    /// path. This replaces a prior `linear(head.probe).or_else(linear(head.dense)).ok()`
-    /// pattern that silently fell through to mean-pool on real SigLIP
-    /// checkpoints, masking the kind of misload this code path is now meant
-    /// to surface.
+    /// The pooling head is required: genuine SigLIP checkpoints always ship
+    /// the head weights, and `load` fails loudly when they are missing. A
+    /// prior version kept `head: Option<SigLIPHead>` with a silent mean-pool
+    /// fallback on the `None` branch; mean-pooled penultimate activations are
+    /// not in the trained pooled-output space, so every downstream cosine
+    /// threshold misreads them while nothing logs or errors. A missing head
+    /// is a misload to surface at load time, not a degraded mode to serve.
     fn forward(&self, pixel_values: &Tensor) -> candle_core::Result<Tensor> {
         // SigLIP expects inputs in [-1, 1], normalized via (x - mean) / std
         // per channel using IMAGE_MEAN / IMAGE_STD from the model's
@@ -799,10 +798,7 @@ impl SigLIPVisionEncoder {
             xs = layer.forward(&xs)?;
         }
         xs = xs.apply(&self.post_layernorm)?;
-        match &self.head {
-            Some(h) => h.forward(&xs),
-            None => xs.mean(1),
-        }
+        self.head.forward(&xs)
     }
 }
 
@@ -1443,6 +1439,86 @@ impl EmbeddingPathSpecialization for MultiModalEmbeddingModel {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn tiny_image_config() -> MultiModalEmbeddingConfig {
+        MultiModalEmbeddingConfig {
+            image_hidden_size: 8,
+            image_patch_size: 4,
+            image_size: 8, // 4 patches
+            image_num_layers: 0,
+            image_num_heads: 2,
+            image_intermediate_size: 16,
+            ..Default::default()
+        }
+    }
+
+    /// Tensor map covering exactly what SigLIPVisionEncoder::load reads for a
+    /// zero-layer encoder, optionally including the pooling-head weights.
+    fn encoder_tensors(
+        config: &MultiModalEmbeddingConfig,
+        with_head: bool,
+    ) -> std::collections::HashMap<String, Tensor> {
+        let h = config.image_hidden_size;
+        let p = config.image_patch_size;
+        let i = config.image_intermediate_size;
+        let n = config.num_image_patches();
+        let dev = Device::Cpu;
+        let mut m = std::collections::HashMap::new();
+        let mut put = |name: &str, dims: Vec<usize>| {
+            m.insert(
+                name.to_string(),
+                Tensor::zeros(dims, candle_core::DType::F32, &dev).unwrap(),
+            );
+        };
+        put("embeddings.patch_embedding.weight", vec![h, 3, p, p]);
+        put("embeddings.patch_embedding.bias", vec![h]);
+        put("embeddings.position_embedding.weight", vec![n, h]);
+        put("post_layernorm.weight", vec![h]);
+        put("post_layernorm.bias", vec![h]);
+        if with_head {
+            put("head.probe", vec![1, 1, h]);
+            put("head.attention.in_proj_weight", vec![3 * h, h]);
+            put("head.attention.in_proj_bias", vec![3 * h]);
+            put("head.attention.out_proj.weight", vec![h, h]);
+            put("head.attention.out_proj.bias", vec![h]);
+            put("head.layernorm.weight", vec![h]);
+            put("head.layernorm.bias", vec![h]);
+            put("head.mlp.fc1.weight", vec![i, h]);
+            put("head.mlp.fc1.bias", vec![i]);
+            put("head.mlp.fc2.weight", vec![h, i]);
+            put("head.mlp.fc2.bias", vec![h]);
+        }
+        m
+    }
+
+    #[test]
+    fn test_siglip_vision_encoder_loads_with_head_weights() {
+        let config = tiny_image_config();
+        let vb = VarBuilder::from_tensors(
+            encoder_tensors(&config, true),
+            candle_core::DType::F32,
+            &Device::Cpu,
+        );
+        SigLIPVisionEncoder::load(vb, &config).expect("encoder with full head weights should load");
+    }
+
+    /// A checkpoint without the pooling-head weights must fail to load. The
+    /// prior Option-based load swallowed the missing head and silently
+    /// mean-pooled at forward time, producing embeddings outside the trained
+    /// pooled-output space with nothing logged.
+    #[test]
+    fn test_siglip_vision_encoder_requires_pooling_head() {
+        let config = tiny_image_config();
+        let vb = VarBuilder::from_tensors(
+            encoder_tensors(&config, false),
+            candle_core::DType::F32,
+            &Device::Cpu,
+        );
+        assert!(
+            SigLIPVisionEncoder::load(vb, &config).is_err(),
+            "encoder load must fail loudly when head weights are missing"
+        );
+    }
 
     #[test]
     fn test_default_config() {
