@@ -313,34 +313,6 @@
   line-height: 1.65;
 }
 
-.references {
-  display: grid;
-  border-top: 1px solid var(--site-border);
-}
-
-.references a {
-  display: grid;
-  grid-template-columns: minmax(13rem, 0.4fr) minmax(0, 0.6fr);
-  gap: 1rem;
-  padding: 0.9rem 0;
-  border-bottom: 1px solid var(--site-border);
-  color: var(--site-text);
-}
-
-.references a:hover {
-  color: #087ac5;
-  text-decoration: none;
-}
-
-.references strong {
-  font-size: 0.78rem;
-}
-
-.references span {
-  color: var(--site-muted-bright);
-  font-size: 0.74rem;
-}
-
 @media (max-width: 1050px) {
   .heroGrid,
   .section {
@@ -381,10 +353,5 @@
 
   .emeritusLead {
     grid-template-columns: 1fr;
-  }
-
-  .references a {
-    grid-template-columns: 1fr;
-    gap: 0.25rem;
   }
 }

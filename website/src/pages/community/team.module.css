@@ -1,3 +1,8 @@
+.page {
+  min-height: 100vh;
+  background: var(--site-bg);
+}
+
 .container {
   width: min(100% - 2.5rem, var(--site-grid-max));
   margin: 0 auto;

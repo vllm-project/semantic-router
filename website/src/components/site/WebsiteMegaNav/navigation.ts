@@ -198,12 +198,6 @@ export const WEBSITE_MEGA_NAV_GROUPS: WebsiteMegaNavGroup[] = [
             description: 'Review the expectations for collaboration.',
             to: '/community/code-of-conduct',
           },
-          {
-            key: 'issues',
-            label: 'GitHub Issues',
-            description: 'Report a problem or pick up scoped work.',
-            href: 'https://github.com/vllm-project/semantic-router/issues',
-          },
         ],
       },
       {

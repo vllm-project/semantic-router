@@ -121,8 +121,8 @@ export default function Governance(): ReactNode {
                 to="Committer"
                 requirements={[
                   'Sustained participation for at least three months.',
-                  'At least five substantial merged PRs, or equivalent research, documentation, or community work.',
-                  'At least five meaningful reviews or issue-triage actions that demonstrate sound judgement.',
+                  'At least ten substantial merged PRs, or equivalent research, documentation, or community work.',
+                  'At least ten meaningful reviews or issue-triage actions that demonstrate sound judgement.',
                   'A Maintainer sponsor and a public nomination PR with a seven-day review window.',
                 ]}
                 decision="Approved by a majority of active Maintainers with no unresolved technical or conduct objection."
@@ -237,39 +237,6 @@ export default function Governance(): ReactNode {
             </p>
           </GovernanceSection>
 
-          <GovernanceSection index="06" title="Design references">
-            <p className={styles.sectionIntro}>
-              This model adapts Kubernetes community practices to a smaller,
-              single-project community and intentionally uses the shorter
-              three-month inactivity window selected for vLLM Semantic Router.
-            </p>
-            <div className={styles.references}>
-              <a
-                href="https://github.com/kubernetes/community/blob/main/community-membership.md"
-                target="_blank"
-                rel="noreferrer"
-              >
-                <strong>Kubernetes community membership</strong>
-                <span>Role progression, review duties, and inactive membership ↗</span>
-              </a>
-              <a
-                href="https://github.com/kubernetes/community/blob/main/contributors/guide/owners.md"
-                target="_blank"
-                rel="noreferrer"
-              >
-                <strong>Kubernetes OWNERS guide</strong>
-                <span>Scoped review and approval responsibility ↗</span>
-              </a>
-              <a
-                href="https://github.com/kubernetes/steering/blob/main/charter.md"
-                target="_blank"
-                rel="noreferrer"
-              >
-                <strong>Kubernetes Steering Committee charter</strong>
-                <span>Delegation, governance, voting, and escalation ↗</span>
-              </a>
-            </div>
-          </GovernanceSection>
         </main>
       </div>
     </Layout>
