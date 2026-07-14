@@ -361,12 +361,9 @@ func TestApplyEmbeddingDefaultsImageOnlyUsesNativeDimension(t *testing.T) {
 	}
 }
 
-func TestApplyEmbeddingDefaultsMixedUsesTextDefault(t *testing.T) {
-	// A mixed text+image request defaults req.Dimension to the text default
-	// (768). req.Dimension controls the text side only; the image side always
-	// encodes at its native dimension regardless. This preserves text recall
-	// rather than silently downgrading text to 384 for a false-consistency win
-	// (cross-encoder vectors do not align across modalities regardless of dim).
+func TestApplyEmbeddingDefaultsMixedUsesNativeDimension(t *testing.T) {
+	// A mixed text+image request must use the image model's native dimension so
+	// one successful response cannot contain vectors of different lengths.
 	stubMultiModalDim(t, 384)
 	req := EmbeddingRequest{
 		Texts:  []string{"hello"},
@@ -375,8 +372,8 @@ func TestApplyEmbeddingDefaultsMixedUsesTextDefault(t *testing.T) {
 
 	applyEmbeddingDefaults(&req)
 
-	if req.Dimension != defaultEmbeddingDimension {
-		t.Fatalf("expected mixed request to default to text default %d, got %d", defaultEmbeddingDimension, req.Dimension)
+	if req.Dimension != 384 {
+		t.Fatalf("expected mixed request to default to native dimension 384, got %d", req.Dimension)
 	}
 }
 
@@ -424,10 +421,9 @@ func TestValidateEmbeddingRequestRejectsImageOnlyDimensionAboveNative(t *testing
 	}
 }
 
-func TestValidateEmbeddingRequestAllowsAboveNativeDimensionForMixed(t *testing.T) {
-	// Mixed: req.Dimension controls the text side, and the image side always
-	// encodes at its native dimension regardless. A text-legal req.Dimension
-	// like 768 must be accepted even though it exceeds the image ceiling.
+func TestValidateEmbeddingRequestRejectsAboveNativeDimensionForMixed(t *testing.T) {
+	// Every request containing images must reject a dimension above the image
+	// model's native ceiling before either modality is encoded.
 	stubMultiModalDim(t, 384)
 	req := EmbeddingRequest{
 		Texts:     []string{"hello"},
@@ -435,8 +431,12 @@ func TestValidateEmbeddingRequestAllowsAboveNativeDimensionForMixed(t *testing.T
 		Dimension: 768,
 	}
 
-	if _, message, ok := validateEmbeddingRequest(req, nil); !ok {
-		t.Fatalf("expected mixed request with text-legal dimension 768 to be accepted; got %q", message)
+	code, message, ok := validateEmbeddingRequest(req, nil)
+	if ok {
+		t.Fatalf("expected mixed request with dimension 768 to be rejected")
+	}
+	if code != "INVALID_DIMENSION" || !strings.Contains(message, "384") {
+		t.Fatalf("unexpected error %q: %q", code, message)
 	}
 }
 
@@ -517,17 +517,17 @@ func TestValidateEmbeddingRequestAllowsTextModelForMixed(t *testing.T) {
 	}
 }
 
-func TestImageTargetDimensionMixedCapsAboveNativeAtNative(t *testing.T) {
-	// Mixed with a text-scale dimension (768 > native): the image side cannot
-	// reach it and caps at native, diverging from the text side.
+func TestImageTargetDimensionMixedUsesRequestDimension(t *testing.T) {
+	// Validation rejects above-native dimensions at the API boundary. The target
+	// helper itself must not silently change a request's accepted dimension.
 	stubMultiModalDim(t, 384)
 	req := EmbeddingRequest{
 		Texts:     []string{"hello"},
 		Images:    []string{"data:image/png;base64,aGVsbG8="},
 		Dimension: 768,
 	}
-	if got := imageTargetDimension(req); got != 384 {
-		t.Fatalf("expected mixed request image encode dim to cap at 384 (native), got %d", got)
+	if got := imageTargetDimension(req); got != 768 {
+		t.Fatalf("expected mixed request image target to preserve 768 for validated caller, got %d", got)
 	}
 }
 
@@ -631,7 +631,7 @@ func TestMultiModalModelIDBaseNamesConfiguredPath(t *testing.T) {
 	s := &ClassificationAPIServer{
 		config: &config.RouterConfig{
 			InlineModels: config.InlineModels{
-				EmbeddingModels: config.EmbeddingModels{MultiModalModelPath: "models/multi-modal-embed-small"},
+				EmbeddingModels: config.EmbeddingModels{MultiModalModelPath: "models/mom-embedding-multimodal"},
 			},
 		},
 	}
