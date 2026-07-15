@@ -1,0 +1,73 @@
+.section {
+  padding: clamp(2.5rem, 5vw, 3.5rem) 0 clamp(3rem, 6vw, 4rem);
+  border-top: 1px solid var(--site-border);
+  background: linear-gradient(180deg, var(--site-bg-alt), var(--site-bg));
+}
+
+.shell {
+  display: grid;
+  gap: 1.25rem;
+  padding: clamp(1.25rem, 2.5vw, 1.75rem);
+  border: 1px solid var(--site-border);
+  border-radius: 1.1rem;
+  background: var(--site-surface);
+  box-shadow: var(--site-shadow-soft);
+}
+
+.copy {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.copy h2 {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+
+.copy p {
+  margin: 0;
+  max-width: 40rem;
+  color: var(--site-muted-bright);
+  line-height: 1.6;
+}
+
+.routeList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.routeLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.2rem;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--site-border);
+  border-radius: 999px;
+  background: var(--site-surface-alt);
+  color: var(--site-muted-bright);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease;
+}
+
+.routeLink:hover {
+  border-color: var(--site-border-strong);
+  background: var(--site-text);
+  color: var(--site-bg);
+  text-decoration: none;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}

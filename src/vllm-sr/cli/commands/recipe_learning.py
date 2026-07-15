@@ -90,7 +90,6 @@ def listener_replay_endpoint(endpoint: str) -> str | None:
 def normalize_replay_endpoint_query(endpoint: str, limit: int) -> str:
     parts = urlsplit(endpoint)
     query = dict(parse_qsl(parts.query, keep_blank_values=True))
-    query.setdefault("showDetails", "true")
     query.setdefault("limit", str(max(1, min(limit, _MAX_REPLAY_LIMIT))))
     return urlunsplit(
         (parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)

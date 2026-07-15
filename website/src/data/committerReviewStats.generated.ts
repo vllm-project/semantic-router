@@ -30,19 +30,19 @@ export interface CommitterStatsSnapshot {
   entries: CommitterStatsEntry[]
 }
 
-export const committerStatsGeneratedAt = '2026-07-08'
+export const committerStatsGeneratedAt = '2026-07-13'
 
 export const committerStatsData = {
   "v03ToNow": {
     "id": "v03ToNow",
     "label": "v0.3 -> Now",
-    "generatedAt": "2026-07-08",
+    "generatedAt": "2026-07-13",
     "startDate": "2026-06-05",
-    "endDate": "2026-07-08",
+    "endDate": "2026-07-13",
     "description": "Committer review and merge activity after v0.3.0.",
     "activeCommitters": 8,
-    "totalReviews": 85,
-    "totalMerges": 58,
+    "totalReviews": 115,
+    "totalMerges": 76,
     "entries": [
       {
         "rank": 1,
@@ -52,33 +52,33 @@ export const committerStatsData = {
         "avatarUrl": "https://github.com/AayushSaini101.png?size=160",
         "avatarSeed": "AayushSaini101",
         "key": "github:aayushsaini101",
-        "reviews": 35,
-        "merges": 22,
-        "total": 57
+        "reviews": 41,
+        "merges": 31,
+        "total": 72
       },
       {
         "rank": 2,
-        "name": "WUKUNTAI",
-        "login": "WUKUNTAI-0211",
-        "avatarLogin": "WUKUNTAI-0211",
-        "avatarUrl": "https://github.com/WUKUNTAI-0211.png?size=160",
-        "avatarSeed": "WUKUNTAI-0211",
-        "key": "github:wukuntai-0211",
-        "reviews": 13,
-        "merges": 15,
-        "total": 28
-      },
-      {
-        "rank": 3,
         "name": "FAUST",
         "login": "FAUST-BENCHOU",
         "avatarLogin": "FAUST-BENCHOU",
         "avatarUrl": "https://github.com/FAUST-BENCHOU.png?size=160",
         "avatarSeed": "FAUST-BENCHOU",
         "key": "github:faust-benchou",
-        "reviews": 16,
-        "merges": 10,
-        "total": 26
+        "reviews": 30,
+        "merges": 11,
+        "total": 41
+      },
+      {
+        "rank": 3,
+        "name": "WUKUNTAI",
+        "login": "WUKUNTAI-0211",
+        "avatarLogin": "WUKUNTAI-0211",
+        "avatarUrl": "https://github.com/WUKUNTAI-0211.png?size=160",
+        "avatarSeed": "WUKUNTAI-0211",
+        "key": "github:wukuntai-0211",
+        "reviews": 17,
+        "merges": 19,
+        "total": 36
       },
       {
         "rank": 4,
@@ -88,9 +88,9 @@ export const committerStatsData = {
         "avatarUrl": "https://github.com/drivebyer.png?size=160",
         "avatarSeed": "drivebyer",
         "key": "github:drivebyer",
-        "reviews": 11,
-        "merges": 9,
-        "total": 20
+        "reviews": 15,
+        "merges": 13,
+        "total": 28
       },
       {
         "rank": 5,
@@ -100,9 +100,9 @@ export const committerStatsData = {
         "avatarUrl": "https://github.com/haowu1234.png?size=160",
         "avatarSeed": "haowu1234",
         "key": "github:haowu1234",
-        "reviews": 3,
+        "reviews": 4,
         "merges": 2,
-        "total": 5
+        "total": 6
       },
       {
         "rank": 6,
@@ -112,9 +112,9 @@ export const committerStatsData = {
         "avatarUrl": "https://github.com/shraderdm.png?size=160",
         "avatarSeed": "shraderdm",
         "key": "github:shraderdm",
-        "reviews": 4,
+        "reviews": 5,
         "merges": 0,
-        "total": 4
+        "total": 5
       },
       {
         "rank": 7,
@@ -145,7 +145,7 @@ export const committerStatsData = {
   "v02ToV03": {
     "id": "v02ToV03",
     "label": "v0.2 -> v0.3",
-    "generatedAt": "2026-07-08",
+    "generatedAt": "2026-07-13",
     "startDate": "2026-03-10",
     "endDate": "2026-06-05",
     "description": "Committer review and merge activity between v0.2.0 and v0.3.0.",
@@ -290,7 +290,7 @@ export const committerStatsData = {
   "v01ToV02": {
     "id": "v01ToV02",
     "label": "v0.1 -> v0.2",
-    "generatedAt": "2026-07-08",
+    "generatedAt": "2026-07-13",
     "startDate": "2026-01-05",
     "endDate": "2026-03-10",
     "description": "Committer review and merge activity between v0.1.0 and v0.2.0.",
@@ -411,7 +411,7 @@ export const committerStatsData = {
   "v0ToV01": {
     "id": "v0ToV01",
     "label": "v0 -> v0.1",
-    "generatedAt": "2026-07-08",
+    "generatedAt": "2026-07-13",
     "startDate": null,
     "endDate": "2026-01-05",
     "description": "Initial committer review and merge activity through v0.1.0.",
@@ -628,16 +628,28 @@ export const committerStatsData = {
   "all": {
     "id": "all",
     "label": "All time",
-    "generatedAt": "2026-07-08",
+    "generatedAt": "2026-07-13",
     "startDate": null,
-    "endDate": "2026-07-08",
+    "endDate": "2026-07-13",
     "description": "Full committer review and merge history.",
     "activeCommitters": 26,
-    "totalReviews": 359,
-    "totalMerges": 98,
+    "totalReviews": 389,
+    "totalMerges": 116,
     "entries": [
       {
         "rank": 1,
+        "name": "Aayush Saini",
+        "login": "AayushSaini101",
+        "avatarLogin": "AayushSaini101",
+        "avatarUrl": "https://github.com/AayushSaini101.png?size=160",
+        "avatarSeed": "AayushSaini101",
+        "key": "github:aayushsaini101",
+        "reviews": 41,
+        "merges": 31,
+        "total": 72
+      },
+      {
+        "rank": 2,
         "name": "yuluo-yx",
         "login": "yuluo-yx",
         "avatarLogin": "yuluo-yx",
@@ -649,28 +661,16 @@ export const committerStatsData = {
         "total": 58
       },
       {
-        "rank": 2,
+        "rank": 3,
         "name": "Hao Wu",
         "login": "haowu1234",
         "avatarLogin": "haowu1234",
         "avatarUrl": "https://github.com/haowu1234.png?size=160",
         "avatarSeed": "haowu1234",
         "key": "github:haowu1234",
-        "reviews": 50,
+        "reviews": 51,
         "merges": 7,
-        "total": 57
-      },
-      {
-        "rank": 3,
-        "name": "Aayush Saini",
-        "login": "AayushSaini101",
-        "avatarLogin": "AayushSaini101",
-        "avatarUrl": "https://github.com/AayushSaini101.png?size=160",
-        "avatarSeed": "AayushSaini101",
-        "key": "github:aayushsaini101",
-        "reviews": 35,
-        "merges": 22,
-        "total": 57
+        "total": 58
       },
       {
         "rank": 4,
@@ -686,6 +686,18 @@ export const committerStatsData = {
       },
       {
         "rank": 5,
+        "name": "FAUST",
+        "login": "FAUST-BENCHOU",
+        "avatarLogin": "FAUST-BENCHOU",
+        "avatarUrl": "https://github.com/FAUST-BENCHOU.png?size=160",
+        "avatarSeed": "FAUST-BENCHOU",
+        "key": "github:faust-benchou",
+        "reviews": 37,
+        "merges": 11,
+        "total": 48
+      },
+      {
+        "rank": 6,
         "name": "samzong",
         "login": "samzong",
         "avatarLogin": "samzong",
@@ -697,18 +709,6 @@ export const committerStatsData = {
         "total": 46
       },
       {
-        "rank": 6,
-        "name": "FAUST",
-        "login": "FAUST-BENCHOU",
-        "avatarLogin": "FAUST-BENCHOU",
-        "avatarUrl": "https://github.com/FAUST-BENCHOU.png?size=160",
-        "avatarSeed": "FAUST-BENCHOU",
-        "key": "github:faust-benchou",
-        "reviews": 23,
-        "merges": 10,
-        "total": 33
-      },
-      {
         "rank": 7,
         "name": "WUKUNTAI",
         "login": "WUKUNTAI-0211",
@@ -716,9 +716,9 @@ export const committerStatsData = {
         "avatarUrl": "https://github.com/WUKUNTAI-0211.png?size=160",
         "avatarSeed": "WUKUNTAI-0211",
         "key": "github:wukuntai-0211",
-        "reviews": 14,
-        "merges": 15,
-        "total": 29
+        "reviews": 18,
+        "merges": 19,
+        "total": 37
       },
       {
         "rank": 8,
@@ -728,9 +728,9 @@ export const committerStatsData = {
         "avatarUrl": "https://github.com/drivebyer.png?size=160",
         "avatarSeed": "drivebyer",
         "key": "github:drivebyer",
-        "reviews": 13,
-        "merges": 9,
-        "total": 22
+        "reviews": 17,
+        "merges": 13,
+        "total": 30
       },
       {
         "rank": 9,
@@ -824,9 +824,9 @@ export const committerStatsData = {
         "avatarUrl": "https://github.com/shraderdm.png?size=160",
         "avatarSeed": "shraderdm",
         "key": "github:shraderdm",
-        "reviews": 5,
+        "reviews": 6,
         "merges": 0,
-        "total": 5
+        "total": 6
       },
       {
         "rank": 17,

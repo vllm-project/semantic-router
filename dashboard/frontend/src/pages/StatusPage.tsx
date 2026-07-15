@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import RouterModelInventory from '../components/RouterModelInventory'
+import EmbeddingProviderStatusPanel from './EmbeddingProviderStatusPanel'
 import {
   getActiveRouterRuntime,
   getLoadedModelCount,
@@ -172,6 +173,10 @@ const StatusPage: React.FC = () => {
             loadedModels={loadedModels}
             knownModels={knownModels}
           />
+
+          {status.router_runtime?.embedding_provider ? (
+            <EmbeddingProviderStatusPanel provider={status.router_runtime.embedding_provider} />
+          ) : null}
 
           <section
             className={styles.servicesSection}
