@@ -110,20 +110,28 @@ issues or pull requests.
 
 ### Optional CI apply mode
 
-Maintainers can optionally apply the generated `proposed-actions.json` payload
-from CI by running `workflow_dispatch` with `apply_actions=true`. This starts a
-second job that calls `tools/agent/scripts/run_maintainer_board_apply_ci.sh`,
-which wraps `maintainer_board.py apply --confirm`.
+Maintainers can optionally apply a previously reviewed
+`proposed-actions.json` payload from CI in two steps:
+
+1. Run a read-only sync via `workflow_dispatch` (leave `source_run_id` empty).
+   Note the workflow run ID and download or inspect `proposed-actions.json`.
+2. After review, run `workflow_dispatch` again with `source_run_id=<sync run ID>`.
+   The apply job downloads that artifact and calls
+   `tools/agent/scripts/run_maintainer_board_apply_ci.sh`, which validates the
+   payload and applies labels through `maintainer_board_ci_apply.py`.
 
 Apply mode rules:
 
 - runs only on manual `workflow_dispatch`, never on the daily cron
-- applies only the reviewable `proposed-actions.json` produced by the sync job
-- v1 allowlist is the existing maintainer board actions: `label_issue` and
-  `label_pr` only
+- applies only a reviewed artifact from a prior sync run, never from the same
+  workflow run that just generated the payload
+- CI allowlist is `label_issue` and `label_pr` only; labels must come from
+  `tools/agent/maintainer-policy.yaml` lifecycle and PR state mappings
+- rejects malformed payloads, non-`#<number>` targets, and synthetic actions such
+  as `create_issue`
+- reports attempted, succeeded, and failed actions in the job summary even when
+  some `gh` commands fail
 - does not create, comment on, or close issues or pull requests
-
-Review the sync artifacts before enabling apply mode.
 
 ### Relationship to `stale.yml`
 
@@ -143,8 +151,8 @@ Manual trigger examples:
 # Read-only sync
 gh workflow run maintainer-board.yml -f milestone=v0.4 -f issue_limit=100 -f pr_limit=50
 
-# Sync then apply proposed labels (maintainer-only)
-gh workflow run maintainer-board.yml -f milestone=v0.4 -f issue_limit=100 -f pr_limit=50 -f apply_actions=true
+# Apply a reviewed artifact from sync run 123456789 (maintainer-only)
+gh workflow run maintainer-board.yml -f source_run_id=123456789
 ```
 
 ## Apply Policy

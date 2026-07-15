@@ -3,7 +3,7 @@ name: Maintainer Board
 # Scheduled maintainer queue for open issues and pull requests.
 # Complements .github/workflows/stale.yml, which mutates GitHub by marking and
 # closing stale items. The daily cron is read-only; optional label apply runs
-# only via manual workflow_dispatch.
+# only via manual workflow_dispatch against a previously reviewed sync artifact.
 
 on:
   schedule:
@@ -25,17 +25,22 @@ on:
         required: false
         default: "50"
         type: string
-      apply_actions:
-        description: Apply proposed-actions.json labels after sync (workflow_dispatch only)
+      source_run_id:
+        description: >-
+          Prior Maintainer Board workflow run ID whose proposed-actions.json was
+          reviewed. When set, skips sync and applies that artifact only.
         required: false
-        default: false
-        type: boolean
+        default: ""
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   maintainer-board:
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.source_run_id == '')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -76,8 +81,7 @@ jobs:
             ${{ runner.temp }}/maintainer-board/milestone-*.md
 
   apply-actions:
-    needs: maintainer-board
-    if: github.event_name == 'workflow_dispatch' && inputs.apply_actions == true
+    if: github.event_name == 'workflow_dispatch' && inputs.source_run_id != ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -97,14 +101,17 @@ jobs:
       - name: Install maintainer board dependencies
         run: pip install PyYAML==6.0.3
 
-      - name: Download maintainer board artifacts
+      - name: Download reviewed maintainer board artifacts
         uses: actions/download-artifact@v4
         with:
-          name: maintainer-board-${{ github.run_id }}
+          name: maintainer-board-${{ inputs.source_run_id }}
           path: ${{ runner.temp }}/maintainer-board
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.source_run_id }}
 
       - name: Apply proposed maintainer board actions
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MAINTAINER_BOARD_OUTPUT_DIR: ${{ runner.temp }}/maintainer-board
+          MAINTAINER_BOARD_SOURCE_RUN_ID: ${{ inputs.source_run_id }}
         run: bash tools/agent/scripts/run_maintainer_board_apply_ci.sh
