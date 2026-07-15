@@ -35,7 +35,7 @@ func TestAdapter_UnsupportedLifecycle(t *testing.T) {
 
 	t.Run("Inference returns error", func(t *testing.T) {
 		handle := &onnxHandle{id: "test-model"}
-		req := native.InferenceRequest{}
+		var req native.InferenceRequest
 		_, err := adapter.Inference(ctx, handle, req)
 		if err == nil {
 			t.Fatal("Expected error from Inference, got nil")

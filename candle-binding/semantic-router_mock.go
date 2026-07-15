@@ -250,6 +250,13 @@ func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
 	return nil
 }
 
+// MultiModalEmbeddingOutput represents the result of a multi-modal embedding.
+type MultiModalEmbeddingOutput struct {
+	Embedding        []float32
+	Modality         string
+	ProcessingTimeMs float32
+}
+
 // MultiModalEncodeText encodes text using multi-modal model (mock)
 func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutput, error) {
 	dim := 384
