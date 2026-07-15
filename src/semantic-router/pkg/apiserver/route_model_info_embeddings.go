@@ -18,7 +18,13 @@ func (s *ClassificationAPIServer) getEmbeddingModelsInfo(runtimeState *startupst
 	var models []ModelInfo
 
 	for _, adapter := range native.Registry.List() {
-		for _, model := range adapter.Info() {
+		info, err := adapter.Info()
+		if err != nil {
+			logging.Warnf(context.Background(), "Failed to discover models for backend %s: %v", adapter.Name(), err)
+			continue
+		}
+
+		for _, model := range info {
 			if model.Capability != native.CapabilityEmbedding && model.Capability != native.CapabilityMultimodalEmbedding {
 				continue
 			}
@@ -32,7 +38,7 @@ func (s *ClassificationAPIServer) getEmbeddingModelsInfo(runtimeState *startupst
 			}
 
 			isMatryoshka := "false"
-			if adapter.Capabilities().Features["matryoshka_2d"] {
+			if model.Features["matryoshka_2d"] {
 				isMatryoshka = "true"
 			}
 
