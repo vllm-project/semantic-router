@@ -710,6 +710,46 @@ routing:
 	}
 }
 
+func TestProviderBackendRefForwardAuthorizationHeaderRejectsAnthropicFormat(t *testing.T) {
+	// The Anthropic-native path does not implement caller-Authorization
+	// forwarding, so the combination must be rejected at load time (per backend
+	// ref, since the flag is per-backend while the format is per-model).
+	canonicalYAML := []byte(`
+version: v0.3
+providers:
+  defaults:
+    default_model: claude-worker
+  models:
+    - name: claude-worker
+      api_format: anthropic
+      backend_refs:
+        - name: static
+          endpoint: 127.0.0.1:8000
+        - name: gateway
+          base_url: https://litellm.example.com/v1
+          forward_authorization_header: true
+routing:
+  modelCards:
+    - name: claude-worker
+  decisions:
+    - name: default
+      priority: 1
+      rules:
+        operator: OR
+        conditions: []
+      modelRefs:
+        - model: claude-worker
+`)
+
+	_, err := ParseYAMLBytes(canonicalYAML)
+	if err == nil {
+		t.Fatal("ParseYAMLBytes accepted forward_authorization_header with api_format: anthropic, want error")
+	}
+	if !strings.Contains(err.Error(), "forward_authorization_header is not supported with api_format: anthropic") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestGetModelPricingTreatsExplicitZeroPricingAsConfigured(t *testing.T) {
 	cfg := &RouterConfig{
 		BackendModels: BackendModels{
