@@ -26,9 +26,10 @@ var (
 // Profile implements the forward-auth test profile.
 // It exercises the forward_authorization_header feature and the internal-leg
 // trust boundary: a forward-auth backend that requires the caller's inbound
-// Authorization header, a static-key backend that does not, and a looper
-// decision that re-dispatches through the gateway so the per-request
-// Authorization requirement is enforced across the internal leg.
+// Authorization header, a static-key backend that does not, and rejection of
+// spoofed reserved internal headers. Looper-leg enforcement is covered by the
+// Go unit tests (see e2e/testcases/forward_authorization.go for why it is not
+// asserted in-cluster here).
 type Profile struct {
 	stack *gatewaystack.Stack
 }
@@ -52,7 +53,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests forward_authorization_header passthrough and the internal-leg trust boundary (direct, mixed, looper, and spoofed-header paths)"
+	return "Tests forward_authorization_header passthrough and the internal-leg trust boundary (direct forward, per-backend static-key, and spoofed reserved-header paths)"
 }
 
 // Setup deploys the shared gateway stack and forward-auth resources.

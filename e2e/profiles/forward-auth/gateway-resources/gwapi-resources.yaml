@@ -54,9 +54,8 @@ spec:
 ---
 # AIGatewayRoute — routes model aliases to the correct backend
 # Envoy AI Gateway sets x-ai-eg-model after extracting the request model.
-# forward-model -> forward-be, static-model -> static-be. The looper "auto"
-# alias falls through to the forward-auth backend so the internal re-dispatch
-# leg exercises the per-request Authorization requirement.
+# forward-model -> forward-be, static-model -> static-be. The "auto" alias
+# defaults to the forward-auth backend.
 apiVersion: aigateway.envoyproxy.io/v1alpha1
 kind: AIGatewayRoute
 metadata:
@@ -90,7 +89,7 @@ spec:
     timeouts:
       request: 60s
       backendRequest: 60s
-  # Auto alias — decision-based routing (looper); default to the forward backend
+  # Auto alias — decision-based routing; defaults to the forward backend
   - matches:
     - headers:
       - type: Exact

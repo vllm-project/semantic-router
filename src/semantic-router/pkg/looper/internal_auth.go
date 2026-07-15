@@ -53,8 +53,10 @@ var (
 //   - VSR_LOOPER_INTERNAL_AUTH_SECRET, when set — supports multi-replica
 //     topologies where the re-dispatch may land on a different process.
 //   - otherwise a per-process value from crypto/rand — correct for the default
-//     localhost sidecar topology where the leg loops back to the same process,
-//     and never leaves the process on the wire.
+//     localhost sidecar topology where the leg loops back to the same process.
+//
+// The secret is stamped on the internal request and travels the loopback wire,
+// but extproc validates and strips it at ingress so it never reaches an upstream.
 //
 // The result is always non-empty and unpredictable. A crypto/rand failure would
 // silently disable authentication and collapse the trust boundary, so it panics
