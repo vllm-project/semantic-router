@@ -393,6 +393,30 @@ async function expectInsideViewport(page: Page, locator: Locator) {
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport!.width)
 }
 
+async function expectBalancedDesktopFrame(page: Page, locator: Locator) {
+  await expect(locator).toBeVisible()
+  const bounds = await locator.boundingBox()
+  const viewport = page.viewportSize()
+  const documentFrame = await page.evaluate(() => {
+    const rect = document.documentElement.getBoundingClientRect()
+    return { left: rect.left, right: rect.right, width: rect.width }
+  })
+  expect(bounds).not.toBeNull()
+  expect(viewport).not.toBeNull()
+
+  const leftGutter = bounds!.x - documentFrame.left
+  const rightGutter = documentFrame.right - (bounds!.x + bounds!.width)
+  expect(Math.abs(leftGutter - rightGutter)).toBeLessThanOrEqual(2)
+  expect(leftGutter).toBeGreaterThanOrEqual(24)
+  expect(leftGutter).toBeLessThanOrEqual(72)
+  expect(bounds!.width / documentFrame.width).toBeGreaterThanOrEqual(0.9)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
+
+  return bounds!
+}
+
 test.describe('Layout top navigation', () => {
   test('keeps every mobile header control inside 320px and 375px viewports', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 700 })
@@ -644,7 +668,73 @@ test.describe('Layout top navigation', () => {
     ).toBe(true)
   })
 
-  test('keeps desktop utility controls visible at 961px with a long account name', async ({
+  test('aligns every desktop mega menu to one balanced AMD-style shell', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.setViewportSize({ width: 2048, height: 1152 })
+    await mockCommon(page)
+
+    await page.goto('/dashboard')
+
+    const headerFrame = page.getByTestId('layout-header-content')
+    const headerBounds = await headerFrame.boundingBox()
+    const headerPadding = await headerFrame.evaluate((element) => {
+      const style = window.getComputedStyle(element)
+      return {
+        left: Number.parseFloat(style.paddingLeft),
+        right: Number.parseFloat(style.paddingRight),
+      }
+    })
+    expect(headerBounds).not.toBeNull()
+    expect(headerBounds!.height).toBe(80)
+    expect(Math.abs(headerPadding.left - headerPadding.right)).toBeLessThanOrEqual(1)
+
+    const workflowGroup = page.getByRole('group', { name: 'Workflow navigation' })
+    const menuWidths: number[] = []
+
+    for (const label of ['Build', 'Analyze', 'Operate'] as const) {
+      const trigger = workflowGroup.getByRole('button', { name: label })
+      await trigger.click()
+      const menu = page.getByRole('navigation', { name: label })
+      const menuBounds = await expectBalancedDesktopFrame(page, menu)
+      menuWidths.push(menuBounds.width)
+      expect(Math.abs(menuBounds.x - headerBounds!.x - headerPadding.left)).toBeLessThanOrEqual(1)
+      expect(Math.abs(menuBounds.y - headerBounds!.height)).toBeLessThanOrEqual(1)
+    }
+
+    expect(Math.max(...menuWidths) - Math.min(...menuWidths)).toBeLessThanOrEqual(2)
+
+    await workflowGroup.getByRole('button', { name: 'Build' }).click()
+    const buildMenu = page.getByRole('navigation', { name: 'Build' })
+    const initialBounds = await expectBalancedDesktopFrame(page, buildMenu)
+    const railBounds = await buildMenu.getByTestId('layout-mega-menu-rail').boundingBox()
+    const contentBounds = await buildMenu.getByTestId('layout-mega-menu-content').boundingBox()
+    expect(railBounds).not.toBeNull()
+    expect(contentBounds).not.toBeNull()
+    expect(railBounds!.width / initialBounds.width).toBeGreaterThanOrEqual(0.15)
+    expect(railBounds!.width / initialBounds.width).toBeLessThanOrEqual(0.2)
+    expect(contentBounds!.width / initialBounds.width).toBeGreaterThanOrEqual(0.78)
+
+    const firstTabBounds = await buildMenu.getByRole('tab').first().boundingBox()
+    expect(firstTabBounds).not.toBeNull()
+    expect(Math.abs(firstTabBounds!.y - initialBounds.y)).toBeLessThanOrEqual(2)
+
+    for (const category of [/Knowledge/, /Integrations & Policy/]) {
+      await buildMenu.getByRole('tab', { name: category }).click()
+      const nextBounds = await buildMenu.boundingBox()
+      expect(nextBounds).not.toBeNull()
+      expect(Math.abs(nextBounds!.x - initialBounds.x)).toBeLessThanOrEqual(1)
+      expect(Math.abs(nextBounds!.width - initialBounds.width)).toBeLessThanOrEqual(1)
+    }
+
+    await page.mouse.click(2040, 1144)
+    await expect(buildMenu).toBeHidden()
+    await expect(workflowGroup.getByRole('button', { name: 'Build' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+  })
+
+  test('switches to compact navigation at 961px with full access and a long account name', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 961, height: 768 })
@@ -654,17 +744,41 @@ test.describe('Layout top navigation', () => {
         email: 'alexandria.montgomery@example.com',
         name: 'Alexandria Catherine Montgomery',
         role: 'admin',
-        permissions: ['config.read', 'config.write'],
+        permissions: [
+          'config.deploy',
+          'config.read',
+          'config.write',
+          'evaluation.read',
+          'evaluation.run',
+          'evaluation.write',
+          'feedback.submit',
+          'logs.read',
+          'mcp.manage',
+          'mcp.read',
+          'mlpipeline.manage',
+          'openclaw.manage',
+          'openclaw.read',
+          'replay.read',
+          'security.manage',
+          'tools.use',
+          'topology.read',
+          'users.manage',
+          'users.view',
+        ],
       },
     })
 
     await page.goto('/dashboard')
 
-    await expect(page.getByRole('navigation', { name: 'Global navigation' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Toggle menu' })).toBeHidden()
+    await expect(page.getByRole('navigation', { name: 'Global navigation' })).toBeHidden()
+    await expect(page.getByRole('button', { name: 'Toggle menu' })).toBeVisible()
     await expectInsideViewport(page, page.getByRole('link', { name: 'Documentation' }))
     await expectInsideViewport(page, page.getByRole('link', { name: 'GitHub' }))
     await expectInsideViewport(page, page.getByRole('button', { name: /Open account menu/i }))
+    await expectInsideViewport(page, page.getByRole('button', { name: 'Toggle menu' }))
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
   })
 
   test('keeps a manually selected category open from an active route', async ({ page }) => {
@@ -687,6 +801,29 @@ test.describe('Layout top navigation', () => {
     await expect(knowledgeTab).toHaveAttribute('aria-selected', 'true')
     await expect(buildMenu.getByRole('link', { name: 'Bases' })).toBeVisible()
     await expect(routingTab).toHaveAttribute('aria-selected', 'false')
+  })
+
+  test('keeps mega-menu links clickable when Safari reports a null blur target', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockCommon(page)
+
+    await page.goto('/dashboard')
+
+    await page
+      .getByRole('group', { name: 'Workflow navigation' })
+      .getByRole('button', { name: 'Build' })
+      .click()
+
+    const buildMenu = page.getByRole('navigation', { name: 'Build' })
+    await buildMenu.evaluate((menu) => {
+      menu.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }))
+    })
+
+    await expect(buildMenu).toBeVisible()
+    await buildMenu.getByRole('link', { name: 'Config Builder' }).click()
+    await expect(page).toHaveURL(/\/builder$/)
   })
 
   test('keeps every mega-menu category reachable in a short desktop window', async ({ page }) => {

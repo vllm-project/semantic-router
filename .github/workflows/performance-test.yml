@@ -81,6 +81,11 @@ jobs:
       # benchmark model set must be pre-downloaded. Populates the "Cache Models"
       # cache above; the cache key rotates when tools/make/models.mk changes.
       - name: Download benchmark models
+        # Disable HF's xet CAS backend (cas-server.xethub.hf.co), which
+        # intermittently returns 401 on CI and fails the download; fall back to
+        # the regular HF CDN. The gate depends on this step, so keep it robust.
+        env:
+          HF_HUB_DISABLE_XET: "1"
         run: make download-models-perf
 
       - name: Run component benchmarks
@@ -90,6 +95,41 @@ jobs:
           mkdir -p reports
           export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release
           make perf-bench-quick 2>&1 | tee reports/bench-output.txt
+
+      - name: Run Looper benchmarks
+        id: looper
+        if: always() # report Looper status even if the component step failed
+        run: |
+          set -o pipefail
+          export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release
+          make perf-bench-looper 2>&1 | tee -a reports/bench-output.txt
+
+      - name: Generate current results
+        id: current
+        run: |
+          set -o pipefail
+          cd perf && go run cmd/perftest/main.go \
+            --parse-bench=../reports/bench-output.txt \
+            --output=../reports/current.json
+
+      # The regression gate. Diffs the current run against the committed
+      # per-suite baselines and exits non-zero if any benchmark's allocs/op or
+      # B/op regresses beyond its threshold in config/thresholds.yaml, turning
+      # this required check red on the PR (#2455). ns/op changes are advisory
+      # only (reported, never blocking) because absolute time is machine-dependent.
+      #
+      # allocs/op and B/op are hardware-independent, so the committed baselines
+      # compare cleanly here regardless of which machine recorded them — no
+      # seeding required. The cross-hardware / cross-backend matrix is #1510.
+      - name: Compare against baseline and gate on regressions
+        id: gate
+        run: |
+          cd perf && go run cmd/perftest/main.go \
+            --compare-baseline=testdata/baselines/ \
+            --current=../reports/current.json \
+            --threshold-file=config/thresholds.yaml \
+            --output=../reports/comparison.json \
+            --fail-on-regression
 
       - name: Parse benchmark results
         id: parse
@@ -107,18 +147,33 @@ jobs:
           # at least one result line is present, and did not run otherwise.
           suite_status() {
             local prefix="$1"
-            if grep -q "^--- FAIL: ${prefix}" reports/bench-output.txt 2>/dev/null; then
+            if grep -qE "^--- FAIL: ${prefix}" reports/bench-output.txt 2>/dev/null; then
               echo "❌"
-            elif grep -q "^${prefix}" reports/bench-output.txt 2>/dev/null; then
+            elif grep -qE "^${prefix}" reports/bench-output.txt 2>/dev/null; then
               echo "✅"
             else
               echo "⚠️ not run"
             fi
           }
-          if [ "${{ steps.bench.outcome }}" = "success" ]; then
-            headline="Component benchmarks completed successfully."
+          case "${{ steps.gate.outcome }}" in
+            success) gate_status="✅ no regressions beyond thresholds";;
+            failure) gate_status="❌ regression detected beyond threshold";;
+            *)       gate_status="⚠️ not run";;
+          esac
+          if [ "${{ steps.gate.outcome }}" = "failure" ]; then
+            headline="❌ **Performance regression gate FAILED** — a benchmark regressed beyond its configured threshold. See the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+          elif [ "${{ steps.bench.outcome }}" = "success" ] && [ "${{ steps.looper.outcome }}" = "success" ]; then
+            headline="Component benchmarks completed with no regressions beyond thresholds."
           else
             headline="❌ Component benchmarks **FAILED** — see the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+          fi
+          # Blocking (allocs/op or B/op over threshold) and advisory (ns/op
+          # slower — reported, never blocks) lists, pulled from the comparison.
+          blocked=""
+          advisory=""
+          if [ -f reports/comparison.json ]; then
+            blocked=$(jq -r '.results[]? | select(.RegressionDetected==true) | "- \(.BenchmarkName): allocs/op \(.Baseline.allocs_per_op // 0)→\(.Current.allocs_per_op // 0) \(if (.Baseline.allocs_per_op // 0) > 0 then "(\(if .AllocsPerOpChange>=0 then "+" else "" end)\(.AllocsPerOpChange|round)%)" else "(new)" end), B/op \(.Baseline.bytes_per_op // 0)→\(.Current.bytes_per_op // 0) \(if (.Baseline.bytes_per_op // 0) > 0 then "(\(if .BytesPerOpChange>=0 then "+" else "" end)\(.BytesPerOpChange|round)%)" else "(new)" end)"' reports/comparison.json 2>/dev/null || true)
+            advisory=$(jq -r '.results[]? | select(.NsAdvisory==true) | "- \(.BenchmarkName): ns/op \(.NsPerOpChange|round)% slower"' reports/comparison.json 2>/dev/null || true)
           fi
           cat > reports/summary.md <<EOF
           ## Performance Benchmark Results
@@ -129,6 +184,16 @@ jobs:
           - Classification benchmarks: $(suite_status BenchmarkClassify)
           - Decision engine benchmarks: $(suite_status BenchmarkEvaluate)
           - Cache benchmarks: $(suite_status BenchmarkCache)
+          - Looper family benchmarks: $(suite_status "Benchmark(ReMoM|Fusion|Flow|Base)")
+          - Regression gate: ${gate_status}
+          EOF
+          if [ -n "$blocked" ]; then
+            { echo ""; echo "### Blocking regressions (allocs/op or B/op over threshold)"; echo "$blocked"; } >> reports/summary.md
+          fi
+          if [ -n "$advisory" ]; then
+            { echo ""; echo "### Advisory — slower wall-clock, does not block the gate (ns/op)"; echo "$advisory"; } >> reports/summary.md
+          fi
+          cat >> reports/summary.md <<EOF
 
           ### Details
           See attached benchmark artifacts for detailed results and profiles.

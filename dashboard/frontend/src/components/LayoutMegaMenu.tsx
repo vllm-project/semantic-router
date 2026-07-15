@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type CSSProperties,
-  type FocusEvent,
-  type KeyboardEvent,
-} from 'react'
+import { useEffect, useMemo, useState, type FocusEvent, type KeyboardEvent } from 'react'
 import { NavLink } from 'react-router-dom'
 import type { LayoutMenuCategory, LayoutMenuItem } from './LayoutNavSupport'
 import { getLayoutMegaMenuGeometry } from './LayoutMegaMenuSupport'
@@ -21,18 +14,6 @@ interface LayoutMegaMenuProps {
   onConfigSelect: (item: Extract<LayoutMenuItem, { kind: 'config' }>) => void
   onItemIntent: (item: LayoutMenuItem) => void
   onNavigate: () => void
-}
-
-const MENU_DESCRIPTIONS: Record<string, string> = {
-  Build: 'Shape signals, decisions, model paths, and the context behind them.',
-  Analyze: 'Measure routing outcomes and plan the heterogeneous model fleet.',
-  Operate: 'Run, observe, and administer the live routing control plane.',
-}
-
-const MENU_SEQUENCE: Record<string, string> = {
-  Build: 'DESIGN / DECIDE / CONNECT',
-  Analyze: 'INSPECT / EVALUATE / PLAN',
-  Operate: 'RUN / OBSERVE / GOVERN',
 }
 
 const LayoutMegaMenu = ({
@@ -112,6 +93,13 @@ const LayoutMegaMenu = ({
 
   const handlePanelBlur = (event: FocusEvent<HTMLElement>) => {
     const nextTarget = event.relatedTarget
+    // Safari can report no related target when pointer activation moves focus
+    // away from the menu. Closing synchronously here unmounts the link before
+    // its click handler runs, so let the click/outside-click paths own it.
+    if (!nextTarget) {
+      return
+    }
+
     if (
       nextTarget instanceof Node &&
       (event.currentTarget.contains(nextTarget) ||
@@ -127,20 +115,13 @@ const LayoutMegaMenu = ({
     return null
   }
 
-  const columnsClassName =
-    selectedCategory.sections.length >= 3 ? styles.columnsThree : styles.columnsTwo
   const geometry = getLayoutMegaMenuGeometry(selectedCategory)
-  const menuStyle = {
-    '--layout-mega-menu-rail-width': `${geometry.railWidth}px`,
-    '--layout-mega-menu-width': `${geometry.maxWidth}px`,
-  } as CSSProperties
 
   return (
     <nav
       id={id}
       aria-labelledby={triggerId}
       className={styles.menu}
-      style={menuStyle}
       data-density={geometry.density}
       data-item-count={geometry.itemCount}
       data-section-count={geometry.sectionCount}
@@ -148,18 +129,6 @@ const LayoutMegaMenu = ({
       onBlur={handlePanelBlur}
     >
       <aside className={styles.rail} data-testid="layout-mega-menu-rail">
-        <div className={styles.railIntro}>
-          <span className={styles.railMarker} />
-          <span className={styles.eyebrow}>Semantic Router control plane</span>
-          <strong className={styles.railTitle}>{label}</strong>
-          <p className={styles.railDescription}>
-            {MENU_DESCRIPTIONS[label] ?? 'Navigate the semantic routing control plane.'}
-          </p>
-          <span className={styles.railSequence} aria-hidden="true">
-            {MENU_SEQUENCE[label]}
-          </span>
-        </div>
-
         <div
           className={styles.categoryTabs}
           role="tablist"
@@ -209,18 +178,7 @@ const LayoutMegaMenu = ({
         aria-labelledby={`${id}-${selectedCategory.key}-tab`}
         className={styles.panel}
       >
-        <div className={styles.panelHeader}>
-          <div>
-            <span className={styles.panelEyebrow}>{label}</span>
-            <h2 className={styles.panelTitle}>{selectedCategory.label}</h2>
-          </div>
-          <p className={styles.panelDescription}>{selectedCategory.description}</p>
-        </div>
-
-        <div
-          className={`${styles.content} ${columnsClassName}`}
-          data-testid="layout-mega-menu-content"
-        >
+        <div className={styles.content} data-testid="layout-mega-menu-content">
           {selectedCategory.sections.map((section) => (
             <section
               key={`${selectedCategory.key}-${section.title}`}

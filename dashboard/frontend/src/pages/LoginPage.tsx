@@ -327,7 +327,11 @@ const LoginPage: React.FC = () => {
               </div>
             </section>
           ) : isBootstrapMode ? (
-            <form className={styles.card} onSubmit={onSubmitBootstrap}>
+            <form
+              className={styles.card}
+              onSubmit={onSubmitBootstrap}
+              autoComplete="on"
+            >
               <div className={styles.stageHeader}>
                 <p className={styles.stageEyebrow}>{currentStep.eyebrow}</p>
                 <h2 className={styles.stageTitle}>{currentStep.title}</h2>
@@ -345,6 +349,8 @@ const LoginPage: React.FC = () => {
                     id="bootstrap-name"
                     className={styles.input}
                     type="text"
+                    name="name"
+                    autoComplete="name"
                     value={bootstrapForm.name}
                     onChange={(event) =>
                       setBootstrapForm((current) => ({
@@ -368,6 +374,8 @@ const LoginPage: React.FC = () => {
                     id="bootstrap-email"
                     className={styles.input}
                     type="email"
+                    name="email"
+                    autoComplete="username"
                     value={bootstrapForm.email}
                     onChange={(event) =>
                       setBootstrapForm((current) => ({
@@ -395,6 +403,8 @@ const LoginPage: React.FC = () => {
                       id="bootstrap-password"
                       className={styles.input}
                       type="password"
+                      name="new-password"
+                      autoComplete="new-password"
                       value={bootstrapForm.password}
                       onChange={(event) =>
                         setBootstrapForm((current) => ({
@@ -462,7 +472,11 @@ const LoginPage: React.FC = () => {
               </div>
             </form>
           ) : (
-            <form className={styles.card} onSubmit={onSubmitLogin}>
+            <form
+              className={styles.card}
+              onSubmit={onSubmitLogin}
+              autoComplete="on"
+            >
               <div className={styles.stageHeader}>
                 <p className={styles.stageEyebrow}>Account access</p>
                 <h2 className={styles.stageTitle}>Sign in</h2>
@@ -480,6 +494,8 @@ const LoginPage: React.FC = () => {
                   id="login-email"
                   className={styles.input}
                   type="email"
+                  name="email"
+                  autoComplete="username"
                   value={loginEmail}
                   onChange={(event) => setLoginEmail(event.target.value)}
                   placeholder="you@example.com"
@@ -496,6 +512,8 @@ const LoginPage: React.FC = () => {
                   id="login-password"
                   className={styles.input}
                   type="password"
+                  name="password"
+                  autoComplete="current-password"
                   value={loginPassword}
                   onChange={(event) => setLoginPassword(event.target.value)}
                   placeholder="••••••••"

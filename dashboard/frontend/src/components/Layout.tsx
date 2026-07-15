@@ -331,7 +331,7 @@ const Layout: React.FC<LayoutProps> = ({
   return (
     <div className={`${styles.container} ${hideHeaderOnMobile ? styles.hideHeaderMobile : ''}`}>
       <header className={`${styles.header} ${hideHeaderOnMobile ? styles.headerHideMobile : ''}`}>
-        <div className={styles.headerContent}>
+        <div className={styles.headerContent} data-testid="layout-header-content">
           <NavLink to="/" className={styles.brand}>
             <img src="/vllm.png" alt="vLLM" className={styles.logo} />
             <span className={styles.brandText}>Semantic Router</span>
@@ -343,44 +343,40 @@ const Layout: React.FC<LayoutProps> = ({
             </div>
 
             {hasWorkflowNavigation ? (
-              <>
-                <div className={styles.navDivider} />
-
-                <div
-                  className={`${styles.navSection} ${styles.navSectionSecondary}`}
-                  role="group"
-                  aria-label="Workflow navigation"
-                >
-                  {renderDesktopDropdown(
-                    'build',
-                    'Build',
-                    buildMenuCategories,
-                    isBuildActive,
-                    activeBuildCategory,
-                  )}
-                  {renderDesktopDropdown(
-                    'analyze',
-                    'Analyze',
-                    analyzeMenuCategories,
-                    isAnalyzeActive,
-                    activeAnalyzeCategory,
-                  )}
-                  {renderDesktopDropdown(
-                    'operate',
-                    'Operate',
-                    operateMenuCategories,
-                    isOperateActive,
-                    activeOperateCategory,
-                  )}
-                </div>
-              </>
+              <div
+                className={`${styles.navSection} ${styles.navSectionSecondary}`}
+                role="group"
+                aria-label="Workflow navigation"
+              >
+                {renderDesktopDropdown(
+                  'build',
+                  'Build',
+                  buildMenuCategories,
+                  isBuildActive,
+                  activeBuildCategory,
+                )}
+                {renderDesktopDropdown(
+                  'analyze',
+                  'Analyze',
+                  analyzeMenuCategories,
+                  isAnalyzeActive,
+                  activeAnalyzeCategory,
+                )}
+                {renderDesktopDropdown(
+                  'operate',
+                  'Operate',
+                  operateMenuCategories,
+                  isOperateActive,
+                  activeOperateCategory,
+                )}
+              </div>
             ) : null}
           </nav>
 
           <div className={styles.headerRight}>
             <PlatformBranding variant="inline" className={styles.headerBranding} />
             <a
-              href="https://vllm-semantic-router.com"
+              href="https://vllm-sr.ai"
               target="_blank"
               rel="noopener noreferrer"
               className={styles.iconButton}
