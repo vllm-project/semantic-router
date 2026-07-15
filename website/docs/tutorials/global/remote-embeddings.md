@@ -11,6 +11,19 @@ Two fields describe different parts of the setup:
 
 Keep both fields. `remote` is not an API protocol, and `openai_compatible` is not a model family.
 
+## Key Advantages
+
+- Reuses an existing managed embedding service instead of loading another model into the Router.
+- Shares one provider across embedding signals, knowledge bases, model selection, and other text embedding consumers.
+- Preserves existing signal thresholds, decision conditions, and model references when changing execution providers.
+- Reports redacted provider health through startup status without exposing credential values.
+
+## What Problem Does It Solve?
+
+Local embedding execution requires the Router to download model assets and reserve compute and memory for inference. That can duplicate an embedding service already operated elsewhere and couple Router deployment size to the selected embedding model.
+
+A remote provider moves text embedding execution behind an OpenAI-compatible endpoint while keeping routing configuration and decision behavior unchanged.
+
 ## Supported Scope
 
 The remote provider is shared by text embedding consumers, including:
@@ -30,7 +43,18 @@ Current limitations:
 - Semantic cache, memory, RAG, and vector-store index migration are separate storage concerns. Do not switch an existing persistent index to a different embedding dimension without rebuilding or migrating it.
 - The `openai_compatible` adapter sends `Authorization: Bearer <token>`. Custom authentication headers and provider-specific request schemas are not supported yet.
 
-## Configure the Provider
+## When to Use
+
+Use a remote embedding provider when:
+
+- an OpenAI-compatible embedding service is already available
+- embedding capacity should scale independently from the Router
+- Router Pods should avoid downloading and loading a local text embedding model
+- multiple Router consumers should share the same managed embedding space
+
+Keep local execution when the deployment must operate without network access to an embedding service or requires multimodal image embeddings.
+
+## Configuration
 
 Store the credential in an environment variable. Never put the key directly in YAML:
 
