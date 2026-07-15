@@ -178,6 +178,7 @@ manual_profile_rules:
       - e2e/profiles/rag-external-api/**
       - e2e/testcases/rag_external_api.go
       - src/semantic-router/pkg/extproc/req_filter_rag_external.go
+      - src/semantic-router/pkg/config/rag_external_api_template.go
       - src/semantic-router/pkg/config/rag_plugin_backends.go
       - src/semantic-router/pkg/config/rag_plugin_validation.go
   response-api:

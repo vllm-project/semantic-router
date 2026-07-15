@@ -2,6 +2,16 @@ package config
 
 import "fmt"
 
+const (
+	ExternalAPIRequestFormatPinecone      = "pinecone"
+	ExternalAPIRequestFormatWeaviate      = "weaviate"
+	ExternalAPIRequestFormatElasticsearch = "elasticsearch"
+	ExternalAPIRequestFormatCustom        = "custom"
+
+	DefaultExternalAPIMaxResponseBodyBytes int64 = 16 << 20
+	MaximumExternalAPIResponseBodyBytes    int64 = 64 << 20
+)
+
 // MilvusRAGConfig represents configuration for Milvus-based RAG retrieval.
 type MilvusRAGConfig struct {
 	Collection           string `json:"collection" yaml:"collection"`

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -84,6 +83,32 @@ func TestBuildCustomRequestKeepsConfiguredFieldBoundary(t *testing.T) {
 	}
 }
 
+func TestBuildCustomRequestPreservesArrayRoot(t *testing.T) {
+	router, ragConfig := customRequestTestFixture()
+	query := `value", {"injected":true}`
+	template := `["${user_content}", ${top_k}, {"threshold": {{.Threshold}}, "nested": ["prefix:${user_content}:suffix"]}]`
+
+	body := mustBuildCustomRequest(t, router, ragConfig, query, template)
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	var got []interface{}
+	if err := decoder.Decode(&got); err != nil {
+		t.Fatalf("decode JSON array: %v\n%s", err, body)
+	}
+
+	if len(got) != 3 || got[0] != query || got[1] != json.Number("7") {
+		t.Fatalf("array-root substitutions = %#v", got)
+	}
+	object, ok := got[2].(map[string]interface{})
+	if !ok || object["threshold"] != json.Number("0.625") {
+		t.Fatalf("array-root nested object = %#v", got[2])
+	}
+	nested, ok := object["nested"].([]interface{})
+	if !ok || len(nested) != 1 || nested[0] != "prefix:"+query+":suffix" {
+		t.Fatalf("array-root nested substitutions = %#v", object["nested"])
+	}
+}
+
 func TestBuildCustomRequestRejectsInvalidDocuments(t *testing.T) {
 	router, ragConfig := customRequestTestFixture()
 	tests := []struct {
@@ -110,6 +135,21 @@ func TestBuildCustomRequestRejectsInvalidDocuments(t *testing.T) {
 			name:     "placeholder in object key",
 			template: `{"${user_content}":"value"}`,
 			want:     "not allowed in object keys",
+		},
+		{
+			name:     "scalar root",
+			template: `"${user_content}"`,
+			want:     "must be a JSON object or array",
+		},
+		{
+			name:     "unsupported placeholder",
+			template: `{"query":"${unknown}"}`,
+			want:     "unsupported custom request template placeholder",
+		},
+		{
+			name:     "malformed placeholder",
+			template: `{"query":"{{.Query}"}`,
+			want:     "malformed custom request template placeholder",
 		},
 	}
 
@@ -233,18 +273,50 @@ func TestExternalRAGPropagatesCancellationWhileReading(t *testing.T) {
 }
 
 func TestExternalRAGResponseLimitBoundaries(t *testing.T) {
-	if got := externalAPIResponseBodyLimit(&config.ExternalAPIRAGConfig{}); got != defaultExternalAPIMaxResponseBodyBytes {
-		t.Fatalf("default response limit = %d, want %d", got, defaultExternalAPIMaxResponseBodyBytes)
+	if got := externalAPIResponseBodyLimit(&config.ExternalAPIRAGConfig{}); got != config.DefaultExternalAPIMaxResponseBodyBytes {
+		t.Fatalf("default response limit = %d, want %d", got, config.DefaultExternalAPIMaxResponseBodyBytes)
 	}
 
-	limit := int64(math.MaxInt64)
-	if got := externalAPIResponseBodyLimit(&config.ExternalAPIRAGConfig{MaxResponseBodyBytes: &limit}); got != math.MaxInt64 {
-		t.Fatalf("configured response limit = %d, want MaxInt64", got)
+	limit := config.MaximumExternalAPIResponseBodyBytes
+	if got := externalAPIResponseBodyLimit(&config.ExternalAPIRAGConfig{MaxResponseBodyBytes: &limit}); got != config.MaximumExternalAPIResponseBodyBytes {
+		t.Fatalf("configured response limit = %d, want %d", got, config.MaximumExternalAPIResponseBodyBytes)
 	}
 
-	body, exceeded, err := readExternalAPIResponseBody(strings.NewReader("bounded"), math.MaxInt64)
+	body, exceeded, err := readExternalAPIResponseBody(strings.NewReader("bounded"), config.MaximumExternalAPIResponseBodyBytes)
 	if err != nil || exceeded || string(body) != "bounded" {
-		t.Fatalf("readExternalAPIResponseBody(MaxInt64) = (%q, %t, %v)", body, exceeded, err)
+		t.Fatalf("readExternalAPIResponseBody(maximum) = (%q, %t, %v)", body, exceeded, err)
+	}
+}
+
+func TestReadExternalAPIResponseBodyExactLimitAndOneByteOver(t *testing.T) {
+	const limit = int64(7)
+
+	body, exceeded, err := readExternalAPIResponseBody(strings.NewReader("1234567"), limit)
+	if err != nil || exceeded || string(body) != "1234567" {
+		t.Fatalf("exact-limit read = (%q, %t, %v), want accepted body", body, exceeded, err)
+	}
+
+	body, exceeded, err = readExternalAPIResponseBody(strings.NewReader("12345678"), limit)
+	if err != nil || !exceeded || body != nil {
+		t.Fatalf("one-byte-over read = (%q, %t, %v), want deterministic rejection", body, exceeded, err)
+	}
+}
+
+func TestReadExternalAPIResponseBodyRejectsInvalidLimits(t *testing.T) {
+	tests := []int64{
+		0,
+		-1,
+		config.MaximumExternalAPIResponseBodyBytes + 1,
+		1<<63 - 1,
+	}
+
+	for _, limit := range tests {
+		t.Run(fmt.Sprintf("limit_%d", limit), func(t *testing.T) {
+			body, exceeded, err := readExternalAPIResponseBody(strings.NewReader("bounded"), limit)
+			if err == nil || body != nil || exceeded {
+				t.Fatalf("readExternalAPIResponseBody(%d) = (%q, %t, %v), want invalid-limit error", limit, body, exceeded, err)
+			}
+		})
 	}
 }
 

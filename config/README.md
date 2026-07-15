@@ -62,10 +62,14 @@ Each supported algorithm now has its own tutorial page under `website/docs/tutor
 
 Each supported plugin now has its own tutorial page under `website/docs/tutorials/plugin/`.
 
-External API RAG fragments must build outbound bodies from typed JSON placeholders and set
+External API RAG fragments may preserve a configured JSON object or array root while building
+outbound bodies from typed JSON placeholders. The `${user_content}`, `${top_k}`, and
+`${threshold}` names are reserved for runtime substitution; other braced lowercase names are
+rejected before environment expansion, while intentional environment references use uppercase
+names such as `${RAG_TENANT}`. Fragments must set
 `backend_config.max_response_body_bytes` when the default 16 MiB successful-response limit is
-not appropriate. The limit is exact: a response at the configured byte count is accepted and a
-response one byte larger is rejected before JSON decoding.
+not appropriate, up to the supported 64 MiB maximum. The limit is exact: a response at the
+configured byte count is accepted and a response one byte larger is rejected before JSON decoding.
 
 The repository enforces this fragment catalog, the exhaustive reference config, the maintained deploy/E2E config assets, and the core public config docs in Go tests. When a supported signal, decision algorithm, plugin surface, or canonical contract term changes, both `go test ./pkg/config/...` and `make agent-lint` will fail until `config/`, maintained `deploy/` / `e2e/` config assets, and the core config docs are updated to match.
 

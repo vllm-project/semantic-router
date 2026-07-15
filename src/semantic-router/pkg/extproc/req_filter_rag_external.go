@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"strings"
 	"sync"
@@ -23,8 +22,6 @@ var (
 	externalAPIClient     *http.Client
 	externalAPIClientOnce sync.Once
 )
-
-const defaultExternalAPIMaxResponseBodyBytes int64 = 16 << 20
 
 // getExternalAPIClient returns a shared HTTP client for external API requests
 func getExternalAPIClient() *http.Client {
@@ -100,13 +97,13 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 	var buildErr error
 
 	switch apiConfig.RequestFormat {
-	case "pinecone":
+	case config.ExternalAPIRequestFormatPinecone:
 		requestBody, buildErr = r.buildPineconeRequest(ctx, ragConfig)
-	case "weaviate":
+	case config.ExternalAPIRequestFormatWeaviate:
 		requestBody, buildErr = r.buildWeaviateRequest(ctx, ragConfig)
-	case "elasticsearch":
+	case config.ExternalAPIRequestFormatElasticsearch:
 		requestBody, buildErr = r.buildElasticsearchRequest(ctx, ragConfig)
-	case "custom":
+	case config.ExternalAPIRequestFormatCustom:
 		requestBody, buildErr = r.buildCustomRequest(ctx, ragConfig, apiConfig.RequestTemplate)
 	default:
 		return "", fmt.Errorf("unsupported request format: %s", apiConfig.RequestFormat)
@@ -226,15 +223,21 @@ func externalAPIResponseBodyLimit(apiConfig *config.ExternalAPIRAGConfig) int64 
 	if apiConfig.MaxResponseBodyBytes != nil {
 		return *apiConfig.MaxResponseBodyBytes
 	}
-	return defaultExternalAPIMaxResponseBodyBytes
+	return config.DefaultExternalAPIMaxResponseBodyBytes
 }
 
 func readExternalAPIResponseBody(reader io.Reader, maxBytes int64) ([]byte, bool, error) {
-	readLimit := maxBytes
-	if maxBytes < math.MaxInt64 {
-		readLimit++
+	if maxBytes <= 0 || maxBytes > config.MaximumExternalAPIResponseBodyBytes {
+		return nil, false, fmt.Errorf(
+			"external API response body limit must be between 1 and %d bytes, got %d",
+			config.MaximumExternalAPIResponseBodyBytes,
+			maxBytes,
+		)
 	}
-	body, err := io.ReadAll(io.LimitReader(reader, readLimit))
+
+	// Configuration validation caps maxBytes well below MaxInt64, so reserving
+	// one sentinel byte cannot overflow and io.ReadAll remains allocation-bounded.
+	body, err := io.ReadAll(io.LimitReader(reader, maxBytes+1))
 	if err != nil {
 		return nil, false, err
 	}
@@ -332,10 +335,6 @@ func (r *OpenAIRouter) buildElasticsearchRequest(ctx *RequestContext, ragConfig 
 
 // buildCustomRequest builds a custom request using template
 func (r *OpenAIRouter) buildCustomRequest(ctx *RequestContext, ragConfig *config.RAGPluginConfig, template string) ([]byte, error) {
-	if template == "" {
-		return nil, fmt.Errorf("request template is required for custom format")
-	}
-
 	topK := 5
 	if ragConfig.TopK != nil {
 		topK = *ragConfig.TopK
@@ -345,204 +344,23 @@ func (r *OpenAIRouter) buildCustomRequest(ctx *RequestContext, ragConfig *config
 		threshold = float64(*ragConfig.SimilarityThreshold)
 	}
 
-	// Bare placeholders such as `"top_k": ${top_k}` are not valid JSON.
-	// Quote only exact placeholder tokens that occur outside JSON strings, then
-	// decode the template before inserting any user-controlled value. This keeps
-	// the configured object/array shape authoritative while retaining the two
-	// placeholder syntaxes supported by earlier configurations.
-	normalized := quoteBareCustomRequestPlaceholders(template)
-	document, err := decodeCustomRequestTemplate(normalized)
-	if err != nil {
-		return nil, fmt.Errorf("invalid custom request template JSON: %w", err)
-	}
-
-	typedDocument, err := substituteCustomRequestPlaceholders(document, ctx.UserContent, topK, threshold)
+	compiled, err := config.ParseExternalAPICustomRequestTemplate(template)
 	if err != nil {
 		return nil, err
 	}
-
-	requestBody, err := json.Marshal(typedDocument)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal custom request template: %w", err)
-	}
-	return requestBody, nil
-}
-
-func decodeCustomRequestTemplate(template string) (interface{}, error) {
-	decoder := json.NewDecoder(strings.NewReader(template))
-	decoder.UseNumber()
-
-	var document interface{}
-	if err := decoder.Decode(&document); err != nil {
-		return nil, err
-	}
-
-	var trailing interface{}
-	if err := decoder.Decode(&trailing); err != io.EOF {
-		if err == nil {
-			return nil, fmt.Errorf("template contains multiple JSON values")
-		}
-		return nil, fmt.Errorf("invalid trailing data: %w", err)
-	}
-	return document, nil
-}
-
-var customRequestPlaceholders = []string{
-	"{{.Query}}",
-	"{{.TopK}}",
-	"{{.Threshold}}",
-	"${user_content}",
-	"${top_k}",
-	"${threshold}",
-}
-
-func quoteBareCustomRequestPlaceholders(template string) string {
-	var result strings.Builder
-	result.Grow(len(template))
-
-	inString := false
-	escaped := false
-	for i := 0; i < len(template); {
-		if inString {
-			ch := template[i]
-			result.WriteByte(ch)
-			i++
-			if escaped {
-				escaped = false
-				continue
-			}
-			switch ch {
-			case '\\':
-				escaped = true
-			case '"':
-				inString = false
-			}
-			continue
-		}
-
-		if template[i] == '"' {
-			inString = true
-			result.WriteByte(template[i])
-			i++
-			continue
-		}
-
-		if placeholder := customRequestPlaceholderAt(template, i); placeholder != "" {
-			encoded, _ := json.Marshal(placeholder)
-			result.Write(encoded)
-			i += len(placeholder)
-			continue
-		}
-
-		result.WriteByte(template[i])
-		i++
-	}
-
-	return result.String()
-}
-
-func customRequestPlaceholderAt(value string, offset int) string {
-	for _, placeholder := range customRequestPlaceholders {
-		if strings.HasPrefix(value[offset:], placeholder) {
-			return placeholder
-		}
-	}
-	return ""
-}
-
-func containsCustomRequestPlaceholder(value string) bool {
-	for _, placeholder := range customRequestPlaceholders {
-		if strings.Contains(value, placeholder) {
-			return true
-		}
-	}
-	return false
-}
-
-func substituteCustomRequestPlaceholders(value interface{}, query string, topK int, threshold float64) (interface{}, error) {
-	switch typed := value.(type) {
-	case map[string]interface{}:
-		result := make(map[string]interface{}, len(typed))
-		for key, child := range typed {
-			if containsCustomRequestPlaceholder(key) {
-				return nil, fmt.Errorf("custom request template placeholders are not allowed in object keys: %q", key)
-			}
-			replaced, err := substituteCustomRequestPlaceholders(child, query, topK, threshold)
-			if err != nil {
-				return nil, err
-			}
-			result[key] = replaced
-		}
-		return result, nil
-	case []interface{}:
-		result := make([]interface{}, len(typed))
-		for i, child := range typed {
-			replaced, err := substituteCustomRequestPlaceholders(child, query, topK, threshold)
-			if err != nil {
-				return nil, err
-			}
-			result[i] = replaced
-		}
-		return result, nil
-	case string:
-		if replacement, ok := exactCustomRequestPlaceholder(typed, query, topK, threshold); ok {
-			return replacement, nil
-		}
-		return interpolateCustomRequestPlaceholders(typed, query, topK, threshold), nil
-	default:
-		return value, nil
-	}
-}
-
-func exactCustomRequestPlaceholder(value, query string, topK int, threshold float64) (interface{}, bool) {
-	switch value {
-	case "{{.Query}}", "${user_content}":
-		return query, true
-	case "{{.TopK}}", "${top_k}":
-		return topK, true
-	case "{{.Threshold}}", "${threshold}":
-		return json.Number(fmt.Sprintf("%.3f", threshold)), true
-	default:
-		return nil, false
-	}
-}
-
-func interpolateCustomRequestPlaceholders(value, query string, topK int, threshold float64) string {
-	var result strings.Builder
-	result.Grow(len(value))
-
-	for i := 0; i < len(value); {
-		placeholder := customRequestPlaceholderAt(value, i)
-		if placeholder == "" {
-			result.WriteByte(value[i])
-			i++
-			continue
-		}
-
-		switch placeholder {
-		case "{{.Query}}", "${user_content}":
-			result.WriteString(query)
-		case "{{.TopK}}", "${top_k}":
-			result.WriteString(fmt.Sprintf("%d", topK))
-		case "{{.Threshold}}", "${threshold}":
-			result.WriteString(fmt.Sprintf("%.3f", threshold))
-		}
-		i += len(placeholder)
-	}
-
-	return result.String()
+	return compiled.Render(ctx.UserContent, topK, threshold)
 }
 
 // extractContextFromResponse extracts context from API response based on format
 func (r *OpenAIRouter) extractContextFromResponse(response map[string]interface{}, format string) (string, error) {
 	switch format {
-	case "pinecone":
+	case config.ExternalAPIRequestFormatPinecone:
 		return r.extractPineconeContext(response)
-	case "weaviate":
+	case config.ExternalAPIRequestFormatWeaviate:
 		return r.extractWeaviateContext(response)
-	case "elasticsearch":
+	case config.ExternalAPIRequestFormatElasticsearch:
 		return r.extractElasticsearchContext(response)
-	case "custom":
+	case config.ExternalAPIRequestFormatCustom:
 		// For custom format, assume response has a "content" or "text" field
 		if content, ok := response["content"].(string); ok {
 			return content, nil

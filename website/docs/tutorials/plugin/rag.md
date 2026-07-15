@@ -83,9 +83,14 @@ plugin:
       max_response_body_bytes: 16777216
 ```
 
-Custom request templates are parsed as JSON before placeholder substitution. Exact placeholder
-nodes such as `${top_k}` stay typed, user content cannot add fields or change the configured
-shape, and configured JSON numbers retain their original precision. Successful response bodies
-default to an exact 16 MiB limit. Set `max_response_body_bytes` to a positive byte count to
-override it; a response at the limit is accepted and a response one byte larger is rejected
-without decoding a truncated prefix.
+The supported request formats are `pinecone`, `weaviate`, `elasticsearch`, and `custom`. Custom
+request templates are parsed as non-null JSON objects or arrays at configuration load, including
+when `external_api` is a hybrid child. Exact placeholder nodes such as `${top_k}` stay typed,
+placeholders cannot be used as object keys, user content cannot add fields or change the configured
+object/array shape, and configured JSON numbers retain their original precision. The lowercase
+`${user_content}`, `${top_k}`, and `${threshold}` names are reserved for runtime substitution;
+other braced lowercase names fail before environment expansion. Use uppercase names such as
+`${RAG_TENANT}` for intentional environment references. Successful response bodies default to an
+exact 16 MiB limit. Set `max_response_body_bytes` to a positive byte count up to 64 MiB to override
+it; a response at the limit is accepted and a response one byte larger is rejected without decoding
+a truncated prefix.

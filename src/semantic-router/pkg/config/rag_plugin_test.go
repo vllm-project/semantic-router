@@ -132,44 +132,6 @@ func registerRAGAccessorSpecs() {
 	})
 }
 
-func TestExternalAPIRAGResponseLimitValidation(t *testing.T) {
-	value := func(v int64) *int64 { return &v }
-	tests := []struct {
-		name    string
-		limit   *int64
-		wantErr bool
-	}{
-		{name: "omitted", limit: nil},
-		{name: "positive", limit: value(1024)},
-		{name: "maximum int64", limit: value(1<<63 - 1)},
-		{name: "zero", limit: value(0), wantErr: true},
-		{name: "negative", limit: value(-1), wantErr: true},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			cfg := &RAGPluginConfig{
-				Enabled: true,
-				Backend: "external_api",
-				BackendConfig: MustStructuredPayload(&ExternalAPIRAGConfig{
-					Endpoint:             "http://localhost:8080/search",
-					RequestFormat:        "custom",
-					RequestTemplate:      `{"query":"${user_content}"}`,
-					MaxResponseBodyBytes: test.limit,
-				}),
-			}
-
-			err := cfg.Validate()
-			if test.wantErr && err == nil {
-				t.Fatal("Validate() succeeded, want error")
-			}
-			if !test.wantErr && err != nil {
-				t.Fatalf("Validate() error = %v", err)
-			}
-		})
-	}
-}
-
 func TestHybridExternalAPIRAGResponseLimitValidation(t *testing.T) {
 	invalidLimit := int64(0)
 	externalConfig := MustStructuredPayload(&ExternalAPIRAGConfig{

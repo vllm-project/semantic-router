@@ -78,12 +78,32 @@ func validateExternalAPIRAGBackend(c *RAGPluginConfig) error {
 	if apiConfig.Endpoint == "" {
 		return fmt.Errorf("external API endpoint is required")
 	}
-	if apiConfig.RequestFormat == "" {
+	switch apiConfig.RequestFormat {
+	case ExternalAPIRequestFormatPinecone,
+		ExternalAPIRequestFormatWeaviate,
+		ExternalAPIRequestFormatElasticsearch:
+	case ExternalAPIRequestFormatCustom:
+		if _, err := ParseExternalAPICustomRequestTemplate(apiConfig.RequestTemplate); err != nil {
+			return err
+		}
+	case "":
 		return fmt.Errorf("request format is required for external API")
+	default:
+		return fmt.Errorf(
+			"unsupported external API request format %q; supported formats are pinecone, weaviate, elasticsearch, and custom",
+			apiConfig.RequestFormat,
+		)
 	}
 	if apiConfig.MaxResponseBodyBytes != nil {
 		if *apiConfig.MaxResponseBodyBytes <= 0 {
 			return fmt.Errorf("external API max_response_body_bytes must be greater than 0, got %d", *apiConfig.MaxResponseBodyBytes)
+		}
+		if *apiConfig.MaxResponseBodyBytes > MaximumExternalAPIResponseBodyBytes {
+			return fmt.Errorf(
+				"external API max_response_body_bytes must not exceed %d, got %d",
+				MaximumExternalAPIResponseBodyBytes,
+				*apiConfig.MaxResponseBodyBytes,
+			)
 		}
 	}
 	return nil
