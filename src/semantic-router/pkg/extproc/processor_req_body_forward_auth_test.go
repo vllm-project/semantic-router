@@ -94,29 +94,25 @@ func TestBuildRouteHeaderStateForwardsInboundAuthorizationCaseInsensitive(t *tes
 	assert.Equal(t, "Bearer mixed-case-key", headerMap["Authorization"])
 }
 
-func TestDecisionForwardsAuthorization(t *testing.T) {
+// TestHandleLooperExecutionMixedDecisionNotRejectedUpFront proves the
+// decision-wide early 401 is gone: a decision whose candidates include a
+// forward-auth backend must NOT be rejected before the selected backend is
+// known (a mixed decision may still resolve to a static-key backend that needs
+// no caller credential). The per-request Authorization requirement is enforced
+// per-leg at the selected backend instead — see the buildRouteHeaderState
+// forward-path tests below and TestBuildRouteHeaderStateForwardMissingAuthorizationReturns401.
+func TestHandleLooperExecutionMixedDecisionNotRejectedUpFront(t *testing.T) {
 	router := forwardAuthTestRouter(t)
-
-	forwardDecision := &config.Decision{ModelRefs: []config.ModelRef{{Model: "model-a"}}}
-	assert.True(t, router.decisionForwardsAuthorization(forwardDecision),
-		"decision targeting a forward-enabled backend should require forwarding")
-
-	otherDecision := &config.Decision{ModelRefs: []config.ModelRef{{Model: "unknown-model"}}}
-	assert.False(t, router.decisionForwardsAuthorization(otherDecision),
-		"decision targeting no forward-enabled backend should not require forwarding")
-
-	assert.False(t, router.decisionForwardsAuthorization(nil))
-}
-
-func TestHandleLooperExecutionForwardBackendRequiresAuthorization(t *testing.T) {
-	router := forwardAuthTestRouter(t)
+	// Unreachable endpoint with a short timeout: the looper Execute fails fast,
+	// which is fine — we only assert the request is not short-circuited with a
+	// 401 before the looper (and thus the selected backend) even runs.
+	router.Config.Looper = config.LooperConfig{Endpoint: "http://127.0.0.1:1", TimeoutSeconds: 1}
 	decision := &config.Decision{
 		Name:      "panel",
 		Algorithm: &config.AlgorithmConfig{Type: "fusion"},
 		ModelRefs: []config.ModelRef{{Model: "model-a"}},
 	}
-	// Caller sent no Authorization; a candidate backend forwards it, so the
-	// looper must reject up front rather than fall back to a static key.
+	// Caller sent no Authorization.
 	reqCtx := &RequestContext{Headers: map[string]string{}}
 	req := &openai.ChatCompletionNewParams{
 		Model:    "model-a",
@@ -127,8 +123,12 @@ func TestHandleLooperExecutionForwardBackendRequiresAuthorization(t *testing.T) 
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	immediate := resp.GetImmediateResponse()
-	require.NotNil(t, immediate, "missing Authorization on a forward-enabled looper route should 401")
-	assert.Equal(t, 401, int(immediate.GetStatus().GetCode()))
+	require.NotNil(t, immediate)
+	// The request must reach the looper and fail on the unreachable endpoint
+	// (500), proving it got PAST the removed decision-wide gate rather than being
+	// short-circuited with a 401 before the selected backend is known.
+	assert.Equal(t, 500, int(immediate.GetStatus().GetCode()),
+		"a forward-auth candidate must not be rejected before the selected backend is known")
 }
 
 func TestBuildRouteHeaderStateForwardOnLooperLegUsesDedicatedHeader(t *testing.T) {

@@ -664,53 +664,6 @@ routing:
 	}
 }
 
-func TestModelForwardsAuthorization(t *testing.T) {
-	canonicalYAML := []byte(`
-version: v0.3
-providers:
-  defaults:
-    default_model: gateway-model
-  models:
-    - name: gateway-model
-      backend_refs:
-        - name: gateway
-          base_url: https://litellm.example.com/v1
-          provider: openai
-          forward_authorization_header: true
-    - name: static-model
-      backend_refs:
-        - name: local
-          endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: gateway-model
-    - name: static-model
-  decisions:
-    - name: default
-      priority: 1
-      rules:
-        operator: OR
-        conditions: []
-      modelRefs:
-        - model: gateway-model
-`)
-
-	cfg, err := ParseYAMLBytes(canonicalYAML)
-	if err != nil {
-		t.Fatalf("ParseYAMLBytes returned error: %v", err)
-	}
-
-	if !cfg.ModelForwardsAuthorization("gateway-model") {
-		t.Fatalf("ModelForwardsAuthorization(gateway-model) = false, want true")
-	}
-	if cfg.ModelForwardsAuthorization("static-model") {
-		t.Fatalf("ModelForwardsAuthorization(static-model) = true, want false")
-	}
-	if cfg.ModelForwardsAuthorization("unknown") {
-		t.Fatalf("ModelForwardsAuthorization(unknown) = true, want false")
-	}
-}
-
 func TestProviderBackendRefForwardAuthorizationHeaderForcesProfileCreation(t *testing.T) {
 	// A backend that sets ONLY forward_authorization_header (no base_url,
 	// provider, auth_header, etc.) must still get a provider profile so the flag
