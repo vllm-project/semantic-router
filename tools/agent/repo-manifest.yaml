@@ -111,7 +111,7 @@ validation:
     full_ci_profiles:
     - kubernetes
     - dashboard
-    - no-model
+    - remote-embedding
 docs:
 - AGENTS.md
 - docs/agent/README.md

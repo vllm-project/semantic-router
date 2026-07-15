@@ -39,6 +39,8 @@ on:
         value: ${{ jobs.filter.outputs.e2e_dynamic_config }}
       e2e_multimodal_routing:
         value: ${{ jobs.filter.outputs.e2e_multimodal_routing }}
+      e2e_remote_embedding:
+        value: ${{ jobs.filter.outputs.e2e_remote_embedding }}
       e2e_llm_d:
         value: ${{ jobs.filter.outputs.e2e_llm_d }}
       e2e_routing_strategies:
@@ -91,6 +93,7 @@ jobs:
       e2e_dashboard: ${{ steps.changes.outputs.e2e_dashboard }}
       e2e_dynamic_config: ${{ steps.changes.outputs.e2e_dynamic_config }}
       e2e_multimodal_routing: ${{ steps.changes.outputs.e2e_multimodal_routing }}
+      e2e_remote_embedding: ${{ steps.changes.outputs.e2e_remote_embedding }}
       e2e_llm_d: ${{ steps.changes.outputs.e2e_llm_d }}
       e2e_routing_strategies: ${{ steps.changes.outputs.e2e_routing_strategies }}
       e2e_production_stack: ${{ steps.changes.outputs.e2e_production_stack }}
@@ -219,6 +222,9 @@ jobs:
               - 'e2e/profiles/dynamic-config/**'
             e2e_multimodal_routing:
               - 'e2e/profiles/multimodal-routing/**'
+            e2e_remote_embedding:
+              - 'e2e/profiles/remote-embedding/**'
+              - 'e2e/testcases/remote_embedding_routing.go'
             e2e_llm_d:
               - 'e2e/profiles/llm-d/**'
               - 'deploy/kubernetes/llmd-base/**'
