@@ -32,11 +32,63 @@ var complexityDifficultyLevels = map[string]struct{}{
 // suffix here turns that latent misconfiguration into a clear load-time error
 // (issue #2324).
 func validateComplexityContracts(cfg *RouterConfig) error {
+	if err := validateComplexityRules(cfg); err != nil {
+		return err
+	}
 	declared := collectComplexityRuleNames(cfg.ComplexityRules)
 	for _, decision := range cfg.Decisions {
 		if err := validateDecisionComplexityReferences(decision.Name, &decision.Rules, declared); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// validateComplexityRules validates each complexity rule's method and, when any
+// rule opts into the trained classifier (method: model), requires the
+// module-level classifier configuration.
+//
+// Two failures this guards against, both of which otherwise produce a route
+// that is silently inert at runtime:
+//   - An unrecognized method (e.g. a typo like "modle") falls back to the
+//     embedding path; because model-mode configs omit the hard/easy prototype
+//     banks, the rule then classifies against empty banks. Reject unknown
+//     methods so the misconfiguration surfaces at load time.
+//   - A model-mode rule with no configured classifier (missing model_id or
+//     complexity_mapping_path) can never emit a match. Reject it here rather
+//     than wiring nothing and leaving the signal permanently dead.
+func validateComplexityRules(cfg *RouterConfig) error {
+	for _, rule := range cfg.ComplexityRules {
+		switch rule.Method {
+		case "", ComplexityMethodEmbedding, ComplexityMethodModel:
+		default:
+			return fmt.Errorf(
+				"complexity rule %q has unsupported method %q; valid values are %q (default) or %q",
+				rule.Name, rule.Method, ComplexityMethodEmbedding, ComplexityMethodModel,
+			)
+		}
+	}
+
+	if !HasModelComplexityRule(cfg.ComplexityRules) {
+		return nil
+	}
+
+	classifier := cfg.ComplexityModel.Classifier
+	if classifier.ModelID == "" {
+		return fmt.Errorf(
+			"one or more complexity rules use method: %q but "+
+				"global.model_catalog.modules.complexity.classifier.model_id is not set; "+
+				"model-mode rules can never match without a configured classifier",
+			ComplexityMethodModel,
+		)
+	}
+	if classifier.ComplexityMappingPath == "" {
+		return fmt.Errorf(
+			"one or more complexity rules use method: %q but "+
+				"global.model_catalog.modules.complexity.classifier.complexity_mapping_path is not set; "+
+				"a class-index -> difficulty mapping is required",
+			ComplexityMethodModel,
+		)
 	}
 	return nil
 }

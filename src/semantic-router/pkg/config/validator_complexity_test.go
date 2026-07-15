@@ -134,6 +134,89 @@ func TestValidateComplexityContracts(t *testing.T) {
 	}
 }
 
+// TestValidateComplexityRules covers per-rule method validation and the
+// model-mode classifier-configuration requirement.
+func TestValidateComplexityRules(t *testing.T) {
+	classifierConfigured := InlineModels{
+		ComplexityModel: ComplexityModelConfig{
+			Classifier: ComplexityClassifierModelConfig{
+				ModelID:               "org/complexity-classifier",
+				ComplexityMappingPath: "/models/complexity/mapping.json",
+			},
+		},
+	}
+	modelIDOnly := InlineModels{
+		ComplexityModel: ComplexityModelConfig{
+			Classifier: ComplexityClassifierModelConfig{ModelID: "org/complexity-classifier"},
+		},
+	}
+
+	cases := []struct {
+		name       string
+		rules      []ComplexityRule
+		models     InlineModels
+		wantErr    bool
+		errSubstrs []string
+	}{
+		{
+			name:  "empty method uses embedding default",
+			rules: []ComplexityRule{{Name: "c"}},
+		},
+		{
+			name:  "explicit embedding accepted",
+			rules: []ComplexityRule{{Name: "c", Method: ComplexityMethodEmbedding}},
+		},
+		{
+			name:   "model method with classifier configured accepted",
+			rules:  []ComplexityRule{{Name: "c", Method: ComplexityMethodModel}},
+			models: classifierConfigured,
+		},
+		{
+			name:       "unknown method rejected",
+			rules:      []ComplexityRule{{Name: "c", Method: "modle"}},
+			wantErr:    true,
+			errSubstrs: []string{"unsupported method", "modle"},
+		},
+		{
+			name:       "model method without model_id rejected",
+			rules:      []ComplexityRule{{Name: "c", Method: ComplexityMethodModel}},
+			wantErr:    true,
+			errSubstrs: []string{"model_id", "model-mode rules"},
+		},
+		{
+			name:       "model method without mapping path rejected",
+			rules:      []ComplexityRule{{Name: "c", Method: ComplexityMethodModel}},
+			models:     modelIDOnly,
+			wantErr:    true,
+			errSubstrs: []string{"complexity_mapping_path"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &RouterConfig{
+				InlineModels:       tc.models,
+				IntelligentRouting: IntelligentRouting{Signals: Signals{ComplexityRules: tc.rules}},
+			}
+			err := validateComplexityRules(cfg)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				for _, sub := range tc.errSubstrs {
+					if !strings.Contains(err.Error(), sub) {
+						t.Errorf("error %q missing expected substring %q", err.Error(), sub)
+					}
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
 // TestValidateComplexityContracts_NoComplexityConditions ensures decisions
 // without any complexity conditions are unaffected.
 func TestValidateComplexityContracts_NoComplexityConditions(t *testing.T) {
