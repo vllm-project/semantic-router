@@ -18,25 +18,7 @@ func (a *Adapter) Name() native.Backend {
 }
 
 func (a *Adapter) Capabilities() native.CapabilitySet {
-	return native.CapabilitySet{
-		Capabilities: []native.Capability{
-			native.CapabilityEmbedding,
-			native.CapabilitySequenceClassification,
-			native.CapabilityTokenClassification,
-		},
-		SupportedFamilies: []native.Family{
-			native.FamilymmBERT,
-		},
-		SupportedArtifacts: []native.ArtifactFormat{
-			native.ArtifactONNXIR,
-			native.ArtifactQuantized,
-		},
-		Features: map[string]bool{
-			"matryoshka_2d":      true,
-			"batching":           true,
-			"provider_selection": true, // CPU, CUDA, ROCm
-		},
-	}
+	return native.CapabilitySet{}
 }
 
 type onnxHandle struct {

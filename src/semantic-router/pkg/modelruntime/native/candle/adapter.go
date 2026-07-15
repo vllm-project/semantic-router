@@ -3,7 +3,6 @@ package candle
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
@@ -84,7 +83,6 @@ func (a *Adapter) Info() []native.ModelInfo {
 	for _, m := range info.Models {
 		results = append(results, native.ModelInfo{
 			Backend:           native.BackendCandle,
-			Capability:        native.CapabilityEmbedding,
 			ModelName:         m.ModelName,
 			ModelPath:         m.ModelPath,
 			IsLoaded:          m.IsLoaded,

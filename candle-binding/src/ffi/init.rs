@@ -322,7 +322,7 @@ pub extern "C" fn init_modernbert_pii_classifier(model_id: *const c_char, use_cp
     // Try to initialize the actual ModernBERT PII model
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory(model_id, use_cpu) {
         Ok(model) => {
-            crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNget_registry().register("legacy_bert_pii", model).is_ok()
+            get_registry().register("legacy_bert_pii", model).is_ok()
         }
         Err(e) => {
             eprintln!("Failed to initialize ModernBERT PII classifier: {}", e);
@@ -379,7 +379,7 @@ pub extern "C" fn init_modernbert_jailbreak_classifier(
     // Try to initialize the actual ModernBERT jailbreak model
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory(model_id, use_cpu) {
         Ok(model) => {
-            crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNget_registry().register("legacy_bert_jailbreak", model).is_ok()
+            get_registry().register("legacy_bert_jailbreak", model).is_ok()
         }
         Err(e) => {
             eprintln!("Failed to initialize ModernBERT jailbreak classifier: {}", e);
@@ -432,7 +432,7 @@ pub extern "C" fn init_mmbert_classifier(model_id: *const c_char, use_cpu: bool)
         Ok(model) => {
             let is_multilingual = model.is_multilingual();
             eprintln!("   mmBERT loaded (is_multilingual: {})", is_multilingual);
-            MMget_registry().register("legacy_bert", model).is_ok()
+            get_registry().register("legacy_bert", model).is_ok()
         }
         Err(e) => {
             eprintln!("   ✗ Failed to initialize mmBERT classifier: {}", e);
@@ -472,7 +472,7 @@ pub extern "C" fn init_mmbert_classifier_auto(model_id: *const c_char, use_cpu: 
             let variant = model.variant();
             let is_multilingual = model.is_multilingual();
             eprintln!("   Detected variant: {:?} (multilingual: {})", variant, is_multilingual);
-            MMget_registry().register("legacy_bert", model).is_ok()
+            get_registry().register("legacy_bert", model).is_ok()
         }
         Err(e) => {
             eprintln!("   ✗ Failed to initialize classifier: {}", e);

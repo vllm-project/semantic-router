@@ -18,23 +18,7 @@ func (a *Adapter) Name() native.Backend {
 }
 
 func (a *Adapter) Capabilities() native.CapabilitySet {
-	return native.CapabilitySet{
-		Capabilities: []native.Capability{
-			native.CapabilityEmbedding,
-			native.CapabilitySequenceClassification,
-			native.CapabilityTokenClassification,
-		},
-		SupportedFamilies: []native.Family{
-			native.FamilyModernBERT,
-		},
-		SupportedArtifacts: []native.ArtifactFormat{
-			native.ArtifactOpenVINOIR,
-		},
-		Features: map[string]bool{
-			"matryoshka_2d": false,
-			"batching":      true,
-		},
-	}
+	return native.CapabilitySet{}
 }
 
 type openvinoHandle struct {

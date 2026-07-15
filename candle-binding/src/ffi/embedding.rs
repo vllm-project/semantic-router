@@ -70,21 +70,39 @@ pub(crate) fn truncate_embedding_to_dimension(
     truncated
 }
 
+/// Safe wrapper for a multimodal reference to ensure the Arc lifecycle outlives the borrow.
+pub(crate) enum MultimodalRef {
+    Standalone(std::sync::Arc<(MultiModalEmbeddingModel, MmTokenizer, String)>),
+    Factory(std::sync::Arc<ModelFactory>),
+}
+
+impl MultimodalRef {
+    pub fn model(&self) -> &MultiModalEmbeddingModel {
+        match self {
+            Self::Standalone(arc) => &arc.0,
+            Self::Factory(arc) => arc.get_multimodal_model().unwrap(),
+        }
+    }
+    pub fn tokenizer(&self) -> &MmTokenizer {
+        match self {
+            Self::Standalone(arc) => &arc.1,
+            Self::Factory(arc) => arc.get_multimodal_tokenizer().unwrap(),
+        }
+    }
+}
+
 /// Get a reference to the multimodal model + tokenizer, checking standalone first
 /// then falling back to the factory.
-fn get_multimodal_refs() -> Option<(&'static MultiModalEmbeddingModel, &'static MmTokenizer)> {
-    if let Some((model, tokenizer, _)) =
+fn get_multimodal_refs() -> Option<MultimodalRef> {
+    if let Some(arc) =
         get_registry()
             .get::<(MultiModalEmbeddingModel, MmTokenizer, String)>("standalone_multimodal")
     {
-        return Some((model, tokenizer));
+        return Some(MultimodalRef::Standalone(arc));
     }
     if let Some(factory) = get_registry().get::<ModelFactory>("global_model_factory") {
-        if let (Some(model), Some(tokenizer)) = (
-            factory.get_multimodal_model(),
-            factory.get_multimodal_tokenizer(),
-        ) {
-            return Some((model, tokenizer));
+        if factory.get_multimodal_model().is_some() && factory.get_multimodal_tokenizer().is_some() {
+            return Some(MultimodalRef::Factory(factory));
         }
     }
     None
@@ -809,8 +827,10 @@ fn generate_multimodal_text_embedding(
 ) -> Result<Vec<f32>, String> {
     use candle_core::Tensor;
 
-    let (model, tokenizer) =
+    let refs =
         get_multimodal_refs().ok_or_else(|| "Multi-modal model not available".to_string())?;
+    let model = refs.model();
+    let tokenizer = refs.tokenizer();
 
     let encoding = tokenizer
         .encode(text, true)
@@ -849,8 +869,10 @@ fn generate_multimodal_text_embeddings_batch(
     target_layer: Option<usize>,
     target_dim: Option<usize>,
 ) -> Result<Vec<Vec<f32>>, String> {
-    let (model, tokenizer) =
+    let refs =
         get_multimodal_refs().ok_or_else(|| "Multi-modal model not available".to_string())?;
+    let model = refs.model();
+    let tokenizer = refs.tokenizer();
 
     let embeddings = model
         .encode_text_batch_with_matryoshka(tokenizer, texts, 512, target_layer, target_dim)
@@ -2330,7 +2352,7 @@ pub extern "C" fn multimodal_encode_text(
         }
     };
 
-    let (model, tokenizer) = match get_multimodal_refs() {
+    let refs = match get_multimodal_refs() {
         Some(refs) => refs,
         None => {
             eprintln!("Error: Multi-modal model not loaded");
@@ -2340,6 +2362,8 @@ pub extern "C" fn multimodal_encode_text(
             return -1;
         }
     };
+    let model = refs.model();
+    let tokenizer = refs.tokenizer();
 
     let start_time = std::time::Instant::now();
 
@@ -2536,7 +2560,7 @@ pub extern "C" fn multimodal_encode_image_from_bytes(
         return -1;
     }
 
-    let (model, _tokenizer) = match get_multimodal_refs() {
+    let refs = match get_multimodal_refs() {
         Some(refs) => refs,
         None => {
             eprintln!("Error: Multi-modal model not loaded");
@@ -2546,6 +2570,8 @@ pub extern "C" fn multimodal_encode_image_from_bytes(
             return -1;
         }
     };
+    let model = refs.model();
+    let _tokenizer = refs.tokenizer();
 
     let start_time = std::time::Instant::now();
     let bytes = unsafe { std::slice::from_raw_parts(bytes_ptr, bytes_len) };
@@ -2649,7 +2675,7 @@ pub extern "C" fn multimodal_encode_image(
         return -1;
     }
 
-    let (model, _tokenizer) = match get_multimodal_refs() {
+    let refs = match get_multimodal_refs() {
         Some(refs) => refs,
         None => {
             eprintln!("Error: Multi-modal model not loaded");
@@ -2659,6 +2685,8 @@ pub extern "C" fn multimodal_encode_image(
             return -1;
         }
     };
+    let model = refs.model();
+    let _tokenizer = refs.tokenizer();
 
     let start_time = std::time::Instant::now();
 
@@ -2752,7 +2780,7 @@ pub extern "C" fn multimodal_encode_audio(
         return -1;
     }
 
-    let (model, _tokenizer) = match get_multimodal_refs() {
+    let refs = match get_multimodal_refs() {
         Some(refs) => refs,
         None => {
             eprintln!("Error: Multi-modal model not loaded");
@@ -2762,6 +2790,8 @@ pub extern "C" fn multimodal_encode_audio(
             return -1;
         }
     };
+    let model = refs.model();
+    let _tokenizer = refs.tokenizer();
 
     let start_time = std::time::Instant::now();
 

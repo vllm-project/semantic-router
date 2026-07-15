@@ -810,7 +810,7 @@ pub extern "C" fn classify_candle_bert_text(text: *const c_char) -> Classificati
     }
 
     // Fallback to Traditional BERT classifier
-    if let Some(classifier) = TRADITIONAL_get_registry().get::<crate::BertClassifier>("legacy_bert")
+    if let Some(classifier) = get_registry().get::<crate::BertClassifier>("legacy_bert")
     {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
@@ -860,7 +860,7 @@ pub extern "C" fn classify_bert_text(text: *const c_char) -> ClassificationResul
             Err(_) => return default_result,
         }
     };
-    if let Some(classifier) = TRADITIONAL_get_registry().get::<crate::BertClassifier>("legacy_bert")
+    if let Some(classifier) = get_registry().get::<crate::BertClassifier>("legacy_bert")
     {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
@@ -1019,7 +1019,7 @@ pub extern "C" fn classify_modernbert_text(text: *const c_char) -> ModernBertCla
         }
     };
     if let Some(classifier) =
-        crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNget_registry()
+        get_registry()
             .get::<crate::BertClassifier>("legacy_bert")
     {
         let classifier = classifier.clone();
@@ -1061,7 +1061,7 @@ pub extern "C" fn classify_modernbert_text_with_probabilities(
     };
 
     if let Some(classifier) =
-        TRADITIONAL_MODERNget_registry().get::<crate::BertClassifier>("legacy_bert")
+        get_registry().get::<crate::BertClassifier>("legacy_bert")
     {
         let classifier = classifier.clone();
         match classifier.classify_text_with_probabilities(text) {
@@ -1118,7 +1118,7 @@ pub extern "C" fn classify_modernbert_pii_text(
     };
 
     if let Some(classifier) =
-        TRADITIONAL_MODERNget_registry().get::<crate::BertClassifier>("legacy_bert_pii")
+        get_registry().get::<crate::BertClassifier>("legacy_bert_pii")
     {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
@@ -1163,7 +1163,7 @@ pub extern "C" fn classify_modernbert_jailbreak_text(
     };
 
     if let Some(classifier) =
-        TRADITIONAL_MODERNget_registry().get::<crate::BertClassifier>("legacy_bert_jailbreak")
+        get_registry().get::<crate::BertClassifier>("legacy_bert_jailbreak")
     {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
