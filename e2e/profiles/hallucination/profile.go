@@ -77,4 +77,3 @@ func (p *Profile) GetTestCases() []string {
 func (p *Profile) GetServiceConfig() framework.ServiceConfig {
 	return p.stack.ServiceConfig()
 }
-

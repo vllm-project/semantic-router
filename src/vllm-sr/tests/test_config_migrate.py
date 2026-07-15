@@ -529,20 +529,3 @@ def test_migrate_config_data_preserves_hallucination_endpoint_backend():
     assert detector["model_id"] == "KRLabsOrg/lettucedect-v2-qwen-2b"
     # Legacy detectors are given a stable model_ref during migration.
     assert detector["model_ref"] == "hallucination_detector"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

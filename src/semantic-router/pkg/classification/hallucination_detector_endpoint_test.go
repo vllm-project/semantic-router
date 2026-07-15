@@ -38,25 +38,8 @@ func openAIResponse(content string) string {
 	return string(body)
 }
 
-func TestEndpointDetector_RequestShape(t *testing.T) {
-	var captured map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasSuffix(r.URL.Path, "/chat/completions") {
-			t.Errorf("unexpected path: %s", r.URL.Path)
-		}
-		body, _ := io.ReadAll(r.Body)
-		if err := json.Unmarshal(body, &captured); err != nil {
-			t.Errorf("request body not JSON: %v", err)
-		}
-		_, _ = io.WriteString(w, openAIResponse(`{"hallucinated_spans": []}`))
-	}))
-	defer server.Close()
-
-	detector := newTestEndpointDetector(t, server.URL, true)
-	if _, err := detector.DetectWithNLI("the sky is blue", "what color is the sky?", "the sky is green"); err != nil {
-		t.Fatalf("DetectWithNLI: %v", err)
-	}
-
+func verifyRequestShape(t *testing.T, captured map[string]interface{}) {
+	t.Helper()
 	if captured["model"] != "test-detector" {
 		t.Errorf("model = %v, want test-detector", captured["model"])
 	}
@@ -81,6 +64,28 @@ func TestEndpointDetector_RequestShape(t *testing.T) {
 	if messages[1].(map[string]interface{})["role"] != "user" {
 		t.Errorf("messages[1].role = %v, want user", messages[1].(map[string]interface{})["role"])
 	}
+}
+
+func TestEndpointDetector_RequestShape(t *testing.T) {
+	var captured map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/chat/completions") {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		body, _ := io.ReadAll(r.Body)
+		if err := json.Unmarshal(body, &captured); err != nil {
+			t.Errorf("request body not JSON: %v", err)
+		}
+		_, _ = io.WriteString(w, openAIResponse(`{"hallucinated_spans": []}`))
+	}))
+	defer server.Close()
+
+	detector := newTestEndpointDetector(t, server.URL, true)
+	if _, err := detector.DetectWithNLI("the sky is blue", "what color is the sky?", "the sky is green"); err != nil {
+		t.Fatalf("DetectWithNLI: %v", err)
+	}
+
+	verifyRequestShape(t, captured)
 }
 
 func TestEndpointDetector_CleanResponse(t *testing.T) {

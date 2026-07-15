@@ -65,15 +65,17 @@ def extract_answer_under_review(req: ChatRequest) -> str:
 def build_hallucination_detection_content(req: ChatRequest) -> str:
     answer = extract_answer_under_review(req)
     flagged_text = answer[:80] if answer else "mocked hallucination"
-    return json.dumps({
-        "hallucinated_spans": [
-            {
-                "text": flagged_text,
-                "category": "unsupported_addition",
-                "subcategory": "claim"
-            }
-        ]
-    })
+    return json.dumps(
+        {
+            "hallucinated_spans": [
+                {
+                    "text": flagged_text,
+                    "category": "unsupported_addition",
+                    "subcategory": "claim",
+                }
+            ]
+        }
+    )
 
 
 def build_chat_usage(req: ChatRequest, content: str) -> dict:
