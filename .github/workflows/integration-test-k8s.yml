@@ -65,6 +65,7 @@ jobs:
           [[ "${{ needs.changes.outputs.e2e_ml_model_selection }}" == "true" ]] && profiles+=("ml-model-selection")
           [[ "${{ needs.changes.outputs.e2e_multi_endpoint }}" == "true" ]] && profiles+=("multi-endpoint")
           [[ "${{ needs.changes.outputs.e2e_authz_rbac }}" == "true" ]] && profiles+=("authz-rbac")
+          [[ "${{ needs.changes.outputs.e2e_forward_auth }}" == "true" ]] && profiles+=("forward-auth")
           [[ "${{ needs.changes.outputs.e2e_streaming }}" == "true" ]] && profiles+=("streaming")
 
           # Convert to JSON array

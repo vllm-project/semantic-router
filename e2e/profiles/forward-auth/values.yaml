@@ -1,0 +1,162 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/vllm-project/semantic-router/extproc
+  pullPolicy: Never
+  tag: e2e-test
+service:
+  type: ClusterIP
+  port: 8080
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: static-model
+    models:
+      # forward-model opts into forward_authorization_header: the router forwards
+      # the caller's inbound Authorization header verbatim to the upstream and
+      # rejects (401) requests that arrive without one. api_key/api_key_env are
+      # intentionally omitted (they would be ignored for this backend).
+      - name: forward-model
+        external_model_ids:
+          vllm: Qwen/Qwen2.5-14B-Instruct
+        backend_refs:
+          - name: forward-be
+            endpoint: forward-be.default.svc.cluster.local:8000
+            weight: 1
+            type: vllm
+            auth_header: Authorization
+            auth_prefix: Bearer
+            forward_authorization_header: true
+      # static-model keeps the default static-key behavior for contrast: it needs
+      # no caller Authorization because the router injects the configured api_key.
+      - name: static-model
+        external_model_ids:
+          vllm: Qwen/Qwen2.5-14B-Instruct
+        backend_refs:
+          - name: static-be
+            endpoint: static-be.default.svc.cluster.local:8000
+            weight: 1
+            type: vllm
+            api_key: some-static-key
+  routing:
+    decisions:
+      # Direct route for a specified forward-model request. Specified-model
+      # requests route straight to the model's backend; this decision provides a
+      # keyword-reachable path to the same forward-auth backend as well.
+      - name: forward_direct
+        description: Route forward-auth traffic to the forward-auth backend.
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: forward_keywords
+        modelRefs:
+          - model: forward-model
+            use_reasoning: false
+      # Direct route for the static-key backend (no caller Authorization needed).
+      - name: static_direct
+        description: Route static traffic to the static-key backend.
+        priority: 90
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: static_keywords
+        modelRefs:
+          - model: static-model
+            use_reasoning: false
+    signals:
+      keywords:
+        - name: forward_keywords
+          operator: OR
+          keywords:
+            - forward
+            - gateway
+        - name: static_keywords
+          operator: OR
+          keywords:
+            - static
+            - local
+      domains:
+        - name: general
+          description: General knowledge, conversation, and miscellaneous topics
+        - name: other
+          description: Catch-all for unclassified queries
+    modelCards:
+      - name: forward-model
+        param_size: 14b
+        description: Qwen2.5 14B routed through a per-user gateway (forwards caller Authorization).
+        capabilities:
+          - chat
+          - reasoning
+        quality_score: 0.85
+      - name: static-model
+        param_size: 14b
+        description: Qwen2.5 14B on a local backend with a static service key.
+        capabilities:
+          - chat
+          - reasoning
+        quality_score: 0.85
+  global:
+    model_catalog:
+      kbs: []
+    router:
+      clear_route_cache: true
+      strategy: priority
+      auto_model_name: auto
+    services:
+      observability:
+        metrics:
+          enabled: true
+        tracing:
+          enabled: false
+      api:
+        batch_classification:
+          max_batch_size: 100
+          concurrency_threshold: 5
+          max_concurrency: 8
+          metrics:
+            enabled: true
+            detailed_goroutine_tracking: true
+            high_resolution_timing: false
+            sample_rate: 1.0
+            duration_buckets:
+              - 0.001
+              - 0.005
+              - 0.01
+              - 0.025
+              - 0.05
+              - 0.1
+              - 0.25
+              - 0.5
+              - 1
+              - 2.5
+              - 5
+              - 10
+              - 30
+            size_buckets:
+              - 1
+              - 2
+              - 5
+              - 10
+              - 20
+              - 50
+              - 100
+              - 200
+    stores:
+      semantic_cache:
+        enabled: false
+        embedding_model: mmbert
+      memory:
+        embedding_model: mmbert
+      vector_store:
+        embedding_model: mmbert
+resources:
+  limits:
+    cpu: 2000m
+    memory: 8Gi
+  requests:
+    cpu: 500m
+    memory: 2Gi

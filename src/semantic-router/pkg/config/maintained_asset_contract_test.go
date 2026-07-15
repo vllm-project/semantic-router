@@ -57,6 +57,7 @@ var maintainedValuesConfigAssets = []string{
 	repoRel("e2e", "profiles", "aibrix", "values.yaml"),
 	repoRel("e2e", "profiles", "authz-rbac", "values.yaml"),
 	repoRel("e2e", "profiles", "dynamic-config", "values.yaml"),
+	repoRel("e2e", "profiles", "forward-auth", "values.yaml"),
 	repoRel("e2e", "profiles", "llm-d", "values.yaml"),
 	repoRel("e2e", "profiles", "ml-model-selection", "values.yaml"),
 	repoRel("e2e", "profiles", "multi-endpoint", "values.yaml"),
