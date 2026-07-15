@@ -4,7 +4,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
+	"strconv"
 )
+
+// complexityDifficultyLabels is the set of difficulty labels the complexity
+// signal can emit. The runtime consumers — classifyComplexityDifficulty in
+// complexity_rule_scoring.go and the neutral-band/margin logic in
+// classifier_signal_complexity.go — hardcode exactly these lowercase values, so
+// a trained-model mapping that emits anything else (a different case, a synonym)
+// produces a signal the decision schema can never reference. Keep in sync with
+// those consumers and with complexityDifficultyLevels in
+// pkg/config/validator_complexity.go.
+var complexityDifficultyLabels = map[string]struct{}{
+	"easy":   {},
+	"medium": {},
+	"hard":   {},
+}
 
 // CategoryMapping holds the mapping between indices and domain categories
 type CategoryMapping struct {
@@ -139,7 +155,47 @@ func LoadComplexityMapping(path string) (*ComplexityMapping, error) {
 		}
 	}
 
+	if err := validateComplexityMapping(&mapping); err != nil {
+		return nil, fmt.Errorf("invalid complexity mapping %q: %w", path, err)
+	}
+
 	return &mapping, nil
+}
+
+// validateComplexityMapping checks that a normalized complexity mapping is
+// usable at runtime: it must map a contiguous block of class indices [0, N)
+// onto the supported lowercase difficulty labels easy/medium/hard.
+//
+// Without this, a JSON file that parses but carries none of the recognized keys
+// yields empty maps and every classification silently misses
+// (GetDifficultyFromIndex returns ok=false); and a mapping with a stray label
+// like "HARD" or an arbitrary class name loads successfully but emits a
+// difficulty the decision schema can never match.
+func validateComplexityMapping(cm *ComplexityMapping) error {
+	if len(cm.IdxToLabel) == 0 {
+		return fmt.Errorf("mapping is empty; expected an idx_to_label (or id_to_label / idx_to_category) block")
+	}
+
+	indices := make([]int, 0, len(cm.IdxToLabel))
+	for idxStr, label := range cm.IdxToLabel {
+		idx, err := strconv.Atoi(idxStr)
+		if err != nil {
+			return fmt.Errorf("class index %q is not an integer", idxStr)
+		}
+		if _, ok := complexityDifficultyLabels[label]; !ok {
+			return fmt.Errorf("class index %d maps to unsupported label %q; supported labels are easy, medium, hard", idx, label)
+		}
+		indices = append(indices, idx)
+	}
+
+	sort.Ints(indices)
+	for i, idx := range indices {
+		if idx != i {
+			return fmt.Errorf("class indices must be contiguous starting at 0; got %v", indices)
+		}
+	}
+
+	return nil
 }
 
 // GetDifficultyFromIndex converts a class index to a difficulty label using the mapping.

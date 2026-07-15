@@ -232,6 +232,43 @@ var _ = Describe("complexity mapping", func() {
 	})
 })
 
+var _ = Describe("complexity mapping validation", func() {
+	writeMapping := func(content string) string {
+		dir := GinkgoT().TempDir()
+		path := filepath.Join(dir, "complexity_mapping.json")
+		Expect(os.WriteFile(path, []byte(content), 0o600)).To(Succeed())
+		return path
+	}
+
+	It("rejects a mapping with no recognized keys", func() {
+		_, err := LoadComplexityMapping(writeMapping(`{"unrelated":"value"}`))
+		Expect(err).To(MatchError(ContainSubstring("empty")))
+	})
+
+	It("rejects non-contiguous class indices", func() {
+		_, err := LoadComplexityMapping(writeMapping(`{"idx_to_label":{"0":"easy","2":"hard"}}`))
+		Expect(err).To(MatchError(ContainSubstring("contiguous")))
+	})
+
+	It("rejects an unsupported difficulty label", func() {
+		_, err := LoadComplexityMapping(writeMapping(`{"idx_to_label":{"0":"easy","1":"HARD"}}`))
+		Expect(err).To(MatchError(ContainSubstring("unsupported label")))
+	})
+
+	It("rejects a non-integer class index", func() {
+		_, err := LoadComplexityMapping(writeMapping(`{"idx_to_label":{"x":"easy"}}`))
+		Expect(err).To(MatchError(ContainSubstring("not an integer")))
+	})
+
+	It("accepts a contiguous lowercase easy/medium/hard mapping", func() {
+		mapping, err := LoadComplexityMapping(writeMapping(`{"idx_to_label":{"0":"easy","1":"medium","2":"hard"}}`))
+		Expect(err).ToNot(HaveOccurred())
+		label, ok := mapping.GetDifficultyFromIndex(2)
+		Expect(ok).To(BeTrue())
+		Expect(label).To(Equal("hard"))
+	})
+})
+
 var _ = Describe("complexity rule method helpers", func() {
 	It("detects model-mode rules", func() {
 		Expect(config.ComplexityRule{Method: "model"}.UsesModel()).To(BeTrue())
