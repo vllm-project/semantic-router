@@ -384,6 +384,7 @@ export interface FeedbackDetectorConfig {
 }
 
 export interface EmbeddingOptimizationConfig {
+  backend?: 'candle' | 'openvino' | 'openai_compatible'
   model_type?: string
   preload_embeddings?: boolean
   target_dimension?: number
@@ -391,6 +392,15 @@ export interface EmbeddingOptimizationConfig {
   enable_soft_matching?: boolean
   top_k?: number
   min_score_threshold?: number
+}
+
+export interface EmbeddingEndpointConfig {
+  base_url?: string
+  model?: string
+  api_key_env?: string
+  timeout_seconds?: number
+  max_retries?: number
+  dimensions?: number
 }
 
 export interface EmbeddingModelsConfig {
@@ -401,6 +411,7 @@ export interface EmbeddingModelsConfig {
   bert_model_path?: string
   use_cpu?: boolean
   embedding_config?: EmbeddingOptimizationConfig
+  endpoint?: EmbeddingEndpointConfig
 }
 
 export interface ObservabilityConfig {

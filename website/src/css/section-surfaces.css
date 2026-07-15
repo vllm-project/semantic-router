@@ -1,0 +1,115 @@
+/* Shared section headers and compact card copy — avoids awkward forced line breaks. */
+
+.site-section-intro {
+  display: grid;
+  gap: 0.85rem;
+  max-width: 46rem;
+  margin-bottom: 2rem;
+}
+
+.site-section-intro--wide {
+  max-width: 52rem;
+}
+
+.site-section-intro__title {
+  max-width: none;
+  margin: 0;
+  font-size: var(--site-text-h2);
+  line-height: var(--site-leading-tight);
+  text-wrap: pretty;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.site-section-intro__title--offset {
+  margin-top: 0.65rem;
+}
+
+.site-section-intro__lede {
+  max-width: 42rem;
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: 1rem;
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+
+/* Single-line metadata in narrow cards (roles, affiliations, chip labels). */
+.site-card-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-card-line--2 {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  text-overflow: ellipsis;
+}
+
+/* Brand-blue interactive surfaces — matches vLLM icon (#30a2ff). */
+.site-hover-transition {
+  transition:
+    background var(--site-transition-medium),
+    border-color var(--site-transition-fast),
+    box-shadow var(--site-transition-medium),
+    transform var(--site-transition-medium),
+    color var(--site-transition-fast);
+}
+
+.site-hover-card:hover,
+.site-hover-card:focus-visible {
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg-soft);
+  box-shadow: var(--site-hover-glow);
+  transform: var(--site-hover-lift);
+}
+
+.site-hover-row {
+  position: relative;
+}
+
+.site-hover-row::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--site-gradient-brand-bar);
+  opacity: 0;
+  transition: opacity var(--site-transition-fast);
+}
+
+.site-hover-row:hover,
+.site-hover-row:focus-visible {
+  background: var(--site-hover-row-bg);
+  text-decoration: none;
+}
+
+.site-hover-row:hover::before,
+.site-hover-row:focus-visible::before {
+  opacity: 1;
+}
+
+.site-hover-row:hover :is(strong, .site-hover-row__title),
+.site-hover-row:focus-visible :is(strong, .site-hover-row__title) {
+  color: var(--site-brand-blue);
+}
+
+.site-hover-row:hover .site-hover-row__arrow,
+.site-hover-row:focus-visible .site-hover-row__arrow {
+  color: var(--site-brand-blue);
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.site-hover-chip:hover,
+.site-hover-chip:focus-visible {
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg);
+  color: var(--site-brand-blue);
+  box-shadow: var(--site-hover-inset);
+  text-decoration: none;
+}

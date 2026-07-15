@@ -82,7 +82,7 @@ sudo docker run -d \
 ### Step 2: Install vLLM Semantic Router
 
 ```bash
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash
+curl -fsSL https://vllm-sr.ai/install.sh | bash
 ```
 
 ### Step 3: Access the dashboard

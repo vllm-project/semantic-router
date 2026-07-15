@@ -93,6 +93,13 @@ const LayoutMegaMenu = ({
 
   const handlePanelBlur = (event: FocusEvent<HTMLElement>) => {
     const nextTarget = event.relatedTarget
+    // Safari can report no related target when pointer activation moves focus
+    // away from the menu. Closing synchronously here unmounts the link before
+    // its click handler runs, so let the click/outside-click paths own it.
+    if (!nextTarget) {
+      return
+    }
+
     if (
       nextTarget instanceof Node &&
       (event.currentTarget.contains(nextTarget) ||

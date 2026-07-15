@@ -1,4 +1,5 @@
 import type { EditFormData } from '../components/EditModal'
+import { EMBEDDING_MODELS_STRUCTURED_FIELDS } from './configPageEmbeddingStructuredSchema'
 import type { RouterSystemKey } from './configPageRouterDefaultsSupport'
 import {
   boolean,
@@ -503,21 +504,7 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
       ),
     },
   },
-  embedding_models: {
-    embedding_config: {
-      label: 'Embedding Optimization',
-      description: 'Embedding model, layer, dimension, and soft-matching controls.',
-      schema: object('Embedding Optimization', {
-        model_type: text('Model Type'),
-        preload_embeddings: boolean('Preload Embeddings'),
-        target_dimension: number('Target Dimension', { min: 1 }),
-        target_layer: number('Target Layer', { min: 0 }),
-        enable_soft_matching: boolean('Enable Soft Matching'),
-        top_k: number('Top K', { min: 1 }),
-        min_score_threshold: number('Min Score Threshold', { min: 0, max: 1, step: 0.01 }),
-      }),
-    },
-  },
+  embedding_models: EMBEDDING_MODELS_STRUCTURED_FIELDS,
   prompt_compression: {
     skip_signals: {
       label: 'Skip Signals',

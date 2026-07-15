@@ -138,8 +138,8 @@
   z-index: -1;
   inset: 0;
   background:
-    radial-gradient(circle at 31% 52%, rgba(3, 3, 3, 0.95) 0, rgba(3, 3, 3, 0.76) 28%, transparent 58%),
-    linear-gradient(90deg, rgba(3, 3, 3, 0.82), rgba(3, 3, 3, 0.18) 68%, rgba(3, 3, 3, 0.38));
+    radial-gradient(circle at 50% 52%, rgba(3, 3, 3, 0.95) 0, rgba(3, 3, 3, 0.76) 28%, transparent 61%),
+    linear-gradient(90deg, rgba(3, 3, 3, 0.4), rgba(3, 3, 3, 0.18) 50%, rgba(3, 3, 3, 0.4));
   pointer-events: none;
 }
 
@@ -147,44 +147,31 @@
   display: grid;
   width: min(100%, 54rem);
   gap: 1.25rem;
-  justify-items: start;
+  justify-items: center;
+  margin: 0 auto;
   pointer-events: auto;
+  text-align: center;
 }
 
 .brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.75rem;
-  color: #f4f4f5;
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.72rem;
-  font-weight: 650;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+  display: block;
+  width: clamp(14rem, 26vw, 20rem);
+  max-width: 72%;
 }
 
 .brand img {
-  width: 1.7rem;
-  height: 1.7rem;
+  display: block;
+  width: 100%;
+  height: auto;
   object-fit: contain;
 }
 
-.systemLabel {
-  margin: 0.8rem 0 0;
-  color: #a1a1aa;
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.15em;
-  line-height: 1.5;
-  text-transform: uppercase;
-}
-
-.copy h1 {
+.stage .copy h1 {
   display: grid;
   gap: 0.04em;
   max-width: 12ch;
   margin: 0;
+  justify-items: center;
   color: #fafafa;
   font-size: clamp(3.4rem, 7.25vw, 7.25rem);
   font-weight: 420;
@@ -192,17 +179,17 @@
   line-height: 0.86;
 }
 
-.copy h1 span {
+.stage .copy h1 span {
   display: block;
   white-space: nowrap;
 }
 
-.copy h1 .accent {
+.stage .copy h1 .accent {
   color: #30a2ff;
   font-weight: 720;
 }
 
-.description {
+.stage .description {
   max-width: 36rem;
   margin: 0.65rem 0 0;
   color: #b2b2b8;
@@ -217,6 +204,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+  justify-content: center;
   margin-top: 0.75rem;
 }
 
@@ -394,21 +382,16 @@
   }
 
   .brand {
-    font-size: 0.65rem;
+    width: min(16rem, 76vw);
+    max-width: 100%;
   }
 
-  .systemLabel {
-    max-width: 26rem;
-    margin-top: 0.4rem;
-    font-size: 0.58rem;
-  }
-
-  .copy h1 {
+  .stage .copy h1 {
     font-size: clamp(2.45rem, 10.2vw, 3.2rem);
     line-height: 0.88;
   }
 
-  .description {
+  .stage .description {
     max-width: 29rem;
     font-size: 0.95rem;
   }
@@ -457,15 +440,11 @@
     gap: 0.8rem;
   }
 
-  .copy h1 {
+  .stage .copy h1 {
     font-size: clamp(3.35rem, 6.2vw, 5.25rem);
   }
 
-  .systemLabel {
-    margin-top: 0;
-  }
-
-  .description,
+  .stage .description,
   .actions {
     margin-top: 0.25rem;
   }

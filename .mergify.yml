@@ -1,0 +1,17 @@
+---
+queue_rules:
+  - name: default
+    queue_conditions:
+      - base = main
+    merge_conditions: []
+    merge_method: squash
+    update_method: merge
+    batch_size: 1
+
+pull_request_rules:
+  - name: queue approved pull requests
+    conditions:
+      - base = main
+      - "#approved-reviews-by >= 1"
+    actions:
+      queue:

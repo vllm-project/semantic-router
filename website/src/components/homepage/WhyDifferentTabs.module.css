@@ -1,0 +1,108 @@
+.tabRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-bottom: 1.25rem;
+}
+
+.tab,
+.tabActive {
+  padding: 0.62rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    color 180ms ease;
+}
+
+.tab:hover {
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg-soft);
+  color: #fff;
+}
+
+.tabActive {
+  border-color: var(--site-hover-border-strong);
+  background: var(--site-hover-surface-bg);
+  color: #fff;
+}
+
+.sectionLabel::after {
+  color: var(--site-brand-blue);
+}
+
+.solutionLabel {
+  color: var(--site-brand-blue);
+}
+
+.panel {
+  display: grid;
+  grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
+  gap: 1rem;
+}
+
+.problemBlock,
+.solutionBlock {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.problemLabel,
+.solutionLabel {
+  display: inline-flex;
+  width: fit-content;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.problemLabel {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.solutionLabel {
+  color: var(--site-brand-blue);
+}
+
+.sectionLabel {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.problemBlock p,
+.solutionBlock p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.68);
+  line-height: 1.65;
+}
+
+.solutionBlock h3 {
+  margin: 0;
+  font-size: clamp(1.35rem, 2.5vw, 1.9rem);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+
+.linkRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+@media (max-width: 900px) {
+  .panel {
+    grid-template-columns: 1fr;
+  }
+}

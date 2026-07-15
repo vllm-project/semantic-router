@@ -57,6 +57,26 @@ func (r *OpenAIRouter) newContinueRequestBodyResponse() *ext_proc.ProcessingResp
 	}
 }
 
+func newFullDuplexRequestBodyResponse(body []byte, endOfStream bool) *ext_proc.ProcessingResponse {
+	return &ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_RequestBody{
+			RequestBody: &ext_proc.BodyResponse{
+				Response: &ext_proc.CommonResponse{
+					Status: ext_proc.CommonResponse_CONTINUE,
+					BodyMutation: &ext_proc.BodyMutation{
+						Mutation: &ext_proc.BodyMutation_StreamedResponse{
+							StreamedResponse: &ext_proc.StreamedBodyResponse{
+								Body:        body,
+								EndOfStream: endOfStream,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func (r *OpenAIRouter) handleSkipProcessingResponseHeaders(
 	v *ext_proc.ProcessingRequest_ResponseHeaders,
 	ctx *RequestContext,

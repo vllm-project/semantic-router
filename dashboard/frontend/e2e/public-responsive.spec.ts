@@ -40,7 +40,7 @@ test.describe('Public and transition surfaces on short screens', () => {
     await expect(header.getByRole('link', { name: 'vLLM Semantic Router home' })).toBeVisible()
     await expect(header.getByRole('link', { name: 'Docs', exact: true })).toHaveAttribute(
       'href',
-      'https://vllm-semantic-router.com/docs/intro/',
+      'https://vllm-sr.ai/docs/intro/',
     )
     await expect(header.getByRole('link', { name: 'GitHub', exact: true })).toHaveAttribute(
       'href',

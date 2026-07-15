@@ -9,6 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from cli import container_images  # noqa: E402
 from cli.consts import (  # noqa: E402
+    VLLM_SR_CONTAINER_IMAGE_CUDA,
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
     VLLM_SR_CONTAINER_IMAGE_ROCM,
     VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT,
@@ -129,6 +130,53 @@ def test_get_runtime_images_derives_official_envoy_image_from_rocm_base(monkeypa
     }
     assert ensured == [
         (VLLM_SR_CONTAINER_IMAGE_ROCM, "never"),
+        (VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT, "never"),
+        (VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT, "never"),
+    ]
+
+
+def test_select_image_source_picks_cuda_default_for_nvidia(monkeypatch):
+    monkeypatch.delenv("VLLM_SR_IMAGE", raising=False)
+    monkeypatch.delenv("VLLM_SR_IMAGE_NVIDIA", raising=False)
+
+    assert (
+        container_images._select_image_source(None, "nvidia")
+        == VLLM_SR_CONTAINER_IMAGE_CUDA
+    )
+
+
+def test_select_image_source_honors_nvidia_env_override(monkeypatch):
+    monkeypatch.delenv("VLLM_SR_IMAGE", raising=False)
+    monkeypatch.setenv("VLLM_SR_IMAGE_NVIDIA", "my-registry/vllm-sr-cuda:pinned")
+
+    assert (
+        container_images._select_image_source(None, "nvidia")
+        == "my-registry/vllm-sr-cuda:pinned"
+    )
+
+
+def test_get_runtime_images_derives_official_service_images_from_cuda_base(monkeypatch):
+    ensured = []
+    monkeypatch.setattr(
+        container_images,
+        "_resolve_selected_image",
+        lambda image, normalized_platform: VLLM_SR_CONTAINER_IMAGE_CUDA,
+    )
+    monkeypatch.setattr(
+        container_images,
+        "_ensure_image_available",
+        lambda image, pull_policy: ensured.append((image, pull_policy)),
+    )
+
+    images = container_images.get_runtime_images(pull_policy="never", platform="nvidia")
+
+    assert images == {
+        "router": VLLM_SR_CONTAINER_IMAGE_CUDA,
+        "envoy": VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT,
+        "dashboard": VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT,
+    }
+    assert ensured == [
+        (VLLM_SR_CONTAINER_IMAGE_CUDA, "never"),
         (VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT, "never"),
         (VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT, "never"),
     ]
@@ -374,6 +422,56 @@ def test_get_runtime_images_upgrades_router_override_to_rocm_on_amd(monkeypatch)
     assert images["dashboard"] == "base:latest"
     assert ensured == [
         ("ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:custom", "never"),
+        ("base:latest", "never"),
+    ]
+
+
+def test_resolve_selected_image_upgrades_cpu_image_to_cuda_on_nvidia(monkeypatch):
+    monkeypatch.delenv("VLLM_SR_IMAGE", raising=False)
+
+    upgraded = container_images._resolve_selected_image(
+        "ghcr.io/vllm-project/semantic-router/vllm-sr:custom", "nvidia"
+    )
+
+    assert upgraded == "ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:custom"
+
+
+def test_resolve_selected_image_leaves_nonofficial_image_unchanged_on_nvidia(
+    monkeypatch,
+):
+    monkeypatch.delenv("VLLM_SR_IMAGE", raising=False)
+
+    unchanged = container_images._resolve_selected_image("myco/router:custom", "nvidia")
+
+    assert unchanged == "myco/router:custom"
+
+
+def test_get_runtime_images_upgrades_router_override_to_cuda_on_nvidia(monkeypatch):
+    ensured = []
+    monkeypatch.setattr(
+        container_images,
+        "_resolve_selected_image",
+        lambda image, normalized_platform: "base:latest",
+    )
+    monkeypatch.setattr(
+        container_images,
+        "_ensure_image_available",
+        lambda image, pull_policy: ensured.append((image, pull_policy)),
+    )
+
+    images = container_images.get_runtime_images(
+        router_image="ghcr.io/vllm-project/semantic-router/vllm-sr:custom",
+        pull_policy="never",
+        platform="nvidia",
+    )
+
+    assert (
+        images["router"] == "ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:custom"
+    )
+    assert images["envoy"] == "base:latest"
+    assert images["dashboard"] == "base:latest"
+    assert ensured == [
+        ("ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:custom", "never"),
         ("base:latest", "never"),
     ]
 

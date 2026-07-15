@@ -6,6 +6,7 @@ import (
 	"io"
 	"runtime/debug"
 
+	http_ext "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -28,6 +29,9 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 	// This guarantees no chunk accumulation, model detection, or buffered
 	// pipeline runs for opted-out requests, regardless of streamed_body_mode.
 	if ctx.SkipProcessing {
+		if ctx.FullDuplexRequestBody {
+			return newFullDuplexRequestBodyResponse(v.RequestBody.GetBody(), v.RequestBody.GetEndOfStream()), nil
+		}
 		return r.newContinueRequestBodyResponse(), nil
 	}
 
@@ -45,9 +49,17 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 
 	// Decide mode based on config: only use streaming handler when explicitly enabled
 	streamedMode := r.Config != nil && r.Config.StreamedBodyMode
-	if streamedMode && !eos {
+	if ctx.FullDuplexRequestBody && !streamedMode {
+		return newFullDuplexRequestBodyResponse(v.RequestBody.GetBody(), eos), nil
+	}
+	if streamedMode && (!eos || ctx.FullDuplexRequestBody) {
 		ctx.StreamedBody = newStreamedBodyHandler(r, ctx)
-		return ctx.StreamedBody.HandleChunk(v.RequestBody, ctx)
+		resp, err := ctx.StreamedBody.HandleChunk(v.RequestBody, ctx)
+		if eos {
+			ctx.StreamedBody.Release()
+			ctx.StreamedBody = nil
+		}
+		return resp, err
 	}
 
 	// BUFFERED mode or single-message STREAMED — use classic pipeline
@@ -150,6 +162,10 @@ func (r *OpenAIRouter) handleProcessRequest(
 	req *ext_proc.ProcessingRequest,
 	ctx *RequestContext,
 ) error {
+	if protocolConfig := req.GetProtocolConfig(); protocolConfig != nil {
+		ctx.FullDuplexRequestBody = protocolConfig.GetRequestBodyMode() == http_ext.ProcessingMode_FULL_DUPLEX_STREAMED
+	}
+
 	switch v := req.Request.(type) {
 	case *ext_proc.ProcessingRequest_RequestHeaders:
 		return r.processRequestHeaders(stream, v, ctx)
@@ -190,6 +206,12 @@ func (r *OpenAIRouter) processRequestBody(
 	if err != nil {
 		logging.Errorf("handleRequestBody failed: %v", err)
 		return err
+	}
+	// FULL_DUPLEX_STREAMED explicitly permits the processor to buffer any
+	// number of input chunks before sending a StreamedBodyResponse. A nil
+	// response here means this chunk was retained for the eventual EOS reply.
+	if response == nil && ctx.FullDuplexRequestBody {
+		return nil
 	}
 	if err := sendResponse(stream, response, "request body"); err != nil {
 		logging.Errorf("sendResponse for body failed: %v", err)
