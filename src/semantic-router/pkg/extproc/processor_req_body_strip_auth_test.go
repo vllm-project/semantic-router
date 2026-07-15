@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // callerAuthCanary is a distinctive caller credential value used to prove the
@@ -19,14 +20,16 @@ const callerAuthCanary = "Bearer caller-virtual-key-canary-2375"
 // stripAuthTestRouter builds a router whose single backend "plain" does NOT opt
 // into forward_authorization_header. withStaticKey controls whether the backend
 // carries a static service key: without one, the default/no-provider path is
-// exercised; with one, the static-key injection path is exercised.
-func stripAuthTestRouter(t *testing.T, withStaticKey bool) *OpenAIRouter {
+// exercised; with one, the static-key injection path is exercised. stripEnabled
+// sets global.router.strip_inbound_authorization (the opt-in hardening).
+func stripAuthTestRouter(t *testing.T, withStaticKey, stripEnabled bool) *OpenAIRouter {
 	t.Helper()
 	staticKey := ""
 	if withStaticKey {
 		staticKey = "service-key-canary"
 	}
 	cfg := &config.RouterConfig{
+		RouterOptions: config.RouterOptions{StripInboundAuthorization: stripEnabled},
 		BackendModels: config.BackendModels{
 			ModelConfig: map[string]config.ModelParams{
 				"model-a": {
@@ -74,7 +77,7 @@ func allSetHeaderValues(opts []*core.HeaderValueOption) []string {
 // #2375 regression: a backend with no static key and no forward opt-in must
 // strip the caller's Authorization rather than preserve it upstream.
 func TestBuildRouteHeaderStateStripsCallerAuthorizationOnDefaultPath(t *testing.T) {
-	router := stripAuthTestRouter(t, false)
+	router := stripAuthTestRouter(t, false, true)
 	ctx := &RequestContext{Headers: map[string]string{
 		"authorization": callerAuthCanary,
 	}}
@@ -97,11 +100,33 @@ func TestBuildRouteHeaderStateStripsCallerAuthorizationOnDefaultPath(t *testing.
 	}
 }
 
+// TestBuildRouteHeaderStatePreservesCallerAuthorizationByDefault proves the
+// strip is opt-in: with global.router.strip_inbound_authorization off (the
+// default) and a backend that neither injects a static key nor forwards, the
+// caller's inbound Authorization is left untouched (not scheduled for removal),
+// preserving pre-#2375 passthrough behavior. The internal carrier is still
+// stripped unconditionally.
+func TestBuildRouteHeaderStatePreservesCallerAuthorizationByDefault(t *testing.T) {
+	router := stripAuthTestRouter(t, false, false)
+	ctx := &RequestContext{Headers: map[string]string{
+		"authorization": callerAuthCanary,
+	}}
+
+	state, errorResponse := router.buildRouteHeaderState("model-a", "", "plain", ctx, nil)
+	require.Nil(t, errorResponse)
+	require.NotNil(t, state)
+
+	assert.NotContains(t, state.removeHeaders, forwardedAuthorizationHeaderName,
+		"default (opt-in off) must not strip the caller Authorization")
+	// The internal carrier is always stripped, independent of the opt-in.
+	assert.Contains(t, state.removeHeaders, headers.VSRInboundAuthorization)
+}
+
 // TestBuildRouteHeaderStateStaticKeyOverwritesCallerAuthorization proves the
 // static-key path replaces (not appends to) the caller Authorization so the
 // caller credential cannot ride alongside the injected service key.
 func TestBuildRouteHeaderStateStaticKeyOverwritesCallerAuthorization(t *testing.T) {
-	router := stripAuthTestRouter(t, true)
+	router := stripAuthTestRouter(t, true, true)
 	ctx := &RequestContext{Headers: map[string]string{
 		"authorization": callerAuthCanary,
 	}}
@@ -130,11 +155,45 @@ func TestBuildRouteHeaderStateStaticKeyOverwritesCallerAuthorization(t *testing.
 	}
 }
 
+// TestBuildRouteHeaderStateStaticKeyOverwritesCallerAuthorizationDefaultOptOut
+// proves that even with the strip opt-in OFF (the default), a static-key backend
+// still overwrites the caller Authorization so the caller credential cannot ride
+// alongside the injected key — OVERWRITE is the sole defense in the default state.
+func TestBuildRouteHeaderStateStaticKeyOverwritesCallerAuthorizationDefaultOptOut(t *testing.T) {
+	router := stripAuthTestRouter(t, true, false)
+	ctx := &RequestContext{Headers: map[string]string{
+		"authorization": callerAuthCanary,
+	}}
+
+	state, errorResponse := router.buildRouteHeaderState("model-a", "", "plain", ctx, nil)
+	require.Nil(t, errorResponse)
+	require.NotNil(t, state)
+
+	// The strip is off, so Authorization is not scheduled for removal...
+	assert.NotContains(t, state.removeHeaders, forwardedAuthorizationHeaderName)
+	// ...but the static key is injected with OVERWRITE, so the caller value cannot survive.
+	var authOption *core.HeaderValueOption
+	for _, opt := range state.setHeaders {
+		if opt.GetHeader().GetKey() == "Authorization" {
+			authOption = opt
+		}
+	}
+	require.NotNil(t, authOption)
+	assert.Equal(t, "Bearer service-key-canary", string(authOption.GetHeader().GetRawValue()))
+	assert.Equal(t, core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD, authOption.GetAppendAction())
+	for _, v := range allSetHeaderValues(state.setHeaders) {
+		assert.NotContains(t, v, "caller-virtual-key-canary")
+	}
+}
+
 // TestBuildRouteHeaderStateForwardOptInStillReceivesCredential guards against the
 // strip regressing the opt-in feature: a forward-enabled backend must still
 // receive the caller credential verbatim.
 func TestBuildRouteHeaderStateForwardOptInStillReceivesCredential(t *testing.T) {
 	router := forwardAuthTestRouter(t)
+	// With the opt-in strip enabled, the forward path must still deliver the
+	// caller credential (remove_headers is applied before set_headers).
+	router.Config.StripInboundAuthorization = true
 	ctx := &RequestContext{Headers: map[string]string{
 		"authorization": callerAuthCanary,
 	}}

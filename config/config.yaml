@@ -1376,6 +1376,12 @@ global:
       timeout_sec: 15
     skip_processing:
       enabled: false
+    # Opt-in hardening: strip the caller's inbound Authorization before
+    # forwarding to a backend that neither injects a static key nor opts into
+    # forward_authorization_header (and, on the skip-processing passthrough, the
+    # ext_authz-injected per-user keys too). Off by default, which preserves the
+    # caller's Authorization on that path.
+    strip_inbound_authorization: false
     model_selection:
       method: hybrid
       enabled: true

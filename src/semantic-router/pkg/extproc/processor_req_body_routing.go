@@ -272,16 +272,21 @@ func (r *OpenAIRouter) buildRouteHeaderState(
 		return nil, errorResponse
 	}
 	state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
-	// Strip the caller's inbound Authorization by default so a caller credential
-	// (e.g. a per-user virtual key) never reaches an upstream model backend unless
-	// a backend explicitly opts in via forward_authorization_header. Envoy applies
-	// remove_headers before set_headers, so the forwarding and static-key branches
-	// in appendCredentialHeaders re-set Authorization and win over this strip (the
-	// same ordering the content-length remove/set above relies on). This mirrors
-	// the Anthropic-native path, which unconditionally removes "authorization".
-	// See issue #2375.
-	state.removeHeaders = append(state.removeHeaders, forwardedAuthorizationHeaderName)
-	// The internal looper carrier for caller identity must never reach an upstream.
+	// Opt-in hardening (global.router.strip_inbound_authorization): strip the
+	// caller's inbound Authorization on the default/passthrough path so a caller
+	// credential (e.g. a per-user virtual key) never reaches an upstream that
+	// neither injects a static key nor opts into forward_authorization_header.
+	// Off by default, preserving the caller's Authorization on that path. Envoy
+	// applies remove_headers before set_headers, so the forwarding and static-key
+	// branches in appendCredentialHeaders re-set Authorization and win over this
+	// strip when enabled (the same ordering the content-length remove/set above
+	// relies on). Those branches already emit a single Authorization header
+	// regardless of this flag. See issue #2375.
+	if r.stripInboundAuthorizationEnabled() {
+		state.removeHeaders = append(state.removeHeaders, forwardedAuthorizationHeaderName)
+	}
+	// The internal looper carrier for caller identity must never reach an upstream
+	// (unconditional — it is a router-internal header, not a caller credential).
 	state.removeHeaders = append(state.removeHeaders, headers.VSRInboundAuthorization)
 	appendProfileHeaders(&state.setHeaders, profile)
 	appendCapturedPassThroughHeaders(&state.setHeaders, profile, ctx)
@@ -324,14 +329,19 @@ func (r *OpenAIRouter) appendCredentialHeaders(
 		return r.createErrorResponse(401, "Authentication failed. Check your API key configuration.")
 	}
 	if accessKey == "" {
-		// No static key and no forward opt-in: nothing is injected, and the
-		// caller's inbound Authorization is stripped by buildRouteHeaderState.
-		// The upstream receives no caller credential (issue #2375).
-		logging.ComponentDebugEvent("extproc", "provider_auth_stripped", map[string]interface{}{
+		// No static key and no forward opt-in: nothing is injected. Whether the
+		// caller's inbound Authorization reaches the upstream depends on the
+		// strip_inbound_authorization opt-in (applied in buildRouteHeaderState) —
+		// stripped when enabled, otherwise passed through (issue #2375).
+		mode := "passthrough_caller_credential"
+		if r.stripInboundAuthorizationEnabled() {
+			mode = "strip_caller_credential"
+		}
+		logging.ComponentDebugEvent("extproc", "provider_auth_no_static_key", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"provider":   llmProvider,
 			"model":      model,
-			"mode":       "strip_caller_credential",
+			"mode":       mode,
 		})
 		return nil
 	}

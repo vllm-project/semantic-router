@@ -218,7 +218,10 @@ func TestSkipProcessingEnabledHelper(t *testing.T) {
 }
 
 func TestHandleRequestBodyDispatchSkipProcessingShortCircuits(t *testing.T) {
-	router := &OpenAIRouter{}
+	// Enable the opt-in strip so the passthrough removes the caller credential.
+	router := &OpenAIRouter{Config: &config.RouterConfig{
+		RouterOptions: config.RouterOptions{StripInboundAuthorization: true},
+	}}
 	ctx := &RequestContext{
 		Headers:        make(map[string]string),
 		SkipProcessing: true,
@@ -268,7 +271,9 @@ func TestHandleRequestBodyDispatchSkipProcessingShortCircuits(t *testing.T) {
 // ext_authz-injected per-user keys (the same set the routing path strips), since
 // skip bypasses routing and has no backend opt-in (issue #2375).
 func TestSkipProcessingResponseStripsCallerAuthorization(t *testing.T) {
-	cfg := &config.RouterConfig{}
+	cfg := &config.RouterConfig{
+		RouterOptions: config.RouterOptions{StripInboundAuthorization: true},
+	}
 	router := &OpenAIRouter{
 		Config:             cfg,
 		CredentialResolver: newTestCredentialResolver(cfg),
@@ -297,6 +302,35 @@ func TestSkipProcessingResponseStripsCallerAuthorization(t *testing.T) {
 		if !slices.Contains(removeHeaders, injected) {
 			t.Fatalf("skip processing must strip injected key %q, got remove_headers=%v", injected, removeHeaders)
 		}
+	}
+}
+
+// TestSkipProcessingResponsePreservesCallerAuthorizationByDefault proves the
+// strip is opt-in: with global.router.strip_inbound_authorization off (the
+// default), the skip passthrough leaves the caller Authorization and the
+// ext_authz-injected per-user keys in place, preserving pre-#2375 behavior. The
+// internal looper carrier is still stripped unconditionally.
+func TestSkipProcessingResponsePreservesCallerAuthorizationByDefault(t *testing.T) {
+	cfg := &config.RouterConfig{} // StripInboundAuthorization defaults to false
+	router := &OpenAIRouter{
+		Config:             cfg,
+		CredentialResolver: newTestCredentialResolver(cfg),
+	}
+
+	resp := router.newContinueRequestBodyResponse()
+	removeHeaders := resp.GetRequestBody().GetResponse().GetHeaderMutation().GetRemoveHeaders()
+
+	if slices.Contains(removeHeaders, forwardedAuthorizationHeaderName) {
+		t.Fatalf("default (opt-in off) must not strip %q, got remove_headers=%v", forwardedAuthorizationHeaderName, removeHeaders)
+	}
+	for _, injected := range []string{headers.UserOpenAIKey, headers.UserAnthropicKey} {
+		if slices.Contains(removeHeaders, injected) {
+			t.Fatalf("default (opt-in off) must not strip injected key %q, got remove_headers=%v", injected, removeHeaders)
+		}
+	}
+	// The internal carrier is always stripped, independent of the opt-in.
+	if !slices.Contains(removeHeaders, headers.VSRInboundAuthorization) {
+		t.Fatalf("carrier %q must always be stripped, got remove_headers=%v", headers.VSRInboundAuthorization, removeHeaders)
 	}
 }
 
