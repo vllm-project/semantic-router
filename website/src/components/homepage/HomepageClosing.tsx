@@ -37,7 +37,7 @@ export default function HomepageClosing(): JSX.Element {
           </nav>
 
           <div className={styles.actions}>
-            <PillLink href="https://play.vllm-semantic-router.com/" rel="noreferrer" target="_blank">
+            <PillLink href="https://app.vllm-sr.ai/playground" rel="noreferrer" target="_blank">
               <Translate id="homepage.closing.playground">Try playground</Translate>
             </PillLink>
             <PillLink

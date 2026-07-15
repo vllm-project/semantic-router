@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import clsx from 'clsx'
 import Translate, { translate } from '@docusaurus/Translate'
 import Link from '@docusaurus/Link'
+import useBaseUrl from '@docusaurus/useBaseUrl'
 import Claude from '@lobehub/icons/es/Claude/components/Mono'
 import DeepSeek from '@lobehub/icons/es/DeepSeek/components/Mono'
 import Gemini from '@lobehub/icons/es/Gemini/components/Mono'
@@ -12,8 +13,33 @@ import ScrollReveal from '@site/src/components/site/ScrollReveal'
 import shared from './homepageShared.module.css'
 import styles from './IntegrationArchitecture.module.css'
 
-const extprocRouterModules = ['Signal layer', 'Decision engine', 'Plugins']
-const DECISION_ENGINE_INDEX = 1
+const routerStages = [
+  {
+    id: 'signal',
+    label: translate({ id: 'homepage.integration.pipeline.signal.label', message: 'Signal layer' }),
+    detail: translate({ id: 'homepage.integration.pipeline.signal.detail', message: 'Detect' }),
+  },
+  {
+    id: 'projection',
+    label: translate({ id: 'homepage.integration.pipeline.projection.label', message: 'Projection layer' }),
+    detail: translate({ id: 'homepage.integration.pipeline.projection.detail', message: 'Coordinate' }),
+  },
+  {
+    id: 'decision',
+    label: translate({ id: 'homepage.integration.pipeline.decision.label', message: 'Decision engine' }),
+    detail: translate({ id: 'homepage.integration.pipeline.decision.detail', message: 'Match' }),
+  },
+  {
+    id: 'algorithm',
+    label: translate({ id: 'homepage.integration.pipeline.algorithm.label', message: 'Algorithms' }),
+    detail: translate({ id: 'homepage.integration.pipeline.algorithm.detail', message: 'Optimize' }),
+  },
+  {
+    id: 'plugins',
+    label: translate({ id: 'homepage.integration.pipeline.plugins.label', message: 'Plugins' }),
+    detail: translate({ id: 'homepage.integration.pipeline.plugins.detail', message: 'Enforce' }),
+  },
+] as const
 
 type ModelKind = 'closed' | 'open'
 
@@ -120,7 +146,8 @@ type Point = {
 }
 
 type RouteLayout = {
-  origin: Point
+  queries: Record<string, Point>
+  stages: Record<string, Point>
   targets: Record<string, Point>
 }
 
@@ -131,20 +158,26 @@ function toSvgPoint(point: Point): Point {
   }
 }
 
-function buildEgressPath(origin: Point, target: Point): string {
-  const start = toSvgPoint(origin)
-  const end = toSvgPoint(target)
-  const control1X = start.x + (end.x - start.x) * 0.42
-  const control1Y = start.y
-  const control2X = end.x - (end.x - start.x) * 0.22
-  const control2Y = end.y
+function buildRoutePath(points: Point[]): string {
+  const svgPoints = points.map(toSvgPoint)
+  const [start, ...rest] = svgPoints
+  if (!start) {
+    return ''
+  }
 
-  return `M ${start.x},${start.y} C ${control1X},${control1Y} ${control2X},${control2Y} ${end.x},${end.y}`
+  return rest.reduce((path, point, index) => {
+    const previous = svgPoints[index]
+    const distance = point.x - previous.x
+    const controlOffset = Math.max(8, Math.abs(distance) * 0.42)
+
+    return `${path} C ${previous.x + controlOffset},${previous.y} ${point.x - controlOffset},${point.y} ${point.x},${point.y}`
+  }, `M ${start.x},${start.y}`)
 }
 
 function measureRouteLayout(
   diagram: HTMLElement,
-  decisionEngine: HTMLElement,
+  queryRows: HTMLElement[],
+  stageRows: HTMLElement[],
   modelRows: HTMLElement[],
 ): RouteLayout | null {
   const diagramRect = diagram.getBoundingClientRect()
@@ -155,11 +188,33 @@ function measureRouteLayout(
   const toPercentX = (value: number) => ((value - diagramRect.left) / diagramRect.width) * 100
   const toPercentY = (value: number) => ((value - diagramRect.top) / diagramRect.height) * 100
 
-  const decisionRect = decisionEngine.getBoundingClientRect()
-  const origin = {
-    x: toPercentX(decisionRect.left + decisionRect.width / 2),
-    y: toPercentY(decisionRect.top + decisionRect.height / 2),
-  }
+  const queries: Record<string, Point> = {}
+  incomingQueries.forEach((query, index) => {
+    const row = queryRows[index]
+    if (!row) {
+      return
+    }
+
+    const rowRect = row.getBoundingClientRect()
+    queries[query.id] = {
+      x: toPercentX(rowRect.left + rowRect.width * 0.72),
+      y: toPercentY(rowRect.top + rowRect.height / 2),
+    }
+  })
+
+  const stages: Record<string, Point> = {}
+  routerStages.forEach((stage, index) => {
+    const row = stageRows[index]
+    if (!row) {
+      return
+    }
+
+    const rowRect = row.getBoundingClientRect()
+    stages[stage.id] = {
+      x: toPercentX(rowRect.left + rowRect.width / 2),
+      y: toPercentY(rowRect.top + rowRect.height / 2),
+    }
+  })
 
   const targets: Record<string, Point> = {}
   modelTargets.forEach((model, index) => {
@@ -175,19 +230,25 @@ function measureRouteLayout(
     }
   })
 
-  if (Object.keys(targets).length !== modelTargets.length) {
+  if (
+    Object.keys(queries).length !== incomingQueries.length
+    || Object.keys(stages).length !== routerStages.length
+    || Object.keys(targets).length !== modelTargets.length
+  ) {
     return null
   }
 
-  return { origin, targets }
+  return { queries, stages, targets }
 }
 
 function QueryColumn({
   title,
   activeQueryIndex,
+  onRowRef,
 }: {
   title: string
   activeQueryIndex: number
+  onRowRef: (queryId: string, node: HTMLLIElement | null) => void
 }): JSX.Element {
   return (
     <div className={styles.flowColumn}>
@@ -198,6 +259,9 @@ function QueryColumn({
           return (
             <li
               key={query.id}
+              ref={(node) => {
+                onRowRef(query.id, node)
+              }}
               className={clsx(styles.flowNode, styles.query, {
                 [styles.queryActive]: active,
               })}
@@ -213,6 +277,62 @@ function QueryColumn({
           )
         })}
       </ul>
+    </div>
+  )
+}
+
+function RouterPipeline({
+  logoSrc,
+  activeQueryId,
+  onStageRef,
+}: {
+  logoSrc: string
+  activeQueryId: string
+  onStageRef: (stageId: string, node: HTMLLIElement | null) => void
+}): JSX.Element {
+  return (
+    <div className={styles.routerPipeline}>
+      <header className={styles.pipelineHeader}>
+        <img src={logoSrc} alt="vLLM Semantic Router" />
+        <div>
+          <span>
+            <Translate id="homepage.integration.pipeline.eyebrow">System Level Intelligence</Translate>
+          </span>
+          <strong>
+            <Translate id="homepage.integration.pipeline.title">model id: vllm-sr/auto</Translate>
+          </strong>
+        </div>
+      </header>
+
+      <ol className={styles.pipelineStages}>
+        {routerStages.map((stage, index) => (
+          <li
+            key={`${activeQueryId}-${stage.id}`}
+            ref={(node) => {
+              onStageRef(stage.id, node)
+            }}
+            className={styles.pipelineStage}
+            style={{
+              '--stage-delay': `${0.28 + index * 0.43}s`,
+            } as React.CSSProperties}
+          >
+            <span className={styles.pipelineStageIndex}>
+              {String(index + 1).padStart(2, '0')}
+            </span>
+            <strong>{stage.label}</strong>
+            <span className={styles.pipelineStageDetail}>{stage.detail}</span>
+          </li>
+        ))}
+      </ol>
+
+      <div className={styles.pipelineLayers}>
+        <span>
+          <Translate id="homepage.integration.layer.security">Security & policy</Translate>
+        </span>
+        <span>
+          <Translate id="homepage.integration.layer.observability">Observability & replay</Translate>
+        </span>
+      </div>
     </div>
   )
 }
@@ -320,116 +440,30 @@ function ModelColumn({
 }
 
 function RoutingAnimation({
+  activeQuery,
   activeModel,
-  activeQueryLabel,
   layout,
 }: {
+  activeQuery: IncomingQuery
   activeModel: ModelTarget
-  activeQueryLabel: string
   layout: RouteLayout | null
 }): JSX.Element {
-  const packetRef = useRef<HTMLSpanElement | null>(null)
+  const queryOrigin = layout?.queries[activeQuery.id]
   const target = layout?.targets[activeModel.id]
-  const origin = layout?.origin
-  const mid = origin && target
-    ? {
-        x: origin.x + (target.x - origin.x) * 0.3,
-        y: origin.y + (target.y - origin.y) * 0.4,
-      }
-    : null
-
-  useLayoutEffect(() => {
-    const packet = packetRef.current
-    if (!packet || !origin || !target || !mid) {
-      return undefined
-    }
-
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (prefersReducedMotion) {
-      packet.style.left = `${target.x}%`
-      packet.style.top = `${target.y}%`
-      packet.style.opacity = '1'
-      packet.style.transform = 'translate(-50%, -50%)'
-      return undefined
-    }
-
-    const keyframes: Keyframe[] = [
-      {
-        left: `${origin.x}%`,
-        top: `${origin.y}%`,
-        opacity: 0,
-        transform: 'translate(-50%, -50%) scale(0.6)',
-      },
-      {
-        opacity: 1,
-        transform: 'translate(-50%, -50%) scale(1)',
-        offset: 0.1,
-      },
-      {
-        left: `${origin.x}%`,
-        top: `${origin.y}%`,
-        opacity: 1,
-        transform: 'translate(-50%, -50%) scale(1)',
-        offset: 0.3,
-      },
-      {
-        left: `${mid.x}%`,
-        top: `${mid.y}%`,
-        opacity: 1,
-        transform: 'translate(-50%, -50%) scale(1)',
-        offset: 0.55,
-      },
-      {
-        left: `${target.x}%`,
-        top: `${target.y}%`,
-        opacity: 1,
-        transform: 'translate(-50%, -50%) scale(1)',
-        offset: 0.82,
-      },
-      {
-        left: `${target.x}%`,
-        top: `${target.y}%`,
-        opacity: 0,
-        transform: 'translate(-50%, -50%) scale(0.7)',
-        offset: 1,
-      },
-    ]
-
-    const animation = packet.animate(keyframes, {
-      duration: 3200,
-      easing: 'ease-in-out',
-      fill: 'forwards',
-    })
-
-    return () => {
-      animation.cancel()
-    }
-  }, [activeModel.id, origin, target, mid])
+  const stagePoints = layout
+    ? routerStages
+        .map(stage => layout.stages[stage.id])
+        .filter((point): point is Point => Boolean(point))
+    : []
+  const firstStage = stagePoints[0]
+  const lastStage = stagePoints[stagePoints.length - 1]
+  const activePath
+    = queryOrigin && target && stagePoints.length === routerStages.length
+      ? buildRoutePath([queryOrigin, ...stagePoints, target])
+      : ''
 
   return (
     <div className={styles.flowTrack} aria-hidden="true">
-      {origin && (
-        <span
-          className={styles.routeOrigin}
-          style={{
-            left: `${origin.x}%`,
-            top: `${origin.y}%`,
-          }}
-        />
-      )}
-      {origin && target && (
-        <span
-          key={`${activeModel.id}-${activeQueryLabel}`}
-          ref={packetRef}
-          className={styles.queryPacket}
-          style={{
-            left: `${origin.x}%`,
-            top: `${origin.y}%`,
-          }}
-        >
-          <span className={styles.packetLabel}>{activeQueryLabel}</span>
-        </span>
-      )}
       {layout && (
         <svg className={styles.flowLines} viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} preserveAspectRatio="none">
           <defs>
@@ -438,23 +472,83 @@ function RoutingAnimation({
               <stop offset="50%" stopColor="#30a2ff" stopOpacity="1" />
               <stop offset="100%" stopColor="#0876c9" stopOpacity="0.75" />
             </linearGradient>
+            <filter id="integrationPacketGlow" x="-300%" y="-300%" width="700%" height="700%">
+              <feGaussianBlur stdDeviation="3.2" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
           </defs>
+
+          {firstStage && incomingQueries.map((query) => {
+            const origin = layout.queries[query.id]
+            return origin
+              ? (
+                  <path
+                    key={`inbound-${query.id}`}
+                    className={styles.flowPathBase}
+                    d={buildRoutePath([origin, firstStage])}
+                  />
+                )
+              : null
+          })}
+
+          {stagePoints.length === routerStages.length && (
+            <path
+              className={styles.flowPathBase}
+              d={buildRoutePath(stagePoints)}
+            />
+          )}
+
           {modelTargets.map((model) => {
             const routeTarget = layout.targets[model.id]
-            if (!routeTarget) {
+            if (!lastStage || !routeTarget) {
               return null
             }
 
             return (
               <path
-                key={model.id}
-                className={clsx(styles.flowPathEgress, {
-                  [styles.flowPathEgressActive]: activeModel.id === model.id,
-                })}
-                d={buildEgressPath(layout.origin, routeTarget)}
+                key={`egress-${model.id}`}
+                className={styles.flowPathBase}
+                d={buildRoutePath([lastStage, routeTarget])}
               />
             )
           })}
+
+          {activePath && (
+            <>
+              <path
+                key={`route-${activeQuery.id}-${activeModel.id}`}
+                className={styles.flowPathActive}
+                d={activePath}
+                pathLength={1}
+              />
+              <circle
+                key={`packet-${activeQuery.id}-${activeModel.id}`}
+                className={styles.routePacket}
+                r="4.5"
+                filter="url(#integrationPacketGlow)"
+              >
+                <animateMotion
+                  path={activePath}
+                  dur="2.85s"
+                  begin="0s"
+                  fill="freeze"
+                  calcMode="spline"
+                  keyTimes="0;1"
+                  keySplines="0.45 0 0.2 1"
+                />
+                <animate
+                  attributeName="r"
+                  values="3.5;5.5;4.5"
+                  keyTimes="0;0.18;1"
+                  dur="2.85s"
+                  fill="freeze"
+                />
+              </circle>
+            </>
+          )}
         </svg>
       )}
     </div>
@@ -464,11 +558,21 @@ function RoutingAnimation({
 export default function IntegrationArchitecture(): JSX.Element {
   const [activeQueryIndex, setActiveQueryIndex] = useState(0)
   const [layout, setLayout] = useState<RouteLayout | null>(null)
+  const logoSrc = useBaseUrl('/img/vllm-sr-logo.white.png')
   const diagramRef = useRef<HTMLDivElement | null>(null)
-  const decisionEngineRef = useRef<HTMLLIElement | null>(null)
+  const queryRowRefs = useRef<Record<string, HTMLLIElement | null>>({})
+  const stageRowRefs = useRef<Record<string, HTMLLIElement | null>>({})
   const modelRowRefs = useRef<Record<string, HTMLLIElement | null>>({})
   const activeQuery = incomingQueries[activeQueryIndex]
   const activeModel = getModelForQuery(activeQueryIndex)
+
+  const handleQueryRowRef = useCallback((queryId: string, node: HTMLLIElement | null) => {
+    queryRowRefs.current[queryId] = node
+  }, [])
+
+  const handleStageRowRef = useCallback((stageId: string, node: HTMLLIElement | null) => {
+    stageRowRefs.current[stageId] = node
+  }, [])
 
   const handleModelRowRef = useCallback((modelId: string, node: HTMLLIElement | null) => {
     modelRowRefs.current[modelId] = node
@@ -476,16 +580,21 @@ export default function IntegrationArchitecture(): JSX.Element {
 
   const updateLayout = useCallback(() => {
     const diagram = diagramRef.current
-    const decisionEngine = decisionEngineRef.current
-    if (!diagram || !decisionEngine) {
+    if (!diagram) {
       return
     }
 
+    const queryRows = incomingQueries
+      .map(query => queryRowRefs.current[query.id])
+      .filter((row): row is HTMLLIElement => row !== null)
+    const stageRows = routerStages
+      .map(stage => stageRowRefs.current[stage.id])
+      .filter((row): row is HTMLLIElement => row !== null)
     const modelRows = modelTargets
       .map(model => modelRowRefs.current[model.id])
       .filter((row): row is HTMLLIElement => row !== null)
 
-    const nextLayout = measureRouteLayout(diagram, decisionEngine, modelRows)
+    const nextLayout = measureRouteLayout(diagram, queryRows, stageRows, modelRows)
     if (nextLayout) {
       setLayout(nextLayout)
     }
@@ -557,7 +666,7 @@ export default function IntegrationArchitecture(): JSX.Element {
               <Translate id="homepage.integration.title">Route queries to the right model</Translate>
             </h2>
             <p className={shared.sectionSubtitle}>
-              <Translate id="homepage.integration.extproc.summary">The decision engine classifies each request and picks the best model in your fleet. Clients keep the same OpenAI-compatible API.</Translate>
+              <Translate id="homepage.integration.extproc.summary">Route each request to the best model pool through one OpenAI-compatible API.</Translate>
             </p>
           </header>
         </ScrollReveal>
@@ -579,41 +688,22 @@ export default function IntegrationArchitecture(): JSX.Element {
 
             <div className={styles.diagramShell} ref={diagramRef}>
               <RoutingAnimation
+                activeQuery={activeQuery}
                 activeModel={activeModel}
-                activeQueryLabel={activeQuery.label}
                 layout={layout}
               />
               <QueryColumn
                 title={translate({ id: 'homepage.integration.incoming', message: 'Incoming queries' })}
                 activeQueryIndex={activeQueryIndex}
+                onRowRef={handleQueryRowRef}
               />
-              <div className={`${styles.routerHub} ${styles.routerHubActive}`}>
-                <span className={styles.hubBadge}>
-                  <Translate id="homepage.integration.hub">vLLM Semantic Router</Translate>
-                </span>
-                <ul className={styles.hubModules}>
-                  {extprocRouterModules.map((module, index) => (
-                    <li
-                      key={module}
-                      ref={index === DECISION_ENGINE_INDEX ? decisionEngineRef : undefined}
-                      style={{ animationDelay: `${index * 0.2}s` }}
-                    >
-                      {module}
-                    </li>
-                  ))}
-                </ul>
-                <div className={styles.hubLayers}>
-                  <span>
-                    <Translate id="homepage.integration.layer.security">Security & policy</Translate>
-                  </span>
-                  <span>
-                    <Translate id="homepage.integration.layer.observability">Observability & replay</Translate>
-                  </span>
-                </div>
-                <span className={styles.hubPulse} aria-hidden="true" />
-              </div>
+              <RouterPipeline
+                logoSrc={logoSrc}
+                activeQueryId={activeQuery.id}
+                onStageRef={handleStageRowRef}
+              />
               <ModelColumn
-                title={translate({ id: 'homepage.integration.models', message: 'Models' })}
+                title={translate({ id: 'homepage.integration.models', message: 'Model pools' })}
                 activeModelId={activeModel.id}
                 activeQueryLabel={activeQuery.label}
                 onRowRef={handleModelRowRef}

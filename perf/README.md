@@ -49,7 +49,8 @@ make perf-profile-mem
 ### Baseline Comparison
 
 ```bash
-# Compare current performance against baseline
+# Compare against baseline (report only). Consumes reports/bench-output.txt, so
+# run a benchmark target that tees there first (or use make perf-check).
 make perf-compare
 
 # Update baselines (run this on main branch after verifying improvements)
@@ -59,7 +60,7 @@ make perf-baseline-update
 ### Regression Detection
 
 ```bash
-# Run benchmarks and fail if regressions detected
+# Run benchmarks and fail if any benchmark regresses beyond its threshold
 make perf-check
 ```
 
@@ -156,7 +157,9 @@ Defined in `config/thresholds.yaml`:
 | Cache (1K entries) | P95 latency | < 5ms |
 | Cache | Hit rate | > 80% |
 
-Regression thresholds: 10-20% depending on component.
+Regression thresholds are matched per benchmark by name and **gate on
+allocs/op + B/op** (hardware-independent); `ns/op` is advisory only. See
+[Thresholds Config](#thresholds-config-configthresholdsyaml).
 
 ## E2E Performance Tests
 
@@ -175,14 +178,49 @@ Test cases:
 
 ## CI/CD Integration
 
-Performance tests run automatically on every PR:
+### PR regression gate
 
-1. **PR Opened** → Run component benchmarks (5 min)
-2. **Compare Against Baseline** → Calculate % changes
-3. **Post Results to PR** → Automatic comment with metrics table
-4. **Block if Regression** → Fail CI if thresholds exceeded
+`performance-test.yml` runs on every PR that touches the router, bindings, or
+`perf/`:
 
-Nightly jobs update baselines on the main branch.
+1. **Run benchmarks** — component suites + the Looper family, tee'd to
+   `reports/bench-output.txt`.
+2. **Generate current results** — `perftest --parse-bench` turns that raw output
+   into `reports/current.json`.
+3. **Compare and gate** — `perftest --compare-baseline ... --fail-on-regression`
+   diffs `current.json` against the committed per-suite baselines and **exits
+   non-zero if any benchmark's allocs/op or B/op regresses beyond its
+   threshold**, turning the check red on the PR. (`ns/op` changes are reported
+   as advisory only — they never fail the gate.)
+4. **Comment on the PR** — a summary comment reports each suite's status and the
+   regression-gate result.
+
+### Baseline lifecycle
+
+Because the gate blocks on **allocs/op and B/op** — which are
+hardware-independent — the committed baselines in `testdata/baselines/` are valid
+to compare against **regardless of which machine recorded them**. The gate works
+against the existing committed baselines with no special seeding. Suites whose
+baseline is empty (e.g. classification before benchmark models are cached) are
+simply skipped, never falsely failed.
+
+Refresh the baselines with `make perf-baseline-update` (then commit
+`testdata/baselines/`) when a PR legitimately changes a benchmark's allocations,
+or on a Go upgrade — allocation counts drift only with the code and the Go
+version, not with hardware. A `performance-nightly.yml` workflow exists to
+automate this refresh; it is currently **disabled**, and enabling it (it commits
+to the repo) is a maintainer decision, deliberately left out of this change.
+
+For **local** runs, `make perf-check` compares against these committed baselines
+too; `ns/op` will differ from your hardware but only shows as advisory.
+
+### Scope
+
+This gate establishes the single-runner numeric-regression mechanism. Large-scale
+**cross-hardware / cross-backend** coverage (Candle/ONNX × NVIDIA × AMD,
+backend-specific baselines) is tracked separately by **#1510**. The gap this work
+closes was surfaced by the router-quality audit in **#2375** and filed as
+**#2455**.
 
 ## Configuration
 
@@ -201,13 +239,42 @@ benchmark_config:
 
 ### Thresholds Config (`config/thresholds.yaml`)
 
+Regression thresholds are matched **per benchmark** by name. The gate **blocks**
+on the hardware-independent metrics — `max_allocs_regression_percent` (allocs/op)
+and `max_bytes_regression_percent` (B/op) — because those are determined by the
+code path, not the CPU, so they compare cleanly across machines. `ns/op` is
+**advisory** (`max_ns_regression_percent`): it is reported but never fails the
+gate, since absolute time depends on the runner's hardware.
+
+The **first matching pattern wins**, so entries are ordered most-specific first;
+any benchmark matching nothing uses `default`:
+
 ```yaml
 component_benchmarks:
-  classification:
-    batch_size_1:
-      max_p95_latency_ms: 10.0
-      max_regression_percent: 10
+  default:
+    max_allocs_regression_percent: 10
+    max_bytes_regression_percent: 10
+    max_ns_regression_percent: 30      # advisory only
+  benchmarks:
+    - name: decision_engine
+      pattern: "^Benchmark(EvaluateDecisions|PrioritySelection|Rule)"
+      max_allocs_regression_percent: 5   # blocks
+      max_bytes_regression_percent: 5    # blocks
+      max_ns_regression_percent: 20      # advisory
+    - name: looper
+      pattern: "^Benchmark(ReMoM|Fusion|Flow|Base)"
+      max_allocs_regression_percent: 10
+      max_bytes_regression_percent: 15
+      max_ns_regression_percent: 40
 ```
+
+> **Why not gate on time?** Absolute `ns/op` varies with the CI runner's CPU and
+> noisy neighbors, so comparing it across machines produces false positives (and,
+> if you bias the baseline slow to avoid them, false negatives that hide real
+> regressions). Allocations and bytes per op are deterministic for a given build,
+> so they gate reliably without needing same-machine baselines. Introducing
+> allocations where the baseline had none (0 → N) is always treated as a
+> regression.
 
 ## Troubleshooting
 

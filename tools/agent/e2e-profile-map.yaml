@@ -6,6 +6,7 @@ default_local_profiles:
 full_ci_profiles:
   - kubernetes
   - dashboard
+  - remote-embedding
 
 full_ci_triggers:
   - src/semantic-router/**
@@ -75,6 +76,14 @@ profile_rules:
     summary: Image-modality EmbeddingSignal routing via the multi-modal-embed-small model.
     paths:
       - e2e/profiles/multimodal-routing/**
+  remote-embedding:
+    owner: e2e
+    coverage_role: openai-compatible-remote-embedding-provider
+    selection_mode: full-ci
+    summary: OpenAI-compatible remote provider startup health and deterministic text embedding-signal routing.
+    paths:
+      - e2e/profiles/remote-embedding/**
+      - e2e/testcases/remote_embedding_routing.go
   llm-d:
     owner: e2e
     coverage_role: llm-d-inference-gateway-health

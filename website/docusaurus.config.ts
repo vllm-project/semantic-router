@@ -7,7 +7,7 @@ import rehypeKatex from 'rehype-katex'
 
 const lightCodeTheme = themes.github
 const darkCodeTheme = themes.vsDark
-const siteUrl = 'https://vllm-semantic-router.com'
+const siteUrl = 'https://vllm-sr.ai'
 const siteDefaultDescription
   = 'We believe Mixture-of-Models is the next-generation model architecture for heterogeneous LLM inference. vLLM Semantic Router makes it executable.'
 const siteSocialTitle
@@ -188,11 +188,10 @@ const config: Config = {
       { name: 'ICBM', content: '37.7749, -122.4194' },
     ],
     navbar: {
-      title: 'vLLM-SR',
       logo: {
         alt: 'vLLM Semantic Router Logo',
-        src: 'img/vllm.png',
-        srcDark: 'img/vllm.png',
+        src: 'img/vllm-sr-logo.white.png',
+        srcDark: 'img/vllm-sr-logo.white.png',
       },
       items: [
         {
@@ -202,15 +201,29 @@ const config: Config = {
         },
         {
           type: 'docsVersionDropdown',
+          className: 'nav-docs-only',
           position: 'right',
           dropdownActiveClassDisabled: true,
         },
         {
-          type: 'docSidebar',
-          sidebarId: 'tutorialSidebar',
+          type: 'dropdown',
           className: 'nav-primary',
           position: 'left',
           label: 'Docs',
+          items: [
+            { label: 'Quick Start', to: '/docs/intro' },
+            { label: 'Installation', to: '/docs/installation/' },
+            {
+              label: 'Core Concepts',
+              to: '/docs/overview/semantic-router-overview',
+            },
+            { label: 'Tutorials', to: '/docs/tutorials/algorithm/overview' },
+            { label: 'API Reference', to: '/docs/api/router' },
+            {
+              label: 'Troubleshooting',
+              to: '/docs/troubleshooting/common-errors',
+            },
+          ],
         },
         {
           type: 'dropdown',
@@ -219,7 +232,7 @@ const config: Config = {
           position: 'left',
           items: [
             {
-              label: 'Paper & Talks',
+              label: 'Papers & Talks',
               to: '/publications',
             },
             {
@@ -230,15 +243,12 @@ const config: Config = {
               label: 'Vision Paper',
               to: '/vision-paper',
             },
+            {
+              label: 'Engineering Blog',
+              to: '/blog',
+            },
           ],
         },
-        {
-          to: '/blog',
-          className: 'nav-primary',
-          label: 'Blog',
-          position: 'left',
-        },
-
         {
           type: 'dropdown',
           className: 'nav-primary',
@@ -246,11 +256,19 @@ const config: Config = {
           position: 'left',
           items: [
             {
-              label: 'Governance',
+              label: 'Project Team',
               to: '/community/team',
             },
             {
-              label: 'Working Group',
+              label: 'Steering Committee',
+              to: '/community/steering-committee',
+            },
+            {
+              label: 'Roles & Governance',
+              to: '/community/governance',
+            },
+            {
+              label: 'Working Groups',
               to: '/community/work-groups',
             },
             {
@@ -258,25 +276,18 @@ const config: Config = {
               to: '/community/contributing',
             },
             {
-              label: 'Code of Conduct',
-              to: '/community/code-of-conduct',
-            },
-
-            {
-              type: 'html',
-              value: '<hr style="margin: 0.3rem 0;">',
+              label: 'Contributor Leaderboard',
+              to: '/community/contributors',
             },
             {
-              label: 'GitHub Issues',
-              href: 'https://github.com/vllm-project/semantic-router/issues',
+              label: 'GitHub Repository',
+              href: 'https://github.com/vllm-project/semantic-router',
+            },
+            {
+              label: 'Models',
+              href: 'https://huggingface.co/LLM-Semantic-Router',
             },
           ],
-        },
-        {
-          to: '/community/contributors',
-          className: 'nav-primary',
-          label: 'Leaderboard',
-          position: 'left',
         },
         {
           label: 'GitHub',
@@ -285,9 +296,9 @@ const config: Config = {
           position: 'right',
         },
         {
-          label: 'Models',
-          href: 'https://huggingface.co/LLM-Semantic-Router',
-          className: 'nav-utility',
+          label: 'Dashboard',
+          href: 'https://app.vllm-sr.ai',
+          className: 'nav-dashboard-cta',
           position: 'right',
         },
       ],
@@ -308,7 +319,7 @@ const config: Config = {
             },
             {
               label: 'Governance',
-              to: '/community/team',
+              to: '/community/governance',
             },
             {
               label: 'Contributing',
@@ -364,7 +375,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} vLLM Semantic Router Team. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} vLLM Semantic Router Team.`,
     },
     prism: {
       theme: lightCodeTheme,
@@ -388,7 +399,7 @@ const config: Config = {
         'applicationCategory': 'AIInfrastructure',
         'operatingSystem': 'Cross-platform',
         'description': siteDefaultDescription,
-        'url': 'https://vllm-semantic-router.com',
+        'url': 'https://vllm-sr.ai',
         'publisher': {
           '@type': 'Organization',
           'name': 'vLLM Semantic Router Team',

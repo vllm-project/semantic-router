@@ -380,4 +380,4 @@ Contributions welcome! Please see the main repository for guidelines.
 
 ---
 
-*Part of the [semantic-router project ecosystem](https://vllm-semantic-router.com/)*
+*Part of the [semantic-router project ecosystem](https://vllm-sr.ai/)*

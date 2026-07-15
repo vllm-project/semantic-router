@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 import Head from '@docusaurus/Head'
 import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
@@ -15,7 +15,6 @@ import TeamCarousel from '@site/src/components/TeamCarousel'
 import TestimonialsRail from '@site/src/components/TestimonialsRail'
 import { researchPapers } from '@site/src/data/researchContent'
 import { SITE_SOCIAL_PREVIEW_IMAGE_PATH } from '@site/src/data/socialPreview'
-import TransformerPipelineAnimation from '@site/src/components/TransformerPipelineAnimation'
 import SemanticTerrainHero from '@site/src/components/site/SemanticTerrainHero'
 import ScrollReveal from '@site/src/components/site/ScrollReveal'
 import {
@@ -142,110 +141,50 @@ const architectureDimensions = [
   },
 ]
 
-const encoderTracks = [
+const momScorecards = [
   {
-    label: 'SEQ_CLS',
-    mode: 'cls' as const,
-    text: translate({
-      id: 'homepage.aiTech.track.sequence',
-      message:
-        'Sequence classification for domain, jailbreak, fact-check, and feedback routing.',
-    }),
-  },
-  {
-    label: 'TOKEN',
-    mode: 'token' as const,
-    text: translate({
-      id: 'homepage.aiTech.track.token',
-      message:
-        'Token labeling for PII and safety-sensitive spans that need localized intervention.',
-    }),
-  },
-  {
-    label: 'EMBED',
-    mode: 'pool' as const,
-    text: translate({
-      id: 'homepage.aiTech.track.embedding',
-      message:
-        'Embedding paths for semantic cache, knowledge base routing, and similarity scoring.',
-    }),
-  },
-  {
-    label: 'RER',
-    mode: 'cross' as const,
-    text: translate({
-      id: 'homepage.aiTech.track.rerank',
-      message:
-        'Cross-encoder reranking for high-precision candidate selection and multi-modal signals.',
-    }),
-  },
-]
-
-const encoderCards = [
-  {
-    marker: 'BIE',
     title: translate({
-      id: 'homepage.aiTech.cap.biEncoder',
-      message: 'Bi-Encoder Embeddings',
+      id: 'homepage.momProof.livecodebench.title',
+      message: 'LiveCodeBench',
     }),
-    text: translate({
-      id: 'homepage.aiTech.cap.biEncoder.desc',
-      message:
-        'Independently encode queries and candidates into dense vectors for similarity search and semantic caching.',
+    result: translate({
+      id: 'homepage.momProof.livecodebench.result',
+      message: '92.6 vs Fugu Ultra 92.0',
+    }),
+    image: '/img/mom-proof/livecodebench-scorecard-dark.png',
+    alt: translate({
+      id: 'homepage.momProof.livecodebench.alt',
+      message: 'LiveCodeBench dark scorecard showing VSR Closed at 92.6',
     }),
   },
   {
-    marker: 'XCE',
     title: translate({
-      id: 'homepage.aiTech.cap.crossEncoder',
-      message: 'Cross-Encoder Learning',
+      id: 'homepage.momProof.gpqa.title',
+      message: 'GPQA-Diamond',
     }),
-    text: translate({
-      id: 'homepage.aiTech.cap.crossEncoder.desc',
-      message:
-        'Joint cross-attention scoring of query-candidate pairs for high-precision reranking.',
+    result: translate({
+      id: 'homepage.momProof.gpqa.result',
+      message: '96.0 vs Fugu Ultra 95.5',
+    }),
+    image: '/img/mom-proof/gpqa-diamond-scorecard-dark.png',
+    alt: translate({
+      id: 'homepage.momProof.gpqa.alt',
+      message: 'GPQA-Diamond dark scorecard showing VSR Closed at 96.0',
     }),
   },
   {
-    marker: 'CLS',
     title: translate({
-      id: 'homepage.aiTech.cap.classification',
-      message: 'Classification',
+      id: 'homepage.momProof.hle.title',
+      message: 'Humanity\'s Last Exam',
     }),
-    text: translate({
-      id: 'homepage.aiTech.cap.classification.desc',
-      message:
-        'Domain, jailbreak, PII and fact-check classification across 14 MMLU categories via ModernBERT with LoRA.',
+    result: translate({
+      id: 'homepage.momProof.hle.result',
+      message: '50.0 matches Fugu Ultra',
     }),
-  },
-  {
-    marker: 'ATT',
-    title: translate({
-      id: 'homepage.aiTech.cap.attention',
-      message: 'Full Attention',
-    }),
-    text: translate({
-      id: 'homepage.aiTech.cap.attention.desc',
-      message:
-        'Bidirectional attention across tokens and sentences, with full context instead of causal masking.',
-    }),
-  },
-  {
-    marker: '2DM',
-    title: translate({ id: 'homepage.aiTech.cap.2dmse', message: '2DMSE' }),
-    text: translate({
-      id: 'homepage.aiTech.cap.2dmse.desc',
-      message:
-        'Adjust embedding layers and dimensions at inference time to trade compute for accuracy on the fly.',
-    }),
-  },
-  {
-    marker: 'MRL',
-    title: translate({ id: 'homepage.aiTech.cap.mrl', message: 'MRL' }),
-    text: translate({
-      id: 'homepage.aiTech.cap.mrl.desc',
-      message:
-        'Truncate embedding vectors to any dimension without retraining to balance accuracy and speed per request.',
+    image: '/img/mom-proof/humanitys-last-exam-scorecard-dark.png',
+    alt: translate({
+      id: 'homepage.momProof.hle.alt',
+      message: 'Humanity\'s Last Exam dark scorecard showing VSR Closed at 50.0',
     }),
   },
 ]
@@ -345,29 +284,28 @@ function CapabilitySection(): JSX.Element {
   )
 }
 
-function EncoderIntelligenceSection(): JSX.Element {
-  const [encoderMode, setEncoderMode] = useState<'cls' | 'token' | 'pool' | 'cross'>('cls')
-
+function MixtureOfModelsProofSection(): JSX.Element {
   return (
-    <section className={styles.encoderSection} aria-labelledby="encoder-intelligence-title">
+    <section className={styles.momProofSection} aria-labelledby="mom-proof-title">
       <div className="site-shell-container">
         <ScrollReveal>
-          <div className={styles.sectionHeading}>
+          <div className={styles.momProofHeading}>
             <SectionLabel>
-              <Translate id="homepage.aiTech.label">
-                Signal intelligence
+              <Translate id="homepage.momProof.label">
+                Mixture-of-Models proof
               </Translate>
             </SectionLabel>
             <div>
-              <h2 id="encoder-intelligence-title">
-                <Translate id="homepage.aiTech.title">
-                  Intelligence before generation.
+              <h2 id="mom-proof-title">
+                <Translate id="homepage.momProof.title">
+                  One model API can beat frontier models.
                 </Translate>
               </h2>
               <p>
-                <Translate id="homepage.aiTech.description">
-                  Purpose-built encoders extract intent, context, safety, and
-                  modality before a generative model is selected.
+                <Translate id="homepage.momProof.description">
+                  vLLM Semantic Router keeps the public surface as vllm-sr/auto,
+                  then coordinates closed, open, and hybrid model pools inside the
+                  serving layer.
                 </Translate>
               </p>
             </div>
@@ -375,60 +313,38 @@ function EncoderIntelligenceSection(): JSX.Element {
         </ScrollReveal>
 
         <ScrollReveal delay={70}>
-          <div className={styles.encoderFrame}>
-            <div className={styles.encoderShowcase}>
-              <div className={styles.encoderLead}>
-                <div className={styles.encoderLeadCopy}>
-                  <SectionLabel>
-                    <Translate id="homepage.aiTech.leadLabel">
-                      Signal surfaces
-                    </Translate>
-                  </SectionLabel>
-                  <p>
-                    <Translate id="homepage.aiTech.leadCopy">
-                      Sequence classification, token labeling, embeddings, and
-                      reranking collapse into one system-intelligence layer.
-                    </Translate>
-                  </p>
-                </div>
-
-                <div className={styles.encoderTrackList} role="tablist" aria-label="Encoder signal modes">
-                  {encoderTracks.map((track) => {
-                    const isActive = encoderMode === track.mode
-                    return (
-                      <button
-                        key={track.label}
-                        type="button"
-                        role="tab"
-                        aria-selected={isActive}
-                        className={`${styles.encoderTrack} ${isActive ? styles.encoderTrackActive : ''}`}
-                        onClick={() => setEncoderMode(track.mode)}
-                      >
-                        <span className={styles.encoderTrackLabel}>{track.label}</span>
-                        <span className={styles.encoderTrackText}>{track.text}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-
-                <div className={styles.encoderActions}>
-                  <PillLink
-                    className={styles.encoderCta}
-                    href="https://huggingface.co/LLM-Semantic-Router"
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    <Translate id="homepage.aiTech.primaryCta">
-                      Hugging Face Models
-                    </Translate>
-                  </PillLink>
-                </div>
+          <div className={styles.momProofFrame}>
+            <div className={styles.momProofArchitecture}>
+              <div className={styles.momProofArchitectureCopy}>
+                <SectionLabel>
+                  <Translate id="homepage.momProof.architectureLabel">
+                    Router-side collaboration
+                  </Translate>
+                </SectionLabel>
+                <h3>
+                  <Translate id="homepage.momProof.architectureTitle">
+                    The app calls one model. The router builds the team.
+                  </Translate>
+                </h3>
+                <p>
+                  <Translate id="homepage.momProof.architectureCopy">
+                    Route by task shape, risk, confidence, and model capability;
+                    run bounded collaboration; return one OpenAI-compatible
+                    response.
+                  </Translate>
+                </p>
               </div>
 
-              <div className={styles.encoderPipelineFrame}>
-                <TransformerPipelineAnimation
-                  mode={encoderMode}
-                  onModeChange={setEncoderMode}
+              <div className={styles.momProofArchitectureImageWrap}>
+                <img
+                  className={styles.momProofArchitectureImage}
+                  src="/img/mom-proof/architecture-router-dark.png"
+                  alt={translate({
+                    id: 'homepage.momProof.architectureAlt',
+                    message:
+                      'vLLM Semantic Router routes heterogeneous closed and open model pools',
+                  })}
+                  loading="lazy"
                 />
               </div>
             </div>
@@ -436,14 +352,19 @@ function EncoderIntelligenceSection(): JSX.Element {
         </ScrollReveal>
 
         <ScrollReveal delay={120}>
-          <div className={styles.encoderCardGrid}>
-            {encoderCards.map(card => (
-              <article key={card.marker} className={styles.encoderCard}>
-                <span className={styles.encoderCardMarker}>{card.marker}</span>
-                <div className={styles.encoderCardCopy}>
+          <div className={styles.momScorecardGrid}>
+            {momScorecards.map(card => (
+              <article key={card.image} className={styles.momScorecard}>
+                <div className={styles.momScorecardHeader}>
                   <h3>{card.title}</h3>
-                  <p>{card.text}</p>
+                  <p>{card.result}</p>
                 </div>
+                <img
+                  className={styles.momScorecardImage}
+                  src={card.image}
+                  alt={card.alt}
+                  loading="lazy"
+                />
               </article>
             ))}
           </div>
@@ -476,7 +397,7 @@ function FinalCtaSection(): JSX.Element {
             </div>
             <div className={styles.finalCtaActions}>
               <PillLink
-                href="https://play.vllm-semantic-router.com/"
+                href="https://app.vllm-sr.ai/playground"
                 rel="noreferrer"
                 target="_blank"
               >
@@ -559,12 +480,18 @@ export default function Home(): JSX.Element {
         </div>
 
         <div className={styles.bandGraphite}>
+          <ScrollReveal>
+            <TestimonialsRail />
+          </ScrollReveal>
+        </div>
+
+        <div className={styles.bandGraphite}>
           <CapabilitySection />
         </div>
 
-        <div className={styles.bandBlack}>
-          <ScrollReveal>
-            <TestimonialsRail />
+        <div className={styles.bandGraphite}>
+          <ScrollReveal delay={50}>
+            <InstallQuickStartSection />
           </ScrollReveal>
         </div>
 
@@ -575,13 +502,7 @@ export default function Home(): JSX.Element {
         </div>
 
         <div className={styles.bandBlack}>
-          <EncoderIntelligenceSection />
-        </div>
-
-        <div className={styles.bandGraphite}>
-          <ScrollReveal delay={50}>
-            <InstallQuickStartSection />
-          </ScrollReveal>
+          <MixtureOfModelsProofSection />
         </div>
 
         <div className={styles.bandBlack}>

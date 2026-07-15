@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import styles from './PublicHeader.module.css'
 
-const DOCS_URL = 'https://vllm-semantic-router.com/docs/intro/'
+const DOCS_URL = 'https://vllm-sr.ai/docs/intro/'
 const GITHUB_URL = 'https://github.com/vllm-project/semantic-router'
 
 export default function PublicHeader() {
