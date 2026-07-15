@@ -44,7 +44,7 @@ if [[ ! -f "${ACTIONS_FILE}" ]]; then
   exit 1
 fi
 
-cd "${SCRIPT_DIR}"
+cd "${SCRIPT_DIR}" || exit
 export PYTHONPATH=.
 
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
