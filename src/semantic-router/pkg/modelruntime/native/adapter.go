@@ -32,6 +32,7 @@ type ModelInfo struct {
 	FeatureFlags        map[string]bool
 	UnsupportedReasons  map[string]string
 	RegistryMetadata    map[string]string
+	Features            map[string]bool
 }
 
 // BackendAdapter defines the neutral contract that all backends must implement.
@@ -41,6 +42,6 @@ type BackendAdapter interface {
 	LoadModel(ctx context.Context, req LoadRequest) (ModelHandle, error)
 	UnloadModel(ctx context.Context, handle ModelHandle) error
 	Inference(ctx context.Context, handle ModelHandle, req InferenceRequest) (InferenceResponse, error)
-	Info() []ModelInfo
+	Info() ([]ModelInfo, error)
 }
 

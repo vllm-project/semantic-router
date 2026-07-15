@@ -71,12 +71,12 @@ func (a *Adapter) Inference(ctx context.Context, handle native.ModelHandle, req 
 	return nil, errors.New("candle native adapter inference is not yet wired (Phase 2)")
 }
 
-func (a *Adapter) Info() []native.ModelInfo {
+func (a *Adapter) Info() ([]native.ModelInfo, error) {
 	// In the future this maps candle_binding.GetEmbeddingModelsInfo() etc.
 	// to the unified schema.
 	info, err := candle_binding.GetEmbeddingModelsInfo()
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	var results []native.ModelInfo
@@ -88,7 +88,8 @@ func (a *Adapter) Info() []native.ModelInfo {
 			IsLoaded:          m.IsLoaded,
 			MaxSequenceLength: m.MaxSequenceLength,
 			DefaultDimension:  m.DefaultDimension,
+			Features:          map[string]bool{"matryoshka_2d": false},
 		})
 	}
-	return results
+	return results, nil
 }
