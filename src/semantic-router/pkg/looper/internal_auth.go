@@ -37,7 +37,7 @@ const minInternalAuthSecretLen = 16
 // (so a re-dispatch may land on a different pod than the one that issued it);
 // the per-process random fallback only holds when the leg loops back to the
 // same process (the default localhost sidecar topology).
-const InternalAuthSecretEnv = "VSR_LOOPER_INTERNAL_AUTH_SECRET"
+const InternalAuthSecretEnv = "VSR_LOOPER_INTERNAL_AUTH_SECRET" //nolint:gosec // G101: this is the NAME of an env var, not a hardcoded credential.
 
 var (
 	internalAuthOnce   sync.Once
