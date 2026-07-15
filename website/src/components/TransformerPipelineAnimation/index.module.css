@@ -58,15 +58,16 @@
 }
 
 .tabActive {
-  border-color: var(--site-border-strong);
-  background: var(--site-surface-alt);
+  border-color: rgba(48, 162, 255, 0.45);
+  background: rgba(48, 162, 255, 0.1);
   color: var(--site-text);
+  box-shadow: var(--site-hover-inset);
 }
 
 .tabActive .tabCode {
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--site-text);
+  border-color: rgba(48, 162, 255, 0.35);
+  background: rgba(48, 162, 255, 0.16);
+  color: var(--site-brand-blue);
 }
 
 .downArrow {
@@ -121,6 +122,7 @@
 .inputBox {
   width: min(100%, 420px);
   padding: 0.85rem 1rem;
+  border-radius: 0.55rem;
   font-size: 0.8rem;
   line-height: 1.45;
   text-align: center;
@@ -145,8 +147,9 @@
 }
 
 .tokenSpecial {
-  background: rgba(48, 162, 255, 0.1);
-  color: var(--site-text);
+  border-color: rgba(48, 162, 255, 0.35);
+  background: rgba(48, 162, 255, 0.12);
+  color: var(--site-brand-blue-light);
 }
 
 .tokenNormal {
@@ -240,7 +243,11 @@
   text-transform: uppercase;
 }
 
-.subAttention,
+.subAttention {
+  border-color: rgba(48, 162, 255, 0.28);
+  background: rgba(48, 162, 255, 0.08);
+}
+
 .subNorm,
 .subFFN {
   background: rgba(255, 255, 255, 0.03);
@@ -248,17 +255,15 @@
 
 .branchesArea {
   width: 100%;
+  max-width: 32rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.95rem;
+  gap: 0.65rem;
 }
 
 .branchGrid {
-  width: 100%;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.8rem;
+  display: none;
 }
 
 .branch {
@@ -266,17 +271,20 @@
   grid-template-columns: auto 1fr;
   align-items: start;
   gap: 0.65rem;
-  padding: 0.78rem;
-  cursor: pointer;
+  width: 100%;
+  padding: 0.78rem 0.85rem;
+  border-radius: 0.65rem;
+  cursor: default;
   transition:
     border-color 180ms ease,
     background 180ms ease,
-    transform 180ms ease,
-    opacity 180ms ease;
+    box-shadow 180ms ease;
 }
 
-.branch:hover {
-  border-color: var(--site-border-strong);
+.branchActive {
+  border-color: rgba(48, 162, 255, 0.38);
+  background: rgba(48, 162, 255, 0.08);
+  box-shadow: var(--site-hover-inset);
 }
 
 .branchCLS,
@@ -305,6 +313,14 @@
   font-family: var(--ifm-font-family-monospace);
 }
 
+.branchTaskType {
+  font-size: 0.56rem;
+  line-height: 1.4;
+  color: var(--site-muted-bright);
+  font-family: var(--ifm-font-family-monospace);
+  font-style: italic;
+}
+
 .branchSignals {
   display: flex;
   flex-wrap: wrap;
@@ -326,8 +342,9 @@
 .signalTagToken,
 .signalTagPool,
 .signalTagCross {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--site-muted-bright);
+  border-color: rgba(48, 162, 255, 0.22);
+  background: rgba(48, 162, 255, 0.1);
+  color: var(--site-brand-blue-light);
 }
 
 @media (max-width: 768px) {

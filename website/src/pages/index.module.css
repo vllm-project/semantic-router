@@ -109,9 +109,10 @@
 
 .heroIntroPanel :global(h1) {
   max-width: none;
-  font-size: clamp(3.2rem, 7.3vw, 6.1rem);
-  line-height: 0.93;
-  letter-spacing: -0.055em;
+  font-size: clamp(2.75rem, 6vw, 5.25rem);
+  line-height: 1.05;
+  letter-spacing: -0.05em;
+  text-wrap: pretty;
 }
 
 .heroIntroPanel :global(p) {
@@ -171,7 +172,7 @@
   font-size: clamp(1rem, 1.15vw, 1.12rem);
   font-weight: 520;
   letter-spacing: -0.01em;
-  text-wrap: balance;
+  text-wrap: pretty;
 }
 
 .heroPrimaryCta,
@@ -419,6 +420,7 @@
 
 .capabilitySection,
 .encoderSection,
+.momProofSection,
 .finalCtaSection {
   border-bottom: 0;
 }
@@ -426,7 +428,7 @@
 .capabilitySection {
   position: relative;
   overflow: hidden;
-  padding: clamp(4.5rem, 7vw, 6.5rem) 0;
+  padding: clamp(3rem, 5vw, 4.5rem) 0;
   background: var(--site-bg);
   color: var(--site-text);
 }
@@ -438,7 +440,7 @@
 .encoderSection {
   position: relative;
   overflow: hidden;
-  padding: 5rem 0;
+  padding: clamp(3.25rem, 5.5vw, 4.5rem) 0;
   background: var(--site-bg);
 }
 
@@ -446,40 +448,57 @@
   content: none;
 }
 
+.momProofSection {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(3.5rem, 6vw, 5rem) 0;
+  background: var(--site-bg);
+}
+
+.momProofSection::before {
+  content: none;
+}
+
 .sectionHeading {
+  composes: site-section-intro site-section-intro--wide from global;
   display: grid;
-  grid-template-columns: minmax(220px, 0.32fr) minmax(0, 0.68fr);
-  gap: 2rem;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
   margin-bottom: 2rem;
 }
 
 .sectionHeading h2 {
-  max-width: 14ch;
-  margin: 0.8rem 0 0;
-  font-size: clamp(2.4rem, 5vw, 4.4rem);
-  line-height: 0.95;
+  max-width: none;
+  margin: 0;
+  font-size: var(--site-text-h2);
+  line-height: 1.18;
+  letter-spacing: -0.025em;
+  text-wrap: pretty;
 }
 
 .sectionHeading p {
   max-width: 42rem;
-  margin: 1rem 0 0;
+  margin: 0;
+  color: var(--site-muted-bright);
   font-size: 1rem;
+  line-height: 1.65;
+  text-wrap: pretty;
 }
 
 .capabilityFrame {
   position: relative;
   z-index: 1;
   display: grid;
-  gap: clamp(1.75rem, 3.5vw, 3rem);
-  padding: clamp(1.5rem, 3.4vw, 3rem);
+  gap: clamp(1.1rem, 2vw, 1.65rem);
+  padding: clamp(1rem, 2vw, 1.65rem);
   border: 1px solid var(--site-border);
-  border-radius: clamp(1.25rem, 2vw, 1.75rem);
+  border-radius: clamp(1rem, 1.6vw, 1.35rem);
   background: var(--site-surface-alt);
 }
 
 .capabilityHeading {
   display: grid;
-  gap: 1.25rem;
+  gap: 0.65rem;
 }
 
 .capabilityLabel {
@@ -494,28 +513,28 @@
   max-width: none;
   margin: 0;
   color: var(--site-text-strong);
-  font-size: clamp(2.8rem, 5.25vw, 5.1rem);
+  font-size: clamp(1.3rem, 2.1vw, 1.7rem);
   font-weight: 400;
-  line-height: 0.92;
-  letter-spacing: -0.055em;
-  white-space: nowrap;
+  line-height: 1.2;
+  letter-spacing: -0.028em;
+  text-wrap: pretty;
 }
 
 .capabilitySummary {
   display: grid;
-  grid-template-columns: minmax(0, 42rem) auto;
+  grid-template-columns: minmax(0, 36rem) auto;
   align-items: end;
   justify-content: space-between;
-  gap: 2rem;
+  gap: 1.25rem;
 }
 
 .capabilitySummary p {
-  max-width: 42rem;
+  max-width: 36rem;
   margin: 0;
   color: var(--site-muted-bright);
-  font-size: clamp(1.05rem, 1.5vw, 1.28rem);
-  line-height: 1.55;
-  letter-spacing: -0.015em;
+  font-size: clamp(0.92rem, 1.05vw, 1rem);
+  line-height: 1.5;
+  letter-spacing: -0.01em;
 }
 
 .capabilitySummary .capabilityCta {
@@ -630,15 +649,15 @@
 }
 
 .matrixHeader {
-  min-height: 3.1rem;
+  min-height: 2.35rem;
   align-items: center;
   border-bottom: 1px solid var(--site-border-strong);
   background: rgba(255, 255, 255, 0.025);
   color: var(--site-muted);
   font-family: var(--ifm-font-family-monospace);
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   font-weight: 700;
-  letter-spacing: 0.13em;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
 }
 
@@ -647,7 +666,7 @@
 .matrixFragmented,
 .matrixUnified {
   min-width: 0;
-  padding: 1rem clamp(1rem, 2vw, 1.65rem);
+  padding: 0.7rem clamp(0.85rem, 1.5vw, 1.2rem);
 }
 
 .matrixHeader span + span,
@@ -661,8 +680,40 @@
 }
 
 .matrixRow {
-  min-height: 7.75rem;
+  min-height: 0;
   border-bottom: 1px solid var(--site-border);
+}
+
+:global(.revealVisible) .architectureMatrix .matrixRow {
+  animation: matrixRowEnter 620ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+:global(.revealVisible) .architectureMatrix .matrixRow:nth-child(2) {
+  animation-delay: 70ms;
+}
+
+:global(.revealVisible) .architectureMatrix .matrixRow:nth-child(3) {
+  animation-delay: 140ms;
+}
+
+:global(.revealVisible) .architectureMatrix .matrixRow:nth-child(4) {
+  animation-delay: 210ms;
+}
+
+:global(.revealVisible) .architectureMatrix .matrixRow:nth-child(5) {
+  animation-delay: 280ms;
+}
+
+@keyframes matrixRowEnter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 0.75rem, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
 }
 
 .matrixRow:last-child {
@@ -677,40 +728,40 @@
 }
 
 .matrixDimension {
-  gap: 0.9rem;
+  gap: 0.65rem;
 }
 
 .matrixDimension > span {
   flex: 0 0 auto;
   color: var(--site-accent-strong);
   font-family: var(--ifm-font-family-monospace);
-  font-size: 0.66rem;
+  font-size: 0.6rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.09em;
 }
 
 .matrixDimension > span::after {
   content: '';
   display: inline-block;
-  width: 1.5rem;
+  width: 1.15rem;
   height: 1px;
-  margin-left: 0.55rem;
+  margin-left: 0.45rem;
   vertical-align: middle;
   background: rgba(48, 162, 255, 0.52);
 }
 
 .matrixDimension strong {
   color: var(--site-text-strong);
-  font-size: clamp(1.05rem, 1.65vw, 1.35rem);
+  font-size: clamp(0.92rem, 1.15vw, 1.05rem);
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
 }
 
 .matrixFragmented p,
 .matrixUnified p {
   margin: 0;
-  font-size: clamp(0.94rem, 1.3vw, 1.08rem);
-  line-height: 1.5;
+  font-size: clamp(0.82rem, 0.95vw, 0.92rem);
+  line-height: 1.45;
 }
 
 .matrixFragmented p {
@@ -746,74 +797,119 @@
   padding-top: 0.25rem;
 }
 
+.encoderFrame {
+  border: 1px solid var(--site-border);
+  border-radius: 1.1rem;
+  background:
+    radial-gradient(ellipse 80% 50% at 100% 0%, rgba(48, 162, 255, 0.08), transparent 55%),
+    var(--site-surface-alt);
+  overflow: hidden;
+}
+
 .encoderShowcase {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(260px, 0.34fr) minmax(0, 0.66fr);
-  gap: 1rem;
+  grid-template-columns: minmax(240px, 0.32fr) minmax(0, 0.68fr);
+  gap: 0;
   margin-bottom: 1rem;
 }
 
 .encoderLead,
 .encoderPipelineFrame,
 .encoderCard {
-  border: 1px solid var(--site-border);
-  background: var(--site-surface);
-}
-
-.encoderLeadStack {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  min-height: 100%;
+  border: 0;
+  background: transparent;
 }
 
 .encoderLead {
   display: flex;
   flex-direction: column;
-  align-self: start;
-  gap: 1rem;
-  padding: 1.4rem;
+  align-self: stretch;
+  gap: 0.9rem;
+  padding: clamp(1.1rem, 2vw, 1.35rem);
+  border-right: 1px solid var(--site-border);
+  background: rgba(255, 255, 255, 0.015);
 }
 
 .encoderLeadCopy {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.55rem;
 }
 
 .encoderLeadCopy p {
-  max-width: 20rem;
+  max-width: 22rem;
   margin: 0;
-  font-size: 1rem;
+  color: var(--site-muted-bright);
+  font-size: clamp(0.88rem, 1vw, 0.96rem);
+  line-height: 1.6;
+  text-wrap: pretty;
 }
 
 .encoderTrackList {
   display: grid;
-  gap: 0.6rem;
+  gap: 0.5rem;
 }
 
 .encoderTrack {
   display: grid;
-  gap: 0.45rem;
-  padding: 0.8rem 0.9rem;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0.7rem 0.8rem;
   border: 1px solid var(--site-border);
-  background: rgba(255, 255, 255, 0.03);
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.02);
   color: var(--site-muted);
-  font-size: 0.84rem;
-  line-height: 1.55;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--site-transition-fast),
+    background var(--site-transition-fast),
+    box-shadow var(--site-transition-fast),
+    transform var(--site-transition-fast);
+}
+
+.encoderTrack:hover {
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg-soft);
+  transform: translateY(-1px);
+}
+
+.encoderTrack:focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 2px;
+}
+
+.encoderTrackActive {
+  border-color: rgba(48, 162, 255, 0.42);
+  background: rgba(48, 162, 255, 0.08);
+  box-shadow: var(--site-hover-inset);
+  color: var(--site-text);
+}
+
+.encoderTrackActive .encoderTrackLabel {
+  border-color: rgba(48, 162, 255, 0.35);
+  background: rgba(48, 162, 255, 0.14);
+  color: var(--site-brand-blue);
+}
+
+.encoderTrackText {
+  text-wrap: pretty;
 }
 
 .encoderTrackLabel,
 .encoderCardMarker {
   display: inline-flex;
   width: fit-content;
-  padding: 0.18rem 0.42rem;
+  padding: 0.16rem 0.4rem;
   border: 1px solid var(--site-border);
   background: rgba(255, 255, 255, 0.05);
   color: var(--site-muted-bright);
   font-family: var(--ifm-font-family-monospace);
-  font-size: 0.68rem;
+  font-size: 0.64rem;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -821,32 +917,37 @@
 .encoderActions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  padding-top: 0.2rem;
+  gap: 0.65rem;
+  padding-top: 0.15rem;
+  margin-top: auto;
+}
+
+.encoderCta:global(.pill) {
+  border-color: rgba(48, 162, 255, 0.38) !important;
+  background: rgba(48, 162, 255, 0.1) !important;
+  color: var(--site-brand-blue) !important;
+  box-shadow: none !important;
+}
+
+.encoderCta:global(.pill):hover {
+  border-color: var(--site-brand-blue) !important;
+  background: var(--site-brand-blue) !important;
+  color: #030303 !important;
+  box-shadow: var(--site-hover-glow) !important;
 }
 
 .encoderPipelineFrame {
   position: relative;
   overflow: hidden;
-  min-height: 34rem;
+  min-height: 28rem;
   display: flex;
   align-items: flex-start;
-  padding: 1.4rem;
+  padding: clamp(1rem, 1.8vw, 1.25rem);
   background:
-    radial-gradient(circle at top, rgba(48, 162, 255, 0.1), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 42%),
-    var(--site-surface);
-}
-
-.encoderPipelineFrame::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
-  background-size: 38px 38px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), transparent 96%);
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    radial-gradient(circle at top, rgba(48, 162, 255, 0.08), transparent 38%);
+  background-size: 32px 32px, 32px 32px, auto;
 }
 
 .encoderPipelineFrame > * {
@@ -860,58 +961,207 @@
   z-index: 1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
 }
 
 .encoderCard {
   display: grid;
   align-content: start;
-  gap: 1rem;
-  min-height: 14rem;
-  padding: 1.35rem;
+  gap: 0.75rem;
+  min-height: 0;
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--site-border);
+  border-radius: 0.75rem;
+  background: var(--site-surface);
   transition:
     border-color 180ms ease,
     transform 180ms ease,
-    background 180ms ease;
+    background 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .encoderCard:hover {
   transform: translateY(-3px);
-  border-color: var(--site-border-strong);
-  background: var(--site-surface-alt);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg-soft);
+  box-shadow: var(--site-hover-glow);
+}
+
+.encoderCard:hover h3 {
+  color: var(--site-brand-blue);
 }
 
 .encoderSpotlightCard {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 1.5rem;
-  background:
-    radial-gradient(circle at top right, rgba(255, 255, 255, 0.07), transparent 42%),
-    var(--site-surface);
-}
-
-.encoderSpotlightCard .encoderCardCopy {
-  margin-top: auto;
+  display: none;
 }
 
 .encoderCardCopy {
   display: grid;
-  gap: 0.8rem;
+  gap: 0.45rem;
 }
 
 .encoderCardCopy h3 {
   margin: 0;
-  font-size: clamp(1.1rem, 2.4vw, 1.7rem);
-  line-height: 1.05;
+  font-size: clamp(0.95rem, 1.2vw, 1.05rem);
+  line-height: 1.25;
 }
 
 .encoderCardCopy p {
   margin: 0;
-  max-width: 38rem;
-  font-size: 0.95rem;
+  max-width: none;
+  color: var(--site-muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.momProofHeading {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 0.34fr) minmax(0, 0.66fr);
+  gap: clamp(1rem, 2vw, 2rem);
+  align-items: end;
+  margin-bottom: clamp(1.4rem, 3vw, 2.4rem);
+}
+
+.momProofHeading h2 {
+  max-width: 48rem;
+  margin: 0;
+  color: var(--site-text-strong);
+  font-size: clamp(2rem, 4.4vw, 4.5rem);
+  font-weight: 690;
+  line-height: 0.98;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+
+.momProofHeading p {
+  max-width: 45rem;
+  margin: 0.9rem 0 0;
+  color: var(--site-muted-bright);
+  font-size: clamp(0.98rem, 1.35vw, 1.18rem);
+  line-height: 1.58;
+  text-wrap: pretty;
+}
+
+.momProofFrame {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: clamp(1rem, 1.8vw, 1.45rem);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 42%),
+    var(--site-surface-alt);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 24px 72px rgba(0, 0, 0, 0.34);
+}
+
+.momProofArchitecture {
+  display: grid;
+  grid-template-columns: minmax(17rem, 0.34fr) minmax(0, 0.66fr);
+  min-width: 0;
+}
+
+.momProofArchitectureCopy {
+  display: grid;
+  align-content: center;
+  gap: 0.85rem;
+  min-width: 0;
+  padding: clamp(1.25rem, 3vw, 2.6rem);
+  border-right: 1px solid var(--site-border);
+}
+
+.momProofArchitectureCopy h3 {
+  max-width: 25rem;
+  margin: 0;
+  color: var(--site-text-strong);
+  font-size: clamp(1.35rem, 2.5vw, 2.4rem);
+  font-weight: 620;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+
+.momProofArchitectureCopy p {
+  max-width: 27rem;
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: clamp(0.92rem, 1.1vw, 1rem);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.momProofArchitectureImageWrap {
+  min-width: 0;
+  padding: clamp(0.8rem, 1.8vw, 1.35rem);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.momProofArchitectureImage,
+.momScorecardImage {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.momProofArchitectureImage {
+  aspect-ratio: 1298 / 867;
+  object-fit: contain;
+  border-radius: 0.85rem;
+}
+
+.momScorecardGrid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(0.8rem, 1.5vw, 1.1rem);
+  margin-top: clamp(0.9rem, 2vw, 1.35rem);
+}
+
+.momScorecard {
+  overflow: hidden;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 1rem;
+  background: #050608;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 18px 48px rgba(0, 0, 0, 0.26);
+}
+
+.momScorecardHeader {
+  display: grid;
+  gap: 0.32rem;
+  padding: 1rem 1.05rem 0.15rem;
+}
+
+.momScorecardHeader h3 {
+  margin: 0;
+  color: var(--site-text-strong);
+  font-size: clamp(1rem, 1.35vw, 1.18rem);
+  font-weight: 680;
+  letter-spacing: -0.022em;
+}
+
+.momScorecardHeader p {
+  margin: 0;
+  color: var(--site-accent-strong);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  font-weight: 760;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.momScorecardImage {
+  aspect-ratio: 2400 / 1308;
+  object-fit: cover;
+  object-position: center;
 }
 
 .finalCtaSection {
@@ -921,9 +1171,9 @@
 
 .finalCtaFrame {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 2rem;
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: 1.5rem;
   padding: clamp(1.6rem, 4vw, 3.25rem);
   border: 1px solid var(--site-border-strong);
   border-radius: 1.5rem;
@@ -934,17 +1184,19 @@
 
 .finalCtaCopy {
   display: grid;
-  gap: 1rem;
+  gap: 0.85rem;
+  min-width: 0;
 }
 
 .finalCtaCopy h2 {
-  max-width: 13ch;
+  max-width: min(100%, 30rem);
   margin: 0;
   color: var(--site-text-strong);
-  font-size: clamp(2.35rem, 5vw, 4.65rem);
+  font-size: var(--site-text-h2);
   font-weight: 450;
-  line-height: 0.94;
-  letter-spacing: -0.05em;
+  line-height: 1.18;
+  letter-spacing: -0.03em;
+  text-wrap: pretty;
 }
 
 .finalCtaCopy p {
@@ -958,28 +1210,53 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  justify-content: flex-end;
+  justify-content: flex-start;
+}
+
+@media (min-width: 768px) {
+  .finalCtaFrame {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 2rem;
+  }
+
+  .finalCtaActions {
+    justify-content: flex-end;
+  }
 }
 
 @media (max-width: 996px) {
   .heroGrid,
   .sectionHeading,
   .encoderShowcase,
+  .momProofHeading,
+  .momProofArchitecture,
   .finalCtaFrame {
     grid-template-columns: 1fr;
   }
 
-  .encoderCardGrid {
+  .encoderCardGrid,
+  .momScorecardGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .momProofArchitectureCopy {
+    border-right: 0;
+    border-bottom: 1px solid var(--site-border);
+  }
+
+  .encoderLead {
+    border-right: 0;
+    border-bottom: 1px solid var(--site-border);
+  }
+
+  .encoderPipelineFrame {
+    min-height: 0;
   }
 
   .heroStage {
     min-height: calc(100svh - var(--site-header-height));
     padding: 3rem 0 0;
-  }
-
-  .encoderLeadStack {
-    min-height: auto;
   }
 }
 
@@ -1022,8 +1299,8 @@
   .heroIntroPanel :global(h1) {
     width: 100%;
     max-width: 100%;
-    font-size: clamp(2.15rem, 9.5vw, 2.6rem);
-    line-height: 0.96;
+    font-size: clamp(2rem, 8.5vw, 2.45rem);
+    line-height: 1.1;
   }
 
   .heroDescriptionText {
@@ -1089,19 +1366,20 @@
   }
 
   .capabilitySection,
-  .encoderSection {
-    padding: 3.5rem 0;
+  .encoderSection,
+  .momProofSection {
+    padding: 3rem 0;
   }
 
   .capabilityHeading h2 {
-    font-size: clamp(2.4rem, 7vw, 3.1rem);
-    white-space: normal;
+    font-size: clamp(1.25rem, 4vw, 1.55rem);
+    line-height: 1.22;
   }
 
   .capabilitySummary {
     grid-template-columns: 1fr;
     align-items: start;
-    gap: 1.25rem;
+    gap: 1rem;
   }
 
   .capabilitySummary .capabilityCta {
@@ -1130,7 +1408,7 @@
   .matrixDimension,
   .matrixFragmented,
   .matrixUnified {
-    padding: 1rem 1.05rem;
+    padding: 0.75rem 0.9rem;
   }
 
   .matrixFragmented,
@@ -1188,6 +1466,19 @@
     margin-top: 0.35rem;
   }
 
+  .momScorecardGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .momProofHeading h2 {
+    font-size: clamp(2.05rem, 13vw, 3.35rem);
+  }
+
+  .momProofArchitectureCopy,
+  .momProofArchitectureImageWrap {
+    padding: 1rem;
+  }
+
   .encoderCardGrid {
     display: flex;
     overflow-x: auto;
@@ -1197,15 +1488,10 @@
     scroll-snap-type: x proximity;
   }
 
-  .encoderSpotlightCard {
-    min-height: auto;
-    grid-template-columns: 1fr;
-  }
-
   .encoderCardGrid .encoderCard {
-    flex: 0 0 min(18rem, calc(100vw - 3rem));
-    min-width: min(18rem, calc(100vw - 3rem));
-    min-height: 15rem;
+    flex: 0 0 min(16rem, calc(100vw - 3rem));
+    min-width: min(16rem, calc(100vw - 3rem));
+    min-height: 0;
     scroll-snap-align: start;
   }
 
@@ -1222,12 +1508,12 @@
 
 @media (max-width: 640px) {
   .capabilityHeading h2 {
-    font-size: clamp(2.15rem, 10vw, 2.75rem);
-    line-height: 0.98;
+    font-size: clamp(1.2rem, 4.8vw, 1.5rem);
+    line-height: 1.24;
   }
 
   .capabilitySummary p {
-    font-size: 1rem;
+    font-size: 0.92rem;
   }
 
   .capabilitySummary .capabilityCta {
@@ -1257,8 +1543,8 @@
   }
 
   .heroIntroPanel :global(h1) {
-    font-size: clamp(1.85rem, 7.2vh, 3rem);
-    line-height: 0.9;
+    font-size: clamp(1.75rem, 6.5vh, 2.65rem);
+    line-height: 1.08;
   }
 
   .heroIntroPanel :global(p) {

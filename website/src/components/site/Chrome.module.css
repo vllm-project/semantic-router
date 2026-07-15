@@ -99,16 +99,17 @@
 }
 
 .pageTitle {
-  max-width: 18ch;
+  max-width: none;
   margin: 0;
-  font-size: clamp(3rem, 9vw, 7rem);
-  line-height: 0.9;
+  font-size: clamp(2.25rem, 5.5vw, 3.75rem);
+  line-height: 1.1;
   font-weight: 400;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.04em;
+  text-wrap: pretty;
 }
 
 .pageTitleCenter {
-  max-width: 12.5ch;
+  max-width: none;
 }
 
 .pageDescription {
