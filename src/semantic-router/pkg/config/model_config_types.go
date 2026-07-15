@@ -184,10 +184,9 @@ type ComplexityModelConfig struct {
 // difficulty class whose index is mapped to a label (e.g. easy/medium/hard) via
 // ComplexityMappingPath. ModelID is a HuggingFace repo id or local path.
 type ComplexityClassifierModelConfig struct {
-	ModelID               string  `yaml:"model_id,omitempty"`
-	Threshold             float32 `yaml:"threshold,omitempty"`
-	UseCPU                bool    `yaml:"use_cpu,omitempty"`
-	ComplexityMappingPath string  `yaml:"complexity_mapping_path,omitempty"`
+	ModelID               string `yaml:"model_id,omitempty"`
+	UseCPU                bool   `yaml:"use_cpu,omitempty"`
+	ComplexityMappingPath string `yaml:"complexity_mapping_path,omitempty"`
 }
 
 func (c ComplexityModelConfig) WithDefaults() ComplexityModelConfig {

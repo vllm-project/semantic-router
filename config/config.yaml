@@ -2160,9 +2160,13 @@ global:
           top_m: 2
           margin_threshold: 0.0
         # Optional trained classifier for complexity rules with method: model.
-        # Set model_id (HF repo or local path) + complexity_mapping_path to enable; inert by default.
+        # Inert by default; set model_id (HF repo or local path) and
+        # complexity_mapping_path (class-index -> easy/medium/hard JSON) to enable.
+        # The confidence floor is the per-rule threshold under routing.signals.complexity.
         classifier:
-          threshold: 0.6
+          model_id: ""
+          use_cpu: false
+          complexity_mapping_path: ""
       hallucination_mitigation:
         enabled: true
         on_hallucination_detected: annotate

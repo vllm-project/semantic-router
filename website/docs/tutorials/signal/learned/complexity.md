@@ -78,7 +78,6 @@ global:
         # prototype_scoring still applies to embedding-mode rules.
         classifier:
           model_id: your-org/complexity-classifier # HF repo id or local path
-          threshold: 0.6 # confidence floor (see below)
           use_cpu: false
           # class-index -> difficulty mapping (required for model mode)
           complexity_mapping_path: models/complexity-classifier/complexity_mapping.json
