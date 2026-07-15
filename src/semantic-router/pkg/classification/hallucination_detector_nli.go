@@ -21,7 +21,7 @@ const (
 	NLIContradiction = candle.NLIContradiction
 	// NLIUnknown means no NLI judgment is available (e.g. the endpoint backend,
 	// which does not produce NLI labels).
-	NLIUnknown = candle.NLIUnknown
+	NLIUnknown = NLILabel(4)
 	// NLIError means an error occurred during classification.
 	NLIError = candle.NLIError
 )
