@@ -248,6 +248,14 @@ func (c *Client) applyRequestHeaders(httpReq *http.Request, accessKey string, it
 		httpReq.Header.Set(headers.VSRInboundAuthorization, c.inboundAuthorization)
 	}
 
+	// Authenticate the internal leg. extproc trusts the looper markers and the
+	// caller-identity carrier below ONLY when this proof matches the per-process
+	// secret; on any unauthenticated (client) request it strips them. Set after
+	// the configured c.headers loop so a stray configured value can never shadow
+	// the proof (config also rejects reserved headers up front). The proof is
+	// validated and stripped at the ingress and never reaches the upstream.
+	httpReq.Header.Set(headers.VSRLooperAuthorization, InternalAuthSecret())
+
 	// Looper identification headers: let extproc identify looper requests and
 	// look up the decision configuration.
 	httpReq.Header.Set("x-vsr-looper-request", "true")

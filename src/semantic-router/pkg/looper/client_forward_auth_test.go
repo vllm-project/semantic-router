@@ -16,12 +16,14 @@ import (
 type capturedHeaders struct {
 	authorization  string
 	inboundForward string
+	looperAuth     string
 }
 
 func captureHeadersServer(captured *capturedHeaders) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		captured.authorization = r.Header.Get("Authorization")
 		captured.inboundForward = r.Header.Get(headers.VSRInboundAuthorization)
+		captured.looperAuth = r.Header.Get(headers.VSRLooperAuthorization)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":""}}]}`))
 	}))
@@ -59,6 +61,11 @@ func TestCallModelCarriesInboundAuthorizationOnDedicatedHeader(t *testing.T) {
 	}
 	if captured.authorization != "Bearer static-service-key" {
 		t.Fatalf("Authorization = %q, want the static access key on the internal leg", captured.authorization)
+	}
+	// The internal leg must authenticate itself so extproc trusts the markers
+	// and the caller-identity carrier above.
+	if captured.looperAuth != InternalAuthSecret() {
+		t.Fatalf("%s = %q, want the per-process internal auth secret", headers.VSRLooperAuthorization, captured.looperAuth)
 	}
 }
 

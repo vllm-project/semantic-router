@@ -233,6 +233,9 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.VectorStore = global.Stores.VectorStore
 
 	cfg.Tools = global.Integrations.Tools
+	if err := global.Integrations.Looper.Validate(); err != nil {
+		return err
+	}
 	cfg.Looper = global.Integrations.Looper
 
 	cfg.ExternalModels = append([]ExternalModelConfig(nil), global.ModelCatalog.External...)

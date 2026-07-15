@@ -87,7 +87,7 @@ func TestFullDuplex_FinalResponseFallsBackToAccumulatedBody(t *testing.T) {
 	original := []byte(`{"model":"gpt-4","messages":[{"role":"user","content":"hello"}]}`)
 	h := &StreamedBodyHandler{ctx: &RequestContext{FullDuplexRequestBody: true}}
 	h.buf.Write(original)
-	response := newContinueRequestBodyResponse()
+	response := (&OpenAIRouter{}).newContinueRequestBodyResponse()
 
 	got := h.finalizeResponse(response)
 	streamed := got.GetRequestBody().GetResponse().GetBodyMutation().GetStreamedResponse()

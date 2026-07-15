@@ -95,9 +95,6 @@ func captureRequestHeaders(
 		if lowerKey == headers.RequestID {
 			ctx.RequestID = headerValue
 		}
-		if lowerKey == headers.VSRLooperRequest && headerValue == "true" {
-			ctx.LooperRequest = true
-		}
 		// The x-vsr-skip-processing opt-out is gated by the deployment-level
 		// global.router.skip_processing.enabled flag. When disabled (the
 		// default), the header is ignored entirely so an unauthenticated
@@ -108,6 +105,13 @@ func captureRequestHeaders(
 			ctx.SkipProcessing = true
 		}
 	}
+
+	// Enforce the internal-leg trust boundary before any router logic keys off
+	// the looper markers: a genuine looper re-dispatch authenticates with a
+	// per-process secret and has ctx.LooperRequest set here, while reserved
+	// internal headers on an untrusted (client) request are stripped so a caller
+	// cannot spoof the internal path or inject a caller-identity carrier.
+	enforceInternalHeaderTrust(ctx)
 
 	method := ctx.Headers[":method"]
 	path := ctx.Headers[":path"]
