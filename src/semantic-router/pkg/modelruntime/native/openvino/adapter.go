@@ -2,6 +2,7 @@ package openvino
 
 import (
 	"context"
+	"errors"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
@@ -45,19 +46,18 @@ func (h *openvinoHandle) ID() string {
 }
 
 func (a *Adapter) LoadModel(ctx context.Context, req native.LoadRequest) (native.ModelHandle, error) {
-	// For Phase 3, this implements the contract but delegates down.
-	return &openvinoHandle{id: req.ModelRef}, nil
+	return nil, errors.New("openvino native adapter lifecycle is not yet wired (Phase 3)")
 }
 
 func (a *Adapter) UnloadModel(ctx context.Context, handle native.ModelHandle) error {
-	return nil
+	return errors.New("openvino native adapter lifecycle is not yet wired (Phase 3)")
+}
+
+func (a *Adapter) Inference(ctx context.Context, handle native.ModelHandle, req native.InferenceRequest) (native.InferenceResponse, error) {
+	return nil, errors.New("openvino native adapter inference is not yet wired (Phase 3)")
 }
 
 func (a *Adapter) Info() []native.ModelInfo {
 	return nil
-}
-
-func init() {
-	native.Registry.Register(NewAdapter())
 }
 
