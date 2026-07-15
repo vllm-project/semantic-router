@@ -2,7 +2,7 @@ package candle
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
@@ -58,44 +58,39 @@ func (h *candleHandle) ID() string {
 }
 
 func (a *Adapter) LoadModel(ctx context.Context, req native.LoadRequest) (native.ModelHandle, error) {
-	// For Phase 2, we just delegate to candle_binding's legacy initializer
-	// mapping the request parameters to the old shape.
-
-	// E.g. candle_binding.InitModel(...) would happen here in a full migration.
-	// For now, this serves as the adapter entry point.
-	return &candleHandle{id: req.ModelRef}, nil
+	// For Phase 2, this adapter is intentionally unregistered and returns an explicit error
+	// to prevent call sites from believing the capability is operational.
+	return nil, errors.New("candle native adapter lifecycle is not yet wired (Phase 2)")
 }
 
 func (a *Adapter) UnloadModel(ctx context.Context, handle native.ModelHandle) error {
-	// Not fully supported in legacy Candle CGO binding without shutting down global state
-	return nil
+	return errors.New("candle native adapter lifecycle is not yet wired (Phase 2)")
 }
 
-func (a *Adapter) Info() []native.ModelInfo {
+func (a *Adapter) Inference(ctx context.Context, handle native.ModelHandle, req native.InferenceRequest) (native.InferenceResponse, error) {
+	return nil, errors.New("candle native adapter inference is not yet wired (Phase 2)")
+}
+
+func (a *Adapter) Info() ([]native.ModelInfo, error) {
 	// In the future this maps candle_binding.GetEmbeddingModelsInfo() etc.
 	// to the unified schema.
 	info, err := candle_binding.GetEmbeddingModelsInfo()
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	var results []native.ModelInfo
 	for _, m := range info.Models {
 		results = append(results, native.ModelInfo{
 			Backend:           native.BackendCandle,
-			Capability:        native.CapabilityEmbedding,
+			Capabilities:      []native.Capability{native.CapabilityEmbedding},
 			ModelName:         m.ModelName,
 			ModelPath:         m.ModelPath,
 			IsLoaded:          m.IsLoaded,
 			MaxSequenceLength: m.MaxSequenceLength,
 			DefaultDimension:  m.DefaultDimension,
+			Features:          map[string]bool{"matryoshka_2d": false},
 		})
 	}
-	return results
+	return results, nil
 }
-
-func init() {
-	// Register the Candle adapter automatically
-	native.Registry.Register(NewAdapter())
-}
-
