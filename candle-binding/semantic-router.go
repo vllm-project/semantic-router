@@ -455,8 +455,8 @@ import "C"
 
 var ErrEmbeddingModelNotReady = errors.New("embedding model is not initialized")
 
-func ensureEmbeddingModelReady(modelType ...string) error {
-	if len(modelType) > 0 && strings.EqualFold(strings.TrimSpace(modelType[0]), "multimodal") {
+func ensureEmbeddingModelReady(modelType string) error {
+	if strings.EqualFold(strings.TrimSpace(modelType), "multimodal") {
 		if !multiModalReady.Load() {
 			return ErrEmbeddingModelNotReady
 		}
@@ -826,7 +826,7 @@ func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWait
 //   - *EmbeddingOutput: Embedding output with metadata
 //   - error: Non-nil if embedding generation fails
 func GetEmbeddingBatched(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
-	if err := ensureEmbeddingModelReady(); err != nil {
+	if err := ensureEmbeddingModelReady(""); err != nil {
 		return nil, err
 	}
 
@@ -1355,7 +1355,7 @@ func InitEmbeddingModelsWithMmBert(qwen3ModelPath, gemmaModelPath, mmBertModelPa
 		return fmt.Errorf("failed to initialize embedding models with mmBERT")
 	}
 
-	embeddingModelsReady = true
+	embeddingModelsReady.Store(true)
 	log.Printf("INFO: Embedding models initialized (with mmBERT 2D Matryoshka support)")
 	return nil
 }
@@ -1446,7 +1446,7 @@ func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, 
 //	output, err := GetEmbeddingWithMetadata("Hello world", 0.5, 0.5, 768)
 //	fmt.Printf("Used model: %s, took %.2fms\n", output.ModelType, output.ProcessingTimeMs)
 func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority float32, targetDim int) (*EmbeddingOutput, error) {
-	if err := ensureEmbeddingModelReady(); err != nil {
+	if err := ensureEmbeddingModelReady(""); err != nil {
 		return nil, err
 	}
 
@@ -1698,7 +1698,7 @@ func cFloatArrayToGoSlice(data *C.float, length C.int) []float32 {
 //	// Use Gemma with 512-dim Matryoshka
 //	result, err = CalculateEmbeddingSimilarity("text1", "text2", "gemma", 512)
 func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetDim int) (*SimilarityOutput, error) {
-	if err := ensureEmbeddingModelReady(); err != nil {
+	if err := ensureEmbeddingModelReady(""); err != nil {
 		return nil, err
 	}
 	// Validate model type
@@ -1781,7 +1781,7 @@ type BatchSimilarityOutput struct {
 //   - BatchSimilarityOutput: Top-k matches sorted by similarity (descending)
 //   - error: Error message if operation failed
 func CalculateSimilarityBatch(query string, candidates []string, topK int, modelType string, targetDim int) (*BatchSimilarityOutput, error) {
-	if err := ensureEmbeddingModelReady(); err != nil {
+	if err := ensureEmbeddingModelReady(""); err != nil {
 		return nil, err
 	}
 	// Validate model type
