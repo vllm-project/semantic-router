@@ -7,7 +7,6 @@ implements forwarding.
 """
 
 import pytest
-
 from cli.config_migration import _convert_model_targets_to_provider_models
 from cli.models import BackendRef, Model
 
