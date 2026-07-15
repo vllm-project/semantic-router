@@ -481,6 +481,7 @@ var (
 	feedbackDetectorInitOnce              sync.Once
 	feedbackDetectorInitErr               error
 	complexityClassifierInitOnce          sync.Once
+	complexityClassifierInitErr           error
 	qwenPreferenceInitOnce                sync.Once
 	qwenPreferenceInitErr                 error
 )
@@ -2655,16 +2656,31 @@ func InitComplexityClassifier(modelPath string, useCPU bool) error {
 		success := C.init_complexity_classifier(cModelID, C.bool(useCPU))
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize complexity classifier model")
-		} else {
-			log.Printf("Complexity classifier initialized successfully")
+			return
 		}
+
+		log.Printf("Complexity classifier initialized successfully")
 	})
-	return err
+
+	// Reset the once so a later call can retry with a different model.
+	if err != nil {
+		complexityClassifierInitOnce = sync.Once{}
+	}
+
+	// Cache the error at package level so subsequent calls (which skip the
+	// sync.Once closure and would otherwise see a fresh nil err) still observe
+	// the failure instead of falsely reporting success.
+	complexityClassifierInitErr = err
+	return complexityClassifierInitErr
 }
 
 // ClassifyComplexityText classifies the provided text for reasoning complexity.
 // Returns the predicted difficulty class index and confidence.
 func ClassifyComplexityText(text string) (ClassResult, error) {
+	if complexityClassifierInitErr != nil {
+		return ClassResult{}, fmt.Errorf("complexity classifier not initialized: %v", complexityClassifierInitErr)
+	}
+
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
