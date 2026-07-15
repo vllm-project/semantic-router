@@ -339,6 +339,11 @@ routing:
           lt: 0.05
 
     complexity:
+      # method selects how the rule decides difficulty:
+      #   embedding (default) uses the hard/easy prototype banks below.
+      #   model uses the trained classifier under
+      #   global.model_catalog.modules.complexity.classifier (set model_id +
+      #   complexity_mapping_path); in model mode hard/easy are not required.
       - name: needs_reasoning
         method: embedding
         threshold: 0.75
