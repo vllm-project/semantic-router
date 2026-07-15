@@ -245,7 +245,7 @@ def test_recipe_learning_normalizes_replay_endpoint() -> None:
     endpoint = normalize_replay_endpoint("http://localhost:8080", 25)
 
     assert endpoint.startswith("http://localhost:8080/v1/router_replay")
-    assert "showDetails=true" in endpoint
+    assert "showDetails" not in endpoint
     assert "limit=25" in endpoint
 
 

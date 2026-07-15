@@ -179,11 +179,11 @@ type loraModelMatch struct {
 func classifyLoRAModel(path string, dirName string, modelRegistry map[string]string) loraModelMatch {
 	intent, pii, security := loraRegistryMatch(path, modelRegistry)
 	switch {
-	case intent || strings.HasPrefix(dirName, "lora_intent_classifier"):
+	case intent || strings.HasPrefix(dirName, "lora_intent_classifier") || strings.Contains(dirName, "intent-classifier-merged"):
 		return loraModelMatch{kind: loraIntentModel, architecture: detectArchitectureFromPath(dirName)}
-	case pii || strings.HasPrefix(dirName, "lora_pii_detector"):
+	case pii || strings.HasPrefix(dirName, "lora_pii_detector") || strings.Contains(dirName, "pii-detector-merged"):
 		return loraModelMatch{kind: loraPIIModel, architecture: detectArchitectureFromPath(dirName)}
-	case security || strings.HasPrefix(dirName, "lora_jailbreak_classifier"):
+	case security || strings.HasPrefix(dirName, "lora_jailbreak_classifier") || strings.Contains(dirName, "jailbreak-detector-merged"):
 		return loraModelMatch{kind: loraSecurityModel, architecture: detectArchitectureFromPath(dirName)}
 	default:
 		return loraModelMatch{kind: notLoRAModel}
@@ -201,10 +201,13 @@ func loraRegistryMatch(path string, modelRegistry map[string]string) (bool, bool
 
 	repoIDLower := strings.ToLower(repoID)
 	isIntent := strings.Contains(repoIDLower, "lora_intent_classifier") ||
-		strings.Contains(repoIDLower, "lora_domain_classifier")
+		strings.Contains(repoIDLower, "lora_domain_classifier") ||
+		strings.Contains(repoIDLower, "intent-classifier-merged")
 	isPII := strings.Contains(repoIDLower, "lora_pii_detector") ||
-		strings.Contains(repoIDLower, "lora_pii_classifier")
+		strings.Contains(repoIDLower, "lora_pii_classifier") ||
+		strings.Contains(repoIDLower, "pii-detector-merged")
 	isSecurity := strings.Contains(repoIDLower, "lora_jailbreak_classifier") ||
-		strings.Contains(repoIDLower, "lora_security_classifier")
+		strings.Contains(repoIDLower, "lora_security_classifier") ||
+		strings.Contains(repoIDLower, "jailbreak-detector-merged")
 	return isIntent, isPII, isSecurity
 }

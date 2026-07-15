@@ -4,8 +4,9 @@
   height: 100vh;
   overflow: hidden;
   background:
-    radial-gradient(circle at top left, rgba(37, 83, 217, 0.08), transparent 28%),
-    linear-gradient(180deg, rgba(7, 11, 21, 0.98), rgba(11, 15, 27, 1));
+    radial-gradient(circle at 12% -8%, rgba(255, 255, 255, 0.065), transparent 30rem),
+    radial-gradient(circle at 92% 4%, rgba(227, 27, 35, 0.08), transparent 24rem),
+    var(--surface-canvas);
 }
 
 .backLink {
@@ -19,33 +20,43 @@
   min-height: 38px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(10, 15, 27, 0.72);
+  border: 1px solid var(--border-strong);
+  background: rgba(9, 9, 10, 0.82);
   text-decoration: none;
-  color: rgba(244, 247, 255, 0.92);
+  color: var(--text-primary);
   font-weight: 600;
   letter-spacing: 0.01em;
   backdrop-filter: blur(12px);
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.42);
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .backLink:hover {
-  border-color: rgba(108, 142, 255, 0.42);
+  border-color: rgba(227, 27, 35, 0.58);
+  background: rgba(227, 27, 35, 0.12);
   color: #ffffff;
+}
+
+.backLink:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
 }
 
 .mapShell {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--surface-canvas);
 }
 
 .iframe {
   width: 100%;
   height: 100%;
   border: 0;
-  background: #fff;
+  background: var(--surface-canvas);
 }
 
 .loadingPanel {
@@ -56,18 +67,26 @@
   align-items: center;
   justify-content: center;
   gap: 12px;
-  background: rgba(10, 15, 27, 0.52);
-  color: rgba(244, 247, 255, 0.92);
-  backdrop-filter: blur(10px);
+  background:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.045), transparent 18rem),
+    rgba(5, 5, 5, 0.82);
+  color: var(--text-secondary);
+  backdrop-filter: blur(12px);
   z-index: 3;
+}
+
+.loadingPanel p {
+  font-size: 0.88rem;
+  font-weight: 560;
+  letter-spacing: 0.01em;
 }
 
 .spinner {
   width: 34px;
   height: 34px;
   border-radius: 999px;
-  border: 3px solid rgba(255, 255, 255, 0.2);
-  border-top-color: #ffffff;
+  border: 3px solid var(--border-strong);
+  border-top-color: var(--text-primary);
   animation: spin 0.9s linear infinite;
 }
 
@@ -78,15 +97,27 @@
   right: 16px;
   z-index: 5;
   padding: 14px 18px;
-  border-radius: 16px;
-  border: 1px solid rgba(180, 57, 57, 0.18);
-  background: rgba(255, 241, 241, 0.92);
-  color: #9c2f2f;
+  border-radius: 12px;
+  border: 1px solid rgba(239, 68, 68, 0.42);
+  background: rgba(35, 10, 11, 0.92);
+  color: #fecaca;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(12px);
 }
 
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+
+  .backLink {
+    transition: none;
   }
 }
 

@@ -4,8 +4,10 @@
 # Defaults are safe for generic OpenAI-compatible providers:
 #   - put the secret in OPENAI_API_KEY
 #   - edit global.model_catalog.embeddings.semantic.endpoint.base_url when using
-#     Azure OpenAI-compatible endpoints, for example:
+#     an Azure OpenAI-compatible v1 endpoint that accepts bearer authentication,
+#     for example:
 #     https://<resource>.openai.azure.com/openai/v1
+#     Endpoints that require the legacy api-key header are not supported.
 #
 # This config is intentionally not referenced by the default local-dev flow.
 version: v0.3

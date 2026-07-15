@@ -11,6 +11,7 @@ func (r *OpenAIRouter) buildReplayUsageCost(ctx *RequestContext, usage responseU
 	snapshot := routerreplay.UsageCost{
 		PromptTokens:       replayIntPtr(usage.promptTokens),
 		CachedPromptTokens: replayIntPtr(usage.cachedPromptTokens),
+		CacheWriteTokens:   replayIntPtr(usage.cacheWriteTokens),
 		CompletionTokens:   replayIntPtr(usage.completionTokens),
 		TotalTokens:        replayIntPtr(totalTokens),
 	}
@@ -24,22 +25,21 @@ func (r *OpenAIRouter) buildReplayUsageCost(ctx *RequestContext, usage responseU
 		return snapshot
 	}
 
-	baselineModel, baselinePromptRate, baselineCompletionRate, baselineCurrency, ok := r.Config.GetMostExpensivePricedModel()
+	baselineModel, baselinePricing, ok := r.Config.GetMostExpensiveFullModelPricing()
 	if !ok {
 		return snapshot
 	}
 
 	currency := selectedPricing.Currency
 	if currency == "" {
-		currency = baselineCurrency
+		currency = baselinePricing.Currency
 	}
 	if currency == "" {
 		currency = "USD"
 	}
 
 	actualCost := costForResponseUsage(usage, selectedPricing)
-	baselineCost := (float64(usage.promptTokens)*baselinePromptRate +
-		float64(usage.completionTokens)*baselineCompletionRate) / 1_000_000.0
+	baselineCost := costForResponseUsage(usage, baselinePricing)
 	costSavings := baselineCost - actualCost
 
 	snapshot.ActualCost = replayFloat64Ptr(actualCost)

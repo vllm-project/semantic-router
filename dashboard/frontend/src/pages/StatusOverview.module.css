@@ -1,0 +1,257 @@
+.panel {
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #101012;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 52px;
+  padding: 0.65rem 1.1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.eyebrow,
+.healthLabel,
+.metric dt,
+.readinessLabel {
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0.2rem 0 0;
+  color: var(--color-text);
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.stateBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 32px;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: #18181b;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.stateDot,
+.readinessDot {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.overviewBody {
+  display: grid;
+  grid-template-columns: minmax(17rem, 0.72fr) minmax(0, 1.55fr);
+}
+
+.healthSummary {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 128px;
+  padding: 0.85rem 1.15rem;
+  border-right: 1px solid var(--color-border);
+  background: linear-gradient(125deg, rgba(255, 255, 255, 0.025), transparent 65%);
+}
+
+.healthValue {
+  margin-top: 0.45rem;
+  font-size: clamp(1.85rem, 2.7vw, 2.35rem);
+  font-weight: 680;
+  line-height: 1;
+}
+
+.healthNarrative {
+  max-width: 25rem;
+  margin: 0.6rem 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: 0.85rem 1rem;
+  border-left: 1px solid var(--color-border);
+}
+
+.metric:first-child {
+  border-left: 0;
+}
+
+.metric dd {
+  margin: 0.45rem 0 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: clamp(1.05rem, 1.6vw, 1.35rem);
+  font-weight: 650;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metric .metricHint {
+  margin-top: 0.35rem;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.readinessRow {
+  display: grid;
+  grid-template-columns: minmax(10rem, auto) minmax(16rem, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  min-height: 50px;
+  padding: 0.6rem 1.1rem;
+  border-top: 1px solid var(--color-border);
+  background: #0d0d0f;
+}
+
+.readinessIdentity {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.readinessIdentity > div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+}
+
+.readinessValue {
+  color: var(--color-text);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.readinessDescription {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.runtimeFacts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.runtimeFacts span {
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.28rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
+}
+
+.toneOk {
+  color: #72d995;
+}
+
+.toneWarn {
+  color: #f5b84b;
+}
+
+.toneDown {
+  color: #f87171;
+}
+
+@media (max-width: 1180px) {
+  .overviewBody {
+    grid-template-columns: minmax(15rem, 0.62fr) minmax(0, 1.38fr);
+  }
+
+  .metricGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric {
+    min-height: 70px;
+    padding: 0.75rem 0.9rem;
+  }
+
+  .metric:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .metric:nth-child(n + 3) {
+    border-top: 1px solid var(--color-border);
+  }
+}
+
+@media (max-width: 820px) {
+  .overviewBody {
+    grid-template-columns: 1fr;
+  }
+
+  .healthSummary {
+    min-height: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .readinessRow {
+    grid-template-columns: 1fr;
+    gap: 0.45rem;
+  }
+
+  .runtimeFacts {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 520px) {
+  .panelHeader {
+    align-items: flex-start;
+  }
+
+  .metricGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .metric,
+  .metric:nth-child(odd) {
+    min-height: 68px;
+    border-top: 1px solid var(--color-border);
+    border-left: 0;
+  }
+
+  .metric:first-child {
+    border-top: 0;
+  }
+}

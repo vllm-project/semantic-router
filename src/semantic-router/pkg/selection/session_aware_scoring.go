@@ -192,13 +192,20 @@ func cacheCheckoutCost(params config.ModelParams) float64 {
 	if prompt <= 0 {
 		return 0
 	}
+	checkout := prompt
+	if params.Pricing.CacheWritePer1M != nil {
+		checkout = math.Max(*params.Pricing.CacheWritePer1M, 0)
+	}
 	cached := params.Pricing.CachedInputPer1M
 	if cached < 0 {
 		cached = 0
 	}
-	delta := prompt - cached
+	delta := checkout - cached
 	if delta > 0 {
 		return delta
+	}
+	if params.Pricing.CacheWritePer1M != nil {
+		return 0
 	}
 	return prompt
 }

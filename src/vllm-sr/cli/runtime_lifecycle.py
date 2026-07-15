@@ -436,7 +436,7 @@ def _print_curl_example(listeners, stack_layout: RuntimeStackLayout) -> None:
     print(f"curl -v http://localhost:{first_port}/v1/chat/completions \\")
     print('  -H "Content-Type: application/json" \\')
     print("  -d '{")
-    print('    "model": "MoM",')
+    print('    "model": "vllm-sr/auto",')
     print('    "messages": [')
     print('      {"role": "user", "content": "What is the derivative of x^2?"}')
     print("    ]")
