@@ -61,6 +61,8 @@ on:
         value: ${{ jobs.filter.outputs.e2e_streaming }}
       e2e_anthropic_shim:
         value: ${{ jobs.filter.outputs.e2e_anthropic_shim }}
+      e2e_no_model:
+        value: ${{ jobs.filter.outputs.e2e_no_model }}
       e2e_common:
         value: ${{ jobs.filter.outputs.e2e_common }}
       docs_only:
@@ -100,6 +102,7 @@ jobs:
       e2e_authz_rbac: ${{ steps.changes.outputs.e2e_authz_rbac }}
       e2e_streaming: ${{ steps.changes.outputs.e2e_streaming }}
       e2e_anthropic_shim: ${{ steps.changes.outputs.e2e_anthropic_shim }}
+      e2e_no_model: ${{ steps.changes.outputs.e2e_no_model }}
       e2e_common: ${{ steps.changes.outputs.e2e_common }}
       docs_only: ${{ steps.docs_only.outputs.docs_only }}
     steps:
@@ -262,6 +265,11 @@ jobs:
               - 'e2e/testing/anthropic-shim/**'
               - 'deploy/kubernetes/anthropic-backend/**'
               - 'src/semantic-router/pkg/anthropic/outbound*.go'
+            e2e_no_model:
+              - 'e2e/profiles/no-model/**'
+              - 'e2e/testcases/service_readiness_503.go'
+              - 'src/semantic-router/pkg/apiserver/route_embeddings.go'
+              - 'src/semantic-router/pkg/apiserver/route_classify.go'
             # Common e2e code that affects all profiles
             e2e_common:
               - 'e2e/pkg/**'
