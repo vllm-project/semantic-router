@@ -31,7 +31,7 @@ const heroModelLogos = [
 ]
 
 export default function SemanticTerrainHero(): JSX.Element {
-  const logoSrc = useBaseUrl('/img/vllm.png')
+  const logoSrc = useBaseUrl('/img/vllm-sr-logo.white.png')
   const modelCopies = [0, 1]
   const modelRepeats = [0, 1, 2]
 
@@ -44,15 +44,8 @@ export default function SemanticTerrainHero(): JSX.Element {
         <div className="site-shell-container">
           <div className={styles.copy}>
             <div className={styles.brand}>
-              <img src={logoSrc} alt="" aria-hidden="true" />
-              <span>vLLM Semantic Router</span>
+              <img src={logoSrc} alt="vLLM Semantic Router" />
             </div>
-
-            <p className={styles.systemLabel}>
-              <Translate id="homepage.hero.systemLabel">
-                System-level intelligence for heterogeneous LLM inference
-              </Translate>
-            </p>
 
             <h1>
               <span className={styles.accent}>
@@ -60,22 +53,21 @@ export default function SemanticTerrainHero(): JSX.Element {
               </span>
               <span>
                 <Translate id="homepage.hero.line2">
-                  Mixture-of-Models.
+                  Mixture-of-Models
                 </Translate>
               </span>
             </h1>
 
             <p className={styles.description}>
               <Translate id="homepage.hero.description">
-                Turn signals and preferences into executable model paths across
-                heterogeneous LLMs.
+                System-level intelligence for heterogeneous LLM inference
               </Translate>
             </p>
 
             <div className={styles.actions}>
               <PillLink
                 className={styles.primaryCta}
-                href="https://play.vllm-semantic-router.com/"
+                href="https://app.vllm-sr.ai"
                 rel="noreferrer"
                 target="_blank"
               >

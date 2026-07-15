@@ -1,0 +1,20 @@
+---
+queue_rules:
+  - name: default
+    queue_conditions:
+      - base = main
+    merge_conditions: []
+    merge_method: squash
+    update_method: merge
+    batch_size: 1
+
+merge_protections_settings:
+  auto_merge_conditions:
+    - base = main
+
+merge_protections:
+  - name: require approval before automatic queueing
+    if:
+      - base = main
+    success_conditions:
+      - "#approved-reviews-by >= 1"

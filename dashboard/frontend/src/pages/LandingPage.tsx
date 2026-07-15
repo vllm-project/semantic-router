@@ -36,7 +36,7 @@ const LandingPage: React.FC = () => {
           </h1>
 
           <p className={styles.subtitle}>
-            Turn signals and preferences into executable model paths across heterogeneous LLMs.
+            System-level intelligence for heterogeneous LLM inference
           </p>
 
           <div className={styles.ctaGroup}>
@@ -47,7 +47,7 @@ const LandingPage: React.FC = () => {
               className={styles.secondaryButton}
               onClick={() =>
                 window.open(
-                  'https://vllm-semantic-router.com/docs/intro/',
+                  'https://vllm-sr.ai/docs/intro/',
                   '_blank',
                   'noopener,noreferrer',
                 )

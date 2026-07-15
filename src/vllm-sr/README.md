@@ -448,11 +448,11 @@ routing:
 
 Router replay records are exposed through:
 
-- `GET /v1/router_replay?limit=20&offset=0&search=req-123&decision=foo&model=bar&cache_status=cached&showDetails=false` - List recent records with pagination metadata. Default page size is `20`; larger `limit` values are capped at `100`. Use `showDetails=false` (default `true`) to omit large captured bodies and traces from each row so the list stays under the ext-proc response limit; fetch `GET /v1/router_replay/{id}` for full payloads.
+- `GET /v1/router_replay?limit=20&offset=0&search=req-123&decision=foo&model=bar&cache_status=cached` - List recent records with pagination metadata. Default page size is `20`; larger `limit` values are capped at `100`. List rows return summary records (routing metadata without large captured bodies or full tool traces). Fetch `GET /v1/router_replay/{id}` for full payloads. Pass `showDetails=true` only when you explicitly need full bodies embedded in each list row.
 - `GET /v1/router_replay/aggregate?search=req-123&decision=foo&model=bar&cache_status=cached` - Return summary and chart aggregates for the filtered replay set.
 - `GET /v1/router_replay/{id}` - Fetch a single replay record.
 
-If a replay page would exceed the ext-proc gRPC message budget, the router returns `413 Payload Too Large` instead of failing the stream. Prefer `showDetails=false` on list calls when rows may contain large request or response bodies.
+If a replay list page with `showDetails=true` would exceed the ext-proc gRPC message budget, the router returns `413 Payload Too Large` instead of failing the stream. Prefer the default summary list and use the detail endpoint for full request/response bodies.
 
 **Validation Rules:**
 

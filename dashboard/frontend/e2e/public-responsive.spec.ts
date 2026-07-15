@@ -40,7 +40,7 @@ test.describe('Public and transition surfaces on short screens', () => {
     await expect(header.getByRole('link', { name: 'vLLM Semantic Router home' })).toBeVisible()
     await expect(header.getByRole('link', { name: 'Docs', exact: true })).toHaveAttribute(
       'href',
-      'https://vllm-semantic-router.com/docs/intro/',
+      'https://vllm-sr.ai/docs/intro/',
     )
     await expect(header.getByRole('link', { name: 'GitHub', exact: true })).toHaveAttribute(
       'href',
@@ -171,7 +171,7 @@ test.describe('Public and transition surfaces on short screens', () => {
     ).toBeVisible()
     await expect(
       page.getByText(
-        'Turn signals and preferences into executable model paths across heterogeneous LLMs.',
+        'System-level intelligence for heterogeneous LLM inference',
       ),
     ).toBeVisible()
     const exploreDocs = page.getByRole('button', { name: 'Explore the Docs' })

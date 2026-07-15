@@ -7,19 +7,17 @@ detection, jailbreak guard, mmBERT embedding for Knowledge-Base
 signals, hallucination mitigation, feedback detection. The backend
 LLM is reached over the network and is **not** served from this host.
 
-**How this relates to `deploy/amd/README.md`:** the two documents,
-despite their filename symmetry, are not parallel.
-[`deploy/amd/README.md`](../amd/README.md) is a *routing profile*
-guide (the `balance.yaml` recipe running against a single ROCm vLLM
-backend), which is a different concern. The AMD equivalent of *this*
-file — how to build the router image on ROCm and serve it with
-`vllm-sr serve --platform amd` — lives in
-[`docs/agent/amd-local.md`](../../docs/agent/amd-local.md), together
-with the `amd-local` entry in
-[`docs/agent/environments.md`](../../docs/agent/environments.md).
-A future refactor may move this playbook to a matching
-`docs/agent/nvidia-local.md` for structural symmetry; that reshuffle
-is intentionally out of scope for this PR.
+**How this relates to `amd-local.md`:** this file is the NVIDIA
+equivalent of [`amd-local.md`](amd-local.md) — how to build the router
+image on CUDA and serve it with `vllm-sr serve --platform nvidia`.
+Both live under `docs/agent/` and have matching entries in
+[`environments.md`](environments.md).
+
+[`deploy/amd/README.md`](../../deploy/amd/README.md) is a different
+concern: a *routing profile* guide (the `balance.yaml` recipe running
+against a single ROCm vLLM backend). The naming looks parallel but
+the topic isn't. `deploy/nvidia/` is intentionally left empty until a
+matching NVIDIA routing profile is authored.
 
 > **When this playbook is NOT for you:** upstream `onnx-binding/README.md`
 > documents CPU≈GPU latency parity for BERT-size embeddings at small
@@ -216,7 +214,7 @@ Without overrides, even when the container has GPU access, the router
 runs entirely on CPU.
 
 Add the following override block under `global.model_catalog` in your
-routing recipe (e.g. [`deploy/recipes/balance.yaml`](../recipes/balance.yaml)
+routing recipe (e.g. [`deploy/recipes/balance.yaml`](../../deploy/recipes/balance.yaml)
 or whichever recipe your deployment loads):
 
 ```yaml
@@ -259,11 +257,45 @@ actually loads.
 
 ---
 
-## Step 3: Swap the router container
+## Step 3: Start the router on the CUDA image
 
-`vllm-sr serve` calls `docker run` internally with a fixed set of
-mounts, env vars, ports, and network. To run the CUDA image, recreate
-the container with the same spec **plus** `--gpus all`.
+### Recommended: `vllm-sr serve --platform nvidia`
+
+`vllm-sr serve --platform nvidia` now does everything this step used to
+require by hand:
+
+1. selects the published CUDA image
+   (`ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest`) — the
+   same default the AMD path uses for ROCm,
+2. attaches the GPU (`--gpus all` on Docker, CDI
+   `nvidia.com/gpu=all` on Podman), and
+3. flips `use_cpu` to `false` for the router internal models under
+   `global.model_catalog`, so the Step 2 override block is applied
+   automatically even if your recipe still defaults to CPU.
+
+```bash
+vllm-sr serve --platform nvidia --config <your-recipe>.yaml
+```
+
+Overrides, if you need them:
+
+- `--image <ref>` or `VLLM_SR_IMAGE=<ref>` — pin a specific CUDA image
+  (bypasses the default). `VLLM_SR_IMAGE_NVIDIA` sets the nvidia-only
+  default without affecting other platforms.
+- `VLLM_SR_NVIDIA_PRESERVE_CPU=1` — keep the recipe's `use_cpu` values
+  instead of flipping them to `false` (use when the router shares a GPU
+  that has no spare headroom).
+- `VLLM_SR_NVIDIA_GPU_PASSTHROUGH=0` — skip `--gpus all` injection.
+
+If steps 4a–4e below pass, you are done — skip the manual recipe.
+
+### Fallback: manual `docker run` (older `vllm-sr`, or custom orchestration)
+
+Use this only on a `vllm-sr` build that predates `--platform nvidia`
+image selection, or when you drive the container yourself. `vllm-sr
+serve` calls `docker run` internally with a fixed set of mounts, env
+vars, ports, and network; to run the CUDA image by hand, recreate the
+container with the same spec **plus** `--gpus all`.
 
 ### 3a. Capture the running container spec
 
@@ -612,7 +644,7 @@ sourced from `src/vllm-sr/Dockerfile.cuda` and
 | ORT wheel | `onnxruntime_rocm-1.22.1` (radeon repo) | `onnxruntime-gpu==1.22.0` (PyPI) |
 | `onnx-binding` feature | `--features rocm-dynamic` | `--features "cuda,ort/load-dynamic"` |
 | GPU passthrough | `--device=/dev/kfd --device=/dev/dri` | `--gpus all` (Docker) or CDI `nvidia.com/gpu=all` (Podman) |
-| CLI entrypoint (once #2421 lands) | `vllm-sr serve --platform amd` | `vllm-sr serve --platform nvidia` (currently only wires GPU passthrough — see #2421) |
+| CLI entrypoint | `vllm-sr serve --platform amd` | `vllm-sr serve --platform nvidia` (selects the CUDA image + flips `use_cpu` to false, at parity with the AMD path) |
 
 The two images are independent; do not mix `--gpus all` with
 `--device=/dev/kfd` on the same router container.
