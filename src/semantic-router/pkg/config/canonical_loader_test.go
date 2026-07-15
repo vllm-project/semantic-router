@@ -750,6 +750,58 @@ routing:
 	}
 }
 
+func TestCanonicalExportRoundTripsForwardAuthorizationHeader(t *testing.T) {
+	// A config parsed and re-exported (apiserver config-update, k8s reconciler,
+	// DSL emitter) must preserve forward_authorization_header; dropping it would
+	// silently revert the backend to static-key injection.
+	canonicalYAML := []byte(`
+version: v0.3
+providers:
+  defaults:
+    default_model: gateway-model
+  models:
+    - name: gateway-model
+      backend_refs:
+        - name: gateway
+          base_url: https://litellm.example.com/v1
+          provider: openai
+          forward_authorization_header: true
+routing:
+  modelCards:
+    - name: gateway-model
+  decisions:
+    - name: default
+      priority: 1
+      rules:
+        operator: OR
+        conditions: []
+      modelRefs:
+        - model: gateway-model
+`)
+
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+
+	exported := CanonicalStaticConfigFromRouterConfig(cfg)
+	var found bool
+	for _, model := range exported.Providers.Models {
+		if model.Name != "gateway-model" {
+			continue
+		}
+		for _, ref := range model.BackendRefs {
+			found = true
+			if !ref.ForwardAuthorizationHeader {
+				t.Fatalf("exported backend_ref %q lost forward_authorization_header", ref.Name)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("exported config did not contain the gateway-model backend_ref")
+	}
+}
+
 func TestGetModelPricingTreatsExplicitZeroPricingAsConfigured(t *testing.T) {
 	cfg := &RouterConfig{
 		BackendModels: BackendModels{

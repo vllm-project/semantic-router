@@ -8,6 +8,7 @@ implements forwarding.
 
 import pytest
 
+from cli.config_migration import _convert_model_targets_to_provider_models
 from cli.models import BackendRef, Model
 
 
@@ -67,3 +68,19 @@ def test_model_allows_anthropic_format_without_forwarding():
         backend_refs=[BackendRef(name="static", endpoint="127.0.0.1:8000")],
     )
     assert model.api_format == "anthropic"
+
+
+def test_legacy_migration_preserves_forward_authorization_header():
+    # Migrating legacy model_targets/backends must not silently drop the opt-in.
+    model_targets = {"gateway-model": {"backend_refs": ["gateway"]}}
+    backends = {
+        "gateway": {
+            "base_url": "https://litellm.example.com/v1",
+            "forward_authorization_header": True,
+        }
+    }
+    provider_models = _convert_model_targets_to_provider_models(
+        model_targets, backends, {}
+    )
+    ref = provider_models[0]["backend_refs"][0]
+    assert ref.get("forward_authorization_header") is True
