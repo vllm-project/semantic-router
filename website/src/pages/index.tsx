@@ -175,7 +175,7 @@ const momScorecards = [
   {
     title: translate({
       id: 'homepage.momProof.hle.title',
-      message: "Humanity's Last Exam",
+      message: 'Humanity\'s Last Exam',
     }),
     result: translate({
       id: 'homepage.momProof.hle.result',
@@ -184,7 +184,7 @@ const momScorecards = [
     image: '/img/mom-proof/humanitys-last-exam-scorecard-dark.png',
     alt: translate({
       id: 'homepage.momProof.hle.alt',
-      message: "Humanity's Last Exam dark scorecard showing VSR Closed at 50.0",
+      message: 'Humanity\'s Last Exam dark scorecard showing VSR Closed at 50.0',
     }),
   },
 ]
@@ -344,6 +344,7 @@ function MixtureOfModelsProofSection(): JSX.Element {
                     message:
                       'vLLM Semantic Router routes heterogeneous closed and open model pools',
                   })}
+                  loading="lazy"
                 />
               </div>
             </div>
@@ -353,7 +354,7 @@ function MixtureOfModelsProofSection(): JSX.Element {
         <ScrollReveal delay={120}>
           <div className={styles.momScorecardGrid}>
             {momScorecards.map(card => (
-              <article key={card.title} className={styles.momScorecard}>
+              <article key={card.image} className={styles.momScorecard}>
                 <div className={styles.momScorecardHeader}>
                   <h3>{card.title}</h3>
                   <p>{card.result}</p>
