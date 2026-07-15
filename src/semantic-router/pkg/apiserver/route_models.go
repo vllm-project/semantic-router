@@ -5,6 +5,8 @@ package apiserver
 import (
 	"net/http"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // handleOpenAIModels handles OpenAI-compatible model listing at /v1/models
@@ -14,52 +16,74 @@ func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, _ *h
 	now := time.Now().Unix()
 	cfg := s.currentConfig()
 
-	// Start with the configured auto model name (or default "MoM")
-	// The model list uses the actual configured name, not "auto"
-	// However, "auto" is still accepted as an alias in request handling for backward compatibility
-	models := []OpenAIModel{}
-
-	// Add the effective auto model name (configured or default "MoM")
-	if cfg != nil {
-		effectiveAutoModelName := cfg.GetEffectiveAutoModelName()
-		models = append(models, OpenAIModel{
-			ID:          effectiveAutoModelName,
-			Object:      "model",
-			Created:     now,
-			OwnedBy:     "vllm-semantic-router",
-			Description: "Intelligent Router for Mixture-of-Models",
-		})
-	} else {
-		// Fallback if no config
-		models = append(models, OpenAIModel{
-			ID:          "MoM",
-			Object:      "model",
-			Created:     now,
-			OwnedBy:     "vllm-semantic-router",
-			Description: "Intelligent Router for Mixture-of-Models",
-		})
-	}
-
-	// Append underlying models from config (if available and configured to include them)
-	if cfg != nil && cfg.IncludeConfigModelsInList {
-		for _, m := range cfg.GetAllModels() {
-			// Skip if already added as the configured auto model name (avoid duplicates)
-			if m == cfg.GetEffectiveAutoModelName() {
-				continue
-			}
-			models = append(models, OpenAIModel{
-				ID:      m,
-				Object:  "model",
-				Created: now,
-				OwnedBy: "upstream-endpoint",
-			})
-		}
-	}
+	builder := newOpenAIModelListBuilder(now)
+	builder.appendAutoAliases(cfg)
+	builder.appendLooperAliases(cfg)
+	builder.appendBackendModels(cfg)
 
 	resp := OpenAIModelList{
 		Object: "list",
-		Data:   models,
+		Data:   builder.models,
 	}
 
 	s.writeJSONResponse(w, http.StatusOK, resp)
+}
+
+type openAIModelListBuilder struct {
+	now    int64
+	models []OpenAIModel
+	seen   map[string]bool
+}
+
+func newOpenAIModelListBuilder(now int64) *openAIModelListBuilder {
+	return &openAIModelListBuilder{
+		now:  now,
+		seen: map[string]bool{},
+	}
+}
+
+func (b *openAIModelListBuilder) appendAutoAliases(cfg *config.RouterConfig) {
+	autoModelNames := config.DefaultAutoModelNames()
+	if cfg != nil {
+		autoModelNames = cfg.EffectiveAutoModelNames()
+	}
+	for _, model := range autoModelNames {
+		b.append(model, "vllm-semantic-router", "Intelligent Router for Mixture-of-Models")
+	}
+}
+
+func (b *openAIModelListBuilder) appendLooperAliases(cfg *config.RouterConfig) {
+	if cfg == nil || !cfg.Looper.IsEnabled() {
+		return
+	}
+	b.appendAll(cfg.ExposedReMoMModelNames(), "vllm-semantic-router", "ReMoM multi-round reasoning")
+	b.appendAll(cfg.ExposedFusionModelNames(), "vllm-semantic-router", "Fusion multi-model deliberation")
+	b.appendAll(cfg.ExposedFlowModelNames(), "vllm-semantic-router", "Router Flow micro-agent workflows")
+}
+
+func (b *openAIModelListBuilder) appendBackendModels(cfg *config.RouterConfig) {
+	if cfg == nil || !cfg.IncludeConfigModelsInList {
+		return
+	}
+	b.appendAll(cfg.GetAllModels(), "upstream-endpoint", "")
+}
+
+func (b *openAIModelListBuilder) appendAll(models []string, owner string, description string) {
+	for _, model := range models {
+		b.append(model, owner, description)
+	}
+}
+
+func (b *openAIModelListBuilder) append(id string, owner string, description string) {
+	if id == "" || b.seen[id] {
+		return
+	}
+	b.seen[id] = true
+	b.models = append(b.models, OpenAIModel{
+		ID:          id,
+		Object:      "model",
+		Created:     b.now,
+		OwnedBy:     owner,
+		Description: description,
+	})
 }

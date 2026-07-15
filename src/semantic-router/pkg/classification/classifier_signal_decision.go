@@ -3,6 +3,7 @@ package classification
 import (
 	"fmt"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -10,18 +11,28 @@ import (
 // EvaluateDecisionWithEngine evaluates all decisions using pre-computed signals.
 // Accepts SignalResults to avoid duplicate signal computation.
 func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decision.DecisionResult, error) {
-	result, _, err := c.evaluateDecisionInternal(signals, false)
+	result, _, err := c.evaluateDecisionInternal(signals, false, nil)
+	return result, err
+}
+
+// EvaluateDecisionWithEngineForDecisions evaluates only the supplied decision candidates.
+func (c *Classifier) EvaluateDecisionWithEngineForDecisions(signals *SignalResults, decisions []config.Decision) (*decision.DecisionResult, error) {
+	result, _, err := c.evaluateDecisionInternal(signals, false, decisions)
 	return result, err
 }
 
 // EvaluateDecisionWithEngineAndTrace evaluates decisions and returns a
 // per-decision trace tree that mirrors the boolean expression structure.
 func (c *Classifier) EvaluateDecisionWithEngineAndTrace(signals *SignalResults) (*decision.DecisionResult, []decision.DecisionTrace, error) {
-	return c.evaluateDecisionInternal(signals, true)
+	return c.evaluateDecisionInternal(signals, true, nil)
 }
 
-func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool) (*decision.DecisionResult, []decision.DecisionTrace, error) {
-	if len(c.Config.Decisions) == 0 {
+func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool, candidates []config.Decision) (*decision.DecisionResult, []decision.DecisionTrace, error) {
+	decisions := c.Config.Decisions
+	if candidates != nil {
+		decisions = candidates
+	}
+	if len(decisions) == 0 {
 		return nil, nil, fmt.Errorf("no decisions configured")
 	}
 
@@ -37,7 +48,7 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		c.Config.KeywordRules,
 		c.Config.EmbeddingRules,
 		c.Config.Categories,
-		c.Config.Decisions,
+		decisions,
 		c.Config.Strategy,
 	)
 

@@ -79,7 +79,10 @@ Model semantics and deployment bindings are now separated explicitly:
 - `providers.defaults` carries provider-wide defaults such as `default_model`, `reasoning_families`, and `default_reasoning_effort`
 - `providers.models` carries per-model access bindings directly
 - each `providers.models[].backend_refs[]` item carries its own transport and auth fields such as `endpoint`, `base_url`, `protocol`, `auth_header`, `auth_prefix`, `api_key`, and `api_key_env`
+- `providers.models[].pricing` can price prompt, cached-input, cache-write, and completion tokens independently; an omitted cache-write rate inherits the prompt rate
 - `routing.decisions[].modelRefs[].lora_name` resolves against the matching `routing.modelCards[].loras` entry, so `lora_name` is now part of the supported routing contract instead of a runtime-only escape hatch
+- `routing.decisions[].output_contract` is the decision-scoped, model-visible final response format contract. Loop algorithms merge it with any format already present in the client request instead of hard-coding benchmark- or task-specific prompts inside algorithms.
+- `routing.decisions[].output_contract_spec` is the typed router-executable output contract. Use it for machine-checked post-processing such as `type: choice`, `type: structured_json` with `json_schema.schema_ref: terminal_action_v1`, or `type: reference_selection` with `postprocess: [{type: dereference_selected_reference}]`; extraction defaults to exact `content` matching and must be widened explicitly with `extract.sources`. Do not encode these runtime behaviors as prompt-text heuristics.
 - `routing.decisions[].candidateIterations` is bounded to `decision.candidates` or explicit model lists and remains declarative metadata for the selection layer, not a second policy interpreter
 - `routing.decisions[].emits[]` is the structured side-effect contract produced by DSL `EMIT` blocks. The current supported kind is `retention`; `drop: true` is consumed by the response-side semantic-cache write gate, while `ttl_turns`, `keep_current_model`, and `prefer_prefix_retention` remain typed/auditable hints until their dedicated runtime consumers land.
 
@@ -90,12 +93,13 @@ Router-global defaults are now owned by the router itself, not by a second user-
 - the router provides typed built-in defaults
 - `global:` only overrides what you need to change
 - `global.router` groups router-engine control knobs, including `config_source`
-- `global.router.model_selection.model_switch_gate` is the optional shadow/enforce policy seam for auditing session-aware model stay-vs-switch decisions
-- `session_aware` selection can consume replay-derived `remaining_turn_prior` lookup-table entries, hard-lock non-portable provider-state continuations, reset continuity on decision drift, price prefix-cache loss by input checkout cost, and expose those facts in `session_policy` traces for experiments. Its cache-cost multiplier is constrained to neutral-or-stricter values and its remaining-turn prior horizon must be positive.
+- `global.router.auto_model_names` registers full-router auto aliases such as `vllm-sr/auto`, `auto`, and `MoM`; the legacy `auto_model_name` field remains a single-name compatibility shortcut
+- `global.router.learning` owns cross-request Router Learning state.
+- `global.router.learning.adaptation` is online model-choice learning. `global.router.learning.protection` is session/conversation stability protection. Decisions remain semantic and can opt out with `routing.decisions[].adaptations.mode: bypass`; `algorithm.type: session_aware|elo|rl_driven|gmtrouter` is not part of the public contract.
 - `global.services` groups shared APIs and runtime services
 - `global.services.router_replay.enabled` provides the router-wide replay default, while route-local `router_replay.enabled: false` is the explicit opt-out
 - `global.stores` groups storage-backed services
-- `global.integrations` groups helper runtime integrations
+- `global.integrations` groups helper runtime integrations, including looper-owned ReMoM direct model slug registration for `vllm-sr/remom`, Fusion direct model slug registration for `vllm-sr/fusion`, and Router Flow direct model slug registration for `vllm-sr/flow`. Compatibility aliases such as `openrouter/fusion` are opt-in through `global.integrations.looper.*.model_names`; breadth, judge, panel, workflow planning, worker policy, and output contracts remain on `routing.decisions[]`.
 - `global.model_catalog` groups router-owned model assets under `embeddings`, `system`, `external`, `classifiers`, `kbs`, and `modules`, including embedding fallback knobs such as `embedding_config.top_k`, shared prototype-aware scoring controls such as `prototype_scoring`, and built-in knowledge-base source paths such as `knowledge_bases/privacy/`
 - `global.model_catalog.modules` is the home for router-owned module settings such as `prompt_compression`, `prompt_guard`, `classifier`, `complexity`, `hallucination_mitigation`, `feedback_detector`, and `modality_detector`
 - `global.model_catalog.modules.prompt_compression.profile` keeps prompt-compression presets in the signal-evaluation layer as a validated enum (`default`, `coding`, `medical`, `security`, `multi_turn`, with `multi-turn` accepted as an alias). It does not rewrite the upstream model request body; post-decision request mutation belongs under decision/plugin surfaces.
@@ -124,7 +128,7 @@ The repo no longer ships large full-example trees under `config/intelligent-rout
 - `config/config.yaml` is the exhaustive canonical reference config
 - `config/signal/`, `config/decision/`, `config/algorithm/`, and `config/plugin/` hold reusable routing fragments
 - `config/decision/` is organized by boolean rule shape (`single`, `and`, `or`, `not`, `composite`)
-- `config/algorithm/` is organized by routing policy family (`looper`, `selection`)
+- `config/algorithm/` is organized by routing policy family (`looper`, `selection`), with `fusion` as the looper fragment for panel-and-judge deliberation
 - latest `docs/tutorials/` source tree mirrors `signal/decision/algorithm/plugin/global`, and the older tutorial trees were removed from the active docs surface
 - runtime support examples such as `deploy/examples/runtime/semantic-cache/`, `deploy/examples/runtime/response-api/`, and `deploy/examples/runtime/tools/` stay separate because they are not part of the user-facing config contract
 - harness-only manifests live under `e2e/config/`

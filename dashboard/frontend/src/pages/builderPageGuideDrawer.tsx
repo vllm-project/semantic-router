@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useId } from "react";
 import { createPortal } from "react-dom";
 
 import DslGuide from "@/components/DslGuide";
+import useAccessibleDialog from "@/hooks/useAccessibleDialog";
 
 import styles from "./BuilderPage.module.css";
 
@@ -22,19 +23,33 @@ const BuilderGuideDrawer: React.FC<BuilderGuideDrawerProps> = ({
   onDragStart,
   onInsertSnippet,
 }) => {
+  const dialogId = useId();
+  const titleId = `${dialogId}-title`;
+  const dialogRef = useAccessibleDialog<HTMLDivElement>({
+    isOpen: open,
+    onClose,
+    dismissible: !isDragging,
+  });
+
   if (!open) return null;
 
   return createPortal(
     <div
       className={styles.guideDrawerOverlay}
-      onClick={() => {
+      role="presentation"
+      onMouseDown={() => {
         if (!isDragging) onClose();
       }}
     >
       <div
+        ref={dialogRef}
         className={styles.guideDrawer}
         style={{ width }}
-        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onMouseDown={(event) => event.stopPropagation()}
       >
         <div
           className={styles.guideDrawerResizeHandle}
@@ -43,7 +58,7 @@ const BuilderGuideDrawer: React.FC<BuilderGuideDrawerProps> = ({
           <div className={styles.guideDrawerResizeLine} />
         </div>
         <div className={styles.guideDrawerHeader}>
-          <span className={styles.guideDrawerTitle}>
+          <h2 id={titleId} className={styles.guideDrawerTitle}>
             <svg
               width="14"
               height="14"
@@ -59,11 +74,14 @@ const BuilderGuideDrawer: React.FC<BuilderGuideDrawerProps> = ({
               <path d="M5 6h5M5 9h3" strokeLinecap="round" />
             </svg>
             DSL Language Guide
-          </span>
+          </h2>
           <button
+            type="button"
             className={styles.guideDrawerClose}
             onClick={onClose}
             title="Close Guide"
+            aria-label="Close DSL language guide"
+            data-dialog-initial-focus
           >
             <svg
               width="14"

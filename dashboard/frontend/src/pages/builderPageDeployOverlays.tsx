@@ -1,8 +1,10 @@
-import React, { useRef, useState } from "react";
+import React, { useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DiffEditor } from "@monaco-editor/react";
+import type { MonacoDiffEditor } from "@monaco-editor/react";
 
 import type { DeployResult, DeployStep } from "@/types/dsl";
+import useAccessibleDialog from "@/hooks/useAccessibleDialog";
 
 import styles from "./BuilderPage.module.css";
 
@@ -87,17 +89,33 @@ const BuilderDeployConfirmModal: React.FC<BuilderDeployConfirmModalProps> = ({
   onClose,
   onConfirm,
 }) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const diffEditorRef = useRef<any>(null);
+  const dialogId = useId();
+  const titleId = `${dialogId}-title`;
+  const descriptionId = `${dialogId}-description`;
+  const diffEditorRef = useRef<MonacoDiffEditor | null>(null);
   const [diffChangeCount, setDiffChangeCount] = useState(0);
+  const dialogRef = useAccessibleDialog<HTMLDivElement>({
+    isOpen: open,
+    onClose,
+  });
 
   if (!open) return null;
 
   return createPortal(
-    <div className={styles.modalOverlay} onClick={onClose}>
+    <div
+      className={styles.modalOverlay}
+      role="presentation"
+      onMouseDown={onClose}
+    >
       <div
+        ref={dialogRef}
         className={styles.deployDiffModal}
-        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        tabIndex={-1}
+        onMouseDown={(event) => event.stopPropagation()}
       >
         <div className={styles.deployModalHeader}>
           <svg
@@ -112,7 +130,9 @@ const BuilderDeployConfirmModal: React.FC<BuilderDeployConfirmModalProps> = ({
             <line x1="12" y1="9" x2="12" y2="13" />
             <line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
-          <span>Deploy to Router — Config Diff</span>
+          <h2 id={titleId} className={styles.deployModalTitle}>
+            Deploy to Router — Config Diff
+          </h2>
           <div style={{ flex: 1 }} />
           <span className={styles.deployDiffLabels}>
             <span className={styles.deployDiffLabelOld}>Current</span>
@@ -130,8 +150,10 @@ const BuilderDeployConfirmModal: React.FC<BuilderDeployConfirmModalProps> = ({
         {!loading && !error && (
           <div className={styles.deployDiffNav}>
             <button
+              type="button"
               className={styles.deployDiffNavBtn}
               title="Previous Change (↑)"
+              aria-label="Go to previous config change"
               onClick={() => {
                 const editor = diffEditorRef.current;
                 if (!editor) return;
@@ -140,13 +162,20 @@ const BuilderDeployConfirmModal: React.FC<BuilderDeployConfirmModalProps> = ({
                 const modifiedEditor = editor.getModifiedEditor();
                 const currentLine =
                   modifiedEditor.getPosition()?.lineNumber ?? 1;
-                for (let index = navigation.length - 1; index >= 0; index -= 1) {
+                for (
+                  let index = navigation.length - 1;
+                  index >= 0;
+                  index -= 1
+                ) {
                   const startLine =
                     navigation[index].modifiedStartLineNumber ||
                     navigation[index].originalStartLineNumber;
                   if (startLine < currentLine) {
                     modifiedEditor.revealLineInCenter(startLine);
-                    modifiedEditor.setPosition({ lineNumber: startLine, column: 1 });
+                    modifiedEditor.setPosition({
+                      lineNumber: startLine,
+                      column: 1,
+                    });
                     return;
                   }
                 }
@@ -173,8 +202,10 @@ const BuilderDeployConfirmModal: React.FC<BuilderDeployConfirmModalProps> = ({
               </svg>
             </button>
             <button
+              type="button"
               className={styles.deployDiffNavBtn}
               title="Next Change (↓)"
+              aria-label="Go to next config change"
               onClick={() => {
                 const editor = diffEditorRef.current;
                 if (!editor) return;
@@ -189,15 +220,22 @@ const BuilderDeployConfirmModal: React.FC<BuilderDeployConfirmModalProps> = ({
                     navigation[index].originalStartLineNumber;
                   if (startLine > currentLine) {
                     modifiedEditor.revealLineInCenter(startLine);
-                    modifiedEditor.setPosition({ lineNumber: startLine, column: 1 });
+                    modifiedEditor.setPosition({
+                      lineNumber: startLine,
+                      column: 1,
+                    });
                     return;
                   }
                 }
                 const first = navigation[0];
                 const firstLine =
-                  first.modifiedStartLineNumber || first.originalStartLineNumber;
+                  first.modifiedStartLineNumber ||
+                  first.originalStartLineNumber;
                 modifiedEditor.revealLineInCenter(firstLine);
-                modifiedEditor.setPosition({ lineNumber: firstLine, column: 1 });
+                modifiedEditor.setPosition({
+                  lineNumber: firstLine,
+                  column: 1,
+                });
               }}
             >
               <svg
@@ -275,6 +313,7 @@ const BuilderDeployConfirmModal: React.FC<BuilderDeployConfirmModalProps> = ({
         </div>
         <div className={styles.deployModalFooter}>
           <p
+            id={descriptionId}
             style={{
               fontSize: "var(--text-xs)",
               color: "var(--color-text-muted)",
@@ -284,10 +323,16 @@ const BuilderDeployConfirmModal: React.FC<BuilderDeployConfirmModalProps> = ({
           >
             A backup of the current config will be created before deployment.
           </p>
-          <button className={styles.toolbarBtn} onClick={onClose}>
+          <button
+            type="button"
+            className={styles.toolbarBtn}
+            onClick={onClose}
+            data-dialog-initial-focus
+          >
             Cancel
           </button>
           <button
+            type="button"
             className={styles.toolbarBtnDeploy}
             onClick={onConfirm}
             disabled={loading || !!error}
@@ -335,7 +380,12 @@ const BuilderDeployToast: React.FC<BuilderDeployToastProps> = ({
   if (!deploying && !deployResult) return null;
 
   return createPortal(
-    <div className={styles.deployToast}>
+    <div
+      className={styles.deployToast}
+      role={deployResult?.status === "error" ? "alert" : "status"}
+      aria-live={deployResult?.status === "error" ? "assertive" : "polite"}
+      aria-atomic="true"
+    >
       {deploying && (
         <div className={styles.deployProgress}>
           <div className={styles.deployStepList}>
@@ -400,7 +450,12 @@ const BuilderDeployToast: React.FC<BuilderDeployToastProps> = ({
             )}
           </div>
           <span className={styles.deployResultMsg}>{deployResult.message}</span>
-          <button className={styles.deployResultDismiss} onClick={onDismiss}>
+          <button
+            type="button"
+            className={styles.deployResultDismiss}
+            onClick={onDismiss}
+            aria-label="Dismiss deployment status"
+          >
             <svg
               width="12"
               height="12"
@@ -421,7 +476,10 @@ const BuilderDeployToast: React.FC<BuilderDeployToastProps> = ({
 
 const BuilderDragOverlay: React.FC<{ active: boolean }> = ({ active }) => {
   if (!active) return null;
-  return createPortal(<div className={styles.dragOverlay} />, document.body);
+  return createPortal(
+    <div className={styles.dragOverlay} aria-hidden="true" />,
+    document.body,
+  );
 };
 
 export { BuilderDeployConfirmModal, BuilderDeployToast, BuilderDragOverlay };

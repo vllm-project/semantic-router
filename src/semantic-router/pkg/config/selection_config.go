@@ -9,20 +9,20 @@ type ModelSelectionConfig struct {
 	Enabled bool `yaml:"enabled,omitempty"`
 
 	// Family-specific configuration blocks.
-	Elo      EloSelectionConfig      `yaml:"elo,omitempty"`
+	Elo      EloSelectionConfig      `yaml:"-"`
 	RouterDC RouterDCSelectionConfig `yaml:"router_dc,omitempty"`
 	AutoMix  AutoMixSelectionConfig  `yaml:"automix,omitempty"`
 	Hybrid   HybridSelectionConfig   `yaml:"hybrid,omitempty"`
 	ML       MLSelectionConfig       `yaml:"ml,omitempty"`
 
-	SessionAware SessionAwareSelectionConfig `yaml:"session_aware,omitempty"`
+	SessionAware SessionAwareSelectionConfig `yaml:"-"`
 	Momentum     MomentumSelectionConfig     `yaml:"momentum,omitempty"`
 
 	// ModelSwitchGate configures session-aware stay-vs-switch evaluation.
-	ModelSwitchGate ModelSwitchGateConfig `yaml:"model_switch_gate,omitempty"`
+	ModelSwitchGate ModelSwitchGateConfig `yaml:"-"`
 
 	// LookupTables configures persisted lookup tables for session-aware routing.
-	LookupTables LookupTableConfig `yaml:"lookup_tables,omitempty"`
+	LookupTables LookupTableConfig `yaml:"-"`
 }
 
 // LookupTableConfig configures session-routing lookup tables that replace
@@ -166,10 +166,10 @@ type RouterDCSelectionConfig struct {
 	Temperature         float64 `yaml:"temperature,omitempty"`
 	DimensionSize       int     `yaml:"dimension_size,omitempty"`
 	MinSimilarity       float64 `yaml:"min_similarity,omitempty"`
-	UseQueryContrastive bool    `yaml:"use_query_contrastive,omitempty"`
-	UseModelContrastive bool    `yaml:"use_model_contrastive,omitempty"`
-	RequireDescriptions bool    `yaml:"require_descriptions,omitempty"`
-	UseCapabilities     bool    `yaml:"use_capabilities,omitempty"`
+	UseQueryContrastive bool    `yaml:"use_query_contrastive"`
+	UseModelContrastive bool    `yaml:"use_model_contrastive"`
+	RequireDescriptions bool    `yaml:"require_descriptions"`
+	UseCapabilities     bool    `yaml:"use_capabilities"`
 }
 
 type AutoMixSelectionConfig struct {
@@ -182,12 +182,12 @@ type AutoMixSelectionConfig struct {
 }
 
 type HybridSelectionConfig struct {
-	EloWeight           float64 `yaml:"elo_weight,omitempty"`
+	ExperienceWeight    float64 `yaml:"experience_weight,omitempty"`
 	RouterDCWeight      float64 `yaml:"router_dc_weight,omitempty"`
 	AutoMixWeight       float64 `yaml:"automix_weight,omitempty"`
 	CostWeight          float64 `yaml:"cost_weight,omitempty"`
 	QualityGapThreshold float64 `yaml:"quality_gap_threshold,omitempty"`
-	NormalizeScores     bool    `yaml:"normalize_scores,omitempty"`
+	NormalizeScores     bool    `yaml:"normalize_scores"`
 }
 
 // SessionAwareSelectionConfig configures the session_aware selector. It wraps

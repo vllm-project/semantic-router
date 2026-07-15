@@ -29,6 +29,9 @@
 //! - Paper: YaRN: Efficient Context Window Extension of Large Language Models
 
 use crate::core::{config_errors, from_candle_error, UnifiedError, UnifiedResult};
+use crate::model_architectures::attention::chunked_sdpa::{
+    chunked_sdpa, prepare_padding_mask, ChunkedSdpaConfig, ATTN_QUERY_BLOCK,
+};
 use crate::model_architectures::embedding::pooling::mean_pool;
 use crate::model_architectures::traits::{
     EmbeddingPathSpecialization, LongContextEmbeddingCapable, ModelType, PoolingMethod,
@@ -61,14 +64,6 @@ pub struct MmBertEmbeddingConfig {
     pub local_attention: usize,
     pub local_rope_theta: f64,
 }
-
-/// Query-block size for chunked (memory-bounded) attention.
-///
-/// Attention is computed in blocks of this many query positions so the full
-/// `seq×seq` score matrix is never materialized (~3.2 GB at 8K tokens), which is
-/// what crashed the router on long inputs (issue #1957). 512 is a good CPU
-/// memory/throughput trade-off; short inputs fit in a single block.
-const ATTN_QUERY_BLOCK: usize = 512;
 
 impl MmBertEmbeddingConfig {
     /// Load configuration from a pretrained model directory
@@ -283,7 +278,6 @@ impl MmBertAttention {
         block_size: usize,
     ) -> candle_core::Result<Tensor> {
         let (b, seq_len, d) = hidden_states.dims3()?;
-        let device = hidden_states.device();
         let qkv = hidden_states
             .apply(&self.qkv)?
             .reshape((
@@ -302,58 +296,21 @@ impl MmBertAttention {
         // Apply RoPE on the full q/k (cheap, O(seq*d)) before chunking.
         let (q, k) = self.rotary_emb.apply_rotary_emb_qkv(&q, &k)?;
 
-        let scale = (self.attention_head_size as f64).powf(-0.5);
-        let q = (q * scale)?.contiguous()?;
-        let k = k.contiguous()?;
-        let v = v.contiguous()?;
-
-        // A non-positive block size means "no chunking" (single block over the whole
-        // sequence); guard against a zero so the loop always makes progress.
-        let block = if block_size == 0 {
-            seq_len.max(1)
-        } else {
-            block_size
-        };
-
-        let mut out_blocks: Vec<Tensor> = Vec::new();
-        let mut qs = 0usize;
-        while qs < seq_len {
-            let blk = block.min(seq_len - qs);
-            let qe = qs + blk;
-
-            // Key/value range for this query block.
-            let (ks, ke) = if uses_local_attention {
-                (qs.saturating_sub(window), (qe + window).min(seq_len))
+        // Delegate the memory-bounded loop to the shared kernel. A local layer maps
+        // to a sliding window; a global layer attends to every key. Scaling is folded
+        // into the kernel.
+        let cfg = ChunkedSdpaConfig {
+            block_size,
+            window: if uses_local_attention {
+                Some(window)
             } else {
-                (0, seq_len)
-            };
-            let kw = ke - ks;
+                None
+            },
+            causal: false,
+            scale: (self.attention_head_size as f64).powf(-0.5),
+        };
+        let xs = chunked_sdpa(&q, &k, &v, Some(pad_mask), &cfg)?; // (b, heads, seq, hd)
 
-            let q_blk = q.narrow(2, qs, blk)?.contiguous()?; // (b, heads, blk, hd)
-            let k_win = k.narrow(2, ks, kw)?;
-            let v_win = v.narrow(2, ks, kw)?.contiguous()?; // (b, heads, kw, hd)
-            let k_t = k_win.transpose(D::Minus2, D::Minus1)?.contiguous()?; // (b, heads, hd, kw)
-
-            // (b, heads, blk, kw)
-            let mut scores = q_blk.matmul(&k_t)?;
-
-            // Padding mask slice over the key range: (b, 1, 1, kw), broadcasts.
-            let pad_slice = pad_mask.narrow(D::Minus1, ks, kw)?;
-            scores = scores.broadcast_add(&pad_slice)?;
-
-            // Sliding-window band: keep only |i - j| <= window within the key superset.
-            if uses_local_attention {
-                let band = build_local_band_mask(qs, blk, ks, kw, window, device)?;
-                scores = scores.broadcast_add(&band)?;
-            }
-
-            let probs = candle_nn::ops::softmax(&scores, D::Minus1)?;
-            out_blocks.push(probs.matmul(&v_win)?); // (b, heads, blk, hd)
-
-            qs = qe;
-        }
-
-        let xs = Tensor::cat(&out_blocks, 2)?; // (b, heads, seq, hd)
         let xs = xs.transpose(1, 2)?.reshape((b, seq_len, d))?;
         xs.apply(&self.proj)
     }
@@ -448,52 +405,6 @@ impl MmBertLayer {
         let mlp_out = xs.apply(&self.mlp_norm)?.apply(&self.mlp)?;
         xs + mlp_out
     }
-}
-
-// ============================================================================
-// Attention Mask Helpers
-// ============================================================================
-
-/// Build the additive padding mask in `(b, 1, 1, seq)` form.
-///
-/// Real tokens map to `0`, padding tokens to a large negative value, so that
-/// `scores.broadcast_add(pad_mask)` zeroes out padding after softmax. Unlike the
-/// previous `(b, 1, seq, seq)` expansion, this keeps the mask O(seq) — the value
-/// depends only on the key position and broadcasts over query positions.
-fn prepare_padding_mask(mask: &Tensor, dtype: DType) -> candle_core::Result<Tensor> {
-    let expanded_mask = mask.unsqueeze(1)?.unsqueeze(2)?.to_dtype(dtype)?; // (b, 1, 1, seq)
-    let inverted_mask = (1.0 - expanded_mask)?;
-    (inverted_mask * f32::MIN as f64)?.to_dtype(dtype)
-}
-
-/// Build the additive sliding-window band mask for one query block.
-///
-/// Returns a `(q_len, k_len)` tensor (broadcasts over batch/heads) where entry
-/// `(a, c)` — query at absolute index `q_start + a`, key at `k_start + c` — is `0`
-/// when within the window (`|i - j| <= window`) and `-inf` otherwise. Called only
-/// for local-attention layers; the key range is the per-block superset `[k_start,
-/// k_start + k_len)`, so this mask removes the edge keys that fall outside an
-/// individual query's window.
-fn build_local_band_mask(
-    q_start: usize,
-    q_len: usize,
-    k_start: usize,
-    k_len: usize,
-    window: usize,
-    device: &Device,
-) -> candle_core::Result<Tensor> {
-    let window = window as i64;
-    let mut mask = vec![0f32; q_len * k_len];
-    for a in 0..q_len {
-        let i = (q_start + a) as i64;
-        for c in 0..k_len {
-            let j = (k_start + c) as i64;
-            if (i - j).abs() > window {
-                mask[a * k_len + c] = f32::NEG_INFINITY;
-            }
-        }
-    }
-    Tensor::from_slice(&mask, (q_len, k_len), device)
 }
 
 // ============================================================================
@@ -975,6 +886,8 @@ impl EmbeddingPathSpecialization for MmBertEmbeddingModel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Used only by the dense-reference helper and the band-mask test below.
+    use crate::model_architectures::attention::chunked_sdpa::build_local_band_mask;
 
     #[test]
     fn test_matryoshka_config_defaults() {

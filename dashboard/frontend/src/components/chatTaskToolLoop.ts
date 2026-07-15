@@ -138,7 +138,10 @@ export const runToolLoop = async ({
 
     const followUpResponse = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-vsr-debug': 'true',
+      },
       body: JSON.stringify({
         model: task.requestOptions.model,
         messages: currentMessages,

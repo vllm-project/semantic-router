@@ -18,6 +18,8 @@ package extproc
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -126,63 +128,53 @@ func TestSelectModelFromCandidatesRecordsSingleCandidateInRouterMemory(t *testin
 	}
 }
 
-func TestSelectModelFromCandidatesUsesDecisionScopedSessionAwareConfig(t *testing.T) {
-	registry := selection.NewRegistry()
-	registry.Register(selection.MethodStatic, selectionResultSelector{result: &selection.SelectionResult{
-		SelectedModel: "frontier",
-		Score:         0.90,
-		Method:        selection.MethodStatic,
-		AllScores: map[string]float64{
-			"current":  0.20,
-			"frontier": 0.90,
-		},
-	}})
+func TestSelectorForDecisionMethodBuildsDecisionScopedHybridSelector(t *testing.T) {
+	cfg := config.DefaultGlobalConfig()
+	cfg.BackendModels.ModelConfig = map[string]config.ModelParams{
+		"current":  {Description: "general chat"},
+		"frontier": {Description: "coding specialist"},
+	}
+
+	modelSelectionCfg := buildModelSelectionConfig(&cfg)
+	registry := selection.NewFactory(modelSelectionCfg).
+		WithModelConfig(cfg.BackendModels.ModelConfig).
+		WithEmbeddingFunc(func(text string) ([]float32, error) {
+			lower := strings.ToLower(text)
+			switch {
+			case strings.Contains(lower, "coding"):
+				return []float32{1, 0}, nil
+			case strings.Contains(lower, "general"):
+				return []float32{0, 1}, nil
+			default:
+				return []float32{0.5, 0.5}, nil
+			}
+		}).
+		CreateAll()
 
 	router := &OpenAIRouter{
+		Config:        &cfg,
 		ModelSelector: registry,
-		Config: &config.RouterConfig{
-			IntelligentRouting: config.IntelligentRouting{
-				ModelSelection: config.ModelSelectionConfig{
-					SessionAware: config.SessionAwareSelectionConfig{
-						IdleTimeoutSeconds: extprocIntPtr(300),
-					},
-				},
-			},
-		},
 	}
-	ctx := &RequestContext{SessionID: "decision-session"}
-	trueValue := true
-	selected, method := router.selectModelFromCandidates(&selection.SelectionContext{
-		SessionID:       "decision-session",
-		DecisionName:    "idle-route",
-		CandidateModels: []config.ModelRef{{Model: "current"}, {Model: "frontier"}},
-		AgenticSession: &selection.AgenticSessionContext{
-			ID:            "decision-session",
-			TurnIndex:     3,
-			PreviousModel: "current",
-			IdleKnown:     true,
-			IdleFor:       2 * time.Second,
-		},
-	}, &config.AlgorithmConfig{
-		Type: "session_aware",
-		SessionAware: &config.SessionAwareSelectionConfig{
-			BaseMethod:           "static",
-			IdleTimeoutSeconds:   extprocIntPtr(1),
-			MinTurnsBeforeSwitch: extprocIntPtr(1),
-			SwitchMargin:         extprocFloat64Ptr(0.05),
-			StayBias:             extprocFloat64Ptr(0.10),
-			ToolLoopHardLock:     &trueValue,
-		},
-	}, ctx)
 
-	if selected == nil || selected.Model != "frontier" {
-		t.Fatalf("expected frontier from decision-scoped idle policy, got %#v", selected)
+	selector := router.selectorForDecisionMethod(selection.MethodHybrid, &config.AlgorithmConfig{
+		Type: "hybrid",
+		Hybrid: &config.HybridSelectionConfig{
+			ExperienceWeight: 0.6,
+			RouterDCWeight:   0.4,
+		},
+	})
+
+	result, err := selector.Select(context.Background(), &selection.SelectionContext{
+		Query:           "need help with coding",
+		DecisionName:    "hybrid_route",
+		CandidateModels: []config.ModelRef{{Model: "current"}, {Model: "frontier"}},
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
 	}
-	if method != string(selection.MethodSessionAware) {
-		t.Fatalf("expected session_aware method, got %q", method)
-	}
-	if ctx.VSRSessionPolicy == nil || ctx.VSRSessionPolicy["idle_expired"] != true {
-		t.Fatalf("expected decision-scoped idle timeout in session policy, got %#v", ctx.VSRSessionPolicy)
+	wantWeights := fmt.Sprintf("weights=[elo:%.2f, dc:%.2f, am:%.2f, cost:%.2f]", 0.6, 0.4, 0.2, 0.2)
+	if !strings.Contains(result.Reasoning, wantWeights) {
+		t.Fatalf("expected decision-scoped hybrid weights in reasoning, got %q", result.Reasoning)
 	}
 }
 
@@ -289,40 +281,4 @@ func TestBuildSelectionContextMarksPreviousResponseIDAsNonPortableContext(t *tes
 	if got := selCtx.AgenticSession.Phase; got != selection.AgenticPhaseProviderState {
 		t.Fatalf("expected provider-state phase for previous_response_id, got %q", got)
 	}
-}
-
-func TestApplySessionAwareSelectionConfigPreservesExplicitZeroValues(t *testing.T) {
-	cfg := selection.DefaultSessionAwareConfig()
-	falseValue := false
-	applySessionAwareSelectionConfig(cfg, config.SessionAwareSelectionConfig{
-		IdleTimeoutSeconds:         extprocIntPtr(0),
-		MinTurnsBeforeSwitch:       extprocIntPtr(0),
-		SwitchMargin:               extprocFloat64Ptr(0),
-		StayBias:                   extprocFloat64Ptr(0),
-		ToolLoopHardLock:           &falseValue,
-		ContextPortabilityHardLock: &falseValue,
-		DecisionDriftReset:         &falseValue,
-		PrefixCacheWeight:          extprocFloat64Ptr(0),
-		RemainingTurnPriorWeight:   extprocFloat64Ptr(0),
-	})
-
-	if cfg.IdleTimeoutSeconds != 0 ||
-		cfg.MinTurnsBeforeSwitch != 0 ||
-		cfg.SwitchMargin != 0 ||
-		cfg.StayBias != 0 ||
-		cfg.ToolLoopHardLock ||
-		cfg.ContextPortabilityHardLock ||
-		cfg.DecisionDriftReset ||
-		cfg.PrefixCacheWeight != 0 ||
-		cfg.RemainingTurnPriorWeight != 0 {
-		t.Fatalf("expected explicit zero/false session-aware config to be preserved, got %#v", cfg)
-	}
-}
-
-func extprocIntPtr(v int) *int {
-	return &v
-}
-
-func extprocFloat64Ptr(v float64) *float64 {
-	return &v
 }

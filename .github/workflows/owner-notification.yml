@@ -126,16 +126,45 @@ jobs:
 
             // Assign owners to the PR
             if (allOwners.size > 0) {
-              try {
-                await github.rest.issues.addAssignees({
+              const requestedOwners = Array.from(allOwners);
+              const assigneeUsers = await github.paginate(
+                github.rest.issues.listAssignees,
+                {
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  assignees: Array.from(allOwners)
-                });
+                  per_page: 100
+                }
+              );
+              const assignableLogins = new Set(
+                assigneeUsers.map(user => user.login.toLowerCase())
+              );
+              const assignableOwners = requestedOwners.filter(owner =>
+                assignableLogins.has(owner.toLowerCase())
+              );
+              const skippedOwners = requestedOwners.filter(owner =>
+                !assignableLogins.has(owner.toLowerCase())
+              );
+
+              if (skippedOwners.length > 0) {
                 console.log(
-                  `Assigned PR to: ${Array.from(allOwners).join(', ')}`
+                  `Skipping non-assignable owners: ${skippedOwners.join(', ')}`
                 );
+              }
+
+              try {
+                if (assignableOwners.length > 0) {
+                  await github.rest.issues.addAssignees({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: context.issue.number,
+                    assignees: assignableOwners
+                  });
+                  console.log(
+                    `Assigned PR to: ${assignableOwners.join(', ')}`
+                  );
+                } else {
+                  console.log('No assignable owners found for changed files');
+                }
               } catch (error) {
                 console.log(`Failed to assign PR: ${error.message}`);
                 // Continue with comment creation even if assignment fails
@@ -146,7 +175,8 @@ jobs:
             let commentBody = '## 👥 vLLM Semantic Team Notification\n\n';
             commentBody +=
               'The following members have been identified for the changed ' +
-              'files in this PR and have been automatically assigned:\n\n';
+              'files in this PR and have been automatically assigned when ' +
+              'their GitHub accounts are assignable in this repository:\n\n';
 
             for (const [dirPath, info] of ownerMap) {
               commentBody +=

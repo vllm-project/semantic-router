@@ -67,7 +67,7 @@ func (m *MilvusStore) List(ctx context.Context, opts ListOptions) (*ListResult, 
 		opts.UserID, opts.Types, opts.Limit)
 
 	// Build filter expression
-	filterExpr := fmt.Sprintf("user_id == \"%s\"", opts.UserID)
+	filterExpr := milvusUserScopeFilter(opts.UserID)
 
 	if tf := buildTypeFilter(opts.Types); tf != "" {
 		filterExpr = fmt.Sprintf("%s && %s", filterExpr, tf)

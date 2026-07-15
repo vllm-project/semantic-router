@@ -244,6 +244,12 @@ func (q *QdrantStore) AttachResponse(ctx context.Context, id string, body string
 	})
 }
 
+func (q *QdrantStore) AppendOutcome(ctx context.Context, id string, outcome Outcome) error {
+	return q.updateRecord(ctx, id, func(r *Record) {
+		r.Outcomes = append(r.Outcomes, cloneOutcome(outcome))
+	})
+}
+
 func (q *QdrantStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error {
 	return q.updateRecord(ctx, id, func(r *Record) {
 		r.HallucinationDetected = detected
@@ -256,6 +262,7 @@ func (q *QdrantStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 	return q.updateRecord(ctx, id, func(r *Record) {
 		r.PromptTokens = cloneIntPtr(usage.PromptTokens)
 		r.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
+		r.CacheWriteTokens = cloneIntPtr(usage.CacheWriteTokens)
 		r.CompletionTokens = cloneIntPtr(usage.CompletionTokens)
 		r.TotalTokens = cloneIntPtr(usage.TotalTokens)
 		r.ActualCost = cloneFloat64Ptr(usage.ActualCost)

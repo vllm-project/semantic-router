@@ -2,8 +2,9 @@ package services
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
 type IntentMessage struct {
@@ -18,28 +19,55 @@ type intentSignalInput struct {
 	priorUserMessages []string
 	nonUserMessages   []string
 	hasAssistantReply bool
+	imageURL          string
 }
 
 type intentConversationHistory struct {
-	currentUserMessage string
-	priorUserMessages  []string
-	nonUserMessages    []string
-	hasAssistantReply  bool
+	currentUserMessage  string
+	currentUserImageURL string
+	priorUserMessages   []string
+	nonUserMessages     []string
+	hasAssistantReply   bool
+}
+
+type intentMessageImageURL struct {
+	URL string `json:"url"`
+}
+
+// UnmarshalJSON accepts both the Chat Completions object form {"url": "..."} and
+// the Responses API bare-string form, so a string-valued image_url part cannot
+// fail the whole content-parts unmarshal (which would drop text extraction).
+func (u *intentMessageImageURL) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		u.URL = s
+		return nil
+	}
+	// Best-effort: an unknown shape (number/array/bool) yields no image rather
+	// than failing the whole content-parts unmarshal and dropping sibling text.
+	type plain intentMessageImageURL
+	var p plain
+	if err := json.Unmarshal(data, &p); err == nil {
+		*u = intentMessageImageURL(p)
+	}
+	return nil
 }
 
 type intentMessageContentPart struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
+	Type     string                 `json:"type"`
+	Text     string                 `json:"text"`
+	ImageURL *intentMessageImageURL `json:"image_url,omitempty"`
 }
 
 func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
+	text := strings.TrimSpace(req.Text)
+
 	if input, ok := resolveIntentSignalInputFromMessages(req.Messages); ok {
-		return input, nil
+		return applyTopLevelTextFallback(input, text), nil
 	}
 
-	text := strings.TrimSpace(req.Text)
 	if text == "" {
-		return intentSignalInput{}, fmt.Errorf("text cannot be empty")
+		return intentSignalInput{}, ErrEmptyText
 	}
 
 	return intentSignalInput{
@@ -47,6 +75,23 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 		contextText:     text,
 		currentUserText: text,
 	}, nil
+}
+
+// applyTopLevelTextFallback fills empty text slots from req.Text when the
+// messages path was accepted solely because it carries an image, so image safety
+// cannot toggle whether the caller-supplied text is scored.
+func applyTopLevelTextFallback(input intentSignalInput, text string) intentSignalInput {
+	if text == "" || strings.TrimSpace(input.evaluationText) != "" {
+		return input
+	}
+	input.evaluationText = text
+	if strings.TrimSpace(input.contextText) == "" {
+		input.contextText = text
+	}
+	if strings.TrimSpace(input.currentUserText) == "" {
+		input.currentUserText = text
+	}
+	return input
 }
 
 func resolveIntentSignalInputFromMessages(messages []IntentMessage) (intentSignalInput, bool) {
@@ -62,9 +107,13 @@ func resolveIntentSignalInputFromMessages(messages []IntentMessage) (intentSigna
 		priorUserMessages: append([]string(nil), history.priorUserMessages...),
 		nonUserMessages:   append([]string(nil), history.nonUserMessages...),
 		hasAssistantReply: history.hasAssistantReply,
+		imageURL:          history.currentUserImageURL,
 	}
 
-	if input.evaluationText == "" && len(history.nonUserMessages) > 0 {
+	// Promote system/assistant text only with no user text AND no image; the
+	// image guard stops an image-only turn from promoting assistant text, leaving
+	// the slot empty for the caller's req.Text fallback.
+	if input.evaluationText == "" && input.imageURL == "" && len(history.nonUserMessages) > 0 {
 		input.evaluationText = strings.Join(history.nonUserMessages, " ")
 		input.contextText = input.evaluationText
 	}
@@ -78,7 +127,10 @@ func resolveIntentSignalInputFromMessages(messages []IntentMessage) (intentSigna
 		input.contextText = history.currentUserMessage
 	}
 
-	return input, strings.TrimSpace(input.evaluationText) != ""
+	// An image-only user turn (no accompanying text) is still a valid input for
+	// image-modality signals, so accept the message path when an image is present
+	// even if there is no evaluation text to score.
+	return input, strings.TrimSpace(input.evaluationText) != "" || input.imageURL != ""
 }
 
 func extractIntentConversationHistory(messages []IntentMessage) intentConversationHistory {
@@ -86,25 +138,83 @@ func extractIntentConversationHistory(messages []IntentMessage) intentConversati
 
 	for _, msg := range messages {
 		text := extractIntentMessageText(msg.Content)
-		if text == "" {
-			continue
-		}
+		role := strings.ToLower(strings.TrimSpace(msg.Role))
 
-		switch strings.ToLower(strings.TrimSpace(msg.Role)) {
-		case "user":
+		if role == "user" {
+			imageURL := extractIntentMessageImageURL(msg.Content)
+			if text == "" && imageURL == "" {
+				continue
+			}
+			// An image-only turn attaches its image without clobbering the most
+			// recent user text, which stays the best text to score.
+			if text == "" {
+				history.currentUserImageURL = imageURL
+				continue
+			}
 			if history.currentUserMessage != "" {
 				history.priorUserMessages = append(history.priorUserMessages, history.currentUserMessage)
 			}
 			history.currentUserMessage = text
+			history.currentUserImageURL = imageURL
+			continue
+		}
+
+		if text == "" {
+			continue
+		}
+
+		switch role {
 		case "system", "assistant":
 			history.nonUserMessages = append(history.nonUserMessages, text)
-			if strings.EqualFold(strings.TrimSpace(msg.Role), "assistant") {
+			if role == "assistant" {
 				history.hasAssistantReply = true
 			}
 		}
 	}
 
 	return history
+}
+
+// extractIntentMessageImageURL returns the first safe inline base64 image data
+// URI (canonicalized) from a message's content parts. Only data URIs are
+// accepted; HTTP(S) URLs are rejected to prevent SSRF. This shares the same
+// imageurl gate as the ExtProc request path but is not a full behavioral mirror
+// of it (e.g. the ExtProc path fills the first safe image once across all user
+// turns, whereas this HTTP path resolves per turn).
+func extractIntentMessageImageURL(raw json.RawMessage) string {
+	raw = bytesTrimSpace(raw)
+	if len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+
+	var parts []intentMessageContentPart
+	if err := json.Unmarshal(raw, &parts); err == nil {
+		return firstSafeImageURL(parts)
+	}
+
+	var part intentMessageContentPart
+	if err := json.Unmarshal(raw, &part); err == nil {
+		return firstSafeImageURL([]intentMessageContentPart{part})
+	}
+
+	return ""
+}
+
+func firstSafeImageURL(parts []intentMessageContentPart) string {
+	for _, part := range parts {
+		if part.ImageURL == nil {
+			continue
+		}
+		// Return the canonical form (lowercased scheme/MIME/";base64," marker,
+		// payload preserved) rather than the raw URI. The classifier backend that
+		// ultimately consumes this scans for ";base64," case-sensitively, so an
+		// accepted uppercase-scheme data URI would otherwise yield no image signal
+		// on the classify/eval path even though the gate admitted it.
+		if canonical, ok := imageurl.CanonicalDataURL(strings.TrimSpace(part.ImageURL.URL)); ok {
+			return canonical
+		}
+	}
+	return ""
 }
 
 func extractIntentMessageText(raw json.RawMessage) string {

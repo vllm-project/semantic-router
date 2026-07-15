@@ -2,6 +2,7 @@
 
 #![allow(dead_code)]
 
+pub mod attention; // NEW: Shared attention kernels (chunked SDPA)
 pub mod embedding;
 pub mod generative; // NEW: Generative/causal language models (Qwen3ForCausalLM)
 pub mod lora;
@@ -53,6 +54,5 @@ pub use embedding::pooling::{cls_pool, last_token_pool, mean_pool};
 pub mod model_factory_test;
 #[cfg(test)]
 pub mod routing_test;
-#[cfg(test)]
 #[cfg(test)]
 pub mod unified_interface_test;

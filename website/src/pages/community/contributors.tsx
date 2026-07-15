@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import Layout from '@theme/Layout'
 import Link from '@docusaurus/Link'
 import Translate, { translate } from '@docusaurus/Translate'
@@ -12,7 +12,15 @@ import type {
   ContributorRankEntry,
   ContributorRankRange,
 } from '../../data/contributorRank.generated'
+import { committerStatsData } from '../../data/committerReviewStats.generated'
+import type { CommitterStatsRange } from '../../data/committerReviewStats.generated'
 import styles from './contributors.module.css'
+
+type SortBy = 'commits' | 'reviews'
+
+type ContributorWithReviews = ContributorRankEntry & {
+  reviews: number
+}
 
 type RangeOption = {
   id: ContributorRankRange
@@ -28,25 +36,47 @@ const ContributorsPage: React.FC = () => {
 
   const rangeOptions: RangeOption[] = [
     {
-      id: 'last3months',
+      id: 'v03ToNow',
       label: translate({
-        id: 'community.contributors.range.last3months.label',
-        message: 'Last 3 months',
+        id: 'community.contributors.range.v03ToNow.label',
+        message: 'v0.3 -> Now',
       }),
       caption: translate({
-        id: 'community.contributors.range.last3months.caption',
-        message: 'Default',
+        id: 'community.contributors.range.v03ToNow.caption',
+        message: 'Current release',
       }),
     },
     {
-      id: 'last365days',
+      id: 'v02ToV03',
       label: translate({
-        id: 'community.contributors.range.last365days.label',
-        message: 'Last 365 days',
+        id: 'community.contributors.range.v02ToV03.label',
+        message: 'v0.2 -> v0.3',
       }),
       caption: translate({
-        id: 'community.contributors.range.last365days.caption',
-        message: 'Trailing year',
+        id: 'community.contributors.range.v02ToV03.caption',
+        message: 'Release gap',
+      }),
+    },
+    {
+      id: 'v01ToV02',
+      label: translate({
+        id: 'community.contributors.range.v01ToV02.label',
+        message: 'v0.1 -> v0.2',
+      }),
+      caption: translate({
+        id: 'community.contributors.range.v01ToV02.caption',
+        message: 'Release gap',
+      }),
+    },
+    {
+      id: 'v0ToV01',
+      label: translate({
+        id: 'community.contributors.range.v0ToV01.label',
+        message: 'v0 -> v0.1',
+      }),
+      caption: translate({
+        id: 'community.contributors.range.v0ToV01.caption',
+        message: 'Initial release',
       }),
     },
     {
@@ -62,10 +92,48 @@ const ContributorsPage: React.FC = () => {
     },
   ]
 
-  const [selectedRange, setSelectedRange] = useState<ContributorRankRange>('last3months')
+  const [selectedRange, setSelectedRange] = useState<ContributorRankRange>('v03ToNow')
+  const [sortBy, setSortBy] = useState<SortBy>('commits')
   const snapshot = contributorRankData[selectedRange]
-  const topContributors = snapshot.entries.slice(0, 5)
+  const committerSnapshot = committerStatsData[selectedRange as CommitterStatsRange]
   const selectedRangeLabel = rangeOptions.find(option => option.id === selectedRange)?.label ?? snapshot.label
+
+  const rankedEntries = useMemo(() => {
+    const reviewsByLogin = new Map<string, number>()
+    for (const entry of committerSnapshot.entries) {
+      if (entry.login) {
+        reviewsByLogin.set(entry.login.toLowerCase(), entry.reviews)
+      }
+    }
+
+    const entriesWithReviews: ContributorWithReviews[] = snapshot.entries.map(entry => ({
+      ...entry,
+      reviews: entry.login ? (reviewsByLogin.get(entry.login.toLowerCase()) ?? 0) : 0,
+    }))
+
+    const sorted = [...entriesWithReviews].sort((left, right) => {
+      if (sortBy === 'reviews') {
+        if (right.reviews !== left.reviews) {
+          return right.reviews - left.reviews
+        }
+
+        if (right.commits !== left.commits) {
+          return right.commits - left.commits
+        }
+
+        return left.rank - right.rank
+      }
+
+      return left.rank - right.rank
+    })
+
+    return sorted.map((entry, index) => ({
+      ...entry,
+      rank: index + 1,
+    }))
+  }, [committerSnapshot.entries, snapshot.entries, sortBy])
+
+  const topContributors = rankedEntries.slice(0, 5)
 
   return (
     <Layout
@@ -142,39 +210,74 @@ const ContributorsPage: React.FC = () => {
                 {formatDate(contributorRankGeneratedAt, dateLocale)}
               </p>
             </div>
-            <label className={styles.rangeSelectLabel}>
-              <span>
-                <Translate id="community.contributors.range.label">Range</Translate>
-              </span>
-              <select
-                className={styles.rangeSelect}
-                value={selectedRange}
-                aria-label={translate({
-                  id: 'community.contributors.range.aria',
-                  message: 'Contributor leaderboard time range',
-                })}
-                onChange={event => setSelectedRange(event.target.value as ContributorRankRange)}
-              >
-                {rangeOptions.map(option => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
+            <div className={styles.sectionControls}>
+              <label className={styles.rangeSelectLabel}>
+                <span>
+                  <Translate id="community.contributors.range.label">Range</Translate>
+                </span>
+                <select
+                  className={styles.rangeSelect}
+                  value={selectedRange}
+                  aria-label={translate({
+                    id: 'community.contributors.range.aria',
+                    message: 'Contributor leaderboard release window',
+                  })}
+                  onChange={event => setSelectedRange(event.target.value as ContributorRankRange)}
+                >
+                  {rangeOptions.map(option => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={styles.rangeSelectLabel}>
+                <span>
+                  <Translate id="community.contributors.sort.label">Sort by</Translate>
+                </span>
+                <select
+                  className={styles.rangeSelect}
+                  value={sortBy}
+                  aria-label={translate({
+                    id: 'community.contributors.sort.aria',
+                    message: 'Contributor leaderboard sort order',
+                  })}
+                  onChange={event => setSortBy(event.target.value as SortBy)}
+                >
+                  <option value="commits">
+                    {translate({
+                      id: 'community.contributors.sort.commits',
+                      message: 'Commits',
+                    })}
                   </option>
-                ))}
-              </select>
-            </label>
+                  <option value="reviews">
+                    {translate({
+                      id: 'community.contributors.sort.reviews',
+                      message: 'Reviews',
+                    })}
+                  </option>
+                </select>
+              </label>
+            </div>
           </div>
 
           <div className={styles.rankListHeader} aria-hidden="true">
             <span><Translate id="community.contributors.table.rank">Rank</Translate></span>
             <span><Translate id="community.contributors.table.contributor">Contributor</Translate></span>
             <span><Translate id="community.contributors.table.commits">Commits</Translate></span>
+            <span><Translate id="community.contributors.table.reviews">Reviews</Translate></span>
             <span><Translate id="community.contributors.table.share">Share</Translate></span>
             <span><Translate id="community.contributors.table.latest">Latest</Translate></span>
           </div>
 
           <div className={styles.rankList}>
-            {snapshot.entries.map(entry => (
-              <ContributorRow key={`${snapshot.id}-${entry.rank}-${entry.name}`} entry={entry} dateLocale={dateLocale} numberLocale={numberLocale} />
+            {rankedEntries.map(entry => (
+              <ContributorRow
+                key={`${snapshot.id}-${entry.rank}-${entry.name}`}
+                entry={entry}
+                dateLocale={dateLocale}
+                numberLocale={numberLocale}
+              />
             ))}
           </div>
         </section>
@@ -222,7 +325,7 @@ const TopContributorCard: React.FC<{ entry: ContributorRankEntry, numberLocale: 
 }
 
 const ContributorRow: React.FC<{
-  entry: ContributorRankEntry
+  entry: ContributorWithReviews
   numberLocale: string
   dateLocale: string
 }> = ({ entry, numberLocale, dateLocale }) => {
@@ -265,6 +368,11 @@ const ContributorRow: React.FC<{
       <div className={styles.statBlock}>
         <span><Translate id="community.contributors.table.commits">Commits</Translate></span>
         <strong>{entry.commits.toLocaleString(numberLocale)}</strong>
+      </div>
+
+      <div className={styles.statBlock}>
+        <span><Translate id="community.contributors.table.reviews">Reviews</Translate></span>
+        <strong>{entry.reviews.toLocaleString(numberLocale)}</strong>
       </div>
 
       <div className={styles.share}>

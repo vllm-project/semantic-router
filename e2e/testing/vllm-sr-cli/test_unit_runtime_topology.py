@@ -125,22 +125,22 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
             self.assertIn(container_name, removed_container_names)
 
     @mock.patch.dict(os.environ, {"CONTAINER_RUNTIME": "podman"}, clear=False)
-    def test_cli_test_base_rejects_podman_env_override(self):
+    def test_cli_test_base_accepts_podman_env_override(self):
         with mock.patch.object(
             cli_test_base.shutil,
             "which",
             side_effect=lambda name: "/usr/bin/podman" if name == "podman" else None,
-        ), self.assertRaisesRegex(RuntimeError, "require Docker"):
-            CLITestBase._detect_container_runtime()
+        ):
+            self.assertEqual(CLITestBase._detect_container_runtime(), "podman")
 
     @mock.patch.dict(os.environ, {}, clear=True)
-    def test_cli_test_base_rejects_podman_only_hosts(self):
+    def test_cli_test_base_falls_back_to_podman(self):
         with mock.patch.object(
             cli_test_base.shutil,
             "which",
             side_effect=lambda name: "/usr/bin/podman" if name == "podman" else None,
-        ), self.assertRaisesRegex(RuntimeError, "Podman is installed but unsupported"):
-            CLITestBase._detect_container_runtime()
+        ):
+            self.assertEqual(CLITestBase._detect_container_runtime(), "podman")
 
     @mock.patch.object(CLITestBase, "_run_subprocess")
     def test_run_cli_preserves_partial_output_on_timeout(self, run_subprocess):
@@ -163,13 +163,13 @@ class TestCLITestRunnerRuntimeDetection(unittest.TestCase):
     """Verify the standalone CLI test runner matches Docker-only runtime rules."""
 
     @mock.patch.dict(os.environ, {"CONTAINER_RUNTIME": "podman"}, clear=False)
-    def test_runner_rejects_podman_env_override(self):
+    def test_runner_accepts_podman_env_override(self):
         with mock.patch.object(
             run_cli_tests.shutil,
             "which",
             side_effect=lambda name: "/usr/bin/podman" if name == "podman" else None,
         ):
-            self.assertIsNone(run_cli_tests.detect_container_runtime())
+            self.assertEqual(run_cli_tests.detect_container_runtime(), "podman")
 
     @mock.patch.dict(os.environ, {}, clear=True)
     def test_runner_accepts_docker(self):

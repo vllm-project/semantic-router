@@ -4,6 +4,10 @@ import { useAuth } from "../contexts/AuthContext";
 import { useSetup } from "../contexts/SetupContext";
 import ColorBends from "../components/ColorBends";
 import {
+  DASHBOARD_COLOR_BENDS_MOTION,
+  DASHBOARD_MOTION_COLORS,
+} from "../components/dashboardMotionTheme";
+import {
   buildAuthTransitionPath,
   resolvePostAuthTarget,
 } from "./authTransitionSupport";
@@ -34,25 +38,25 @@ const BOOTSTRAP_STEPS: BootstrapStep[] = [
     key: "name",
     label: "Identity",
     eyebrow: "Step 1",
-    title: "Who are you? What should we call you?",
+    title: "Name your first administrator.",
     description:
-      "Give the workspace a human name for the first admin before anything else wakes up.",
+      "This name identifies who will configure the first model system.",
   },
   {
     key: "email",
     label: "Access",
     eyebrow: "Step 2",
-    title: "Where should your future admin sign in?",
+    title: "Choose the administrator email.",
     description:
-      "Choose the email that will own the first activation, setup flow, and later user management.",
+      "Use the email that will own activation, setup, and future access management.",
   },
   {
     key: "password",
-    label: "Future",
+    label: "Security",
     eyebrow: "Step 3",
-    title: "Set the key, then step into the future.",
+    title: "Secure the workspace.",
     description:
-      "One last step. Lock in a password and move directly into the first-run experience.",
+      "Create a password, then continue directly to model setup.",
   },
 ];
 
@@ -217,19 +221,14 @@ const LoginPage: React.FC = () => {
 
   return (
     <div className={styles.container}>
-      <div className={styles.backgroundEffect}>
+      <div
+        className={styles.backgroundEffect}
+        data-testid="login-motion-background"
+      >
         <ColorBends
-          colors={["#76b900", "#00b4d8", "#ffffff"]}
-          rotation={20}
-          speed={0.2}
-          scale={1}
-          frequency={1}
-          warpStrength={1}
-          mouseInfluence={1}
-          parallax={0.5}
-          noise={0.08}
+          colors={DASHBOARD_MOTION_COLORS}
+          {...DASHBOARD_COLOR_BENDS_MOTION}
           transparent
-          autoRotate={0.8}
         />
       </div>
 
@@ -252,22 +251,22 @@ const LoginPage: React.FC = () => {
                 {bootstrapStatus === "checking"
                   ? "Preparing workspace"
                   : isBootstrapMode
-                    ? "Bootstrap wizard"
-                    : "Dashboard sign-in"}
+                    ? "Workspace activation"
+                    : "Dashboard access"}
               </p>
               <h1 className={styles.storyTitle}>
                 {bootstrapStatus === "checking"
-                  ? "Checking whether this workspace still needs its first admin."
+                  ? "Preparing your workspace."
                   : isBootstrapMode
-                    ? "Create the first admin one step at a time."
-                    : "Sign in and continue where the router left off."}
+                    ? "Create the first administrator."
+                    : "Continue building your Mixture-of-Models."}
               </h1>
               <p className={styles.storyDescription}>
                 {bootstrapStatus === "checking"
-                  ? "We are deciding whether this browser should enter creation mode or the normal sign-in surface."
+                  ? "We are checking whether this workspace needs an administrator or is ready for sign-in."
                   : isBootstrapMode
-                    ? "No account exists yet. Move name first, then access, then the final key that opens setup."
-                    : "Bootstrap is complete. This surface stays on sign-in only and no longer exposes first-admin creation."}
+                    ? "Create the account that will connect heterogeneous LLMs and define their model paths."
+                    : "Sign in to inspect model paths, tune decisions, and operate the running system."}
               </p>
             </div>
 
@@ -328,7 +327,11 @@ const LoginPage: React.FC = () => {
               </div>
             </section>
           ) : isBootstrapMode ? (
-            <form className={styles.card} onSubmit={onSubmitBootstrap}>
+            <form
+              className={styles.card}
+              onSubmit={onSubmitBootstrap}
+              autoComplete="on"
+            >
               <div className={styles.stageHeader}>
                 <p className={styles.stageEyebrow}>{currentStep.eyebrow}</p>
                 <h2 className={styles.stageTitle}>{currentStep.title}</h2>
@@ -346,6 +349,8 @@ const LoginPage: React.FC = () => {
                     id="bootstrap-name"
                     className={styles.input}
                     type="text"
+                    name="name"
+                    autoComplete="name"
                     value={bootstrapForm.name}
                     onChange={(event) =>
                       setBootstrapForm((current) => ({
@@ -369,6 +374,8 @@ const LoginPage: React.FC = () => {
                     id="bootstrap-email"
                     className={styles.input}
                     type="email"
+                    name="email"
+                    autoComplete="username"
                     value={bootstrapForm.email}
                     onChange={(event) =>
                       setBootstrapForm((current) => ({
@@ -396,6 +403,8 @@ const LoginPage: React.FC = () => {
                       id="bootstrap-password"
                       className={styles.input}
                       type="password"
+                      name="new-password"
+                      autoComplete="new-password"
                       value={bootstrapForm.password}
                       onChange={(event) =>
                         setBootstrapForm((current) => ({
@@ -456,14 +465,18 @@ const LoginPage: React.FC = () => {
                 >
                   {bootstrapStepIndex === BOOTSTRAP_STEPS.length - 1
                     ? pending
-                      ? "Opening the future..."
-                      : "Enter Future"
+                      ? "Creating administrator..."
+                      : "Create admin and continue"
                     : "Next"}
                 </button>
               </div>
             </form>
           ) : (
-            <form className={styles.card} onSubmit={onSubmitLogin}>
+            <form
+              className={styles.card}
+              onSubmit={onSubmitLogin}
+              autoComplete="on"
+            >
               <div className={styles.stageHeader}>
                 <p className={styles.stageEyebrow}>Account access</p>
                 <h2 className={styles.stageTitle}>Sign in</h2>
@@ -481,6 +494,8 @@ const LoginPage: React.FC = () => {
                   id="login-email"
                   className={styles.input}
                   type="email"
+                  name="email"
+                  autoComplete="username"
                   value={loginEmail}
                   onChange={(event) => setLoginEmail(event.target.value)}
                   placeholder="you@example.com"
@@ -497,6 +512,8 @@ const LoginPage: React.FC = () => {
                   id="login-password"
                   className={styles.input}
                   type="password"
+                  name="password"
+                  autoComplete="current-password"
                   value={loginPassword}
                   onChange={(event) => setLoginPassword(event.target.value)}
                   placeholder="••••••••"

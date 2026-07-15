@@ -4,32 +4,39 @@ import "reflect"
 
 func assertReferenceConfigRouterGlobalCoverage(t testingT, router map[string]interface{}) {
 	modelSelection := mustMapAt(t, router, "model_selection")
+	learning := mustMapAt(t, router, "learning")
 
 	assertMapCoversStructFields(t, router, reflect.TypeOf(CanonicalRouterGlobal{}), "global.router")
 	assertMapCoversStructFields(t, mustMapAt(t, router, "streamed_body"), reflect.TypeOf(CanonicalStreamedBody{}), "global.router.streamed_body")
 	assertMapCoversStructFields(t, mustMapAt(t, router, "skip_processing"), reflect.TypeOf(SkipProcessingConfig{}), "global.router.skip_processing")
 	assertMapCoversStructFields(t, modelSelection, reflect.TypeOf(ModelSelectionConfig{}), "global.router.model_selection")
 	assertReferenceConfigRouterSelectionCoverage(t, modelSelection)
+	assertReferenceConfigRouterLearningCoverage(t, learning)
 }
 
 func assertReferenceConfigRouterSelectionCoverage(t testingT, modelSelection map[string]interface{}) {
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml"), reflect.TypeOf(MLSelectionConfig{}), "global.router.model_selection.ml")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "elo"), reflect.TypeOf(EloSelectionConfig{}), "global.router.model_selection.elo")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "router_dc"), reflect.TypeOf(RouterDCSelectionConfig{}), "global.router.model_selection.router_dc")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "automix"), reflect.TypeOf(AutoMixSelectionConfig{}), "global.router.model_selection.automix")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "hybrid"), reflect.TypeOf(HybridSelectionConfig{}), "global.router.model_selection.hybrid")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "session_aware"), reflect.TypeOf(SessionAwareSelectionConfig{}), "global.router.model_selection.session_aware")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "model_switch_gate"), reflect.TypeOf(ModelSwitchGateConfig{}), "global.router.model_selection.model_switch_gate")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "knn"), reflect.TypeOf(MLKNNConfig{}), "global.router.model_selection.ml.knn")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "kmeans"), reflect.TypeOf(MLKMeansConfig{}), "global.router.model_selection.ml.kmeans")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "svm"), reflect.TypeOf(MLSVMConfig{}), "global.router.model_selection.ml.svm")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "mlp"), reflect.TypeOf(MLMLPConfig{}), "global.router.model_selection.ml.mlp")
+}
 
-	lookupTables := mustMapAt(t, modelSelection, "lookup_tables")
-	assertMapCoversStructFields(t, lookupTables, reflect.TypeOf(LookupTableConfig{}), "global.router.model_selection.lookup_tables")
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, lookupTables, "quality_gaps"), reflect.TypeOf(QualityGapOverride{}), "global.router.model_selection.lookup_tables.quality_gaps")
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, lookupTables, "handoff_penalties"), reflect.TypeOf(HandoffPenaltyOverride{}), "global.router.model_selection.lookup_tables.handoff_penalties")
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, lookupTables, "remaining_turn_priors"), reflect.TypeOf(RemainingTurnPriorOverride{}), "global.router.model_selection.lookup_tables.remaining_turn_priors")
+func assertReferenceConfigRouterLearningCoverage(t testingT, learning map[string]interface{}) {
+	adaptation := mustMapAt(t, learning, "adaptation")
+	protection := mustMapAt(t, learning, "protection")
+	identity := mustMapAt(t, protection, "identity")
+	identityHeaders := mustMapAt(t, identity, "headers")
+
+	assertMapCoversStructFields(t, learning, reflect.TypeOf(RouterLearningConfig{}), "global.router.learning")
+	assertMapCoversStructFields(t, adaptation, reflect.TypeOf(RouterLearningAdaptationConfig{}), "global.router.learning.adaptation")
+	assertMapCoversStructFields(t, protection, reflect.TypeOf(RouterLearningProtectionConfig{}), "global.router.learning.protection")
+	assertMapCoversStructFields(t, identity, reflect.TypeOf(RouterLearningIdentityConfig{}), "global.router.learning.protection.identity")
+	assertMapCoversStructFields(t, identityHeaders, reflect.TypeOf(RouterLearningIdentityHeadersConfig{}), "global.router.learning.protection.identity.headers")
+	assertMapCoversStructFields(t, mustMapAt(t, protection, "tuning"), reflect.TypeOf(RouterLearningProtectionTuning{}), "global.router.learning.protection.tuning")
 }
 
 func assertReferenceConfigServiceGlobalCoverage(t testingT, services map[string]interface{}) {
@@ -165,6 +172,13 @@ func assertReferenceConfigIntegrationGlobalCoverage(t testingT, integrations map
 		"global.integrations.tools.advanced_filtering.weights",
 	)
 	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper"), reflect.TypeOf(LooperConfig{}), "global.integrations.looper")
+	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper", "remom"), reflect.TypeOf(ReMoMRuntimeConfig{}), "global.integrations.looper.remom")
+	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper", "fusion"), reflect.TypeOf(FusionRuntimeConfig{}), "global.integrations.looper.fusion")
+	flow := mustMapAt(t, integrations, "looper", "flow")
+	assertMapCoversStructFields(t, flow, reflect.TypeOf(FlowRuntimeConfig{}), "global.integrations.looper.flow")
+	assertMapCoversStructFields(t, mustMapAt(t, flow, "state"), reflect.TypeOf(WorkflowStateRuntimeConfig{}), "global.integrations.looper.flow.state")
+	assertMapCoversStructFields(t, mustMapAt(t, flow, "state", "file"), reflect.TypeOf(WorkflowStateFileConfig{}), "global.integrations.looper.flow.state.file")
+	assertMapCoversStructFields(t, mustMapAt(t, flow, "state", "redis"), reflect.TypeOf(WorkflowStateRedisConfig{}), "global.integrations.looper.flow.state.redis")
 }
 
 func assertReferenceConfigModelCatalogCoverage(t testingT, modelCatalog map[string]interface{}) {
@@ -190,6 +204,12 @@ func assertReferenceConfigEmbeddingCatalogCoverage(t testingT, embeddings map[st
 		mustMapAt(t, embeddings, "semantic", "embedding_config", "prototype_scoring"),
 		reflect.TypeOf(PrototypeScoringConfig{}),
 		"global.model_catalog.embeddings.semantic.embedding_config.prototype_scoring",
+	)
+	assertMapCoversStructFields(
+		t,
+		mustMapAt(t, embeddings, "semantic", "endpoint"),
+		reflect.TypeOf(EmbeddingEndpointConfig{}),
+		"global.model_catalog.embeddings.semantic.endpoint",
 	)
 }
 

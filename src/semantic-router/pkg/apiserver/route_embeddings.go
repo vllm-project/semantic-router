@@ -3,16 +3,56 @@
 package apiserver
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
+
+// multiModalEncodeImage is the FFI image-encode entry point, kept as a
+// package-level var so tests can inject a failing encoder without a loaded model.
+var multiModalEncodeImage = candle_binding.MultiModalEncodeImageFromBase64
+
+// imageEncodeError marks an image-encode failure driven by the request input:
+// the payload validated as a safe base64 data URI but was not a decodable image.
+// The handler maps it to 400 INVALID_IMAGE rather than 500, so a client-supplied
+// bad image is reported as a client error, not an internal one.
+type imageEncodeError struct {
+	index int
+	err   error
+}
+
+func (e *imageEncodeError) Error() string {
+	return fmt.Sprintf("images[%d]: %v", e.index, e.err)
+}
+
+func (e *imageEncodeError) Unwrap() error { return e.err }
+
+// classifyEmbeddingError maps a buildEmbeddingResults error to the HTTP status,
+// error code, and client message. Input-caused image-encode failures are 400
+// INVALID_IMAGE; every other failure is a genuine 500.
+func classifyEmbeddingError(err error) (int, string, string) {
+	var imgErr *imageEncodeError
+	if errors.As(err, &imgErr) {
+		return http.StatusBadRequest, "INVALID_IMAGE",
+			fmt.Sprintf("images[%d] could not be decoded as an image", imgErr.index)
+	}
+	return http.StatusInternalServerError, "EMBEDDING_GENERATION_FAILED",
+		fmt.Sprintf("failed to generate embedding: %v", err)
+}
 
 const (
 	defaultEmbeddingDimension = 768
 	defaultEmbeddingPriority  = 0.5
+	// maxImagesPerRequest bounds images per request; each is a full SigLIP
+	// forward pass and the body-size cap alone admits very many minimal images.
+	maxImagesPerRequest = 8
 )
 
 // handleEmbeddings handles embedding generation requests
@@ -24,12 +64,12 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 
 	results, totalProcessingTime, err := buildEmbeddingResults(req)
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "EMBEDDING_GENERATION_FAILED",
-			fmt.Sprintf("failed to generate embedding: %v", err))
+		status, code, message := classifyEmbeddingError(err)
+		s.writeErrorResponse(w, status, code, message)
 		return
 	}
 
-	avgProcessingTime := float64(totalProcessingTime) / float64(len(req.Texts))
+	avgProcessingTime := averageEmbeddingProcessingTime(totalProcessingTime, req)
 	response := EmbeddingResponse{
 		Embeddings:            results,
 		TotalCount:            len(results),
@@ -51,12 +91,25 @@ func (s *ClassificationAPIServer) parseEmbeddingRequest(w http.ResponseWriter, r
 	}
 
 	applyEmbeddingDefaults(&req)
-	if code, message, ok := validateEmbeddingRequest(req); !ok {
+	mmbertPath := ""
+	if s.config != nil {
+		mmbertPath = s.config.EmbeddingModels.MmBertModelPath
+	}
+	availableLayers := config.MmBertAvailableLayers(mmbertPath)
+	if code, message, ok := validateEmbeddingRequest(req, availableLayers); !ok {
 		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
 		return EmbeddingRequest{}, false
 	}
 
 	return req, true
+}
+
+func averageEmbeddingProcessingTime(totalProcessingTime int64, req EmbeddingRequest) float64 {
+	inputCount := len(req.Texts) + len(req.Images)
+	if inputCount == 0 {
+		return 0
+	}
+	return float64(totalProcessingTime) / float64(inputCount)
 }
 
 func applyEmbeddingDefaults(req *EmbeddingRequest) {
@@ -72,9 +125,12 @@ func applyEmbeddingDefaults(req *EmbeddingRequest) {
 	}
 }
 
-func validateEmbeddingRequest(req EmbeddingRequest) (string, string, bool) {
-	if len(req.Texts) == 0 {
-		return "INVALID_INPUT", "texts array cannot be empty", false
+func validateEmbeddingRequest(req EmbeddingRequest, mmbertLayers []int) (string, string, bool) {
+	if len(req.Texts) == 0 && len(req.Images) == 0 {
+		return "INVALID_INPUT", "at least one of texts or images must be provided", false
+	}
+	if code, message, ok := validateEmbeddingImages(req.Images); !ok {
+		return code, message, false
 	}
 	if !isValidDimension(req.Dimension) {
 		return "INVALID_DIMENSION", fmt.Sprintf("dimension must be one of: 64, 128, 256, 512, 768, 1024 (got %d)", req.Dimension), false
@@ -82,14 +138,31 @@ func validateEmbeddingRequest(req EmbeddingRequest) (string, string, bool) {
 	if req.TargetLayer != 0 && req.Model != "mmbert" {
 		return "INVALID_PARAMETER", "target_layer is only supported for model='mmbert'", false
 	}
-	if req.Model == "mmbert" && req.TargetLayer != 0 && !isValidMmBertLayer(req.TargetLayer) {
-		return "INVALID_LAYER", fmt.Sprintf("target_layer must be one of: 3, 6, 11, 22 (got %d)", req.TargetLayer), false
+	if req.Model == "mmbert" && req.TargetLayer != 0 && !config.IsValidMmBertLayer(req.TargetLayer, mmbertLayers) {
+		return "INVALID_LAYER", fmt.Sprintf("target_layer must be one of: %s (got %d)", formatLayerList(mmbertLayers), req.TargetLayer), false
+	}
+	return "", "", true
+}
+
+// validateEmbeddingImages enforces the image-input contract: a bounded count of
+// safe inline base64 image data URIs whose payloads decode.
+func validateEmbeddingImages(images []string) (string, string, bool) {
+	if len(images) > maxImagesPerRequest {
+		return "INVALID_INPUT", fmt.Sprintf("at most %d images may be provided per request (got %d)", maxImagesPerRequest, len(images)), false
+	}
+	for i, image := range images {
+		if !imageurl.IsSafeImageDataURL(image) {
+			return "INVALID_IMAGE", fmt.Sprintf("images[%d] must be an inline base64 image data URI (data:image/<type>;base64,...)", i), false
+		}
+		if _, ok := imageurl.DecodeBase64(image); !ok {
+			return "INVALID_IMAGE", fmt.Sprintf("images[%d] is not valid base64-encoded image data", i), false
+		}
 	}
 	return "", "", true
 }
 
 func buildEmbeddingResults(req EmbeddingRequest) ([]EmbeddingResult, int64, error) {
-	results := make([]EmbeddingResult, 0, len(req.Texts))
+	results := make([]EmbeddingResult, 0, len(req.Texts)+len(req.Images))
 	var totalProcessingTime int64
 
 	for _, text := range req.Texts {
@@ -104,6 +177,33 @@ func buildEmbeddingResults(req EmbeddingRequest) ([]EmbeddingResult, int64, erro
 			Embedding:        output.Embedding,
 			Dimension:        len(output.Embedding),
 			ModelUsed:        output.ModelType,
+			ProcessingTimeMs: processingTime,
+		})
+
+		totalProcessingTime += processingTime
+	}
+
+	for i, image := range req.Images {
+		// Canonicalize so the FFI's case-sensitive ";base64," scan finds the
+		// payload boundary (validation already guaranteed a safe data URI).
+		encodeInput := image
+		if canonical, ok := imageurl.CanonicalDataURL(image); ok {
+			encodeInput = canonical
+		}
+		output, err := multiModalEncodeImage(encodeInput, req.Dimension)
+		if err != nil {
+			// The image already passed the safe-data-URI + base64-decode gate, so
+			// an encode failure here is input-caused (undecodable image bytes);
+			// surface it as a 400 rather than a 500.
+			return nil, 0, &imageEncodeError{index: i, err: err}
+		}
+
+		processingTime := int64(output.ProcessingTimeMs)
+		results = append(results, EmbeddingResult{
+			Modality:         output.Modality,
+			Embedding:        output.Embedding,
+			Dimension:        len(output.Embedding),
+			ModelUsed:        "multi-modal-embed",
 			ProcessingTimeMs: processingTime,
 		})
 
@@ -303,8 +403,12 @@ func isValidDimension(dim int) bool {
 	return validDimensions[dim]
 }
 
-// isValidMmBertLayer checks if the provided layer is valid for mmBERT early exit
-func isValidMmBertLayer(layer int) bool {
-	validLayers := map[int]bool{3: true, 6: true, 11: true, 22: true}
-	return validLayers[layer]
+// formatLayerList renders a layer set as a comma-separated string for error
+// messages, e.g. [6 11 16 22] -> "6, 11, 16, 22".
+func formatLayerList(layers []int) string {
+	parts := make([]string, len(layers))
+	for i, l := range layers {
+		parts[i] = strconv.Itoa(l)
+	}
+	return strings.Join(parts, ", ")
 }

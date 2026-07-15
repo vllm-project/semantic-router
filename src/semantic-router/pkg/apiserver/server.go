@@ -13,7 +13,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
@@ -70,12 +69,7 @@ func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime
 
 	liveClassificationSvc := newLiveClassificationService(
 		classificationSvc,
-		func() classificationService {
-			if runtimeRegistry != nil {
-				return runtimeRegistry.ClassificationService()
-			}
-			return services.GetGlobalClassificationService()
-		},
+		buildClassificationResolver(runtimeRegistry),
 	)
 
 	// Create server instance
@@ -158,6 +152,29 @@ func resolveMemoryStore(cfg *config.RouterConfig, runtimeRegistry *routerruntime
 		return runtimeRegistry.MemoryStore()
 	}
 	return initMemoryStore(5, 500*time.Millisecond)
+}
+
+// buildClassificationResolver returns the resolver used by the live
+// classification service. Both sources return a concrete
+// *services.ClassificationService which is nil until the runtime finishes
+// initializing; returning that nil pointer directly would wrap it into a
+// non-nil interface value, defeat the nil check in
+// liveClassificationService.current(), and panic with a nil receiver on the
+// first request. Return an untyped nil instead so current() falls back to
+// the placeholder service.
+func buildClassificationResolver(runtimeRegistry *routerruntime.Registry) func() classificationService {
+	return func() classificationService {
+		if runtimeRegistry != nil {
+			if svc := runtimeRegistry.ClassificationService(); svc != nil {
+				return svc
+			}
+			return nil
+		}
+		if svc := services.GetGlobalClassificationService(); svc != nil {
+			return svc
+		}
+		return nil
+	}
 }
 
 func buildConfigResolver(runtimeRegistry *routerruntime.Registry) func() *config.RouterConfig {
@@ -345,35 +362,4 @@ func (s *ClassificationAPIServer) writeErrorResponse(w http.ResponseWriter, stat
 	}
 
 	s.writeJSONResponse(w, statusCode, errorResponse)
-}
-
-// handleRLState returns the current state of RL-based selectors for debugging
-func (s *ClassificationAPIServer) handleRLState(w http.ResponseWriter, r *http.Request) {
-	userID := r.URL.Query().Get("user_id")
-
-	state := map[string]interface{}{
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-	}
-
-	registry := s.currentSelectionRegistry()
-	if registry == nil {
-		s.writeJSONResponse(w, http.StatusOK, state)
-		return
-	}
-
-	// Get RLDriven selector state
-	if rlSelector, ok := registry.Get(selection.MethodRLDriven); ok {
-		if rlDriven, ok := rlSelector.(*selection.RLDrivenSelector); ok {
-			state["rl_driven"] = rlDriven.GetDebugState(userID)
-		}
-	}
-
-	// Get GMTRouter selector state
-	if gmtSelector, ok := registry.Get(selection.MethodGMTRouter); ok {
-		if gmtRouter, ok := gmtSelector.(*selection.GMTRouterSelector); ok {
-			state["gmtrouter"] = gmtRouter.GetDebugState(userID)
-		}
-	}
-
-	s.writeJSONResponse(w, http.StatusOK, state)
 }

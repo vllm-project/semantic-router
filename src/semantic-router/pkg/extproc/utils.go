@@ -9,6 +9,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
 // sendResponse sends a response with proper error handling and logging.
@@ -28,7 +29,13 @@ func sendResponse(stream ext_proc.ExternalProcessor_ProcessServer, response *ext
 		}
 	}
 
-	logging.Debugf("Processing at stage [%s]: %+v", msgType, response)
+	// Redact credentials (Authorization / x-api-key / ...) before dumping the
+	// mutation: the credential resolver injects the upstream provider key as a
+	// set-header, so a verbatim %+v would leak it to the log (CWE-532). Gate on
+	// the debug level so the clone+redact cost is paid only when it is logged.
+	if logging.DebugEnabled() {
+		logging.Debugf("Processing at stage [%s]: %+v", msgType, redactResponseForLog(response))
+	}
 
 	if err := stream.Send(response); err != nil {
 		logging.Errorf("Error sending %s response: %v", msgType, err)
@@ -184,27 +191,11 @@ func statusCodeToEnum(statusCode int) typev3.StatusCode {
 // with an allowlisted MIME type (e.g. "data:image/png;base64,...").
 // HTTP(S) URLs, non-image data URIs, and file paths are rejected to prevent
 // SSRF, local file access, and decode errors on non-image payloads.
+//
+// The implementation lives in the shared imageurl package so the ExtProc path
+// and the HTTP classification API enforce an identical gate.
 func isSafeImageDataURL(url string) bool {
-	if url == "" {
-		return false
-	}
-	lower := strings.ToLower(url)
-	if !strings.HasPrefix(lower, "data:image/") {
-		return false
-	}
-	const base64Sep = ";base64,"
-	sepIdx := strings.Index(lower, base64Sep)
-	if sepIdx == -1 {
-		return false
-	}
-	mime := lower[len("data:"):sepIdx]
-	switch mime {
-	case "image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp":
-	default:
-		return false
-	}
-	payload := strings.TrimSpace(url[sepIdx+len(base64Sep):])
-	return payload != ""
+	return imageurl.IsSafeImageDataURL(url)
 }
 
 // rewriteRequestModel rewrites the model field in the request body JSON.

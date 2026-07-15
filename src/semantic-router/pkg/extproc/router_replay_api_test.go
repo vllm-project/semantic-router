@@ -181,11 +181,69 @@ func TestHandleRouterReplayAPIListRejectsInvalidQuery(t *testing.T) {
 	}
 }
 
-func TestHandleRouterReplayAPIListReturnsPayloadTooLargeForOversizedPage(t *testing.T) {
+func TestHandleRouterReplayAPIListSummarySkipsLargeBodies(t *testing.T) {
 	oversizedBody := strings.Repeat("x", 5*1024*1024)
 	router := newReplayAPITestRouterWithRecords(t, 1, oversizedBody)
 
 	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=1")
+	if response == nil || response.GetImmediateResponse() == nil {
+		t.Fatal("expected immediate replay list response")
+	}
+	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_OK {
+		t.Fatalf("expected OK status, got %v", got)
+	}
+
+	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
+	record := mustSingleReplayRecord(t, body)
+	if got := record["request_body"]; got != nil && got != "" {
+		t.Fatalf("expected empty request_body in default summary list, got %#v", got)
+	}
+}
+
+func TestHandleRouterReplayAPIListShowDetailsTrueReturnsFullBodies(t *testing.T) {
+	oversizedBody := strings.Repeat("x", 1024)
+	router := newReplayAPITestRouterWithRecords(t, 1, oversizedBody)
+
+	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=1&showDetails=true")
+	if response == nil || response.GetImmediateResponse() == nil {
+		t.Fatal("expected immediate replay list response")
+	}
+	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_OK {
+		t.Fatalf("expected OK status, got %v", got)
+	}
+
+	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
+	record := mustSingleReplayRecord(t, body)
+	if got := record["request_body"]; got != oversizedBody {
+		t.Fatalf("expected full request_body when showDetails=true, got len=%d", len(fmt.Sprint(got)))
+	}
+}
+
+func TestHandleRouterReplayAPIListRejectsInvalidShowDetails(t *testing.T) {
+	router, _ := newReplayAPITestRouter(t)
+
+	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=10&showDetails=maybe")
+	if response == nil || response.GetImmediateResponse() == nil {
+		t.Fatal("expected immediate error response")
+	}
+	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_BadRequest {
+		t.Fatalf("expected bad request status, got %v", got)
+	}
+	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
+	errorBody, ok := body["error"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected error payload, got %#v", body)
+	}
+	if got := errorBody["message"]; got != "showDetails must be a boolean" {
+		t.Fatalf("expected invalid showDetails message, got %#v", got)
+	}
+}
+
+func TestHandleRouterReplayAPIListReturnsPayloadTooLargeWhenShowDetailsTrue(t *testing.T) {
+	oversizedBody := strings.Repeat("x", 5*1024*1024)
+	router := newReplayAPITestRouterWithRecords(t, 1, oversizedBody)
+
+	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=1&showDetails=true")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate error response")
 	}

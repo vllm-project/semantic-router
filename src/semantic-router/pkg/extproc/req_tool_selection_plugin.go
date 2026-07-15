@@ -99,7 +99,7 @@ func (r *OpenAIRouter) runToolSelectionPluginAdd(
 		minSim,
 	)
 
-	emitToolObservability(response, strategyOut, confidence, latency)
+	emitToolObservability(response, ctx, strategyOut, confidence, latency)
 	metrics.RecordToolsRetrieval(strategyOut, latency.Seconds())
 
 	if toolErr != nil {
@@ -126,18 +126,23 @@ func (r *OpenAIRouter) runToolSelectionPluginFilter(
 	}
 
 	start := time.Now()
+	provider, providerErr := toolsEmbeddingProvider(r.Config)
+	if providerErr != nil {
+		return r.handleToolSelectionError(openAIRequest, response, ctx, providerErr, r.effectiveToolSelectionFallback(ts))
+	}
 	filtered, confidence, ferr := filterRequestToolsAgainstQuerySemantic(
 		classificationText,
 		openAIRequest.Tools,
 		em.EmbeddingConfig.ModelType,
 		em.EmbeddingConfig.TargetDimension,
+		provider,
 		thresh,
 		ts.PreserveCount,
 	)
 	latency := time.Since(start)
 
 	strategyLabel := config.ToolSelectionModeFilter
-	emitToolObservability(response, strategyLabel, confidence, latency)
+	emitToolObservability(response, ctx, strategyLabel, confidence, latency)
 	metrics.RecordToolsRetrieval(strategyLabel, latency.Seconds())
 
 	if ferr != nil {

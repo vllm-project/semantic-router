@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import styles from './HeaderReveal.module.css'
+import { formatLearningHeaderValue, isLearningHeader } from './headerLearningDisplay'
 
 interface HeaderRevealProps {
   headers: Record<string, string>
@@ -9,6 +10,11 @@ interface HeaderRevealProps {
 
 // Header metadata for display
 const HEADER_INFO: Record<string, { label: string; description: string }> = {
+  // Response outcome. The schema version is intentionally not user-facing.
+  'x-vsr-response-path': {
+    label: 'Response Path',
+    description: 'How the response was produced (upstream, cache, fast_response, looper, ...)',
+  },
   // Signal headers
   'x-vsr-matched-keywords': {
     label: 'Keywords',
@@ -96,9 +102,30 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Selected Model',
     description: 'The model chosen by the router',
   },
+  'x-vsr-selected-algorithm': {
+    label: 'Algorithm',
+    description: 'The model-selection algorithm used for this route',
+  },
   'x-vsr-selected-modality': {
     label: 'Selected Modality',
     description: 'The modality chosen by the router',
+  },
+  // Router Learning headers
+  'x-vsr-learning-methods': {
+    label: 'Learning',
+    description: 'Router Learning methods summarized by this response',
+  },
+  'x-vsr-learning-actions': {
+    label: 'Learning Action',
+    description: 'Method-keyed Router Learning actions',
+  },
+  'x-vsr-learning-scopes': {
+    label: 'Learning Scope',
+    description: 'Method-keyed identity scopes used by Router Learning',
+  },
+  'x-vsr-learning-reasons': {
+    label: 'Learning Reason',
+    description: 'Method-keyed compact reasons for Router Learning actions',
   },
   // Plugin status headers
   'x-vsr-cache-hit': {
@@ -117,21 +144,10 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Fast Response',
     description: 'Request short-circuited by fast_response plugin',
   },
-  'x-vsr-jailbreak-blocked': {
-    label: 'Jailbreak Blocked',
-    description: 'Request blocked by jailbreak protection',
-  },
-  'x-vsr-pii-violation': {
-    label: 'PII Violation',
-    description: 'Request blocked by PII protection',
-  },
-  'x-vsr-hallucination-detected': {
-    label: 'Quality: Hallucination',
-    description: 'Potential hallucination detected',
-  },
-  'x-vsr-fact-check-needed': {
-    label: 'Quality: Fact Check',
-    description: 'Fact checking recommended',
+  'x-vsr-response-warnings': {
+    label: 'Quality: Response Warnings',
+    description:
+      'Comma-separated response-quality warnings (hallucination, unverified_factual, response_jailbreak)',
   },
   // Looper headers
   'x-vsr-looper-model': {
@@ -148,7 +164,7 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
   },
   'x-vsr-looper-algorithm': {
     label: 'Algorithm',
-    description: 'The multi-model algorithm used (confidence, ratings)',
+    description: 'The multi-model algorithm used (confidence, ratings, remom, fusion, workflows)',
   },
   // Retention directive headers (issue #2009)
   'x-vsr-retention-drop': {
@@ -170,18 +186,25 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
 }
 
 const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRevealProps) => {
-  const [isVisible, setIsVisible] = useState(true)
+  const [phase, setPhase] = useState<'visible' | 'exiting' | 'complete'>('visible')
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsVisible(false)
-      setTimeout(() => onComplete?.(), 300) // Wait for fade out animation
+    let completionTimer: ReturnType<typeof setTimeout> | undefined
+    const displayTimer = setTimeout(() => {
+      setPhase('exiting')
+      completionTimer = setTimeout(() => {
+        setPhase('complete')
+        onComplete?.()
+      }, 300)
     }, displayDuration)
 
-    return () => clearTimeout(timer)
+    return () => {
+      clearTimeout(displayTimer)
+      if (completionTimer) clearTimeout(completionTimer)
+    }
   }, [displayDuration, onComplete])
 
-  if (!isVisible) {
+  if (phase === 'complete') {
     return null
   }
 
@@ -189,38 +212,50 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
 
   // Group headers by category based on the comments in HEADER_INFO
   const groupedHeaders = {
+    // Response outcome: internal response-contract versions stay hidden.
+    response: displayHeaders.filter(([key]) => key === 'x-vsr-response-path'),
     // Signal headers: all x-vsr-matched-*
-    signals: displayHeaders.filter(([key]) =>
-      key.startsWith('x-vsr-matched-')
-    ),
+    signals: displayHeaders.filter(([key]) => key.startsWith('x-vsr-matched-')),
     // Decision headers: selected-decision
-    decision: displayHeaders.filter(([key]) =>
-      key === 'x-vsr-selected-decision'
+    decision: displayHeaders.filter(([key]) => key === 'x-vsr-selected-decision'),
+    // Prefer the generic route-selection algorithm and retain the looper header
+    // as a compatibility fallback for older router responses.
+    algorithm: displayHeaders.filter(([key]) =>
+      displayHeaders.some(
+        ([candidate, value]) => candidate === 'x-vsr-selected-algorithm' && value.trim() !== '',
+      )
+        ? key === 'x-vsr-selected-algorithm'
+        : key === 'x-vsr-looper-algorithm',
     ),
-    // Model selection headers: selected-model
-    model: displayHeaders.filter(([key]) =>
-      key === 'x-vsr-selected-model' ||
-      key === 'x-vsr-selected-modality'
+    // Model selection headers: selected and final model path.
+    model: displayHeaders.filter(
+      ([key]) =>
+        key === 'x-vsr-selected-model' ||
+        key === 'x-vsr-selected-modality' ||
+        key === 'x-vsr-looper-model' ||
+        key === 'x-vsr-looper-models-used',
     ),
+    // Router Learning headers: bounded primary adaptation summary
+    learning: displayHeaders.filter(([key]) => key.startsWith('x-vsr-learning')),
     // Plugin status headers: cache, reasoning, context, security, quality
-    plugin: displayHeaders.filter(([key]) =>
-      key === 'x-vsr-cache-hit' ||
-      key === 'x-vsr-selected-reasoning' ||
-      key === 'x-vsr-fast-response' ||
-      key === 'x-vsr-context-token-count' ||
-      key === 'x-vsr-jailbreak-blocked' ||
-      key === 'x-vsr-pii-violation' ||
-      key === 'x-vsr-hallucination-detected' ||
-      key === 'x-vsr-fact-check-needed'
+    plugin: displayHeaders.filter(
+      ([key]) =>
+        key === 'x-vsr-cache-hit' ||
+        key === 'x-vsr-selected-reasoning' ||
+        key === 'x-vsr-fast-response' ||
+        key === 'x-vsr-context-token-count' ||
+        key === 'x-vsr-response-warnings',
     ),
-    // Looper headers: all x-vsr-looper-*
-    looper: displayHeaders.filter(([key]) =>
-      key.startsWith('x-vsr-looper-')
+    // Remaining multi-model execution details.
+    looper: displayHeaders.filter(
+      ([key]) =>
+        key.startsWith('x-vsr-looper-') &&
+        key !== 'x-vsr-looper-algorithm' &&
+        key !== 'x-vsr-looper-model' &&
+        key !== 'x-vsr-looper-models-used',
     ),
     // Retention directive headers: all x-vsr-retention-*
-    retention: displayHeaders.filter(([key]) =>
-      key.startsWith('x-vsr-retention-')
-    ),
+    retention: displayHeaders.filter(([key]) => key.startsWith('x-vsr-retention-')),
   }
 
   const renderSection = (title: string, items: [string, string][], isPrimary = false) => {
@@ -231,10 +266,16 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
         <div className={styles.sectionItems}>
           {items.map(([key, value]) => {
             const info = HEADER_INFO[key]
+            const displayValue = isLearningHeader(key)
+              ? formatLearningHeaderValue(key, value)
+              : value
             return (
-              <div key={key} className={`${styles.headerItem} ${isPrimary ? styles.headerItemPrimary : ''}`}>
+              <div
+                key={key}
+                className={`${styles.headerItem} ${isPrimary ? styles.headerItemPrimary : ''}`}
+              >
                 <div className={styles.headerLabel}>{info.label}</div>
-                <div className={styles.headerValue}>{value}</div>
+                <div className={styles.headerValue}>{displayValue}</div>
               </div>
             )
           })}
@@ -244,20 +285,30 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
   }
 
   return (
-    <div className={`${styles.overlay} ${!isVisible ? styles.fadeOut : ''}`}>
+    <div
+      className={`${styles.overlay} ${phase === 'exiting' ? styles.fadeOut : ''}`}
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      aria-label="Semantic Router decision path"
+    >
       <div className={styles.container}>
-        <div className={styles.title}>Signal Driven Decision</div>
+        <div className={styles.title}>Routing this request</div>
         <div className={styles.sections}>
-          {renderSection('MODEL', groupedHeaders.model, true)}
-          {renderSection('DECISION', groupedHeaders.decision, true)}
-          {renderSection('SIGNALS', groupedHeaders.signals)}
+          <div className={styles.pathLabel}>DECISION PATH</div>
+          <div className={styles.decisionPath}>
+            {renderSection('SIGNAL', groupedHeaders.signals, true)}
+            {renderSection('DECISION', groupedHeaders.decision, true)}
+            {renderSection('ALGORITHM', groupedHeaders.algorithm, true)}
+            {renderSection('MODEL', groupedHeaders.model, true)}
+            {renderSection('RESPONSE PATH', groupedHeaders.response, true)}
+          </div>
+          {renderSection('LEARNING', groupedHeaders.learning)}
           {renderSection('PLUGIN', groupedHeaders.plugin)}
-          {renderSection('LOOPER', groupedHeaders.looper)}
+          {renderSection('EXECUTION', groupedHeaders.looper)}
           {renderSection('RETENTION', groupedHeaders.retention)}
         </div>
-        <div className={styles.hint}>
-          Response will appear shortly...
-        </div>
+        <div className={styles.hint}>Response will appear shortly...</div>
       </div>
     </div>
   )
