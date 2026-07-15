@@ -3,17 +3,28 @@
 package candle_binding
 
 import (
+	"errors"
 	"log"
 	"runtime"
 	"strings"
 	"sync"
 )
 
+var ErrEmbeddingModelNotReady = errors.New("embedding model is not initialized")
+
+func ensureEmbeddingModelReady() error {
+	if !embeddingModelsReady {
+		return ErrEmbeddingModelNotReady
+	}
+	return nil
+}
+
 // Mock implementation variables
 var (
 	initOnce             sync.Once
 	modelInitialized     bool
 	embeddingModelsReady bool
+	multiModalReady      bool
 )
 
 // TokenizeResult represents the result of tokenization
@@ -99,6 +110,13 @@ type SafetyClassificationResult struct {
 	RawOutput   string   // Raw model output
 }
 
+// MultiModalEmbeddingOutput represents the result of a multi-modal embedding.
+type MultiModalEmbeddingOutput struct {
+	Embedding        []float32 // The embedding vector (384-dim by default)
+	Modality         string    // "text", "image", or "audio"
+	ProcessingTimeMs float32   // Processing time in milliseconds
+}
+
 // EmbeddingOutput represents the complete embedding generation result with metadata
 type EmbeddingOutput struct {
 	Embedding        []float32 // The embedding vector
@@ -181,12 +199,22 @@ func GetEmbeddingSmart(text string, qualityPriority, latencyPriority float32) ([
 
 // InitEmbeddingModelsBatched initializes Qwen3 embedding model
 func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWaitMs uint64, useCPU bool) error {
+	embeddingModelsReady = false
+	if qwen3ModelPath == "" {
+		return errors.New("qwen3ModelPath cannot be empty for batched initialization")
+	}
+
 	log.Printf("[MOCK] Initializing Batched Embedding Models")
+	embeddingModelsReady = true
 	return nil
 }
 
 // GetEmbeddingBatched generates an embedding using the continuous batching model
 func GetEmbeddingBatched(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
+	if err := ensureEmbeddingModelReady(); err != nil {
+		return nil, err
+	}
+
 	emb, _ := GetEmbedding(text, 512)
 	return &EmbeddingOutput{
 		Embedding:        emb,
@@ -218,6 +246,10 @@ func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, 
 
 // GetEmbeddingWithMetadata generates an embedding with full metadata
 func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority float32, targetDim int) (*EmbeddingOutput, error) {
+	if err := ensureEmbeddingModelReady(); err != nil {
+		return nil, err
+	}
+
 	emb, _ := GetEmbeddingWithDim(text, qualityPriority, latencyPriority, targetDim)
 	return &EmbeddingOutput{
 		Embedding:        emb,
@@ -229,6 +261,10 @@ func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority floa
 
 // GetEmbeddingWithModelType generates an embedding with a manually specified model type
 func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
+	if err := ensureEmbeddingModelReady(); err != nil {
+		return nil, err
+	}
+
 	emb, _ := GetEmbeddingWithDim(text, 0, 0, targetDim)
 	return &EmbeddingOutput{
 		Embedding:        emb,
@@ -249,11 +285,22 @@ func InitMmBertEmbeddingModel(modelPath string, useCPU bool) error {
 func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
 	log.Printf("[MOCK] Initializing Multi-Modal Embedding Model: %s", modelPath)
 	_ = useCPU
+	multiModalReady = true
+	return nil
+}
+
+func ensureMultiModalModelReady() error {
+	if !multiModalReady {
+		return ErrEmbeddingModelNotReady
+	}
 	return nil
 }
 
 // MultiModalEncodeText encodes text using multi-modal model (mock)
 func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := ensureMultiModalModelReady(); err != nil {
+		return nil, err
+	}
 	dim := 384
 	if targetDim > 0 {
 		dim = targetDim
@@ -267,6 +314,9 @@ func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutpu
 
 // MultiModalEncodeImage encodes image using multi-modal model (mock)
 func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := ensureMultiModalModelReady(); err != nil {
+		return nil, err
+	}
 	dim := 384
 	if targetDim > 0 {
 		dim = targetDim
@@ -280,6 +330,9 @@ func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*
 
 // MultiModalEncodeAudio encodes audio using multi-modal model (mock)
 func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := ensureMultiModalModelReady(); err != nil {
+		return nil, err
+	}
 	dim := 384
 	if targetDim > 0 {
 		dim = targetDim
@@ -293,6 +346,9 @@ func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) 
 
 // MultiModalEncodeImageFromBytes decodes image bytes and encodes to embedding (mock)
 func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := ensureMultiModalModelReady(); err != nil {
+		return nil, err
+	}
 	dim := 384
 	if targetDim > 0 {
 		dim = targetDim
@@ -306,6 +362,9 @@ func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiMod
 
 // MultiModalEncodeImageFromBase64 decodes a base64-encoded image and encodes to embedding (mock)
 func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := ensureMultiModalModelReady(); err != nil {
+		return nil, err
+	}
 	dim := 384
 	if targetDim > 0 {
 		dim = targetDim
@@ -319,6 +378,9 @@ func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiMod
 
 // MultiModalEncodeImageFromURL downloads and encodes an image from URL (mock)
 func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := ensureMultiModalModelReady(); err != nil {
+		return nil, err
+	}
 	dim := 384
 	if targetDim > 0 {
 		dim = targetDim
@@ -332,6 +394,9 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 
 // GetEmbedding2DMatryoshka generates an embedding using mock 2D Matryoshka API
 func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
+	if err := ensureEmbeddingModelReady(); err != nil {
+		return nil, err
+	}
 	_ = text
 	_ = targetLayer
 	dim := targetDim
@@ -364,6 +429,9 @@ func CalculateSimilarityDefault(text1, text2 string) float32 {
 
 // CalculateEmbeddingSimilarity calculates cosine similarity
 func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetDim int) (*SimilarityOutput, error) {
+	if err := ensureEmbeddingModelReady(); err != nil {
+		return nil, err
+	}
 	return &SimilarityOutput{
 		Similarity:       0.85,
 		ModelType:        "mock",
@@ -373,6 +441,9 @@ func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetD
 
 // CalculateSimilarityBatch finds top-k most similar candidates
 func CalculateSimilarityBatch(query string, candidates []string, topK int, modelType string, targetDim int) (*BatchSimilarityOutput, error) {
+	if err := ensureEmbeddingModelReady(); err != nil {
+		return nil, err
+	}
 	matches := make([]BatchSimilarityMatch, len(candidates))
 	for i := range candidates {
 		matches[i] = BatchSimilarityMatch{
@@ -399,6 +470,21 @@ func GetEmbeddingModelsInfo() (*ModelsInfoOutput, error) {
 // IsEmbeddingReady returns whether the embedding models have been initialized.
 func IsEmbeddingReady() bool {
 	return embeddingModelsReady
+}
+
+// SetEmbeddingReady sets the embedding model readiness flag for testing.
+func SetEmbeddingReady(ready bool) {
+	embeddingModelsReady = ready
+}
+
+// IsMultiModalReady returns whether the multimodal embedding models have been initialized.
+func IsMultiModalReady() bool {
+	return multiModalReady
+}
+
+// SetMultiModalReady sets the multimodal embedding model readiness flag for testing.
+func SetMultiModalReady(ready bool) {
+	multiModalReady = ready
 }
 
 // FindMostSimilar finds the most similar text

@@ -14,7 +14,7 @@ var ErrEmptyText = errors.New("text cannot be empty")
 // model has not been loaded (init failed or was skipped). Handlers map it to
 // HTTP 503 (service unavailable) so callers can distinguish a not-ready condition
 // from a genuine runtime/inference failure (500).
-var ErrModelNotReady = errors.New("model is not loaded")
+var ErrModelNotReady = errors.New("model not ready")
 
 // blankText reports whether s is empty or whitespace-only.
 func blankText(s string) bool {

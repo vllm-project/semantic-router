@@ -153,6 +153,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 )
@@ -243,9 +244,31 @@ type ModelInfo struct {
 // Initialization Functions
 // ============================================================================
 
+var ErrEmbeddingModelNotReady = errors.New("embedding model is not initialized")
+
 var (
 	initMu sync.Mutex
 )
+
+var multiModalEmbeddingReady atomic.Bool
+
+func ensureEmbeddingModelReady(modelType string) error {
+	switch strings.ToLower(strings.TrimSpace(modelType)) {
+	case "multimodal":
+		if !multiModalEmbeddingReady.Load() {
+			return ErrEmbeddingModelNotReady
+		}
+	case "", "mmbert", "qwen3", "gemma":
+		if !IsMmBertModelInitialized() {
+			return ErrEmbeddingModelNotReady
+		}
+	default:
+		if !IsMmBertModelInitialized() {
+			return ErrEmbeddingModelNotReady
+		}
+	}
+	return nil
+}
 
 // InitMmBertEmbeddingModel initializes the mmBERT embedding model
 // This is the ONNX Runtime equivalent of candle_binding.InitMmBertEmbeddingModel
@@ -387,6 +410,10 @@ func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, 
 
 // GetEmbeddingWithMetadata generates embedding with full metadata
 func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority float32, targetDim int) (*EmbeddingOutput, error) {
+	if err := ensureEmbeddingModelReady(""); err != nil {
+		return nil, err
+	}
+
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -426,6 +453,10 @@ func modelTypeToString(modelType int) string {
 
 // GetEmbedding2DMatryoshka generates embedding with 2D Matryoshka (layer + dimension)
 func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
+	if err := ensureEmbeddingModelReady(modelType); err != nil {
+		return nil, err
+	}
+
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -452,6 +483,10 @@ func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, ta
 
 // GetEmbeddingWithModelType generates embedding with specific model type
 func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
+	if err := ensureEmbeddingModelReady(modelType); err != nil {
+		return nil, err
+	}
+
 	switch strings.ToLower(strings.TrimSpace(modelType)) {
 	case "multimodal":
 		output, err := MultiModalEncodeText(text, targetDim)
@@ -476,6 +511,9 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 
 // CalculateEmbeddingSimilarity calculates cosine similarity between two texts
 func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetDim int) (*SimilarityOutput, error) {
+	if err := ensureEmbeddingModelReady(modelType); err != nil {
+		return nil, err
+	}
 	cText1 := C.CString(text1)
 	defer C.free(unsafe.Pointer(cText1))
 	cText2 := C.CString(text2)
@@ -497,6 +535,9 @@ func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetD
 
 // CalculateSimilarityBatch finds top-k most similar candidates for a query
 func CalculateSimilarityBatch(query string, candidates []string, topK int, modelType string, targetDim int) (*BatchSimilarityOutput, error) {
+	if err := ensureEmbeddingModelReady(modelType); err != nil {
+		return nil, err
+	}
 	if len(candidates) == 0 {
 		return nil, errors.New("no candidates provided")
 	}
@@ -1027,16 +1068,26 @@ func modalityToString(m int) string {
 // InitMultiModalEmbeddingModel loads the multi-modal ONNX model.
 // modelPath can contain encoders/tokenizer either at root or under modelPath/onnx.
 func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
+	initMu.Lock()
+	defer initMu.Unlock()
+
+	multiModalEmbeddingReady.Store(false)
+
 	cPath := C.CString(modelPath)
 	defer C.free(unsafe.Pointer(cPath))
 	if !C.init_multimodal_embedding_model(cPath, C.bool(useCPU)) {
 		return fmt.Errorf("failed to initialize multi-modal embedding model from %s", modelPath)
 	}
+	multiModalEmbeddingReady.Store(true)
 	return nil
 }
 
 // MultiModalEncodeText encodes text into a shared multi-modal embedding space.
 func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := ensureEmbeddingModelReady("multimodal"); err != nil {
+		return nil, err
+	}
+
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -1063,6 +1114,9 @@ func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutpu
 
 // MultiModalEncodeImage encodes pre-processed pixel data (CHW, float32 [0,1]).
 func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := ensureEmbeddingModelReady("multimodal"); err != nil {
+		return nil, err
+	}
 	if len(pixelData) == 0 {
 		return nil, errors.New("pixelData cannot be empty")
 	}
@@ -1097,6 +1151,9 @@ func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*
 
 // MultiModalEncodeAudio encodes a mel spectrogram [nMels × timeFrames].
 func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := ensureEmbeddingModelReady("multimodal"); err != nil {
+		return nil, err
+	}
 	if len(melData) == 0 {
 		return nil, errors.New("melData cannot be empty")
 	}
@@ -1128,6 +1185,9 @@ func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) 
 // MultiModalEncodeImageFromBytes decodes raw JPEG/PNG bytes, resizes to 512×512,
 // and encodes to a multi-modal embedding.
 func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := ensureEmbeddingModelReady("multimodal"); err != nil {
+		return nil, err
+	}
 	if len(imageBytes) == 0 {
 		return nil, errors.New("imageBytes cannot be empty")
 	}

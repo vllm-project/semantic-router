@@ -6,6 +6,7 @@ default_local_profiles:
 full_ci_profiles:
   - kubernetes
   - dashboard
+  - no-model
 
 full_ci_triggers:
   - src/semantic-router/**
@@ -158,6 +159,16 @@ profile_rules:
       - e2e/testing/anthropic-shim/**
       - deploy/kubernetes/anthropic-backend/**
       - src/semantic-router/pkg/anthropic/outbound*.go
+  no-model:
+    owner: e2e
+    coverage_role: readiness-503-contract
+    selection_mode: full-ci
+    summary: Readiness 503 responses when no embedding or classifier models are loaded, including per-modality and partial-initialization behavior.
+    paths:
+      - e2e/profiles/no-model/**
+      - e2e/testcases/service_readiness_503.go
+      - src/semantic-router/pkg/apiserver/route_embeddings.go
+      - src/semantic-router/pkg/apiserver/route_classify.go
 
 manual_profile_rules:
   response-api:

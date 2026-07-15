@@ -10,8 +10,10 @@ import (
 	"strings"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	onnx_binding "github.com/vllm-project/semantic-router/onnx-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
@@ -34,6 +36,27 @@ func (e *imageEncodeError) Error() string {
 
 func (e *imageEncodeError) Unwrap() error { return e.err }
 
+func isEmbeddingModelNotReady(err error) bool {
+	return errors.Is(err, services.ErrModelNotReady) ||
+		errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) ||
+		errors.Is(err, onnx_binding.ErrEmbeddingModelNotReady)
+}
+
+// checkEmbeddingReadiness validates that the models required for the request
+// are initialized. Text inputs require text-model readiness; image inputs
+// require multimodal-model readiness. This prevents a text-ready-only
+// deployment from attempting image inference (which would 500) and a
+// multimodal-only deployment from being rejected for text-only requests.
+func checkEmbeddingReadiness(req EmbeddingRequest) error {
+	if len(req.Texts) > 0 && !candle_binding.IsEmbeddingReady() {
+		return candle_binding.ErrEmbeddingModelNotReady
+	}
+	if len(req.Images) > 0 && !candle_binding.IsMultiModalReady() {
+		return candle_binding.ErrEmbeddingModelNotReady
+	}
+	return nil
+}
+
 // classifyEmbeddingError maps a buildEmbeddingResults error to the HTTP status,
 // error code, and client message. Input-caused image-encode failures are 400
 // INVALID_IMAGE; every other failure is a genuine 500.
@@ -42,6 +65,10 @@ func classifyEmbeddingError(err error) (int, string, string) {
 	if errors.As(err, &imgErr) {
 		return http.StatusBadRequest, "INVALID_IMAGE",
 			fmt.Sprintf("images[%d] could not be decoded as an image", imgErr.index)
+	}
+	if isEmbeddingModelNotReady(err) {
+		return http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+			fmt.Sprintf("failed to generate embedding: %v", err)
 	}
 	return http.StatusInternalServerError, "EMBEDDING_GENERATION_FAILED",
 		fmt.Sprintf("failed to generate embedding: %v", err)
@@ -62,9 +89,9 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if !candle_binding.IsEmbeddingReady() {
+	if err := checkEmbeddingReadiness(req); err != nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-			"Embedding models are not initialized — configure an embedding model in your router config")
+			fmt.Sprintf("failed to generate embedding: %v", err))
 		return
 	}
 
@@ -278,6 +305,11 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		req.Dimension,
 	)
 	if err != nil {
+		if isEmbeddingModelNotReady(err) {
+			s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+				fmt.Sprintf("failed to calculate similarity: %v", err))
+			return
+		}
 		s.writeErrorResponse(w, http.StatusInternalServerError, "SIMILARITY_CALCULATION_FAILED",
 			fmt.Sprintf("failed to calculate similarity: %v", err))
 		return
@@ -317,6 +349,11 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		req.Dimension,
 	)
 	if err != nil {
+		if isEmbeddingModelNotReady(err) {
+			s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+				fmt.Sprintf("failed to calculate batch similarity: %v", err))
+			return
+		}
 		s.writeErrorResponse(w, http.StatusInternalServerError, "BATCH_SIMILARITY_FAILED",
 			fmt.Sprintf("failed to calculate batch similarity: %v", err))
 		return
