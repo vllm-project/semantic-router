@@ -20,6 +20,7 @@ const RESPONSE_HEADER_KEYS = [
   'x-vsr-schema-version',
   'x-vsr-response-path',
   'x-vsr-selected-model',
+  'x-vsr-selected-algorithm',
   'x-vsr-selected-decision',
   'x-vsr-selected-modality',
   'x-vsr-replay-id',

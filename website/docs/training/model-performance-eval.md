@@ -283,7 +283,7 @@ python src/training/model_eval/result_to_config.py \
 - If your production config carries **environment-specific settings (multi-endpoint weights, secrets, pricing, policies)**, merge the generated `providers/routing/global` sections into that deployment-specific config instead of replacing it wholesale.
 
 ### Example config.eval.yaml
-see more about config at [configuration](https://vllm-semantic-router.com/docs/installation/configuration)
+see more about config at [configuration](https://vllm-sr.ai/docs/installation/configuration)
 
 ```yaml
 version: v0.3

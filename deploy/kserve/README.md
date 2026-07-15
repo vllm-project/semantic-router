@@ -283,5 +283,5 @@ For detailed configuration options, see the main project documentation:
 ### External Resources
 
 - **Main Project**: https://github.com/vllm-project/semantic-router
-- **Full Documentation**: https://vllm-semantic-router.com
+- **Full Documentation**: https://vllm-sr.ai
 - **KServe Docs**: https://kserve.github.io/website/

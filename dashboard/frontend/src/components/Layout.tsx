@@ -1,26 +1,28 @@
-import React, { useEffect, useState, type ReactNode } from 'react'
+import React, { useEffect, useRef, useState, type ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import styles from './Layout.module.css'
 import LayoutAccountControl from './LayoutAccountControl'
+import LayoutMegaMenu from './LayoutMegaMenu'
+import LayoutMobileNavigation from './LayoutMobileNavigation'
 import PlatformBranding from './PlatformBranding'
 import {
-  ANALYSIS_OPERATIONS_MENU_SECTIONS,
-  FLEET_SIM_MENU_SECTIONS,
-  filterLayoutMenuSections,
-  hasActiveLayoutMenuSection,
+  ANALYZE_MENU_CATEGORIES,
+  BUILD_MENU_CATEGORIES,
+  filterLayoutMenuCategories,
+  findActiveLayoutMenuCategory,
+  hasActiveLayoutMenuCategory,
   isLayoutMenuItemActive,
-  KNOWLEDGE_BASE_MENU_SECTIONS,
-  MANAGER_MENU_SECTIONS,
+  OPERATE_MENU_CATEGORIES,
   PRIMARY_NAV_LINKS,
-  SECONDARY_NAV_LINKS,
   type LayoutDropdownKey,
+  type LayoutMenuCategory,
   type LayoutMenuItem,
-  type LayoutMenuSection,
   type LayoutNavLink,
 } from './LayoutNavSupport'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
-import { canAccessMLSetup } from '../utils/accessControl'
+import { canAccessDashboardPath, canAccessMLSetup, canViewUsers } from '../utils/accessControl'
+import { preloadDashboardRoute } from '../app/routeLoaders'
 
 interface LayoutProps {
   children: ReactNode
@@ -28,6 +30,18 @@ interface LayoutProps {
   onConfigSectionChange?: (section: string) => void
   hideHeaderOnMobile?: boolean
   hideAccountControl?: boolean
+}
+
+const DESKTOP_MENU_IDS: Record<LayoutDropdownKey, string> = {
+  build: 'layout-mega-menu-build',
+  analyze: 'layout-mega-menu-analyze',
+  operate: 'layout-mega-menu-operate',
+}
+
+const DESKTOP_MENU_TRIGGER_IDS: Record<LayoutDropdownKey, string> = {
+  build: 'layout-mega-menu-trigger-build',
+  analyze: 'layout-mega-menu-trigger-analyze',
+  operate: 'layout-mega-menu-trigger-operate',
 }
 
 const Layout: React.FC<LayoutProps> = ({
@@ -38,64 +52,123 @@ const Layout: React.FC<LayoutProps> = ({
   hideAccountControl = false,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [openMobileSection, setOpenMobileSection] = useState<LayoutDropdownKey | null>(null)
   const [openDropdown, setOpenDropdown] = useState<LayoutDropdownKey | null>(null)
   const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false)
+  const dropdownTriggerRefs = useRef<Partial<Record<LayoutDropdownKey, HTMLButtonElement | null>>>(
+    {},
+  )
+  const pendingMenuFocusRef = useRef<'active-tab' | 'last-link' | null>(null)
   const { user, logout } = useAuth()
   const { fleetSimEnabled } = useReadonly()
   const location = useLocation()
   const navigate = useNavigate()
-  const canManageUsers = user?.role === 'admin'
+  const canAccessUsers = canViewUsers(user)
   const canUseMLSetup = canAccessMLSetup(user)
-  const secondaryNavLinks = SECONDARY_NAV_LINKS.filter((link) => link.to !== '/users' || canManageUsers)
-  const managerMenuSections = filterLayoutMenuSections(
-    [...MANAGER_MENU_SECTIONS, ...KNOWLEDGE_BASE_MENU_SECTIONS],
-    item => canManageUsers || item.kind !== 'route' || item.to !== '/users'
+  const canAccessMenuItem = (item: LayoutMenuItem) =>
+    canAccessDashboardPath(user, item.kind === 'config' ? `/config/${item.configSection}` : item.to)
+  const buildMenuCategories = filterLayoutMenuCategories(BUILD_MENU_CATEGORIES, canAccessMenuItem)
+  const analyzeMenuCategories = filterLayoutMenuCategories(
+    ANALYZE_MENU_CATEGORIES,
+    (item, category) =>
+      canAccessMenuItem(item) &&
+      (fleetSimEnabled || category.key !== 'fleet-simulation') &&
+      (canUseMLSetup || item.kind !== 'route' || item.to !== '/ml-setup'),
   )
-  const analysisOperationsMenuSections = filterLayoutMenuSections(
-    ANALYSIS_OPERATIONS_MENU_SECTIONS,
-    item => canUseMLSetup || item.kind !== 'route' || item.to !== '/ml-setup'
+  const operateMenuCategories = filterLayoutMenuCategories(
+    OPERATE_MENU_CATEGORIES,
+    (item) =>
+      canAccessMenuItem(item) && (canAccessUsers || item.kind !== 'route' || item.to !== '/users'),
   )
-  const systemMenuSections = analysisOperationsMenuSections
-  const simulatorMenuSections = fleetSimEnabled ? FLEET_SIM_MENU_SECTIONS : []
+  const hasWorkflowNavigation =
+    buildMenuCategories.length > 0 ||
+    analyzeMenuCategories.length > 0 ||
+    operateMenuCategories.length > 0
   const accountName = user?.name?.trim() || 'Account'
   const accountEmail = user?.email?.trim() || 'Session pending'
   const accountPermissions = user?.permissions ?? []
 
   const isConfigPage = location.pathname === '/config' || location.pathname.startsWith('/config/')
-  const isManagerActive = hasActiveLayoutMenuSection(
-    managerMenuSections,
+  const isBuildActive = hasActiveLayoutMenuCategory(
+    buildMenuCategories,
     location.pathname,
     isConfigPage,
-    configSection
+    configSection,
   )
-  const isAnalysisOpsActive = hasActiveLayoutMenuSection(
-    systemMenuSections,
+  const isAnalyzeActive = hasActiveLayoutMenuCategory(
+    analyzeMenuCategories,
     location.pathname,
     isConfigPage,
-    configSection
+    configSection,
   )
-  const isSimulatorActive = hasActiveLayoutMenuSection(
-    simulatorMenuSections,
+  const isOperateActive = hasActiveLayoutMenuCategory(
+    operateMenuCategories,
     location.pathname,
     isConfigPage,
-    configSection
+    configSection,
+  )
+
+  const activeBuildCategory = findActiveLayoutMenuCategory(
+    buildMenuCategories,
+    location.pathname,
+    isConfigPage,
+    configSection,
+  )
+  const activeAnalyzeCategory = findActiveLayoutMenuCategory(
+    analyzeMenuCategories,
+    location.pathname,
+    isConfigPage,
+    configSection,
+  )
+  const activeOperateCategory = findActiveLayoutMenuCategory(
+    operateMenuCategories,
+    location.pathname,
+    isConfigPage,
+    configSection,
   )
 
   const closeMenus = () => {
     setOpenDropdown(null)
     setMobileMenuOpen(false)
+    setOpenMobileSection(null)
     setIsAccountDialogOpen(false)
   }
 
   const toggleDropdown = (dropdown: LayoutDropdownKey) => {
     setIsAccountDialogOpen(false)
-    setOpenDropdown(prev => (prev === dropdown ? null : dropdown))
+    setOpenDropdown((currentDropdown) => {
+      const nextDropdown = currentDropdown === dropdown ? null : dropdown
+      pendingMenuFocusRef.current = nextDropdown ? 'active-tab' : null
+      return nextDropdown
+    })
+  }
+
+  const openDropdownFromKeyboard = (
+    dropdown: LayoutDropdownKey,
+    focusTarget: 'active-tab' | 'last-link',
+  ) => {
+    setIsAccountDialogOpen(false)
+    pendingMenuFocusRef.current = focusTarget
+
+    if (openDropdown === dropdown) {
+      const menu = document.getElementById(DESKTOP_MENU_IDS[dropdown])
+      const menuLinks = Array.from(menu?.querySelectorAll<HTMLElement>('[data-mega-link]') ?? [])
+      const target =
+        focusTarget === 'last-link'
+          ? menuLinks[menuLinks.length - 1]
+          : menu?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+      target?.focus()
+      pendingMenuFocusRef.current = null
+      return
+    }
+
+    setOpenDropdown(dropdown)
   }
 
   const toggleAccountDialog = () => {
     setOpenDropdown(null)
     setMobileMenuOpen(false)
-    setIsAccountDialogOpen(prev => !prev)
+    setIsAccountDialogOpen((prev) => !prev)
   }
 
   const handleMenuItemSelect = (item: LayoutMenuItem) => {
@@ -119,92 +192,129 @@ const Layout: React.FC<LayoutProps> = ({
       key={link.to}
       end={link.matchMode !== 'prefix'}
       to={link.to}
-      className={({ isActive }) => (isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink)}
+      className={({ isActive }) =>
+        isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+      }
+      onFocus={() => void preloadDashboardRoute(link.to)}
+      onPointerEnter={() => void preloadDashboardRoute(link.to)}
     >
       {link.label}
     </NavLink>
   )
 
-  const renderMenuItem = (
-    item: LayoutMenuItem,
-    key: string,
-    className: string,
-    activeClassName: string,
-    useMenuRole: boolean
+  const renderDesktopDropdown = (
+    dropdown: LayoutDropdownKey,
+    label: string,
+    categories: LayoutMenuCategory[],
+    active: boolean,
+    activeCategoryKey?: string,
   ) => {
-    const active = isLayoutMenuItemActive(item, location.pathname, isConfigPage, configSection)
-    const roleProps = useMenuRole ? { role: 'menuitem' as const } : {}
+    if (categories.length === 0) return null
 
-    if (item.kind === 'config') {
-      return (
-        <button
-          key={key}
-          type="button"
-          {...roleProps}
-          className={`${className} ${active ? activeClassName : ''}`}
-          onClick={() => handleMenuItemSelect(item)}
-        >
-          {item.label}
-        </button>
-      )
-    }
+    const isOpen = openDropdown === dropdown
+    const menuId = DESKTOP_MENU_IDS[dropdown]
+    const triggerId = DESKTOP_MENU_TRIGGER_IDS[dropdown]
 
     return (
-      <NavLink
-        key={key}
-        {...roleProps}
-        to={item.to}
-        className={`${className} ${active ? activeClassName : ''}`}
-        onClick={closeMenus}
-      >
-        {item.label}
-      </NavLink>
+      <div className={styles.navDropdown}>
+        <button
+          id={triggerId}
+          ref={(element) => {
+            dropdownTriggerRefs.current[dropdown] = element
+          }}
+          type="button"
+          aria-controls={menuId}
+          aria-expanded={isOpen}
+          className={`${styles.navLink} ${active ? styles.navLinkActive : ''}`}
+          onClick={(event) => {
+            event.stopPropagation()
+            toggleDropdown(dropdown)
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+              return
+            }
+
+            event.preventDefault()
+            openDropdownFromKeyboard(dropdown, event.key === 'ArrowUp' ? 'last-link' : 'active-tab')
+          }}
+          onBlur={(event) => {
+            const nextTarget = event.relatedTarget
+            const menu = document.getElementById(menuId)
+            if (nextTarget instanceof Node && menu?.contains(nextTarget)) {
+              return
+            }
+
+            if (openDropdown === dropdown) {
+              setOpenDropdown(null)
+            }
+          }}
+        >
+          {label}
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            className={`${styles.dropdownArrow} ${isOpen ? styles.dropdownArrowOpen : ''}`}
+            aria-hidden="true"
+          >
+            <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
+        {isOpen ? (
+          <LayoutMegaMenu
+            id={menuId}
+            triggerId={triggerId}
+            label={label}
+            categories={categories}
+            activeCategoryKey={activeCategoryKey}
+            isItemActive={(item) =>
+              isLayoutMenuItemActive(item, location.pathname, isConfigPage, configSection)
+            }
+            onConfigSelect={handleMenuItemSelect}
+            onItemIntent={(item) => {
+              const target = item.kind === 'config' ? `/config/${item.configSection}` : item.to
+              void preloadDashboardRoute(target)
+            }}
+            onNavigate={closeMenus}
+          />
+        ) : null}
+      </div>
     )
   }
 
-  const renderDropdownMenu = (
-    sections: LayoutMenuSection[],
-    className: string,
-    label: string
-  ) => (
-    <div className={className} role="menu" aria-label={label}>
-      {sections.map((section, sectionIndex) => (
-        <React.Fragment key={`${label}-${section.title || sectionIndex}`}>
-          {sectionIndex > 0 ? <div className={styles.dropdownDivider} /> : null}
-          {section.title ? <div className={styles.dropdownSectionLabel}>{section.title}</div> : null}
-          {section.items.map(item =>
-            renderMenuItem(
-              item,
-              `${label}-${section.title || 'items'}-${item.label}`,
-              styles.dropdownItem,
-              styles.dropdownItemActive,
-              true
-            )
-          )}
-        </React.Fragment>
-      ))}
-    </div>
-  )
+  useEffect(() => {
+    if (!openDropdown) {
+      return
+    }
 
-  const renderMobileMenuSection = (title: string, sections: LayoutMenuSection[]) => (
-    <div className={styles.mobileNavSection}>
-      <div className={styles.mobileNavSectionTitle}>{title}</div>
-      {sections.map((section, sectionIndex) => (
-        <React.Fragment key={`${title}-${section.title || sectionIndex}`}>
-          {section.title ? <div className={styles.mobileNavSubsectionTitle}>{section.title}</div> : null}
-          {section.items.map(item =>
-            renderMenuItem(
-              item,
-              `${title}-${section.title || 'items'}-${item.label}`,
-              styles.mobileNavLink,
-              styles.mobileNavLinkActive,
-              false
-            )
-          )}
-        </React.Fragment>
-      ))}
-    </div>
-  )
+    const menu = document.getElementById(DESKTOP_MENU_IDS[openDropdown])
+    if (pendingMenuFocusRef.current === 'last-link') {
+      const menuLinks = Array.from(menu?.querySelectorAll<HTMLElement>('[data-mega-link]') ?? [])
+      menuLinks[menuLinks.length - 1]?.focus()
+    } else if (pendingMenuFocusRef.current === 'active-tab') {
+      menu?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus()
+    }
+    pendingMenuFocusRef.current = null
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return
+      }
+
+      const trigger = dropdownTriggerRefs.current[openDropdown]
+      event.preventDefault()
+      setOpenDropdown(null)
+      trigger?.focus()
+    }
+
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [openDropdown])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -221,7 +331,7 @@ const Layout: React.FC<LayoutProps> = ({
   return (
     <div className={`${styles.container} ${hideHeaderOnMobile ? styles.hideHeaderMobile : ''}`}>
       <header className={`${styles.header} ${hideHeaderOnMobile ? styles.headerHideMobile : ''}`}>
-        <div className={styles.headerContent}>
+        <div className={styles.headerContent} data-testid="layout-header-content">
           <NavLink to="/" className={styles.brand}>
             <img src="/vllm.png" alt="vLLM" className={styles.logo} />
             <span className={styles.brandText}>Semantic Router</span>
@@ -232,117 +342,61 @@ const Layout: React.FC<LayoutProps> = ({
               {PRIMARY_NAV_LINKS.map(renderTopNavLink)}
             </div>
 
-            <div className={styles.navDivider} />
-
-            <div className={`${styles.navSection} ${styles.navSectionSecondary}`} role="group" aria-label="Secondary navigation">
-              {secondaryNavLinks.map(renderTopNavLink)}
-              <div className={styles.navDropdown}>
-                <button
-                  type="button"
-                  aria-expanded={openDropdown === 'manager'}
-                  aria-haspopup="menu"
-                  className={`${styles.navLink} ${isManagerActive ? styles.navLinkActive : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleDropdown('manager')
-                  }}
-                >
-                  Manager
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    className={`${styles.dropdownArrow} ${openDropdown === 'manager' ? styles.dropdownArrowOpen : ''}`}
-                  >
-                    <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                {openDropdown === 'manager'
-                  ? renderDropdownMenu(managerMenuSections, styles.dropdownMenu, 'Manager')
-                  : null}
+            {hasWorkflowNavigation ? (
+              <div
+                className={`${styles.navSection} ${styles.navSectionSecondary}`}
+                role="group"
+                aria-label="Workflow navigation"
+              >
+                {renderDesktopDropdown(
+                  'build',
+                  'Build',
+                  buildMenuCategories,
+                  isBuildActive,
+                  activeBuildCategory,
+                )}
+                {renderDesktopDropdown(
+                  'analyze',
+                  'Analyze',
+                  analyzeMenuCategories,
+                  isAnalyzeActive,
+                  activeAnalyzeCategory,
+                )}
+                {renderDesktopDropdown(
+                  'operate',
+                  'Operate',
+                  operateMenuCategories,
+                  isOperateActive,
+                  activeOperateCategory,
+                )}
               </div>
-              {fleetSimEnabled ? (
-                <div className={styles.navDropdown}>
-                  <button
-                    type="button"
-                    aria-expanded={openDropdown === 'simulator'}
-                    aria-haspopup="menu"
-                    className={`${styles.navLink} ${isSimulatorActive ? styles.navLinkActive : ''}`}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      toggleDropdown('simulator')
-                    }}
-                  >
-                    Simulator
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 12 12"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      className={`${styles.dropdownArrow} ${openDropdown === 'simulator' ? styles.dropdownArrowOpen : ''}`}
-                    >
-                      <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                  {openDropdown === 'simulator'
-                    ? renderDropdownMenu(simulatorMenuSections, styles.dropdownMenu, 'Simulator')
-                    : null}
-                </div>
-              ) : null}
-              <div className={styles.navDropdown}>
-                <button
-                  type="button"
-                  aria-expanded={openDropdown === 'analysisOps'}
-                  aria-haspopup="menu"
-                  className={`${styles.navLink} ${isAnalysisOpsActive ? styles.navLinkActive : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleDropdown('analysisOps')
-                  }}
-                >
-                  System
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    className={`${styles.dropdownArrow} ${openDropdown === 'analysisOps' ? styles.dropdownArrowOpen : ''}`}
-                  >
-                    <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                {openDropdown === 'analysisOps'
-                  ? renderDropdownMenu(
-                      systemMenuSections,
-                      styles.dropdownMenu,
-                      'System'
-                    )
-                  : null}
-              </div>
-            </div>
+            ) : null}
           </nav>
 
           <div className={styles.headerRight}>
             <PlatformBranding variant="inline" className={styles.headerBranding} />
-            {hideAccountControl ? null : (
-              <LayoutAccountControl
-                accountName={accountName}
-                accountEmail={accountEmail}
-                accountRole={user?.role}
-                accountPermissions={accountPermissions}
-                isOpen={isAccountDialogOpen}
-                onToggle={toggleAccountDialog}
-                onClose={closeMenus}
-                onLogout={handleLogout}
-              />
-            )}
+            <a
+              href="https://vllm-sr.ai"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.iconButton}
+              aria-label="Documentation"
+              title="Documentation"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+              </svg>
+            </a>
             <a
               href="https://github.com/vllm-project/semantic-router"
               target="_blank"
@@ -355,29 +409,57 @@ const Layout: React.FC<LayoutProps> = ({
                 <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
               </svg>
             </a>
-            <a
-              href="https://vllm-semantic-router.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className={styles.iconButton}
-              aria-label="Documentation"
-              title="Documentation"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-              </svg>
-            </a>
+            {hideAccountControl ? null : (
+              <>
+                <span className={styles.utilityDivider} aria-hidden="true" />
+                <LayoutAccountControl
+                  accountName={accountName}
+                  accountEmail={accountEmail}
+                  accountRole={user?.role}
+                  accountPermissions={accountPermissions}
+                  isOpen={isAccountDialogOpen}
+                  onToggle={toggleAccountDialog}
+                  onClose={closeMenus}
+                  onLogout={handleLogout}
+                />
+              </>
+            )}
 
             <button
               type="button"
               className={styles.mobileMenuButton}
-              onClick={() => setMobileMenuOpen(prev => !prev)}
+              onClick={() => {
+                setIsAccountDialogOpen(false)
+                setOpenDropdown(null)
+                setMobileMenuOpen((current) => {
+                  const next = !current
+                  setOpenMobileSection(
+                    next
+                      ? isBuildActive
+                        ? 'build'
+                        : isAnalyzeActive
+                          ? 'analyze'
+                          : isOperateActive
+                            ? 'operate'
+                            : null
+                      : null,
+                  )
+                  return next
+                })
+              }}
               aria-label="Toggle menu"
               aria-controls="mobile-navigation"
               aria-expanded={mobileMenuOpen}
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              >
                 {mobileMenuOpen ? (
                   <>
                     <path d="M18 6L6 18" />
@@ -396,33 +478,22 @@ const Layout: React.FC<LayoutProps> = ({
         </div>
 
         {mobileMenuOpen ? (
-          <div id="mobile-navigation" className={styles.mobileNav} role="navigation" aria-label="Mobile navigation">
-            {PRIMARY_NAV_LINKS.map(link => (
-              <NavLink
-                key={`mobile-${link.to}`}
-                end
-                to={link.to}
-                className={styles.mobileNavLink}
-                onClick={closeMenus}
-              >
-                {link.label}
-              </NavLink>
-            ))}
-            {secondaryNavLinks.map(link => (
-              <NavLink
-                key={`mobile-${link.to}`}
-                end
-                to={link.to}
-                className={styles.mobileNavLink}
-                onClick={closeMenus}
-              >
-                {link.label}
-              </NavLink>
-            ))}
-            {renderMobileMenuSection('Manager', managerMenuSections)}
-            {fleetSimEnabled ? renderMobileMenuSection('Simulator', simulatorMenuSections) : null}
-            {renderMobileMenuSection('System', systemMenuSections)}
-          </div>
+          <LayoutMobileNavigation
+            configSection={configSection}
+            isConfigPage={isConfigPage}
+            openSection={openMobileSection}
+            pathname={location.pathname}
+            sections={[
+              { key: 'build', label: 'Build', categories: buildMenuCategories },
+              { key: 'analyze', label: 'Analyze', categories: analyzeMenuCategories },
+              { key: 'operate', label: 'Operate', categories: operateMenuCategories },
+            ]}
+            onConfigSelect={handleMenuItemSelect}
+            onNavigate={closeMenus}
+            onSectionToggle={(section) =>
+              setOpenMobileSection((current) => (current === section ? null : section))
+            }
+          />
         ) : null}
       </header>
 

@@ -88,6 +88,11 @@
   border-color: var(--border-strong);
 }
 
+.closeButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
 .closeButton:focus-visible,
 .cancelButton:focus-visible,
 .saveButton:focus-visible {

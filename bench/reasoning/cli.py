@@ -5,40 +5,11 @@ Command Line Interface for Semantic Router Benchmark Suite
 
 import argparse
 import os
+import subprocess
 import sys
-from typing import List, Optional
 
 
-def main():
-    """Main CLI entry point for semantic-router-bench."""
-    parser = argparse.ArgumentParser(
-        prog="semantic-router-bench",
-        description="Comprehensive benchmark suite for semantic router vs direct vLLM evaluation",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Quick dataset test
-  semantic-router-bench test --dataset mmlu --samples 5
-
-  # Full benchmark comparison
-  semantic-router-bench compare --dataset arc-challenge --samples 10
-
-  # Reasoning mode evaluation (Issue #42)
-  semantic-router-bench reasoning-eval --datasets mmlu gpqa --samples 10
-
-  # List available datasets
-  semantic-router-bench list-datasets
-
-  # Generate plots from existing results
-  semantic-router-bench plot --router-dir results/router_mmlu --vllm-dir results/vllm_mmlu
-
-For more detailed usage, see: https://vllm-semantic-router.com/docs/benchmarking
-        """,
-    )
-
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
-
-    # Test command - quick single dataset evaluation
+def _add_test_command(subparsers):
     test_parser = subparsers.add_parser("test", help="Quick test on a single dataset")
     test_parser.add_argument(
         "--dataset",
@@ -72,7 +43,8 @@ For more detailed usage, see: https://vllm-semantic-router.com/docs/benchmarking
         help="Output directory for results",
     )
 
-    # Compare command - full router vs vLLM comparison
+
+def _add_compare_command(subparsers):
     compare_parser = subparsers.add_parser(
         "compare", help="Full router vs vLLM comparison"
     )
@@ -113,10 +85,8 @@ For more detailed usage, see: https://vllm-semantic-router.com/docs/benchmarking
         help="Output directory for results",
     )
 
-    # List datasets command
-    list_parser = subparsers.add_parser("list-datasets", help="List available datasets")
 
-    # Plot command - generate plots from existing results
+def _add_plot_command(subparsers):
     plot_parser = subparsers.add_parser(
         "plot", help="Generate plots from benchmark results"
     )
@@ -131,7 +101,8 @@ For more detailed usage, see: https://vllm-semantic-router.com/docs/benchmarking
     )
     plot_parser.add_argument("--dataset-name", help="Dataset name for plot titles")
 
-    # Comprehensive command - run full research benchmark
+
+def _add_comprehensive_command(subparsers):
     comprehensive_parser = subparsers.add_parser(
         "comprehensive", help="Run comprehensive multi-dataset benchmark"
     )
@@ -156,7 +127,8 @@ For more detailed usage, see: https://vllm-semantic-router.com/docs/benchmarking
     )
     comprehensive_parser.add_argument("--vllm-model", default="openai/gpt-oss-20b")
 
-    # Reasoning mode evaluation command (Issue #42)
+
+def _add_reasoning_command(subparsers):
     reasoning_parser = subparsers.add_parser(
         "reasoning-eval",
         help="Evaluate standard vs reasoning mode (Issue #42)",
@@ -205,6 +177,46 @@ For more detailed usage, see: https://vllm-semantic-router.com/docs/benchmarking
         help="Skip markdown report generation",
     )
 
+
+def _build_parser():
+    parser = argparse.ArgumentParser(
+        prog="semantic-router-bench",
+        description="Comprehensive benchmark suite for semantic router vs direct vLLM evaluation",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Quick dataset test
+  semantic-router-bench test --dataset mmlu --samples 5
+
+  # Full benchmark comparison
+  semantic-router-bench compare --dataset arc-challenge --samples 10
+
+  # Reasoning mode evaluation (Issue #42)
+  semantic-router-bench reasoning-eval --datasets mmlu gpqa --samples 10
+
+  # List available datasets
+  semantic-router-bench list-datasets
+
+  # Generate plots from existing results
+  semantic-router-bench plot --router-dir results/router_mmlu --vllm-dir results/vllm_mmlu
+
+For more detailed usage, see: https://vllm-sr.ai/docs/benchmarking
+        """,
+    )
+
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    _add_test_command(subparsers)
+    _add_compare_command(subparsers)
+    subparsers.add_parser("list-datasets", help="List available datasets")
+    _add_plot_command(subparsers)
+    _add_comprehensive_command(subparsers)
+    _add_reasoning_command(subparsers)
+    return parser
+
+
+def main():
+    """Main CLI entry point for semantic-router-bench."""
+    parser = _build_parser()
     args = parser.parse_args()
 
     if not args.command:
@@ -232,10 +244,6 @@ For more detailed usage, see: https://vllm-semantic-router.com/docs/benchmarking
 def run_test(args):
     """Run quick test command."""
     print(f"🧪 Quick test: {args.dataset} dataset ({args.samples} samples)")
-
-    # Import and run the benchmark script
-    import os
-    import subprocess
 
     cmd = [
         sys.executable,
@@ -273,9 +281,6 @@ def run_compare(args):
     """Run comparison command."""
     print(f"⚡ Comparison: {args.dataset} dataset ({args.samples} samples)")
 
-    import os
-    import subprocess
-
     script_path = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), "benchmark_comparison.sh"
     )
@@ -297,7 +302,7 @@ def run_compare(args):
 def list_datasets():
     """List available datasets."""
     try:
-        from .dataset_factory import list_available_datasets
+        from .dataset_factory import list_available_datasets  # noqa: PLC0415
 
         # This function prints the datasets and returns None
         list_available_datasets()
@@ -315,9 +320,6 @@ def list_datasets():
 def run_plot(args):
     """Run plotting command."""
     print(f"📈 Generating plots from {args.router_dir} and {args.vllm_dir}")
-
-    import os
-    import subprocess
 
     cmd = [
         sys.executable,
@@ -340,9 +342,6 @@ def run_plot(args):
 def run_comprehensive(args):
     """Run comprehensive benchmark."""
     print(f"🔬 Comprehensive benchmark: {', '.join(args.datasets)}")
-
-    import os
-    import subprocess
 
     script_path = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), "comprehensive_bench.sh"
@@ -369,11 +368,9 @@ def run_reasoning_eval(args):
     - Token usage (completion_tokens/prompt_tokens ratio)
     - Response time per output token
     """
-    print(f"🧠 Reasoning Mode Evaluation (Issue #42)")
+    print("🧠 Reasoning Mode Evaluation (Issue #42)")
     print(f"   Datasets: {', '.join(args.datasets)}")
     print(f"   Samples per category: {args.samples}")
-
-    import subprocess
 
     cmd = [
         sys.executable,

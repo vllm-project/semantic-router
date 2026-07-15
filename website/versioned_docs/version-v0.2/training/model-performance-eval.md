@@ -273,7 +273,7 @@ python src/training/model_eval/result_to_config.py \
 - If your production config.yaml carries **environment-specific settings (endpoints, pricing, policies)**, port the evaluated `decisions[].modelRefs` and `default_model` back into your canonical config.
 
 ### Example config.eval.yaml
-see more about config at [configuration](https://vllm-semantic-router.com/docs/installation/configuration)
+see more about config at [configuration](https://vllm-sr.ai/docs/installation/configuration)
 
 ```yaml
 bert_model:

@@ -1,5 +1,6 @@
 import React from 'react'
 import Translate from '@docusaurus/Translate'
+import { committerActivityEntries } from './committerActivity.generated'
 
 export interface MemberLink {
   label: string
@@ -16,13 +17,14 @@ export interface TeamMember {
   externalLinks?: MemberLink[]
   bio: React.ReactNode
   expertise?: React.ReactNode[]
-  memberType: 'steering' | 'committer'
+  memberType: 'steering' | 'maintainer' | 'committer' | 'emeritus'
+  steeringTrack?: 'industry' | 'academic'
 }
 
 export const steeringCommitteeMembers: TeamMember[] = [
   {
     name: 'Xunzhuo Liu',
-    role: <Translate id="team.members.XunzhuoLiu.role">LLM Routing @ vLLM</Translate>,
+    role: <Translate id="team.members.XunzhuoLiu.role">@AMD</Translate>,
     avatar: '/img/team/xunzhuo.png',
     github: 'https://github.com/Xunzhuo',
     linkedin: 'http://linkedin.com/in/bitliu',
@@ -35,7 +37,26 @@ export const steeringCommitteeMembers: TeamMember[] = [
       <Translate id="team.members.XunzhuoLiu.expertise.gateway">Kubernetes AI Gateway</Translate>,
       <Translate id="team.members.XunzhuoLiu.expertise.opensource">Open-source infrastructure</Translate>,
     ],
-    memberType: 'steering',
+    memberType: 'maintainer',
+    steeringTrack: 'industry',
+  },
+  {
+    name: 'Huamin Chen',
+    role: <Translate id="team.members.HuaminChen.role">@Microsoft</Translate>,
+    avatar: '/img/team/huamin.png',
+    github: 'https://github.com/rootfs',
+    linkedin: 'https://www.linkedin.com/in/huaminchen',
+    externalLinks: [
+      { label: 'Hugging Face', href: 'https://huggingface.co/HuaminChen' },
+    ],
+    bio: <Translate id="team.members.HuaminChen.bio">Long-term incubator of frontier infrastructure and AI systems across cloud-native platforms, open-source ecosystems, and model-serving stacks.</Translate>,
+    expertise: [
+      <Translate id="team.members.HuaminChen.expertise.cloud">Cloud-native platforms</Translate>,
+      <Translate id="team.members.HuaminChen.expertise.serving">Model-serving stacks</Translate>,
+      <Translate id="team.members.HuaminChen.expertise.ecosystem">Open-source ecosystems</Translate>,
+    ],
+    memberType: 'maintainer',
+    steeringTrack: 'industry',
   },
   {
     name: 'Bowei He',
@@ -52,6 +73,7 @@ export const steeringCommitteeMembers: TeamMember[] = [
       <Translate id="team.members.BoweiHe.expertise.hunyuan">Tencent Hunyuan LLM</Translate>,
     ],
     memberType: 'steering',
+    steeringTrack: 'academic',
   },
   {
     name: 'Yankai Chen',
@@ -69,6 +91,7 @@ export const steeringCommitteeMembers: TeamMember[] = [
       <Translate id="team.members.YankaiChen.expertise.mining">Knowledge mining</Translate>,
     ],
     memberType: 'steering',
+    steeringTrack: 'academic',
   },
   {
     name: 'Fuyuan Lyu',
@@ -86,23 +109,7 @@ export const steeringCommitteeMembers: TeamMember[] = [
       <Translate id="team.members.FuyuanLyu.expertise.labeling">Automatic labeling</Translate>,
     ],
     memberType: 'steering',
-  },
-  {
-    name: 'Huamin Chen',
-    role: <Translate id="team.members.HuaminChen.role">@Microsoft</Translate>,
-    avatar: '/img/team/huamin.png',
-    github: 'https://github.com/rootfs',
-    linkedin: 'https://www.linkedin.com/in/huaminchen',
-    externalLinks: [
-      { label: 'Hugging Face', href: 'https://huggingface.co/HuaminChen' },
-    ],
-    bio: <Translate id="team.members.HuaminChen.bio">Long-term incubator of frontier infrastructure and AI systems across cloud-native platforms, open-source ecosystems, and model-serving stacks.</Translate>,
-    expertise: [
-      <Translate id="team.members.HuaminChen.expertise.cloud">Cloud-native platforms</Translate>,
-      <Translate id="team.members.HuaminChen.expertise.serving">Model-serving stacks</Translate>,
-      <Translate id="team.members.HuaminChen.expertise.ecosystem">Open-source ecosystems</Translate>,
-    ],
-    memberType: 'steering',
+    steeringTrack: 'academic',
   },
   {
     name: 'Steve Liu',
@@ -120,8 +127,49 @@ export const steeringCommitteeMembers: TeamMember[] = [
       <Translate id="team.members.SteveLiu.expertise.cps">Cyber-physical systems</Translate>,
     ],
     memberType: 'steering',
+    steeringTrack: 'academic',
   },
 ]
+
+export const industryTrackMembers = steeringCommitteeMembers.filter(
+  member => member.steeringTrack === 'industry',
+)
+
+export const academicTrackMembers = steeringCommitteeMembers.filter(
+  member => member.steeringTrack === 'academic',
+)
+
+export const maintainerMembers = steeringCommitteeMembers.filter(
+  member => member.memberType === 'maintainer',
+)
+
+export function getTeamMemberBadge(
+  member: TeamMember,
+  context: 'team' | 'steering' = 'team',
+): React.ReactNode {
+  if (context === 'steering' && member.steeringTrack === 'industry') {
+    return <Translate id="team.track.industry.title">Industry Track</Translate>
+  }
+
+  if (context === 'steering' && member.steeringTrack === 'academic') {
+    return <Translate id="team.track.academic.title">Academic Track</Translate>
+  }
+
+  if (member.memberType === 'maintainer') {
+    return <Translate id="team.badge.maintainer">Maintainer</Translate>
+  }
+
+  if (member.memberType === 'committer') {
+    return <Translate id="team.badge.committer">Committer</Translate>
+  }
+
+  if (member.memberType === 'emeritus') {
+    return <Translate id="team.badge.emeritus">Emeritus Committer</Translate>
+  }
+
+  return <Translate id="team.badge.steering">Steering Committee</Translate>
+}
+
 export const topNewContributorMembers: TeamMember[] = [
   {
     name: 'FAUST',
@@ -194,7 +242,7 @@ export const topNewContributorMembers: TeamMember[] = [
   },
 ]
 
-export const committerMembers: TeamMember[] = [
+export const allCommitterMembers: TeamMember[] = [
   ...topNewContributorMembers,
   {
     name: 'Chen Wang',
@@ -403,3 +451,24 @@ export const committerMembers: TeamMember[] = [
     memberType: 'committer',
   },
 ]
+
+const committerStatusByLogin = new Map(
+  committerActivityEntries.map(entry => [entry.login.toLowerCase(), entry.status]),
+)
+
+function getGithubLogin(member: TeamMember): string | undefined {
+  return member.github?.match(/github\.com\/([^/?#]+)/i)?.[1]?.toLowerCase()
+}
+
+function isEmeritusCommitter(member: TeamMember): boolean {
+  const login = getGithubLogin(member)
+  return login ? committerStatusByLogin.get(login) === 'emeritus' : false
+}
+
+export const committerMembers = allCommitterMembers.filter(
+  member => !isEmeritusCommitter(member),
+)
+
+export const emeritusCommitterMembers = allCommitterMembers
+  .filter(isEmeritusCommitter)
+  .map(member => ({ ...member, memberType: 'emeritus' as const }))
