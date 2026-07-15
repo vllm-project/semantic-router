@@ -88,12 +88,24 @@ func testHallucinationDetection(ctx context.Context, client *kubernetes.Clientse
 
 	printHallucinationResults(results, warnedCount)
 
-	// Fail only if the endpoint detection path never surfaced a warning: that
-	// means the pluggable endpoint backend did not run end-to-end at all. Like
-	// the other classifier e2e tests, per-case model behavior is tolerated.
-	if warnedCount == 0 {
-		return fmt.Errorf("hallucination detection test failed: no response surfaced the %q warning across %d cases",
-			hallucinationWarningCode, len(testCases))
+	// The mock endpoint detector deterministically flags every non-empty answer,
+	// so every case must surface the warning. Anything less means routing, tool
+	// context propagation, or warning emission is broken for the missing cases.
+	if warnedCount < len(testCases) {
+		var failures []string
+		for _, result := range results {
+			if result.HallucinationWarned {
+				continue
+			}
+			detail := result.Error
+			if detail == "" {
+				detail = fmt.Sprintf("no %q warning (decision=%q, warnings=%q)",
+					hallucinationWarningCode, result.SelectedDecision, result.WarningsHeader)
+			}
+			failures = append(failures, fmt.Sprintf("%s: %s", result.Description, detail))
+		}
+		return fmt.Errorf("hallucination detection test failed: %d/%d cases did not surface the %q warning:\n  - %s",
+			len(testCases)-warnedCount, len(testCases), hallucinationWarningCode, strings.Join(failures, "\n  - "))
 	}
 
 	return nil

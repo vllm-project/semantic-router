@@ -1,7 +1,9 @@
 package classification
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -107,6 +109,35 @@ func TestEndpointDetector_CleanResponse(t *testing.T) {
 	}
 }
 
+func assertSpanShape(t *testing.T, first EnhancedHallucinationSpan, answer, expectedText, expectedExplanation string) {
+	t.Helper()
+	if first.Text != expectedText {
+		t.Errorf("Span Text = %q, want %s", first.Text, expectedText)
+	}
+	wantStart := strings.Index(answer, expectedText)
+	if first.Start != wantStart || first.End != wantStart+len(expectedText) {
+		t.Errorf("Span offsets = [%d,%d), want [%d,%d)", first.Start, first.End, wantStart, wantStart+len(expectedText))
+	}
+	// NLI fields must be backend-neutral, not fabricated. The numeric label must
+	// be the NLIUnknown sentinel (not 0, which is NLIEntailment) and stay
+	// consistent with the string form.
+	if first.NLILabelStr != "UNKNOWN" || first.NLIConfidence != 0 {
+		t.Errorf("Span NLI = (%q, %v), want (UNKNOWN, 0)", first.NLILabelStr, first.NLIConfidence)
+	}
+	if first.NLILabel != NLIUnknown {
+		t.Errorf("Span.NLILabel = %v, want NLIUnknown", first.NLILabel)
+	}
+	if first.NLILabel == NLIEntailment {
+		t.Errorf("Span.NLILabel must not serialize as entailment (0)")
+	}
+	if first.Severity == 4 {
+		t.Errorf("Span.Severity = 4 (critical); endpoint spans must not synthesize critical severity")
+	}
+	if first.Explanation != expectedExplanation {
+		t.Errorf("Span.Explanation = %q, want model-supplied explanation", first.Explanation)
+	}
+}
+
 func TestEndpointDetector_DetectedResponse_TaxonomyAndOffsets(t *testing.T) {
 	answer := "The capital of France is Berlin and it was founded in 1850."
 	content := `{"hallucinated_spans": [` +
@@ -130,30 +161,35 @@ func TestEndpointDetector_DetectedResponse_TaxonomyAndOffsets(t *testing.T) {
 		t.Fatalf("Spans = %d, want 2", len(result.Spans))
 	}
 
-	first := result.Spans[0]
-	if first.Text != "Berlin" {
-		t.Errorf("Spans[0].Text = %q, want Berlin", first.Text)
+	assertSpanShape(t, result.Spans[0], answer, "Berlin", "France's capital is Paris")
+}
+
+func TestEndpointDetector_SpanNotInAnswerIsDropped(t *testing.T) {
+	// A single span that is not quoted from the answer is invalid, so the whole
+	// response is all-invalid and must fail open via an error rather than a clean
+	// verdict. A valid span alongside it is still returned.
+	content := `{"hallucinated_spans": [` +
+		`{"text": "not present anywhere", "category": "contradiction", "subcategory": "entity"},` +
+		`{"text": "Berlin", "category": "contradiction", "subcategory": "entity"}` +
+		`]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, openAIResponse(content))
+	}))
+	defer server.Close()
+
+	detector := newTestEndpointDetector(t, server.URL, false)
+	result, err := detector.DetectWithNLI("ctx", "q", "Berlin is the answer")
+	if err != nil {
+		t.Fatalf("DetectWithNLI: %v", err)
 	}
-	wantStart := strings.Index(answer, "Berlin")
-	if first.Start != wantStart || first.End != wantStart+len("Berlin") {
-		t.Errorf("Spans[0] offsets = [%d,%d), want [%d,%d)", first.Start, first.End, wantStart, wantStart+len("Berlin"))
-	}
-	// NLI fields must be backend-neutral, not fabricated.
-	if first.NLILabelStr != "UNKNOWN" || first.NLIConfidence != 0 {
-		t.Errorf("Spans[0] NLI = (%q, %v), want (UNKNOWN, 0)", first.NLILabelStr, first.NLIConfidence)
-	}
-	if first.NLILabel != 0 {
-		t.Errorf("Spans[0].NLILabel = %v, want 0", first.NLILabel)
-	}
-	if first.Severity == 4 {
-		t.Errorf("Spans[0].Severity = 4 (critical); endpoint spans must not synthesize critical severity")
-	}
-	if first.Explanation != "France's capital is Paris" {
-		t.Errorf("Spans[0].Explanation = %q, want model-supplied explanation", first.Explanation)
+	if !result.HallucinationDetected || len(result.Spans) != 1 || result.Spans[0].Text != "Berlin" {
+		t.Errorf("only the answer-quoted span should be kept, got detected=%v spans=%d", result.HallucinationDetected, len(result.Spans))
 	}
 }
 
-func TestEndpointDetector_SpanNotInAnswerIsSkipped(t *testing.T) {
+func TestEndpointDetector_AllInvalidSpansReturnsError(t *testing.T) {
+	// Every returned span is invalid (not quoted from the answer). This must be
+	// treated as a malformed detector result, not hallucination_detected=false.
 	content := `{"hallucinated_spans": [{"text": "not present anywhere", "category": "contradiction", "subcategory": "entity"}]}`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, openAIResponse(content))
@@ -161,16 +197,15 @@ func TestEndpointDetector_SpanNotInAnswerIsSkipped(t *testing.T) {
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, false)
-	result, err := detector.DetectWithNLI("ctx", "q", "a completely different answer")
-	if err != nil {
-		t.Fatalf("DetectWithNLI: %v", err)
-	}
-	if result.HallucinationDetected || len(result.Spans) != 0 {
-		t.Errorf("span not quoted from answer must be skipped, got detected=%v spans=%d", result.HallucinationDetected, len(result.Spans))
+	if _, err := detector.DetectWithNLI("ctx", "q", "a completely different answer"); err == nil {
+		t.Fatalf("expected error when every returned span is invalid")
 	}
 }
 
-func TestEndpointDetector_InvalidTaxonomyIsSanitized(t *testing.T) {
+func TestEndpointDetector_InvalidTaxonomyReturnsError(t *testing.T) {
+	// A span whose taxonomy is outside the allowed enum is invalid; when it is the
+	// only span, the response is all-invalid and must error rather than report a
+	// clean verdict.
 	answer := "value X is wrong"
 	content := `{"hallucinated_spans": [{"text": "value X", "category": "bogus", "subcategory": "also_bogus"}]}`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -179,16 +214,51 @@ func TestEndpointDetector_InvalidTaxonomyIsSanitized(t *testing.T) {
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, false)
-	result, err := detector.DetectWithNLI("ctx", "q", answer)
-	if err != nil {
-		t.Fatalf("DetectWithNLI: %v", err)
+	if _, err := detector.DetectWithNLI("ctx", "q", answer); err == nil {
+		t.Fatalf("expected error when the only span has invalid taxonomy")
 	}
-	if len(result.Spans) != 1 {
-		t.Fatalf("Spans = %d, want 1", len(result.Spans))
+}
+
+func TestEndpointDetector_MissingSpansArrayReturnsError(t *testing.T) {
+	// A decodable body that omits hallucinated_spans is a schema violation, not a
+	// clean verdict.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, openAIResponse(`{}`))
+	}))
+	defer server.Close()
+
+	detector := newTestEndpointDetector(t, server.URL, false)
+	if _, err := detector.DetectWithNLI("ctx", "q", "answer text"); err == nil {
+		t.Fatalf("expected error when hallucinated_spans is missing")
 	}
-	// Invalid taxonomy values must not leak into the explanation verbatim.
-	if strings.Contains(result.Spans[0].Explanation, "bogus") {
-		t.Errorf("invalid taxonomy leaked into explanation: %q", result.Spans[0].Explanation)
+}
+
+func TestEndpointDetector_NullSpansArrayReturnsError(t *testing.T) {
+	// An explicit null is indistinguishable from missing at the value level and
+	// must not be treated as an empty (clean) list.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, openAIResponse(`{"hallucinated_spans": null}`))
+	}))
+	defer server.Close()
+
+	detector := newTestEndpointDetector(t, server.URL, false)
+	if _, err := detector.DetectWithNLI("ctx", "q", "answer text"); err == nil {
+		t.Fatalf("expected error when hallucinated_spans is null")
+	}
+}
+
+func TestEndpointDetector_EmptyTextSpanReturnsError(t *testing.T) {
+	// A span with empty text carries no verifiable evidence; as the only span it
+	// makes the response all-invalid and must error.
+	content := `{"hallucinated_spans": [{"text": "", "category": "contradiction", "subcategory": "entity"}]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, openAIResponse(content))
+	}))
+	defer server.Close()
+
+	detector := newTestEndpointDetector(t, server.URL, false)
+	if _, err := detector.DetectWithNLI("ctx", "q", "answer text"); err == nil {
+		t.Fatalf("expected error when the only span has empty text")
 	}
 }
 
@@ -316,5 +386,21 @@ func TestEndpointDetector_DetectMapsSpansToText(t *testing.T) {
 	}
 	if !result.HallucinationDetected || len(result.UnsupportedSpans) != 1 || result.UnsupportedSpans[0] != "Berlin" {
 		t.Errorf("Detect mapping = %+v, want single unsupported span 'Berlin'", result)
+	}
+}
+
+func TestSystemPromptHashGuard(t *testing.T) {
+	// The generative span detector was fine-tuned on a very specific prompt.
+	// Any formatting drift degrades quality.
+	baseHash := fmt.Sprintf("%x", sha256.Sum256([]byte(systemPromptBase)))
+	explHash := fmt.Sprintf("%x", sha256.Sum256([]byte(systemPromptExpl)))
+
+	// If these hashes change, you MUST verify the new prompts against the training data
+	// (https://github.com/KRLabsOrg/LettuceDetect/blob/main/lettucedetect/prompts/generative.py)
+	if baseHash != "05939b718dc3b737541666c3debf1ea426316bef7b410057cf1ee6c64a635e6f" {
+		t.Errorf("systemPromptBase drift detected (hash: %s)", baseHash)
+	}
+	if explHash != "f6e3da772b0ed904a5785c422a81a0127f30f16285492ce74ef0c91fa1bda601" {
+		t.Errorf("systemPromptExpl drift detected (hash: %s)", explHash)
 	}
 }

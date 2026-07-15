@@ -8,14 +8,19 @@ This directory holds smoke, demo, and harness manifests that the repository uses
 - response API and hallucination test configs
 - ONNX binding test configs
 
-`config.hallucination-endpoint.yaml` exercises the endpoint-backed hallucination
-detector (`global.model_catalog.modules.hallucination_mitigation.detector.backend:
-endpoint`). It points the detector at an OpenAI-compatible mock served by
-`e2e/testing/mock-hallucination-endpoint.py` (default port `8077`), so the endpoint
-backend can be validated locally without a GPU or the real generative detector
-model. Start the mock detector, the mock chat backend, and the router with this
-config, then send a fact-check query whose answer contains a known unsupported
-claim and confirm the `x-vsr-response-warnings: hallucination` header is set.
+`config.hallucination.yaml` is the local hallucination router config used by the
+`hallucination-demo` targets in `tools/make/build-run-test.mk` (and
+`e2e/testing/hallucination-demo/`). It runs the in-process Candle detector with
+NLI so the flow can be exercised locally with `./bin/router -config=e2e/config/config.hallucination.yaml`.
+
+The endpoint-backed detector
+(`global.model_catalog.modules.hallucination_mitigation.detector.backend: endpoint`)
+is exercised by the Kubernetes E2E `hallucination` profile
+(`e2e/profiles/hallucination/values.yaml`). That profile deploys an
+OpenAI-compatible mock detector (`deploy/kubernetes/hallucination/mock-hallucination-detector.yaml`,
+served by the shared `tools/mock-vllm` image) and asserts the
+`x-vsr-response-warnings: hallucination` header. Run it with
+`make e2e-test E2E_PROFILE=hallucination`.
 `config.remote-embedding-smoke.yaml` is a manual local smoke config for validating
 `global.model_catalog.embeddings.semantic.embedding_config.backend: openai_compatible`
 without changing the default `config/config.yaml`. It uses mock chat backends on

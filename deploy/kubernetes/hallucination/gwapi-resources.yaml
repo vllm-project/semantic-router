@@ -148,4 +148,3 @@ spec:
     kind: Gateway
     name: semantic-router
   type: JSONPatch
-

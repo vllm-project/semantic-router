@@ -50,9 +50,14 @@ func ValidateHallucinationBackend(cfg *HallucinationModelConfig) error {
 			cfg.Backend, HallucinationBackendCandle, HallucinationBackendEndpoint)
 	}
 
-	endpoint := strings.TrimSpace(cfg.Endpoint)
-	if endpoint == "" {
+	endpoint := cfg.Endpoint
+	if strings.TrimSpace(endpoint) == "" {
 		return fmt.Errorf("hallucination detector endpoint is required when backend is %q", HallucinationBackendEndpoint)
+	}
+	// Reject surrounding whitespace: the runtime constructor uses the raw value,
+	// so a padded endpoint would pass validation and then build an invalid URL.
+	if endpoint != strings.TrimSpace(endpoint) {
+		return fmt.Errorf("hallucination detector endpoint %q must not have leading or trailing whitespace", endpoint)
 	}
 	parsed, err := url.Parse(endpoint)
 	if err != nil {

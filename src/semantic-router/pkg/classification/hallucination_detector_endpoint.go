@@ -16,11 +16,15 @@ import (
 )
 
 const (
-	systemPromptBase = `You are an expert annotator who identifies hallucinated spans in a generated answer with respect to a given context (the only trusted evidence). A hallucinated span is a substring of the answer that is not supported by the context. Spans consistent with the context are not hallucinations. Quote each hallucinated span verbatim from the answer and classify it into exactly one category and one subcategory.
+	systemPromptBase = `You are an expert annotator who identifies hallucinated spans in a generated answer with respect to a given context (the only trusted evidence). A hallucinated span is a substring of the answer that is not supported by the context. Spans consistent with the context are not hallucinations.
+
+Quote each hallucinated span verbatim from the answer and classify it into exactly one category and one subcategory.
+
 Categories (the kinds of unsupported span):
 - contradiction: conflicts with the context (a wrong value, number, date, name, or relationship)
 - fabricated_reference: an entity, name, identifier, or section that is absent from the context
 - unsupported_addition: a claim, detail, or behavior the context never states
+
 Subcategories:
 - entity: a wrong or invented name, entity, or object
 - temporal: an incorrect date, time, duration, or ordering
@@ -36,15 +40,17 @@ Subcategories:
 - subjective: an unsupported subjective or evaluative statement
 - unspecified: unsupported, with no more specific subtype
 
-Reply with ONLY a JSON object (no markdown, no code fences):
-{"hallucinated_spans": [{"text": "...", "category": "...", "subcategory": "..."}]}.
-If nothing is unsupported, reply {"hallucinated_spans": []}.`
+Reply with ONLY a JSON object (no markdown, no code fences): {"hallucinated_spans": [{"text": "...", "category": "...", "subcategory": "..."}]}. If nothing is unsupported, reply {"hallucinated_spans": []}.`
 
-	systemPromptExpl = `You are an expert annotator who identifies hallucinated spans in a generated answer with respect to a given context (the only trusted evidence). A hallucinated span is a substring of the answer that is not supported by the context. Spans consistent with the context are not hallucinations. Quote each hallucinated span verbatim from the answer and classify it into exactly one category and one subcategory, and give a short explanation of why it is unsupported.
+	systemPromptExpl = `You are an expert annotator who identifies hallucinated spans in a generated answer with respect to a given context (the only trusted evidence). A hallucinated span is a substring of the answer that is not supported by the context. Spans consistent with the context are not hallucinations.
+
+Quote each hallucinated span verbatim from the answer and classify it into exactly one category and one subcategory, and give a short explanation of why it is unsupported.
+
 Categories (the kinds of unsupported span):
 - contradiction: conflicts with the context (a wrong value, number, date, name, or relationship)
 - fabricated_reference: an entity, name, identifier, or section that is absent from the context
 - unsupported_addition: a claim, detail, or behavior the context never states
+
 Subcategories:
 - entity: a wrong or invented name, entity, or object
 - temporal: an incorrect date, time, duration, or ordering
@@ -60,9 +66,7 @@ Subcategories:
 - subjective: an unsupported subjective or evaluative statement
 - unspecified: unsupported, with no more specific subtype
 
-Reply with ONLY a JSON object (no markdown, no code fences):
-{"hallucinated_spans": [{"text": "...", "category": "...", "subcategory": "...", "explanation": "..."}]}.
-If nothing is unsupported, reply {"hallucinated_spans": []}.`
+Reply with ONLY a JSON object (no markdown, no code fences): {"hallucinated_spans": [{"text": "...", "category": "...", "subcategory": "...", "explanation": "..."}]}. If nothing is unsupported, reply {"hallucinated_spans": []}.`
 )
 
 // endpointCategories and endpointSubcategories are the hallucination taxonomy
@@ -107,7 +111,7 @@ func NewEndpointHallucinationDetector(cfg *config.HallucinationModelConfig) (*En
 	return &EndpointHallucinationDetector{
 		config:   cfg,
 		client:   &http.Client{Timeout: 10 * time.Second},
-		endpoint: strings.TrimRight(cfg.Endpoint, "/"),
+		endpoint: strings.TrimRight(strings.TrimSpace(cfg.Endpoint), "/"),
 	}, nil
 }
 
@@ -143,7 +147,7 @@ func (d *EndpointHallucinationDetector) IsNLIInitialized() bool {
 }
 
 func (d *EndpointHallucinationDetector) buildRequestPayload(reqContext, question, answer string) ([]byte, error) {
-	prompt := fmt.Sprintf("User request: %s\n\nContext (trusted evidence):\n%s\n\nAnswer to verify:\n%s", question, reqContext, answer)
+	prompt := fmt.Sprintf("User request: %s\n\nExcerpt 1:\n%s\n\nAnswer to verify:\n%s", question, reqContext, answer)
 
 	systemPrompt := systemPromptBase
 	if d.config.IncludeExplanation {
@@ -202,8 +206,9 @@ func (d *EndpointHallucinationDetector) buildRequestPayload(reqContext, question
 // for any malformed response so the caller can fail open via the detection_error
 // path instead of recording a false clean verdict. The taxonomy is validated
 // locally, each span is verified to be a substring of the answer, and deterministic
-// Start/End offsets are populated. NLI fields are left UNKNOWN/0 because the
-// endpoint backend does not produce NLI labels.
+// Start/End offsets are populated. The NLI label is set to the NLIUnknown sentinel
+// (not 0, which is NLIEntailment) because the endpoint backend does not produce NLI
+// labels, keeping the numeric and string forms consistent.
 func (d *EndpointHallucinationDetector) parseOpenAIResponse(respBytes []byte, answer string) ([]EnhancedHallucinationSpan, error) {
 	var openaiResp struct {
 		Choices []struct {
@@ -220,8 +225,11 @@ func (d *EndpointHallucinationDetector) parseOpenAIResponse(respBytes []byte, an
 		return nil, fmt.Errorf("response contained no choices")
 	}
 
+	// HallucinatedSpans is a pointer so we can distinguish an explicitly present
+	// array (including []) from a missing field or JSON null. A decodable body
+	// that omits the array is a schema violation, not a clean verdict.
 	var parsed struct {
-		HallucinatedSpans []struct {
+		HallucinatedSpans *[]struct {
 			Text        string `json:"text"`
 			Category    string `json:"category"`
 			Subcategory string `json:"subcategory"`
@@ -232,34 +240,53 @@ func (d *EndpointHallucinationDetector) parseOpenAIResponse(respBytes []byte, an
 	if err := json.Unmarshal([]byte(openaiResp.Choices[0].Message.Content), &parsed); err != nil {
 		return nil, fmt.Errorf("JSON schema parsing failed: %w", err)
 	}
+	if parsed.HallucinatedSpans == nil {
+		return nil, fmt.Errorf("endpoint response missing required hallucinated_spans array")
+	}
 
-	spans := make([]EnhancedHallucinationSpan, 0, len(parsed.HallucinatedSpans))
-	for _, s := range parsed.HallucinatedSpans {
+	rawSpans := *parsed.HallucinatedSpans
+	spans := make([]EnhancedHallucinationSpan, 0, len(rawSpans))
+	invalidCount := 0
+	for _, s := range rawSpans {
 		if s.Text == "" {
+			invalidCount++
 			continue
 		}
-		// The span must be quoted verbatim from the answer; skip anything that is
-		// not actually present so we never emit fabricated offsets.
+		// The span must be quoted verbatim from the answer; anything not actually
+		// present is invalid so we never emit fabricated offsets.
 		start := strings.Index(answer, s.Text)
 		if start < 0 {
 			logging.Debugf("Endpoint hallucination span not found in answer, skipping: %q", s.Text)
+			invalidCount++
 			continue
 		}
 
 		category := normalizeTaxonomyValue(s.Category, endpointCategories)
 		subcategory := normalizeTaxonomyValue(s.Subcategory, endpointSubcategories)
+		if category == "" || subcategory == "" {
+			logging.Debugf("Endpoint hallucination span has invalid taxonomy, skipping: category=%q subcategory=%q", s.Category, s.Subcategory)
+			invalidCount++
+			continue
+		}
 
 		spans = append(spans, EnhancedHallucinationSpan{
 			Text:                    s.Text,
 			Start:                   start,
 			End:                     start + len(s.Text),
 			HallucinationConfidence: 1.0,
-			NLILabel:                0,
+			NLILabel:                NLIUnknown,
 			NLILabelStr:             "UNKNOWN",
 			NLIConfidence:           0,
 			Severity:                2,
 			Explanation:             endpointSpanExplanation(s.Explanation, category, subcategory),
 		})
+	}
+
+	// A response that returned spans but where every one failed validation is a
+	// malformed detector result, not a clean verdict. Fail open via an error
+	// rather than silently reporting hallucination_detected=false.
+	if len(spans) == 0 && invalidCount > 0 {
+		return nil, fmt.Errorf("endpoint returned %d span(s) but none were valid", invalidCount)
 	}
 	return spans, nil
 }

@@ -267,19 +267,12 @@ func (k *KindCluster) verifyNvidiaRuntime(ctx context.Context) error {
 func (k *KindCluster) getHostMountPath() (string, error) {
 	switch runtime.GOOS {
 	case "linux":
-		// On Linux under Docker Desktop, /mnt and /tmp are often not shared by default.
-		// Use a directory in the user's home folder for better compatibility.
-		homeDir, _ := os.UserHomeDir()
-		tmpDir := filepath.Join(homeDir, ".kind-tmp", "kind-mnt-"+k.Name)
-		if err := os.MkdirAll(tmpDir, 0755); err != nil {
-			return "", fmt.Errorf("failed to create temp mount directory: %w", err)
-		}
-		k.log("Using Linux-compatible mount path: %s", tmpDir)
-		return tmpDir, nil
+		// On Linux, use /mnt as it's standard and typically has more space
+		return "/mnt", nil
 	case "darwin":
-		// On macOS, Docker Desktop only allows mounting from specific locations like the home directory.
-		homeDir, _ := os.UserHomeDir()
-		tmpDir := filepath.Join(homeDir, ".kind-tmp", "kind-mnt-"+k.Name)
+		// On macOS, Docker Desktop only allows mounting from specific locations
+		// Use /tmp which is allowed by default
+		tmpDir := filepath.Join(os.TempDir(), "kind-mnt-"+k.Name)
 		if err := os.MkdirAll(tmpDir, 0755); err != nil {
 			return "", fmt.Errorf("failed to create temp mount directory: %w", err)
 		}
@@ -309,8 +302,7 @@ func (k *KindCluster) createClusterConfig() (string, error) {
 
 	// Ensure ML models mount directory exists BEFORE Kind cluster creation
 	// This is required because Kind mounts are set up at cluster creation time
-	homeDir, _ := os.UserHomeDir()
-	mlModelsDir := filepath.Join(homeDir, ".kind-tmp", "kind-ml-models")
+	mlModelsDir := "/tmp/kind-ml-models"
 	if err := os.MkdirAll(mlModelsDir, 0755); err != nil {
 		k.log("Warning: failed to create ML models directory %s: %v", mlModelsDir, err)
 	}
@@ -326,7 +318,7 @@ func (k *KindCluster) createClusterConfig() (string, error) {
 	}
 
 	// Base config with host mount for storage (always included)
-	// Also mount the models dir for ML model selection E2E tests
+	// Also mount /tmp/kind-ml-models for ML model selection E2E tests
 	kindConfig := fmt.Sprintf(`kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: %s
@@ -335,8 +327,8 @@ nodes:
     extraMounts:
       - hostPath: %s
         containerPath: /mnt
-      - hostPath: %s
-        containerPath: /tmp/ml-models%s`, k.Name, hostPath, mlModelsDir, workspaceModelsMount)
+      - hostPath: /tmp/kind-ml-models
+        containerPath: /tmp/ml-models%s`, k.Name, hostPath, workspaceModelsMount)
 
 	// Add GPU mount to worker if GPU is enabled
 	if k.GPUEnabled {
@@ -345,20 +337,20 @@ nodes:
     extraMounts:
       - hostPath: %s
         containerPath: /mnt
-      - hostPath: %s
+      - hostPath: /tmp/kind-ml-models
         containerPath: /tmp/ml-models%s
       - hostPath: /dev/null
         containerPath: /var/run/nvidia-container-devices/all
-`, hostPath, mlModelsDir, workspaceModelsMount)
+`, hostPath, workspaceModelsMount)
 	} else {
 		kindConfig += fmt.Sprintf(`
   - role: worker
     extraMounts:
       - hostPath: %s
         containerPath: /mnt
-      - hostPath: %s
+      - hostPath: /tmp/kind-ml-models
         containerPath: /tmp/ml-models%s
-`, hostPath, mlModelsDir, workspaceModelsMount)
+`, hostPath, workspaceModelsMount)
 	}
 
 	configFile, err := os.CreateTemp("", "kind-config-*.yaml")
