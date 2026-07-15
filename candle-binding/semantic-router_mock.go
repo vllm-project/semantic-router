@@ -12,7 +12,13 @@ import (
 
 var ErrEmbeddingModelNotReady = errors.New("embedding model is not initialized")
 
-func ensureEmbeddingModelReady() error {
+func ensureEmbeddingModelReady(modelType string) error {
+	if strings.EqualFold(strings.TrimSpace(modelType), "multimodal") {
+		if !multiModalReady {
+			return ErrEmbeddingModelNotReady
+		}
+		return nil
+	}
 	if !embeddingModelsReady {
 		return ErrEmbeddingModelNotReady
 	}
@@ -211,7 +217,7 @@ func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWait
 
 // GetEmbeddingBatched generates an embedding using the continuous batching model
 func GetEmbeddingBatched(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
-	if err := ensureEmbeddingModelReady(); err != nil {
+	if err := ensureEmbeddingModelReady(""); err != nil {
 		return nil, err
 	}
 
@@ -231,6 +237,14 @@ func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, mmBertModelPath 
 	return nil
 }
 
+// InitEmbeddingModelsWithMmBert initializes all embedding models including mmBERT.
+func InitEmbeddingModelsWithMmBert(qwen3ModelPath, gemmaModelPath, mmBertModelPath string, useCPU bool) error {
+	log.Printf("[MOCK] Initializing Embedding Models with mmBERT 2D Matryoshka support")
+	embeddingModelsReady = true
+	multiModalReady = true
+	return nil
+}
+
 // GetEmbeddingWithDim generates an embedding with intelligent model selection
 func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, targetDim int) ([]float32, error) {
 	dim := targetDim
@@ -246,7 +260,7 @@ func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, 
 
 // GetEmbeddingWithMetadata generates an embedding with full metadata
 func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority float32, targetDim int) (*EmbeddingOutput, error) {
-	if err := ensureEmbeddingModelReady(); err != nil {
+	if err := ensureEmbeddingModelReady(""); err != nil {
 		return nil, err
 	}
 
@@ -261,7 +275,7 @@ func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority floa
 
 // GetEmbeddingWithModelType generates an embedding with a manually specified model type
 func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
-	if err := ensureEmbeddingModelReady(); err != nil {
+	if err := ensureEmbeddingModelReady(""); err != nil {
 		return nil, err
 	}
 
@@ -394,7 +408,7 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 
 // GetEmbedding2DMatryoshka generates an embedding using mock 2D Matryoshka API
 func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
-	if err := ensureEmbeddingModelReady(); err != nil {
+	if err := ensureEmbeddingModelReady(""); err != nil {
 		return nil, err
 	}
 	_ = text
@@ -429,7 +443,7 @@ func CalculateSimilarityDefault(text1, text2 string) float32 {
 
 // CalculateEmbeddingSimilarity calculates cosine similarity
 func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetDim int) (*SimilarityOutput, error) {
-	if err := ensureEmbeddingModelReady(); err != nil {
+	if err := ensureEmbeddingModelReady(""); err != nil {
 		return nil, err
 	}
 	return &SimilarityOutput{
@@ -441,7 +455,7 @@ func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetD
 
 // CalculateSimilarityBatch finds top-k most similar candidates
 func CalculateSimilarityBatch(query string, candidates []string, topK int, modelType string, targetDim int) (*BatchSimilarityOutput, error) {
-	if err := ensureEmbeddingModelReady(); err != nil {
+	if err := ensureEmbeddingModelReady(""); err != nil {
 		return nil, err
 	}
 	matches := make([]BatchSimilarityMatch, len(candidates))
