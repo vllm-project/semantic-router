@@ -420,6 +420,7 @@
 
 .capabilitySection,
 .encoderSection,
+.momProofSection,
 .finalCtaSection {
   border-bottom: 0;
 }
@@ -444,6 +445,17 @@
 }
 
 .encoderSection::before {
+  content: none;
+}
+
+.momProofSection {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(3.5rem, 6vw, 5rem) 0;
+  background: var(--site-bg);
+}
+
+.momProofSection::before {
   content: none;
 }
 
@@ -1004,6 +1016,154 @@
   text-wrap: pretty;
 }
 
+.momProofHeading {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 0.34fr) minmax(0, 0.66fr);
+  gap: clamp(1rem, 2vw, 2rem);
+  align-items: end;
+  margin-bottom: clamp(1.4rem, 3vw, 2.4rem);
+}
+
+.momProofHeading h2 {
+  max-width: 48rem;
+  margin: 0;
+  color: var(--site-text-strong);
+  font-size: clamp(2rem, 4.4vw, 4.5rem);
+  font-weight: 690;
+  line-height: 0.98;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+
+.momProofHeading p {
+  max-width: 45rem;
+  margin: 0.9rem 0 0;
+  color: var(--site-muted-bright);
+  font-size: clamp(0.98rem, 1.35vw, 1.18rem);
+  line-height: 1.58;
+  text-wrap: pretty;
+}
+
+.momProofFrame {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: clamp(1rem, 1.8vw, 1.45rem);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 42%),
+    var(--site-surface-alt);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 24px 72px rgba(0, 0, 0, 0.34);
+}
+
+.momProofArchitecture {
+  display: grid;
+  grid-template-columns: minmax(17rem, 0.34fr) minmax(0, 0.66fr);
+  min-width: 0;
+}
+
+.momProofArchitectureCopy {
+  display: grid;
+  align-content: center;
+  gap: 0.85rem;
+  min-width: 0;
+  padding: clamp(1.25rem, 3vw, 2.6rem);
+  border-right: 1px solid var(--site-border);
+}
+
+.momProofArchitectureCopy h3 {
+  max-width: 25rem;
+  margin: 0;
+  color: var(--site-text-strong);
+  font-size: clamp(1.35rem, 2.5vw, 2.4rem);
+  font-weight: 620;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+
+.momProofArchitectureCopy p {
+  max-width: 27rem;
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: clamp(0.92rem, 1.1vw, 1rem);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.momProofArchitectureImageWrap {
+  min-width: 0;
+  padding: clamp(0.8rem, 1.8vw, 1.35rem);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.momProofArchitectureImage,
+.momScorecardImage {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.momProofArchitectureImage {
+  aspect-ratio: 1298 / 867;
+  object-fit: contain;
+  border-radius: 0.85rem;
+}
+
+.momScorecardGrid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(0.8rem, 1.5vw, 1.1rem);
+  margin-top: clamp(0.9rem, 2vw, 1.35rem);
+}
+
+.momScorecard {
+  overflow: hidden;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 1rem;
+  background: #050608;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 18px 48px rgba(0, 0, 0, 0.26);
+}
+
+.momScorecardHeader {
+  display: grid;
+  gap: 0.32rem;
+  padding: 1rem 1.05rem 0.15rem;
+}
+
+.momScorecardHeader h3 {
+  margin: 0;
+  color: var(--site-text-strong);
+  font-size: clamp(1rem, 1.35vw, 1.18rem);
+  font-weight: 680;
+  letter-spacing: -0.022em;
+}
+
+.momScorecardHeader p {
+  margin: 0;
+  color: var(--site-accent-strong);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  font-weight: 760;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.momScorecardImage {
+  aspect-ratio: 2400 / 1308;
+  object-fit: cover;
+  object-position: center;
+}
+
 .finalCtaSection {
   padding: 1rem 0 5rem;
   background: var(--site-bg);
@@ -1069,12 +1229,20 @@
   .heroGrid,
   .sectionHeading,
   .encoderShowcase,
+  .momProofHeading,
+  .momProofArchitecture,
   .finalCtaFrame {
     grid-template-columns: 1fr;
   }
 
-  .encoderCardGrid {
+  .encoderCardGrid,
+  .momScorecardGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .momProofArchitectureCopy {
+    border-right: 0;
+    border-bottom: 1px solid var(--site-border);
   }
 
   .encoderLead {
@@ -1198,7 +1366,8 @@
   }
 
   .capabilitySection,
-  .encoderSection {
+  .encoderSection,
+  .momProofSection {
     padding: 3rem 0;
   }
 
@@ -1295,6 +1464,19 @@
 
   .stageDetail {
     margin-top: 0.35rem;
+  }
+
+  .momScorecardGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .momProofHeading h2 {
+    font-size: clamp(2.05rem, 13vw, 3.35rem);
+  }
+
+  .momProofArchitectureCopy,
+  .momProofArchitectureImageWrap {
+    padding: 1rem;
   }
 
   .encoderCardGrid {

@@ -18,6 +18,7 @@ import (
 	multimodalrouting "github.com/vllm-project/semantic-router/e2e/profiles/multimodal-routing"
 	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
 	raghybridsearch "github.com/vllm-project/semantic-router/e2e/profiles/rag-hybrid-search"
+	remoteembedding "github.com/vllm-project/semantic-router/e2e/profiles/remote-embedding"
 	responseapi "github.com/vllm-project/semantic-router/e2e/profiles/response-api"
 	responseapiredis "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis"
 	responseapirediscluster "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis-cluster"
@@ -75,6 +76,7 @@ func init() {
 		func() framework.Profile { return responseapirediscluster.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
 	)
+	register("remote-embedding", func() framework.Profile { return remoteembedding.NewProfile() }, framework.ProfileCapabilities{})
 	register(
 		"router-replay",
 		func() framework.Profile { return routerreplay.NewProfile() },
