@@ -1,0 +1,36 @@
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: stub-model
+    models:
+      - name: stub-model
+        backend_refs:
+          - name: stub
+            endpoint: stub.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    decisions:
+      - name: stub-route
+        description: Catch-all stub route
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: stub-model
+            use_reasoning: false
+    signals: {}
+    modelCards:
+      - name: stub-model
+  global:
+    stores:
+      semantic_cache:
+        embedding_model: mmbert
+      memory:
+        embedding_model: mmbert
+      vector_store:
+        embedding_model: mmbert
+persistence:
+  enabled: false
