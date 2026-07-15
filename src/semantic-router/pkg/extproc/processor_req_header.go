@@ -38,7 +38,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// also short-circuit in the no-op path.
 	if ctx.SkipProcessing {
 		detectStreamingExpectation(ctx)
-		return newContinueRequestHeadersResponse(), nil
+		return newContinueRequestHeadersResponse(buildReservedHeaderRemovalMutation()), nil
 	}
 
 	if replayResp := r.handleRouterReplayAPI(method, path); replayResp != nil {
@@ -56,6 +56,22 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		return validationResp, nil
 	}
 	return newContinueRequestHeadersResponse(buildIdentityEncodingRequestMutation()), nil
+}
+
+// buildReservedHeaderRemovalMutation returns a header-phase mutation that
+// removes every reserved internal header from the wire request Envoy forwards
+// upstream. enforceInternalHeaderTrust has already stripped them from
+// ctx.Headers (so router logic is unaffected), but that in-memory strip does
+// NOT reach the wire: without this, a client-spoofed marker — and, critically,
+// the internal-leg auth proof on a genuine looper request — would travel to the
+// upstream, leaking the secret. Applying it at the header phase covers every
+// upstream-bound path uniformly and does not depend on operators configuring
+// Envoy's request_headers_to_remove. See buildIdentityEncodingRequestMutation
+// for the routing-path variant that also pins accept-encoding.
+func buildReservedHeaderRemovalMutation() *ext_proc.HeaderMutation {
+	return &ext_proc.HeaderMutation{
+		RemoveHeaders: append([]string(nil), headers.ReservedInternalHeaders...),
+	}
 }
 
 func startRequestHeaderSpan(
@@ -182,6 +198,10 @@ func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
 				Value: "identity",
 			},
 		}},
+		// Strip the reserved internal headers from the wire so a spoofed marker
+		// or the internal-leg auth proof never reaches the upstream. See
+		// buildReservedHeaderRemovalMutation.
+		RemoveHeaders: append([]string(nil), headers.ReservedInternalHeaders...),
 	}
 }
 

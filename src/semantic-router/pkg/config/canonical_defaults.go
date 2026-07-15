@@ -328,7 +328,12 @@ func DefaultGlobalConfig() RouterConfig {
 	global := DefaultCanonicalGlobal()
 	_ = resolveModuleModelRefs(&global)
 	cfg := RouterConfig{}
-	_ = applyCanonicalGlobal(&cfg, &global)
+	// The built-in defaults must always satisfy applyCanonicalGlobal's validation
+	// (e.g. LooperConfig.Validate); a failure here is a programming error in the
+	// defaults, not operator input, so fail loudly rather than silently.
+	if err := applyCanonicalGlobal(&cfg, &global); err != nil {
+		panic("config: default global config is invalid: " + err.Error())
+	}
 	if cfg.VectorStore != nil {
 		cfg.VectorStore.ApplyDefaults()
 	}

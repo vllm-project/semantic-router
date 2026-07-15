@@ -19,7 +19,10 @@ package extproc
 import (
 	"testing"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
@@ -98,6 +101,35 @@ func TestEnforceInternalHeaderTrustRejectsWrongSecret(t *testing.T) {
 	assert.False(t, ctx.LooperRequest, "an invalid auth proof must not be trusted")
 	_, present := ctx.Headers[headers.VSRLooperRequest]
 	assert.False(t, present, "reserved headers must be stripped when the proof is invalid")
+}
+
+// TestHandleRequestHeadersRemovesReservedHeadersFromWire proves the reserved
+// internal headers — critically the auth proof — are scheduled for wire removal
+// so they never reach an upstream, even on a genuine (authenticated) leg. The
+// in-memory strip in enforceInternalHeaderTrust is not enough; Envoy forwards
+// the original wire headers unless extproc emits RemoveHeaders.
+func TestHandleRequestHeadersRemovesReservedHeadersFromWire(t *testing.T) {
+	router := &OpenAIRouter{}
+	req := &ext_proc.ProcessingRequest_RequestHeaders{
+		RequestHeaders: &ext_proc.HttpHeaders{
+			Headers: &core.HeaderMap{
+				Headers: []*core.HeaderValue{
+					{Key: ":method", Value: "POST"},
+					{Key: ":path", Value: "/v1/chat/completions"},
+					{Key: "x-vsr-looper-request", Value: "true"},
+					{Key: headers.VSRLooperAuthorization, Value: looper.InternalAuthSecret()},
+				},
+			},
+		},
+	}
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	resp, err := router.handleRequestHeaders(req, ctx)
+	require.NoError(t, err)
+
+	removed := resp.GetRequestHeaders().GetResponse().GetHeaderMutation().GetRemoveHeaders()
+	for _, name := range headers.ReservedInternalHeaders {
+		assert.Containsf(t, removed, name, "reserved header %q must be scheduled for wire removal", name)
+	}
 }
 
 // TestIsTrustedInternalRequest exercises the matcher directly.

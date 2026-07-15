@@ -54,6 +54,7 @@ func enforceInternalHeaderTrust(ctx *RequestContext) {
 
 	// Untrusted ingress: the looper marker (if any) was spoofed. Strip every
 	// reserved internal header and never treat the request as internal.
+	proofPresent := strings.TrimSpace(lookupHeaderCaseInsensitive(ctx.Headers, headers.VSRLooperAuthorization)) != ""
 	stripped := false
 	for _, name := range headers.ReservedInternalHeaders {
 		if deleteHeaderCaseInsensitive(ctx.Headers, name) {
@@ -63,9 +64,13 @@ func enforceInternalHeaderTrust(ctx *RequestContext) {
 	ctx.LooperRequest = false
 
 	if stripped {
+		// Distinguish a mismatched proof (likely a shared-secret misconfiguration
+		// across replicas — see looper.InternalAuthSecretEnv) from a plain spoof,
+		// so the two are diagnosable apart.
 		logging.ComponentWarnEvent("extproc", "reserved_internal_headers_stripped", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"detail":     "client-supplied reserved internal headers were stripped at ingress",
+			"request_id":    ctx.RequestID,
+			"invalid_proof": proofPresent,
+			"detail":        "client-supplied reserved internal headers were stripped at ingress",
 		})
 	}
 }
@@ -91,10 +96,8 @@ func isTrustedInternalRequest(h map[string]string) bool {
 // the casing of a reserved header to slip past a plain map delete.
 func deleteHeaderCaseInsensitive(h map[string]string, name string) bool {
 	removed := false
-	if _, ok := h[name]; ok {
-		delete(h, name)
-		removed = true
-	}
+	// Delete-during-range is well-defined in Go; the case-fold match also covers
+	// the exact-case key, so no separate precheck is needed.
 	for k := range h {
 		if strings.EqualFold(k, name) {
 			delete(h, k)

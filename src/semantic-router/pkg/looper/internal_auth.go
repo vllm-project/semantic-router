@@ -19,30 +19,45 @@ package looper
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"os"
+	"strings"
 	"sync"
 )
+
+// InternalAuthSecretEnv names an optional operator-provided secret that
+// authenticates the internal looper leg. Set it to the SAME value on every
+// router replica when the looper endpoint is a shared/load-balanced address
+// (so a re-dispatch may land on a different pod than the one that issued it);
+// the per-process random fallback only holds when the leg loops back to the
+// same process (the default localhost sidecar topology).
+const InternalAuthSecretEnv = "VSR_LOOPER_INTERNAL_AUTH_SECRET"
 
 var (
 	internalAuthOnce   sync.Once
 	internalAuthSecret string
 )
 
-// InternalAuthSecret returns the per-process secret that authenticates the
-// internal looper leg.
-//
-// The looper re-dispatch loops back to the same router process, so the client
-// (this package) and the extproc that validates the request share memory. The
-// client stamps the secret on every internal request via the
+// InternalAuthSecret returns the secret that authenticates the internal looper
+// leg. The looper client stamps it on every internal request via the
 // headers.VSRLooperAuthorization header, and extproc validates it at the
 // trusted ingress before honoring any looper marker or caller-identity carrier.
-// Because the secret is generated once, kept only in memory, and never leaves
-// the process, a client on the wire cannot forge it.
 //
-// The secret is unpredictable (crypto/rand) and non-empty. Generation failure
-// would silently disable the internal-leg authentication, collapsing the trust
-// boundary, so it panics rather than returning an empty secret.
+// It resolves once, in order:
+//   - VSR_LOOPER_INTERNAL_AUTH_SECRET, when set — supports multi-replica
+//     topologies where the re-dispatch may land on a different process.
+//   - otherwise a per-process value from crypto/rand — correct for the default
+//     localhost sidecar topology where the leg loops back to the same process,
+//     and never leaves the process on the wire.
+//
+// The result is always non-empty and unpredictable. A crypto/rand failure would
+// silently disable authentication and collapse the trust boundary, so it panics
+// rather than returning an empty secret.
 func InternalAuthSecret() string {
 	internalAuthOnce.Do(func() {
+		if env := strings.TrimSpace(os.Getenv(InternalAuthSecretEnv)); env != "" {
+			internalAuthSecret = env
+			return
+		}
 		buf := make([]byte, 32)
 		if _, err := rand.Read(buf); err != nil {
 			panic("looper: failed to generate internal auth secret: " + err.Error())
