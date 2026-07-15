@@ -13,7 +13,11 @@ impl ModelRegistry {
         }
     }
 
-    pub fn register<T: std::any::Any + Send + Sync>(&self, id: &str, model: T) -> Result<(), String> {
+    pub fn register<T: std::any::Any + Send + Sync>(
+        &self,
+        id: &str,
+        model: T,
+    ) -> Result<(), String> {
         let mut map = self.models.write().map_err(|e| e.to_string())?;
         map.insert(id.to_string(), Arc::new(model));
         Ok(())
@@ -29,6 +33,14 @@ impl ModelRegistry {
         let mut map = self.models.write().map_err(|e| e.to_string())?;
         map.remove(id);
         Ok(())
+    }
+
+    pub fn count_by_prefix(&self, prefix: &str) -> usize {
+        if let Ok(map) = self.models.read() {
+            map.keys().filter(|k| k.starts_with(prefix)).count()
+        } else {
+            0
+        }
     }
 }
 

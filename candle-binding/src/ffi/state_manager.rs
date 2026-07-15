@@ -1,6 +1,6 @@
 //! Global State Manager
 
-use std::sync::{Arc, Mutex, RwLock, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 // Import all necessary types
 use crate::classifiers::lora::parallel_engine::ParallelLoRAEngine;
@@ -158,7 +158,7 @@ impl GlobalStateManager {
             parallel_lora_engine_initialized: self.get_parallel_lora_engine().is_some(),
             lora_token_classifier_initialized: self.get_lora_token_classifier().is_some(),
             bert_similarity_initialized: self.get_bert_similarity().is_some(),
-            legacy_classifiers_count: 0,
+            legacy_classifiers_count: get_registry().count_by_prefix("legacy_"),
             system_state: self.get_system_state(),
         }
     }
@@ -190,4 +190,45 @@ pub fn get_system_stats() -> GlobalStateStats {
 
 pub fn cleanup_global_state() {
     GlobalStateManager::instance().cleanup();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::registry::get_registry;
+
+    #[test]
+    fn test_legacy_classifier_stats() {
+        let manager = get_global_state_manager();
+
+        // Ensure clean state (note: cleanup removes everything from registry)
+        manager.cleanup();
+        assert_eq!(manager.get_stats().legacy_classifiers_count, 0);
+
+        // Register 1 legacy classifier
+        get_registry()
+            .register("legacy_bert", String::from("dummy_model"))
+            .unwrap();
+        assert_eq!(manager.get_stats().legacy_classifiers_count, 1);
+
+        // Register another legacy classifier
+        get_registry()
+            .register("legacy_bert_pii", String::from("dummy_model_2"))
+            .unwrap();
+        assert_eq!(manager.get_stats().legacy_classifiers_count, 2);
+
+        // Register a non-legacy component (should not affect count)
+        get_registry()
+            .register("modernbert", String::from("dummy"))
+            .unwrap();
+        assert_eq!(manager.get_stats().legacy_classifiers_count, 2);
+
+        // Unregister one
+        get_registry().unregister("legacy_bert").unwrap();
+        assert_eq!(manager.get_stats().legacy_classifiers_count, 1);
+
+        // Cleanup all
+        manager.cleanup();
+        assert_eq!(manager.get_stats().legacy_classifiers_count, 0);
+    }
 }

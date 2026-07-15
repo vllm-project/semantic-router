@@ -57,4 +57,3 @@ func (r SequenceClassificationResponse) Capability() Capability { return Capabil
 type ModelHandle interface {
 	ID() string
 }
-

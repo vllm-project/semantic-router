@@ -70,7 +70,7 @@ goarch: amd64
 panic: boom
 BenchmarkNoBenchmem-8   	 1000000	      1234 ns/op
 BenchmarkCustomMetric-8   	  100	     5.20 MB/s	   628 ns/op	   112 B/op	     5 allocs/op
-   	garbage line with numbers 123 456
+	garbage line with numbers 123 456
 PASS
 ok  	pkg	1.2s
 `

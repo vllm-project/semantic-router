@@ -12,6 +12,7 @@
 use crate::model_architectures::generative::{
     MultiAdapterClassificationResult, Qwen3MultiLoRAClassifier,
 };
+use crate::registry::get_registry;
 use candle_core::Device;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
@@ -19,7 +20,6 @@ use std::ptr;
 use std::sync::{Mutex, OnceLock};
 
 /// Global multi-adapter classifier instance (for LoRA-based classification)
-static GLOBAL_QWEN3_MULTI_CLASSIFIER: OnceLock<Mutex<Qwen3MultiLoRAClassifier>> = OnceLock::new();
 
 /// Generative classification result returned to Go
 #[repr(C)]
@@ -227,28 +227,33 @@ pub unsafe extern "C" fn init_qwen3_multi_lora_classifier(base_model_path: *cons
     let device = Device::cuda_if_available(0).unwrap_or(Device::Cpu);
 
     // Check if already initialized
-    if GLOBAL_QWEN3_MULTI_CLASSIFIER.get().is_some() {
+    if get_registry()
+        .get::<Mutex<Qwen3MultiLoRAClassifier>>("global_qwen3_multi_classifier")
+        .is_some()
+    {
         println!("Qwen3 Multi-LoRA classifier already initialized, reusing existing instance");
         return 0;
     }
 
     // Load multi-adapter classifier
     match Qwen3MultiLoRAClassifier::new(base_model_path_str, &device) {
-        Ok(classifier) => match GLOBAL_QWEN3_MULTI_CLASSIFIER.set(Mutex::new(classifier)) {
-            Ok(_) => {
-                println!(
-                    "Qwen3 Multi-LoRA classifier initialized with base model: {}",
-                    base_model_path_str
-                );
-                0
+        Ok(classifier) => {
+            match get_registry().register("global_qwen3_multi_classifier", Mutex::new(classifier)) {
+                Ok(_) => {
+                    println!(
+                        "Qwen3 Multi-LoRA classifier initialized with base model: {}",
+                        base_model_path_str
+                    );
+                    0
+                }
+                Err(_) => {
+                    println!(
+                        "Qwen3 Multi-LoRA classifier already initialized (race condition), reusing"
+                    );
+                    0
+                }
             }
-            Err(_) => {
-                println!(
-                    "Qwen3 Multi-LoRA classifier already initialized (race condition), reusing"
-                );
-                0
-            }
-        },
+        }
         Err(e) => {
             eprintln!("Error: failed to load Qwen3 Multi-LoRA classifier: {}", e);
             -1
@@ -299,7 +304,9 @@ pub unsafe extern "C" fn load_qwen3_lora_adapter(
     };
 
     // Get classifier
-    let classifier_mutex = match GLOBAL_QWEN3_MULTI_CLASSIFIER.get() {
+    let classifier_mutex = match get_registry()
+        .get::<Mutex<Qwen3MultiLoRAClassifier>>("global_qwen3_multi_classifier")
+    {
         Some(c) => c,
         None => {
             eprintln!("Error: Qwen3 Multi-LoRA classifier not initialized");
@@ -373,7 +380,9 @@ pub unsafe extern "C" fn classify_with_qwen3_adapter(
         }
     };
 
-    let classifier_mutex = match GLOBAL_QWEN3_MULTI_CLASSIFIER.get() {
+    let classifier_mutex = match get_registry()
+        .get::<Mutex<Qwen3MultiLoRAClassifier>>("global_qwen3_multi_classifier")
+    {
         Some(c) => c,
         None => {
             eprintln!("Error: Qwen3 Multi-LoRA classifier not initialized");
@@ -430,7 +439,9 @@ pub unsafe extern "C" fn get_qwen3_loaded_adapters(
         return -1;
     }
 
-    let classifier_mutex = match GLOBAL_QWEN3_MULTI_CLASSIFIER.get() {
+    let classifier_mutex = match get_registry()
+        .get::<Mutex<Qwen3MultiLoRAClassifier>>("global_qwen3_multi_classifier")
+    {
         Some(c) => c,
         None => {
             eprintln!("Error: Qwen3 Multi-LoRA classifier not initialized");
@@ -523,7 +534,9 @@ pub unsafe extern "C" fn classify_zero_shot_qwen3(
         }
     };
 
-    let classifier_mutex = match GLOBAL_QWEN3_MULTI_CLASSIFIER.get() {
+    let classifier_mutex = match get_registry()
+        .get::<Mutex<Qwen3MultiLoRAClassifier>>("global_qwen3_multi_classifier")
+    {
         Some(c) => c,
         None => {
             eprintln!("Error: Qwen3 Multi-LoRA classifier not initialized");
@@ -559,7 +572,10 @@ pub unsafe extern "C" fn classify_zero_shot_qwen3(
 /// - 0 if not initialized
 #[no_mangle]
 pub extern "C" fn is_qwen3_multi_lora_initialized() -> i32 {
-    if GLOBAL_QWEN3_MULTI_CLASSIFIER.get().is_some() {
+    if get_registry()
+        .get::<Mutex<Qwen3MultiLoRAClassifier>>("global_qwen3_multi_classifier")
+        .is_some()
+    {
         1
     } else {
         0

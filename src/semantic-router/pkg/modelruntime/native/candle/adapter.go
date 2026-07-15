@@ -2,6 +2,7 @@ package candle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -58,17 +59,17 @@ func (h *candleHandle) ID() string {
 }
 
 func (a *Adapter) LoadModel(ctx context.Context, req native.LoadRequest) (native.ModelHandle, error) {
-	// For Phase 2, we just delegate to candle_binding's legacy initializer
-	// mapping the request parameters to the old shape.
-
-	// E.g. candle_binding.InitModel(...) would happen here in a full migration.
-	// For now, this serves as the adapter entry point.
-	return &candleHandle{id: req.ModelRef}, nil
+	// For Phase 2, this adapter is intentionally unregistered and returns an explicit error
+	// to prevent call sites from believing the capability is operational.
+	return nil, errors.New("candle native adapter lifecycle is not yet wired (Phase 2)")
 }
 
 func (a *Adapter) UnloadModel(ctx context.Context, handle native.ModelHandle) error {
-	// Not fully supported in legacy Candle CGO binding without shutting down global state
-	return nil
+	return errors.New("candle native adapter lifecycle is not yet wired (Phase 2)")
+}
+
+func (a *Adapter) Inference(ctx context.Context, handle native.ModelHandle, req native.InferenceRequest) (native.InferenceResponse, error) {
+	return nil, errors.New("candle native adapter inference is not yet wired (Phase 2)")
 }
 
 func (a *Adapter) Info() []native.ModelInfo {
@@ -93,9 +94,3 @@ func (a *Adapter) Info() []native.ModelInfo {
 	}
 	return results
 }
-
-func init() {
-	// Register the Candle adapter automatically
-	native.Registry.Register(NewAdapter())
-}
-
