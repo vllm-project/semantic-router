@@ -20,8 +20,8 @@
     "context": "The Great Wall of China is a series of fortifications. Its total length is estimated at about 21,000 kilometers."
   },
   {
-    "description": "Speed of light",
-    "question": "What is the speed of light in a vacuum?",
-    "context": "The speed of light in a vacuum is approximately 299,792 kilometers per second."
+    "description": "First US President",
+    "question": "Who was the first president of the United States?",
+    "context": "George Washington was the first president of the United States."
   }
 ]
