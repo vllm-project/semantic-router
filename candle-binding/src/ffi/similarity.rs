@@ -1,7 +1,7 @@
 //! FFI Similarity Functions
 
-use crate::ffi::init::BERT_SIMILARITY;
 use crate::ffi::types::*;
+use crate::registry::get_registry;
 use std::ffi::{c_char, CStr};
 
 /// Get text embedding
@@ -27,20 +27,21 @@ pub extern "C" fn get_text_embedding(text: *const c_char, max_length: i32) -> Em
         }
     };
 
-    let bert = match BERT_SIMILARITY.get() {
-        Some(b) => b.clone(),
-        None => {
-            eprintln!("BERT model not initialized");
-            return EmbeddingResult {
-                data: std::ptr::null_mut(),
-                length: 0,
-                error: true,
-                model_type: -1,
-                sequence_length: 0,
-                processing_time_ms: 0.0,
-            };
-        }
-    };
+    let bert =
+        match get_registry().get::<crate::core::similarity::BertSimilarity>("bert_similarity") {
+            Some(b) => b.clone(),
+            None => {
+                eprintln!("BERT model not initialized");
+                return EmbeddingResult {
+                    data: std::ptr::null_mut(),
+                    length: 0,
+                    error: true,
+                    model_type: -1,
+                    sequence_length: 0,
+                    processing_time_ms: 0.0,
+                };
+            }
+        };
 
     let max_length_opt = if max_length <= 0 {
         None
@@ -125,13 +126,14 @@ pub extern "C" fn calculate_similarity(
         }
     };
 
-    let bert = match BERT_SIMILARITY.get() {
-        Some(b) => b.clone(),
-        None => {
-            eprintln!("BERT model not initialized");
-            return -1.0;
-        }
-    };
+    let bert =
+        match get_registry().get::<crate::core::similarity::BertSimilarity>("bert_similarity") {
+            Some(b) => b.clone(),
+            None => {
+                eprintln!("BERT model not initialized");
+                return -1.0;
+            }
+        };
 
     let max_length_opt = if max_length <= 0 {
         None
@@ -195,17 +197,18 @@ pub extern "C" fn find_most_similar(
         result
     };
 
-    let bert = match BERT_SIMILARITY.get() {
-        Some(b) => b.clone(),
-        None => {
-            eprintln!("BERT model not initialized");
-            return SimilarityResult {
-                index: -1,
-                similarity: -1.0,
-                text: std::ptr::null_mut(),
-            };
-        }
-    };
+    let bert =
+        match get_registry().get::<crate::core::similarity::BertSimilarity>("bert_similarity") {
+            Some(b) => b.clone(),
+            None => {
+                eprintln!("BERT model not initialized");
+                return SimilarityResult {
+                    index: -1,
+                    similarity: -1.0,
+                    text: std::ptr::null_mut(),
+                };
+            }
+        };
 
     let max_length_opt = if max_length <= 0 {
         None
