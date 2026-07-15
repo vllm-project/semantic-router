@@ -22,7 +22,14 @@ import (
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
+
+// minInternalAuthSecretLen is the shortest operator-provided secret we accept
+// without warning. A short shared secret is guessable, which would let a client
+// forge the internal-leg proof. The random fallback is well above this.
+const minInternalAuthSecretLen = 16
 
 // InternalAuthSecretEnv names an optional operator-provided secret that
 // authenticates the internal looper leg. Set it to the SAME value on every
@@ -55,6 +62,14 @@ var (
 func InternalAuthSecret() string {
 	internalAuthOnce.Do(func() {
 		if env := strings.TrimSpace(os.Getenv(InternalAuthSecretEnv)); env != "" {
+			if len(env) < minInternalAuthSecretLen {
+				logging.ComponentWarnEvent("looper", "internal_auth_secret_weak", map[string]interface{}{
+					"env":        InternalAuthSecretEnv,
+					"length":     len(env),
+					"min_length": minInternalAuthSecretLen,
+					"detail":     "operator-provided internal auth secret is short and may be guessable; use a long random value",
+				})
+			}
 			internalAuthSecret = env
 			return
 		}
