@@ -14,7 +14,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("model-not-ready-503", pkgtestcases.TestCase{
-		Description: "Verify classifier and embedding endpoints return 503 when backing models are unavailable",
+		Description: "Verify classifier and embedding endpoints return 503 when backing models are unavailable or partially initialized",
 		Tags: []string{
 			"apiserver",
 			"readiness",
@@ -55,6 +55,12 @@ var endpoints = []endpointSpec{
 		Name: "embeddings",
 		Path: "/api/v1/embeddings",
 		Body: `{"texts":["hello"]}`,
+		Code: "EMBEDDING_NOT_READY",
+	},
+	{
+		Name: "embeddings-multimodal",
+		Path: "/api/v1/embeddings",
+		Body: `{"texts":["hello"],"images":["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQABAA0w0e0GAAAAAElFTkSuQmCC"]}`,
 		Code: "EMBEDDING_NOT_READY",
 	},
 	{
