@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -248,6 +249,58 @@ func testManagementAPIServer(t *testing.T, management config.ManagementAPIConfig
 			ManagementAPI: management,
 		},
 	}
+}
+
+// TestManagementAuthPolicyConcurrentWithConfigPublish exercises the auth
+// path against concurrent publishConfigMutation writers. Under go test -race,
+// an unsynchronized s.config read/write pair fails this test.
+func TestManagementAuthPolicyConcurrentWithConfigPublish(t *testing.T) {
+	t.Setenv("VSR_MGMT_TOKEN", "race-token")
+
+	server := testManagementAPIServer(t, config.ManagementAPIConfig{
+		Auth: config.ManagementAPIAuthConfig{
+			Mode: config.ManagementAuthModeBearer,
+			Tokens: []config.ManagementAPITokenRef{
+				{Env: "VSR_MGMT_TOKEN", Role: "viewer"},
+			},
+			Roles: config.DefaultManagementAPIRoles(),
+		},
+	})
+
+	const workers = 32
+	var wg sync.WaitGroup
+	wg.Add(workers * 2)
+	for i := 0; i < workers; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				policy := server.managementAuthPolicy()
+				if policy.Mode != config.ManagementAuthModeBearer && policy.Mode != config.ManagementAuthModeDisabled {
+					t.Errorf("unexpected auth mode %q", policy.Mode)
+					return
+				}
+			}
+		}()
+		go func(i int) {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				next := &config.RouterConfig{
+					ManagementAPI: config.ManagementAPIConfig{
+						Auth: config.ManagementAPIAuthConfig{
+							Mode: config.ManagementAuthModeBearer,
+							Tokens: []config.ManagementAPITokenRef{
+								{Env: "VSR_MGMT_TOKEN", Role: "viewer"},
+							},
+							Roles: config.DefaultManagementAPIRoles(),
+						},
+						Port: 8080 + i + j,
+					},
+				}
+				server.publishConfigMutation(next)
+			}
+		}(i)
+	}
+	wg.Wait()
 }
 
 func assertManagementErrorCode(t *testing.T, rr *httptest.ResponseRecorder, want string) {

@@ -35,10 +35,11 @@ func (s *ClassificationAPIServer) managementAuthPolicy() managementAuthPolicy {
 }
 
 func (s *ClassificationAPIServer) managementAPIConfig() config.ManagementAPIConfig {
-	if s == nil || s.config == nil {
+	routerCfg := s.currentConfig()
+	if routerCfg == nil {
 		return config.DefaultManagementAPIConfig()
 	}
-	cfg := s.config.ManagementAPI
+	cfg := routerCfg.ManagementAPI
 	if cfg.BindAddress == "" && cfg.Port == 0 && cfg.Auth.Mode == "" {
 		return config.DefaultManagementAPIConfig()
 	}
