@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -43,7 +44,7 @@ func newValkeyConfig() *config.ValkeyConfig {
 	return cfg
 }
 
-func demoCacheOperations(cacheBackend cache.CacheBackend) {
+func demoCacheOperations(ctx context.Context, cacheBackend cache.CacheBackend) {
 	model := "gpt-4"
 	query := "What is the capital of France?"
 	requestID := "req-12345"
@@ -51,7 +52,7 @@ func demoCacheOperations(cacheBackend cache.CacheBackend) {
 	responseBody := []byte(`{"choices":[{"message":{"content":"The capital of France is Paris."}}]}`)
 
 	fmt.Println("\n2. Adding entry to cache...")
-	err := cacheBackend.AddEntry(requestID, model, query, requestBody, responseBody, 3600)
+	err := cacheBackend.AddEntry(ctx, requestID, model, query, requestBody, responseBody, 3600)
 	if err != nil {
 		log.Fatalf("Failed to add entry: %v", err)
 	}
@@ -62,13 +63,13 @@ func demoCacheOperations(cacheBackend cache.CacheBackend) {
 
 	fmt.Println("\n3. Searching for similar query...")
 	similarQuery := "What's the capital city of France?"
-	cachedResponse, found, err := cacheBackend.FindSimilar(model, similarQuery)
+	result, err := cacheBackend.FindSimilar(ctx, model, similarQuery)
 	if err != nil {
 		log.Fatalf("Failed to search cache: %v", err)
 	}
-	if found {
+	if result.Found {
 		fmt.Println("✓ Cache HIT! Found similar query")
-		fmt.Printf("  Cached response: %s\n", string(cachedResponse))
+		fmt.Printf("  Cached response: %s\n", string(result.Body))
 	} else {
 		fmt.Println("✗ Cache MISS - no similar query found")
 	}
@@ -82,19 +83,19 @@ func demoCacheOperations(cacheBackend cache.CacheBackend) {
 
 	fmt.Println("\n5. Searching with custom threshold...")
 	strictQuery := "Paris is the capital of which country?"
-	cachedResponse, found, err = cacheBackend.FindSimilarWithThreshold(model, strictQuery, 0.75)
+	result, err = cacheBackend.FindSimilarWithThreshold(ctx, model, strictQuery, 0.75)
 	if err != nil {
 		log.Fatalf("Failed to search cache: %v", err)
 	}
-	if found {
+	if result.Found {
 		fmt.Println("✓ Cache HIT with threshold 0.75")
-		fmt.Printf("  Cached response: %s\n", string(cachedResponse))
+		fmt.Printf("  Cached response: %s\n", string(result.Body))
 	} else {
 		fmt.Println("✗ Cache MISS with threshold 0.75")
 	}
 }
 
-func demoPendingRequestWorkflow(cacheBackend cache.CacheBackend) {
+func demoPendingRequestWorkflow(ctx context.Context, cacheBackend cache.CacheBackend) {
 	model := "gpt-4"
 	fmt.Println("\n6. Pending Request Workflow:")
 	newRequestID := "req-67890"
@@ -102,7 +103,7 @@ func demoPendingRequestWorkflow(cacheBackend cache.CacheBackend) {
 	newRequestBody := []byte(`{"model":"gpt-4","messages":[{"role":"user","content":"What is machine learning?"}]}`)
 
 	fmt.Println("  Adding pending request...")
-	err := cacheBackend.AddPendingRequest(newRequestID, model, newQuery, newRequestBody, 3600)
+	err := cacheBackend.AddPendingRequest(ctx, newRequestID, model, newQuery, newRequestBody, 3600)
 	if err != nil {
 		log.Fatalf("Failed to add pending request: %v", err)
 	}
@@ -113,7 +114,7 @@ func demoPendingRequestWorkflow(cacheBackend cache.CacheBackend) {
 
 	newResponseBody := []byte(`{"choices":[{"message":{"content":"Machine learning is a subset of AI..."}}]}`)
 	fmt.Println("  Updating with response...")
-	err = cacheBackend.UpdateWithResponse(newRequestID, newResponseBody, 3600)
+	err = cacheBackend.UpdateWithResponse(ctx, newRequestID, newResponseBody, 3600)
 	if err != nil {
 		log.Fatalf("Failed to update response: %v", err)
 	}
@@ -121,11 +122,11 @@ func demoPendingRequestWorkflow(cacheBackend cache.CacheBackend) {
 
 	time.Sleep(500 * time.Millisecond)
 
-	_, found, err := cacheBackend.FindSimilar(model, newQuery)
+	result, err := cacheBackend.FindSimilar(ctx, model, newQuery)
 	if err != nil {
 		log.Fatalf("Failed to search cache: %v", err)
 	}
-	if found {
+	if result.Found {
 		fmt.Println("  ✓ Entry is now in cache and searchable")
 	} else {
 		fmt.Println("  ⚠ Entry not yet searchable (may need more indexing time)")
@@ -176,7 +177,8 @@ func main() {
 		fmt.Printf("⚠ Found %d existing entries in cache (from previous runs)\n", initialStats.TotalEntries)
 	}
 
-	demoCacheOperations(cacheBackend)
-	demoPendingRequestWorkflow(cacheBackend)
+	ctx := context.Background()
+	demoCacheOperations(ctx, cacheBackend)
+	demoPendingRequestWorkflow(ctx, cacheBackend)
 	printFinalStats(cacheBackend)
 }
