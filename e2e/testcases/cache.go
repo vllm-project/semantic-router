@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -63,6 +64,7 @@ func testCache(ctx context.Context, client *kubernetes.Clientset, opts pkgtestca
 
 	// Run cache tests
 	var results []CacheResult
+	var setupFailures []string
 	totalRequests := 0
 	cacheHits := 0
 
@@ -71,13 +73,19 @@ func testCache(ctx context.Context, client *kubernetes.Clientset, opts pkgtestca
 		if opts.Verbose {
 			fmt.Printf("[Test] Sending original question: %s\n", testCase.OriginalQuestion)
 		}
-		_, err := sendChatRequest(ctx, testCase.OriginalQuestion, localPort, opts.Verbose)
+		origResp, err := sendChatRequest(ctx, testCase.OriginalQuestion, localPort, opts.Verbose)
 		if err != nil {
 			if opts.Verbose {
 				fmt.Printf("[Test] Error sending original question: %v\n", err)
 			}
+			// A failed priming request means the similar questions below can
+			// never legitimately hit; record it so the test fails instead of
+			// silently skipping the case (#2473).
+			setupFailures = append(setupFailures,
+				fmt.Sprintf("original question %q: %v", testCase.OriginalQuestion, err))
 			continue
 		}
+		origResp.Body.Close()
 
 		// Wait a bit to ensure cache is populated
 		time.Sleep(1 * time.Second)
@@ -115,6 +123,40 @@ func testCache(ctx context.Context, client *kubernetes.Clientset, opts pkgtestca
 	if opts.Verbose {
 		fmt.Printf("[Test] Cache test completed: %d/%d cache hits (%.2f%% hit rate)\n",
 			cacheHits, totalRequests, hitRate)
+	}
+
+	// Turn the collected results into an explicit pass/fail verdict. Previously
+	// this returned nil unconditionally, so a malformed/missing similarity
+	// header (recorded in CacheResult.Error) or a run that executed zero
+	// requests still passed CI (#2473).
+	var assertionFailures []string
+	assertionFailures = append(assertionFailures, setupFailures...)
+	for _, r := range results {
+		if r.Error != "" {
+			assertionFailures = append(assertionFailures,
+				fmt.Sprintf("%q: %s", r.SimilarQuestion, r.Error))
+		}
+	}
+
+	if totalRequests == 0 {
+		return fmt.Errorf("cache test executed zero similar-question requests (%d setup failures); "+
+			"nothing was asserted", len(setupFailures))
+	}
+	if len(assertionFailures) > 0 {
+		return fmt.Errorf("cache per-request similarity assertions failed (%d of %d requests):\n  %s",
+			len(assertionFailures), totalRequests, strings.Join(assertionFailures, "\n  "))
+	}
+	// Per-request isolation acceptance (#2473): every hit must have surfaced its
+	// own in-range score. parseCacheSimilarity already rejects a hit with an
+	// absent or out-of-(0,1] header, so reaching here with cacheHits>0 means
+	// each hit carried a request-owned score rather than a leaked/global one.
+	if cacheHits > 0 {
+		for _, r := range results {
+			if r.CacheHit && r.Similarity <= 0 {
+				return fmt.Errorf("cache hit for %q surfaced non-positive similarity %.4f; "+
+					"per-request score not propagated", r.SimilarQuestion, r.Similarity)
+			}
+		}
 	}
 
 	return nil
