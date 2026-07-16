@@ -59,12 +59,14 @@ export const sponsorCategories: SponsorCategory[] = [
         name: 'Alibaba Cloud',
         url: 'https://www.alibabacloud.com/',
         logo: '/img/sponsors/alibaba-cloud.svg',
+        logoStyle: 'brand',
       },
       {
         id: 'amd',
         name: 'AMD',
         url: 'https://www.amd.com/',
         logo: '/img/sponsors/amd.svg',
+        logoStyle: 'brand',
       },
       {
         id: 'anyscale',
@@ -78,6 +80,7 @@ export const sponsorCategories: SponsorCategory[] = [
         name: 'AWS',
         url: 'https://aws.amazon.com/',
         logo: '/img/sponsors/aws.svg',
+        logoStyle: 'brand',
       },
       {
         id: 'crusoe',
@@ -91,18 +94,21 @@ export const sponsorCategories: SponsorCategory[] = [
         name: 'Google Cloud',
         url: 'https://cloud.google.com/',
         logo: '/img/sponsors/google-cloud.svg',
+        logoStyle: 'brand',
       },
       {
         id: 'ibm',
         name: 'IBM',
         url: 'https://www.ibm.com/',
         logo: '/img/sponsors/ibm.svg',
+        logoStyle: 'brand',
       },
       {
         id: 'intel',
         name: 'Intel',
         url: 'https://www.intel.com/',
         logo: '/img/sponsors/intel.svg',
+        logoStyle: 'brand',
       },
       {
         id: 'lambda',
@@ -116,6 +122,7 @@ export const sponsorCategories: SponsorCategory[] = [
         name: 'Microsoft',
         url: 'https://www.microsoft.com/',
         logo: '/img/sponsors/microsoft.svg',
+        logoStyle: 'brand',
       },
       {
         id: 'nebius',
@@ -136,18 +143,21 @@ export const sponsorCategories: SponsorCategory[] = [
         name: 'NVIDIA',
         url: 'https://www.nvidia.com/',
         logo: '/img/sponsors/nvidia.svg',
+        logoStyle: 'brand',
       },
       {
         id: 'redhat',
         name: 'Red Hat',
         url: 'https://www.redhat.com/',
         logo: '/img/sponsors/redhat.svg',
+        logoStyle: 'brand',
       },
       {
         id: 'roblox',
         name: 'Roblox',
         url: 'https://www.roblox.com/',
         logo: '/img/sponsors/roblox.svg',
+        logoStyle: 'brand',
       },
       {
         id: 'runpod',

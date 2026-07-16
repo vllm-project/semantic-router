@@ -102,16 +102,17 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 1.85rem;
-  height: 1.85rem;
+  width: 1.95rem;
+  height: 1.95rem;
   border-radius: 999px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.94);
+  padding: 0.2rem;
 }
 
 .sponsorLogo {
-  width: 1.35rem;
-  height: 1.35rem;
+  width: 1.45rem;
+  height: 1.45rem;
   object-fit: contain;
 }
 

@@ -73,7 +73,7 @@ function resolveLogoSrc(logo: string, assetBase: string): string {
 }
 
 function logoClassName(style: SponsorLogoStyle | undefined): string {
-  return style === 'brand' ? styles.sponsorLogoBrand : styles.sponsorLogoMono
+  return style === 'mono' ? styles.sponsorLogoMono : styles.sponsorLogoBrand
 }
 
 function SponsorChip({
