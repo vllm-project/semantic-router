@@ -67,10 +67,15 @@ func (h *HybridCache) findSimilar(
 	}
 
 	h.recordLookupMiss(start, metricOp, logPrefix, threshold, model, totalCandidates, len(candidatesWithIDs))
-	// Best HNSW candidate was above threshold but Milvus fetch failed;
-	// surface its score as the per-request best so callers can distinguish this
-	// "found in index, unfetchable" miss from a no-candidate miss.
-	return LookupResult{Similarity: candidatesWithIDs[0].similarity}, nil
+	// Every above-threshold candidate existed in the index but its Milvus fetch
+	// failed: this is an upstream-storage error, not an ordinary below-threshold
+	// miss. Per the LookupResult contract (see cache_interface.go), an upstream
+	// error returns zero similarity and a non-nil error — surfacing the
+	// above-threshold candidate score here would leak a hit-level score as a
+	// miss and let callers publish it as x-vsr-cache-similarity (#2473).
+	return LookupResult{}, fmt.Errorf(
+		"%s: all %d above-threshold candidates failed to fetch from storage",
+		logPrefix, len(candidatesWithIDs))
 }
 
 func (h *HybridCache) searchCandidates(queryEmbedding []float32, threshold float32) ([]candidateWithID, int) {
