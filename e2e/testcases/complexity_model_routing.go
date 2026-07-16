@@ -53,38 +53,50 @@ func testComplexityModelRouting(ctx context.Context, client *kubernetes.Clientse
 		return fmt.Errorf("failed to load test cases: %w", err)
 	}
 
-	total := 0
-	emitted := 0
 	var failures []string
-
+	emitted := 0
 	for _, tc := range cases {
-		total++
-		response, err := sendLocalChatCompletion(ctx, localPort, "MoM", tc.Query, 60*time.Second)
-		if err != nil {
-			failures = append(failures, fmt.Sprintf("%s: request error: %v", tc.Name, err))
+		match, failure := evaluateComplexityCase(ctx, localPort, tc, opts.Verbose)
+		if failure != "" {
+			failures = append(failures, failure)
 			continue
 		}
-		if response.StatusCode != http.StatusOK {
-			logUnexpectedChatCompletionStatus(opts.Verbose, response, "test case: "+tc.Name, "Query: "+tc.Query)
-			failures = append(failures, fmt.Sprintf("%s: %s", tc.Name, formatUnexpectedChatCompletionStatus(response)))
-			continue
-		}
-
-		header := response.Headers.Get(complexityMatchedHeader)
-		match := firstComplexityMatchForRule(header, tc.ExpectedRule)
-		if match == "" {
-			failures = append(failures, fmt.Sprintf(
-				"%s: expected a %q:<easy|medium|hard> value on %s, got %q",
-				tc.Name, tc.ExpectedRule, complexityMatchedHeader, header))
-			continue
-		}
-
 		emitted++
 		if opts.Verbose {
-			fmt.Printf("[Test] %s -> %s=%q (matched %q)\n", tc.Name, complexityMatchedHeader, header, match)
+			fmt.Printf("[Test] %s -> %s=%q\n", tc.Name, complexityMatchedHeader, match)
 		}
 	}
 
+	reportComplexityResults(opts, len(cases), emitted, failures)
+
+	if emitted == 0 {
+		return fmt.Errorf("complexity model-mode test failed: no valid rule:difficulty signal emitted (0/%d)", len(cases))
+	}
+	return nil
+}
+
+// evaluateComplexityCase sends one case's query and returns the matched
+// "<rule>:<difficulty>" value, or a non-empty failure description.
+func evaluateComplexityCase(ctx context.Context, localPort string, tc ComplexityModelRoutingCase, verbose bool) (string, string) {
+	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", tc.Query, 60*time.Second)
+	if err != nil {
+		return "", fmt.Sprintf("%s: request error: %v", tc.Name, err)
+	}
+	if response.StatusCode != http.StatusOK {
+		logUnexpectedChatCompletionStatus(verbose, response, "test case: "+tc.Name, "Query: "+tc.Query)
+		return "", fmt.Sprintf("%s: %s", tc.Name, formatUnexpectedChatCompletionStatus(response))
+	}
+	header := response.Headers.Get(complexityMatchedHeader)
+	match := firstComplexityMatchForRule(header, tc.ExpectedRule)
+	if match == "" {
+		return "", fmt.Sprintf("%s: expected a %q:<easy|medium|hard> value on %s, got %q",
+			tc.Name, tc.ExpectedRule, complexityMatchedHeader, header)
+	}
+	return match, ""
+}
+
+// reportComplexityResults records run details and prints any per-case failures.
+func reportComplexityResults(opts pkgtestcases.TestCaseOptions, total, emitted int, failures []string) {
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
 			"total_tests":     total,
@@ -92,22 +104,15 @@ func testComplexityModelRouting(ctx context.Context, client *kubernetes.Clientse
 			"failed_tests":    total - emitted,
 		})
 	}
-
 	if len(failures) > 0 {
 		fmt.Println("\n[Test] Complexity model-mode failures:")
 		for _, f := range failures {
 			fmt.Printf("  - %s\n", f)
 		}
 	}
-
-	if emitted == 0 {
-		return fmt.Errorf("complexity model-mode test failed: no valid rule:difficulty signal emitted (0/%d)", total)
-	}
-
 	if opts.Verbose {
-		fmt.Printf("[Test] Complexity model-mode test completed: %d/%d cases emitted a valid signal\n", emitted, total)
+		fmt.Printf("[Test] Complexity model-mode completed: %d/%d cases emitted a valid signal\n", emitted, total)
 	}
-	return nil
 }
 
 func loadComplexityModelRoutingCases(path string) ([]ComplexityModelRoutingCase, error) {

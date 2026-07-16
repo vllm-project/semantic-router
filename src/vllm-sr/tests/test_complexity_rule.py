@@ -1,7 +1,6 @@
 import pytest
-from pydantic import ValidationError
-
 from cli.models import ComplexityRule
+from pydantic import ValidationError
 
 
 def _banks():
