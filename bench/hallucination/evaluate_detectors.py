@@ -64,11 +64,38 @@ def prf(tp, fp, fn):
     return p, r, f1
 
 
-def evaluate(detector, samples):
+def score_gold_spans(preds, gold_spans, answer):
+    """Char-level counts and taxonomy matches for one sample's gold spans."""
+    pred_chars = char_set(preds, answer)
+    gold_chars = char_set(gold_spans, answer)
+    ctp = len(pred_chars & gold_chars)
+    cfp = len(pred_chars - gold_chars)
+    cfn = len(gold_chars - pred_chars)
+
+    matched = cat_ok = sub_ok = 0
+    for g in gold_spans:
+        if not g.get("category"):
+            continue
+        g_chars = char_set([g], answer)
+        # ponytail: max-overlap span matching; alignment-based if ties matter
+        best = max(
+            preds,
+            key=lambda p: len(char_set([p], answer) & g_chars),
+            default=None,
+        )
+        if best is None or not char_set([best], answer) & g_chars:
+            continue
+        matched += 1
+        cat_ok += best.get("category") == g["category"]
+        sub_ok += best.get("subcategory") == g.get("subcategory")
+    return ctp, cfp, cfn, matched, cat_ok, sub_ok
+
+
+def evaluate(detector, samples, skip_failures=False):
     ex = {"tp": 0, "fp": 0, "fn": 0, "tn": 0}
     char_tp = char_fp = char_fn = 0
     tax_total = tax_cat_ok = tax_sub_ok = 0
-    latencies, rows = [], []
+    latencies, rows, failures = [], [], []
 
     for sample in samples:
         answer = sample.llm_response or sample.gold_answer
@@ -81,7 +108,14 @@ def evaluate(detector, samples):
                 output_format="spans",
             )
         except Exception as e:
+            # A silently dropped sample would let a flaky backend be scored on an
+            # easier subset, so abort by default; --skip-failures records instead.
+            if not skip_failures:
+                raise RuntimeError(
+                    f"prediction failed on sample {sample.id}: {e}"
+                ) from e
             print(f"  {sample.id}: predict failed: {e}")
+            failures.append(sample.id)
             continue
         latencies.append((time.perf_counter() - t0) * 1000)
 
@@ -96,27 +130,13 @@ def evaluate(detector, samples):
 
         gold_spans = sample.hallucination_spans or []
         if gold_spans:
-            pred_chars = char_set(preds, answer)
-            gold_chars = char_set(gold_spans, answer)
-            char_tp += len(pred_chars & gold_chars)
-            char_fp += len(pred_chars - gold_chars)
-            char_fn += len(gold_chars - pred_chars)
-
-            for g in gold_spans:
-                if not g.get("category"):
-                    continue
-                g_chars = char_set([g], answer)
-                # ponytail: max-overlap span matching; alignment-based if ties matter
-                best = max(
-                    preds,
-                    key=lambda p: len(char_set([p], answer) & g_chars),
-                    default=None,
-                )
-                if best is None or not char_set([best], answer) & g_chars:
-                    continue
-                tax_total += 1
-                tax_cat_ok += best.get("category") == g["category"]
-                tax_sub_ok += best.get("subcategory") == g.get("subcategory")
+            ctp, cfp, cfn, matched, cat_ok, sub_ok = score_gold_spans(
+                preds, gold_spans, answer
+            )
+            char_tp, char_fp, char_fn = char_tp + ctp, char_fp + cfp, char_fn + cfn
+            tax_total += matched
+            tax_cat_ok += cat_ok
+            tax_sub_ok += sub_ok
 
         rows.append({"id": sample.id, "flagged": flagged, "spans": preds})
 
@@ -126,6 +146,7 @@ def evaluate(detector, samples):
     latencies.sort()
     metrics = {
         "samples": len(rows),
+        "failed": {"count": len(failures), "ids": failures} if failures else None,
         "example_level": {
             **ex,
             "precision": ep,
@@ -175,6 +196,12 @@ def main():
         default=None,
         help="OpenAI-compatible endpoint for llm detectors (e.g. vLLM)",
     )
+    ap.add_argument(
+        "--skip-failures",
+        action="store_true",
+        help="record failed predictions and continue instead of aborting; "
+        "failed sample IDs are reported so runs remain comparable",
+    )
     args = ap.parse_args()
 
     samples = get_dataset(args.dataset).load(args.max_samples)
@@ -183,7 +210,11 @@ def main():
     all_metrics = {}
     for spec in args.detector:
         print(f"\n=== {spec} ===")
-        metrics, rows = evaluate(build_detector(spec, args.base_url), samples)
+        metrics, rows = evaluate(
+            build_detector(spec, args.base_url),
+            samples,
+            skip_failures=args.skip_failures,
+        )
         all_metrics[spec] = metrics
         print(json.dumps(metrics, indent=2))
         safe = spec.replace("/", "_").replace(":", "-")

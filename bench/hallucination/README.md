@@ -161,17 +161,19 @@ an evaluation-only benchmark — neither model saw it in training):
 | Detector | Params | Config | Precision | Recall | F1 | Accuracy | p50 |
 |----------|--------|--------|-----------|--------|----|----------|-----|
 | `KRLabsOrg/lettucedect-v2-qwen-2b` (vLLM-served) | 2B | native | 0.962 | 0.769 | 0.855 | 0.869 | ~116ms |
-| `llm-semantic-router/modernbert-base-32k-haldetect-combined` | 149M | best swept (thr 0.3, span 1) | 0.999 | 0.503 | 0.669 | 0.751 | ~13ms |
-| same | 149M | production (thr 0.82, span 2) | 1.000 | 0.395 | 0.566 | 0.697 | ~13ms |
+| sentinel + `modernbert-base-32k-haldetect-combined` | 149M | best swept (thr 0.3, span 1) | 0.999 | 0.502 | 0.668 | 0.750 | ~25ms |
+| same | 149M | production (thr 0.82, span 2) | 1.000 | 0.394 | 0.565 | 0.697 | ~25ms |
 
 Notes: the "best swept" row selects the threshold on the evaluation data itself
 (an oracle upper bound, deliberately generous to the baseline); the generative
-detector runs untuned at its native decision point. The sentinel gate passes
-~100% of this all-factual dataset (correct behavior — its efficiency win applies
-to mixed workloads). Both serializations (router format and paper format) were
-tested; the difference is <2 F1 points. The two models make a natural two-tier
-pairing: the 149M encoder is ~9x faster at perfect precision, the 2B generative
-detector catches roughly twice the hallucinations and types each span.
+detector runs untuned at its native decision point. Baseline latency is the
+sentinel + detector pipeline as timed by `evaluate_halugate.py` (sentinel-skipped
+samples contribute sentinel-only time); the sentinel passes ~100% of this
+all-factual dataset (correct behavior — its efficiency win applies to mixed
+workloads). Both serializations (router format and paper format) were tested;
+the difference is <2 F1 points. The two models make a natural two-tier pairing:
+the 149M encoder pipeline is ~4.5x faster at near-perfect precision, the 2B
+generative detector catches roughly 1.5x the hallucinations and types each span.
 
 ## Output
 

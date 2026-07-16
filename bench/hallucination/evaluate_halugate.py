@@ -9,6 +9,7 @@ Uses the paper serialization (arXiv:2603.23508 eq.3): Context [SEP] Query [SEP] 
 
 import argparse
 import json
+import time
 
 import torch
 from datasets import load_dataset
@@ -96,25 +97,50 @@ def main():
         )
 
     ds = load_dataset("pminervini/HaluEval", "qa_samples", split="data")
-    rows, skipped = [], 0
+    rows, skipped, latencies = [], 0, []
     for i, item in enumerate(ds):
         if i >= args.max_samples:
             break
         needs_check = True
+        pipeline_ms = 0.0
         if not args.no_sentinel:
+            t0 = time.perf_counter()
             enc = s_tok(
                 item["question"], return_tensors="pt", truncation=True, max_length=512
             ).to(device)
             with torch.no_grad():
                 label = int(s_model(**enc).logits[0].argmax())
             needs_check = s_model.config.id2label[label] == "FACT_CHECK_NEEDED"
+            pipeline_ms += (time.perf_counter() - t0) * 1000
             skipped += not needs_check
+        t0 = time.perf_counter()
         probs = answer_token_probs(
             d_tok, d_model, device, item["knowledge"], item["question"], item["answer"]
         )
+        detector_ms = (time.perf_counter() - t0) * 1000
+        # A sentinel-skipped sample never reaches the detector in production, so
+        # its pipeline latency is sentinel-only (probs are still computed for the
+        # threshold sweep, but their cost is excluded here).
+        if needs_check:
+            pipeline_ms += detector_ms
+        latencies.append(pipeline_ms)
         rows.append((item["hallucination"] == "no", needs_check, probs))
 
     print(f"sentinel skipped {skipped}/{len(rows)}")
+    latencies.sort()
+    print(
+        json.dumps(
+            {
+                "latency_ms": {
+                    "avg": round(sum(latencies) / len(latencies), 2),
+                    "p50": round(latencies[len(latencies) // 2], 2),
+                    "p99": round(latencies[int(len(latencies) * 0.99)], 2),
+                    "note": "sentinel + detector when not skipped; "
+                    "sentinel-skipped samples contribute sentinel-only time",
+                }
+            }
+        )
+    )
     if args.sweep:
         for thr in (0.3, 0.4, 0.5, 0.6, 0.7, 0.82, 0.9):
             for span in (1, 2, 3):
