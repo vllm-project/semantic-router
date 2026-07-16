@@ -50,7 +50,6 @@ see code in [/src/training/model_eval](https://github.com/vllm-project/semantic-
   ```
 
 - Python packages for evaluation scripts:
-  - From the repo root: matplotlib in [requirements.txt](https://github.com/vllm-project/semantic-router/blob/main/requirements.txt)
   - From `/src/training/model_eval`: [requirements.txt](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_eval/requirements.txt)
 
   ```bash
