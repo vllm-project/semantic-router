@@ -82,4 +82,62 @@ var _ = Describe("Cache lookup cancellation and per-request miss score (#2473)",
 			Expect(res.Similarity).To(BeNumerically("<", threshold))
 		})
 	})
+
+	// Write-path cancellation (#2473): embedding is a synchronous CGO call that
+	// cannot be interrupted mid-flight, so cancellation is re-checked AFTER the
+	// embed completes and BEFORE the entry is published. A request cancelled in
+	// that window must return the context error and leave no orphaned state.
+	//
+	// cancelAfterEmbedCtx trips exactly on the post-embed guard: generateEmbedding
+	// calls ctxErr once (sees nil and proceeds), then the write method's guard
+	// calls ctxErr again and observes cancellation — simulating a context that
+	// was cancelled while the CGO embed was running.
+	Context("with a context cancelled during the CGO embedding", func() {
+		It("AddEntry returns the context error and publishes no entry", func() {
+			backend := newSeededBackend()
+			defer func() { _ = backend.Close() }()
+			before := backend.GetStats().TotalEntries
+
+			ctx := &cancelAfterEmbedCtx{Context: context.Background(), errAfter: 2}
+			err := backend.AddEntry(ctx, "orphan-1", "m", "a brand new distinct query",
+				[]byte("req"), []byte("resp"), -1)
+
+			Expect(errors.Is(err, context.Canceled)).To(BeTrue(),
+				"expected context.Canceled, got %v", err)
+			Expect(backend.GetStats().TotalEntries).To(Equal(before),
+				"cancelled AddEntry must not publish an entry")
+		})
+
+		It("AddPendingRequest returns the context error and publishes no pending entry", func() {
+			backend := newSeededBackend()
+			defer func() { _ = backend.Close() }()
+			before := backend.GetStats().TotalEntries
+
+			ctx := &cancelAfterEmbedCtx{Context: context.Background(), errAfter: 2}
+			err := backend.AddPendingRequest(ctx, "orphan-2", "m", "another distinct query",
+				[]byte("req"), -1)
+
+			Expect(errors.Is(err, context.Canceled)).To(BeTrue(),
+				"expected context.Canceled, got %v", err)
+			Expect(backend.GetStats().TotalEntries).To(Equal(before),
+				"cancelled AddPendingRequest must not publish a pending entry")
+		})
+	})
 })
+
+// cancelAfterEmbedCtx reports no error until the errAfter-th Err() call, then
+// context.Canceled. It lets a test deterministically trip the post-embedding
+// cancellation guard (Err() call #2) without racing the CGO embed.
+type cancelAfterEmbedCtx struct {
+	context.Context
+	errAfter int
+	calls    int
+}
+
+func (c *cancelAfterEmbedCtx) Err() error {
+	c.calls++
+	if c.calls >= c.errAfter {
+		return context.Canceled
+	}
+	return nil
+}

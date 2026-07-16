@@ -287,6 +287,14 @@ func (c *InMemoryCache) AddPendingRequest(
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// Re-check cancellation after the synchronous embedding (a CGO call that can
+	// block) and before mutating cache state: a request canceled mid-embedding
+	// must not publish an orphaned pending entry (#2473).
+	if err := ctxErr(ctx); err != nil {
+		metrics.RecordCacheOperation("memory", "add_pending", "canceled", time.Since(start).Seconds())
+		return err
+	}
+
 	// Remove expired entries to maintain cache hygiene, but defer the HNSW rebuild to the insertion below if HNSW is enabled.
 	c.cleanupExpiredEntriesDeferred()
 
@@ -340,7 +348,7 @@ func (c *InMemoryCache) AddPendingRequest(
 }
 
 // UpdateWithResponse completes a pending request by adding the response
-func (c *InMemoryCache) UpdateWithResponse(_ context.Context, requestID string, responseBody []byte, ttlSeconds int) error {
+func (c *InMemoryCache) UpdateWithResponse(ctx context.Context, requestID string, responseBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !c.enabled {
@@ -349,6 +357,13 @@ func (c *InMemoryCache) UpdateWithResponse(_ context.Context, requestID string, 
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// Honor cancellation before mutating cache state so a canceled request does
+	// not complete a pending entry (#2473).
+	if err := ctxErr(ctx); err != nil {
+		metrics.RecordCacheOperation("memory", "update_response", "canceled", time.Since(start).Seconds())
+		return err
+	}
 
 	// Clean up expired entries during the update
 	c.cleanupExpiredEntries()
@@ -434,6 +449,14 @@ func (c *InMemoryCache) AddEntry(
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// Re-check cancellation after the synchronous embedding (a CGO call that can
+	// block) and before mutating cache state: a request canceled mid-embedding
+	// must not publish an orphaned entry (#2473).
+	if err := ctxErr(ctx); err != nil {
+		metrics.RecordCacheOperation("memory", "add_entry", "canceled", time.Since(start).Seconds())
+		return err
+	}
 
 	// Remove expired entries to maintain cache hygiene, but defer the HNSW rebuild to the insertion below if HNSW is enabled.
 	c.cleanupExpiredEntriesDeferred()
