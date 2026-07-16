@@ -57,7 +57,7 @@
 }
 
 .viewBtn.active {
-  background: var(--accent-color, #76b900);
+  background: var(--accent-color, #8f949c);
   color: white;
 }
 
@@ -105,8 +105,8 @@
 }
 
 .modeBtn.active {
-  background: var(--accent-color, #76b900);
-  border-color: var(--accent-color, #76b900);
+  background: var(--accent-color, #8f949c);
+  border-color: var(--accent-color, #8f949c);
   color: white;
 }
 
@@ -135,8 +135,8 @@
 
 .queryInput:focus {
   outline: none;
-  border-color: var(--accent-color, #76b900);
-  box-shadow: 0 0 0 2px rgba(118, 185, 0, 0.15);
+  border-color: var(--accent-color, #8f949c);
+  box-shadow: 0 0 0 2px rgba(143, 148, 156, 0.15);
 }
 
 .queryInput::placeholder {
@@ -145,7 +145,7 @@
 
 .testBtn {
   padding: 10px 24px;
-  background: var(--accent-color, #76b900);
+  background: var(--accent-color, #8f949c);
   color: white;
   border: none;
   border-radius: 24px;
@@ -159,9 +159,9 @@
 }
 
 .testBtn:hover:not(:disabled) {
-  background: var(--accent-hover, #8ed100);
+  background: var(--accent-hover, #c9cbd0);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(118, 185, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(143, 148, 156, 0.3);
 }
 
 .testBtn:disabled {
@@ -261,7 +261,7 @@
 .decisionResult {
   font-size: 12px;
   font-weight: 600;
-  color: var(--accent-color, #76b900);
+  color: var(--accent-color, #8f949c);
 }
 
 .decisionResult.fallbackDecision {
@@ -337,7 +337,7 @@
 }
 
 .collapseBtn:hover {
-  border-color: var(--accent-color, #76b900);
+  border-color: var(--accent-color, #8f949c);
   color: var(--text-primary, #e8e8e8);
   background: var(--bg-hover, #222);
 }

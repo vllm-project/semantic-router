@@ -25,7 +25,9 @@
   font-size: 0.8rem;
   font-weight: 700;
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .modeButton:hover {
@@ -34,7 +36,7 @@
 }
 
 .modeButtonActive {
-  color: #081000;
+  color: #09090a;
   background: var(--color-primary);
 }
 
@@ -66,9 +68,9 @@
   gap: 0.45rem;
   padding: 1rem 1.05rem;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(118, 185, 0, 0.14);
+  border: 1px solid rgba(143, 148, 156, 0.14);
   background:
-    linear-gradient(145deg, rgba(118, 185, 0, 0.12), rgba(0, 212, 255, 0.05)),
+    linear-gradient(145deg, rgba(143, 148, 156, 0.12), rgba(166, 171, 179, 0.05)),
     rgba(7, 10, 10, 0.7);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
@@ -137,15 +139,18 @@
   border-radius: var(--radius-lg);
   border: 1px solid rgba(255, 255, 255, 0.08);
   background:
-    linear-gradient(180deg, rgba(118, 185, 0, 0.08), rgba(118, 185, 0, 0.01)),
+    linear-gradient(180deg, rgba(143, 148, 156, 0.08), rgba(143, 148, 156, 0.01)),
     rgba(7, 11, 10, 0.88);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
-  transition: transform var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition:
+    transform var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .systemCard:hover {
   transform: translateY(-2px);
-  border-color: rgba(118, 185, 0, 0.18);
+  border-color: rgba(143, 148, 156, 0.18);
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.22);
 }
 
@@ -202,8 +207,8 @@
 }
 
 .badgeActive {
-  border-color: rgba(118, 185, 0, 0.2);
-  background: rgba(118, 185, 0, 0.14);
+  border-color: rgba(143, 148, 156, 0.2);
+  background: rgba(143, 148, 156, 0.14);
   color: var(--color-primary-light);
 }
 
@@ -214,8 +219,8 @@
 }
 
 .badgeInfo {
-  border-color: rgba(0, 212, 255, 0.16);
-  background: rgba(0, 212, 255, 0.1);
+  border-color: rgba(166, 171, 179, 0.16);
+  background: rgba(166, 171, 179, 0.1);
   color: var(--color-accent-cyan);
 }
 
@@ -313,8 +318,8 @@
 }
 
 .rawToolbarButtonPrimary {
-  border-color: rgba(118, 185, 0, 0.2);
-  background: rgba(118, 185, 0, 0.16);
+  border-color: rgba(143, 148, 156, 0.2);
+  background: rgba(143, 148, 156, 0.16);
   color: var(--color-primary-light);
 }
 
@@ -339,8 +344,8 @@
 }
 
 .rawEditor:focus {
-  outline: 1px solid rgba(118, 185, 0, 0.4);
-  border-color: rgba(118, 185, 0, 0.28);
+  outline: 1px solid rgba(143, 148, 156, 0.4);
+  border-color: rgba(143, 148, 156, 0.28);
 }
 
 .rawHintRow {

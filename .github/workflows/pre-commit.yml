@@ -12,8 +12,72 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pre-commit:
-    if: github.repository == 'vllm-project/semantic-router'
+  changes:
+    uses: ./.github/workflows/ci-changes.yml
+
+  docs-precommit:
+    needs: changes
+    if: >-
+      github.repository == 'vllm-project/semantic-router'
+      && needs.changes.outputs.docs_only == 'true'
+      && github.event_name != 'workflow_dispatch'
+      && (github.event_name != 'pull_request'
+          || !contains(github.event.pull_request.labels.*.name, 'ci/full'))
+    runs-on: ubuntu-latest
+    name: Docs and website lightweight checks
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node
+        if: needs.changes.outputs.website == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+
+      - name: Cache Node dependencies
+        if: needs.changes.outputs.website == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            website/node_modules
+          key: ${{ runner.os }}-node-docs-ci-${{ hashFiles('website/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-docs-ci-
+
+      - name: Run docs CI gate
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            export AGENT_BASE_REF="origin/${{ github.base_ref }}"
+          else
+            export AGENT_BASE_REF="HEAD^"
+          fi
+          make agent-docs-ci-gate
+
+      - name: Build website
+        if: needs.changes.outputs.website == 'true'
+        run: |
+          cd website
+          npm ci
+          npm run build
+
+  full-precommit:
+    needs: changes
+    if: >-
+      github.repository == 'vllm-project/semantic-router'
+      && (needs.changes.outputs.docs_only != 'true'
+          || github.event_name == 'workflow_dispatch'
+          || (github.event_name == 'pull_request'
+              && contains(github.event.pull_request.labels.*.name, 'ci/full')))
     runs-on: ubuntu-latest
     name: Run pre-commit hooks check file lint
 
@@ -31,7 +95,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.25"
 
       - name: Set up Node
         uses: actions/setup-node@v5

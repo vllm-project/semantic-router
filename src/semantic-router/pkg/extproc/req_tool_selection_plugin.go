@@ -126,11 +126,16 @@ func (r *OpenAIRouter) runToolSelectionPluginFilter(
 	}
 
 	start := time.Now()
+	provider, providerErr := toolsEmbeddingProvider(r.Config)
+	if providerErr != nil {
+		return r.handleToolSelectionError(openAIRequest, response, ctx, providerErr, r.effectiveToolSelectionFallback(ts))
+	}
 	filtered, confidence, ferr := filterRequestToolsAgainstQuerySemantic(
 		classificationText,
 		openAIRequest.Tools,
 		em.EmbeddingConfig.ModelType,
 		em.EmbeddingConfig.TargetDimension,
+		provider,
 		thresh,
 		ts.PreserveCount,
 	)

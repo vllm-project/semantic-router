@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"sync"
@@ -33,6 +34,13 @@ func (c *KnowledgeBaseClassifier) collectExemplarRefs() []exemplarRef {
 }
 
 func (c *KnowledgeBaseClassifier) embedOneExemplar(backend, modelType string, targetDim int, ref exemplarRef) embeddingResult {
+	if c.provider != nil {
+		embedding, err := c.embedText(ref.text)
+		if err != nil {
+			return embeddingResult{ref: ref, err: err}
+		}
+		return embeddingResult{ref: ref, embedding: embedding}
+	}
 	if backend == "openvino" {
 		embedding, err := getOpenVINOEmbedding(modelType, ref.text, targetDim)
 		if err != nil {
@@ -45,6 +53,17 @@ func (c *KnowledgeBaseClassifier) embedOneExemplar(backend, modelType string, ta
 		return embeddingResult{ref: ref, err: err}
 	}
 	return embeddingResult{ref: ref, embedding: output.Embedding}
+}
+
+func (c *KnowledgeBaseClassifier) embedText(text string) ([]float32, error) {
+	if c.provider != nil {
+		return c.provider.Embed(context.Background(), text)
+	}
+	output, err := getEmbeddingWithModelType(text, c.modelType, 0)
+	if err != nil {
+		return nil, err
+	}
+	return output.Embedding, nil
 }
 
 func (c *KnowledgeBaseClassifier) embedExemplarsParallel(refs []exemplarRef) <-chan embeddingResult {

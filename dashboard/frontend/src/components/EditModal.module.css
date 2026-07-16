@@ -1,76 +1,123 @@
 .overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.6);
+  inset: 0;
+  z-index: 1300;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(4px);
+  align-items: stretch;
+  justify-content: flex-end;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(8px);
+  animation: overlay-in 180ms ease-out;
 }
 
 .modal {
-  background-color: var(--color-bg);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  max-width: 720px;
-  width: min(92vw, 720px);
-  max-height: 94vh;
+  width: min(720px, 100vw);
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  margin-left: auto;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--color-border);
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 12rem), var(--surface-panel);
+  border: 1px solid var(--border-strong);
+  border-right: 0;
+  border-radius: var(--radius-xl) 0 0 var(--radius-xl);
+  box-shadow: -28px 0 72px rgba(0, 0, 0, 0.52);
+  animation: drawer-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .header {
+  position: relative;
+  flex: 0 0 auto;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid var(--color-border);
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 76px;
+  padding: 1.25rem 1.5rem;
+  background: rgba(9, 9, 10, 0.82);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.header::before {
+  position: absolute;
+  top: 0;
+  left: 1.5rem;
+  width: 2rem;
+  height: 2px;
+  background: var(--brand-amd);
+  content: '';
 }
 
 .title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--color-text);
+  min-width: 0;
   margin: 0;
+  color: var(--text-primary);
+  font-size: 1.25rem;
+  font-weight: 760;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .closeButton {
-  background: none;
-  border: none;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: var(--text-secondary);
   font-size: 1.5rem;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .closeButton:hover {
-  background-color: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.075);
+  border-color: var(--border-strong);
+}
+
+.closeButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
+.closeButton:focus-visible,
+.cancelButton:focus-visible,
+.saveButton:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .form {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  flex: 1;
   overflow: hidden;
 }
 
 .error {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 1rem 1.5rem;
-  background-color: rgba(239, 68, 68, 0.1);
-  border-bottom: 1px solid rgba(239, 68, 68, 0.3);
-  color: #ef4444;
-  font-size: 0.9rem;
+  padding: 0.875rem 1.5rem;
+  color: #fca5a5;
+  font-size: 0.875rem;
+  background: rgba(239, 68, 68, 0.1);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.28);
 }
 
 .errorIcon {
@@ -78,13 +125,17 @@
 }
 
 .fields {
-  flex: 1;
-  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 1.5rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .field {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.375rem;
 }
 
 .field:last-child {
@@ -93,153 +144,248 @@
 
 .label {
   display: block;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--color-text);
   margin-bottom: 0.5rem;
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-weight: 680;
+  letter-spacing: 0.01em;
 }
 
 .required {
-  color: #ef4444;
   margin-left: 0.25rem;
+  color: #f87171;
 }
 
 .description {
-  font-size: 0.8rem;
-  color: var(--color-text-secondary);
-  margin: 0.25rem 0 0.5rem 0;
-  font-style: italic;
+  margin: -0.125rem 0 0.625rem;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-style: normal;
+  line-height: 1.5;
 }
 
 .input,
 .select,
 .textarea {
   width: 100%;
-  padding: 0.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background-color: var(--color-bg);
-  color: var(--color-text);
-  font-size: 0.9rem;
+  padding: 0.6875rem 0.75rem;
+  color: var(--text-primary);
   font-family: inherit;
-  transition: border-color var(--transition-fast);
+  font-size: 0.875rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.input:hover,
+.select:hover,
+.textarea:hover {
+  border-color: var(--border-strong);
 }
 
 .input:focus,
 .select:focus,
 .textarea:focus {
   outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  background: #1d1d21;
+  border-color: rgba(255, 255, 255, 0.38);
+  box-shadow: 0 0 0 3px rgba(245, 245, 247, 0.09);
 }
 
 .textarea {
+  min-height: 7rem;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.55;
   resize: vertical;
-  font-family: 'Courier New', monospace;
-  font-size: 0.85rem;
 }
 
 .multiselect {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 1rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background-color: var(--color-bg);
-  max-height: 300px;
+  gap: 0.375rem;
+  max-height: min(320px, 38vh);
+  padding: 0.5rem;
   overflow-y: auto;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overscroll-behavior: contain;
 }
 
 .multiselectOption {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.5rem;
+  min-height: 40px;
+  padding: 0.5rem 0.625rem;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background-color var(--transition-fast);
 }
 
 .multiselectOption:hover {
-  background-color: rgba(99, 102, 241, 0.05);
+  background: rgba(255, 255, 255, 0.055);
 }
 
-.multiselectOption input[type="checkbox"] {
-  width: 1.125rem;
-  height: 1.125rem;
+.multiselectOption input[type='checkbox'],
+.checkbox input[type='checkbox'] {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
   cursor: pointer;
+  accent-color: var(--text-primary);
 }
 
-.multiselectOption span {
-  font-size: 0.9rem;
-  color: var(--color-text);
+.multiselectOption span,
+.checkbox span {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
 }
 
 .checkbox {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.625rem;
+  min-height: 40px;
   cursor: pointer;
   user-select: none;
 }
 
-.checkbox input[type="checkbox"] {
-  width: 1.25rem;
-  height: 1.25rem;
-  cursor: pointer;
-}
-
-.checkbox span {
-  font-size: 0.9rem;
-  color: var(--color-text);
-}
-
 .actions {
+  flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1.5rem;
-  border-top: 1px solid var(--color-border);
-  background-color: rgba(99, 102, 241, 0.02);
+  gap: 0.625rem;
+  padding: 1rem 1.5rem;
+  background: rgba(9, 9, 10, 0.94);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .cancelButton,
 .saveButton {
-  padding: 0.75rem 1.5rem;
+  min-width: 96px;
+  min-height: 40px;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 680;
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  border: none;
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    opacity var(--transition-fast);
 }
 
 .cancelButton {
-  background-color: transparent;
-  color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
+  color: var(--text-secondary);
+  background: transparent;
 }
 
 .cancelButton:hover:not(:disabled) {
-  background-color: rgba(0, 0, 0, 0.05);
-  border-color: var(--color-text-secondary);
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.055);
+  border-color: var(--border-strong);
 }
 
 .saveButton {
-  background-color: var(--color-primary);
-  color: white;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  color: #09090a;
+  background: var(--action-primary-bg);
+  border-color: var(--action-primary-bg);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
 }
 
 .saveButton:hover:not(:disabled) {
-  background-color: var(--color-primary-dark);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  background: #ffffff;
+  border-color: #ffffff;
 }
 
 .cancelButton:disabled,
 .saveButton:disabled {
-  opacity: 0.5;
   cursor: not-allowed;
+  opacity: 0.48;
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translate3d(32px, 0, 0);
+    opacity: 0.86;
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .overlay {
+    backdrop-filter: none;
+  }
+
+  .modal {
+    width: 100vw;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .header {
+    min-height: 68px;
+    padding: max(1rem, env(safe-area-inset-top)) 1rem 1rem;
+  }
+
+  .header::before {
+    left: 1rem;
+  }
+
+  .fields {
+    padding: 1rem;
+  }
+
+  .actions {
+    padding: 0.875rem 1rem max(0.875rem, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 440px) {
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .cancelButton,
+  .saveButton {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .modal {
+    animation: none;
+  }
+
+  .closeButton,
+  .input,
+  .select,
+  .textarea,
+  .multiselectOption,
+  .cancelButton,
+  .saveButton {
+    transition: none;
+  }
 }

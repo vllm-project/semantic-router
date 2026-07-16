@@ -9,15 +9,15 @@ import styles from './InsightsPage.module.css'
 
 const TOOL_TRACE_STYLES: Record<string, { tint: string; accent: string }> = {
   user_input: {
-    tint: 'rgba(118, 185, 0, 0.12)',
-    accent: 'rgba(163, 230, 53, 0.9)',
+    tint: 'rgba(143, 148, 156, 0.12)',
+    accent: 'rgba(212, 212, 216, 0.9)',
   },
   assistant_tool_call: {
     tint: 'rgba(255, 255, 255, 0.06)',
     accent: 'rgba(255, 255, 255, 0.9)',
   },
   client_tool_result: {
-    tint: 'rgba(118, 185, 0, 0.08)',
+    tint: 'rgba(143, 148, 156, 0.08)',
     accent: 'rgba(220, 252, 231, 0.92)',
   },
   assistant_final_response: {

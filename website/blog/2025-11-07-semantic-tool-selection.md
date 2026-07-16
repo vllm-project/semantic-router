@@ -375,7 +375,7 @@ As AI agents become more capable and connect to more tools, intelligent tool man
 The vLLM Semantic Router is open source:
 
 - **GitHub:** [github.com/vllm-project/semantic-router](https://github.com/vllm-project/semantic-router)
-- **Documentation:** [vllm-semantic-router.com](https://vllm-semantic-router.com)
+- **Documentation:** [vllm-sr.ai](https://vllm-sr.ai)
 - **Quick Start:** Deploy in 5 minutes with Docker Compose or Kubernetes
 
 Example configuration to get started:
