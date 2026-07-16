@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // Embedder generates vector embeddings from text. Implementations
@@ -43,27 +45,71 @@ type IngestionJob struct {
 // backend or embedder is wedged.
 const defaultStopTimeout = 30 * time.Second
 
+// cleanupTimeout bounds the best-effort metadata/persistence work Stop performs
+// outside the drain wait (failing queued jobs). It is derived from the caller's
+// Stop deadline but capped so a wedged metadata registry cannot keep Stop
+// running past its own contract.
+const cleanupTimeout = 5 * time.Second
+
+// lifecycleState tracks where a pipeline generation is in its lifecycle so Stop
+// can report honestly and Start can refuse to reuse a generation that has not
+// finished joining.
+type lifecycleState int
+
+const (
+	// stateStopped means no generation is live: Start may create a new one.
+	stateStopped lifecycleState = iota
+	// stateRunning means the current generation is accepting and processing jobs.
+	stateRunning
+	// stateStopping means Stop was called but the current generation's workers
+	// have not finished joining (e.g. a bounded Stop timed out with a wedged
+	// worker still live). The generation's resources must not be reused until it
+	// reaches stateStopped.
+	stateStopping
+)
+
+// pipelineGeneration owns the per-Start resources whose lifetimes must not
+// outlive a single running/stopping cycle. Giving each generation its own
+// WaitGroup, queue, stop channel, and root context means a timed-out Stop that
+// leaves old workers live can never race a subsequent Start: the new generation
+// gets fresh resources, and the old one is joined independently.
+type pipelineGeneration struct {
+	id         uint64
+	jobQueue   chan IngestionJob
+	stopCh     chan struct{}
+	wg         sync.WaitGroup
+	rootCtx    context.Context
+	rootCancel context.CancelFunc
+	// done is closed once every worker in this generation has returned. A Stop
+	// that timed out can be retried by waiting on this channel, and Start blocks
+	// on it before creating the next generation.
+	done chan struct{}
+}
+
 // IngestionPipeline processes file attachment jobs asynchronously.
 // It reads files, extracts text, chunks, embeds, and stores the
 // resulting vectors in the backend.
 type IngestionPipeline struct {
-	backend      VectorStoreBackend
-	fileStore    *FileStore
-	manager      *Manager
-	embedder     Embedder
-	jobQueue     chan IngestionJob
-	workers      int
-	lifecycleMu  sync.Mutex
+	backend   VectorStoreBackend
+	fileStore *FileStore
+	manager   *Manager
+	embedder  Embedder
+	workers   int
+	queueSize int
+
+	// lifecycleMu serializes Start/Stop so generations are created and joined
+	// one at a time. It is never held across unbounded I/O.
+	lifecycleMu sync.Mutex
+
 	mu           sync.RWMutex
 	fileStatuses map[string]*VectorStoreFile // vsf_id -> status
-	wg           sync.WaitGroup
-	stopCh       chan struct{}
-	// rootCtx is the pipeline lifecycle context. All per-job work derives from
-	// it, so cancelling rootCancel signals every in-flight job to abort at its
-	// next checkpoint. It is (re)created on each Start.
-	rootCtx    context.Context
-	rootCancel context.CancelFunc
-	running    bool
+
+	// state and gen are guarded by mu. gen is the current generation; callers
+	// that need to enqueue or inspect the live queue read it under mu.
+	state lifecycleState
+	gen   *pipelineGeneration
+	// genSeq monotonically numbers generations for diagnostics.
+	genSeq uint64
 }
 
 // PipelineConfig holds configuration for the ingestion pipeline.
@@ -88,56 +134,103 @@ func NewIngestionPipeline(backend VectorStoreBackend, fileStore *FileStore, mana
 		fileStore:    fileStore,
 		manager:      manager,
 		embedder:     embedder,
-		jobQueue:     make(chan IngestionJob, queueSize),
 		workers:      workers,
+		queueSize:    queueSize,
 		fileStatuses: make(map[string]*VectorStoreFile),
-		stopCh:       make(chan struct{}),
+		state:        stateStopped,
 	}
 }
 
-// Start launches the worker goroutines.
+// Start launches the worker goroutines for a fresh generation.
+//
+// If a previous generation is still stopping (a bounded Stop timed out with
+// workers not yet joined), Start blocks until that generation has fully joined
+// before creating the next one. This guarantees a new generation never shares a
+// WaitGroup, queue, or root context with a still-live old generation.
+//
+// The wait for a stopping generation happens WITHOUT holding lifecycleMu, so a
+// concurrent AttachFile or retry Stop is never blocked behind a Start that is
+// itself parked on a wedged old generation. lifecycleMu is only held for the
+// brief state check and generation creation.
 func (p *IngestionPipeline) Start() {
-	p.lifecycleMu.Lock()
-	defer p.lifecycleMu.Unlock()
+	for {
+		p.lifecycleMu.Lock()
 
-	p.mu.Lock()
-	if p.running {
+		p.mu.Lock()
+		state := p.state
+		var prevDone chan struct{}
+		if state == stateStopping && p.gen != nil {
+			prevDone = p.gen.done
+		}
 		p.mu.Unlock()
+
+		switch state {
+		case stateRunning:
+			// Already running: idempotent no-op.
+			p.lifecycleMu.Unlock()
+			return
+		case stateStopping:
+			// A previous generation is still unwinding. Release lifecycleMu before
+			// waiting so attaches/Stops can proceed, then retry the transition.
+			p.lifecycleMu.Unlock()
+			if prevDone != nil {
+				<-prevDone
+			}
+			continue
+		}
+
+		// stateStopped: create the next generation while holding lifecycleMu.
+		p.mu.Lock()
+		p.genSeq++
+		gen := &pipelineGeneration{
+			id:       p.genSeq,
+			jobQueue: make(chan IngestionJob, p.queueSize),
+			stopCh:   make(chan struct{}),
+			done:     make(chan struct{}),
+		}
+		gen.rootCtx, gen.rootCancel = context.WithCancel(context.Background())
+		p.gen = gen
+		p.state = stateRunning
+		p.mu.Unlock()
+
+		for i := 0; i < p.workers; i++ {
+			gen.wg.Add(1)
+			go p.worker(gen)
+		}
+		// Reap this generation's workers so a later Start/Stop can observe join
+		// completion via gen.done without holding any lock across the wait. Once
+		// joined, self-heal the state: if this generation is still current and
+		// stopping (a bounded Stop timed out and later released), move it to
+		// stopped so the pipeline reflects reality without needing another call.
+		go func() {
+			gen.wg.Wait()
+			close(gen.done)
+			p.markGenerationStopped(gen)
+		}()
+		p.lifecycleMu.Unlock()
 		return
 	}
-	p.stopCh = make(chan struct{})
-	stopCh := p.stopCh
-	p.rootCtx, p.rootCancel = context.WithCancel(context.Background())
-	rootCtx := p.rootCtx
-	p.running = true
-	p.mu.Unlock()
-
-	for i := 0; i < p.workers; i++ {
-		p.wg.Add(1)
-		go p.worker(rootCtx, stopCh)
-	}
 }
 
-// Stop gracefully shuts down the pipeline, bounded by ctx.
+// Stop gracefully shuts down the current generation, bounded by ctx.
 //
-// It stops accepting new jobs, fails any still queued, and waits for in-flight
-// jobs to drain. If ctx is cancelled or its deadline elapses before draining
-// completes, the pipeline root context is cancelled so in-flight jobs abort at
-// their next checkpoint, and Stop returns ctx.Err() without blocking further.
-// A nil ctx is treated as a bounded shutdown with defaultStopTimeout.
+// It stops accepting new jobs, fails any still queued (bounded by a cleanup
+// deadline so a wedged metadata registry cannot stall shutdown), and waits for
+// in-flight jobs to drain. If ctx is cancelled or its deadline elapses before
+// draining completes, the generation's root context is cancelled so in-flight
+// jobs abort at their next checkpoint, and Stop returns ctx.Err() without
+// blocking further. A nil ctx is treated as a bounded shutdown with
+// defaultStopTimeout.
+//
+// Honest lifecycle reporting: if the drain times out, the generation stays in
+// stateStopping (its workers are still live). A subsequent Stop does not return
+// nil — it waits on the same generation's completion (bounded by its own ctx)
+// and only reports success once the workers have actually joined. This lets a
+// caller retry the join with a longer deadline instead of being told shutdown
+// succeeded when it did not.
 func (p *IngestionPipeline) Stop(ctx context.Context) error {
 	p.lifecycleMu.Lock()
 	defer p.lifecycleMu.Unlock()
-
-	p.mu.Lock()
-	if !p.running {
-		p.mu.Unlock()
-		return nil
-	}
-	stopCh := p.stopCh
-	rootCancel := p.rootCancel
-	p.running = false
-	p.mu.Unlock()
 
 	if ctx == nil {
 		var cancel context.CancelFunc
@@ -145,35 +238,89 @@ func (p *IngestionPipeline) Stop(ctx context.Context) error {
 		defer cancel()
 	}
 
-	p.failQueuedJobs("pipeline_stopped", "ingestion pipeline stopped before processing job")
-	close(stopCh)
+	p.mu.Lock()
+	switch p.state {
+	case stateStopped:
+		// Nothing live to join.
+		p.mu.Unlock()
+		return nil
+	case stateStopping:
+		// A prior Stop timed out; this generation's workers are still unwinding.
+		// Wait on its completion (bounded by ctx) rather than falsely reporting a
+		// clean shutdown.
+		gen := p.gen
+		p.mu.Unlock()
+		return p.awaitGeneration(ctx, gen)
+	}
+
+	// stateRunning: begin shutting this generation down.
+	gen := p.gen
+	p.state = stateStopping
+	p.mu.Unlock()
+
+	// Fail queued jobs under a bounded cleanup context so a stalled registry
+	// cannot keep Stop running past its deadline. This runs before the drain
+	// wait but is itself bounded, and lifecycleMu is not held across the
+	// per-job persistence I/O inside failQueuedJobs (it uses the cleanup ctx).
+	p.failQueuedJobs(ctx, gen, "pipeline_stopped", "ingestion pipeline stopped before processing job")
+	close(gen.stopCh)
 
 	// Wait for workers to drain, bounded by ctx. On timeout, cancel the root
 	// context so in-flight jobs abort at their next stage checkpoint, then
-	// return without waiting further — Stop must not block past ctx.
+	// return without waiting further — Stop must not block past ctx. The
+	// generation remains in stateStopping until its workers join (observed via
+	// gen.done by awaitGeneration/Start).
 	//
 	// Note: a job wedged *inside* a single stage (e.g. an embedder or backend
 	// call that ignores context) cannot be interrupted here; that worker unwinds
 	// only once the stage returns. Making individual stages ctx-aware is handled
 	// by the follow-up embedder/backend context work. Stop's own contract —
 	// returning within ctx — holds regardless.
-	done := make(chan struct{})
-	go func() {
-		p.wg.Wait()
-		close(done)
-	}()
+	return p.awaitGeneration(ctx, gen)
+}
+
+// awaitGeneration waits for gen's workers to finish joining, bounded by ctx.
+// On graceful completion it transitions to stateStopped and returns nil,
+// letting any in-flight job run to completion. On ctx expiry it cancels the
+// generation root context so in-flight jobs abort at their next checkpoint,
+// then returns ctx.Err() while leaving the generation in stateStopping so a
+// later call can retry the join.
+func (p *IngestionPipeline) awaitGeneration(ctx context.Context, gen *pipelineGeneration) error {
+	if gen == nil {
+		return nil
+	}
 
 	select {
-	case <-done:
-		if rootCancel != nil {
-			rootCancel()
+	case <-gen.done:
+		// Workers drained gracefully; cancel the (now-unused) root to release its
+		// resources. Cancellation here cannot abort any work — every worker has
+		// already returned.
+		if gen.rootCancel != nil {
+			gen.rootCancel()
 		}
+		p.markGenerationStopped(gen)
 		return nil
 	case <-ctx.Done():
-		if rootCancel != nil {
-			rootCancel()
+		// Deadline elapsed with workers still live. Signal in-flight jobs to abort
+		// at their next checkpoint, but do not block further — Stop must return
+		// within ctx. Stay in stateStopping so the caller can retry the join with
+		// a longer deadline. Cancelling is idempotent, so repeated timed-out Stop
+		// calls on the same generation are safe.
+		if gen.rootCancel != nil {
+			gen.rootCancel()
 		}
 		return ctx.Err()
+	}
+}
+
+// markGenerationStopped transitions the pipeline to stateStopped if gen is still
+// the current generation and its workers have joined. It is safe to call more
+// than once for the same generation.
+func (p *IngestionPipeline) markGenerationStopped(gen *pipelineGeneration) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.gen == gen && p.state == stateStopping {
+		p.state = stateStopped
 	}
 }
 
@@ -191,13 +338,6 @@ func (p *IngestionPipeline) AttachFile(vectorStoreID, fileID string, strategy *C
 		return nil, fmt.Errorf("vector store not found: %w", err)
 	}
 
-	p.lifecycleMu.Lock()
-	defer p.lifecycleMu.Unlock()
-
-	if !p.isRunningLocked() {
-		return nil, fmt.Errorf("ingestion pipeline is not running")
-	}
-
 	vsfID := GenerateVectorStoreFileID()
 	vsf := &VectorStoreFile{
 		ID:               vsfID,
@@ -208,17 +348,6 @@ func (p *IngestionPipeline) AttachFile(vectorStoreID, fileID string, strategy *C
 		ChunkingStrategy: strategy,
 		CreatedAt:        time.Now().Unix(),
 	}
-
-	p.mu.Lock()
-	p.fileStatuses[vsfID] = cloneVectorStoreFile(vsf)
-	p.mu.Unlock()
-
-	// Update file counts.
-	_ = p.manager.UpdateFileCounts(context.Background(), vectorStoreID, func(fc *FileCounts) {
-		fc.InProgress++
-		fc.Total++
-	})
-
 	job := IngestionJob{
 		VectorStoreFileID: vsfID,
 		VectorStoreID:     vectorStoreID,
@@ -226,20 +355,45 @@ func (p *IngestionPipeline) AttachFile(vectorStoreID, fileID string, strategy *C
 		ChunkingStrategy:  strategy,
 	}
 
-	// Snapshot before enqueuing so the caller always sees "in_progress",
-	// even if the worker completes the job before we return.
-	snapshot := cloneVectorStoreFile(vsf)
+	// Fast pre-check (no I/O): reject before reserving any count if the pipeline
+	// is not currently running. This avoids an increment/compensate round-trip in
+	// the common not-running case and, together with Start not holding
+	// lifecycleMu while it waits out a stopping generation, ensures a reserved
+	// count is always either consumed by a worker or compensated below — never
+	// stranded behind a Start parked on a wedged old generation.
+	if !p.isRunning() {
+		return nil, fmt.Errorf("ingestion pipeline is not running")
+	}
 
-	select {
-	case p.jobQueue <- job:
+	// Increment the durable count BEFORE enqueueing and OUTSIDE lifecycleMu,
+	// using a bounded context. Doing the increment first guarantees a worker can
+	// never observe (and decrement for) this job before its in_progress count is
+	// recorded, so the count never transiently goes negative. Doing it outside
+	// lifecycleMu with a bounded context guarantees a slow/wedged metadata
+	// registry can never keep AttachFile holding lifecycleMu and thereby block
+	// Stop past its deadline (the P1-class hang, via the attach path).
+	countCtx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
+	defer cancel()
+	_ = p.manager.UpdateFileCounts(countCtx, vectorStoreID, func(fc *FileCounts) {
+		fc.InProgress++
+		fc.Total++
+	})
+
+	snapshot := cloneVectorStoreFile(vsf)
+	switch p.enqueueJob(vsfID, vsf, job) {
+	case enqueueQueued:
 		return snapshot, nil
-	default:
-		// Queue is full.
-		p.setFileStatus(vsfID, "failed", &FileError{
-			Code:    "queue_full",
-			Message: "ingestion queue is full, try again later",
-		})
-		_ = p.manager.UpdateFileCounts(context.Background(), vectorStoreID, func(fc *FileCounts) {
+	case enqueueNotRunning:
+		// Incremented above but the pipeline is not running, so no worker will
+		// process this job. Compensate the reservation (bounded, outside lock).
+		p.compensateAttachCount(vectorStoreID)
+		return nil, fmt.Errorf("ingestion pipeline is not running")
+	default: // enqueueQueueFull
+		// Move the count from in_progress to failed (bounded, outside lock). Net
+		// effect over both updates: Total+1, Failed+1, InProgress 0.
+		failCtx, failCancel := context.WithTimeout(context.Background(), cleanupTimeout)
+		defer failCancel()
+		_ = p.manager.UpdateFileCounts(failCtx, vectorStoreID, func(fc *FileCounts) {
 			fc.InProgress--
 			fc.Failed++
 		})
@@ -251,11 +405,78 @@ func (p *IngestionPipeline) AttachFile(vectorStoreID, fileID string, strategy *C
 	}
 }
 
-func (p *IngestionPipeline) isRunningLocked() bool {
+// enqueueResult reports the outcome of the AttachFile enqueue critical section.
+type enqueueResult int
+
+const (
+	enqueueQueued enqueueResult = iota
+	enqueueNotRunning
+	enqueueQueueFull
+)
+
+// enqueueJob runs the enqueue critical section under lifecycleMu: it captures
+// the running generation, registers the in-memory status, and enqueues the job.
+// Holding lifecycleMu makes the enqueue atomic with respect to Stop's queue
+// drain, so a job can never land in a queue whose workers have already exited.
+// No unbounded I/O happens under the lock.
+func (p *IngestionPipeline) enqueueJob(vsfID string, vsf *VectorStoreFile, job IngestionJob) enqueueResult {
+	p.lifecycleMu.Lock()
+	defer p.lifecycleMu.Unlock()
+
+	gen := p.runningGeneration()
+	if gen == nil {
+		return enqueueNotRunning
+	}
+
+	p.mu.Lock()
+	p.fileStatuses[vsfID] = cloneVectorStoreFile(vsf)
+	p.mu.Unlock()
+
+	select {
+	case gen.jobQueue <- job:
+		return enqueueQueued
+	default:
+		p.setFileStatus(vsfID, "failed", &FileError{
+			Code:    "queue_full",
+			Message: "ingestion queue is full, try again later",
+		})
+		return enqueueQueueFull
+	}
+}
+
+// compensateAttachCount reverses the in_progress/total increment made by
+// AttachFile when the job could not be enqueued because the pipeline is not
+// running. It uses a bounded context and is never called under lifecycleMu.
+func (p *IngestionPipeline) compensateAttachCount(vectorStoreID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
+	defer cancel()
+	_ = p.manager.UpdateFileCounts(ctx, vectorStoreID, func(fc *FileCounts) {
+		fc.InProgress--
+		fc.Total--
+	})
+}
+
+// runningGeneration returns the current generation only when the pipeline is in
+// stateRunning, else nil. It takes p.mu itself; callers hold lifecycleMu so the
+// returned generation cannot be swapped out before the caller enqueues onto it.
+func (p *IngestionPipeline) runningGeneration() *pipelineGeneration {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	return p.running
+	if p.state != stateRunning {
+		return nil
+	}
+	return p.gen
+}
+
+// isRunning reports whether the pipeline is currently in stateRunning. It is a
+// lock-free-of-lifecycleMu snapshot used as a fast pre-check; the authoritative
+// check happens under lifecycleMu in the enqueue critical section.
+func (p *IngestionPipeline) isRunning() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	return p.state == stateRunning
 }
 
 // GetFileStatus returns the current status of a vector store file.
@@ -320,21 +541,24 @@ func (p *IngestionPipeline) DetachFile(ctx context.Context, vectorStoreID, vsfID
 	return nil
 }
 
-// worker is the background goroutine that processes ingestion jobs.
-func (p *IngestionPipeline) worker(ctx context.Context, stopCh <-chan struct{}) {
-	defer p.wg.Done()
+// worker is the background goroutine that processes ingestion jobs for a single
+// generation. It reads only from that generation's queue and derives per-job
+// work from that generation's root context, so it can never service a job that
+// belongs to a newer generation.
+func (p *IngestionPipeline) worker(gen *pipelineGeneration) {
+	defer gen.wg.Done()
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-gen.rootCtx.Done():
 			return
-		case <-stopCh:
+		case <-gen.stopCh:
 			return
-		case job, ok := <-p.jobQueue:
+		case job, ok := <-gen.jobQueue:
 			if !ok {
 				return
 			}
-			p.processJob(ctx, job)
+			p.processJob(gen.rootCtx, job)
 		}
 	}
 }
@@ -399,12 +623,29 @@ func (p *IngestionPipeline) processJob(ctx context.Context, job IngestionJob) {
 		return
 	}
 
-	// Mark as completed.
+	// Mark as completed. Commit the status and the durable count coherently:
+	// once InsertChunks has succeeded the chunks are persisted, so the count
+	// update must not be dropped just because shutdown cancelled the job ctx
+	// between insert and persist. Use a detached, bounded cleanup context
+	// (WithoutCancel + timeout) so the completed transition is recorded even
+	// under a racing Stop, and surface a persistence failure instead of leaving
+	// the durable count silently stale.
 	p.setFileStatus(job.VectorStoreFileID, "completed", nil)
-	_ = p.manager.UpdateFileCounts(ctx, job.VectorStoreID, func(fc *FileCounts) {
+	persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
+	defer cancel()
+	if err := p.manager.UpdateFileCounts(persistCtx, job.VectorStoreID, func(fc *FileCounts) {
 		fc.InProgress--
 		fc.Completed++
-	})
+	}); err != nil {
+		// The chunks are durably stored and the in-memory status is completed,
+		// but the durable count could not be persisted. Surface it so the
+		// inconsistency is observable rather than silently swallowed; the
+		// in-memory count still reflects the completion for the running process.
+		logging.Warnf(
+			"vectorstore: chunks stored for file %s but completed-count persist failed: %v",
+			job.VectorStoreFileID, err,
+		)
+	}
 }
 
 // embedChunks embeds each chunk, checking ctx before each embedding call so a
@@ -437,26 +678,56 @@ func (p *IngestionPipeline) embedChunks(ctx context.Context, job IngestionJob, f
 	return embeddedChunks, true
 }
 
-// failJob marks a job as failed and updates file counts.
+// failJob marks a job as failed and updates file counts. The count update is
+// detached from the (possibly cancelled) job context so the in-memory counts
+// and durable metadata stay consistent with the failed status we just wrote,
+// but bounded by cleanupTimeout so a wedged metadata registry cannot make a
+// worker's failure path hang.
 func (p *IngestionPipeline) failJob(ctx context.Context, job IngestionJob, code, message string) {
 	p.setFileStatus(job.VectorStoreFileID, "failed", &FileError{
 		Code:    code,
 		Message: message,
 	})
-	// Count updates use a background context: even when the job context is
-	// cancelled, the in-memory counts and durable metadata must stay consistent
-	// with the file status we just wrote.
-	_ = p.manager.UpdateFileCounts(context.WithoutCancel(ctx), job.VectorStoreID, func(fc *FileCounts) {
+	persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
+	defer cancel()
+	_ = p.manager.UpdateFileCounts(persistCtx, job.VectorStoreID, func(fc *FileCounts) {
 		fc.InProgress--
 		fc.Failed++
 	})
 }
 
-func (p *IngestionPipeline) failQueuedJobs(code, message string) {
+// failQueuedJobs drains the given generation's queue and marks each still-queued
+// job failed, bounded by ctx. Every drained job's in-memory status is set to
+// failed unconditionally — that is cheap (no I/O) and must happen so no queued
+// job is left stuck in_progress after shutdown. Only the durable count
+// persistence is bounded by ctx: queued jobs never produced durable chunks, so
+// when the registry is wedged we honor the Stop deadline and skip the persist
+// rather than blocking shutdown. The full queue is always drained (the loop
+// exits only when the queue is empty), so no job is lost regardless of ctx.
+// lifecycleMu is held by the caller, but the per-job persistence uses ctx (not
+// an unbounded background context), so the lock is never held across unbounded
+// I/O.
+func (p *IngestionPipeline) failQueuedJobs(ctx context.Context, gen *pipelineGeneration, code, message string) {
 	for {
 		select {
-		case job := <-p.jobQueue:
-			p.failJob(context.Background(), job, code, message)
+		case job := <-gen.jobQueue:
+			// Always record the in-memory failed status (no I/O) so a drained job
+			// is never left stuck in_progress, even past the Stop deadline.
+			p.setFileStatus(job.VectorStoreFileID, "failed", &FileError{
+				Code:    code,
+				Message: message,
+			})
+			// Bound the durable count persist by the Stop deadline (ctx) as well as
+			// a per-write cap. When ctx is already expired, WithTimeout yields an
+			// already-canceled context and UpdateFileCounts returns promptly; the
+			// in-memory count is still decremented, only the durable write is
+			// skipped. Honoring ctx takes priority — Stop must not block past it.
+			persistCtx, cancel := context.WithTimeout(ctx, cleanupTimeout)
+			_ = p.manager.UpdateFileCounts(persistCtx, job.VectorStoreID, func(fc *FileCounts) {
+				fc.InProgress--
+				fc.Failed++
+			})
+			cancel()
 		default:
 			return
 		}

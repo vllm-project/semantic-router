@@ -506,6 +506,7 @@ export interface VectorStoreConfig {
   embedding_model?: string
   embedding_dimension?: number
   ingestion_workers?: number
+  ingestion_drain_timeout_seconds?: number
   supported_formats?: string[]
   milvus?: VectorStoreMilvusConfig
   memory?: VectorStoreMemoryConfig

@@ -27,10 +27,11 @@ import (
 )
 
 type blockingEmbedder struct {
-	dim     int
-	once    sync.Once
-	started chan struct{}
-	release chan struct{}
+	dim         int
+	once        sync.Once
+	releaseOnce sync.Once
+	started     chan struct{}
+	release     chan struct{}
 }
 
 func newBlockingEmbedder(dim int) *blockingEmbedder {
@@ -56,6 +57,15 @@ func (e *blockingEmbedder) Embed(_ string) ([]float32, error) {
 
 func (e *blockingEmbedder) Dimension() int {
 	return e.dim
+}
+
+// releaseAll unblocks any goroutine parked in Embed. It is safe to call more
+// than once so tests and their AfterEach hooks can both release without a
+// double-close panic.
+func (e *blockingEmbedder) releaseAll() {
+	e.releaseOnce.Do(func() {
+		close(e.release)
+	})
 }
 
 type pipelineLifecycleFixture struct {
@@ -168,12 +178,7 @@ var _ = Describe("IngestionPipeline queued shutdown", func() {
 	})
 
 	It("fails queued attachments during stop", func() {
-		released := false
-		defer func() {
-			if !released {
-				close(embedder.release)
-			}
-		}()
+		defer embedder.releaseAll()
 
 		vs, err := f.mgr.CreateStore(f.ctx, CreateStoreRequest{Name: "queued-stop"})
 		Expect(err).NotTo(HaveOccurred())
@@ -209,8 +214,7 @@ var _ = Describe("IngestionPipeline queued shutdown", func() {
 		Expect(secondStatus.LastError).NotTo(BeNil())
 		Expect(secondStatus.LastError.Code).To(Equal("pipeline_stopped"))
 
-		close(embedder.release)
-		released = true
+		embedder.releaseAll()
 		Eventually(stopped, 5*time.Second).Should(BeClosed())
 
 		firstStatus, err := f.pipeline.GetFileStatus(first.ID)
@@ -239,7 +243,8 @@ var _ = Describe("IngestionPipeline bounded Stop", func() {
 
 	AfterEach(func() {
 		// Release the wedged embedder so the worker can unwind, then clean up.
-		close(embedder.release)
+		embedder.releaseAll()
+		_ = f.pipeline.Stop(context.Background())
 		_ = os.RemoveAll(f.tempDir)
 	})
 
@@ -272,7 +277,7 @@ var _ = Describe("IngestionPipeline bounded Stop", func() {
 		Expect(time.Since(start)).To(BeNumerically("<", 3*time.Second))
 	})
 
-	It("is idempotent and safe to call after a bounded Stop", func() {
+	It("preserves the stopping state so a second Stop does not falsely report success", func() {
 		vs, err := f.mgr.CreateStore(f.ctx, CreateStoreRequest{Name: "double-stop"})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -283,11 +288,194 @@ var _ = Describe("IngestionPipeline bounded Stop", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(embedder.started, 5*time.Second).Should(BeClosed())
 
+		// First Stop times out while the worker is wedged inside Embed.
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		defer cancel()
 		Expect(f.pipeline.Stop(ctx)).To(MatchError(context.DeadlineExceeded))
 
-		// A second Stop on an already-stopped pipeline is a no-op returning nil.
-		Expect(f.pipeline.Stop(context.Background())).To(BeNil())
+		// A second bounded Stop must NOT report a clean shutdown: the previous
+		// generation's worker is still live. It must again honor its deadline and
+		// return DeadlineExceeded rather than nil (the false-success bug).
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel2()
+		Expect(f.pipeline.Stop(ctx2)).To(MatchError(context.DeadlineExceeded))
+
+		// Once the wedged stage is released, a Stop with a real deadline observes
+		// the worker join and returns nil.
+		embedder.releaseAll()
+		Eventually(func() error {
+			ctxN, cancelN := context.WithTimeout(context.Background(), time.Second)
+			defer cancelN()
+			return f.pipeline.Stop(ctxN)
+		}, 5*time.Second, 50*time.Millisecond).Should(BeNil())
+	})
+})
+
+var _ = Describe("IngestionPipeline restart after timed-out Stop", func() {
+	var (
+		embedder *blockingEmbedder
+		f        *pipelineLifecycleFixture
+	)
+
+	BeforeEach(func() {
+		embedder = newBlockingEmbedder(3)
+		f = newPipelineLifecycleFixture(embedder)
+	})
+
+	AfterEach(func() {
+		embedder.releaseAll()
+		_ = f.pipeline.Stop(context.Background())
+		_ = os.RemoveAll(f.tempDir)
+	})
+
+	// Regression for the generation-reuse race: a bounded Stop that times out
+	// leaves the old generation's worker live. An immediate Start must create a
+	// fresh generation (its own WaitGroup, queue, and root context) rather than
+	// reusing resources the old worker still holds, so the old worker can neither
+	// corrupt the new WaitGroup nor steal a new-generation job with its cancelled
+	// root context.
+	It("starts a fresh generation and processes new jobs after a timed-out stop", func() {
+		vs, err := f.mgr.CreateStore(f.ctx, CreateStoreRequest{Name: "restart-after-timeout"})
+		Expect(err).NotTo(HaveOccurred())
+
+		wedged, err := f.store.Save("wedged.txt", []byte("content"), "assistants")
+		Expect(err).NotTo(HaveOccurred())
+
+		wedgedFile, err := f.pipeline.AttachFile(vs.ID, wedged.ID, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Park the only worker inside Embed so Stop cannot drain gracefully.
+		Eventually(embedder.started, 5*time.Second).Should(BeClosed())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		Expect(f.pipeline.Stop(ctx)).To(MatchError(context.DeadlineExceeded))
+
+		// Immediately restart. Start must block until the still-stopping
+		// generation joins; release the wedged embedder so that join can happen.
+		startReturned := make(chan struct{})
+		go func() {
+			defer close(startReturned)
+			f.pipeline.Start()
+		}()
+
+		// Start is blocked on the old generation's join until we release it.
+		Consistently(startReturned, 200*time.Millisecond, 20*time.Millisecond).ShouldNot(BeClosed())
+		embedder.releaseAll()
+		Eventually(startReturned, 5*time.Second).Should(BeClosed())
+
+		// The new generation must process a fresh job to completion. Because the
+		// released embedder now returns immediately, this exercises the new queue
+		// and new root context.
+		fresh, err := f.store.Save("fresh.txt", []byte("fresh content"), "assistants")
+		Expect(err).NotTo(HaveOccurred())
+
+		freshFile, err := f.pipeline.AttachFile(vs.ID, fresh.ID, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		Eventually(func() string {
+			status, statusErr := f.pipeline.GetFileStatus(freshFile.ID)
+			if statusErr != nil {
+				return ""
+			}
+			return status.Status
+		}, 5*time.Second, 50*time.Millisecond).Should(Equal("completed"))
+
+		// The wedged file from the old generation completes once its worker is
+		// released (it was mid-Embed when the deadline elapsed); either way it
+		// must not remain in_progress forever.
+		Eventually(func() string {
+			status, statusErr := f.pipeline.GetFileStatus(wedgedFile.ID)
+			if statusErr != nil {
+				return ""
+			}
+			return status.Status
+		}, 5*time.Second, 50*time.Millisecond).Should(Or(Equal("completed"), Equal("failed")))
+	})
+})
+
+var _ = Describe("IngestionPipeline attach during restart after timed-out Stop", func() {
+	var (
+		embedder *blockingEmbedder
+		f        *pipelineLifecycleFixture
+	)
+
+	BeforeEach(func() {
+		embedder = newBlockingEmbedder(3)
+		f = newPipelineLifecycleFixture(embedder)
+	})
+
+	AfterEach(func() {
+		embedder.releaseAll()
+		_ = f.pipeline.Stop(context.Background())
+		_ = os.RemoveAll(f.tempDir)
+	})
+
+	// Regression: after a timed-out Stop the pipeline is stateStopping with a
+	// wedged worker. A concurrent Start must not hold lifecycleMu while it waits
+	// for the old generation to join, otherwise a concurrent AttachFile can
+	// reserve a count and then block forever behind Start, stranding the count
+	// with no compensation. This asserts attach makes progress (does not hang)
+	// and file counts stay consistent once everything settles.
+	It("does not strand counts when attach races a restart", func() {
+		vs, err := f.mgr.CreateStore(f.ctx, CreateStoreRequest{Name: "attach-restart-race"})
+		Expect(err).NotTo(HaveOccurred())
+
+		wedged, err := f.store.Save("wedged.txt", []byte("content"), "assistants")
+		Expect(err).NotTo(HaveOccurred())
+		_, err = f.pipeline.AttachFile(vs.ID, wedged.ID, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(embedder.started, 5*time.Second).Should(BeClosed())
+
+		// Time out the Stop with the worker wedged inside Embed.
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		Expect(f.pipeline.Stop(ctx)).To(MatchError(context.DeadlineExceeded))
+
+		// Kick off a restart (will block until the wedged gen joins) and a
+		// concurrent attach. Neither must hang beyond release.
+		startDone := make(chan struct{})
+		go func() { defer close(startDone); f.pipeline.Start() }()
+
+		attachDone := make(chan error, 1)
+		go func() {
+			rec, saveErr := f.store.Save("racer.txt", []byte("content"), "assistants")
+			if saveErr != nil {
+				attachDone <- saveErr
+				return
+			}
+			_, aErr := f.pipeline.AttachFile(vs.ID, rec.ID, nil)
+			attachDone <- aErr
+		}()
+
+		// Release the wedged worker so the old generation can join and the
+		// restart can complete.
+		embedder.releaseAll()
+
+		Eventually(startDone, 5*time.Second).Should(BeClosed())
+		var attachErr error
+		Eventually(attachDone, 5*time.Second).Should(Receive(&attachErr))
+		// The attach either enqueued onto the fresh generation (nil) or was
+		// rejected because it observed the stopping/stopped window
+		// ("not running"). Both are valid; the invariant is it must not hang.
+		if attachErr != nil {
+			Expect(attachErr.Error()).To(ContainSubstring("not running"))
+		}
+
+		// Once the dust settles, counts must be internally consistent:
+		// completed + failed + in_progress == total, with no negative values and
+		// nothing permanently stuck in_progress.
+		Eventually(func() bool {
+			updated, gErr := f.mgr.GetStore(vs.ID)
+			if gErr != nil {
+				return false
+			}
+			fc := updated.FileCounts
+			if fc.InProgress != 0 {
+				return false
+			}
+			return fc.Completed+fc.Failed+fc.InProgress == fc.Total &&
+				fc.Completed >= 0 && fc.Failed >= 0 && fc.Total >= 0
+		}, 5*time.Second, 50*time.Millisecond).Should(BeTrue())
 	})
 })

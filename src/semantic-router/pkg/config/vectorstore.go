@@ -56,8 +56,10 @@ type VectorStoreConfig struct {
 	// Size it to comfortably exceed the typical single-job latency (file size ×
 	// chunk count × per-chunk embed + backend insert), while staying *below* the
 	// deployment's shutdown grace period (e.g. Kubernetes
-	// terminationGracePeriodSeconds, default 30s) so the drain actually runs
-	// before the platform force-kills the process. Default: 30.
+	// terminationGracePeriodSeconds, default 30s) so the drain actually runs —
+	// and leaves cleanup margin for closing the metadata registry and backend —
+	// before the platform force-kills the process. Default: 25 (5s of headroom
+	// under the 30s Kubernetes default grace period).
 	IngestionDrainTimeoutSeconds int `json:"ingestion_drain_timeout_seconds,omitempty" yaml:"ingestion_drain_timeout_seconds,omitempty"`
 
 	// SupportedFormats lists the allowed file extensions for upload.
@@ -317,7 +319,7 @@ func (c *VectorStoreConfig) ApplyDefaults() {
 		c.IngestionWorkers = 2
 	}
 	if c.IngestionDrainTimeoutSeconds <= 0 {
-		c.IngestionDrainTimeoutSeconds = 30
+		c.IngestionDrainTimeoutSeconds = 25
 	}
 	if len(c.SupportedFormats) == 0 {
 		c.SupportedFormats = []string{".txt", ".md", ".json", ".csv", ".html"}

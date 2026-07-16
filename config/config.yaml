@@ -1806,7 +1806,7 @@ global:
       embedding_model: multimodal
       embedding_dimension: 384
       ingestion_workers: 4
-      ingestion_drain_timeout_seconds: 30
+      ingestion_drain_timeout_seconds: 25
       supported_formats: [.txt, .md, .json, .csv, .html, .pdf]
       milvus:
         connection:
