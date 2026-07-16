@@ -301,6 +301,12 @@ func SetEmbeddingReady(ready bool) {
 	embeddingReadyOverride.Store(ready)
 }
 
+// IsMultiModalReady returns whether the multi-modal embedding model has been
+// successfully initialized and is ready to serve image/audio requests.
+func IsMultiModalReady() bool {
+	return multiModalEmbeddingReady.Load()
+}
+
 // SetMultiModalReady sets the multimodal embedding model readiness flag for testing.
 func SetMultiModalReady(ready bool) {
 	multiModalEmbeddingReady.Store(ready)
