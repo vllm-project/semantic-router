@@ -255,37 +255,39 @@ func embeddingOutput(req EmbeddingRequest, text string) (*candle_binding.Embeddi
 	}
 }
 
-// handleSimilarity handles text similarity calculation requests
-func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *http.Request) {
-	// Parse request
+// parseSimilarityRequest parses, validates, and defaults a SimilarityRequest.
+func (s *ClassificationAPIServer) parseSimilarityRequest(w http.ResponseWriter, r *http.Request) (SimilarityRequest, bool) {
 	var req SimilarityRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
-		return
+		return SimilarityRequest{}, false
 	}
-
-	// Validate input
 	if req.Text1 == "" || req.Text2 == "" {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "both text1 and text2 must be provided")
-		return
+		return SimilarityRequest{}, false
 	}
-
-	// Set defaults
 	if req.Model == "" {
 		req.Model = "auto"
 	}
 	if req.Dimension == 0 {
-		req.Dimension = 768 // Default to full dimension
+		req.Dimension = 768
 	}
 	if req.Model == "auto" && req.QualityPriority == 0 && req.LatencyPriority == 0 {
 		req.QualityPriority = 0.5
 		req.LatencyPriority = 0.5
 	}
-
-	// Validate dimension
 	if !isValidDimension(req.Dimension) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_DIMENSION",
 			fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension))
+		return SimilarityRequest{}, false
+	}
+	return req, true
+}
+
+// handleSimilarity handles text similarity calculation requests
+func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *http.Request) {
+	req, ok := s.parseSimilarityRequest(w, r)
+	if !ok {
 		return
 	}
 
@@ -295,7 +297,6 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Calculate similarity
 	result, err := candle_binding.CalculateEmbeddingSimilarity(
 		req.Text1,
 		req.Text2,

@@ -40,7 +40,6 @@ require (
 	github.com/vllm-project/semantic-router/candle-binding v0.0.0-00010101000000-000000000000
 	github.com/vllm-project/semantic-router/ml-binding v0.0.0-00010101000000-000000000000
 	github.com/vllm-project/semantic-router/nlp-binding v0.0.0-00010101000000-000000000000
-	github.com/vllm-project/semantic-router/onnx-binding v0.0.0-00010101000000-000000000000
 	github.com/vllm-project/semantic-router/openvino-binding v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/otel v1.41.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.34.0
