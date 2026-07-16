@@ -99,6 +99,9 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 	// Test connection using the new CheckConnection method
 	if err := cache.CheckConnection(context.Background()); err != nil {
 		logging.Debugf("RedisCache: failed to connect: %v", err)
+		// Close the partially constructed client so a failed constructor leaks
+		// no connection/goroutine resources (#2473).
+		_ = redisClient.Close()
 		return nil, err
 	}
 	logging.Debugf("RedisCache: successfully connected to Redis")
