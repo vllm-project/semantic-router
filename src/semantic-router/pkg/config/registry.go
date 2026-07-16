@@ -6,16 +6,17 @@ import "strings"
 type ModelPurpose string
 
 const (
-	PurposeDomainClassification   ModelPurpose = "domain-classification"   // Classify text into domains/categories
-	PurposePIIDetection           ModelPurpose = "pii-detection"           // Detect personally identifiable information
-	PurposeJailbreakDetection     ModelPurpose = "jailbreak-detection"     // Detect prompt injection/jailbreak attempts
-	PurposeHallucinationSentinel  ModelPurpose = "hallucination-sentinel"  // Detect potential hallucinations
-	PurposeHallucinationDetector  ModelPurpose = "hallucination-detector"  // Verify factual accuracy
-	PurposeHallucinationExplainer ModelPurpose = "hallucination-explainer" // Explain hallucination reasoning
-	PurposeFeedbackDetection      ModelPurpose = "feedback-detection"      // Detect user feedback type
-	PurposeModalityDetection      ModelPurpose = "modality-detection"      // Classify prompts into text/image/both modalities
-	PurposeEmbedding              ModelPurpose = "embedding"               // Generate text embeddings
-	PurposeSemanticSimilarity     ModelPurpose = "semantic-similarity"     // Compute semantic similarity
+	PurposeDomainClassification   ModelPurpose = "domain-classification"     // Classify text into domains/categories
+	PurposePIIDetection           ModelPurpose = "pii-detection"             // Detect personally identifiable information
+	PurposeJailbreakDetection     ModelPurpose = "jailbreak-detection"       // Detect prompt injection/jailbreak attempts
+	PurposeHallucinationSentinel  ModelPurpose = "hallucination-sentinel"    // Detect potential hallucinations
+	PurposeHallucinationDetector  ModelPurpose = "hallucination-detector"    // Verify factual accuracy
+	PurposeHallucinationExplainer ModelPurpose = "hallucination-explainer"   // Explain hallucination reasoning
+	PurposeFeedbackDetection      ModelPurpose = "feedback-detection"        // Detect user feedback type
+	PurposeComplexityClassify     ModelPurpose = "complexity-classification" // Classify prompt reasoning difficulty (easy/medium/hard)
+	PurposeModalityDetection      ModelPurpose = "modality-detection"        // Classify prompts into text/image/both modalities
+	PurposeEmbedding              ModelPurpose = "embedding"                 // Generate text embeddings
+	PurposeSemanticSimilarity     ModelPurpose = "semantic-similarity"       // Compute semantic similarity
 )
 
 // ModelSpec defines a model's metadata and capabilities
@@ -122,6 +123,20 @@ var DefaultModelRegistry = []ModelSpec{
 		MaxContextLength:    512,   // Classifier weights trained on 512 tokens - safe maximum
 		BaseModelMaxContext: 32768, // Base model (ModernBERT-base-32k) supports 32K, but use with caution beyond MaxContextLength
 		Tags:                []string{"safety", "jailbreak", "prompt-injection", "modernbert"},
+	},
+
+	// Complexity Classification - trained 3-class difficulty classifier (method: model)
+	{
+		LocalPath:        "models/mom-complexity-classifier",
+		RepoID:           "Gnuh1M/mmbert-difficulty-classifier",
+		Aliases:          []string{"complexity-classifier", "difficulty-classifier", "mmbert-difficulty-classifier"},
+		Purpose:          PurposeComplexityClassify,
+		Description:      "ModernBERT sequence classifier predicting prompt reasoning difficulty (easy/medium/hard) for complexity rules with method: model.",
+		ParameterSize:    "149M",
+		UsesLoRA:         false,
+		NumClasses:       3, // easy/medium/hard
+		MaxContextLength: 8192,
+		Tags:             []string{"complexity", "difficulty", "classification", "modernbert"},
 	},
 
 	// Hallucination Detection - Sentinel
