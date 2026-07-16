@@ -500,11 +500,13 @@ func newBuildReasoningRequestFieldsRouter() *OpenAIRouter {
 				{Model: "deepseek-v3", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "high"}},
 				{Model: "gpt-oss-model", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "low"}},
 				{Model: "openai-alias", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "high"}},
+				{Model: "deepseek-v4-pro", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "max"}},
 			},
 		}},
 		map[string]config.ModelParams{
-			"deepseek-v3":   {ReasoningFamily: "deepseek"},
-			"gpt-oss-model": {ReasoningFamily: "gpt-oss"},
+			"deepseek-v3":     {ReasoningFamily: "deepseek"},
+			"deepseek-v4-pro": {ReasoningFamily: "deepseek"},
+			"gpt-oss-model":   {ReasoningFamily: "gpt-oss"},
 			"openai-alias": {
 				ReasoningFamily: "gpt-oss",
 				ExternalModelIDs: map[string]string{
@@ -558,8 +560,26 @@ func setReasoningMode(
 	categoryName string,
 ) map[string]interface{} {
 	t.Helper()
+	return setReasoningModeForProvider(t, router, model, initialReasoningEffort, enableReasoning, categoryName, nil)
+}
+
+func setReasoningModeForProvider(
+	t *testing.T,
+	router *OpenAIRouter,
+	model string,
+	initialReasoningEffort interface{},
+	enableReasoning bool,
+	categoryName string,
+	profile *config.ProviderProfile,
+) map[string]interface{} {
+	t.Helper()
 	requestBytes := marshalReasoningRequest(t, model, initialReasoningEffort)
-	modifiedBytes, err := router.setReasoningModeToRequestBody(requestBytes, enableReasoning, categoryName)
+	modifiedBytes, err := router.setReasoningModeToRequestBodyForProvider(
+		requestBytes,
+		enableReasoning,
+		categoryName,
+		profile,
+	)
 	require.NoError(t, err)
 	return unmarshalReasoningRequest(t, modifiedBytes)
 }

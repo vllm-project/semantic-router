@@ -1828,15 +1828,27 @@ mod integration_tests {
     ///   - Tuxedo_kitten.jpg    : Public Domain (author: TimVickers)
     ///   - 1Cute-doggy.jpg      : CC0 1.0 Universal (author: X posid)
     ///   - 1908_Ford_Model_T.jpg: Public Domain (published 1908, pre-1930)
+    ///
+    /// The cat entry uses the direct (non-thumbnail) URL: the 512px thumbnail
+    /// rendition of this file started returning HTTP 400 from Wikimedia's
+    /// thumbor service.
     const WIKI_CAT_URL: &str =
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Tuxedo_kitten.jpg/512px-Tuxedo_kitten.jpg";
+        "https://upload.wikimedia.org/wikipedia/commons/6/6f/Tuxedo_kitten.jpg";
     const WIKI_DOG_URL: &str =
         "https://upload.wikimedia.org/wikipedia/commons/a/a7/1Cute-doggy.jpg";
     const WIKI_CAR_URL: &str =
         "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/1908_Ford_Model_T.jpg/960px-1908_Ford_Model_T.jpg";
 
+    /// Wikimedia returns HTTP 403 for default library User-Agent strings, so
+    /// identify these tests per Wikimedia's User-Agent policy.
+    const WIKIMEDIA_USER_AGENT: &str =
+        "semantic-router-tests/1.0 (https://github.com/vllm-project/semantic-router)";
+
     fn download_bytes(url: &str) -> Vec<u8> {
-        let resp = ureq::get(url).call().expect("HTTP download failed");
+        let resp = ureq::get(url)
+            .set("User-Agent", WIKIMEDIA_USER_AGENT)
+            .call()
+            .expect("HTTP download failed");
         let mut buf = Vec::new();
         resp.into_reader()
             .read_to_end(&mut buf)
