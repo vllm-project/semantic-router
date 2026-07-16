@@ -436,7 +436,11 @@ func (c *QdrantCache) FindSimilarWithThreshold(ctx context.Context, model, query
 	if responseBody == "" || responseBody == pendingResponseMarker {
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("qdrant", "find_similar", "miss", time.Since(start).Seconds())
-		return LookupResult{Similarity: best.Score}, nil
+		// best.Score is above threshold here (Qdrant filters server-side), but
+		// the entry is still pending or has an empty body, so it is not a hit.
+		// Per the LookupResult contract this path carries zero similarity, not
+		// the hit-level score, to avoid leaking it as a miss (#2473).
+		return LookupResult{}, nil
 	}
 
 	atomic.AddInt64(&c.hitCount, 1)

@@ -706,7 +706,11 @@ func (c *RedisCache) FindSimilarWithThreshold(ctx context.Context, model string,
 	similarity, responseBody, ok := c.extractSearchResult(searchResult.Docs[0])
 	if !ok {
 		c.recordCacheMiss("error", time.Since(start))
-		return LookupResult{Similarity: similarity}, nil
+		// A parse/data error (missing distance or empty response_body). The
+		// parsed similarity may be above threshold, so per the LookupResult
+		// contract this path carries zero similarity rather than leaking a
+		// hit-level score as a miss (#2473).
+		return LookupResult{}, nil
 	}
 
 	logging.Infof("Similarity=%.4f, threshold=%.4f (metric=%s)",

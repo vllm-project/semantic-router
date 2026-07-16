@@ -579,7 +579,10 @@ func (c *ValkeyCache) FindSimilarWithThreshold(ctx context.Context, model string
 	responseBody := extractResponseBody(match)
 	if responseBody == nil {
 		c.recordCacheMiss("error", time.Since(start))
-		return LookupResult{Similarity: similarity}, nil
+		// similarity is above threshold here (a qualifying match with a
+		// missing body). Per the LookupResult contract this data-error path
+		// carries zero similarity, not the hit-level score (#2473).
+		return LookupResult{}, nil
 	}
 
 	atomic.AddInt64(&c.hitCount, 1)
