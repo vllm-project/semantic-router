@@ -1,6 +1,6 @@
 # vLLM Semantic Router with Local LLMs + Public Cloud/ Remote LLMs and LLM-D
 
-This guide showcases a deployment in which vSR can selectively route to some local LLMs and some publicly hosted LLMs from cloud providers such as OpenAI. This guide builds upon the baseline vSR + Istio guide which is at [this link](../../istio/README.md) and the vSR + Istio + LLM-D guide which is at [this link](../llmd-base/README.md) and deploys a combination of vSR + Istio + LLM-D + local LLMs + public cloud LLMs in order to showcase full flexibility of deployment options. Remote/ cloud LLMs can be supported by following this guide with or without the LLM-D portion being present in the deployment.
+This guide showcases a deployment in which vSR can selectively route to some local LLMs and some publicly hosted LLMs from cloud providers such as OpenAI. This guide builds upon the baseline vSR + Istio guide which is at [this link](../../istio/README.md) and the vSR + Istio + LLM-D guide which is at [this link](../README.md) and deploys a combination of vSR + Istio + LLM-D + local LLMs + public cloud LLMs in order to showcase full flexibility of deployment options. Remote/ cloud LLMs can be supported by following this guide with or without the LLM-D portion being present in the deployment.
 
 ## Architecture Overview
 
@@ -23,17 +23,17 @@ Before starting, ensure you have the following tools installed:
 - [kubectl](https://kubernetes.io/docs/tasks/tools/) - Kubernetes CLI
 - [istioctl](https://istio.io/latest/docs/ops/diagnostic-tools/istioctl/) - Istio CLI
 
-We use minikube in the description below. As noted above, this guide builds upon the vsr + Istio [deployment guide]((../istio/README.md)) from this repo hence will point to that guide for the common portions of documentation and add the incremental additional steps here.
+We use minikube in the description below. As noted above, this guide builds upon the vsr + Istio [deployment guide](../../istio/README.md) from this repo hence will point to that guide for the common portions of documentation and add the incremental additional steps here.
 
 You will need a machine with at least 2 GPUs for this guide since we deploy two replicas of a local model in combination with 1 remotely hosted model. You can also run it on a machine with only 1 local GPU by scaling down the local replicas since the primary purpose of this guide is to illustrate routing to remotely hosted LLMs alongwith at least 1 local LLM.
 
 ## Step 1: Common Steps from Istio Guide
 
-First, follow the steps documented in the [Istio guide](../istio/README.md), to create a local minikube cluster.
+First, follow the steps documented in the [Istio guide](../../istio/README.md), to create a local minikube cluster.
 
 ## Step 2: Install Istio Gateway, Gateway API, Inference Extension CRDs
 
-Install CRDs for the Kubernetes Gateway API, Gateway API Inference Extension, Istio Control plane and an instance of the Istio Gateway exactly as described in the [Istio guide](../istio/README.md). You may also install istio using istioctl directly as described in the istio web site as long as the version is 1.28.0 or newer.
+Install CRDs for the Kubernetes Gateway API, Gateway API Inference Extension, Istio Control plane and an instance of the Istio Gateway exactly as described in the [Istio guide](../../istio/README.md). You may also install istio using istioctl directly as described in the istio web site as long as the version is 1.28.0 or newer.
 
 If installed correctly you should see the api CRDs for gateway api and inference extension as well as pods running for the Istio gateway and Istiod using the commands shown below.
 

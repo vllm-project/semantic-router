@@ -544,7 +544,7 @@ func buildLookupTableStorage(ltCfg config.LookupTableConfig) (lookuptable.Lookup
 
 	cancel := func() { _ = fs.Close() }
 	if ltCfg.AutoSaveInterval != "" {
-		if interval, err := time.ParseDuration(ltCfg.AutoSaveInterval); err == nil {
+		if interval, err := config.ParsePeriodicInterval(ltCfg.AutoSaveInterval, 0); err == nil {
 			fs.StartAutoSave(interval)
 		} else {
 			logging.Warnf("[RouterSelection] Invalid lookup table auto_save_interval %q: %v", ltCfg.AutoSaveInterval, err)
@@ -569,7 +569,7 @@ func maybePopulateFromReplay(
 	if ltCfg.PopulateInterval == "" {
 		return
 	}
-	interval, err := time.ParseDuration(ltCfg.PopulateInterval)
+	interval, err := config.ParsePeriodicInterval(ltCfg.PopulateInterval, 0)
 	if err != nil {
 		logging.Warnf("[RouterSelection] Invalid lookup table populate_interval %q: %v", ltCfg.PopulateInterval, err)
 		return
@@ -617,10 +617,22 @@ func populateFromReplay(storage lookuptable.LookupTableStorage, reader store.Rea
 	})
 }
 
+// defaultPopulateInterval is the fallback cadence used when
+// startLookupTablePopulator is given a non-positive interval, so a
+// misconfigured value can neither panic time.NewTicker nor silently disable
+// periodic replay re-derivation.
+const defaultPopulateInterval = 15 * time.Minute
+
 // startLookupTablePopulator launches a background goroutine that periodically
 // re-derives lookup table entries from the replay store.
-// The returned cancel function stops the goroutine.
+// The returned cancel function stops the goroutine. A non-positive interval is
+// defensively replaced with defaultPopulateInterval (time.NewTicker panics on a
+// non-positive duration).
 func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader store.Reader, interval time.Duration) func() {
+	if interval <= 0 {
+		logging.Warnf("[RouterSelection] Non-positive lookup table populate interval %s; using default %s", interval, defaultPopulateInterval)
+		interval = defaultPopulateInterval
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	// goSafely so a panic in populateFromReplay (e.g. malformed
 	// replay-store entry) is logged instead of crashing the whole

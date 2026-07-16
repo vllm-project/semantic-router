@@ -12,15 +12,9 @@ import type {
   ContributorRankEntry,
   ContributorRankRange,
 } from '../../data/contributorRank.generated'
-import { committerStatsData } from '../../data/committerReviewStats.generated'
-import type { CommitterStatsRange } from '../../data/committerReviewStats.generated'
 import styles from './contributors.module.css'
 
 type SortBy = 'commits' | 'reviews'
-
-type ContributorWithReviews = ContributorRankEntry & {
-  reviews: number
-}
 
 type RangeOption = {
   id: ContributorRankRange
@@ -95,23 +89,10 @@ const ContributorsPage: React.FC = () => {
   const [selectedRange, setSelectedRange] = useState<ContributorRankRange>('v03ToNow')
   const [sortBy, setSortBy] = useState<SortBy>('commits')
   const snapshot = contributorRankData[selectedRange]
-  const committerSnapshot = committerStatsData[selectedRange as CommitterStatsRange]
   const selectedRangeLabel = rangeOptions.find(option => option.id === selectedRange)?.label ?? snapshot.label
 
   const rankedEntries = useMemo(() => {
-    const reviewsByLogin = new Map<string, number>()
-    for (const entry of committerSnapshot.entries) {
-      if (entry.login) {
-        reviewsByLogin.set(entry.login.toLowerCase(), entry.reviews)
-      }
-    }
-
-    const entriesWithReviews: ContributorWithReviews[] = snapshot.entries.map(entry => ({
-      ...entry,
-      reviews: entry.login ? (reviewsByLogin.get(entry.login.toLowerCase()) ?? 0) : 0,
-    }))
-
-    const sorted = [...entriesWithReviews].sort((left, right) => {
+    const sorted = [...snapshot.entries].sort((left, right) => {
       if (sortBy === 'reviews') {
         if (right.reviews !== left.reviews) {
           return right.reviews - left.reviews
@@ -131,7 +112,7 @@ const ContributorsPage: React.FC = () => {
       ...entry,
       rank: index + 1,
     }))
-  }, [committerSnapshot.entries, snapshot.entries, sortBy])
+  }, [snapshot.entries, sortBy])
 
   const topContributors = rankedEntries.slice(0, 5)
 
@@ -325,7 +306,7 @@ const TopContributorCard: React.FC<{ entry: ContributorRankEntry, numberLocale: 
 }
 
 const ContributorRow: React.FC<{
-  entry: ContributorWithReviews
+  entry: ContributorRankEntry
   numberLocale: string
   dateLocale: string
 }> = ({ entry, numberLocale, dateLocale }) => {
