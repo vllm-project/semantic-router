@@ -250,6 +250,7 @@ var (
 	initMu sync.Mutex
 )
 
+var embeddingReadyOverride atomic.Bool
 var multiModalEmbeddingReady atomic.Bool
 
 func ensureEmbeddingModelReady(modelType string) error {
@@ -288,6 +289,21 @@ func InitMmBertEmbeddingModel(modelPath string, useCPU bool) error {
 // IsMmBertModelInitialized checks if the embedding model is loaded
 func IsMmBertModelInitialized() bool {
 	return bool(C.is_mmbert_model_initialized())
+}
+
+// IsEmbeddingReady returns whether the embedding models have been successfully initialized.
+func IsEmbeddingReady() bool {
+	return embeddingReadyOverride.Load() || IsMmBertModelInitialized()
+}
+
+// SetEmbeddingReady sets the embedding model readiness flag for testing.
+func SetEmbeddingReady(ready bool) {
+	embeddingReadyOverride.Store(ready)
+}
+
+// SetMultiModalReady sets the multimodal embedding model readiness flag for testing.
+func SetMultiModalReady(ready bool) {
+	multiModalEmbeddingReady.Store(ready)
 }
 
 // InitEmbeddingModels initializes embedding models (candle_binding compatible API)

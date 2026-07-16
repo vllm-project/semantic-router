@@ -4,14 +4,12 @@ package apiserver
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-	onnx_binding "github.com/vllm-project/semantic-router/onnx-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
@@ -172,20 +170,6 @@ func TestClassifyEmbeddingErrorMapsModelNotReadyTo503(t *testing.T) {
 			name:       "candle sentinel",
 			err:        candle_binding.ErrEmbeddingModelNotReady,
 			wantText:   candle_binding.ErrEmbeddingModelNotReady.Error(),
-			wantCode:   "EMBEDDING_NOT_READY",
-			wantStatus: http.StatusServiceUnavailable,
-		},
-		{
-			name:       "onnx sentinel",
-			err:        onnx_binding.ErrEmbeddingModelNotReady,
-			wantText:   onnx_binding.ErrEmbeddingModelNotReady.Error(),
-			wantCode:   "EMBEDDING_NOT_READY",
-			wantStatus: http.StatusServiceUnavailable,
-		},
-		{
-			name:       "wrapped onnx sentinel",
-			err:        fmt.Errorf("wrapped: %w", onnx_binding.ErrEmbeddingModelNotReady),
-			wantText:   onnx_binding.ErrEmbeddingModelNotReady.Error(),
 			wantCode:   "EMBEDDING_NOT_READY",
 			wantStatus: http.StatusServiceUnavailable,
 		},

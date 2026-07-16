@@ -1987,6 +1987,16 @@ func IsMultiModalReady() bool {
 	return multiModalReady.Load()
 }
 
+// SetEmbeddingReady sets the embedding model readiness flag for testing.
+func SetEmbeddingReady(ready bool) {
+	embeddingModelsReady.Store(ready)
+}
+
+// SetMultiModalReady sets the multimodal embedding model readiness flag for testing.
+func SetMultiModalReady(ready bool) {
+	multiModalReady.Store(ready)
+}
+
 // InitClassifier initializes the BERT classifier with the specified model path and number of classes
 func InitClassifier(modelPath string, numClasses int, useCPU bool) error {
 	var err error
