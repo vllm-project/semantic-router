@@ -192,6 +192,4 @@ ssh -i ~/.ssh/your-key.pem ubuntu@<instance-ip>
 
 ## See Also
 
-- [Main README](../docs/README.md) - Complete technical documentation
-- [AWS Deployment Guide](../docs/QUICK_START_AWS.md) - AWS setup details
-- [Validation Guide](../docs/blog.md) - How to test trained models
+- [Main README](../README.md) - Complete technical documentation
