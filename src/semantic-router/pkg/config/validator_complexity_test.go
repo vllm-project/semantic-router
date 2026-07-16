@@ -173,9 +173,9 @@ func TestValidateComplexityRules(t *testing.T) {
 		},
 		{
 			name:       "unknown method rejected",
-			rules:      []ComplexityRule{{Name: "c", Method: "modle"}},
+			rules:      []ComplexityRule{{Name: "c", Method: "bogus"}},
 			wantErr:    true,
-			errSubstrs: []string{"unsupported method", "modle"},
+			errSubstrs: []string{"unsupported method", "bogus"},
 		},
 		{
 			name:       "model method without model_id rejected",

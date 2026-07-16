@@ -50,7 +50,7 @@ func validateComplexityContracts(cfg *RouterConfig) error {
 //
 // Two failures this guards against, both of which otherwise produce a route
 // that is silently inert at runtime:
-//   - An unrecognized method (e.g. a typo like "modle") falls back to the
+//   - An unrecognized method (e.g. a stray value like "bogus") falls back to the
 //     embedding path; because model-mode configs omit the hard/easy prototype
 //     banks, the rule then classifies against empty banks. Reject unknown
 //     methods so the misconfiguration surfaces at load time.
