@@ -57,7 +57,7 @@ across the domain / jailbreak / PII classifiers.
 Prerequisites: NVIDIA driver + `nvidia-container-toolkit` (so `docker run
 --gpus all` works) and the CUDA router image built from
 [`src/vllm-sr/Dockerfile.cuda`](../../src/vllm-sr/Dockerfile.cuda) (see
-[`deploy/nvidia/README.md`](../../deploy/nvidia/README.md); default tag
+[`docs/agent/nvidia-local.md`](../../docs/agent/nvidia-local.md); default tag
 `vllm-sr-cuda:local`).
 
 Download the classifiers **and** the embedding model into `models/` using the
@@ -99,7 +99,7 @@ end-to-end latency (avg/P50/P95/min/max), the per-signal histogram latency
 Reference numbers (RTX 4090, `vllm-sr-cuda`): GPU signal extraction stays in the
 single-digit-to-low-tens of ms across 500–16K tokens for all three classifiers,
 versus ~1–3 s on CPU — a ~1–2 order-of-magnitude speedup. See
-[`deploy/nvidia/README.md`](../../deploy/nvidia/README.md) for the full table
+[`docs/agent/nvidia-local.md`](../../docs/agent/nvidia-local.md) for the full table
 and caveats.
 
 Note on the "long-context" sweep: the classifier hard-caps input at 512 tokens

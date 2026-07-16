@@ -22,7 +22,7 @@ set -euo pipefail
 # Prerequisites:
 #   - NVIDIA driver + nvidia-container-toolkit (`docker run --gpus all` works)
 #   - The CUDA router image built from src/vllm-sr/Dockerfile.cuda
-#     (default tag vllm-sr-cuda:local; see deploy/nvidia/README.md)
+#     (default tag vllm-sr-cuda:local; see docs/agent/nvidia-local.md)
 #   - envoyproxy/envoy:v1.33-latest
 #   - Models under $MODELS_DIR (see README.md "Setup"): the three
 #     mmbert32k-*-merged classifiers plus mmbert-embed-32k-2d-matryoshka.
