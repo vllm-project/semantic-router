@@ -110,6 +110,9 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 
 	if err := cache.CheckConnection(context.Background()); err != nil {
 		logging.Debugf("ValkeyCache: failed to connect: %v", err)
+		// Close the partially constructed client so a failed constructor leaks
+		// no connection/goroutine resources (#2473).
+		valkeyClient.Close()
 		return nil, err
 	}
 	logging.Debugf("ValkeyCache: successfully connected to Valkey")
