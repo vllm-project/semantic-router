@@ -1534,6 +1534,31 @@ global:
               requests_per_unit: 1000
               tokens_per_unit: 2000000
               unit: hour
+    management_api:
+      enabled: true
+      bind_address: 127.0.0.1
+      port: 8080
+      remote_exposure: false
+      auth:
+        mode: disabled
+        tokens:
+          - env: VSR_MGMT_TOKEN
+            role: admin
+        roles:
+          viewer:
+            - health.read
+            - ready.read
+            - docs.read
+            - metrics.read
+            - classify.invoke
+            - config.read
+            - data.read
+          operator:
+            - config.write
+            - learning.ingest
+            - data.write
+          admin:
+            - "*"
     startup_status:
       store_backend: file
     router_replay:
