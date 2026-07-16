@@ -67,6 +67,7 @@ See [environments.md](environments.md) for the concrete commands.
 - Behavior-visible routing, startup, config, Docker, CLI, or API changes require updated or new E2E coverage unless the change is a pure refactor.
 - Documentation-only changes should not trigger local smoke or heavy E2E unless the task matrix escalates them.
 - Core, common, startup-chain, Docker, or agent-execution changes may expand CI profile coverage beyond the locally affected set.
+- The baseline full-CI matrix includes `remote-embedding`, which owns the deterministic OpenAI-compatible external embedding-provider contract: authenticated startup health plus text embedding-signal routing. Its exact path ownership and CI selection remain executable in `tools/agent/e2e-profile-map.yaml` and `.github/workflows/integration-test-k8s.yml`.
 - Local E2E remains available, but it is an explicit manual path instead of part of the default `agent-feature-gate`.
 - Workflow-driven integration suites are part of the canonical validation story when they are listed in `tools/agent/e2e-profile-map.yaml`.
 - The current workflow-driven suites are:

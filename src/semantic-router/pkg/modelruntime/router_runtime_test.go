@@ -29,8 +29,11 @@ func TestPrepareRouterRuntimeProbesRemoteEmbeddingProvider(t *testing.T) {
 		writeRuntimeEmbeddingResponse(t, w, []float64{0.1, 0.2})
 	}))
 	defer server.Close()
+	t.Setenv("REMOTE_EMBEDDING_API_KEY", "test-secret")
+	cfg := remoteEmbeddingRuntimeConfig(server.URL + "/v1")
+	cfg.EmbeddingModels.Endpoint.APIKeyEnv = "REMOTE_EMBEDDING_API_KEY"
 
-	state, err := PrepareRouterRuntime(context.Background(), remoteEmbeddingRuntimeConfig(server.URL+"/v1"), PrepareRouterRuntimeOptions{
+	state, err := PrepareRouterRuntime(context.Background(), cfg, PrepareRouterRuntimeOptions{
 		Component:      "test-router",
 		MaxParallelism: 1,
 	})
@@ -40,6 +43,7 @@ func TestPrepareRouterRuntimeProbesRemoteEmbeddingProvider(t *testing.T) {
 	if !state.AnyReady || !state.ToolsReady {
 		t.Fatalf("PrepareRouterRuntime() state = %+v, want AnyReady and ToolsReady", state)
 	}
+	assertReadyRemoteEmbeddingProviderStatus(t, state.EmbeddingProvider)
 }
 
 func TestPrepareRouterRuntimeReportsRemoteEmbeddingProbeFailure(t *testing.T) {
@@ -65,6 +69,63 @@ func TestPrepareRouterRuntimeReportsRemoteEmbeddingProbeFailure(t *testing.T) {
 	if state.AnyReady || state.ToolsReady {
 		t.Fatalf("PrepareRouterRuntime() state = %+v, want not ready", state)
 	}
+	assertFailedRemoteEmbeddingProviderStatus(t, state.EmbeddingProvider)
+	assertRemoteEmbeddingFailureEvent(t, failedEvent)
+}
+
+func assertReadyRemoteEmbeddingProviderStatus(t *testing.T, provider *EmbeddingProviderRuntimeState) {
+	t.Helper()
+	if provider == nil {
+		t.Fatal("expected embedding provider status")
+	}
+	if provider.Mode != "remote" || provider.Backend != config.EmbeddingBackendOpenAICompatible {
+		t.Fatalf("embedding provider status = %+v, want remote openai-compatible", provider)
+	}
+	if provider.Model != "BAAI/bge-m3" {
+		t.Fatalf("embedding provider model = %q", provider.Model)
+	}
+	if provider.APIKeyEnv != "REMOTE_EMBEDDING_API_KEY" {
+		t.Fatalf("embedding provider api key env = %q", provider.APIKeyEnv)
+	}
+	assertRemoteEmbeddingProviderDimensionAndTimestamp(t, provider)
+	assertBoolPtr(t, provider.APIKeyEnvSet, true, "embedding provider api key env set")
+	assertBoolPtr(t, provider.Healthy, true, "embedding provider healthy")
+	if provider.LastProbeError != "" {
+		t.Fatalf("embedding provider last probe error = %q, want empty", provider.LastProbeError)
+	}
+}
+
+func assertFailedRemoteEmbeddingProviderStatus(t *testing.T, provider *EmbeddingProviderRuntimeState) {
+	t.Helper()
+	if provider == nil {
+		t.Fatal("expected embedding provider status")
+	}
+	assertRemoteEmbeddingProviderDimensionAndTimestamp(t, provider)
+	assertBoolPtr(t, provider.Healthy, false, "embedding provider healthy")
+	if provider.LastProbeError == "" {
+		t.Fatal("expected embedding provider last probe error")
+	}
+}
+
+func assertRemoteEmbeddingProviderDimensionAndTimestamp(t *testing.T, provider *EmbeddingProviderRuntimeState) {
+	t.Helper()
+	if provider.Dimension != 2 {
+		t.Fatalf("embedding provider dimension = %d, want 2", provider.Dimension)
+	}
+	if provider.LastCheckedAt == "" {
+		t.Fatal("expected embedding provider last checked timestamp")
+	}
+}
+
+func assertBoolPtr(t *testing.T, got *bool, want bool, label string) {
+	t.Helper()
+	if got == nil || *got != want {
+		t.Fatalf("%s = %v, want %v", label, got, want)
+	}
+}
+
+func assertRemoteEmbeddingFailureEvent(t *testing.T, failedEvent *Event) {
+	t.Helper()
 	if failedEvent == nil || failedEvent.Error == nil {
 		t.Fatal("expected failed remote provider event with error")
 	}

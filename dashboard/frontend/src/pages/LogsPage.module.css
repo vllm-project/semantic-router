@@ -26,8 +26,8 @@
   align-items: center;
   padding: 0.3rem 0.65rem;
   border-radius: 999px;
-  background: rgba(118, 185, 0, 0.12);
-  border: 1px solid rgba(118, 185, 0, 0.22);
+  background: rgba(143, 148, 156, 0.12);
+  border: 1px solid rgba(143, 148, 156, 0.22);
   color: var(--color-primary-light);
   font-size: 0.72rem;
   font-weight: 700;
@@ -90,9 +90,9 @@
   gap: 0.45rem;
   min-height: 148px;
   padding: 1.15rem 1.2rem;
-  border-color: rgba(118, 185, 0, 0.14);
+  border-color: rgba(143, 148, 156, 0.14);
   background:
-    linear-gradient(180deg, rgba(118, 185, 0, 0.08), rgba(118, 185, 0, 0)) top / 100% 100%,
+    linear-gradient(180deg, rgba(143, 148, 156, 0.08), rgba(143, 148, 156, 0)) top / 100% 100%,
     var(--color-surface);
 }
 
@@ -168,19 +168,23 @@
   font-size: 0.92rem;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
 }
 
 .serviceButton:hover {
-  border-color: rgba(118, 185, 0, 0.28);
-  background: rgba(118, 185, 0, 0.08);
+  border-color: rgba(143, 148, 156, 0.28);
+  background: rgba(143, 148, 156, 0.08);
 }
 
 .serviceButton.active {
-  border-color: rgba(118, 185, 0, 0.34);
-  background: rgba(118, 185, 0, 0.14);
+  border-color: rgba(143, 148, 156, 0.34);
+  background: rgba(143, 148, 156, 0.14);
   color: var(--color-primary-light);
-  box-shadow: 0 0 0 1px rgba(118, 185, 0, 0.12);
+  box-shadow: 0 0 0 1px rgba(143, 148, 156, 0.12);
 }
 
 .controlsRight {
@@ -189,6 +193,31 @@
   justify-content: flex-end;
   gap: 0.9rem;
   flex-wrap: wrap;
+}
+
+.filterField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 10rem;
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.filterField input,
+.filterField select {
+  min-height: 42px;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.filterField input {
+  min-width: 14rem;
 }
 
 .linesSelector {
@@ -266,8 +295,8 @@
 }
 
 .info {
-  border: 1px solid rgba(118, 185, 0, 0.22);
-  background: rgba(118, 185, 0, 0.08);
+  border: 1px solid rgba(143, 148, 156, 0.22);
+  background: rgba(143, 148, 156, 0.08);
   color: var(--color-primary-light);
 }
 
@@ -396,6 +425,8 @@
   border-radius: 6px;
   transition: background 0.15s ease;
   box-sizing: border-box;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 2rem;
 }
 
 .logEntry:hover {
@@ -411,7 +442,7 @@
 }
 
 .logEntry.levelInfo {
-  background: rgba(118, 185, 0, 0.08);
+  background: rgba(143, 148, 156, 0.08);
 }
 
 .logLine {

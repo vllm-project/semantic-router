@@ -164,7 +164,10 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		return nil, err
 	}
 
-	toolsDatabase := createToolsDatabase(cfg)
+	toolsDatabase, err := createToolsDatabase(cfg)
+	if err != nil {
+		return nil, err
+	}
 	classifier, classificationSvc, err := createRouterClassifier(cfg, mappings)
 	if err != nil {
 		return nil, err

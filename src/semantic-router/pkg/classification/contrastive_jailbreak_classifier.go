@@ -1,12 +1,14 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -36,12 +38,29 @@ type ContrastiveJailbreakClassifier struct {
 	benignEmbeddings    map[string][]float32 // pattern text → embedding
 
 	modelType string
+	provider  embedding.Provider
+}
+
+type contrastiveJailbreakEmbeddingTask struct {
+	text        string
+	isJailbreak bool
+}
+
+type contrastiveJailbreakEmbeddingResult struct {
+	text        string
+	embedding   []float32
+	isJailbreak bool
+	err         error
 }
 
 // NewContrastiveJailbreakClassifier creates and initialises a classifier for a
 // single contrastive JailbreakRule. KB embeddings are computed eagerly using a
 // worker pool (same approach as ComplexityClassifier).
 func NewContrastiveJailbreakClassifier(rule config.JailbreakRule, defaultModelType string) (*ContrastiveJailbreakClassifier, error) {
+	return NewContrastiveJailbreakClassifierWithProvider(rule, defaultModelType, nil)
+}
+
+func NewContrastiveJailbreakClassifierWithProvider(rule config.JailbreakRule, defaultModelType string, provider embedding.Provider) (*ContrastiveJailbreakClassifier, error) {
 	modelType := defaultModelType
 	if modelType == "" {
 		modelType = "qwen3"
@@ -52,6 +71,7 @@ func NewContrastiveJailbreakClassifier(rule config.JailbreakRule, defaultModelTy
 		jailbreakEmbeddings: make(map[string][]float32),
 		benignEmbeddings:    make(map[string][]float32),
 		modelType:           modelType,
+		provider:            provider,
 	}
 
 	if err := c.preloadKBEmbeddings(); err != nil {
@@ -75,12 +95,11 @@ func (c *ContrastiveJailbreakClassifier) AnalyzeMessages(messages []string) Cont
 		if msg == "" {
 			continue
 		}
-		output, err := getEmbeddingWithModelType(msg, c.modelType, 0)
+		msgEmb, err := c.embedText(msg)
 		if err != nil {
 			logging.Warnf("[Contrastive Jailbreak] Failed to embed message %d: %v", i, err)
 			continue
 		}
-		msgEmb := output.Embedding
 
 		// max similarity to jailbreak KB
 		maxJailSim := float32(-1)
@@ -112,6 +131,17 @@ func (c *ContrastiveJailbreakClassifier) AnalyzeMessages(messages []string) Cont
 	return result
 }
 
+func (c *ContrastiveJailbreakClassifier) embedText(text string) ([]float32, error) {
+	if c.provider != nil {
+		return c.provider.Embed(context.Background(), text)
+	}
+	output, err := getEmbeddingWithModelType(text, c.modelType, 0)
+	if err != nil {
+		return nil, err
+	}
+	return output.Embedding, nil
+}
+
 // preloadKBEmbeddings concurrently computes embeddings for jailbreak and benign
 // pattern knowledge bases, following the same worker-pool approach as
 // ComplexityClassifier.preloadCandidateEmbeddings.
@@ -121,41 +151,49 @@ func (c *ContrastiveJailbreakClassifier) preloadKBEmbeddings() error {
 	logging.Infof("[Contrastive Jailbreak] Preloading KB embeddings for rule %q (jailbreak: %d, benign: %d, model: %s)",
 		c.rule.Name, len(c.rule.JailbreakPatterns), len(c.rule.BenignPatterns), c.modelType)
 
-	type task struct {
-		text        string
-		isJailbreak bool
-	}
-
-	var tasks []task
-	for _, p := range c.rule.JailbreakPatterns {
-		tasks = append(tasks, task{text: p, isJailbreak: true})
-	}
-	for _, p := range c.rule.BenignPatterns {
-		tasks = append(tasks, task{text: p, isJailbreak: false})
-	}
-
+	tasks := c.contrastiveJailbreakEmbeddingTasks()
 	if len(tasks) == 0 {
 		logging.Warnf("[Contrastive Jailbreak] Rule %q has no KB patterns", c.rule.Name)
 		return nil
 	}
 
+	numWorkers := boundedContrastiveJailbreakWorkers(len(tasks))
+	ok, firstErr := c.collectContrastiveJailbreakEmbeddings(c.embedContrastiveJailbreakTasks(tasks, numWorkers))
+
+	elapsed := time.Since(startTime)
+	logging.Infof("[Contrastive Jailbreak] Rule %q: preloaded %d/%d KB embeddings in %v (workers: %d)",
+		c.rule.Name, ok, len(tasks), elapsed, numWorkers)
+
+	return firstErr
+}
+
+func (c *ContrastiveJailbreakClassifier) contrastiveJailbreakEmbeddingTasks() []contrastiveJailbreakEmbeddingTask {
+	tasks := make([]contrastiveJailbreakEmbeddingTask, 0, len(c.rule.JailbreakPatterns)+len(c.rule.BenignPatterns))
+	for _, pattern := range c.rule.JailbreakPatterns {
+		tasks = append(tasks, contrastiveJailbreakEmbeddingTask{text: pattern, isJailbreak: true})
+	}
+	for _, pattern := range c.rule.BenignPatterns {
+		tasks = append(tasks, contrastiveJailbreakEmbeddingTask{text: pattern})
+	}
+	return tasks
+}
+
+func boundedContrastiveJailbreakWorkers(taskCount int) int {
 	numWorkers := runtime.NumCPU() * 2
-	if numWorkers > len(tasks) {
-		numWorkers = len(tasks)
+	if numWorkers > taskCount {
+		return taskCount
 	}
+	return numWorkers
+}
 
-	type res struct {
-		text        string
-		embedding   []float32
-		isJailbreak bool
-		err         error
-	}
-
-	taskCh := make(chan task, len(tasks))
-	resCh := make(chan res, len(tasks))
-
-	for _, t := range tasks {
-		taskCh <- t
+func (c *ContrastiveJailbreakClassifier) embedContrastiveJailbreakTasks(
+	tasks []contrastiveJailbreakEmbeddingTask,
+	numWorkers int,
+) <-chan contrastiveJailbreakEmbeddingResult {
+	taskCh := make(chan contrastiveJailbreakEmbeddingTask, len(tasks))
+	resultCh := make(chan contrastiveJailbreakEmbeddingResult, len(tasks))
+	for _, task := range tasks {
+		taskCh <- task
 	}
 	close(taskCh)
 
@@ -164,50 +202,64 @@ func (c *ContrastiveJailbreakClassifier) preloadKBEmbeddings() error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for t := range taskCh {
-				output, err := getEmbeddingWithModelType(t.text, c.modelType, 0)
-				if err != nil {
-					resCh <- res{text: t.text, isJailbreak: t.isJailbreak, err: err}
-				} else {
-					resCh <- res{text: t.text, embedding: output.Embedding, isJailbreak: t.isJailbreak}
-				}
+			for task := range taskCh {
+				resultCh <- c.embedContrastiveJailbreakTask(task)
 			}
 		}()
 	}
 
 	go func() {
 		wg.Wait()
-		close(resCh)
+		close(resultCh)
 	}()
+	return resultCh
+}
 
+func (c *ContrastiveJailbreakClassifier) embedContrastiveJailbreakTask(
+	task contrastiveJailbreakEmbeddingTask,
+) contrastiveJailbreakEmbeddingResult {
+	embedding, err := c.embedText(task.text)
+	return contrastiveJailbreakEmbeddingResult{
+		text:        task.text,
+		embedding:   embedding,
+		isJailbreak: task.isJailbreak,
+		err:         err,
+	}
+}
+
+func (c *ContrastiveJailbreakClassifier) collectContrastiveJailbreakEmbeddings(
+	results <-chan contrastiveJailbreakEmbeddingResult,
+) (int, error) {
 	var mu sync.Mutex
 	var firstErr error
 	ok := 0
-
-	for r := range resCh {
-		if r.err != nil {
+	for result := range results {
+		if result.err != nil {
 			if firstErr == nil {
-				kind := "benign"
-				if r.isJailbreak {
-					kind = "jailbreak"
-				}
-				firstErr = fmt.Errorf("failed to embed %s pattern %q: %w", kind, r.text, r.err)
+				firstErr = contrastiveJailbreakEmbeddingError(result)
 			}
 			continue
 		}
 		mu.Lock()
-		if r.isJailbreak {
-			c.jailbreakEmbeddings[r.text] = r.embedding
-		} else {
-			c.benignEmbeddings[r.text] = r.embedding
-		}
+		c.storeContrastiveJailbreakEmbedding(result)
 		mu.Unlock()
 		ok++
 	}
+	return ok, firstErr
+}
 
-	elapsed := time.Since(startTime)
-	logging.Infof("[Contrastive Jailbreak] Rule %q: preloaded %d/%d KB embeddings in %v (workers: %d)",
-		c.rule.Name, ok, len(tasks), elapsed, numWorkers)
+func contrastiveJailbreakEmbeddingError(result contrastiveJailbreakEmbeddingResult) error {
+	kind := "benign"
+	if result.isJailbreak {
+		kind = "jailbreak"
+	}
+	return fmt.Errorf("failed to embed %s pattern %q: %w", kind, result.text, result.err)
+}
 
-	return firstErr
+func (c *ContrastiveJailbreakClassifier) storeContrastiveJailbreakEmbedding(result contrastiveJailbreakEmbeddingResult) {
+	if result.isJailbreak {
+		c.jailbreakEmbeddings[result.text] = result.embedding
+		return
+	}
+	c.benignEmbeddings[result.text] = result.embedding
 }

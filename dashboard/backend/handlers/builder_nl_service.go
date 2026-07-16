@@ -21,7 +21,7 @@ const (
 	builderNLProviderOpenAICompatible builderNLProviderKind = "openai-compatible"
 	builderNLProviderAnthropic        builderNLProviderKind = "anthropic"
 
-	builderNLFallbackModelAlias = "MoM"
+	builderNLFallbackModelAlias = "vllm-sr/auto"
 )
 
 type BuilderNLGenerateRequest struct {

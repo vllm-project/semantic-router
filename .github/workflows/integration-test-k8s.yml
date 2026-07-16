@@ -42,7 +42,9 @@ jobs:
              [[ "${{ needs.changes.outputs.agent_exec }}" == "true" ]] || \
              [[ "${{ github.event_name }}" == "schedule" ]] || \
              [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo 'profiles=["kubernetes", "dashboard"]' >> $GITHUB_OUTPUT
+            profiles=("kubernetes" "dashboard" "remote-embedding")
+            printf -v json '"%s",' "${profiles[@]}"
+            echo "profiles=[${json%,}]" >> $GITHUB_OUTPUT
             echo 'should_run=true' >> $GITHUB_OUTPUT
             echo "Running default baseline profiles due to common/core changes or push/schedule/manual trigger"
             exit 0
@@ -59,6 +61,7 @@ jobs:
           [[ "${{ needs.changes.outputs.e2e_routing_strategies }}" == "true" ]] && profiles+=("routing-strategies")
           [[ "${{ needs.changes.outputs.e2e_production_stack }}" == "true" ]] && profiles+=("production-stack")
           [[ "${{ needs.changes.outputs.e2e_dynamic_config }}" == "true" ]] && profiles+=("dynamic-config")
+          [[ "${{ needs.changes.outputs.e2e_remote_embedding }}" == "true" ]] && profiles+=("remote-embedding")
           [[ "${{ needs.changes.outputs.e2e_ml_model_selection }}" == "true" ]] && profiles+=("ml-model-selection")
           [[ "${{ needs.changes.outputs.e2e_multi_endpoint }}" == "true" ]] && profiles+=("multi-endpoint")
           [[ "${{ needs.changes.outputs.e2e_authz_rbac }}" == "true" ]] && profiles+=("authz-rbac")
@@ -120,7 +123,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
 
       - name: Set up Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1

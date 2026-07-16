@@ -84,3 +84,106 @@ routing:
 ```
 
 A bare `name: needs_reasoning` never matches at runtime — the classifier only ever emits `needs_reasoning:hard|easy|medium` — so config validation rejects the suffix-less form with a clear error.
+
+## GPT-5.6 cost-tier example
+
+GPT-5.6 model cards use the same open model-card contract as other providers; no router code or model registry entry is required. Configure the explicit Luna, Terra, and Sol model IDs so complexity decisions can select a stable cost tier:
+
+```yaml
+providers:
+  defaults:
+    default_model: gpt-5.6-luna
+  models:
+    - name: gpt-5.6-luna
+      provider_model_id: gpt-5.6-luna
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 1.0
+        cached_input_per_1m: 0.1
+        cache_write_per_1m: 1.25
+        completion_per_1m: 6.0
+    - name: gpt-5.6-terra
+      provider_model_id: gpt-5.6-terra
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 2.5
+        cached_input_per_1m: 0.25
+        cache_write_per_1m: 3.125
+        completion_per_1m: 15.0
+    - name: gpt-5.6-sol
+      provider_model_id: gpt-5.6-sol
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 5.0
+        cached_input_per_1m: 0.5
+        cache_write_per_1m: 6.25
+        completion_per_1m: 30.0
+
+routing:
+  modelCards:
+    - name: gpt-5.6-luna
+      context_window_size: 1050000
+      description: Cost-efficient GPT-5.6 model for routine requests.
+      capabilities: [chat, coding, reasoning, tools, long-context]
+      modality: ar
+      tags: [gpt-5.6, low-cost]
+    - name: gpt-5.6-terra
+      context_window_size: 1050000
+      description: Balanced GPT-5.6 model for moderately complex requests.
+      capabilities: [chat, coding, reasoning, tools, long-context]
+      modality: ar
+      tags: [gpt-5.6, balanced]
+    - name: gpt-5.6-sol
+      context_window_size: 1050000
+      description: Highest-capability GPT-5.6 model for complex requests.
+      capabilities: [chat, coding, reasoning, tools, long-context]
+      modality: ar
+      tags: [gpt-5.6, premium]
+  signals:
+    complexity:
+      - name: request_complexity
+        threshold: 0.70
+        hard:
+          candidates:
+            - compare architecture tradeoffs under multiple failure modes
+            - debug a subtle distributed systems incident
+            - synthesize research into a technical recommendation
+        easy:
+          candidates:
+            - write a small helper function
+            - summarize this text briefly
+            - update a simple configuration example
+  decisions:
+    - name: gpt_5_6_hard
+      priority: 300
+      rules:
+        operator: AND
+        conditions:
+          - type: complexity
+            name: request_complexity:hard
+      modelRefs:
+        - model: gpt-5.6-sol
+    - name: gpt_5_6_medium
+      priority: 200
+      rules:
+        operator: AND
+        conditions:
+          - type: complexity
+            name: request_complexity:medium
+      modelRefs:
+        - model: gpt-5.6-terra
+    - name: gpt_5_6_easy
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: complexity
+            name: request_complexity:easy
+      modelRefs:
+        - model: gpt-5.6-luna
+```
+
+Retain the `backend_refs` required by your deployment, such as an agentgateway endpoint. These are OpenAI's standard text-token rates from the [GPT-5.6 model page](https://openai.com/index/gpt-5-6/). The current pricing contract stores one flat rate per token class and does not model context-dependent pricing tiers.

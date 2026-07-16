@@ -2,7 +2,7 @@ package looper
 
 import (
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -160,7 +160,10 @@ func shuffleModelCalls(calls []ModelCall, seed int) {
 	if len(calls) <= 1 {
 		return
 	}
-	r := rand.New(rand.NewSource(int64(seed)))
+	// PCG seeds in O(1) with a 16-byte state. The old math/rand v1 source
+	// re-allocated and re-seeded a ~5KB [607]int64 array on every call, which
+	// dominated this per-round hot path; the seeded shuffle stays deterministic.
+	r := rand.New(rand.NewPCG(uint64(seed), uint64(seed))) //nolint:gosec // deterministic shuffle seed, overflow harmless
 	r.Shuffle(len(calls), func(i, j int) {
 		calls[i], calls[j] = calls[j], calls[i]
 	})

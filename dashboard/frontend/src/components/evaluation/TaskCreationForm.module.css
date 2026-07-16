@@ -45,7 +45,7 @@
 }
 
 .step.active::after {
-  background: var(--color-primary, #76b900);
+  background: var(--color-primary, #8f949c);
 }
 
 .step.completed::after {
@@ -68,7 +68,7 @@
 }
 
 .step.active .stepNumber {
-  background: var(--color-primary, #76b900);
+  background: var(--color-primary, #8f949c);
   color: white;
 }
 
@@ -133,7 +133,7 @@
 .input:focus,
 .textarea:focus {
   outline: none;
-  border-color: var(--color-primary, #76b900);
+  border-color: var(--color-primary, #8f949c);
 }
 
 .textarea {
@@ -232,6 +232,34 @@
   color: var(--color-text-secondary, #999);
 }
 
+.datasetError {
+  padding: var(--spacing-lg, 1.5rem);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: var(--radius-md, 0.375rem);
+  background: rgba(239, 68, 68, 0.08);
+  text-align: center;
+}
+
+.datasetError h4 {
+  margin: 0 0 0.35rem;
+  color: var(--color-danger, #ef4444);
+}
+
+.datasetError p {
+  margin: 0;
+  color: var(--color-text-secondary, #999);
+}
+
+.datasetError button {
+  margin-top: 0.85rem;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--color-danger, #ef4444);
+  border-radius: var(--radius-md, 0.375rem);
+  background: transparent;
+  color: var(--color-danger, #ef4444);
+  cursor: pointer;
+}
+
 .datasetGroups {
   display: flex;
   flex-direction: column;
@@ -268,7 +296,7 @@
 }
 
 .datasetItem:hover {
-  border-color: var(--color-primary, #76b900);
+  border-color: var(--color-primary, #8f949c);
 }
 
 .datasetItem input[type='checkbox'] {
@@ -380,14 +408,14 @@
 
 .nextButton,
 .submitButton {
-  background: var(--color-primary, #76b900);
+  background: var(--color-primary, #8f949c);
   border: none;
   color: white;
 }
 
 .nextButton:hover:not(:disabled),
 .submitButton:hover:not(:disabled) {
-  background: var(--color-primary-dark, #5a8f00);
+  background: var(--color-primary-dark, #696d74);
 }
 
 .cancelButton:disabled,

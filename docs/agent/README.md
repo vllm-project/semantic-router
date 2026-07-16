@@ -69,6 +69,7 @@ make agent-ci-gate CHANGED_FILES="..."
 - [openai-api-contracts.md](openai-api-contracts.md)
 - [glossary.md](glossary.md)
 - [amd-local.md](amd-local.md)
+- [nvidia-local.md](nvidia-local.md)
 
 ## Executable Contract
 
