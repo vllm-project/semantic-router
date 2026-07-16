@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -30,9 +31,13 @@ import (
 //     carrier is ignored (the forward backend still 401s) and the request is not
 //     treated as an internal looper request.
 //
-// Every assertion is on router-emitted behavior (401 vs 200) produced BEFORE any
-// upstream call for the security paths, so the upstream only needs to be a valid
-// OpenAI backend for the success paths, not a credential-echoing gateway.
+// The security-path assertions are on router-emitted behavior (401) produced
+// BEFORE any upstream call. The success paths (200) additionally assert the
+// Authorization that actually reached the upstream: the profile's backends run
+// the mock-vllm image, which echoes the received Authorization back on the
+// x-echo-authorization response header. This proves the caller's token is
+// forwarded verbatim to a forward_authorization_header backend (issue #2286) and
+// that the static-key backend receives the injected key instead of the caller's.
 //
 // Looper re-dispatch enforcement (the caller-Authorization requirement surviving
 // the internal leg) is covered by the Go unit tests in pkg/extproc — see
@@ -50,6 +55,16 @@ const (
 	forwardAuthForwardModel = "forward-model"
 	forwardAuthStaticModel  = "static-model"
 	forwardAuthCallerToken  = "Bearer caller-virtual-key-e2e"
+	// forwardAuthCallerSecret / forwardAuthStaticSecret are the distinguishing
+	// substrings the upstream must echo back on x-echo-authorization. The caller
+	// secret must appear when the caller's token is forwarded; the static secret
+	// (the api_key configured on static-be in values.yaml) must appear when the
+	// router injects the static key instead.
+	forwardAuthCallerSecret = "caller-virtual-key-e2e"
+	forwardAuthStaticSecret = "some-static-key"
+	// echoAuthHeader is the response header mock-vllm sets to the Authorization it
+	// received (see tools/mock-vllm/app.py).
+	echoAuthHeader = "x-echo-authorization"
 )
 
 func init() {
@@ -66,6 +81,9 @@ type forwardAuthCase struct {
 	authorization  string            // caller Authorization; empty = omit
 	extraHeaders   map[string]string // e.g. spoofed reserved headers
 	expectRejected bool              // true = expect 401
+	// wantAuthSubstr, when set on a success (200) case, is asserted to be present
+	// in the Authorization the upstream echoed back on x-echo-authorization.
+	wantAuthSubstr string
 }
 
 func testForwardAuthorization(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
@@ -85,6 +103,8 @@ func testForwardAuthorization(ctx context.Context, client *kubernetes.Clientset,
 			model:          forwardAuthForwardModel,
 			authorization:  forwardAuthCallerToken,
 			expectRejected: false,
+			// The upstream must receive the caller's verbatim token, not a static key.
+			wantAuthSubstr: forwardAuthCallerSecret,
 		},
 		{
 			name:           "direct forward backend without Authorization is rejected 401",
@@ -97,6 +117,8 @@ func testForwardAuthorization(ctx context.Context, client *kubernetes.Clientset,
 			model:          forwardAuthStaticModel,
 			authorization:  "",
 			expectRejected: false,
+			// The upstream must receive the router-injected static key.
+			wantAuthSubstr: forwardAuthStaticSecret,
 		},
 		{
 			name:          "spoofed reserved headers cannot forge the caller identity",
@@ -186,6 +208,15 @@ func runForwardAuthCase(ctx context.Context, tc forwardAuthCase, localPort strin
 	// pass vacuously.
 	if resp.StatusCode != http.StatusOK {
 		return false, fmt.Sprintf("expected 200, got %d: %s", resp.StatusCode, truncate(respBody))
+	}
+	// Assert the Authorization the upstream actually received (echoed by mock-vllm).
+	// This is what makes the 200 path meaningful: it proves the caller's token was
+	// forwarded verbatim, or the static key injected, rather than dropped.
+	if tc.wantAuthSubstr != "" {
+		gotAuth := resp.Header.Get(echoAuthHeader)
+		if !strings.Contains(gotAuth, tc.wantAuthSubstr) {
+			return false, fmt.Sprintf("upstream received Authorization %q, want it to contain %q", gotAuth, tc.wantAuthSubstr)
+		}
 	}
 	return true, ""
 }

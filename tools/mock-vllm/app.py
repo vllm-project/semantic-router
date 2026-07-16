@@ -3,7 +3,7 @@ import math
 import time
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -141,12 +141,18 @@ async def models():
 
 
 @app.post("/v1/chat/completions")
-async def chat_completions(req: ChatRequest):
+async def chat_completions(req: ChatRequest, request: Request, http_response: Response):
     created_ts = int(time.time())
     content = build_chat_content(req)
     usage = build_chat_usage(req, content)
     response = build_chat_response(req, content, usage, created_ts)
+    # Reflect the received Authorization back to the caller so end-to-end tests can
+    # assert what actually reached the upstream: a forward_authorization_header
+    # backend must receive the caller's verbatim token, while a static-key backend
+    # must receive the router-injected key. This is a test-only echo.
+    echoed_auth = request.headers.get("authorization", "")
     if not req.stream:
+        http_response.headers["x-echo-authorization"] = echoed_auth
         return response
 
     return StreamingResponse(
@@ -155,6 +161,7 @@ async def chat_completions(req: ChatRequest):
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
+            "x-echo-authorization": echoed_auth,
         },
     )
 

@@ -45,7 +45,11 @@ func init() {
 	register("dashboard", func() framework.Profile { return dashboard.NewProfile() }, framework.ProfileCapabilities{})
 	register("dynamic-config", func() framework.Profile { return dynamicconfig.NewProfile() }, framework.ProfileCapabilities{})
 	register("dynamo", func() framework.Profile { return dynamo.NewProfile() }, framework.ProfileCapabilities{RequiresGPU: true})
-	register("forward-auth", func() framework.Profile { return forwardauth.NewProfile() }, framework.ProfileCapabilities{})
+	register(
+		"forward-auth",
+		func() framework.Profile { return forwardauth.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+	)
 	register("istio", func() framework.Profile { return istio.NewProfile() }, framework.ProfileCapabilities{})
 	register("llm-d", func() framework.Profile { return llmd.NewProfile() }, framework.ProfileCapabilities{})
 	register(

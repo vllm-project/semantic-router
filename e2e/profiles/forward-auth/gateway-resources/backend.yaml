@@ -1,8 +1,10 @@
 # Forward-Auth Backend Resources
-# Two vLLM simulator deployments used by the forward-authorization testcase:
+# Two mock-vllm deployments used by the forward-authorization testcase:
 #   - forward-be: reached by the forward_authorization_header model (forward-model)
 #   - static-be:  reached by the static-key model (static-model)
-# Both use the llm-d inference simulator (same image used by multi-endpoint).
+# Both use the mock-vllm image, which echoes the received Authorization on the
+# x-echo-authorization response header so the testcase can verify the value that
+# actually reached the upstream.
 
 # ── Forward-Auth Backend ─────────────────────────────────────────────────────
 apiVersion: apps/v1
@@ -22,23 +24,14 @@ spec:
         role: forward-auth
     spec:
       containers:
-      - name: vllm-sim
-        image: ghcr.io/llm-d/llm-d-inference-sim:v0.5.0
-        imagePullPolicy: IfNotPresent
-        args:
-        - --model
-        - Qwen/Qwen2.5-14B-Instruct
-        - --port
-        - '8000'
-        env:
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
+      - name: mock-vllm
+        # mock-vllm echoes the received Authorization back on the
+        # x-echo-authorization response header, so the testcase can assert the
+        # caller's token was forwarded verbatim (forward-be) or the static key
+        # was injected (static-be). Built locally and loaded into kind via the
+        # profile's LocalImages capability (see e2e/profiles/all/imports.go).
+        image: ghcr.io/vllm-project/semantic-router/mock-vllm:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 8000
           name: http
@@ -106,23 +99,14 @@ spec:
         role: static-key
     spec:
       containers:
-      - name: vllm-sim
-        image: ghcr.io/llm-d/llm-d-inference-sim:v0.5.0
-        imagePullPolicy: IfNotPresent
-        args:
-        - --model
-        - Qwen/Qwen2.5-14B-Instruct
-        - --port
-        - '8000'
-        env:
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
+      - name: mock-vllm
+        # mock-vllm echoes the received Authorization back on the
+        # x-echo-authorization response header, so the testcase can assert the
+        # caller's token was forwarded verbatim (forward-be) or the static key
+        # was injected (static-be). Built locally and loaded into kind via the
+        # profile's LocalImages capability (see e2e/profiles/all/imports.go).
+        image: ghcr.io/vllm-project/semantic-router/mock-vllm:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 8000
           name: http
