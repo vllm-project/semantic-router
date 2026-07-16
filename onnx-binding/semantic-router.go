@@ -801,6 +801,9 @@ const (
 	NLINeutral NLILabel = 1
 	// NLIContradiction means the premise contradicts the hypothesis
 	NLIContradiction NLILabel = 2
+	// NLIUnknown means no NLI judgment is available (e.g. the endpoint backend,
+	// which does not produce NLI labels).
+	NLIUnknown NLILabel = 3
 	// NLIError means an error occurred during classification
 	NLIError NLILabel = -1
 )
