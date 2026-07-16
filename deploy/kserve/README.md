@@ -263,17 +263,17 @@ oc exec $POD -c semantic-router -n $NAMESPACE -- \
 
 For detailed configuration options, see the main project documentation:
 
-- **Category Classification**: Train custom models at [Category Classifier Training](../../src/training/classifier_model_fine_tuning/)
-- **PII Detection**: Train custom models at [PII Detection Training](../../src/training/pii_model_fine_tuning/)
-- **Prompt Guard**: Train custom models at [Prompt Guard Training](../../src/training/prompt_guard_fine_tuning/)
+- **Category Classification**: Train custom models at [Category Classifier Training](../../src/training/model_classifier/classifier_model_fine_tuning_lora/)
+- **PII Detection**: Train custom models at [PII Detection Training](../../src/training/model_classifier/pii_model_fine_tuning_lora/)
+- **Prompt Guard**: Train custom models at [Prompt Guard Training](../../src/training/model_classifier/prompt_guard_fine_tuning_lora/)
 
 ## Related Documentation
 
 ### Within This Repository
 
-- **[Category Classifier Training](../../src/training/classifier_model_fine_tuning/)** - Train custom category classification models
-- **[PII Detector Training](../../src/training/pii_model_fine_tuning/)** - Train custom PII detection models
-- **[Prompt Guard Training](../../src/training/prompt_guard_fine_tuning/)** - Train custom jailbreak detection models
+- **[Category Classifier Training](../../src/training/model_classifier/classifier_model_fine_tuning_lora/)** - Train custom category classification models
+- **[PII Detector Training](../../src/training/model_classifier/pii_model_fine_tuning_lora/)** - Train custom PII detection models
+- **[Prompt Guard Training](../../src/training/model_classifier/prompt_guard_fine_tuning_lora/)** - Train custom jailbreak detection models
 
 ### Other Deployment Options
 
