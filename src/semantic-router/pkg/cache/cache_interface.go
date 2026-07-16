@@ -88,6 +88,19 @@ type CacheBackend interface {
 	GetStats() CacheStats
 }
 
+// Compile-time assertions that every backend satisfies CacheBackend. They live
+// at the interface definition site (no build tag) so a future contract
+// migration — e.g. adding a parameter to a write method — fails to compile here
+// for every backend, including the windows||!cgo InMemoryCache/HybridCache
+// stubs, instead of silently drifting until a stub build breaks downstream.
+var (
+	_ CacheBackend = (*InMemoryCache)(nil)
+	_ CacheBackend = (*HybridCache)(nil)
+	_ CacheBackend = (*MilvusCache)(nil)
+	_ CacheBackend = (*RedisCache)(nil)
+	_ CacheBackend = (*ValkeyCache)(nil)
+)
+
 // CacheStats holds performance metrics and usage statistics for cache operations
 type CacheStats struct {
 	TotalEntries    int        `json:"total_entries"`
