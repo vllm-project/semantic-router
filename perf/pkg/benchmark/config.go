@@ -3,6 +3,7 @@ package benchmark
 import (
 	"fmt"
 	"os"
+	"regexp"
 
 	"gopkg.in/yaml.v3"
 )
@@ -94,11 +95,32 @@ type ThresholdsConfig struct {
 	ResourceLimits      ResourceLimitsThresholds      `yaml:"resource_limits"`
 }
 
-// ComponentBenchmarksThresholds defines thresholds for component benchmarks
+// ComponentBenchmarksThresholds defines regression thresholds for component
+// benchmarks. Each entry matches a benchmark by name; Default applies to any
+// benchmark no entry matches.
 type ComponentBenchmarksThresholds struct {
-	Classification map[string]BenchmarkThreshold `yaml:"classification"`
-	DecisionEngine map[string]BenchmarkThreshold `yaml:"decision_engine"`
-	Cache          map[string]BenchmarkThreshold `yaml:"cache"`
+	Default    RegressionThreshold            `yaml:"default"`
+	Benchmarks []BenchmarkRegressionThreshold `yaml:"benchmarks"`
+}
+
+// RegressionThreshold holds the per-metric regression bounds for a benchmark.
+//
+// The gate blocks on allocs/op and B/op because they are hardware-independent
+// (determined by the code path, not the CPU), so they compare cleanly across
+// machines. ns/op is ADVISORY: MaxNsRegressionPercent is reported but never
+// fails the gate, because absolute time depends on the runner's hardware.
+type RegressionThreshold struct {
+	MaxAllocsRegressionPercent float64 `yaml:"max_allocs_regression_percent"`
+	MaxBytesRegressionPercent  float64 `yaml:"max_bytes_regression_percent"`
+	MaxNsRegressionPercent     float64 `yaml:"max_ns_regression_percent,omitempty"`
+}
+
+// BenchmarkRegressionThreshold maps a benchmark-name regexp to its thresholds.
+// Name is a human label for readability only.
+type BenchmarkRegressionThreshold struct {
+	Name                string `yaml:"name"`
+	Pattern             string `yaml:"pattern"`
+	RegressionThreshold `yaml:",inline"`
 }
 
 // E2ETestsThresholds defines thresholds for E2E tests
@@ -112,15 +134,6 @@ type ResourceLimitsThresholds struct {
 	MaxMemoryMB   int     `yaml:"max_memory_mb"`
 	MaxGoroutines int     `yaml:"max_goroutines"`
 	MaxCPUPercent float64 `yaml:"max_cpu_percent"`
-}
-
-// BenchmarkThreshold defines thresholds for a single benchmark
-type BenchmarkThreshold struct {
-	MaxP95LatencyMs      float64 `yaml:"max_p95_latency_ms,omitempty"`
-	MaxP99LatencyMs      float64 `yaml:"max_p99_latency_ms,omitempty"`
-	MinThroughputQPS     float64 `yaml:"min_throughput_qps,omitempty"`
-	MinCacheHitRate      float64 `yaml:"min_cache_hit_rate,omitempty"`
-	MaxRegressionPercent float64 `yaml:"max_regression_percent"`
 }
 
 // ThroughputThreshold defines throughput thresholds
@@ -145,6 +158,18 @@ func LoadThresholds(path string) (*ThresholdsConfig, error) {
 	var thresholds ThresholdsConfig
 	if err := yaml.Unmarshal(data, &thresholds); err != nil {
 		return nil, fmt.Errorf("failed to parse thresholds: %w", err)
+	}
+
+	// Reject invalid benchmark patterns up front. Otherwise a typo'd regexp is
+	// skipped at match time and the benchmark silently falls back to the (looser)
+	// default, quietly relaxing the gate with no signal.
+	for _, b := range thresholds.ComponentBenchmarks.Benchmarks {
+		if b.Pattern == "" {
+			continue
+		}
+		if _, err := regexp.Compile(b.Pattern); err != nil {
+			return nil, fmt.Errorf("invalid regexp for benchmark %q: %w", b.Name, err)
+		}
 	}
 
 	return &thresholds, nil
