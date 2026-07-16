@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-	onnx_binding "github.com/vllm-project/semantic-router/onnx-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -38,8 +37,7 @@ func (e *imageEncodeError) Unwrap() error { return e.err }
 
 func isEmbeddingModelNotReady(err error) bool {
 	return errors.Is(err, services.ErrModelNotReady) ||
-		errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) ||
-		errors.Is(err, onnx_binding.ErrEmbeddingModelNotReady)
+		errors.Is(err, candle_binding.ErrEmbeddingModelNotReady)
 }
 
 // checkEmbeddingReadiness validates that the models required for the request
