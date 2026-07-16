@@ -98,6 +98,21 @@ func (r *OpenAIRouter) handleLooperExecution(
 	// Create looper based on algorithm type
 	l := looper.FactoryWithSelectionRegistry(&r.Config.Looper, decision.Algorithm.Type, r.ModelSelector)
 
+	// Preserve the caller's identity across internal looper re-dispatch: forward
+	// the original Authorization header so backends with
+	// forward_authorization_header receive the per-user credential rather than a
+	// static service key.
+	//
+	// The per-request Authorization requirement is enforced per-leg at the
+	// SELECTED backend — appendForwardedAuthorizationHeader 401s a forward-enabled
+	// backend reached without a caller credential — not decision-wide up front. A
+	// mixed decision with one static-key backend and one forward-auth backend must
+	// not be rejected before the selected backend is known, and the selected model
+	// (e.g. a fusion analysis model or workflow planner) may only be resolved at
+	// runtime anyway.
+	inboundAuthorization := lookupHeaderCaseInsensitive(reqCtx.Headers, forwardedAuthorizationHeaderName)
+	l.SetInboundAuthorization(inboundAuthorization)
+
 	// Build looper request.
 	// Response API requests always return JSON, so force non-streaming in the
 	// looper to get a JSON body that TranslateResponse can parse. The

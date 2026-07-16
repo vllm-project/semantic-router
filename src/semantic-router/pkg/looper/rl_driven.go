@@ -85,6 +85,12 @@ func resolveRLDrivenSelector(selectorRegistry *selection.Registry) *selection.RL
 	return nil
 }
 
+// SetInboundAuthorization forwards the caller's Authorization header to the
+// underlying client so internal looper requests preserve per-user identity.
+func (l *RLDrivenLooper) SetInboundAuthorization(authorization string) {
+	l.client.SetInboundAuthorization(authorization)
+}
+
 // Execute implements the RL-driven multi-round routing algorithm.
 // It uses Thompson Sampling to select models and aggregates their responses.
 func (l *RLDrivenLooper) Execute(ctx context.Context, req *Request) (*Response, error) {

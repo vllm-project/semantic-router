@@ -26,13 +26,18 @@ static_resources:
             virtual_hosts:
             - name: local_service
               domains: ["*"]
-              # Security: strip internal headers from client requests to prevent
-              # looper bypass, identity spoofing, and credential leakage.
+              # Security: strip internal headers from requests before they leave
+              # for an upstream, to prevent looper bypass, identity spoofing, and
+              # credential/secret leakage. The router also enforces this at
+              # ext_proc (authoritative); this is defense-in-depth. Keep in sync
+              # with headers.ReservedInternalHeaders.
               request_headers_to_remove:
               - "x-vsr-looper-request"
-              - "x-vsr-looper-secret"
+              - "x-vsr-looper-authorization"
               - "x-vsr-looper-decision"
               - "x-vsr-looper-iteration"
+              - "x-vsr-fusion-depth"
+              - "x-vsr-inbound-authorization"
               - "x-authz-user-id"
               - "x-authz-user-groups"
               routes:

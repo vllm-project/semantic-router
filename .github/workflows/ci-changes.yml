@@ -59,6 +59,8 @@ on:
         value: ${{ jobs.filter.outputs.e2e_multi_endpoint }}
       e2e_authz_rbac:
         value: ${{ jobs.filter.outputs.e2e_authz_rbac }}
+      e2e_forward_auth:
+        value: ${{ jobs.filter.outputs.e2e_forward_auth }}
       e2e_streaming:
         value: ${{ jobs.filter.outputs.e2e_streaming }}
       e2e_anthropic_shim:
@@ -101,6 +103,7 @@ jobs:
       e2e_ml_model_selection: ${{ steps.changes.outputs.e2e_ml_model_selection }}
       e2e_multi_endpoint: ${{ steps.changes.outputs.e2e_multi_endpoint }}
       e2e_authz_rbac: ${{ steps.changes.outputs.e2e_authz_rbac }}
+      e2e_forward_auth: ${{ steps.changes.outputs.e2e_forward_auth }}
       e2e_streaming: ${{ steps.changes.outputs.e2e_streaming }}
       e2e_anthropic_shim: ${{ steps.changes.outputs.e2e_anthropic_shim }}
       e2e_common: ${{ steps.changes.outputs.e2e_common }}
@@ -259,6 +262,13 @@ jobs:
               - 'src/semantic-router/pkg/classification/authz*.go'
               - 'src/semantic-router/pkg/authz/**'
               - 'dashboard/backend/handlers/security_policy*.go'
+            e2e_forward_auth:
+              - 'e2e/profiles/forward-auth/**'
+              - 'e2e/testcases/forward_authorization.go'
+              - 'src/semantic-router/pkg/extproc/req_filter_internal_trust*.go'
+              - 'src/semantic-router/pkg/extproc/processor_req_body_routing.go'
+              - 'src/semantic-router/pkg/extproc/req_filter_looper*.go'
+              - 'src/semantic-router/pkg/looper/internal_auth.go'
             e2e_streaming:
               - 'e2e/profiles/streaming/**'
               - 'deploy/kubernetes/streaming/**'

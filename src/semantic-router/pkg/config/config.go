@@ -176,6 +176,16 @@ type RouterOptions struct {
 	MaxStreamedBodyBytes      int64                `yaml:"max_streamed_body_bytes,omitempty"`
 	StreamedBodyTimeoutSec    int                  `yaml:"streamed_body_timeout_sec,omitempty"`
 	SkipProcessing            SkipProcessingConfig `yaml:"skip_processing,omitempty"`
+	// StripInboundAuthorization, when true, strips the caller's inbound
+	// Authorization before forwarding to a backend that neither injects a static
+	// key nor opts into forward_authorization_header — so a caller credential
+	// never rides to an upstream that was not meant to receive it. It also strips
+	// the ext_authz-injected per-user keys on the skip-processing passthrough
+	// (the routing path always strips those, independent of this flag). Defaults
+	// to false, which preserves the caller's Authorization on that
+	// default/passthrough path. Forward-auth and static-key backends manage their
+	// own single Authorization header regardless of this flag. See issue #2375.
+	StripInboundAuthorization bool `yaml:"strip_inbound_authorization,omitempty"`
 }
 
 // SkipProcessingConfig gates the x-vsr-skip-processing request header.

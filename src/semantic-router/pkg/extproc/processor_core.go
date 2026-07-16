@@ -32,7 +32,7 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 		if ctx.FullDuplexRequestBody {
 			return newFullDuplexRequestBodyResponse(v.RequestBody.GetBody(), v.RequestBody.GetEndOfStream()), nil
 		}
-		return newContinueRequestBodyResponse(), nil
+		return r.newContinueRequestBodyResponse(), nil
 	}
 
 	eos := v.RequestBody.GetEndOfStream()

@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // CanonicalConfig is the public v0.3 config contract.
@@ -212,6 +214,25 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 			if strings.TrimSpace(backendRef.Endpoint) == "" && strings.TrimSpace(backendRef.BaseURL) == "" {
 				return fmt.Errorf("providers.models[%s].backend_refs requires endpoint or base_url", model.Name)
 			}
+			// The Anthropic-native routing path (api_format: anthropic) does not
+			// implement caller-Authorization forwarding, so silently ignoring the
+			// opt-in there would forward a static key as if it were the caller's
+			// credential. Reject the combination up front until that path supports
+			// it. Checked per backend_ref because the flag is per-backend while the
+			// anthropic dispatch is per-model.
+			if backendRef.ForwardAuthorizationHeader && model.APIFormat == APIFormatAnthropic {
+				return fmt.Errorf(
+					"providers.models[%s].backend_refs[%s]: forward_authorization_header is not supported with api_format: anthropic; the Anthropic-native path does not forward the caller Authorization",
+					model.Name, backendRef.Name,
+				)
+			}
+			if backendRef.ForwardAuthorizationHeader && (backendRef.APIKey != "" || backendRef.APIKeyEnv != "") {
+				logging.ComponentWarnEvent("config", "forward_authorization_ignores_static_key", map[string]interface{}{
+					"model":       model.Name,
+					"backend_ref": backendRef.Name,
+					"detail":      "forward_authorization_header is set; api_key/api_key_env are ignored for this backend",
+				})
+			}
 		}
 	}
 
@@ -349,15 +370,16 @@ func normalizeCanonicalProviderModels(models []CanonicalProviderModel) (map[stri
 				endpoint.Weight = 1
 			}
 
-			if backendRef.BaseURL != "" || backendRef.Provider != "" || backendRef.AuthHeader != "" || backendRef.AuthPrefix != "" || backendRef.ChatPath != "" || len(backendRef.ExtraHeaders) > 0 || backendRef.APIVersion != "" {
+			if backendRef.BaseURL != "" || backendRef.Provider != "" || backendRef.AuthHeader != "" || backendRef.AuthPrefix != "" || backendRef.ChatPath != "" || len(backendRef.ExtraHeaders) > 0 || backendRef.APIVersion != "" || backendRef.ForwardAuthorizationHeader {
 				profiles[endpointName] = ProviderProfile{
-					Type:         backendRef.Provider,
-					BaseURL:      backendRef.BaseURL,
-					AuthHeader:   backendRef.AuthHeader,
-					AuthPrefix:   backendRef.AuthPrefix,
-					ExtraHeaders: copyStringMap(backendRef.ExtraHeaders),
-					APIVersion:   backendRef.APIVersion,
-					ChatPath:     backendRef.ChatPath,
+					Type:                       backendRef.Provider,
+					BaseURL:                    backendRef.BaseURL,
+					AuthHeader:                 backendRef.AuthHeader,
+					AuthPrefix:                 backendRef.AuthPrefix,
+					ExtraHeaders:               copyStringMap(backendRef.ExtraHeaders),
+					APIVersion:                 backendRef.APIVersion,
+					ChatPath:                   backendRef.ChatPath,
+					ForwardAuthorizationHeader: backendRef.ForwardAuthorizationHeader,
 				}
 				endpoint.ProviderProfileName = endpointName
 			}

@@ -1054,6 +1054,25 @@ class Model(BaseModel):
     api_format: Optional[str] = None
     external_model_ids: Optional[Dict[str, str]] = None
 
+    @model_validator(mode="after")
+    def validate_forward_authorization_header(self):
+        # The Anthropic-native routing path does not implement caller-Authorization
+        # forwarding, so silently ignoring the opt-in there would forward a static
+        # key as if it were the caller's credential. Reject the combination until
+        # that path supports it. Checked per backend_ref because the flag is
+        # per-backend while api_format is per-model. Mirrors the Go loader
+        # (validateCanonicalContract).
+        if self.api_format == "anthropic":
+            for ref in self.backend_refs:
+                if ref.forward_authorization_header:
+                    raise ValueError(
+                        f"providers.models[{self.name}].backend_refs"
+                        f"[{ref.name}]: forward_authorization_header is not "
+                        "supported with api_format: anthropic; the Anthropic-native "
+                        "path does not forward the caller Authorization"
+                    )
+        return self
+
 
 class LoRAAdapter(BaseModel):
     """LoRA adapter metadata exposed under routing.modelCards[].loras."""
@@ -1100,6 +1119,12 @@ class BackendRef(BaseModel):
     chat_path: Optional[str] = None
     api_key: Optional[str] = None
     api_key_env: Optional[str] = None
+    # Opt this backend into forwarding the caller's inbound Authorization header
+    # verbatim to the upstream instead of injecting a static service key. When
+    # true, api_key/api_key_env are ignored for this backend and requests without
+    # an inbound Authorization header are rejected with 401. Defaults to false,
+    # preserving static-key behavior. Mirrors the Go CanonicalBackendRef field.
+    forward_authorization_header: Optional[bool] = None
 
     def resolve_api_key(self) -> Optional[str]:
         if self.api_key:

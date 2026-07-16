@@ -9,7 +9,9 @@ import (
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 )
 
 type requestHeaderTestCase struct {
@@ -158,6 +160,8 @@ func TestHandleRequestHeadersSetsLooperAndStreamingFlags(t *testing.T) {
 					{Key: ":path", Value: "/v1/chat/completions"},
 					{Key: "accept", Value: "text/event-stream"},
 					{Key: "x-vsr-looper-request", Value: "true"},
+					// A genuine internal leg carries the per-process auth proof.
+					{Key: headers.VSRLooperAuthorization, Value: looper.InternalAuthSecret()},
 					{Key: "x-request-id", Value: "req-123"},
 				},
 			},

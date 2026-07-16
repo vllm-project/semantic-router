@@ -1,0 +1,156 @@
+# Forward-Auth Backend Resources
+# Two mock-vllm deployments used by the forward-authorization testcase:
+#   - forward-be: reached by the forward_authorization_header model (forward-model)
+#   - static-be:  reached by the static-key model (static-model)
+# Both use the mock-vllm image, which echoes the received Authorization on the
+# x-echo-authorization response header so the testcase can verify the value that
+# actually reached the upstream.
+
+# ── Forward-Auth Backend ─────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forward-be
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: forward-be
+  template:
+    metadata:
+      labels:
+        app: forward-be
+        role: forward-auth
+    spec:
+      containers:
+      - name: mock-vllm
+        # mock-vllm echoes the received Authorization back on the
+        # x-echo-authorization response header, so the testcase can assert the
+        # caller's token was forwarded verbatim (forward-be) or the static key
+        # was injected (static-be). Built locally and loaded into kind via the
+        # profile's LocalImages capability (see e2e/profiles/all/imports.go).
+        image: ghcr.io/vllm-project/semantic-router/mock-vllm:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 10m
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: forward-be
+  namespace: default
+  labels:
+    app: forward-be
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+  selector:
+    app: forward-be
+---
+apiVersion: aigateway.envoyproxy.io/v1alpha1
+kind: AIServiceBackend
+metadata:
+  name: forward-be
+  namespace: default
+spec:
+  schema:
+    name: OpenAI
+  backendRef:
+    name: forward-be
+    kind: Backend
+    group: gateway.envoyproxy.io
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: forward-be
+  namespace: default
+spec:
+  endpoints:
+  - fqdn:
+      hostname: forward-be.default.svc.cluster.local
+      port: 8000
+
+# ── Static-Key Backend ───────────────────────────────────────────────────────
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: static-be
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: static-be
+  template:
+    metadata:
+      labels:
+        app: static-be
+        role: static-key
+    spec:
+      containers:
+      - name: mock-vllm
+        # mock-vllm echoes the received Authorization back on the
+        # x-echo-authorization response header, so the testcase can assert the
+        # caller's token was forwarded verbatim (forward-be) or the static key
+        # was injected (static-be). Built locally and loaded into kind via the
+        # profile's LocalImages capability (see e2e/profiles/all/imports.go).
+        image: ghcr.io/vllm-project/semantic-router/mock-vllm:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 10m
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: static-be
+  namespace: default
+  labels:
+    app: static-be
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+  selector:
+    app: static-be
+---
+apiVersion: aigateway.envoyproxy.io/v1alpha1
+kind: AIServiceBackend
+metadata:
+  name: static-be
+  namespace: default
+spec:
+  schema:
+    name: OpenAI
+  backendRef:
+    name: static-be
+    kind: Backend
+    group: gateway.envoyproxy.io
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: static-be
+  namespace: default
+spec:
+  endpoints:
+  - fqdn:
+      hostname: static-be.default.svc.cluster.local
+      port: 8000

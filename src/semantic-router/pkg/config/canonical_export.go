@@ -145,9 +145,10 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 				MaxBytes:   cfg.MaxStreamedBodyBytes,
 				TimeoutSec: cfg.StreamedBodyTimeoutSec,
 			},
-			SkipProcessing: cfg.SkipProcessing,
-			ModelSelection: cfg.ModelSelection,
-			Learning:       cfg.RouterLearning,
+			SkipProcessing:            cfg.SkipProcessing,
+			StripInboundAuthorization: cfg.StripInboundAuthorization,
+			ModelSelection:            cfg.ModelSelection,
+			Learning:                  cfg.RouterLearning,
 		},
 		Services: CanonicalServiceGlobal{
 			API:           cfg.API,
@@ -381,6 +382,12 @@ func canonicalBackendRefFromRuntime(endpoint VLLMEndpoint, fallbackAPIKey string
 		APIVersion: profile.APIVersion,
 		ChatPath:   profile.ChatPath,
 		APIKey:     endpoint.APIKey,
+		// Round-trip the opt-in: without this, a config parsed and re-exported
+		// (apiserver config-update, k8s reconciler merge base, DSL emitter)
+		// silently drops forward_authorization_header, reverting the backend to
+		// static-key injection while the operator believes the caller credential
+		// is still forwarded.
+		ForwardAuthorizationHeader: profile.ForwardAuthorizationHeader,
 	}
 	if endpoint.Address != "" {
 		ref.Endpoint = endpoint.Address

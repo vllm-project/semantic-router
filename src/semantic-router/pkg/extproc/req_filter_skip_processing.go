@@ -18,6 +18,8 @@ package extproc
 
 import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 func (r *OpenAIRouter) skipProcessingEnabled() bool {
@@ -27,12 +29,47 @@ func (r *OpenAIRouter) skipProcessingEnabled() bool {
 	return r.Config.SkipProcessing.IsEnabled()
 }
 
-func newContinueRequestBodyResponse() *ext_proc.ProcessingResponse {
+// stripInboundAuthorizationEnabled reports whether the opt-in hardening that
+// strips the caller's inbound Authorization (and ext_authz-injected per-user
+// keys) on the default/passthrough path is enabled. Off by default so the
+// caller's Authorization is preserved unless an operator opts in via
+// global.router.strip_inbound_authorization. See issue #2375.
+func (r *OpenAIRouter) stripInboundAuthorizationEnabled() bool {
+	if r == nil || r.Config == nil {
+		return false
+	}
+	return r.Config.StripInboundAuthorization
+}
+
+func (r *OpenAIRouter) newContinueRequestBodyResponse() *ext_proc.ProcessingResponse {
+	// The internal looper carrier for caller identity must never reach an upstream
+	// (unconditional — it is a router-internal header, not a caller credential).
+	removeHeaders := []string{
+		headers.VSRInboundAuthorization,
+	}
+	// Opt-in hardening (global.router.strip_inbound_authorization): skip-processing
+	// bypasses routing entirely, so there is no backend profile to inject a static
+	// key or opt into forward_authorization_header. When enabled, strip the
+	// caller's Authorization and every ext_authz-injected per-user key (the same
+	// set the routing path removes via CredentialResolver.HeadersToStrip) so an
+	// opted-out request cannot leak a caller credential to whatever backend Envoy
+	// routes it to. Off by default, preserving the caller's Authorization on the
+	// passthrough. See issue #2375.
+	if r.stripInboundAuthorizationEnabled() {
+		// stripInboundAuthorizationEnabled already guaranteed r is non-nil.
+		removeHeaders = append(removeHeaders, forwardedAuthorizationHeaderName)
+		if r.CredentialResolver != nil {
+			removeHeaders = append(removeHeaders, r.CredentialResolver.HeadersToStrip()...)
+		}
+	}
 	return &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestBody{
 			RequestBody: &ext_proc.BodyResponse{
 				Response: &ext_proc.CommonResponse{
 					Status: ext_proc.CommonResponse_CONTINUE,
+					HeaderMutation: &ext_proc.HeaderMutation{
+						RemoveHeaders: removeHeaders,
+					},
 				},
 			},
 		},

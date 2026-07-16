@@ -48,6 +48,11 @@ providers:
           api_version: "2025-03-01"
           chat_path: /chat/completions
           api_key: static-demo-key
+          # When true, the router forwards the caller's inbound Authorization
+          # header verbatim to this backend and ignores api_key/api_key_env.
+          # Requests without an Authorization header are rejected with 401.
+          # Useful in front of gateways (e.g. LiteLLM) that expect per-user keys.
+          forward_authorization_header: false
           weight: 20
     - name: qwen3-32b
       reasoning_family: gpt
@@ -1371,6 +1376,12 @@ global:
       timeout_sec: 15
     skip_processing:
       enabled: false
+    # Opt-in hardening: strip the caller's inbound Authorization before
+    # forwarding to a backend that neither injects a static key nor opts into
+    # forward_authorization_header (and, on the skip-processing passthrough, the
+    # ext_authz-injected per-user keys too). Off by default, which preserves the
+    # caller's Authorization on that path.
+    strip_inbound_authorization: false
     model_selection:
       method: hybrid
       enabled: true

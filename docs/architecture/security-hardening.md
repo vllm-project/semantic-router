@@ -31,24 +31,43 @@ decisions based on signal classification. This guide covers:
 
 ## 1. Production-Default Envoy Config
 
-The Envoy template strips sensitive internal headers from client requests
-at the proxy layer (defense-in-depth). Even if ext_proc validation is
-bypassed, these headers never reach the router:
+The router authenticates its internal looper leg with a per-process secret
+(`x-vsr-looper-authorization`) and enforces the trust boundary at ext_proc:
+it honors the internal markers and the caller-identity carrier
+(`x-vsr-inbound-authorization`) only on an authenticated leg, strips the proof
+after validating it, and strips every reserved internal header — from both the
+in-memory view and the wire request forwarded upstream — on any unauthenticated
+request. This ext_proc enforcement is authoritative.
+
+As defense-in-depth, the Envoy template additionally strips the same internal
+headers before a request leaves for an upstream, so a spoofed marker or the
+internal auth proof never rides upstream even if a custom ext_proc pipeline is
+misconfigured:
 
 ```yaml
 request_headers_to_remove:
   - "x-vsr-looper-request"
-  - "x-vsr-looper-secret"
+  - "x-vsr-looper-authorization"
   - "x-vsr-looper-decision"
   - "x-vsr-looper-iteration"
+  - "x-vsr-fusion-depth"
+  - "x-vsr-inbound-authorization"
   - "x-authz-user-id"
   - "x-authz-user-groups"
 ```
 
-This is configured in both:
+This list must stay in sync with `headers.ReservedInternalHeaders`. It is
+configured in both:
 
 - `deploy/local/envoy.yaml` (local development)
 - `src/vllm-sr/cli/templates/envoy.template.yaml` (production template)
+
+For multi-replica topologies where the looper endpoint is a shared or
+load-balanced address (a re-dispatch may land on a different router process
+than the one that issued it), set the same `VSR_LOOPER_INTERNAL_AUTH_SECRET`
+on every replica so the internal-leg proof validates across pods. The default
+per-process random secret is correct only when the leg loops back to the same
+process (the localhost sidecar topology).
 
 ## 2. Dashboard RBAC Integration
 

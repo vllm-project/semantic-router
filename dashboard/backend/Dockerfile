@@ -82,6 +82,7 @@ COPY src/vllm-sr/pyproject.toml /app/src/vllm-sr/pyproject.toml
 COPY src/semantic-router/internal/nlgen/ /app/src/semantic-router/internal/nlgen/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/
+COPY src/semantic-router/pkg/headers/ /app/src/semantic-router/pkg/headers/
 COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/
 COPY src/semantic-router/pkg/nlgen/ /app/src/semantic-router/pkg/nlgen/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/

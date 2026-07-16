@@ -42,6 +42,12 @@ type CanonicalBackendRef struct {
 	ChatPath     string            `yaml:"chat_path,omitempty"`
 	APIKey       string            `yaml:"api_key,omitempty"`
 	APIKeyEnv    string            `yaml:"api_key_env,omitempty"`
+	// ForwardAuthorizationHeader opts this backend into forwarding the caller's
+	// inbound Authorization header verbatim to the upstream instead of injecting a
+	// static service key. When true, api_key/api_key_env are ignored for this
+	// backend and requests without an inbound Authorization header are rejected
+	// with 401. Defaults to false, preserving static-key behavior.
+	ForwardAuthorizationHeader bool `yaml:"forward_authorization_header,omitempty"`
 }
 
 func canonicalProviderDefaults(providers CanonicalProviders) CanonicalProviderDefaults {

@@ -1,5 +1,12 @@
 package config
 
+import (
+	"fmt"
+	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+)
+
 // LooperConfig defines configuration for multi-model execution.
 type LooperConfig struct {
 	Endpoint         string              `yaml:"endpoint"`
@@ -14,6 +21,29 @@ type LooperConfig struct {
 
 func (l *LooperConfig) IsEnabled() bool {
 	return l.Endpoint != ""
+}
+
+// Validate rejects a LooperConfig that sets any reserved internal header via
+// Headers. Those headers carry looper identity and caller-credential state on
+// the authenticated internal leg; letting an operator pin one would let a
+// configured value spoof the internal path or a caller identity, so it is a
+// config error rather than a silently-overridden value. Matched
+// case-insensitively.
+func (l *LooperConfig) Validate() error {
+	if l == nil {
+		return nil
+	}
+	for name := range l.Headers {
+		for _, reserved := range headers.ReservedInternalHeaders {
+			if strings.EqualFold(strings.TrimSpace(name), reserved) {
+				return fmt.Errorf(
+					"looper.headers[%q] is a reserved internal header and cannot be set via configuration",
+					name,
+				)
+			}
+		}
+	}
+	return nil
 }
 
 func (l *LooperConfig) GetTimeout() int {

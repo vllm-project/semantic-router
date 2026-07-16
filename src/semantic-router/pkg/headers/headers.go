@@ -368,7 +368,38 @@ const (
 
 	// VSRFusionDepth marks internal Fusion subrequests to prevent recursive Fusion execution.
 	VSRFusionDepth = "x-vsr-fusion-depth"
+
+	// VSRInboundAuthorization carries the caller's original Authorization header
+	// value on internal looper requests. It is the sole source of caller identity
+	// for backends that opt into forward_authorization_header on a looper leg,
+	// keeping the caller credential separate from any static service key on the
+	// Authorization header. It is stripped before the request reaches the upstream.
+	VSRInboundAuthorization = "x-vsr-inbound-authorization"
+
+	// VSRLooperAuthorization authenticates the internal looper leg. The looper
+	// client stamps it with a per-process secret so extproc can distinguish a
+	// genuine internal re-dispatch from a client that spoofs the looper markers.
+	// It is validated and then stripped at the trusted ingress and never reaches
+	// an upstream. See ReservedInternalHeaders.
+	VSRLooperAuthorization = "x-vsr-looper-authorization"
 )
+
+// ReservedInternalHeaders are router-internal headers that carry looper
+// identity or caller-credential state across the authenticated internal
+// re-dispatch leg. They are trusted ONLY on a request whose internal-leg
+// authentication succeeds; on any client-facing (untrusted) ingress they are
+// stripped so a caller cannot spoof the internal looper path or inject a
+// caller-identity carrier. They are also rejected in LooperConfig.Headers so an
+// operator cannot smuggle one onto the internal leg via configuration. Matched
+// case-insensitively at every enforcement point.
+var ReservedInternalHeaders = []string{
+	VSRLooperRequest,
+	VSRLooperIteration,
+	VSRLooperDecision,
+	VSRFusionDepth,
+	VSRInboundAuthorization,
+	VSRLooperAuthorization,
+}
 
 // Looper Response Headers
 // These headers are added to responses when looper mode is used.

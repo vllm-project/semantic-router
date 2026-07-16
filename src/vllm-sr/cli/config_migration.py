@@ -467,6 +467,7 @@ def _convert_model_targets_to_provider_models(
                 "extra_headers",
                 "api_version",
                 "chat_path",
+                "forward_authorization_header",
             ):
                 _set_if_missing(backend_ref, key, backend.get(key))
             if isinstance(auth_profile, dict):

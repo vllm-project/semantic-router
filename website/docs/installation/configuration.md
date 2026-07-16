@@ -88,6 +88,10 @@ providers:
           protocol: http
           weight: 100
           api_key_env: OPENAI_API_KEY
+          # Optional, default false. When true the router forwards the caller's
+          # inbound Authorization header verbatim to this backend and ignores
+          # api_key/api_key_env; requests without an Authorization header get 401.
+          forward_authorization_header: false
 
 routing:
   modelCards:
@@ -182,6 +186,16 @@ routing:
 global:
   router:
     config_source: file
+    # Opt-in hardening (default false). When true, the router strips the caller's
+    # inbound Authorization before forwarding to a backend that neither injects a
+    # static key nor opts into forward_authorization_header, so a caller
+    # credential never reaches an upstream that was not meant to receive it. On
+    # the skip-processing passthrough it also strips the ext_authz-injected
+    # per-user provider keys (on the routing path those are always stripped,
+    # regardless of this flag). Backends that inject a static key or forward the
+    # caller Authorization always emit a single Authorization header regardless
+    # of this flag.
+    strip_inbound_authorization: false
   services:
     observability:
       metrics:

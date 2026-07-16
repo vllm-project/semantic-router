@@ -27,6 +27,7 @@ type CanonicalRouterGlobal struct {
 	ClearRouteCache           bool                  `yaml:"clear_route_cache"`
 	StreamedBody              CanonicalStreamedBody `yaml:"streamed_body"`
 	SkipProcessing            SkipProcessingConfig  `yaml:"skip_processing"`
+	StripInboundAuthorization bool                  `yaml:"strip_inbound_authorization,omitempty"`
 	ModelSelection            ModelSelectionConfig  `yaml:"model_selection"`
 	Learning                  RouterLearningConfig  `yaml:"learning,omitempty"`
 }
@@ -217,6 +218,7 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.MaxStreamedBodyBytes = global.Router.StreamedBody.MaxBytes
 	cfg.StreamedBodyTimeoutSec = global.Router.StreamedBody.TimeoutSec
 	cfg.SkipProcessing = global.Router.SkipProcessing
+	cfg.StripInboundAuthorization = global.Router.StripInboundAuthorization
 	cfg.ModelSelection = global.Router.ModelSelection
 	cfg.RouterLearning = global.Router.Learning
 
@@ -233,6 +235,9 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.VectorStore = global.Stores.VectorStore
 
 	cfg.Tools = global.Integrations.Tools
+	if err := global.Integrations.Looper.Validate(); err != nil {
+		return err
+	}
 	cfg.Looper = global.Integrations.Looper
 
 	cfg.ExternalModels = append([]ExternalModelConfig(nil), global.ModelCatalog.External...)

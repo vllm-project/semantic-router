@@ -29,6 +29,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -39,6 +40,11 @@ type Client struct {
 	headers      map[string]string
 	decisionName string // Decision name to pass in looper requests
 	fusionDepth  int    // Recursion guard for Fusion requests
+	// inboundAuthorization is the caller's original Authorization header value.
+	// When set, it is forwarded verbatim on internal looper requests so per-user
+	// identity survives the re-dispatch to backends that opt into
+	// forward_authorization_header. It takes precedence over the static access key.
+	inboundAuthorization string
 }
 
 // NewClient creates a new looper HTTP client
@@ -61,6 +67,13 @@ func (c *Client) SetDecisionName(name string) {
 // SetFusionDepth sets the Fusion recursion depth marker for internal requests.
 func (c *Client) SetFusionDepth(depth int) {
 	c.fusionDepth = depth
+}
+
+// SetInboundAuthorization records the caller's original Authorization header so
+// internal looper requests can forward it verbatim, preserving per-user identity
+// for backends that opt into forward_authorization_header.
+func (c *Client) SetInboundAuthorization(authorization string) {
+	c.inboundAuthorization = authorization
 }
 
 // resolveEndpoint returns the configured looper endpoint.
@@ -186,29 +199,7 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
-	httpReq.Header.Set("Content-Type", "application/json")
-	for k, v := range c.headers {
-		httpReq.Header.Set(k, v)
-	}
-
-	// Set Authorization header if access key is provided
-	if accessKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+accessKey)
-	}
-
-	// Add looper identification headers
-	// These allow extproc to identify looper requests and lookup decision configuration
-	httpReq.Header.Set("x-vsr-looper-request", "true")
-	httpReq.Header.Set("x-vsr-looper-iteration", fmt.Sprintf("%d", iteration))
-	if c.fusionDepth > 0 {
-		httpReq.Header.Set("x-vsr-fusion-depth", fmt.Sprintf("%d", c.fusionDepth))
-	}
-
-	// Add decision name header for extproc to lookup decision configuration
-	if c.decisionName != "" {
-		httpReq.Header.Set("x-vsr-looper-decision", c.decisionName)
-	}
+	c.applyRequestHeaders(httpReq, accessKey, iteration)
 
 	// Execute request
 	resp, err := c.httpClient.Do(httpReq)
@@ -232,6 +223,49 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 		return c.parseStreamingResponse(respBody, modelName)
 	}
 	return c.parseNonStreamingResponse(respBody, modelName)
+}
+
+// applyRequestHeaders sets the transport, auth, and looper-identification
+// headers on an internal looper request.
+func (c *Client) applyRequestHeaders(httpReq *http.Request, accessKey string, iteration int) {
+	httpReq.Header.Set("Content-Type", "application/json")
+	for k, v := range c.headers {
+		httpReq.Header.Set(k, v)
+	}
+
+	// Set Authorization header if access key is provided.
+	if accessKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+accessKey)
+	}
+
+	// Carry the caller's original Authorization on a dedicated header (never on
+	// Authorization, which may hold the static access key above). On the internal
+	// leg, extproc treats this as the sole source of caller identity for backends
+	// that opt into forward_authorization_header, and strips it before the
+	// upstream. Keeping the two separate prevents the static key from ever being
+	// forwarded as if it were the caller's credential.
+	if c.inboundAuthorization != "" {
+		httpReq.Header.Set(headers.VSRInboundAuthorization, c.inboundAuthorization)
+	}
+
+	// Authenticate the internal leg. extproc trusts the looper markers and the
+	// caller-identity carrier below ONLY when this proof matches the per-process
+	// secret; on any unauthenticated (client) request it strips them. Set after
+	// the configured c.headers loop so a stray configured value can never shadow
+	// the proof (config also rejects reserved headers up front). The proof is
+	// validated and stripped at the ingress and never reaches the upstream.
+	httpReq.Header.Set(headers.VSRLooperAuthorization, InternalAuthSecret())
+
+	// Looper identification headers: let extproc identify looper requests and
+	// look up the decision configuration.
+	httpReq.Header.Set("x-vsr-looper-request", "true")
+	httpReq.Header.Set("x-vsr-looper-iteration", fmt.Sprintf("%d", iteration))
+	if c.fusionDepth > 0 {
+		httpReq.Header.Set("x-vsr-fusion-depth", fmt.Sprintf("%d", c.fusionDepth))
+	}
+	if c.decisionName != "" {
+		httpReq.Header.Set("x-vsr-looper-decision", c.decisionName)
+	}
 }
 
 // parseNonStreamingResponse parses a non-streaming JSON response

@@ -603,6 +603,205 @@ routing:
 	}
 }
 
+func TestProviderBackendRefForwardAuthorizationHeaderCompilesIntoProfile(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+providers:
+  defaults:
+    default_model: gpt-worker
+  models:
+    - name: gpt-worker
+      backend_refs:
+        - name: gateway
+          base_url: https://litellm.example.com/v1
+          provider: openai
+          api_key: ignored-static-key
+          forward_authorization_header: true
+        - name: local
+          endpoint: 127.0.0.1:8000
+routing:
+  modelCards:
+    - name: gpt-worker
+  decisions:
+    - name: default
+      priority: 1
+      rules:
+        operator: OR
+        conditions: []
+      modelRefs:
+        - model: gpt-worker
+`)
+
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+
+	// The gateway backend opts into forwarding: it must have a provider profile
+	// with the flag set even though its only profile-worthy fields are base_url
+	// and provider.
+	gatewayName := cfg.ModelConfig["gpt-worker"].PreferredEndpoints[0]
+	profile, err := cfg.GetProviderProfileForEndpoint(gatewayName)
+	if err != nil {
+		t.Fatalf("GetProviderProfileForEndpoint(%q) error: %v", gatewayName, err)
+	}
+	if profile == nil {
+		t.Fatalf("expected a provider profile for %q, got nil", gatewayName)
+	}
+	if !profile.ForwardAuthorizationHeader {
+		t.Fatalf("profile.ForwardAuthorizationHeader = false, want true")
+	}
+
+	// The local backend does not opt in and has no profile-worthy fields, so it
+	// stays a legacy endpoint with no profile (default static-key behavior).
+	localName := cfg.ModelConfig["gpt-worker"].PreferredEndpoints[1]
+	localProfile, err := cfg.GetProviderProfileForEndpoint(localName)
+	if err != nil {
+		t.Fatalf("GetProviderProfileForEndpoint(%q) error: %v", localName, err)
+	}
+	if localProfile != nil && localProfile.ForwardAuthorizationHeader {
+		t.Fatalf("local backend unexpectedly opted into forward_authorization_header")
+	}
+}
+
+func TestProviderBackendRefForwardAuthorizationHeaderForcesProfileCreation(t *testing.T) {
+	// A backend that sets ONLY forward_authorization_header (no base_url,
+	// provider, auth_header, etc.) must still get a provider profile so the flag
+	// reaches the request path.
+	canonicalYAML := []byte(`
+version: v0.3
+providers:
+  defaults:
+    default_model: gpt-worker
+  models:
+    - name: gpt-worker
+      backend_refs:
+        - name: local
+          endpoint: 127.0.0.1:8000
+          forward_authorization_header: true
+routing:
+  modelCards:
+    - name: gpt-worker
+  decisions:
+    - name: default
+      priority: 1
+      rules:
+        operator: OR
+        conditions: []
+      modelRefs:
+        - model: gpt-worker
+`)
+
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+
+	endpointName := cfg.ModelConfig["gpt-worker"].PreferredEndpoints[0]
+	profile, err := cfg.GetProviderProfileForEndpoint(endpointName)
+	if err != nil {
+		t.Fatalf("GetProviderProfileForEndpoint(%q) error: %v", endpointName, err)
+	}
+	if profile == nil {
+		t.Fatalf("expected a provider profile forced by forward_authorization_header, got nil")
+	}
+	if !profile.ForwardAuthorizationHeader {
+		t.Fatalf("profile.ForwardAuthorizationHeader = false, want true")
+	}
+}
+
+func TestProviderBackendRefForwardAuthorizationHeaderRejectsAnthropicFormat(t *testing.T) {
+	// The Anthropic-native path does not implement caller-Authorization
+	// forwarding, so the combination must be rejected at load time (per backend
+	// ref, since the flag is per-backend while the format is per-model).
+	canonicalYAML := []byte(`
+version: v0.3
+providers:
+  defaults:
+    default_model: claude-worker
+  models:
+    - name: claude-worker
+      api_format: anthropic
+      backend_refs:
+        - name: static
+          endpoint: 127.0.0.1:8000
+        - name: gateway
+          base_url: https://litellm.example.com/v1
+          forward_authorization_header: true
+routing:
+  modelCards:
+    - name: claude-worker
+  decisions:
+    - name: default
+      priority: 1
+      rules:
+        operator: OR
+        conditions: []
+      modelRefs:
+        - model: claude-worker
+`)
+
+	_, err := ParseYAMLBytes(canonicalYAML)
+	if err == nil {
+		t.Fatal("ParseYAMLBytes accepted forward_authorization_header with api_format: anthropic, want error")
+	}
+	if !strings.Contains(err.Error(), "forward_authorization_header is not supported with api_format: anthropic") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCanonicalExportRoundTripsForwardAuthorizationHeader(t *testing.T) {
+	// A config parsed and re-exported (apiserver config-update, k8s reconciler,
+	// DSL emitter) must preserve forward_authorization_header; dropping it would
+	// silently revert the backend to static-key injection.
+	canonicalYAML := []byte(`
+version: v0.3
+providers:
+  defaults:
+    default_model: gateway-model
+  models:
+    - name: gateway-model
+      backend_refs:
+        - name: gateway
+          base_url: https://litellm.example.com/v1
+          provider: openai
+          forward_authorization_header: true
+routing:
+  modelCards:
+    - name: gateway-model
+  decisions:
+    - name: default
+      priority: 1
+      rules:
+        operator: OR
+        conditions: []
+      modelRefs:
+        - model: gateway-model
+`)
+
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+
+	exported := CanonicalStaticConfigFromRouterConfig(cfg)
+	var found bool
+	for _, model := range exported.Providers.Models {
+		if model.Name != "gateway-model" {
+			continue
+		}
+		for _, ref := range model.BackendRefs {
+			found = true
+			if !ref.ForwardAuthorizationHeader {
+				t.Fatalf("exported backend_ref %q lost forward_authorization_header", ref.Name)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("exported config did not contain the gateway-model backend_ref")
+	}
+}
+
 func TestGetModelPricingTreatsExplicitZeroPricingAsConfigured(t *testing.T) {
 	cfg := &RouterConfig{
 		BackendModels: BackendModels{

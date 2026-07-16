@@ -300,6 +300,10 @@ type ProviderProfile struct {
 	ExtraHeaders map[string]string `yaml:"extra_headers,omitempty"`
 	APIVersion   string            `yaml:"api_version,omitempty"`
 	ChatPath     string            `yaml:"chat_path,omitempty"`
+	// ForwardAuthorizationHeader forwards the caller's inbound Authorization
+	// header verbatim to this backend instead of injecting a resolved service
+	// key. See CanonicalBackendRef.ForwardAuthorizationHeader.
+	ForwardAuthorizationHeader bool `yaml:"forward_authorization_header,omitempty"`
 }
 
 type ModelPricing struct {

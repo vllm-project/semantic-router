@@ -30,6 +30,7 @@ Standard CI-backed profiles:
 - **ml-model-selection**: ML-based model-selection behavior
 - **multi-endpoint**: Environment-specific routing and safety policy behavior
 - **authz-rbac**: Authz-driven routing and per-user rate limiting
+- **forward-auth**: Per-backend `forward_authorization_header` passthrough and the internal-leg trust boundary
 - **streaming**: Streamed request-body and streaming-cache behavior
 - **anthropic-shim**: Anthropic-shape backend (llama.cpp + shim) for verifying outbound translation cells — cache-cycle, stop-reason mapping, and request-side field preservation
 - **dashboard**: Dashboard API surface — health, status, config read, deploy preview, config versions, and input validation
@@ -61,6 +62,7 @@ Manual-only profiles:
 | `ml-model-selection` | `chat-completions-request`, `domain-classify` | ML selector behavior |
 | `multi-endpoint` | `chat-completions-request` | Environment-specific safety policies |
 | `authz-rbac` | `chat-completions-request` | Authz and rate-limiting behavior |
+| `forward-auth` | `forward-authorization` | Forward-auth passthrough, per-backend enforcement, spoofed-header rejection |
 | `streaming` | none | Streaming request-body and SSE cache behavior |
 | `anthropic-shim` | none | Outbound Anthropic translation cell — cache, stop-reason, and request-side field preservation |
 | `dashboard` | none | Dashboard HTTP API contract |
