@@ -1279,10 +1279,19 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 	const (
 		maxImageSize = 20 * 1024 * 1024 // 20 MB
 		httpTimeout  = 30               // seconds
+		// Identify the client instead of sending Go's default User-Agent:
+		// hosts that enforce a User-Agent policy (e.g. Wikimedia) return
+		// HTTP 403 for generic library strings.
+		userAgent = "vllm-semantic-router/candle-binding (https://github.com/vllm-project/semantic-router)"
 	)
 
 	client := &http.Client{Timeout: time.Duration(httpTimeout) * time.Second}
-	resp, err := client.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build HTTP request: %w", err)
+	}
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP GET failed: %w", err)
 	}

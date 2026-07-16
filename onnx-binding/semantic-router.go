@@ -1237,13 +1237,23 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 		return nil, errors.New("only https URLs are allowed")
 	}
 
+	// Identify the client instead of sending Go's default User-Agent: hosts
+	// that enforce a User-Agent policy (e.g. Wikimedia) return HTTP 403 for
+	// generic library strings. Mirrors candle-binding's URL-encode path.
+	const userAgent = "vllm-semantic-router/onnx-binding (https://github.com/vllm-project/semantic-router)"
+
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
-	resp, err := client.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build HTTP request: %w", err)
+	}
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP GET error: %w", err)
 	}
