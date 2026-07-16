@@ -1,0 +1,201 @@
+\section{The Mixture-of-Models Artifact and Lifecycle}
+\label{sec:artifact}
+
+A model architecture needs a model artifact, not merely runtime configuration.
+For MoM, that artifact is the \emph{bundle}: a typed envelope that gives a
+composite model one interface, identity, policy, and finite execution semantics
+while leaving constituent checkpoints in their native formats. The same logical
+object must remain identifiable across authoring, optimization, evaluation, and
+deployment. The bundle carries the logical half of the co-design; binding and
+locking instantiate its physical half, and realized traces provide common
+evidence for optimizing both. We therefore define six lifecycle stages, separating policy and
+learned assets from environment-specific endpoints and traces:
+\begin{equation}
+ \text{source}\rightarrow\text{typed IR}\rightarrow\text{bundle}
+ \rightarrow\text{binding}\rightarrow\text{lock}
+ \rightarrow\text{realized trace}.
+ \label{eq:artifact-pipeline}
+\end{equation}
+
+\begin{figure}[H]
+  \centering
+  \resizebox{\linewidth}{!}{\input{figures/fig3_artifact_lifecycle.tex}}
+  \caption{\textbf{The MoM lifecycle separates portable representation
+  from environment-specific realization.} The lifecycle engine compiles source into
+  typed IR and an immutable bundle, then binds and resolves logical references
+  into a lock. Every realized trace is attributed to the
+  bundle, binding, and lock; credentials and live health remain outside the
+  portable artifact.}
+  \label{fig:artifact-lifecycle}
+\end{figure}
+
+\subsection{Six stages, six responsibilities}
+
+The following definitions are normative requirements of the proposed format,
+not a description of the current \vsr{} artifact format.
+
+\paragraph{Authoring source.}
+Source is a human-readable DSL or YAML with comments, fragments, and
+defaults.  Sources that normalize to the same IR define the same logical model.
+
+\paragraph{Canonical typed IR.}
+The IR is the semantic authority. It declares schemas and entry points, logical
+model requirements, signals and projections, action graphs, extension
+interfaces, contracts, behavior variants, request-preference domains, and
+bounds. It contains neither credentials
+nor implicit defaults. Canonical maps, numbers, and asset references enable
+stable hashes and semantic diffs, and unknown fields are rejected. Model
+requirements have no competing manifest authority; hard constraints are typed
+fail-closed predicates; and every contract check names explicit success and
+failure successors.
+
+\paragraph{Portable bundle.}
+The bundle is an immutable distribution unit around the IR:
+\begin{verbatim}
+manifest.json             interface, content index, compatibility
+mom.ir.json               canonical executable specification
+source/ assets/           authoring sources and semantic assets
+contracts/ eval/          schemas and evaluation protocols
+targets/ MODEL_CARD.md    realization templates and documentation
+\end{verbatim}
+Source is optional, allowing an author to export the executable object without
+revealing its authoring representation. Leaf artifacts may be safetensors,
+ONNX, GGUF, or immutable repository objects; closed constituents remain typed
+provider references. Large weights may be external but content-addressed.
+Plugin code is not implicitly trusted: the bundle declares an operator set,
+interface, effects, and digest; deployment policy allows or rejects it.
+
+A \emph{behavior variant} such as accuracy-first or security-first belongs to
+logical semantics and therefore to model identity; it declares the default and
+allowed domain of request preferences. A \emph{realization profile}
+such as CUDA, ROCm, CPU, edge, or hybrid instead declares portable runtime and
+accelerator requirements. It may be distributed with the bundle, but it contains
+no endpoint, secret, device identifier, or live capacity and does not change
+logical identity.
+
+Backend compatibility is not a scalar \texttt{backend} choice. A binding keeps
+six axes distinct: wire transport, API adapter, model runtime, leaf-artifact
+format, accelerator, and deployment driver. Thus one admissible trace may use a
+ROCm-hosted vLLM model, a CUDA specialist, a CPU verifier, and a managed cloud
+API without assigning the composite model itself a single hardware backend.
+
+\paragraph{Deployment binding.}
+A binding is an environment-owned mapping
+\begin{equation}
+ \mathcal{B}:\mathcal{V}\cup\mathcal{Q}\rightarrow 2^{\mathcal{E}}
+ \end{equation}
+from logical model or operator references to candidate endpoints or local
+deployments under a selected realization profile. For
+$r\in\mathcal{V}\cup\mathcal{Q}$, each
+$d\in \mathcal{B}(r)$ must
+satisfy modality, context, capability, data-policy, and interface requirements;
+operator candidates also satisfy their declared effect and sandbox
+requirements. Bindings declare placement, replicas, limits, prices, and
+fallbacks, but contain only secret references. Each candidate exposes its
+capability evidence, capacity envelope, and pricing assumptions, so resolution
+cannot infer them silently from an endpoint name. Here $\mathcal{E}$ is the
+environment's set of candidate deployments.
+
+\paragraph{Resolution lock.}
+Resolution lock $L$ records the complete resolved candidate inventory: model,
+tokenizer, adapter, image, runtime, accelerator, protocol-adapter, asset, and
+plugin identities plus capability evidence. Binding says what may run; lock says
+what was resolved; the trace says what actually ran. Revision evidence is typed
+as \emph{pinned} when an immutable content or repository identifier can be
+recorded and \emph{observed-opaque} when a provider exposes only an alias. The
+latter retains an observation time and a content-addressed probe record without
+claiming bitwise reproducibility. Floating references are a development mode,
+not a production lock.
+
+\paragraph{Realized trace.}
+The trace records semantic/bundle/binding/lock digests, behavior variant,
+request preference, realization profile, constraint
+checks, signals, actions, resolved calls, timing, tokens, usage, accounting
+version, realized cost, retries, contracts, and terminal status. Content may be
+encrypted, redacted, hashed, or referenced under data policy. A trace is an
+observation, not model definition.
+
+\subsection{Identity and portability}
+
+A human coordinate such as \texttt{modelId:version} is not an integrity
+identity. We instead separate four content identities. The
+\emph{semantic digest} commits to canonical IR and its path-sorted semantic
+assets. The \emph{bundle digest} additionally commits to the manifest, source,
+contracts, evaluation protocols, target templates, and documentation. The
+\emph{binding digest} identifies canonical environment policy, while the
+\emph{lock digest} identifies one completed resolution. The manifest stores the
+semantic digest; the external lock stores
+bundle and binding digests; the lock digest is computed only after the lock is
+complete. No object therefore contains its own hash.
+
+Bindings, credentials, and traces are excluded from logical identity.
+Rebinding realizes the same logical model but produces new binding and lock
+identities; changing a controller, prompt, contract, requirement, behavior
+variant, or topology changes the semantic digest. Changing only source
+formatting, a model card, or a realization template preserves logical identity
+but changes the distributed bundle. Every result carries all four digests.
+Together they distinguish semantic,
+distribution, environment, and realized-resolution equivalence.
+
+Portability preserves logical and control semantics, not predictive equivalence
+across substitutions. It is tested by fixing semantic and bundle digests,
+resolving them in two environments, and reporting quality, validity, cost, and
+latency under both binding and lock identities. Capability substitutions are
+explicit and disclosed; two edited recipes are not portable merely because
+they share an API path.
+
+\subsection{Build, import, validation, and export}
+
+Build expands source defaults into canonical IR and performs four classes of
+checks: schema and type validity; reference, reachability, and bound
+correctness; well-formed contract branches and statically decidable constraint
+consistency; and path, digest, and license-record integrity. Explicit migration
+handles older source versions; runtime evidence resolves guards that cannot be
+decided statically. Import instead verifies an already built artifact, records
+its content identity, and never recompiles an optional source representation.
+At deployment, every reachable call needs an admissible binding or a declared
+fallback or abstention path.
+
+Export writes canonical IR, a deterministic manifest, content-addressed assets,
+and evaluation protocols---never credentials, endpoint health, online counters,
+or private traces. It may produce a thin artifact of pinned references, a
+materialized artifact containing redistributable leaf objects, or a targeted
+artifact with selected runtime objects. Materialization fails rather than
+pretending that a closed provider is portable. Source round-tripping preserves
+semantics, not formatting. IR diff reports behavior changes such as a widened
+candidate set or relaxed residency guard.
+
+Consumers verify digests, schemas, operator sets, and engine capabilities;
+deployment policy
+enforces plugin and license rules and probes model access. Evaluation results,
+build provenance, SBOMs, and signatures are digest-bound attestations outside
+the bundle, so new evidence does not redefine the evaluated model.
+
+This boundary follows useful precedents without reducing MoM to any one of
+them. Hugging Face repositories motivate a save/load model coordinate and
+immutable revision pinning; MLflow motivates signatures shared by loading,
+serving, and evaluation; ONNX separates a versioned logical IR from
+capability-negotiated execution providers; and OCI supplies content-addressed
+descriptors and distribution primitives
+\citep{huggingface_2026_models,mlflow_2026_model_format,
+onnx_2026_ir,onnxruntime_2026_execution_providers,oci_2025_image_spec}.
+MoM applies this separation at the model-call level: an accelerator or runtime
+realizes the model but does not define it.
+
+\subsection{One lifecycle across training, evaluation, and inference}
+
+An optimizer consumes data or traces from a deployed realization
+$(\mathcal{M}_k,\mathcal{B}_k,L_k)$ and emits a complete logical or binding
+candidate, not an opaque mutation. Under recorded resolution locks, evaluation
+compares candidate and incumbent on quality, violations, cost, latency, retries,
+and uncertainty before promotion. Serving emits traces, monitoring detects
+drift, replay reconstructs decisions, and approved traces feed offline
+optimization. Immutable local revisions support revision-pinned re-execution;
+stochastic sampling and runtime scheduling still require recorded seeds and
+events. Opaque provider aliases support attributed re-evaluation and drift
+measurement, not bitwise reproduction.
+
+Online adaptation may update trace-linked local state, but the model changes
+only when that state is promoted into a hashed asset or IR revision.  Session
+protection and fallback remain runtime state, preventing one replica's traffic
+from silently redefining another's artifact.

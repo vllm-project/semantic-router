@@ -1,0 +1,16 @@
+schemaVersion: mom.vllm.ai/eval-protocol/v0alpha1
+id: accuracy-smoke
+behaviorVariant: accuracy-first
+tasks:
+  - id: quality-fixture
+    dataset:
+      uri: fixture://mom/quality-smoke-v1
+      digest: sha256:f342aa836ee908626d71b94b35f3146163fff3bb250362de3fb73fc3be8c0e5d
+    metrics: [exact-match, contract-validity, schema-conformance]
+execution:
+  seed: 17
+  concurrency: 1
+  temperature: 0.0
+reporting:
+  includeConfidenceIntervals: true
+  includeTraceSummary: true

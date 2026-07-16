@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "mom.vllm.ai/run-record/v0alpha1",
+  "subject": {
+    "semanticDigest": "sha256:7896fd6d7c496c8afaf32907503d67f536fa12271a398020c342107fb3252c70",
+    "bundleDigest": "sha256:b9cde7d73f2591ab41b04a2652330ba540f0a47ac1726d3208f30a27eab61862",
+    "bindingDigest": "sha256:6b0c802858ff24889819da299b765e992487d6b69980d694eef6611ae6686265",
+    "lockDigest": "sha256:24f99ae82680efd39f1f6bff8d4bb6590307b624b6e720b6e6b7602d254ac579"
+  },
+  "requestId": "fixture-request-001",
+  "entrypoint": "chat",
+  "behaviorVariant": "accuracy-first",
+  "requestPreference": {
+    "qualityBias": 1.0,
+    "costBias": 0.1,
+    "latencyBias": 0.1
+  },
+  "startedAt": "2026-07-15T00:00:00Z",
+  "endedAt": "2026-07-15T00:00:00.120Z",
+  "terminalStatus": "ok",
+  "events": [
+    {
+      "id": "event-0",
+      "sequence": 0,
+      "parentIds": [],
+      "operator": "choose-path",
+      "status": "succeeded",
+      "startedAt": "2026-07-15T00:00:00Z",
+      "durationMs": 112.0,
+      "attempt": 1,
+      "logicalModel": "local-generalist",
+      "bindingId": "lab-rocm-generalist",
+      "observedModelId": "example-org/generalist",
+      "constraintChecks": [
+        {"id": "private-data-locality", "outcome": "pass"}
+      ]
+    },
+    {
+      "id": "event-1",
+      "sequence": 1,
+      "parentIds": ["event-0"],
+      "operator": "validate-answer",
+      "status": "succeeded",
+      "startedAt": "2026-07-15T00:00:00.112Z",
+      "durationMs": 5.0,
+      "attempt": 1,
+      "contractChecks": [
+        {"id": "answer-schema", "outcome": "pass"}
+      ]
+    },
+    {
+      "id": "event-2",
+      "sequence": 2,
+      "parentIds": ["event-1"],
+      "operator": "return-answer",
+      "status": "succeeded",
+      "startedAt": "2026-07-15T00:00:00.117Z",
+      "durationMs": 3.0,
+      "attempt": 1,
+      "redactions": [
+        {"policy": "trace-content-minimization", "action": "hash"}
+      ]
+    }
+  ],
+  "usage": {
+    "modelCalls": 1,
+    "inputTokens": 64,
+    "outputTokens": 32,
+    "estimatedCost": 0.0,
+    "accountingVersion": "fixture-v1"
+  }
+}

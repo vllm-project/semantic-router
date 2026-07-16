@@ -1,0 +1,53 @@
+\begin{tikzpicture}[
+  x=1cm,y=1cm,font=\sffamily,>=Latex,
+  flow/.style={-{Latex[length=1.7mm]},draw=MoMGray,line width=0.65pt},
+  group/.style={draw=MoMBorder,fill=white,rounded corners=3pt,line width=0.45pt},
+  portable/.style={group,fill=MoMBlueLight!20},
+  base/.style={draw=MoMBorder,fill=white,rounded corners=2.5pt,
+    line width=0.58pt,minimum height=1.02cm,inner xsep=6pt,
+    inner ysep=3pt,align=center,text=MoMText},
+  source/.style={base,draw=none,fill=MoMBlueLight},
+  bundle/.style={base,draw=none,fill=MoMDark,text=white},
+  trace/.style={base,draw=MoMDark,fill=MoMBlue,line width=0.72pt},
+  header/.style={font=\sffamily\bfseries\fontsize{7.0}{8.0}\selectfont,
+    text=MoMMuted}
+]
+
+% Six lifecycle stages share one baseline; the semantic boundary lies between
+% the portable bundle and the environment-owned binding.
+\draw[portable] (0.05,0.15) rectangle (7.25,2.62);
+\draw[group] (7.55,0.15) rectangle (13.70,2.62);
+\node[header,anchor=west] at (0.36,2.30) {Portable artifact representations};
+\node[header,anchor=west] at (7.86,2.30) {Environment-specific realization};
+
+\node[source,minimum width=1.70cm] (src) at (1.05,1.22)
+  {{\bfseries\fontsize{8.0}{8.8}\selectfont Source}\\[-1pt]
+   {\fontsize{6.5}{7.2}\selectfont\color{MoMMuted} DSL / YAML}};
+
+\node[base,minimum width=1.70cm] (ir) at (3.35,1.22)
+  {{\bfseries\fontsize{8.0}{8.8}\selectfont Typed IR}\\[-1pt]
+   {\fontsize{6.5}{7.2}\selectfont\color{MoMMuted} semantics}};
+
+\node[bundle,minimum width=1.95cm] (bundle) at (5.83,1.22)
+  {{\bfseries\fontsize{8.0}{8.8}\selectfont MoM bundle}\\[-1pt]
+   {\fontsize{6.5}{7.2}\selectfont model artifact}};
+
+\node[base,minimum width=1.55cm] (binding) at (8.35,1.22)
+  {{\bfseries\fontsize{8.0}{8.8}\selectfont Binding}\\[-1pt]
+   {\fontsize{6.2}{6.9}\selectfont\color{MoMMuted} fleet policy}};
+
+\node[base,minimum width=1.55cm] (lock) at (10.25,1.22)
+  {{\bfseries\fontsize{8.0}{8.8}\selectfont Lock}\\[-1pt]
+   {\fontsize{6.2}{6.9}\selectfont\color{MoMMuted} revisions}};
+
+\node[trace,minimum width=1.90cm] (realized) at (12.50,1.22)
+  {{\bfseries\fontsize{8.0}{8.8}\selectfont Realized trace}\\[-1pt]
+   {\fontsize{6.3}{7.0}\selectfont\color{MoMText} calls / outcomes}};
+
+\draw[flow] (src) -- (ir);
+\draw[flow] (ir) -- (bundle);
+\draw[flow] (bundle) -- (binding);
+\draw[flow] (binding) -- (lock);
+\draw[flow] (lock) -- (realized);
+
+\end{tikzpicture}
