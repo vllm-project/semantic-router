@@ -32,4 +32,4 @@ def test_model_mode_without_banks_accepted():
 
 def test_unknown_method_rejected():
     with pytest.raises(ValidationError, match="method must be"):
-        ComplexityRule(name="c", method="modle", **_banks())
+        ComplexityRule(name="c", method="bogus", **_banks())
