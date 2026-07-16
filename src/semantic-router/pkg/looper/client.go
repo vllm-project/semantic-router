@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -34,11 +33,12 @@ import (
 
 // Client handles HTTP requests to OpenAI-compatible endpoints
 type Client struct {
-	httpClient   *http.Client
-	endpoint     string
-	headers      map[string]string
-	decisionName string // Decision name to pass in looper requests
-	fusionDepth  int    // Recursion guard for Fusion requests
+	httpClient       *http.Client
+	endpoint         string
+	headers          map[string]string
+	decisionName     string // Decision name to pass in looper requests
+	fusionDepth      int    // Recursion guard for Fusion requests
+	maxResponseBytes int64  // Ceiling for a single upstream response body
 }
 
 // NewClient creates a new looper HTTP client
@@ -47,8 +47,9 @@ func NewClient(cfg *config.LooperConfig) *Client {
 		httpClient: &http.Client{
 			Timeout: time.Duration(cfg.GetTimeout()) * time.Second,
 		},
-		endpoint: cfg.Endpoint,
-		headers:  cfg.Headers,
+		endpoint:         cfg.Endpoint,
+		headers:          cfg.Headers,
+		maxResponseBytes: cfg.GetMaxResponseBytes(),
 	}
 	return c
 }
@@ -217,14 +218,9 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	}
 	defer resp.Body.Close()
 
-	// Read response
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := c.readResponseBody(resp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(respBody))
+		return nil, err
 	}
 
 	// Parse response based on streaming mode
