@@ -2501,6 +2501,30 @@
   "homepage.testimonials.source": {
     "message": "来源"
   },
+  "homepage.sponsors.label": {
+    "message": "社区"
+  },
+  "homepage.sponsors.title": {
+    "message": "赞助商"
+  },
+  "homepage.sponsors.subtitle": {
+    "message": "vLLM Semantic Router 是社区项目。以下组织为开发与测试提供算力支持，感谢大家的支持。"
+  },
+  "homepage.sponsors.category.cash": {
+    "message": "资金捐赠"
+  },
+  "homepage.sponsors.category.compute": {
+    "message": "算力资源"
+  },
+  "homepage.sponsors.category.slack": {
+    "message": "Slack 赞助"
+  },
+  "homepage.sponsors.footnote": {
+    "message": "捐赠通过 vLLM 项目收集，用于支持生态内的开发、维护与推广。"
+  },
+  "homepage.sponsors.footnoteLink": {
+    "message": "在 vllm.ai 了解更多"
+  },
   "homepage.finalCta.label": {
     "message": "开始构建"
   },
