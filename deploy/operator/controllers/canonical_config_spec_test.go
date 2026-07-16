@@ -310,6 +310,41 @@ func assertOperatorToolsConfig(t *testing.T, tools routerconfig.ToolsConfig) {
 	}
 }
 
+func TestBuildCanonicalConfigAppliesComplexityModelMode(t *testing.T) {
+	r := &SemanticRouterReconciler{}
+	sr := &vllmv1alpha1.SemanticRouter{
+		Spec: vllmv1alpha1.SemanticRouterSpec{
+			Config: vllmv1alpha1.ConfigSpec{
+				ComplexityRules: []vllmv1alpha1.ComplexityRulesConfig{
+					{Name: "needs-reasoning", Method: "model"},
+				},
+				ComplexityClassifier: &vllmv1alpha1.ComplexityClassifierConfig{
+					ModelID:               "models/mom-complexity-classifier",
+					UseCPU:                true,
+					ComplexityMappingPath: "models/mom-complexity-classifier/category_mapping.json",
+				},
+			},
+		},
+	}
+
+	canonical, err := r.buildCanonicalConfig(context.Background(), sr)
+	if err != nil {
+		t.Fatalf("buildCanonicalConfig failed: %v", err)
+	}
+
+	rules := canonical.Routing.Signals.Complexity
+	if len(rules) != 1 || rules[0].Method != "model" {
+		t.Fatalf("expected one model-mode complexity rule, got %#v", rules)
+	}
+
+	classifier := canonical.Global.ModelCatalog.Modules.Complexity.Classifier
+	if classifier.ModelID != "models/mom-complexity-classifier" ||
+		!classifier.UseCPU ||
+		classifier.ComplexityMappingPath != "models/mom-complexity-classifier/category_mapping.json" {
+		t.Fatalf("unexpected complexity classifier module: %#v", classifier)
+	}
+}
+
 func assertOperatorClassifierConfig(t *testing.T, classifier routerconfig.CanonicalClassifierModule) {
 	t.Helper()
 
