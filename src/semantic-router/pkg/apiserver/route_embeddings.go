@@ -55,6 +55,19 @@ const (
 	maxImagesPerRequest = 8
 )
 
+// invalidDimensionMessage matches the dimensions accepted by isValidDimension,
+// including 64 (which the similarity error messages previously omitted).
+const invalidDimensionMessage = "dimension must be one of: 64, 128, 256, 512, 768, 1024 (got %d)"
+
+// validatePriority rejects a priority weight outside the documented [0.0, 1.0]
+// range; out-of-range values were previously accepted and passed to the model.
+func validatePriority(name string, value float32) (string, string, bool) {
+	if value < 0 || value > 1 {
+		return "INVALID_PARAMETER", fmt.Sprintf("%s must be between 0.0 and 1.0 (got %g)", name, value), false
+	}
+	return "", "", true
+}
+
 // handleEmbeddings handles embedding generation requests
 func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	req, ok := s.parseEmbeddingRequest(w, r)
@@ -226,35 +239,15 @@ func embeddingOutput(req EmbeddingRequest, text string) (*candle_binding.Embeddi
 
 // handleSimilarity handles text similarity calculation requests
 func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *http.Request) {
-	// Parse request
 	var req SimilarityRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
 		return
 	}
 
-	// Validate input
-	if req.Text1 == "" || req.Text2 == "" {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "both text1 and text2 must be provided")
-		return
-	}
-
-	// Set defaults
-	if req.Model == "" {
-		req.Model = "auto"
-	}
-	if req.Dimension == 0 {
-		req.Dimension = 768 // Default to full dimension
-	}
-	if req.Model == "auto" && req.QualityPriority == 0 && req.LatencyPriority == 0 {
-		req.QualityPriority = 0.5
-		req.LatencyPriority = 0.5
-	}
-
-	// Validate dimension
-	if !isValidDimension(req.Dimension) {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_DIMENSION",
-			fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension))
+	applySimilarityDefaults(&req)
+	if code, message, ok := validateSimilarityRequest(req); !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
 		return
 	}
 
@@ -281,6 +274,35 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		result.Similarity, result.ModelType, result.ProcessingTimeMs)
 
 	s.writeJSONResponse(w, http.StatusOK, response)
+}
+
+func applySimilarityDefaults(req *SimilarityRequest) {
+	if req.Model == "" {
+		req.Model = "auto"
+	}
+	if req.Dimension == 0 {
+		req.Dimension = defaultEmbeddingDimension
+	}
+	if req.Model == "auto" && req.QualityPriority == 0 && req.LatencyPriority == 0 {
+		req.QualityPriority = defaultEmbeddingPriority
+		req.LatencyPriority = defaultEmbeddingPriority
+	}
+}
+
+func validateSimilarityRequest(req SimilarityRequest) (string, string, bool) {
+	if strings.TrimSpace(req.Text1) == "" || strings.TrimSpace(req.Text2) == "" {
+		return "INVALID_INPUT", "both text1 and text2 must be provided", false
+	}
+	if !isValidDimension(req.Dimension) {
+		return "INVALID_DIMENSION", fmt.Sprintf(invalidDimensionMessage, req.Dimension), false
+	}
+	if code, message, ok := validatePriority("quality_priority", req.QualityPriority); !ok {
+		return code, message, false
+	}
+	if code, message, ok := validatePriority("latency_priority", req.LatencyPriority); !ok {
+		return code, message, false
+	}
+	return "", "", true
 }
 
 // handleBatchSimilarity handles batch similarity matching requests
@@ -357,17 +379,28 @@ func applyBatchSimilarityDefaults(req *BatchSimilarityRequest) {
 }
 
 func validateBatchSimilarityRequest(req BatchSimilarityRequest) (string, string, bool) {
-	if req.Query == "" {
+	if strings.TrimSpace(req.Query) == "" {
 		return "INVALID_INPUT", "query must be provided", false
 	}
 	if len(req.Candidates) == 0 {
 		return "INVALID_INPUT", "candidates array cannot be empty", false
 	}
+	for i, c := range req.Candidates {
+		if strings.TrimSpace(c) == "" {
+			return "INVALID_INPUT", fmt.Sprintf("candidates[%d] must not be empty or whitespace", i), false
+		}
+	}
 	if req.TopK < 0 {
 		return "INVALID_INPUT", "top_k cannot be negative", false
 	}
 	if !isValidDimension(req.Dimension) {
-		return "INVALID_DIMENSION", fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension), false
+		return "INVALID_DIMENSION", fmt.Sprintf(invalidDimensionMessage, req.Dimension), false
+	}
+	if code, message, ok := validatePriority("quality_priority", req.QualityPriority); !ok {
+		return code, message, false
+	}
+	if code, message, ok := validatePriority("latency_priority", req.LatencyPriority); !ok {
+		return code, message, false
 	}
 	return "", "", true
 }

@@ -51,17 +51,27 @@ func (s *ClassificationService) CheckSecurity(req SecurityRequest) (*SecurityRes
 		}, nil
 	}
 
-	isJailbreak, jailbreakType, confidence, err := s.classifier.CheckForJailbreak(req.Text)
+	isJailbreak, jailbreakType, confidence, riskScore, err := s.classifier.CheckForJailbreakWithRisk(req.Text)
 	if err != nil {
 		return nil, fmt.Errorf("security detection failed: %w", err)
 	}
 
 	processingTime := time.Since(start).Milliseconds()
+	includeReasoning := req.Options != nil && req.Options.IncludeReasoning
+
+	return buildSecurityResponse(isJailbreak, jailbreakType, confidence, riskScore, includeReasoning, processingTime), nil
+}
+
+// buildSecurityResponse assembles the security detection response. The risk_score
+// reflects the probability of the jailbreak class (P(jailbreak)), which is distinct
+// from the classifier confidence: a confident benign prediction yields a low
+// risk_score rather than a misleadingly high one (issue #2591).
+func buildSecurityResponse(isJailbreak bool, jailbreakType string, confidence, riskScore float32, includeReasoning bool, processingTimeMs int64) *SecurityResponse {
 	response := &SecurityResponse{
 		IsJailbreak:      isJailbreak,
-		RiskScore:        float64(confidence),
+		RiskScore:        float64(riskScore),
 		Confidence:       float64(confidence),
-		ProcessingTimeMs: processingTime,
+		ProcessingTimeMs: processingTimeMs,
 		DetectionTypes:   []string{},
 		PatternsDetected: []string{},
 	}
@@ -70,12 +80,12 @@ func (s *ClassificationService) CheckSecurity(req SecurityRequest) (*SecurityRes
 		response.DetectionTypes = append(response.DetectionTypes, jailbreakType)
 		response.PatternsDetected = append(response.PatternsDetected, jailbreakType)
 		response.Recommendation = "block"
-		if req.Options != nil && req.Options.IncludeReasoning {
+		if includeReasoning {
 			response.Reasoning = fmt.Sprintf("Detected %s pattern with confidence %.3f", jailbreakType, confidence)
 		}
 	} else {
 		response.Recommendation = "allow"
 	}
 
-	return response, nil
+	return response
 }
