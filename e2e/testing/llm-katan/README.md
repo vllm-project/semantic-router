@@ -47,15 +47,15 @@ make kube-deploy-llm-katan-claude   # Deploy Claude simulation
 make kube-deploy-llm-katan-multi    # Deploy both models
 
 # Or manually with kubectl
-kubectl apply -k e2e/testing/llm-katan/deploy/kubernetes/overlays/gpt35
-kubectl apply -k e2e/testing/llm-katan/deploy/kubernetes/overlays/claude
+kubectl apply -k deploy/kubernetes/llm-katan/overlays/gpt35
+kubectl apply -k deploy/kubernetes/llm-katan/overlays/claude
 
 # Port forward and test
 make kube-port-forward-llm-katan LLM_KATAN_OVERLAY=gpt35
 curl http://localhost:8000/health
 ```
 
-**📚 For comprehensive Kubernetes deployment guide, see [deploy/docs/README.md](deploy/docs/README.md)**
+**📚 For comprehensive Kubernetes deployment guide, see [deploy/kubernetes/llm-katan/README.md](../../../deploy/kubernetes/llm-katan/README.md)**
 
 ### Setup
 

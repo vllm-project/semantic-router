@@ -1911,6 +1911,7 @@ global:
     looper:
       endpoint: http://localhost:8899/v1/chat/completions
       grpc_max_msg_size_mb: 16
+      max_response_bytes_mb: 32
       timeout_seconds: 120
       retry_count: 2
       headers:
