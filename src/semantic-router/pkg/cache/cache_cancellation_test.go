@@ -11,14 +11,8 @@ import (
 )
 
 // Coverage for #2473: the request context now threads into the embedding work
-// of a lookup. Embedding is a synchronous CGO call that cannot be interrupted
-// mid-flight, so the contract is best-effort: an already-cancelled context
-// short-circuits BEFORE the expensive embed starts, and the lookup returns the
-// context error instead of a (potentially stale) hit.
-//
-// The second spec pins the per-request "best-observed score" semantics of a
-// miss: a below-threshold lookup reports its OWN best similarity (> 0, below
-// threshold), never zero and never another request's leaked score.
+// of a lookup. The specs are registered by the helpers below; see each helper's
+// doc comment for the exact contract it pins.
 var _ = Describe("Cache lookup cancellation and per-request miss score (#2473)", func() {
 	const threshold = float32(0.75)
 
@@ -41,6 +35,16 @@ var _ = Describe("Cache lookup cancellation and per-request miss score (#2473)",
 		return backend
 	}
 
+	specCancelledContextShortCircuits(newSeededBackend, threshold)
+	specBelowThresholdMissScore(newSeededBackend, threshold)
+	specCGOEmbedCancellation(newSeededBackend)
+})
+
+// specCancelledContextShortCircuits pins that embedding is a synchronous CGO
+// call that cannot be interrupted mid-flight, so the contract is best-effort: an
+// already-cancelled context short-circuits BEFORE the expensive embed starts,
+// and the lookup returns the context error instead of a (potentially stale) hit.
+func specCancelledContextShortCircuits(newSeededBackend func() CacheBackend, threshold float32) {
 	Context("with an already-cancelled context", func() {
 		It("short-circuits before embedding and returns context.Canceled, not a hit", func() {
 			backend := newSeededBackend()
@@ -61,7 +65,12 @@ var _ = Describe("Cache lookup cancellation and per-request miss score (#2473)",
 			Expect(res.Body).To(BeNil())
 		})
 	})
+}
 
+// specBelowThresholdMissScore pins the per-request "best-observed score"
+// semantics of a miss: a below-threshold lookup reports its OWN best similarity
+// (> 0, below threshold), never zero and never another request's leaked score.
+func specBelowThresholdMissScore(newSeededBackend func() CacheBackend, threshold float32) {
 	Context("with a below-threshold query", func() {
 		It("reports the request's own best-observed similarity (0 < sim < threshold)", func() {
 			backend := newSeededBackend()
@@ -82,16 +91,19 @@ var _ = Describe("Cache lookup cancellation and per-request miss score (#2473)",
 			Expect(res.Similarity).To(BeNumerically("<", threshold))
 		})
 	})
+}
 
-	// Write-path cancellation (#2473): embedding is a synchronous CGO call that
-	// cannot be interrupted mid-flight, so cancellation is re-checked AFTER the
-	// embed completes and BEFORE the entry is published. A request cancelled in
-	// that window must return the context error and leave no orphaned state.
-	//
-	// cancelAfterEmbedCtx trips exactly on the post-embed guard: generateEmbedding
-	// calls ctxErr once (sees nil and proceeds), then the write method's guard
-	// calls ctxErr again and observes cancellation — simulating a context that
-	// was cancelled while the CGO embed was running.
+// specCGOEmbedCancellation covers write-path cancellation (#2473): embedding is
+// a synchronous CGO call that cannot be interrupted mid-flight, so cancellation
+// is re-checked AFTER the embed completes and BEFORE the entry is published. A
+// request cancelled in that window must return the context error and leave no
+// orphaned state.
+//
+// cancelAfterEmbedCtx trips exactly on the post-embed guard: generateEmbedding
+// calls ctxErr once (sees nil and proceeds), then the write method's guard calls
+// ctxErr again and observes cancellation — simulating a context that was
+// cancelled while the CGO embed was running.
+func specCGOEmbedCancellation(newSeededBackend func() CacheBackend) {
 	Context("with a context cancelled during the CGO embedding", func() {
 		It("AddEntry returns the context error and publishes no entry", func() {
 			backend := newSeededBackend()
@@ -123,7 +135,7 @@ var _ = Describe("Cache lookup cancellation and per-request miss score (#2473)",
 				"cancelled AddPendingRequest must not publish a pending entry")
 		})
 	})
-})
+}
 
 // cancelAfterEmbedCtx reports no error until the errAfter-th Err() call, then
 // context.Canceled. It lets a test deterministically trip the post-embedding

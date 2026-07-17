@@ -125,12 +125,16 @@ func testCache(ctx context.Context, client *kubernetes.Clientset, opts pkgtestca
 			cacheHits, totalRequests, hitRate)
 	}
 
-	// Turn the collected results into an explicit pass/fail verdict. Previously
-	// this returned nil unconditionally, so a malformed/missing similarity
-	// header (recorded in CacheResult.Error) or a run that executed zero
-	// requests still passed CI (#2473).
-	var assertionFailures []string
-	assertionFailures = append(assertionFailures, setupFailures...)
+	// Turn the collected results into an explicit pass/fail verdict (#2473).
+	return evaluateCacheAssertions(results, totalRequests, cacheHits, setupFailures)
+}
+
+// evaluateCacheAssertions converts the collected per-request results into an
+// explicit pass/fail verdict. Previously testCache returned nil unconditionally,
+// so a malformed/missing similarity header (recorded in CacheResult.Error) or a
+// run that executed zero requests still passed CI (#2473).
+func evaluateCacheAssertions(results []CacheResult, totalRequests, cacheHits int, setupFailures []string) error {
+	assertionFailures := append([]string{}, setupFailures...)
 	for _, r := range results {
 		if r.Error != "" {
 			assertionFailures = append(assertionFailures,
