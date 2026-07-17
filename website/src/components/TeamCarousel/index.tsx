@@ -1,10 +1,15 @@
 import React from 'react'
 import Translate from '@docusaurus/Translate'
 import { PillLink, SectionLabel } from '@site/src/components/site/Chrome'
-import { committerMembers, steeringCommitteeMembers, type TeamMember } from '@site/src/data/teamMembers'
+import {
+  committerMembers,
+  getTeamMemberBadge,
+  maintainerMembers,
+  type TeamMember,
+} from '@site/src/data/teamMembers'
 import styles from './styles.module.css'
 
-const teamMembers = [...steeringCommitteeMembers, ...committerMembers]
+const teamMembers = [...maintainerMembers, ...committerMembers]
 
 interface MemberSequenceProps {
   duplicate?: boolean
@@ -43,9 +48,7 @@ function MemberCard({
           loading="lazy"
         />
         <span className={`${styles.badge} ${styles[member.memberType]}`}>
-          {member.memberType === 'steering'
-            ? <Translate id="team.badge.steering">Steering Committee</Translate>
-            : <Translate id="team.badge.committer">Committer</Translate>}
+          {getTeamMemberBadge(member)}
         </span>
       </div>
       <h3 className={styles.memberName}>{member.name}</h3>
