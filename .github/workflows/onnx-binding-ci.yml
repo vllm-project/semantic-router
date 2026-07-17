@@ -1,12 +1,21 @@
 # ONNX Go binding CI.
 #
-# Required, provider-independent lane: builds the Rust FFI library with default
-# (CPU) features and compiles + runs the Go test package WITHOUT any model
-# artifacts. This gate proves the Go binding still matches the FFI/API contract
-# (lifecycle, error arity, Matryoshka signatures, ABI/capability types) on every
-# change — API signature drift fails compilation here, and the lane asserts that
-# a non-zero number of tests actually executed so it can never degrade into a
-# skip-only pass.
+# NOTE ON REQUIRED STATUS: the merge-blocking copy of the model-free contract
+# receipt runs inside the `test-and-build` job (see
+# .github/workflows/test-and-build.yml), because that is the status branch
+# protection and the Mergify merge gate actually require. This standalone
+# workflow provides the same provider-independent receipt as a fast,
+# PR-visible signal on binding changes, plus the explicitly selected
+# model-dependent receipts below.
+#
+# The provider-independent lane builds the Rust FFI library with default (CPU)
+# features and compiles + runs the Go test package WITHOUT any model artifacts.
+# It proves the Go binding still matches the FFI/API contract (lifecycle,
+# error arity, Matryoshka signatures, cross-language ABI struct layout) on
+# every change — API signature drift fails compilation, a #[repr(C)] layout
+# drift fails the ABI receipt tests, and the lane asserts that a non-zero
+# number of tests actually executed so it can never degrade into a skip-only
+# pass.
 #
 # Model/provider-dependent receipts (real mmBERT inference) stay explicitly
 # selected via workflow_dispatch so provider or model availability never
@@ -77,6 +86,11 @@ jobs:
           cargo build --release
           echo "=== Verifying library ==="
           ls -la target/release/libonnx_semantic_router.so
+
+      - name: Run Rust unit tests (includes ABI layout receipts)
+        run: |
+          cd onnx-binding
+          cargo test --release
 
       - name: Vet Go binding (test package included)
         run: |

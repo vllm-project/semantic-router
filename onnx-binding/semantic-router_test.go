@@ -37,13 +37,16 @@ func initTestModel(t *testing.T) {
 	}
 }
 
-// TestIsModelInitializedContract is a model-free ABI contract test: the
-// candle_binding compatible IsModelInitialized must report (rust, go) state
-// with both values agreeing, whether or not a model has been loaded.
-func TestIsModelInitializedContract(t *testing.T) {
-	rustState, goState := IsModelInitialized()
-	if rustState != goState {
-		t.Errorf("Rust and Go initialization state must agree: rust=%v, go=%v", rustState, goState)
+// TestIsModelInitializedArityContract is a model-free FFI-state contract test.
+// There is no independent Go-side state anymore: IsModelInitialized reads the
+// Rust state once and reports it twice, preserving the candle_binding
+// two-value arity for drop-in compatibility. This pins that arity and the
+// wrapper's consistency with IsMmBertModelInitialized — it cannot (and does
+// not claim to) verify agreement between two independently owned states.
+func TestIsModelInitializedArityContract(t *testing.T) {
+	rustState, compatState := IsModelInitialized()
+	if rustState != compatState {
+		t.Errorf("Two-value compatibility arity must mirror one state: got (%v, %v)", rustState, compatState)
 	}
 	if rustState != IsMmBertModelInitialized() {
 		t.Errorf("IsModelInitialized and IsMmBertModelInitialized disagree")

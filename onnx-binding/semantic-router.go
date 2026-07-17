@@ -138,6 +138,23 @@ extern int multimodal_encode_text(const char* text, int target_dim, MultiModalEm
 extern int multimodal_encode_image(const float* pixel_data, int height, int width, int target_dim, MultiModalEmbeddingResult* result);
 extern int multimodal_encode_audio(const float* mel_data, int n_mels, int time_frames, int target_dim, MultiModalEmbeddingResult* result);
 extern void free_multimodal_embedding(float* data, int length);
+
+// ============================================================================
+// ABI Layout Receipts (see src/ffi/abi_receipt.rs)
+// ============================================================================
+// Each returns the Rust-side [size, align, field offsets...] for one shared
+// struct so tests can assert layout agreement across the cgo boundary.
+
+extern size_t abi_layout_embedding_result(size_t* out, size_t cap);
+extern size_t abi_layout_embedding_similarity_result(size_t* out, size_t cap);
+extern size_t abi_layout_similarity_match(size_t* out, size_t cap);
+extern size_t abi_layout_batch_similarity_result(size_t* out, size_t cap);
+extern size_t abi_layout_embedding_model_info(size_t* out, size_t cap);
+extern size_t abi_layout_embedding_models_info_result(size_t* out, size_t cap);
+extern size_t abi_layout_classification_result(size_t* out, size_t cap);
+extern size_t abi_layout_pii_entity(size_t* out, size_t cap);
+extern size_t abi_layout_pii_result(size_t* out, size_t cap);
+extern size_t abi_layout_multimodal_embedding_result(size_t* out, size_t cap);
 */
 import "C"
 
@@ -1230,4 +1247,180 @@ func decodeAndResizeImageOnnx(data []byte, targetW, targetH int) ([]float32, err
 		}
 	}
 	return pixels, nil
+}
+
+// ============================================================================
+// ABI Layout Receipts
+// ============================================================================
+// Go redeclares the shared FFI structs in the cgo preamble above while Rust
+// owns the #[repr(C)] definitions, so layout agreement must be asserted, not
+// assumed. These helpers expose both views — the Rust receipt exported by
+// src/ffi/abi_receipt.rs and cgo's own view of the same struct — as
+// [size, align, field offsets...] slices for the model-free test suite.
+
+// abiLayoutPair holds both sides' layout receipt for one shared FFI struct.
+// fields lists the field names in declaration order for error reporting.
+type abiLayoutPair struct {
+	name   string
+	fields []string
+	rust   []uintptr
+	cgo    []uintptr
+}
+
+// fetchRustLayout probes a Rust layout receipt for its length, then reads it.
+func fetchRustLayout(receipt func(*C.size_t, C.size_t) C.size_t) []uintptr {
+	n := int(receipt(nil, 0))
+	buf := make([]C.size_t, n)
+	receipt(&buf[0], C.size_t(n))
+	out := make([]uintptr, n)
+	for i, v := range buf {
+		out[i] = uintptr(v)
+	}
+	return out
+}
+
+func embeddingLayoutPairs() []abiLayoutPair {
+	var (
+		er  C.EmbeddingResult
+		esr C.EmbeddingSimilarityResult
+		sm  C.SimilarityMatch
+		bsr C.BatchSimilarityResult
+	)
+	return []abiLayoutPair{
+		{
+			"EmbeddingResult",
+			[]string{"data", "length", "error", "model_type", "sequence_length", "processing_time_ms"},
+			fetchRustLayout(func(o *C.size_t, c C.size_t) C.size_t { return C.abi_layout_embedding_result(o, c) }),
+			[]uintptr{
+				unsafe.Sizeof(er), unsafe.Alignof(er),
+				unsafe.Offsetof(er.data), unsafe.Offsetof(er.length), unsafe.Offsetof(er.error),
+				unsafe.Offsetof(er.model_type), unsafe.Offsetof(er.sequence_length), unsafe.Offsetof(er.processing_time_ms),
+			},
+		},
+		{
+			"EmbeddingSimilarityResult",
+			[]string{"similarity", "model_type", "processing_time_ms", "error"},
+			fetchRustLayout(func(o *C.size_t, c C.size_t) C.size_t {
+				return C.abi_layout_embedding_similarity_result(o, c)
+			}),
+			[]uintptr{
+				unsafe.Sizeof(esr), unsafe.Alignof(esr),
+				unsafe.Offsetof(esr.similarity), unsafe.Offsetof(esr.model_type),
+				unsafe.Offsetof(esr.processing_time_ms), unsafe.Offsetof(esr.error),
+			},
+		},
+		{
+			"SimilarityMatch",
+			[]string{"index", "similarity"},
+			fetchRustLayout(func(o *C.size_t, c C.size_t) C.size_t { return C.abi_layout_similarity_match(o, c) }),
+			[]uintptr{
+				unsafe.Sizeof(sm), unsafe.Alignof(sm),
+				unsafe.Offsetof(sm.index), unsafe.Offsetof(sm.similarity),
+			},
+		},
+		{
+			"BatchSimilarityResult",
+			[]string{"matches", "num_matches", "model_type", "processing_time_ms", "error"},
+			fetchRustLayout(func(o *C.size_t, c C.size_t) C.size_t { return C.abi_layout_batch_similarity_result(o, c) }),
+			[]uintptr{
+				unsafe.Sizeof(bsr), unsafe.Alignof(bsr),
+				unsafe.Offsetof(bsr.matches), unsafe.Offsetof(bsr.num_matches), unsafe.Offsetof(bsr.model_type),
+				unsafe.Offsetof(bsr.processing_time_ms), unsafe.Offsetof(bsr.error),
+			},
+		},
+	}
+}
+
+func modelInfoLayoutPairs() []abiLayoutPair {
+	var (
+		emi C.EmbeddingModelInfo
+		emr C.EmbeddingModelsInfoResult
+		mm  C.MultiModalEmbeddingResult
+	)
+	return []abiLayoutPair{
+		{
+			"EmbeddingModelInfo",
+			[]string{"model_name", "is_loaded", "max_sequence_length", "default_dimension", "model_path", "supports_layer_exit", "available_layers"},
+			fetchRustLayout(func(o *C.size_t, c C.size_t) C.size_t { return C.abi_layout_embedding_model_info(o, c) }),
+			[]uintptr{
+				unsafe.Sizeof(emi), unsafe.Alignof(emi),
+				unsafe.Offsetof(emi.model_name), unsafe.Offsetof(emi.is_loaded), unsafe.Offsetof(emi.max_sequence_length),
+				unsafe.Offsetof(emi.default_dimension), unsafe.Offsetof(emi.model_path),
+				unsafe.Offsetof(emi.supports_layer_exit), unsafe.Offsetof(emi.available_layers),
+			},
+		},
+		{
+			"EmbeddingModelsInfoResult",
+			[]string{"models", "num_models", "error"},
+			fetchRustLayout(func(o *C.size_t, c C.size_t) C.size_t {
+				return C.abi_layout_embedding_models_info_result(o, c)
+			}),
+			[]uintptr{
+				unsafe.Sizeof(emr), unsafe.Alignof(emr),
+				unsafe.Offsetof(emr.models), unsafe.Offsetof(emr.num_models), unsafe.Offsetof(emr.error),
+			},
+		},
+		{
+			"MultiModalEmbeddingResult",
+			[]string{"data", "length", "error", "modality", "processing_time_ms"},
+			fetchRustLayout(func(o *C.size_t, c C.size_t) C.size_t {
+				return C.abi_layout_multimodal_embedding_result(o, c)
+			}),
+			[]uintptr{
+				unsafe.Sizeof(mm), unsafe.Alignof(mm),
+				unsafe.Offsetof(mm.data), unsafe.Offsetof(mm.length), unsafe.Offsetof(mm.error),
+				unsafe.Offsetof(mm.modality), unsafe.Offsetof(mm.processing_time_ms),
+			},
+		},
+	}
+}
+
+func classificationLayoutPairs() []abiLayoutPair {
+	var (
+		cr C.ClassificationResultFFI
+		pe C.PIIEntityFFI
+		pr C.PIIResultFFI
+	)
+	return []abiLayoutPair{
+		{
+			"ClassificationResultFFI",
+			[]string{"label", "class_id", "confidence", "num_classes", "probabilities", "processing_time_ms", "error"},
+			fetchRustLayout(func(o *C.size_t, c C.size_t) C.size_t { return C.abi_layout_classification_result(o, c) }),
+			[]uintptr{
+				unsafe.Sizeof(cr), unsafe.Alignof(cr),
+				unsafe.Offsetof(cr.label), unsafe.Offsetof(cr.class_id), unsafe.Offsetof(cr.confidence),
+				unsafe.Offsetof(cr.num_classes), unsafe.Offsetof(cr.probabilities),
+				unsafe.Offsetof(cr.processing_time_ms), unsafe.Offsetof(cr.error),
+			},
+		},
+		{
+			"PIIEntityFFI",
+			[]string{"text", "entity_type", "start", "end", "confidence"},
+			fetchRustLayout(func(o *C.size_t, c C.size_t) C.size_t { return C.abi_layout_pii_entity(o, c) }),
+			[]uintptr{
+				unsafe.Sizeof(pe), unsafe.Alignof(pe),
+				unsafe.Offsetof(pe.text), unsafe.Offsetof(pe.entity_type), unsafe.Offsetof(pe.start),
+				unsafe.Offsetof(pe.end), unsafe.Offsetof(pe.confidence),
+			},
+		},
+		{
+			"PIIResultFFI",
+			[]string{"entities", "num_entities", "processing_time_ms", "error", "error_message"},
+			fetchRustLayout(func(o *C.size_t, c C.size_t) C.size_t { return C.abi_layout_pii_result(o, c) }),
+			[]uintptr{
+				unsafe.Sizeof(pr), unsafe.Alignof(pr),
+				unsafe.Offsetof(pr.entities), unsafe.Offsetof(pr.num_entities), unsafe.Offsetof(pr.processing_time_ms),
+				unsafe.Offsetof(pr.error), unsafe.Offsetof(pr.error_message),
+			},
+		},
+	}
+}
+
+// abiLayoutPairs returns the layout receipts for every FFI struct shared
+// between the cgo preamble and the Rust #[repr(C)] definitions.
+func abiLayoutPairs() []abiLayoutPair {
+	pairs := embeddingLayoutPairs()
+	pairs = append(pairs, modelInfoLayoutPairs()...)
+	pairs = append(pairs, classificationLayoutPairs()...)
+	return pairs
 }
