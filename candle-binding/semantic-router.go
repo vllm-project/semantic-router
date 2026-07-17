@@ -269,6 +269,7 @@ extern ClassificationResult classify_jailbreak_text(const char* text);
 extern ClassificationResult classify_bert_text(const char* text);
 extern ModernBertClassificationResult classify_modernbert_text(const char* text);
 extern ModernBertClassificationResultWithProbs classify_modernbert_text_with_probabilities(const char* text);
+extern ModernBertClassificationResultWithProbs classify_mmbert_32k_jailbreak_with_probabilities(const char* text);
 extern void free_modernbert_probabilities(float* probabilities, int num_classes);
 extern ModernBertClassificationResult classify_modernbert_pii_text(const char* text);
 extern ModernBertClassificationResult classify_modernbert_jailbreak_text(const char* text);
@@ -2426,6 +2427,39 @@ func ClassifyMmBert32KJailbreak(text string) (ClassResult, error) {
 	return ClassResult{
 		Class:      int(result.class),
 		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// ClassifyMmBert32KJailbreakWithProbs classifies text with the mmBERT-32K jailbreak
+// detector and returns the predicted class, confidence, and full probability
+// distribution. This allows callers to read the probability of the jailbreak class
+// itself rather than the confidence of whichever class wins argmax.
+func ClassifyMmBert32KJailbreakWithProbs(text string) (ClassResultWithProbs, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_mmbert_32k_jailbreak_with_probabilities(cText)
+
+	if result.class < 0 {
+		return ClassResultWithProbs{}, fmt.Errorf("failed to classify jailbreak with probabilities using mmBERT-32K")
+	}
+
+	// Convert C array to Go slice
+	probabilities := make([]float32, int(result.num_classes))
+	if result.probabilities != nil && result.num_classes > 0 {
+		probsSlice := (*[1 << 30]C.float)(unsafe.Pointer(result.probabilities))[:result.num_classes:result.num_classes]
+		for i, prob := range probsSlice {
+			probabilities[i] = float32(prob)
+		}
+		// Free the C-allocated memory
+		C.free_modernbert_probabilities(result.probabilities, result.num_classes)
+	}
+
+	return ClassResultWithProbs{
+		Class:         int(result.class),
+		Confidence:    float32(result.confidence),
+		Probabilities: probabilities,
+		NumClasses:    int(result.num_classes),
 	}, nil
 }
 

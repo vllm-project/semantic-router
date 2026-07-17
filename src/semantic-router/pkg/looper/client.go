@@ -288,16 +288,18 @@ func (c *Client) parseStreamingResponse(body []byte, modelName string) (*ModelRe
 		IsStreaming: true,
 	}
 
-	// Parse SSE chunks to extract content
+	// Parse SSE chunks to extract content and usage
 	content, chunks := parseSSEContent(body)
 	result.Content = content
 	result.StreamingChunks = chunks
+	result.Usage = parseStreamingUsage(body)
 
 	logging.ComponentDebugEvent("looper", "model_call_completed", map[string]interface{}{
-		"decision":    c.decisionName,
-		"model_ref":   modelName,
-		"content_len": len(content),
-		"streaming":   true,
+		"decision":     c.decisionName,
+		"model_ref":    modelName,
+		"content_len":  len(content),
+		"total_tokens": result.Usage.TotalTokens,
+		"streaming":    true,
 	})
 
 	return result, nil
@@ -652,7 +654,16 @@ func setStreamParam(body []byte, streaming bool) ([]byte, error) {
 		return nil, err
 	}
 	reqMap["stream"] = streaming
-	if !streaming {
+	if streaming {
+		// Ask the backend to emit a trailing usage chunk so token accounting
+		// works for streamed calls; preserve any caller-set stream_options.
+		opts, _ := reqMap["stream_options"].(map[string]interface{})
+		if opts == nil {
+			opts = map[string]interface{}{}
+		}
+		opts["include_usage"] = true
+		reqMap["stream_options"] = opts
+	} else {
 		delete(reqMap, "stream_options")
 	}
 	return json.Marshal(reqMap)
