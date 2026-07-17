@@ -22,7 +22,6 @@ import (
 	"math"
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -145,14 +144,9 @@ func NewEloSelector(cfg *EloConfig) *EloSelector {
 				})
 			}
 
-			// Start auto-save with configurable interval
-			interval := 30 * time.Second
-			if cfg.AutoSaveInterval != "" {
-				if parsed, err := time.ParseDuration(cfg.AutoSaveInterval); err == nil {
-					interval = parsed
-				}
-			}
-
+			// Start auto-save with a validated interval (positive and below
+			// the documented maximum; falls back to the default otherwise).
+			interval := resolveAutoSaveInterval(cfg.AutoSaveInterval)
 			storage.StartAutoSave(interval, selector.getAllRatingsForStorage)
 			logging.ComponentEvent("selection", "elo_storage_initialized", map[string]interface{}{
 				"storage_path":            cfg.StoragePath,
