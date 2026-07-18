@@ -13,7 +13,7 @@ permissions:
 jobs:
   update-leaderboard:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Check out the repo
@@ -36,6 +36,7 @@ jobs:
       - name: Regenerate contributor leaderboard data
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         working-directory: website
         run: npm run contributors:rank
 
@@ -48,10 +49,5 @@ jobs:
             echo "No leaderboard changes detected"
             exit 0
           fi
-          git commit -s -m "$(cat <<'EOF'
-chore(website): refresh contributor leaderboard data
-
-Regenerate commit and PR review counts for the community leaderboard.
-EOF
-)"
+          git commit -s -m "chore(website): refresh contributor leaderboard data"
           git push
