@@ -22,6 +22,10 @@ class MixtureStressCase:
     weights: dict[str, float]
     cdf: list[tuple[int, float]]
     description: str = ""
+    active_archetypes: tuple[str, ...] = ()
+    model_eligibility: tuple[str, ...] = ()
+    residency: tuple[str, ...] = ()
+    constraint_infeasible_reason: str | None = None
 
 
 @dataclass
@@ -35,6 +39,9 @@ class MixtureCaseResult:
     best: SweepResult | None
     baseline: SweepResult | None
     sweep: tuple[SweepResult, ...]
+    active_archetypes: tuple[str, ...] = ()
+    model_eligibility: tuple[str, ...] = ()
+    residency: tuple[str, ...] = ()
     infeasible_reason: str | None = None
     annual_cost_delta_vs_nominal_kusd: float | None = None
     cost_sensitivity_pct: float | None = None
@@ -152,6 +159,9 @@ def _case_to_dict(case: MixtureCaseResult) -> dict[str, Any]:
         "kind": case.kind,
         "lam": case.lam,
         "weights": case.weights,
+        "active_archetypes": list(case.active_archetypes),
+        "model_eligibility": list(case.model_eligibility),
+        "residency": list(case.residency),
         "best": asdict(case.best) if case.best is not None else None,
         "baseline": asdict(case.baseline) if case.baseline is not None else None,
         "sweep": [asdict(item) for item in case.sweep],

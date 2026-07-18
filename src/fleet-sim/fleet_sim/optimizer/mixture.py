@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from itertools import groupby
+
 from ..workload.mixture import (
     CompositionWindow,
     MixtureScenario,
@@ -20,6 +22,8 @@ from .mixture_models import (
     MixtureStressCase,
     RobustMixtureRecommendation,
 )
+
+_ACTIVE_WEIGHT_TOLERANCE = 1e-12
 
 
 def evaluate_mixture_scenario(
@@ -148,12 +152,10 @@ def _cdf_for_archetype(
 def _empirical_cdf(totals: list[int]) -> list[tuple[int, float]]:
     n = len(totals)
     cdf: list[tuple[int, float]] = []
-    last = None
-    for idx, total in enumerate(totals, start=1):
-        if total == last and idx < n:
-            continue
-        cdf.append((total, idx / n))
-        last = total
+    seen = 0
+    for total, group in groupby(totals):
+        seen += sum(1 for _ in group)
+        cdf.append((total, seen / n))
     cdf[-1] = (cdf[-1][0], 1.0)
     return cdf
 
@@ -170,6 +172,7 @@ def _stress_cases(
             lam,
             scenario.nominal_weights,
             cdfs,
+            scenario.archetype_map,
             "Collapsed aggregate CDF baseline at nominal weights.",
         ),
         _case(
@@ -178,6 +181,7 @@ def _stress_cases(
             lam,
             scenario.nominal_weights,
             cdfs,
+            scenario.archetype_map,
             "Versioned nominal workload mixture.",
         ),
     ]
@@ -193,6 +197,7 @@ def _stress_cases(
                 lam,
                 weights,
                 cdfs,
+                scenario.archetype_map,
                 f"All traffic follows archetype {archetype_id}.",
             )
         )
@@ -214,6 +219,7 @@ def _window_case(
         lam * window.arrival_rate_multiplier,
         window.weights,
         cdfs,
+        scenario.archetype_map,
         (
             f"Composition window {index} from {window.start_s:.0f}s to "
             f"{window.end_s:.0f}s."
@@ -227,8 +233,20 @@ def _case(
     lam: float,
     weights: dict[str, float],
     cdfs: dict[str, list[tuple[int, float]]],
+    archetypes: dict[str, WorkloadArchetype],
     description: str,
 ) -> MixtureStressCase:
+    active_archetypes = _active_archetype_ids(weights)
+    model_eligibility = _common_constraint_values(
+        active_archetypes, archetypes, "model_eligibility"
+    )
+    residency = _common_constraint_values(active_archetypes, archetypes, "residency")
+    constraint_infeasible_reason = _constraint_infeasible_reason(
+        active_archetypes,
+        archetypes,
+        model_eligibility,
+        residency,
+    )
     return MixtureStressCase(
         id=case_id,
         kind=kind,
@@ -236,7 +254,74 @@ def _case(
         weights=dict(weights),
         cdf=aggregate_mixture_cdf(cdfs, weights),
         description=description,
+        active_archetypes=active_archetypes,
+        model_eligibility=model_eligibility,
+        residency=residency,
+        constraint_infeasible_reason=constraint_infeasible_reason,
     )
+
+
+def _active_archetype_ids(weights: dict[str, float]) -> tuple[str, ...]:
+    return tuple(
+        archetype_id
+        for archetype_id, weight in weights.items()
+        if weight > _ACTIVE_WEIGHT_TOLERANCE
+    )
+
+
+def _common_constraint_values(
+    active_archetypes: tuple[str, ...],
+    archetypes: dict[str, WorkloadArchetype],
+    attr: str,
+) -> tuple[str, ...]:
+    constrained = [
+        set(getattr(archetypes[archetype_id], attr))
+        for archetype_id in active_archetypes
+        if getattr(archetypes[archetype_id], attr)
+    ]
+    if not constrained:
+        return ()
+    return tuple(sorted(set.intersection(*constrained)))
+
+
+def _constraint_infeasible_reason(
+    active_archetypes: tuple[str, ...],
+    archetypes: dict[str, WorkloadArchetype],
+    model_eligibility: tuple[str, ...],
+    residency: tuple[str, ...],
+) -> str | None:
+    missing = []
+    if (
+        _needs_common_constraint(active_archetypes, archetypes, "model_eligibility")
+        and not model_eligibility
+    ):
+        missing.append("model_eligibility")
+    if (
+        _needs_common_constraint(active_archetypes, archetypes, "residency")
+        and not residency
+    ):
+        missing.append("residency")
+    if not missing:
+        return None
+    active = ", ".join(active_archetypes)
+    constraints = " and ".join(missing)
+    return (
+        "hard constraints cannot be represented by the CDF-only optimizer: "
+        f"active archetypes [{active}] have no common {constraints}"
+    )
+
+
+def _needs_common_constraint(
+    active_archetypes: tuple[str, ...],
+    archetypes: dict[str, WorkloadArchetype],
+    attr: str,
+) -> bool:
+    constrained_count = sum(
+        1
+        for archetype_id in active_archetypes
+        if getattr(archetypes[archetype_id], attr)
+    )
+    return constrained_count > 1
 
 
 def _evaluate_case(
@@ -248,6 +333,21 @@ def _evaluate_case(
     max_total_gpus: int | None,
     verbose: bool,
 ) -> MixtureCaseResult:
+    if case.constraint_infeasible_reason:
+        return MixtureCaseResult(
+            case_id=case.id,
+            kind=case.kind,
+            lam=case.lam,
+            weights=case.weights,
+            best=None,
+            baseline=None,
+            sweep=(),
+            active_archetypes=case.active_archetypes,
+            model_eligibility=case.model_eligibility,
+            residency=case.residency,
+            infeasible_reason=case.constraint_infeasible_reason,
+        )
+
     report = optimizer.optimize(
         cdf=case.cdf,
         lam=case.lam,
@@ -267,6 +367,9 @@ def _evaluate_case(
         best=best,
         baseline=baseline,
         sweep=tuple(report.analytical + report.simulated),
+        active_archetypes=case.active_archetypes,
+        model_eligibility=case.model_eligibility,
+        residency=case.residency,
         infeasible_reason=reason,
     )
 
@@ -309,6 +412,9 @@ def _robust_recommendation(
     gammas: list[float],
     max_total_gpus: int | None,
 ) -> RobustMixtureRecommendation | None:
+    if any(case.constraint_infeasible_reason for case in cases):
+        return None
+
     candidates: list[RobustMixtureRecommendation] = []
     for gamma in gammas:
         per_case = [

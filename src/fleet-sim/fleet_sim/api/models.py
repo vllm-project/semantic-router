@@ -300,6 +300,9 @@ class MixtureCasePoint(BaseModel):
     kind: str
     lam: float
     weights: dict[str, float]
+    active_archetypes: list[str] = Field(default_factory=list)
+    model_eligibility: list[str] = Field(default_factory=list)
+    residency: list[str] = Field(default_factory=list)
     best: SweepPoint | None = None
     baseline: SweepPoint | None = None
     slo_met: bool

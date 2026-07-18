@@ -18,8 +18,8 @@
         "kind": "poisson"
       },
       "slo_class": "interactive",
-      "model_eligibility": ["llama-3.1-8b", "qwen3-8b"],
-      "residency": ["global"],
+      "model_eligibility": ["llama-3.1-8b", "llama-3.1-70b", "qwen3-8b"],
+      "residency": ["global", "us"],
       "weight": 0.6
     },
     {

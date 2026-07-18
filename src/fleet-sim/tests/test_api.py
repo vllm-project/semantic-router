@@ -1120,7 +1120,11 @@ class TestJobLifecycle:
         assert result is not None
         assert result["ok"] is True
         assert result["robust_recommendation"]["total_gpus"] > 0
-        assert any(case["case_id"] == "nominal-mixture" for case in result["cases"])
+        nominal = next(
+            case for case in result["cases"] if case["case_id"] == "nominal-mixture"
+        )
+        assert nominal["model_eligibility"] == ["llama-3.1-70b"]
+        assert nominal["residency"] == ["us"]
 
     def test_simulate_job_completes_and_has_result(self, client):
         body = {

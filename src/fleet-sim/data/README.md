@@ -35,6 +35,10 @@ CDF-only archetypes validate marginal token-length distributions. They do not
 preserve unknown cross-feature correlations. Trace archetypes can preserve
 correlations that are explicitly present in the trace rows.
 
+When a stress case combines archetypes with no common non-empty
+`model_eligibility` or `residency` intersection, the CDF-only optimizer marks
+the case infeasible instead of returning a misleading robust recommendation.
+
 Use `vllm-sr-sim mixture-optimize --scenario data/workload_mixture_burst.json`
 to evaluate these fixtures with the repository's `FleetOptimizer`, including
 aggregate-CDF baselines, individual archetype stress cases, nominal mixtures,
