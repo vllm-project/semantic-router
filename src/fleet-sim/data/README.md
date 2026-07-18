@@ -41,6 +41,35 @@ aggregate-CDF baselines, individual archetype stress cases, nominal mixtures,
 composition drift/burst windows, robust recommendations, sensitivity, and
 explicit infeasibility diagnostics.
 
+## Workload archetype forecast aggregates
+
+Forecast aggregate fixtures use schema
+`fleet-sim.workload-archetype-forecast/v1alpha1` and taxonomy
+`fleet-sim.workload-archetype-taxonomy/v1alpha1`. Each aggregate window records
+only content-free, low-cardinality buckets: request count, total-token summary,
+latency summary, model class, SLO class, region, archetype weights, and
+uncertainty. The privacy policy rejects caller/session/user/request ids,
+arbitrary domains/hosts/URLs, and raw prompt/response fields. Windows below the
+configured minimum request count fail validation unless explicitly redacted.
+
+| File | Scenario | Description |
+|---|---|---|
+| `workload_forecast_seasonal.json` | Seasonal pattern | Repeating three-window demand pattern where seasonal-naive should beat simple controls |
+| `workload_forecast_drift.json` | Taxonomy drift | Aggregate demand shifts from chat-heavy to agent-heavy windows |
+| `workload_forecast_burst.json` | Burst and rollback | Agent-heavy demand spike followed by recovery; can also exercise stale-data rollback by passing `--now-s` beyond `max_staleness_s` |
+
+Use `vllm-sr-sim forecast-backtest --scenario data/workload_forecast_seasonal.json`
+to compare static mean, reactive last-window, moving-window, seasonal-naive, and
+linear-trend forecasts. The command converts each forecast into a FleetSim
+mixture scenario from the source mixture archetypes, reports backtest error,
+uncertainty coverage, burst/drift/oscillation diagnostics, and states when
+forecasting does not beat simpler controls.
+
+Forecast backtests are advise-only. The generated recommendation is recorded
+separately from downstream actuation; FleetSim does not apply cooldowns, quotas,
+load-balancer changes, or rollback actions on behalf of the operator. Missing or
+stale forecast inputs fall back to ordinary reactive controls.
+
 ## Bring your own CDF
 
 A CDF file is a JSON array of `[token_length, cumulative_fraction]` pairs,

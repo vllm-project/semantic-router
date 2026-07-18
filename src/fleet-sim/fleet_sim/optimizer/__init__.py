@@ -16,6 +16,15 @@ from .disagg import (
     DisaggResult,
     DisaggSweepPoint,
 )
+from .forecast import evaluate_forecast_backtest
+from .forecast_models import (
+    ForecastActuationRecord,
+    ForecastBacktestError,
+    ForecastBacktestReport,
+    ForecastCapacityRecommendation,
+    ForecastMethodBacktest,
+    ForecastWindowBacktest,
+)
 from .grid_flex import (
     GridFlexPoint,
     grid_flex_analysis,
@@ -64,6 +73,14 @@ __all__ = [
     "RobustMixtureRecommendation",
     "aggregate_mixture_cdf",
     "evaluate_mixture_scenario",
+    # Workload forecast backtests
+    "ForecastActuationRecord",
+    "ForecastBacktestError",
+    "ForecastBacktestReport",
+    "ForecastCapacityRecommendation",
+    "ForecastMethodBacktest",
+    "ForecastWindowBacktest",
+    "evaluate_forecast_backtest",
     # Tokens-per-watt
     "TpwPoint",
     "FleetTpwResult",

@@ -13,6 +13,11 @@ Usage
       --scenario data/workload_mixture_drift.json \\
       --lam 200 --slo 500 --b-short 6144 --max-total-gpus 300
 
+  # Backtest proactive workload archetype forecasts from content-free aggregates
+  vllm-sr-sim forecast-backtest \\
+      --scenario data/workload_forecast_seasonal.json \\
+      --slo 500 --b-short 6144 --gamma-max 1.2
+
   # Simulate a fixed two-pool fleet
   vllm-sr-sim simulate \\
       --cdf data/azure_cdf.json \\
@@ -68,6 +73,7 @@ Usage
   #   }
   # }
 """
+
 from __future__ import annotations
 
 import argparse
@@ -181,6 +187,47 @@ def cmd_mixture_optimize(args):
         print(f"\nResults saved to {args.out}")
     if args.fail_on_infeasible and not report.ok:
         raise SystemExit(2)
+
+
+def cmd_forecast_backtest(args):
+    from fleet_sim.optimizer import FleetOptimizer, evaluate_forecast_backtest
+    from fleet_sim.workload import load_forecast_scenario
+
+    scenario = load_forecast_scenario(args.scenario)
+    gpu_s = GPU_REGISTRY.get(args.gpu_short, A100_80GB)
+    gpu_l = GPU_REGISTRY.get(args.gpu_long, A100_80GB)
+    opt = FleetOptimizer(
+        gpu_short=gpu_s,
+        gpu_long=gpu_l,
+        B_short=args.b_short,
+        t_slo_ms=args.slo,
+        long_max_ctx=args.long_max_ctx,
+        p_c=args.p_c,
+        node_avail=args.node_avail,
+    )
+    gammas = [
+        round(args.gamma_min + i * args.gamma_step, 2)
+        for i in range(int((args.gamma_max - args.gamma_min) / args.gamma_step) + 1)
+    ]
+    report = evaluate_forecast_backtest(
+        optimizer=opt,
+        scenario=scenario,
+        gammas=gammas,
+        moving_window_count=args.moving_window_count,
+        season_length_windows=args.season_length_windows,
+        trend_window_count=args.trend_window_count,
+        n_sim_requests=args.n_sim_req,
+        verify_top_n=1 if args.n_sim_req else 0,
+        max_total_gpus=args.max_total_gpus,
+        now_s=args.now_s,
+        fail_on_stale=args.fail_on_stale,
+        verbose=False,
+    )
+    report.print_report()
+
+    if args.out:
+        json.dump(report.to_dict(), open(args.out, "w"), indent=2)
+        print(f"\nResults saved to {args.out}")
 
 
 def cmd_simulate(args):
@@ -1110,6 +1157,52 @@ def main(argv=None):
     sp_mix.add_argument("--fail-on-infeasible", action="store_true")
     sp_mix.add_argument("--out", default=None, help="Save structured report to JSON")
     sp_mix.set_defaults(func=cmd_mixture_optimize)
+
+    # ── forecast-backtest ───────────────────────────────────────────────────
+    sp_forecast = sub.add_parser(
+        "forecast-backtest",
+        help="Backtest proactive workload archetype forecasts",
+    )
+    sp_forecast.add_argument(
+        "--scenario",
+        required=True,
+        help="Path to workload_forecast_*.json aggregate scenario",
+    )
+    sp_forecast.add_argument("--slo", type=float, default=500, help="P99 TTFT SLO (ms)")
+    sp_forecast.add_argument(
+        "--b-short",
+        type=int,
+        default=4096,
+        help="Short-pool context threshold (tokens)",
+    )
+    sp_forecast.add_argument(
+        "--long-max-ctx",
+        type=int,
+        default=65536,
+        help="Long-pool max context (tokens)",
+    )
+    sp_forecast.add_argument(
+        "--gpu-short", default="a100", choices=list(GPU_REGISTRY.keys())
+    )
+    sp_forecast.add_argument(
+        "--gpu-long", default="a100", choices=list(GPU_REGISTRY.keys())
+    )
+    sp_forecast.add_argument("--gamma-min", type=float, default=1.0)
+    sp_forecast.add_argument("--gamma-max", type=float, default=2.0)
+    sp_forecast.add_argument("--gamma-step", type=float, default=0.1)
+    sp_forecast.add_argument("--moving-window-count", type=int, default=3)
+    sp_forecast.add_argument("--season-length-windows", type=int, default=3)
+    sp_forecast.add_argument("--trend-window-count", type=int, default=4)
+    sp_forecast.add_argument("--n-sim-req", type=int, default=0)
+    sp_forecast.add_argument("--max-total-gpus", type=int, default=None)
+    sp_forecast.add_argument("--p-c", type=float, default=0.75)
+    sp_forecast.add_argument("--node-avail", type=float, default=1.0)
+    sp_forecast.add_argument("--now-s", type=float, default=None)
+    sp_forecast.add_argument("--fail-on-stale", action="store_true")
+    sp_forecast.add_argument(
+        "--out", default=None, help="Save structured report to JSON"
+    )
+    sp_forecast.set_defaults(func=cmd_forecast_backtest)
 
     # ── simulate ──────────────────────────────────────────────────────────────
     sp_sim = sub.add_parser("simulate", help="Simulate a fixed fleet configuration")

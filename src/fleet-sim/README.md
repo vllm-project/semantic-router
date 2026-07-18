@@ -42,6 +42,11 @@ vllm-sr-sim mixture-optimize \
   --lam 200 --slo 500 --b-short 6144 \
   --max-total-gpus 300 --out mixture-report.json
 
+vllm-sr-sim forecast-backtest \
+  --scenario data/workload_forecast_seasonal.json \
+  --slo 500 --b-short 6144 --gamma-max 1.2 \
+  --out forecast-report.json
+
 vllm-sr-sim whatif \
   --cdf data/azure_cdf.json \
   --lam-range 50 100 200 500 1000 \
@@ -55,6 +60,13 @@ vllm-sr-sim serve --host 0.0.0.0 --port 8000
 It reports aggregate-CDF, individual-archetype, nominal-mixture, drift/burst
 window, robust worst-case, sensitivity, and infeasibility diagnostics without
 changing production request-path routing.
+
+`forecast-backtest` evaluates proactive workload-archetype forecasts from
+content-free aggregate windows. It compares static, reactive last-window,
+moving-window, seasonal-naive, and linear-trend baselines, converts each
+forecast back into reproducible FleetSim mixture scenarios, reports uncertainty,
+burst/drift/oscillation diagnostics, and keeps advise-only recommendations
+separate from downstream actuation records.
 
 `vllm-sr serve` also starts `vllm-sr-sim` by default as a sibling container on the shared runtime network so the dashboard can proxy it without rebuilding the router image.
 
