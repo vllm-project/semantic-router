@@ -9,6 +9,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,14 @@ from maintainer_release_plan import (
 REPO_ROOT = Path(__file__).resolve().parents[3]
 POLICY_PATH = REPO_ROOT / "tools" / "agent" / "maintainer-policy.yaml"
 DEFAULT_ACTIONS = "proposed-actions.json"
+TRANSIENT_GH_ERRORS = (
+    "HTTP 502",
+    "HTTP 503",
+    "HTTP 504",
+    "502 Bad Gateway",
+    "503 Service Unavailable",
+    "504 Gateway Timeout",
+)
 
 
 def load_policy() -> dict[str, Any]:
@@ -55,20 +64,49 @@ def age_days(value: str | None, now: dt.datetime) -> int:
     return max(0, (now - parse_time(value)).days)
 
 
-def gh_json(args: list[str]) -> Any:
-    result = subprocess.run(
-        ["gh", *args],
-        cwd=REPO_ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode != 0:
+def is_transient_gh_error(result: subprocess.CompletedProcess[str]) -> bool:
+    output = f"{result.stderr}\n{result.stdout}"
+    return any(error in output for error in TRANSIENT_GH_ERRORS)
+
+
+def gh_json(args: list[str], attempts: int = 3) -> Any:
+    for attempt in range(1, attempts + 1):
+        result = subprocess.run(
+            ["gh", *args],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            if not result.stdout.strip():
+                return None
+            return json.loads(result.stdout)
+        if attempt < attempts and is_transient_gh_error(result):
+            delay = 2 ** (attempt - 1)
+            sys.stderr.write(
+                f"gh {' '.join(args)} failed with a transient GitHub error; "
+                f"retrying in {delay}s ({attempt}/{attempts})\n"
+            )
+            time.sleep(delay)
+            continue
         sys.stderr.write(result.stderr)
         raise SystemExit(result.returncode)
-    if not result.stdout.strip():
-        return None
-    return json.loads(result.stdout)
+    raise SystemExit(1)
+
+
+def attach_pr_status_rollups(prs: list[dict[str, Any]]) -> None:
+    for pr in prs:
+        details = gh_json(
+            [
+                "pr",
+                "view",
+                str(pr["number"]),
+                "--json",
+                "statusCheckRollup",
+            ]
+        )
+        pr["statusCheckRollup"] = (details or {}).get("statusCheckRollup") or []
 
 
 def fetch_github_state(
@@ -99,9 +137,10 @@ def fetch_github_state(
             "--limit",
             pr_limit,
             "--json",
-            "number,title,labels,milestone,assignees,createdAt,updatedAt,author,url,isDraft,reviewDecision,mergeStateStatus,statusCheckRollup,headRefName,baseRefName",
+            "number,title,labels,milestone,assignees,createdAt,updatedAt,author,url,isDraft,reviewDecision,mergeStateStatus,headRefName,baseRefName",
         ]
-    )
+    ) or []
+    attach_pr_status_rollups(prs)
     milestones = gh_json(["api", "repos/{owner}/{repo}/milestones?state=open"])
     labels = gh_json(["label", "list", "--json", "name,description,color"])
     return {
