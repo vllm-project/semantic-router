@@ -8,6 +8,11 @@ Usage
       --cdf data/azure_cdf.json \\
       --lam 200 --slo 500 --b-short 6144
 
+  # Evaluate robust capacity across workload archetype mixtures
+  vllm-sr-sim mixture-optimize \\
+      --scenario data/workload_mixture_drift.json \\
+      --lam 200 --slo 500 --b-short 6144 --max-total-gpus 300
+
   # Simulate a fixed two-pool fleet
   vllm-sr-sim simulate \\
       --cdf data/azure_cdf.json \\
@@ -136,6 +141,46 @@ def cmd_optimize(args):
         ]
         json.dump(rows, open(args.out, "w"), indent=2)
         print(f"\nResults saved to {args.out}")
+
+
+def cmd_mixture_optimize(args):
+    from fleet_sim.optimizer import FleetOptimizer, evaluate_mixture_scenario
+    from fleet_sim.workload import load_mixture_scenario
+
+    scenario = load_mixture_scenario(args.scenario)
+    gpu_s = GPU_REGISTRY.get(args.gpu_short, A100_80GB)
+    gpu_l = GPU_REGISTRY.get(args.gpu_long, A100_80GB)
+    opt = FleetOptimizer(
+        gpu_short=gpu_s,
+        gpu_long=gpu_l,
+        B_short=args.b_short,
+        t_slo_ms=args.slo,
+        long_max_ctx=args.long_max_ctx,
+        p_c=args.p_c,
+        node_avail=args.node_avail,
+    )
+    gammas = [
+        round(args.gamma_min + i * args.gamma_step, 2)
+        for i in range(int((args.gamma_max - args.gamma_min) / args.gamma_step) + 1)
+    ]
+    report = evaluate_mixture_scenario(
+        optimizer=opt,
+        scenario=scenario,
+        lam=args.lam,
+        gammas=gammas,
+        n_sim_requests=args.n_sim_req,
+        verify_top_n=1 if args.n_sim_req else 0,
+        max_total_gpus=args.max_total_gpus,
+        fail_on_infeasible=False,
+        verbose=False,
+    )
+    report.print_report()
+
+    if args.out:
+        json.dump(report.to_dict(), open(args.out, "w"), indent=2)
+        print(f"\nResults saved to {args.out}")
+    if args.fail_on_infeasible and not report.ok:
+        raise SystemExit(2)
 
 
 def cmd_simulate(args):
@@ -1026,6 +1071,45 @@ def main(argv=None):
     sp_opt.add_argument("--n-sim-req", type=int, default=40000)
     sp_opt.add_argument("--verify-top", type=int, default=3)
     sp_opt.set_defaults(func=cmd_optimize)
+
+    # ── mixture-optimize ─────────────────────────────────────────────────────
+    sp_mix = sub.add_parser(
+        "mixture-optimize",
+        help="Evaluate FleetOptimizer sensitivity across workload mixtures",
+    )
+    sp_mix.add_argument(
+        "--scenario",
+        required=True,
+        help="Path to workload_mixture_*.json scenario",
+    )
+    sp_mix.add_argument("--lam", type=float, default=200, help="Base arrival rate")
+    sp_mix.add_argument("--slo", type=float, default=500, help="P99 TTFT SLO (ms)")
+    sp_mix.add_argument(
+        "--b-short",
+        type=int,
+        default=4096,
+        help="Short-pool context threshold (tokens)",
+    )
+    sp_mix.add_argument(
+        "--long-max-ctx",
+        type=int,
+        default=65536,
+        help="Long-pool max context (tokens)",
+    )
+    sp_mix.add_argument(
+        "--gpu-short", default="a100", choices=list(GPU_REGISTRY.keys())
+    )
+    sp_mix.add_argument("--gpu-long", default="a100", choices=list(GPU_REGISTRY.keys()))
+    sp_mix.add_argument("--gamma-min", type=float, default=1.0)
+    sp_mix.add_argument("--gamma-max", type=float, default=2.0)
+    sp_mix.add_argument("--gamma-step", type=float, default=0.1)
+    sp_mix.add_argument("--n-sim-req", type=int, default=0)
+    sp_mix.add_argument("--max-total-gpus", type=int, default=None)
+    sp_mix.add_argument("--p-c", type=float, default=0.75)
+    sp_mix.add_argument("--node-avail", type=float, default=1.0)
+    sp_mix.add_argument("--fail-on-infeasible", action="store_true")
+    sp_mix.add_argument("--out", default=None, help="Save structured report to JSON")
+    sp_mix.set_defaults(func=cmd_mixture_optimize)
 
     # ── simulate ──────────────────────────────────────────────────────────────
     sp_sim = sub.add_parser("simulate", help="Simulate a fixed fleet configuration")

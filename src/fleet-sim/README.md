@@ -37,6 +37,11 @@ vllm-sr-sim optimize \
   --lam 200 --slo 500 --b-short 6144 \
   --verify-top 3 --n-sim-req 30000
 
+vllm-sr-sim mixture-optimize \
+  --scenario data/workload_mixture_burst.json \
+  --lam 200 --slo 500 --b-short 6144 \
+  --max-total-gpus 300 --out mixture-report.json
+
 vllm-sr-sim whatif \
   --cdf data/azure_cdf.json \
   --lam-range 50 100 200 500 1000 \
@@ -44,6 +49,12 @@ vllm-sr-sim whatif \
 
 vllm-sr-sim serve --host 0.0.0.0 --port 8000
 ```
+
+`mixture-optimize` keeps the analytical method on the repository's
+`FleetOptimizer` class while evaluating versioned workload-archetype scenarios.
+It reports aggregate-CDF, individual-archetype, nominal-mixture, drift/burst
+window, robust worst-case, sensitivity, and infeasibility diagnostics without
+changing production request-path routing.
 
 `vllm-sr serve` also starts `vllm-sr-sim` by default as a sibling container on the shared runtime network so the dashboard can proxy it without rebuilding the router image.
 

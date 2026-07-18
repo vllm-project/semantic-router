@@ -132,6 +132,13 @@ class TestWorkloadRoutes:
         assert "description" in w
         assert "path" in w
 
+    def test_list_mixture_workloads_returns_three(self, client):
+        r = client.get("/api/workloads/mixtures")
+        assert r.status_code == 200
+        items = r.json()
+        assert {item["name"] for item in items} == {"nominal", "drift", "burst"}
+        assert all(item["archetype_weights"] for item in items)
+
     def test_get_cdf_azure(self, client):
         r = client.get("/api/workloads/azure/cdf")
         assert r.status_code == 200
@@ -484,6 +491,10 @@ class TestJobRoutes:
         r = client.post("/api/jobs", json={"type": "optimize"})
         assert r.status_code == 422
 
+    def test_submit_mixture_optimize_missing_params_returns_422(self, client):
+        r = client.post("/api/jobs", json={"type": "mixture_optimize"})
+        assert r.status_code == 422
+
     def test_submit_simulate_missing_params_returns_422(self, client):
         r = client.post("/api/jobs", json={"type": "simulate"})
         assert r.status_code == 422
@@ -592,6 +603,12 @@ class TestRunnerCdfLoader:
 
         with pytest.raises(FileNotFoundError):
             _load_cdf(WorkloadRef(type="builtin", name="does_not_exist_xyz"))
+
+    def test_load_mixture_scenario_rejects_non_builtin_paths(self):
+        from fleet_sim.api.runner import _load_mixture_scenario
+
+        with pytest.raises(FileNotFoundError, match="Built-in mixture scenario"):
+            _load_mixture_scenario("../workload_mixture_nominal.json")
 
     def test_load_trace_without_id_raises(self):
         from fleet_sim.api.models import WorkloadRef
@@ -1076,6 +1093,34 @@ class TestJobLifecycle:
         assert "sweep" in opt
         assert opt["best"]["total_gpus"] > 0
         assert opt["savings_pct"] >= 0.0
+
+    def test_mixture_optimize_job_completes_and_has_result(self, client):
+        body = {
+            "type": "mixture_optimize",
+            "mixture_optimize": {
+                "scenario": "nominal",
+                "lam": 20.0,
+                "slo_ms": 500.0,
+                "b_short": 4096,
+                "gpu_short": "a100",
+                "gpu_long": "a100",
+                "long_max_ctx": 65536,
+                "gamma_min": 1.0,
+                "gamma_max": 1.0,
+                "gamma_step": 0.5,
+                "n_sim_requests": 0,
+            },
+        }
+        r = client.post("/api/jobs", json=body)
+        assert r.status_code == 200
+        job = _wait_job_done(client, r.json()["id"])
+
+        assert job["status"] == "done", f"Job failed: {job.get('error')}"
+        result = job["result_mixture_optimize"]
+        assert result is not None
+        assert result["ok"] is True
+        assert result["robust_recommendation"]["total_gpus"] > 0
+        assert any(case["case_id"] == "nominal-mixture" for case in result["cases"])
 
     def test_simulate_job_completes_and_has_result(self, client):
         body = {
