@@ -36,7 +36,7 @@ subsystems:
   - src/vllm-sr/cli/main.py
   - src/vllm-sr/cli/core.py
   - src/vllm-sr/cli/commands/runtime.py
-  - src/vllm-sr/cli/docker_cli.py
+  - src/vllm-sr/cli/container_cli.py
   - tools/make/docker.mk
 - name: fleet-sim
   paths:
@@ -111,6 +111,7 @@ validation:
     full_ci_profiles:
     - kubernetes
     - dashboard
+    - remote-embedding
 docs:
 - AGENTS.md
 - docs/agent/README.md
@@ -121,6 +122,7 @@ docs:
 - docs/agent/tech-debt-register.md
 - docs/agent/tech-debt/README.md
 - docs/agent/amd-local.md
+- docs/agent/nvidia-local.md
 - docs/agent/architecture-guardrails.md
 - docs/agent/openai-api-contracts.md
 - docs/agent/architecture-scorecard.md
@@ -136,7 +138,9 @@ docs:
 - docs/agent/plans/pl-0032-architecture-scorecard-ratchet.md
 - docs/agent/plans/pl-0033-v0-3-themis-release-closure.md
 - docs/agent/plans/pl-0034-fusion-api.md
+- docs/agent/plans/pl-0035-router-flow-workflows.md
 - docs/agent/plans/pl-0036-router-learning-followups.md
+- docs/agent/plans/pl-0037-router-flow-eval-campaign.md
 - docs/agent/tech-debt/td-006-structural-rule-exceptions.md
 - docs/agent/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
 - docs/agent/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
@@ -144,6 +148,7 @@ docs:
 - docs/agent/tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md
 - docs/agent/tech-debt/td-042-ffi-embedding-structure-debt.md
 - docs/agent/tech-debt/td-043-semantic-router-go-cyclop-debt.md
+- docs/agent/tech-debt/td-044-flow-tool-state-durability-gap.md
 local_agent_rules:
 - path: src/vllm-sr/cli/AGENTS.md
   scope: src/vllm-sr/cli/**
@@ -227,6 +232,9 @@ doc_governance:
   - path: docs/agent/amd-local.md
     steward: agent-contract
     freshness: update when AMD-local workflow or deployment references change
+  - path: docs/agent/nvidia-local.md
+    steward: agent-contract
+    freshness: update when NVIDIA-local workflow or deployment references change
   - path: docs/agent/architecture-guardrails.md
     steward: agent-contract
     freshness: update when structural or modularity guardrails change
@@ -272,9 +280,15 @@ doc_governance:
   - path: docs/agent/plans/pl-0034-fusion-api.md
     steward: router-core
     freshness: update while Fusion API implementation and AMD regression work is active
+  - path: docs/agent/plans/pl-0035-router-flow-workflows.md
+    steward: router-core
+    freshness: update while Router Flow implementation, eval, and AMD validation work is active
   - path: docs/agent/plans/pl-0036-router-learning-followups.md
     steward: router-core
     freshness: update while Router Learning follow-up implementation, eval, and AMD validation work is active
+  - path: docs/agent/plans/pl-0037-router-flow-eval-campaign.md
+    steward: router-core
+    freshness: update while the Router Flow four-mode benchmark campaign is active
   - path: docs/agent/tech-debt/td-006-structural-rule-exceptions.md
     steward: agent-contract
     freshness: update when the TD006 debt record changes materially
@@ -296,6 +310,9 @@ doc_governance:
   - path: docs/agent/tech-debt/td-043-semantic-router-go-cyclop-debt.md
     steward: candle-binding
     freshness: update when the TD043 debt record changes materially
+  - path: docs/agent/tech-debt/td-044-flow-tool-state-durability-gap.md
+    steward: router-core
+    freshness: update when the TD044 debt record changes materially
 skills:
 - tools/agent/skills/config-platform-change/SKILL.md
 - tools/agent/skills/cross-stack-bugfix/SKILL.md

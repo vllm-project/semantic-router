@@ -31,6 +31,7 @@ const sidebars: SidebarsConfig = {
       label: 'Installation',
       items: [
         'installation/installation',
+        'installation/ollama',
         'installation/k8s/operator',
         'installation/configuration',
         'installation/native-backends',
@@ -159,6 +160,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/looper/fusion',
                 'tutorials/algorithm/looper/ratings',
                 'tutorials/algorithm/looper/remom',
+                'tutorials/algorithm/looper/workflows',
               ],
             },
           ],
@@ -222,6 +224,7 @@ const sidebars: SidebarsConfig = {
             'tutorials/global/api-and-observability',
             'tutorials/global/stores-and-tools',
             'tutorials/global/safety-models-and-policy',
+            'tutorials/global/remote-embeddings',
           ],
         },
       ],
@@ -247,7 +250,9 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Proposals',
       items: [
+        'proposals/batch-and-capacity-aware-routing',
         'proposals/unified-config-contract-v0-3',
+        'proposals/router-flow-workflows',
         'proposals/hallucination-mitigation-milestone',
         'proposals/prompt-classification-routing',
         'proposals/nvidia-dynamo-integration',

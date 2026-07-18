@@ -45,3 +45,21 @@ andyluo:
   title: "Sr. Director @AMD"
   url: https://www.linkedin.com/in/andyluo77
   image_url: /img/team/andy.jpeg
+
+anupsharma:
+  name: Anup Sharma
+  title: AI & Distributed System @ Nutanix
+  url: https://www.linkedin.com/in/anup-sharma1
+  image_url: /img/team/anup.jpeg
+
+aayushsaini101:
+  name: Aayush Saini
+  title: SDE, Data and AI @ Red Hat
+  url: https://github.com/AayushSaini101
+  image_url: https://github.com/AayushSaini101.png
+
+shivjikumarjha:
+  name: Shivji Kumar Jha
+  title: Staff Engineer (Data & AI) @ Nutanix
+  url: https://github.com/ShivjiKumarJha
+  image_url: /img/team/shivji.png

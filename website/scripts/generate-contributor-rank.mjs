@@ -12,6 +12,26 @@ const releaseTags = {
   v02: 'v0.2.0',
   v03: 'v0.3.0',
 }
+const reviewStates = new Set(['APPROVED', 'CHANGES_REQUESTED', 'COMMENTED'])
+
+const pullRequestsQuery = `
+query($cursor: String) {
+  repository(owner: "vllm-project", name: "semantic-router") {
+    pullRequests(states: MERGED, first: 50, after: $cursor, orderBy: { field: UPDATED_AT, direction: DESC }) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        number
+        reviews(first: 100) {
+          nodes {
+            author { login }
+            state
+            submittedAt
+          }
+        }
+      }
+    }
+  }
+}`
 
 const identityOverrides = [
   {
@@ -265,9 +285,18 @@ try {
     targetRelease: releaseTimeline.v03,
   }
   const rangeDefinitions = buildReleaseRangeDefinitions(releaseTimeline, generatedAt)
-  const newContributorsSinceRelease = buildNewContributorsSinceRelease(releaseWindow, allRows)
+  let pullRequests = []
+
+  try {
+    pullRequests = fetchMergedPullRequests()
+  }
+  catch (error) {
+    console.warn(`Skipping PR review stats: ${error.message}`)
+  }
+
+  const newContributorsSinceRelease = buildNewContributorsSinceRelease(releaseWindow, allRows, pullRequests)
   const snapshots = Object.fromEntries(
-    rangeDefinitions.map(range => [range.id, buildSnapshot(range, generatedAt, allRows)]),
+    rangeDefinitions.map(range => [range.id, buildSnapshot(range, generatedAt, allRows, pullRequests)]),
   )
 
   mkdirSync(dirname(outputPath), { recursive: true })
@@ -332,13 +361,15 @@ function buildReleaseRangeDefinitions(releaseTimeline, generatedAt) {
   ]
 }
 
-function buildSnapshot(range, generatedAt, allRows) {
+function buildSnapshot(range, generatedAt, allRows, pullRequests) {
   const rows = readRowsForRange(range, allRows)
   const byContributor = collectContributorStats(rows)
   const newContributorKeys = readNewContributorKeysForRange(range, allRows, byContributor)
   const totalCommits = [...byContributor.values()].reduce((sum, entry) => sum + entry.commits, 0)
-  const entries = rankContributorEntries(byContributor, totalCommits, newContributorKeys)
+  const reviewStats = collectReviewStatsByContributorKey(pullRequests, range)
+  const entries = rankContributorEntries(byContributor, totalCommits, newContributorKeys, reviewStats)
   const newContributors = entries.filter(entry => entry.isNewContributorSinceRelease).length
+  const totalReviews = entries.reduce((sum, entry) => sum + entry.reviews, 0)
 
   return {
     id: range.id,
@@ -348,6 +379,7 @@ function buildSnapshot(range, generatedAt, allRows) {
     endDate: range.endDate,
     description: range.description,
     totalCommits,
+    totalReviews,
     totalContributors: entries.length,
     newContributors,
     entries,
@@ -409,7 +441,7 @@ function readRowsBeforeRange(range, allRows) {
   return allRows.filter(row => row.date.slice(0, 10) < range.startDate)
 }
 
-function buildNewContributorsSinceRelease(releaseWindow, allRows) {
+function buildNewContributorsSinceRelease(releaseWindow, allRows, pullRequests = []) {
   if (!releaseWindow) {
     return {
       tagName: null,
@@ -439,7 +471,11 @@ function buildNewContributorsSinceRelease(releaseWindow, allRows) {
   }
 
   const totalCommits = [...byContributor.values()].reduce((sum, entry) => sum + entry.commits, 0)
-  const entries = rankContributorEntries(byContributor, totalCommits, new Set(byContributor.keys()))
+  const reviewStats = collectReviewStatsByContributorKey(pullRequests, {
+    startDate: baseRelease.publishedAt.slice(0, 10),
+    endDate: targetRelease.publishedAt.slice(0, 10),
+  })
+  const entries = rankContributorEntries(byContributor, totalCommits, new Set(byContributor.keys()), reviewStats)
 
   return {
     tagName: baseRelease.tagName,
@@ -514,17 +550,12 @@ function collectContributorStats(rows) {
   return byContributor
 }
 
-function rankContributorEntries(byContributor, totalCommits, newContributorKeys) {
-  return [...byContributor.values()]
-    .sort((left, right) => {
-      if (right.commits !== left.commits) {
-        return right.commits - left.commits
-      }
+function rankContributorEntries(byContributor, totalCommits, newContributorKeys, reviewStats = new Map()) {
+  const merged = mergeReviewOnlyContributors(byContributor, reviewStats)
 
-      return left.name.localeCompare(right.name)
-    })
-    .map((entry, index) => ({
-      rank: index + 1,
+  return [...merged.values()]
+    .map(entry => ({
+      rank: 0,
       name: entry.name,
       login: entry.login,
       avatarLogin: entry.avatarLogin,
@@ -532,11 +563,171 @@ function rankContributorEntries(byContributor, totalCommits, newContributorKeys)
       avatarSeed: entry.avatarSeed,
       key: entry.key,
       commits: entry.commits,
+      reviews: reviewStats.get(entry.key)?.count ?? 0,
       share: totalCommits > 0 ? Number((entry.commits / totalCommits).toFixed(4)) : 0,
       firstCommitDate: entry.firstCommitDate.slice(0, 10),
       latestCommitDate: entry.latestCommitDate.slice(0, 10),
       isNewContributorSinceRelease: newContributorKeys.has(entry.key),
     }))
+    .filter(entry => entry.commits > 0 || entry.reviews > 0)
+    .sort((left, right) => {
+      if (right.commits !== left.commits) {
+        return right.commits - left.commits
+      }
+
+      if (right.reviews !== left.reviews) {
+        return right.reviews - left.reviews
+      }
+
+      return left.name.localeCompare(right.name)
+    })
+    .map((entry, index) => ({
+      ...entry,
+      rank: index + 1,
+    }))
+}
+
+function mergeReviewOnlyContributors(byContributor, reviewStats) {
+  const merged = new Map(byContributor)
+
+  for (const [key, review] of reviewStats) {
+    if (merged.has(key)) {
+      continue
+    }
+
+    const login = review.login
+    const override = overrideByLogin.get(normalizeLogin(login))
+    const profile = login ? readGitHubUserProfile(login) : null
+    const resolvedLogin = profile?.login ?? login
+
+    merged.set(key, {
+      key,
+      name: override?.name ?? profile?.name ?? resolvedLogin ?? 'Unknown contributor',
+      login: resolvedLogin,
+      avatarLogin: override?.avatarLogin ?? resolvedLogin,
+      avatarUrl: profile?.avatarUrl,
+      avatarSeed: override?.key ?? normalizeLogin(resolvedLogin ?? key),
+      commits: 0,
+      firstCommitDate: `${review.latestDate}T00:00:00Z`,
+      latestCommitDate: `${review.latestDate}T00:00:00Z`,
+    })
+  }
+
+  return merged
+}
+
+function fetchMergedPullRequests() {
+  const pullRequests = []
+  let cursor = null
+
+  do {
+    const page = graphqlRequest(pullRequestsQuery, { cursor })
+    const connection = page.repository.pullRequests
+    pullRequests.push(...connection.nodes)
+    cursor = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : null
+  } while (cursor)
+
+  return pullRequests
+}
+
+function graphqlRequest(query, variables) {
+  const args = ['api', 'graphql', '-f', `query=${query}`]
+
+  for (const [key, value] of Object.entries(variables)) {
+    if (value != null) {
+      args.push('-f', `${key}=${value}`)
+    }
+  }
+
+  const output = execFileSync('gh', args, {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024 * 32,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim()
+
+  const payload = JSON.parse(output)
+  if (payload.errors?.length) {
+    throw new Error(payload.errors.map(error => error.message).join('; '))
+  }
+
+  return payload.data
+}
+
+function collectReviewStatsByContributorKey(pullRequests, range) {
+  const stats = new Map()
+
+  for (const pullRequest of pullRequests) {
+    const reviewedInPr = new Set()
+
+    for (const review of pullRequest.reviews?.nodes ?? []) {
+      const reviewer = normalizeLogin(review.author?.login)
+      const submittedAt = review.submittedAt?.slice(0, 10) ?? null
+
+      if (
+        !reviewer
+        || isBotLogin(reviewer)
+        || reviewedInPr.has(reviewer)
+        || !reviewStates.has(review.state)
+        || !submittedAt
+        || !isDateInRange(submittedAt, range)
+      ) {
+        continue
+      }
+
+      reviewedInPr.add(reviewer)
+
+      const key = resolveReviewerContributorKey(reviewer)
+      if (!key) {
+        continue
+      }
+
+      const login = key.slice('github:'.length)
+      const current = stats.get(key) ?? {
+        key,
+        login,
+        count: 0,
+        latestDate: submittedAt,
+      }
+      current.count += 1
+      current.latestDate = maxDate(current.latestDate, submittedAt)
+      stats.set(key, current)
+    }
+  }
+
+  return stats
+}
+
+function resolveReviewerContributorKey(login) {
+  const normalized = normalizeLogin(login)
+  if (!normalized || isBotLogin(normalized)) {
+    return null
+  }
+
+  const override = overrideByLogin.get(normalized)
+  const canonicalLogin = normalizeLogin(override?.login ?? login)
+
+  return `github:${canonicalLogin}`
+}
+
+function isDateInRange(date, range) {
+  return (!range.startDate || date >= range.startDate) && (!range.endDate || date <= range.endDate)
+}
+
+function isBotLogin(login) {
+  const normalized = normalizeLogin(login)
+  if (!normalized) {
+    return true
+  }
+
+  return (
+    normalized.includes('[bot]')
+    || normalized.endsWith('-bot')
+    || normalized === 'dependabot'
+    || normalized === 'github-actions'
+    || normalized.includes('copilot')
+    || normalized.includes('codex-connector')
+  )
 }
 
 function readContributorRows(startDate) {
@@ -1043,7 +1234,7 @@ function formatLocalDate(date) {
 function renderTypeScript(generatedAt, snapshots, newContributorsSinceRelease) {
   return `/* eslint-disable */
 // This file is generated by \`npm run contributors:rank\`.
-// Source: GitHub commits API with local git fallback.
+// Source: GitHub commits API with local git fallback, plus merged PR reviews.
 
 export type ContributorRankRange = 'v03ToNow' | 'v02ToV03' | 'v01ToV02' | 'v0ToV01' | 'all'
 
@@ -1056,6 +1247,7 @@ export interface ContributorRankEntry {
   avatarUrl?: string
   avatarSeed: string
   commits: number
+  reviews: number
   share: number
   firstCommitDate: string
   latestCommitDate: string
@@ -1070,6 +1262,7 @@ export interface ContributorRankSnapshot {
   endDate: string
   description: string
   totalCommits: number
+  totalReviews: number
   totalContributors: number
   newContributors: number
   entries: ContributorRankEntry[]

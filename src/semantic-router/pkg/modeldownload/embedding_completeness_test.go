@@ -59,6 +59,26 @@ func TestBuildModelSpecsRequiresEmbeddingModelWeightsAndTokenizer(t *testing.T) 
 	}
 }
 
+func TestBuildModelSpecsSkipsEmbeddingModelsForRemoteBackend(t *testing.T) {
+	cfg := newEmbeddingOnlyConfig()
+	cfg.EmbeddingModels.EmbeddingConfig = config.HNSWConfig{
+		Backend:   config.EmbeddingBackendOpenAICompatible,
+		ModelType: config.EmbeddingModelTypeRemote,
+	}
+	cfg.EmbeddingModels.Endpoint = config.EmbeddingEndpointConfig{
+		BaseURL: "http://embedding-service:8000/v1",
+		Model:   "BAAI/bge-m3",
+	}
+
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+	if len(specs) != 0 {
+		t.Fatalf("BuildModelSpecs() returned %d specs for remote embedding backend, want 0: %#v", len(specs), specs)
+	}
+}
+
 // TestOnnxOnlyEmbeddingDirReportedIncomplete reproduces the #2172 symptom end-to-end:
 // an ONNX-only embedding directory (config.json + nested onnx weights, no safetensors /
 // tokenizer.json) must be reported as missing so the full snapshot is re-downloaded.

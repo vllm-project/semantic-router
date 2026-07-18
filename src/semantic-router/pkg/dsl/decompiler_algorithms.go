@@ -14,6 +14,12 @@ var algorithmFieldExporters = map[string]algorithmFieldExporter{
 	"remom": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		remomAlgorithmToFields(algo.ReMoM, fields)
 	},
+	"fusion": func(algo *config.AlgorithmConfig, fields map[string]Value) {
+		fusionAlgorithmToFields(algo.Fusion, fields)
+	},
+	"workflows": func(algo *config.AlgorithmConfig, fields map[string]Value) {
+		workflowsAlgorithmToFields(algo.Workflows, fields)
+	},
 	"router_dc": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		routerDCAlgorithmToFields(algo.RouterDC, fields)
 	},
@@ -93,11 +99,93 @@ func remomAlgorithmToFields(r *config.ReMoMAlgorithmConfig, fields map[string]Va
 	setStringValue(fields, "compaction_strategy", r.CompactionStrategy)
 	setIntValue(fields, "compaction_tokens", r.CompactionTokens)
 	setStringValue(fields, "synthesis_template", r.SynthesisTemplate)
+	setStringValue(fields, "synthesis_model", r.SynthesisModel)
 	setIntValue(fields, "max_concurrent", r.MaxConcurrent)
+	setIntValue(fields, "round_timeout_seconds", r.RoundTimeoutSeconds)
+	setIntValue(fields, "min_successful_responses", r.MinSuccessfulResponses)
 	setStringValue(fields, "on_error", r.OnError)
 	setIntValue(fields, "shuffle_seed", r.ShuffleSeed)
 	setBoolTrueValue(fields, "include_intermediate_responses", r.IncludeIntermediateResponses)
 	setIntValue(fields, "max_responses_per_round", r.MaxResponsesPerRound)
+}
+
+func fusionAlgorithmToFields(f *config.FusionAlgorithmConfig, fields map[string]Value) {
+	if f == nil {
+		return
+	}
+	setStringValue(fields, "model", f.Model)
+	if len(f.AnalysisModels) > 0 {
+		fields["analysis_models"] = stringsToArray(f.AnalysisModels)
+	}
+	setIntValue(fields, "max_concurrent", f.MaxConcurrent)
+	setIntValue(fields, "max_completion_tokens", f.MaxCompletionTokens)
+	setIntValue(fields, "round_timeout_seconds", f.RoundTimeoutSeconds)
+	setIntValue(fields, "min_successful_responses", f.MinSuccessfulResponses)
+	if f.Temperature != nil {
+		fields["temperature"] = FloatValue{V: *f.Temperature}
+	}
+	if f.IncludeAnalysis != nil {
+		fields["include_analysis"] = BoolValue{V: *f.IncludeAnalysis}
+	}
+	setStringValue(fields, "on_error", f.OnError)
+	setStringValue(fields, "analysis_template", f.AnalysisTemplate)
+	setStringValue(fields, "synthesis_template", f.SynthesisTemplate)
+	setStringValue(fields, "judge_prompt_version", f.JudgePromptVersion)
+	if f.IncludeIntermediateResponses != nil {
+		fields["include_intermediate_responses"] = BoolValue{V: *f.IncludeIntermediateResponses}
+	}
+}
+
+func workflowsAlgorithmToFields(w *config.WorkflowsAlgorithmConfig, fields map[string]Value) {
+	if w == nil {
+		return
+	}
+	setStringValue(fields, "mode", w.Mode)
+	setStringValue(fields, "template", w.Template)
+	if len(w.Roles) > 0 {
+		fields["roles"] = workflowRolesValue(w.Roles)
+	}
+	if !w.Final.IsZero() {
+		fields["final"] = workflowFinalValue(w.Final)
+	}
+	if w.Planner.Model != "" {
+		fields["planner"] = ObjectValue{Fields: map[string]Value{
+			"model": StringValue{V: w.Planner.Model},
+		}}
+	}
+	setIntValue(fields, "max_steps", w.MaxSteps)
+	setIntValue(fields, "max_parallel", w.MaxParallel)
+	setIntValue(fields, "max_completion_tokens", w.MaxCompletionTokens)
+	setIntValue(fields, "round_timeout_seconds", w.RoundTimeoutSeconds)
+	setIntValue(fields, "min_successful_responses", w.MinSuccessfulResponses)
+	if w.Temperature != nil {
+		fields["temperature"] = FloatValue{V: *w.Temperature}
+	}
+	if w.IncludeIntermediateResponses != nil {
+		fields["include_intermediate_responses"] = BoolValue{V: *w.IncludeIntermediateResponses}
+	}
+	setStringValue(fields, "on_error", w.OnError)
+}
+
+func workflowRolesValue(roles []config.WorkflowRoleConfig) ArrayValue {
+	items := make([]Value, 0, len(roles))
+	for _, role := range roles {
+		fields := map[string]Value{}
+		setStringValue(fields, "name", role.Name)
+		if len(role.Models) > 0 {
+			fields["models"] = stringsToArray(role.Models)
+		}
+		setStringValue(fields, "prompt", role.Prompt)
+		items = append(items, ObjectValue{Fields: fields})
+	}
+	return ArrayValue{Items: items}
+}
+
+func workflowFinalValue(final config.WorkflowFinalConfig) ObjectValue {
+	fields := map[string]Value{}
+	setStringValue(fields, "model", final.Model)
+	setStringValue(fields, "prompt", final.Prompt)
+	return ObjectValue{Fields: fields}
 }
 
 func routerDCAlgorithmToFields(r *config.RouterDCSelectionConfig, fields map[string]Value) {

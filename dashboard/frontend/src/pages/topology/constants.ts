@@ -25,7 +25,7 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   projection: 'PRJ',
 }
 
-// ============== Signal Colors (Gray Nodes, Green Paths) ==============
+// ============== Signal Colors (Gray Nodes, Alloy Paths) ==============
 export const SIGNAL_COLORS: Record<SignalType, { background: string; border: string }> = {
   keyword: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
   embedding: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
@@ -88,14 +88,14 @@ export const PLUGIN_ICONS: Record<PluginType, string> = {
   tool_selection: 'TS',
 }
 
-// ============== Plugin Colors (NVIDIA Dark Theme) ==============
+// ============== Plugin Colors (Graphite Theme) ==============
 export const PLUGIN_COLORS: Record<PluginType, { background: string; border: string }> = {
-  'semantic-cache': { background: '#76b900', border: '#5a8f00' }, // NVIDIA Green
+  'semantic-cache': { background: '#8f949c', border: '#696d74' }, // Graphite Alloy
   memory: { background: '#3f6b73', border: '#2e4f55' },
-  system_prompt: { background: '#8fd400', border: '#76b900' }, // Light Green
+  system_prompt: { background: '#c9cbd0', border: '#8f949c' }, // Light Alloy
   header_mutation: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
   hallucination: { background: '#556b7d', border: '#3d4a59' }, // Cool Gray
-  router_replay: { background: '#6ba300', border: '#5a8f00' }, // Green (consistent with other plugins)
+  router_replay: { background: '#737780', border: '#696d74' }, // Green (consistent with other plugins)
   rag: { background: '#2f855a', border: '#276749' },
   image_gen: { background: '#7b5ea7', border: '#5b3f86' },
   fast_response: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
@@ -117,6 +117,7 @@ export const ALGORITHM_ICONS: Record<AlgorithmType, string> = {
   hybrid: 'HY',
   remom: 'RM',
   fusion: 'FU',
+  workflows: 'FL',
   latency_aware: 'LAT',
   knn: 'KNN',
   kmeans: 'KM',
@@ -125,16 +126,17 @@ export const ALGORITHM_ICONS: Record<AlgorithmType, string> = {
   multi_factor: 'MF',
 }
 
-// ============== Algorithm Colors (NVIDIA Dark Theme) ==============
+// ============== Algorithm Colors (Graphite Theme) ==============
 export const ALGORITHM_COLORS: Record<AlgorithmType, { background: string; border: string }> = {
-  confidence: { background: '#76b900', border: '#5a8f00' }, // NVIDIA Green
+  confidence: { background: '#8f949c', border: '#696d74' }, // Graphite Alloy
   concurrent: { background: '#5a6c7d', border: '#3d4a59' }, // Blue Gray
   sequential: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  ratings: { background: '#8fd400', border: '#76b900' }, // Light Green
+  ratings: { background: '#c9cbd0', border: '#8f949c' }, // Light Alloy
   static: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
   router_dc: { background: '#556b7d', border: '#3d4a59' }, // Cool Gray
-  remom: { background: '#76b900', border: '#5a8f00' }, // NVIDIA Green (same as plugins)
-  fusion: { background: '#60784f', border: '#455a36' }, // Muted Green
+  remom: { background: '#8f949c', border: '#696d74' }, // Graphite Alloy (same as plugins)
+  fusion: { background: '#60784f', border: '#455a36' }, // Muted Alloy
+  workflows: { background: '#4f6f78', border: '#38545c' }, // Flow Teal
   automix: { background: '#5d6d7e', border: '#3d4a59' }, // Steel Gray
   hybrid: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
   latency_aware: { background: '#5a6c7d', border: '#3d4a59' }, // Blue Gray
@@ -145,29 +147,29 @@ export const ALGORITHM_COLORS: Record<AlgorithmType, { background: string; borde
   multi_factor: { background: '#4e6f63', border: '#38534a' },
 }
 
-// ============== Reasoning Effort Display (NVIDIA Dark Theme) ==============
+// ============== Reasoning Effort Display (Graphite Theme) ==============
 export const REASONING_EFFORT_DISPLAY: Record<
   string,
   { icon: string; label: string; color: string }
 > = {
-  low: { icon: 'L', label: 'Low', color: '#8fd400' }, // Light Green
-  medium: { icon: 'M', label: 'Medium', color: '#76b900' }, // NVIDIA Green
-  high: { icon: 'H', label: 'High', color: '#5a8f00' }, // Dark Green
+  low: { icon: 'L', label: 'Low', color: '#c9cbd0' }, // Light Alloy
+  medium: { icon: 'M', label: 'Medium', color: '#8f949c' }, // Graphite Alloy
+  high: { icon: 'H', label: 'High', color: '#696d74' }, // Dark Alloy
 }
 
 export const MODEL_NODE_WIDTH = 220
 
-// ============== Global Plugin Display (NVIDIA Dark Theme) ==============
+// ============== Global Plugin Display (Graphite Theme) ==============
 export const GLOBAL_PLUGIN_DISPLAY: Record<string, { icon: string; label: string; color: string }> =
   {
     prompt_guard: { icon: 'PG', label: 'Jailbreak Guard', color: '#718096' }, // Medium Gray
     pii_detection: { icon: 'PII', label: 'PII Detection', color: '#5a6c7d' }, // Blue Gray
-    semantic_cache: { icon: 'SC', label: 'Semantic Cache', color: '#76b900' }, // NVIDIA Green
+    semantic_cache: { icon: 'SC', label: 'Semantic Cache', color: '#8f949c' }, // Graphite Alloy
   }
 
-// ============== Node Colors (Gray Nodes, Green Paths) ==============
+// ============== Node Colors (Gray Nodes, Alloy Paths) ==============
 export const NODE_COLORS = {
-  client: { background: '#76b900', border: '#5a8f00' }, // NVIDIA Green (Client stays green)
+  client: { background: '#8f949c', border: '#696d74' }, // Graphite Alloy (Client stays alloy)
   decision: {
     normal: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
     reasoning: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
@@ -181,13 +183,13 @@ export const NODE_COLORS = {
   disabled: { background: '#3d4a59', border: '#2d3748' }, // Very Dark Gray
 }
 
-// ============== Edge Colors (Green Paths) ==============
+// ============== Edge Colors (Alloy Paths) ==============
 export const EDGE_COLORS = {
-  normal: '#76b900', // NVIDIA Green (All paths green)
-  reasoning: '#76b900', // NVIDIA Green (All paths green)
-  active: '#76b900', // NVIDIA Green
+  normal: '#8f949c', // Graphite Alloy (All paths use alloy)
+  reasoning: '#8f949c', // Graphite Alloy (All paths use alloy)
+  active: '#8f949c', // Graphite Alloy
   disabled: '#3d4a59', // Very Dark Gray
-  highlighted: '#8fd400', // Light Green (Highlighted paths brighter)
+  highlighted: '#c9cbd0', // Light Alloy (Highlighted paths brighter)
 }
 
 // ============== Layout Configuration ==============

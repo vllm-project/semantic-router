@@ -81,7 +81,7 @@ docker-build-vllm-sr-sim: ## Build vllm-sr-sim Docker image
 docker-build-vllm-sr-sim:
 	@$(LOG_TARGET)
 	@echo "Building vllm-sr-sim Docker image..."
-	@$(CONTAINER_RUNTIME) build -f src/fleet-sim/Dockerfile -t $(DOCKER_REGISTRY)/vllm-sr-sim:$(DOCKER_TAG) .
+	@$(CONTAINER_RUNTIME) build --build-arg IMAGE_REGISTRY=$(IMAGE_REGISTRY) -f src/fleet-sim/Dockerfile -t $(DOCKER_REGISTRY)/vllm-sr-sim:$(DOCKER_TAG) .
 
 # Build precommit Docker image
 docker-build-precommit: ## Build precommit Docker image
@@ -195,15 +195,16 @@ docker-push-vllm-sr-sim:
 docker-help:
 docker-help: ## Show help for Docker-related make targets and environment variables
 	@echo "Environment Variables:"
-	@echo "  CONTAINER_RUNTIME - Container runtime (default: docker; Podman is not supported)"
+	@echo "  CONTAINER_RUNTIME - Container runtime: docker (default) or podman"
 	@echo "  DOCKER_REGISTRY   - Docker registry (default: ghcr.io/vllm-project/semantic-router)"
 	@echo "  DOCKER_TAG        - Docker tag (default: latest)"
 	@echo "  SKIP_ROUTER_IMAGE - set to 1 only when the local router image is already up to date"
 	@echo "  SERVED_NAME       - Served model name for custom runs"
-	@echo "  VLLM_SR_PLATFORM  - vllm-sr platform hint (set to amd to use ROCm defaults)"
+	@echo "  VLLM_SR_PLATFORM  - vllm-sr platform hint (set to amd for ROCm defaults, nvidia for CUDA defaults)"
 	@echo "  VLLM_SR_TARGETARCH - target image architecture (default: host-native, amd64 for ROCm)"
 	@echo "  VLLM_SR_BUILDPLATFORM - Docker build platform (default: host-native, linux/amd64 for ROCm)"
 	@echo "  VLLM_SR_DOCKERFILE_AMD - Dockerfile used when VLLM_SR_PLATFORM=amd"
+	@echo "  VLLM_SR_DOCKERFILE_NVIDIA - Dockerfile used when VLLM_SR_PLATFORM=nvidia"
 	@echo "  VLLM_SR_ROUTER_IMAGE - router runtime image override (defaults to VLLM_SR_ROUTER_IMAGE_DEFAULT)"
 	@echo "  VLLM_SR_ENVOY_IMAGE - envoy runtime image override (defaults to VLLM_SR_ENVOY_IMAGE_DEFAULT)"
 	@echo "  VLLM_SR_DASHBOARD_IMAGE - dashboard runtime image override (defaults to VLLM_SR_DASHBOARD_IMAGE_DEFAULT)"
@@ -215,8 +216,10 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 # single `DOCKER_TAG=v0.3.0` on the command line pins every image at once.
 VLLM_SR_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr:$(DOCKER_TAG)
 VLLM_SR_IMAGE_ROCM ?= ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:$(DOCKER_TAG)
+VLLM_SR_IMAGE_CUDA ?= ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:$(DOCKER_TAG)
 VLLM_SR_ROUTER_IMAGE_DEFAULT ?= $(VLLM_SR_IMAGE)
 VLLM_SR_ROUTER_IMAGE_ROCM ?= $(VLLM_SR_IMAGE_ROCM)
+VLLM_SR_ROUTER_IMAGE_CUDA ?= $(VLLM_SR_IMAGE_CUDA)
 VLLM_SR_ENVOY_IMAGE_DEFAULT ?= envoyproxy/envoy:v1.34-latest
 VLLM_SR_DASHBOARD_IMAGE_DEFAULT ?= ghcr.io/vllm-project/semantic-router/dashboard:$(DOCKER_TAG)
 VLLM_SR_ROUTER_IMAGE ?= $(VLLM_SR_ROUTER_IMAGE_DEFAULT)
@@ -233,6 +236,7 @@ VLLM_SR_TOPOLOGY ?= split
 VLLM_SR_TOPOLOGY_NORMALIZED := $(shell echo "$(VLLM_SR_TOPOLOGY)" | tr '[:upper:]' '[:lower:]')
 VLLM_SR_DOCKERFILE ?= src/vllm-sr/Dockerfile
 VLLM_SR_DOCKERFILE_AMD ?= src/vllm-sr/Dockerfile.rocm
+VLLM_SR_DOCKERFILE_NVIDIA ?= src/vllm-sr/Dockerfile.cuda
 VLLM_SR_DASHBOARD_DOCKERFILE ?= dashboard/backend/Dockerfile
 VLLM_SR_SIM_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr-sim:latest
 VLLM_SR_SIM_CONTAINER ?= vllm-sr-sim-container
@@ -282,9 +286,43 @@ VLLM_SR_BUILDPLATFORM := linux/amd64
 endif
 endif
 
+# NVIDIA platform defaults (can still be overridden via env/CLI variables)
+ifeq ($(VLLM_SR_PLATFORM_NORMALIZED),nvidia)
+ifeq ($(origin VLLM_SR_IMAGE),file)
+VLLM_SR_IMAGE := $(VLLM_SR_IMAGE_CUDA)
+endif
+ifeq ($(origin VLLM_SR_ROUTER_IMAGE),file)
+VLLM_SR_ROUTER_IMAGE := $(VLLM_SR_ROUTER_IMAGE_CUDA)
+endif
+ifeq ($(origin VLLM_SR_DOCKERFILE),file)
+VLLM_SR_DOCKERFILE := $(VLLM_SR_DOCKERFILE_NVIDIA)
+endif
+ifeq ($(origin VLLM_SR_TARGETARCH),file)
+VLLM_SR_TARGETARCH := amd64
+endif
+ifeq ($(origin VLLM_SR_BUILDPLATFORM),file)
+VLLM_SR_BUILDPLATFORM := linux/amd64
+endif
+endif
+
 # Default 1 so vllm-sr build works behind corporate proxies; set GIT_SSL_NO_VERIFY=0 for strict SSL verification.
 GIT_SSL_NO_VERIFY ?= 1
-VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM)
+# Auto-detect: if Podman can resolve unqualified short names (search chain
+# configured in registries.conf), use unqualified FROM lines so the configured
+# registry priority is honoured.  Otherwise fall back to fully-qualified
+# docker.io/ names for out-of-the-box compatibility.
+IMAGE_REGISTRY ?= $(shell \
+  if [ "$(CONTAINER_RUNTIME)" = "podman" ]; then \
+    if podman pull --quiet library/alpine:latest >/dev/null 2>&1; then \
+      podman rmi --force library/alpine:latest >/dev/null 2>&1; \
+      printf ""; \
+    else \
+      printf "docker.io/"; \
+    fi; \
+  else \
+    printf "docker.io/"; \
+  fi)
+VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM) --build-arg IMAGE_REGISTRY=$(IMAGE_REGISTRY)
 ifeq ($(GIT_SSL_NO_VERIFY),1)
 VLLM_SR_BUILD_ARGS += --build-arg GIT_SSL_NO_VERIFY=1
 endif

@@ -17,7 +17,28 @@ type JailbreakInitializerImpl struct {
 }
 
 func (c *JailbreakInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
-	// Try auto-detecting jailbreak classifier init first - checks for lora_config.json.
+	// A ModernBERT config.json is incompatible with the traditional Candle BERT
+	// loader, so probing Candle first logs alarming "Failed to initialize" errors
+	// before the ModernBERT fallback succeeds (#2096). When the model is detected
+	// as ModernBERT, try the ModernBERT initializer first to skip that doomed probe.
+	if isModernBertModel(modelID) {
+		if err := candle_binding.InitModernBertJailbreakClassifier(modelID, useCPU); err == nil {
+			c.usedModernBERT = true
+			logging.ComponentEvent("classifier", "jailbreak_detector_initialized", map[string]interface{}{
+				"backend":   "modernbert",
+				"model_ref": modelID,
+			})
+			return nil
+		}
+		// Detected as ModernBERT but its initializer failed (e.g. a LoRA model
+		// whose base is ModernBERT); fall through to the auto-detect path.
+		logging.ComponentDebugEvent("classifier", "jailbreak_detector_fallback_enabled", map[string]interface{}{
+			"fallback_backend": "candle_bert_auto",
+			"model_ref":        modelID,
+		})
+	}
+
+	// Try auto-detecting jailbreak classifier init - checks for lora_config.json.
 	// This enables LoRA Jailbreak models when available. InitJailbreakClassifier routes
 	// to LORA_JAILBREAK_CLASSIFIER or BERT_JAILBREAK_CLASSIFIER.
 	err := candle_binding.InitJailbreakClassifier(modelID, numClasses[0], useCPU)
@@ -84,6 +105,14 @@ type JailbreakInference interface {
 	Classify(text string) (candle_binding.ClassResult, error)
 }
 
+// JailbreakProbInference is optionally implemented by jailbreak backends that can
+// return the full class-probability distribution, not just the argmax class. When a
+// backend implements it, callers can report the probability of the jailbreak class
+// itself rather than the confidence of whichever class wins argmax.
+type JailbreakProbInference interface {
+	ClassifyWithProbs(text string) (candle_binding.ClassResultWithProbs, error)
+}
+
 type JailbreakInferenceImpl struct{}
 
 func (c *JailbreakInferenceImpl) Classify(text string) (candle_binding.ClassResult, error) {
@@ -106,6 +135,12 @@ type MmBERT32KJailbreakInferenceImpl struct{}
 
 func (c *MmBERT32KJailbreakInferenceImpl) Classify(text string) (candle_binding.ClassResult, error) {
 	return candle_binding.ClassifyMmBert32KJailbreak(text)
+}
+
+// ClassifyWithProbs returns the mmBERT-32K jailbreak prediction together with the
+// full softmax probability distribution, satisfying JailbreakProbInference.
+func (c *MmBERT32KJailbreakInferenceImpl) ClassifyWithProbs(text string) (candle_binding.ClassResultWithProbs, error) {
+	return candle_binding.ClassifyMmBert32KJailbreakWithProbs(text)
 }
 
 // createMmBERT32KJailbreakInference creates mmBERT-32K jailbreak inference.

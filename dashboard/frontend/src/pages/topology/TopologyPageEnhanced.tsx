@@ -56,30 +56,33 @@ const TopologyFlow: React.FC = () => {
   }, [])
 
   const handleDecisionFocus = useCallback((decisionName: string) => {
-    setFocusedDecisionName(prev => (prev === decisionName ? null : decisionName))
+    setFocusedDecisionName((prev) => (prev === decisionName ? null : decisionName))
     setFocusMode(true)
   }, [])
 
-  const layoutOptions = useMemo(() => ({
-    densityMode,
-    expandHiddenDecisions,
-    onExpandHiddenDecisions: handleExpandHiddenDecisions,
-    focusMode,
-    focusedDecisionName: focusMode ? focusedDecisionName : null,
-    onFocusDecision: handleDecisionFocus,
-  }), [
-    densityMode,
-    expandHiddenDecisions,
-    handleExpandHiddenDecisions,
-    focusMode,
-    focusedDecisionName,
-    handleDecisionFocus,
-  ])
+  const layoutOptions = useMemo(
+    () => ({
+      densityMode,
+      expandHiddenDecisions,
+      onExpandHiddenDecisions: handleExpandHiddenDecisions,
+      focusMode,
+      focusedDecisionName: focusMode ? focusedDecisionName : null,
+      onFocusDecision: handleDecisionFocus,
+    }),
+    [
+      densityMode,
+      expandHiddenDecisions,
+      handleExpandHiddenDecisions,
+      focusMode,
+      focusedDecisionName,
+      handleDecisionFocus,
+    ],
+  )
 
   const stageGuide = useMemo(() => {
     if (!data) return []
 
-    const projectionCount = data.signals.filter(signal => signal.type === 'projection').length
+    const projectionCount = data.signals.filter((signal) => signal.type === 'projection').length
     const runtimeCount = data.decisions.reduce((count, decision) => {
       const hasAlgorithm = Boolean(decision.algorithm && decision.algorithm.type !== 'static')
       const hasPluginChain = Boolean(decision.plugins && decision.plugins.length > 0)
@@ -104,13 +107,11 @@ const TopologyFlow: React.FC = () => {
     if (!data) return
 
     const highlightedPath = testResult?.highlightedPath || []
-    const { nodes: newNodes, edges: newEdges, meta } = calculateFullLayout(
-      data,
-      collapseState,
-      highlightedPath,
-      testResult,
-      layoutOptions
-    )
+    const {
+      nodes: newNodes,
+      edges: newEdges,
+      meta,
+    } = calculateFullLayout(data, collapseState, highlightedPath, testResult, layoutOptions)
     setNodes(newNodes)
     setEdges(newEdges)
     setLayoutMeta(meta)
@@ -124,7 +125,7 @@ const TopologyFlow: React.FC = () => {
           padding: 0.16,
           duration: 300,
           minZoom: 0.15,
-          maxZoom: 1.0
+          maxZoom: 1.0,
         })
       }, 100)
       return () => clearTimeout(timer)
@@ -166,16 +167,22 @@ const TopologyFlow: React.FC = () => {
       <div className={styles.content}>
         {/* Flow Canvas */}
         <div className={styles.flowContainer}>
+          <div className={styles.canvasTitle}>
+            <span>System map</span>
+            <strong>Routing Topology</strong>
+            <p>Signals → Projections → Decisions → Runtime → Models</p>
+          </div>
           <div className={styles.layoutToolbar}>
             <div className={`${styles.toolbarSection} ${styles.densitySection}`}>
               <span className={styles.toolbarLabel}>Density</span>
               <div className={styles.modeSwitch}>
-                {(['compact', 'balanced', 'cinematic'] as DecisionDensityMode[]).map(mode => (
+                {(['compact', 'balanced', 'cinematic'] as DecisionDensityMode[]).map((mode) => (
                   <button
                     key={mode}
                     className={`${styles.modeBtn} ${densityMode === mode ? styles.modeBtnActive : ''}`}
                     onClick={() => setDensityMode(mode)}
                     type="button"
+                    aria-pressed={densityMode === mode}
                   >
                     {mode}
                   </button>
@@ -183,7 +190,7 @@ const TopologyFlow: React.FC = () => {
               </div>
               {stageGuide.length > 0 && (
                 <div className={styles.densitySummary} aria-label="Brain topology stage summary">
-                  {stageGuide.map(stage => (
+                  {stageGuide.map((stage) => (
                     <span key={stage.id} className={styles.densitySummaryItem}>
                       <span className={styles.densitySummaryValue}>{stage.count}</span>
                       <span className={styles.densitySummaryLabel}>{stage.label}</span>
@@ -230,7 +237,7 @@ const TopologyFlow: React.FC = () => {
                   aria-label="Toggle focus mode"
                   className={`${styles.focusSwitch} ${focusMode ? styles.focusSwitchOn : ''}`}
                   onClick={() => {
-                    setFocusMode(prev => {
+                    setFocusMode((prev) => {
                       const next = !prev
                       if (!next) setFocusedDecisionName(null)
                       return next
@@ -294,7 +301,9 @@ const TopologyFlow: React.FC = () => {
           <button
             className={styles.bottomToggle}
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            title={sidebarCollapsed ? 'Expand Panel' : 'Collapse Panel'}
+            type="button"
+            aria-expanded={!sidebarCollapsed}
+            aria-label={sidebarCollapsed ? 'Expand test query panel' : 'Collapse test query panel'}
           >
             {sidebarCollapsed ? '▲' : '▼'}
           </button>
@@ -311,10 +320,7 @@ const TopologyFlow: React.FC = () => {
         </div>
 
         {/* Result Card */}
-        <ResultCard
-          result={testResult}
-          onClose={clearResult}
-        />
+        <ResultCard result={testResult} onClose={clearResult} />
       </div>
     </div>
   )

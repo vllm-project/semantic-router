@@ -194,6 +194,7 @@ export type AlgorithmType =
   | 'hybrid'
   | 'remom'
   | 'fusion'
+  | 'workflows'
   | 'latency_aware'
   | 'knn'
   | 'kmeans'
@@ -209,6 +210,7 @@ export interface AlgorithmConfig {
   ratings?: GenericAlgorithmConfig
   remom?: GenericAlgorithmConfig
   fusion?: GenericAlgorithmConfig
+  workflows?: GenericAlgorithmConfig
   router_dc?: GenericAlgorithmConfig
   automix?: GenericAlgorithmConfig
   autoMix?: GenericAlgorithmConfig
@@ -296,6 +298,8 @@ export interface EndpointConfig {
 export interface PricingConfig {
   currency?: string
   prompt_per_1m?: number
+  cached_input_per_1m?: number
+  cache_write_per_1m?: number
   completion_per_1m?: number
 }
 

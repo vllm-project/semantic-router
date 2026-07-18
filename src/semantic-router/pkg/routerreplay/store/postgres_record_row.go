@@ -18,9 +18,10 @@ const postgresRecordSelectColumns = `
 	prompt, prompt_truncated, tool_definitions, tool_definitions_truncated,
 	rag_enabled, rag_backend, rag_context_length, rag_similarity_score,
 	hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans,
-	prompt_tokens, cached_prompt_tokens, completion_tokens, total_tokens,
+	prompt_tokens, cached_prompt_tokens, cache_write_tokens, completion_tokens, total_tokens,
 	actual_cost, baseline_cost, cost_savings, currency, baseline_model,
-	session_id, turn_index, previous_response_id, conversation_id
+	session_id, turn_index, previous_response_id, conversation_id,
+	cache_similarity, context_token_count
 `
 
 type postgresRowScanner interface {
@@ -59,6 +60,7 @@ type postgresRecordRow struct {
 	hallucinationSpansJSON []byte
 	promptTokens           sql.NullInt64
 	cachedPromptTokens     sql.NullInt64
+	cacheWriteTokens       sql.NullInt64
 	completionTokens       sql.NullInt64
 	totalTokens            sql.NullInt64
 	actualCost             sql.NullFloat64
@@ -175,6 +177,7 @@ func (record postgresInsertRecord) args() []interface{} {
 		record.hallucinationSpansJSON,
 		nullableIntArg(record.record.PromptTokens),
 		nullableIntArg(record.record.CachedPromptTokens),
+		nullableIntArg(record.record.CacheWriteTokens),
 		nullableIntArg(record.record.CompletionTokens),
 		nullableIntArg(record.record.TotalTokens),
 		nullableFloat64Arg(record.record.ActualCost),
@@ -186,6 +189,8 @@ func (record postgresInsertRecord) args() []interface{} {
 		record.record.TurnIndex,
 		emptyStringSQL(record.record.PreviousResponseID),
 		emptyStringSQL(record.record.ConversationID),
+		record.record.CacheSimilarity,
+		record.record.ContextTokenCount,
 	}
 }
 
@@ -263,6 +268,7 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.hallucinationSpansJSON,
 		&row.promptTokens,
 		&row.cachedPromptTokens,
+		&row.cacheWriteTokens,
 		&row.completionTokens,
 		&row.totalTokens,
 		&row.actualCost,
@@ -274,6 +280,8 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.turnIndex,
 		&row.previousResponseID,
 		&row.conversationID,
+		&row.record.CacheSimilarity,
+		&row.record.ContextTokenCount,
 	}
 }
 
@@ -288,6 +296,7 @@ func (row *postgresRecordRow) decode() (Record, error) {
 		&row.record,
 		row.promptTokens,
 		row.cachedPromptTokens,
+		row.cacheWriteTokens,
 		row.completionTokens,
 		row.totalTokens,
 		row.actualCost,

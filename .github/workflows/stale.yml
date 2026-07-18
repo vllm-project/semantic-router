@@ -24,7 +24,7 @@ jobs:
 
           # Inactivity windows.
           days-before-stale: 30
-          days-before-close: 7
+          days-before-close: 30
 
           # Labels applied when an item becomes stale.
           stale-issue-label: stale
@@ -33,18 +33,18 @@ jobs:
           # Messages posted when an item is marked stale.
           stale-pr-message: >
             This pull request has had no activity from the submitter for 30
-            days and has been marked as stale. It will be closed in 7 days if
+            days and has been marked as stale. It will be closed in 30 days if
             no further activity occurs.
           stale-issue-message: >
             This issue has had no activity for 30 days and has been marked as
-            stale. It will be closed in 7 days if no further activity occurs.
+            stale. It will be closed in 30 days if no further activity occurs.
 
           # Messages posted when an item is closed for being stale.
           close-pr-message: >
-            This pull request was closed because it has been stale for 7 days
+            This pull request was closed because it has been stale for 30 days
             with no activity.
           close-issue-message: >
-            This issue was closed because it has been stale for 7 days with no
+            This issue was closed because it has been stale for 30 days with no
             activity.
 
           # Remove the stale label as soon as there is new activity.

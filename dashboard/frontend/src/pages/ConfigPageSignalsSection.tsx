@@ -1,10 +1,10 @@
 import React from 'react'
 import styles from './ConfigPage.module.css'
+import signalStyles from './ConfigPageSignalsSection.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
-import ConfigPageDomainCategoryPicker from './ConfigPageDomainCategoryPicker'
 import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
-import type { FieldConfig } from '../components/EditModal'
+import ConfirmDialog from '../components/ConfirmDialog'
 import type { ViewSection } from '../components/ViewModal'
 import type {
   AddSignalFormState,
@@ -25,13 +25,30 @@ import type {
   RoleBindingSignal,
   SignalType,
   StructureSignal,
-  Subject,
   UserFeedbackSignal,
 } from './configPageSupport'
 import { formatThreshold } from './configPageSupport'
 import { hasFlatSignals } from '../types/config'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { cloneConfigData } from './configPageCanonicalization'
+import { buildSignalFormFields } from './configPageSignalFormFields'
+import {
+  SignalConditionsEditor,
+  SignalStringListEditor,
+  SignalStructureFeatureEditor,
+  SignalStructurePredicateEditor,
+  SignalSubjectsEditor,
+} from './configPageSignalStructuredEditors'
+import {
+  DEFAULT_STRUCTURE_FEATURE,
+  DEFAULT_STRUCTURE_PREDICATE,
+  getSignalReferenceCount,
+  normalizeConditions,
+  normalizeStringList,
+  normalizeStructureFeature,
+  normalizeStructurePredicate,
+  normalizeSubjects,
+} from './configPageSignalFormSupport'
 
 interface ConfigPageSignalsSectionProps {
   config: ConfigData | null
@@ -48,21 +65,21 @@ interface ConfigPageSignalsSectionProps {
 
 type UnifiedSignalData = Partial<
   KeywordSignal &
-  EmbeddingSignal &
-  DomainSignal &
-  PreferenceSignal &
-  FactCheckSignal &
-  UserFeedbackSignal &
-  ReaskSignal &
-  LanguageSignal &
-  ContextSignal &
-  StructureSignal &
-  ComplexitySignal &
-  ModalitySignal &
-  RoleBindingSignal &
-  JailbreakSignal &
-  PIISignal &
-  KBSignal
+    EmbeddingSignal &
+    DomainSignal &
+    PreferenceSignal &
+    FactCheckSignal &
+    UserFeedbackSignal &
+    ReaskSignal &
+    LanguageSignal &
+    ContextSignal &
+    StructureSignal &
+    ComplexitySignal &
+    ModalitySignal &
+    RoleBindingSignal &
+    JailbreakSignal &
+    PIISignal &
+    KBSignal
 >
 
 interface UnifiedSignal {
@@ -81,123 +98,135 @@ export default function ConfigPageSignalsSection({
   saveConfig,
   openEditModal,
   openViewModal,
-  listInputToArray,
   removeSignalByName,
 }: ConfigPageSignalsSectionProps) {
+  const [selectedSignalKeys, setSelectedSignalKeys] = React.useState<Set<string>>(new Set())
+  const [signalsPendingDelete, setSignalsPendingDelete] = React.useState<UnifiedSignal[]>([])
+  const [deletePending, setDeletePending] = React.useState(false)
+  const [deleteError, setDeleteError] = React.useState<string | null>(null)
+  const [actionError, setActionError] = React.useState<string | null>(null)
   const signals = config?.signals
-  const flatSignals: ConfigData['signals'] | null = !signals && hasFlatSignals(config) ? {
-    keywords: config?.keyword_rules,
-    embeddings: config?.embedding_rules,
-    domains: (config?.categories || []).map((category) => ({
-      name: category.name,
-      description: category.description || '',
-      mmlu_categories: category.mmlu_categories,
-    })),
-    fact_check: config?.fact_check_rules,
-    user_feedbacks: config?.user_feedback_rules,
-    reasks: config?.reask_rules,
-    preferences: config?.preference_rules,
-    language: config?.language_rules,
-    context: config?.context_rules,
-    structure: config?.structure_rules,
-    complexity: config?.complexity_rules,
-    modality: undefined,
-    role_bindings: undefined,
-    jailbreak: config?.jailbreak,
-    pii: config?.pii,
-  } : null
+  const flatSignals: ConfigData['signals'] | null =
+    !signals && hasFlatSignals(config)
+      ? {
+          keywords: config?.keyword_rules,
+          embeddings: config?.embedding_rules,
+          domains: (config?.categories || []).map((category) => ({
+            name: category.name,
+            description: category.description || '',
+            mmlu_categories: category.mmlu_categories,
+          })),
+          fact_check: config?.fact_check_rules,
+          user_feedbacks: config?.user_feedback_rules,
+          reasks: config?.reask_rules,
+          preferences: config?.preference_rules,
+          language: config?.language_rules,
+          context: config?.context_rules,
+          structure: config?.structure_rules,
+          complexity: config?.complexity_rules,
+          modality: undefined,
+          role_bindings: undefined,
+          jailbreak: config?.jailbreak,
+          pii: config?.pii,
+        }
+      : null
   const effectiveSignals = signals || flatSignals
 
   const allSignals: UnifiedSignal[] = []
 
-  effectiveSignals?.keywords?.forEach(kw => {
+  effectiveSignals?.keywords?.forEach((kw) => {
     allSignals.push({
       name: kw.name,
       type: 'Keywords',
       summary: `${kw.operator}, ${kw.keywords.length} keywords${kw.case_sensitive ? ', case-sensitive' : ''}`,
-      rawData: kw
+      rawData: kw,
     })
   })
 
-  effectiveSignals?.embeddings?.forEach(emb => {
+  effectiveSignals?.embeddings?.forEach((emb) => {
     allSignals.push({
       name: emb.name,
       type: 'Embeddings',
       summary: `Threshold: ${Math.round(emb.threshold * 100)}%, ${emb.candidates.length} items, ${emb.aggregation_method}`,
-      rawData: emb
+      rawData: emb,
     })
   })
 
-  effectiveSignals?.domains?.forEach(domain => {
+  effectiveSignals?.domains?.forEach((domain) => {
     const categoryCount = domain.mmlu_categories?.length || 0
     allSignals.push({
       name: domain.name,
       type: 'Domain',
-      summary: categoryCount > 0 ? `${categoryCount} MMLU categories` : (domain.description || 'No description'),
-      rawData: domain
+      summary:
+        categoryCount > 0
+          ? `${categoryCount} MMLU categories`
+          : domain.description || 'No description',
+      rawData: domain,
     })
   })
 
-  effectiveSignals?.preferences?.forEach(pref => {
+  effectiveSignals?.preferences?.forEach((pref) => {
     const examplesCount = pref.examples?.length || 0
-    const thresholdText = pref.threshold !== undefined ? ` • threshold ${formatThreshold(pref.threshold)}` : ''
-    const examplesText = examplesCount > 0 ? ` • ${examplesCount} ${examplesCount === 1 ? 'example' : 'examples'}` : ''
+    const thresholdText =
+      pref.threshold !== undefined ? ` • threshold ${formatThreshold(pref.threshold)}` : ''
+    const examplesText =
+      examplesCount > 0 ? ` • ${examplesCount} ${examplesCount === 1 ? 'example' : 'examples'}` : ''
     allSignals.push({
       name: pref.name,
       type: 'Preference',
       summary: `${pref.description || 'No description'}${examplesText}${thresholdText}`,
-      rawData: pref
+      rawData: pref,
     })
   })
 
-  effectiveSignals?.fact_check?.forEach(fc => {
+  effectiveSignals?.fact_check?.forEach((fc) => {
     allSignals.push({
       name: fc.name,
       type: 'Fact Check',
       summary: fc.description || 'No description',
-      rawData: fc
+      rawData: fc,
     })
   })
 
-  effectiveSignals?.user_feedbacks?.forEach(uf => {
+  effectiveSignals?.user_feedbacks?.forEach((uf) => {
     allSignals.push({
       name: uf.name,
       type: 'User Feedback',
       summary: uf.description || 'No description',
-      rawData: uf
+      rawData: uf,
     })
   })
 
-  effectiveSignals?.reasks?.forEach(reask => {
+  effectiveSignals?.reasks?.forEach((reask) => {
     const lookback = reask.lookback_turns ?? 1
     const threshold = reask.threshold ?? 0.8
     allSignals.push({
       name: reask.name,
       type: 'Reask',
       summary: `${reask.description || 'No description'} • lookback ${lookback} • threshold ${formatThreshold(threshold)}`,
-      rawData: reask
+      rawData: reask,
     })
   })
 
-  effectiveSignals?.language?.forEach(lang => {
+  effectiveSignals?.language?.forEach((lang) => {
     allSignals.push({
       name: lang.name,
       type: 'Language',
       summary: 'Language detection rule',
-      rawData: lang
+      rawData: lang,
     })
   })
 
-  effectiveSignals?.context?.forEach(ctx => {
+  effectiveSignals?.context?.forEach((ctx) => {
     allSignals.push({
       name: ctx.name,
       type: 'Context',
       summary: `${ctx.min_tokens} to ${ctx.max_tokens} tokens`,
-      rawData: ctx
+      rawData: ctx,
     })
   })
 
-  effectiveSignals?.structure?.forEach(structure => {
+  effectiveSignals?.structure?.forEach((structure) => {
     allSignals.push({
       name: structure.name,
       type: 'Structure',
@@ -206,18 +235,18 @@ export default function ConfigPageSignalsSection({
     })
   })
 
-  effectiveSignals?.complexity?.forEach(comp => {
+  effectiveSignals?.complexity?.forEach((comp) => {
     const hardCount = comp.hard?.candidates?.length || 0
     const easyCount = comp.easy?.candidates?.length || 0
     allSignals.push({
       name: comp.name,
       type: 'Complexity',
       summary: `Threshold: ${comp.threshold}, ${hardCount} hard / ${easyCount} easy candidates`,
-      rawData: comp
+      rawData: comp,
     })
   })
 
-  effectiveSignals?.modality?.forEach(modality => {
+  effectiveSignals?.modality?.forEach((modality) => {
     allSignals.push({
       name: modality.name,
       type: 'Modality',
@@ -226,7 +255,7 @@ export default function ConfigPageSignalsSection({
     })
   })
 
-  effectiveSignals?.role_bindings?.forEach(binding => {
+  effectiveSignals?.role_bindings?.forEach((binding) => {
     const subjectCount = binding.subjects?.length || 0
     allSignals.push({
       name: binding.name,
@@ -236,27 +265,27 @@ export default function ConfigPageSignalsSection({
     })
   })
 
-  effectiveSignals?.jailbreak?.forEach(jb => {
+  effectiveSignals?.jailbreak?.forEach((jb) => {
     const method = jb.method || 'classifier'
     allSignals.push({
       name: jb.name,
       type: 'Jailbreak',
       summary: `Method: ${method}, Threshold: ${jb.threshold}${jb.include_history ? ', includes history' : ''}`,
-      rawData: jb
+      rawData: jb,
     })
   })
 
-  effectiveSignals?.pii?.forEach(p => {
+  effectiveSignals?.pii?.forEach((p) => {
     const allowed = p.pii_types_allowed?.length || 0
     allSignals.push({
       name: p.name,
       type: 'PII',
       summary: `Threshold: ${p.threshold}${allowed > 0 ? `, ${allowed} types allowed` : ', deny all'}`,
-      rawData: p
+      rawData: p,
     })
   })
 
-  effectiveSignals?.kb?.forEach(kbSignal => {
+  effectiveSignals?.kb?.forEach((kbSignal) => {
     const match = kbSignal.match || 'best'
     allSignals.push({
       name: kbSignal.name,
@@ -266,42 +295,49 @@ export default function ConfigPageSignalsSection({
     })
   })
 
-  const filteredSignals = allSignals.filter(signal =>
-    signal.name.toLowerCase().includes(signalsSearch.toLowerCase()) ||
-    signal.type.toLowerCase().includes(signalsSearch.toLowerCase()) ||
-    signal.summary.toLowerCase().includes(signalsSearch.toLowerCase())
+  const filteredSignals = allSignals.filter(
+    (signal) =>
+      signal.name.toLowerCase().includes(signalsSearch.toLowerCase()) ||
+      signal.type.toLowerCase().includes(signalsSearch.toLowerCase()) ||
+      signal.summary.toLowerCase().includes(signalsSearch.toLowerCase()),
   )
+
+  const signalKey = (signal: UnifiedSignal) => `${signal.type}-${signal.name}`
+  const signalReferenceCount = (signal: UnifiedSignal) =>
+    getSignalReferenceCount(config, signal.type, signal.name)
 
   const signalsColumns: Column<UnifiedSignal>[] = [
     {
       key: 'name',
       header: 'Name',
       sortable: true,
-      render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>
+      render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>,
     },
     {
       key: 'type',
       header: 'Type',
       width: '160px',
       sortable: true,
-      render: (row) => <span className={styles.tableMetaBadge}>{row.type}</span>
+      render: (row) => <span className={styles.tableMetaBadge}>{row.type}</span>,
     },
     {
       key: 'summary',
       header: 'Summary',
       render: (row) => (
-        <span style={{
-          fontSize: '0.875rem',
-          color: 'var(--color-text-secondary)',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          display: 'block'
-        }}>
+        <span
+          style={{
+            fontSize: '0.875rem',
+            color: 'var(--color-text-secondary)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            display: 'block',
+          }}
+        >
           {row.summary}
         </span>
-      )
-    }
+      ),
+    },
   ]
 
   const handleViewSignal = (signal: UnifiedSignal) => {
@@ -312,8 +348,8 @@ export default function ConfigPageSignalsSection({
       fields: [
         { label: 'Name', value: signal.name },
         { label: 'Type', value: signal.type },
-        { label: 'Summary', value: signal.summary, fullWidth: true }
-      ]
+        { label: 'Summary', value: signal.summary, fullWidth: true },
+      ],
     })
 
     if (signal.type === 'Keywords') {
@@ -327,21 +363,24 @@ export default function ConfigPageSignalsSection({
             value: (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                 {(signal.rawData.keywords || []).map((kw: string, i: number) => (
-                  <span key={i} style={{
-                    padding: '0.25rem 0.75rem',
-                    background: 'rgba(118, 185, 0, 0.1)',
-                    borderRadius: '4px',
-                    fontSize: '0.875rem',
-                    fontFamily: 'var(--font-mono)'
-                  }}>
+                  <span
+                    key={i}
+                    style={{
+                      padding: '0.25rem 0.75rem',
+                      background: 'rgba(143, 148, 156, 0.1)',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem',
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                  >
                     {kw}
                   </span>
                 ))}
               </div>
             ),
-            fullWidth: true
-          }
-        ]
+            fullWidth: true,
+          },
+        ],
       })
     } else if (signal.type === 'Embeddings') {
       sections.push({
@@ -354,20 +393,23 @@ export default function ConfigPageSignalsSection({
             value: (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {(signal.rawData.candidates || []).map((c: string, i: number) => (
-                  <div key={i} style={{
-                    padding: '0.5rem',
-                    background: 'rgba(0, 212, 255, 0.1)',
-                    borderRadius: '4px',
-                    fontSize: '0.875rem'
-                  }}>
+                  <div
+                    key={i}
+                    style={{
+                      padding: '0.5rem',
+                      background: 'rgba(166, 171, 179, 0.1)',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem',
+                    }}
+                  >
                     {c}
                   </div>
                 ))}
               </div>
             ),
-            fullWidth: true
-          }
-        ]
+            fullWidth: true,
+          },
+        ],
       })
     } else if (signal.type === 'Domain') {
       sections.push({
@@ -379,58 +421,92 @@ export default function ConfigPageSignalsSection({
             value: signal.rawData.mmlu_categories?.length ? (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                 {signal.rawData.mmlu_categories.map((cat: string, i: number) => (
-                  <span key={i} style={{
-                    padding: '0.25rem 0.75rem',
-                    background: 'rgba(147, 51, 234, 0.1)',
-                    borderRadius: '4px',
-                    fontSize: '0.875rem'
-                  }}>
+                  <span
+                    key={i}
+                    style={{
+                      padding: '0.25rem 0.75rem',
+                      background: 'rgba(147, 51, 234, 0.1)',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem',
+                    }}
+                  >
                     {cat}
                   </span>
                 ))}
               </div>
-            ) : 'No categories',
-            fullWidth: true
-          }
-        ]
+            ) : (
+              'No categories'
+            ),
+            fullWidth: true,
+          },
+        ],
       })
     } else if (signal.type === 'Preference') {
       sections.push({
         title: 'Preference Configuration',
         fields: [
           { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
-          { label: 'Threshold', value: signal.rawData.threshold !== undefined ? formatThreshold(signal.rawData.threshold) : 'Not set' },
+          {
+            label: 'Threshold',
+            value:
+              signal.rawData.threshold !== undefined
+                ? formatThreshold(signal.rawData.threshold)
+                : 'Not set',
+          },
           {
             label: 'Examples',
             value: signal.rawData.examples?.length ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.9rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.25rem',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.9rem',
+                }}
+              >
                 {signal.rawData.examples.map((ex: string, i: number) => (
-                  <div key={i} style={{ padding: '0.35rem 0.5rem', background: 'rgba(234, 179, 8, 0.1)', borderRadius: 6 }}>
+                  <div
+                    key={i}
+                    style={{
+                      padding: '0.35rem 0.5rem',
+                      background: 'rgba(234, 179, 8, 0.1)',
+                      borderRadius: 6,
+                    }}
+                  >
                     {ex}
                   </div>
                 ))}
               </div>
-            ) : 'No examples provided',
-            fullWidth: true
-          }
-        ]
+            ) : (
+              'No examples provided'
+            ),
+            fullWidth: true,
+          },
+        ],
       })
     } else if (signal.type === 'Reask') {
       sections.push({
         title: 'Reask Signal',
         fields: [
           { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
-          { label: 'Threshold', value: signal.rawData.threshold !== undefined ? formatThreshold(signal.rawData.threshold) : 'Default (80%)' },
+          {
+            label: 'Threshold',
+            value:
+              signal.rawData.threshold !== undefined
+                ? formatThreshold(signal.rawData.threshold)
+                : 'Default (80%)',
+          },
           { label: 'Lookback Turns', value: signal.rawData.lookback_turns?.toString() || '1' },
-        ]
+        ],
       })
     } else if (signal.type === 'Language') {
       sections.push({
         title: 'Language Signal',
         fields: [
           { label: 'Language Code', value: signal.rawData.name || 'N/A', fullWidth: true },
-          { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
-        ]
+          { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
+        ],
       })
     } else if (signal.type === 'Context') {
       sections.push({
@@ -438,8 +514,8 @@ export default function ConfigPageSignalsSection({
         fields: [
           { label: 'Min Tokens', value: signal.rawData.min_tokens || 'N/A', fullWidth: true },
           { label: 'Max Tokens', value: signal.rawData.max_tokens || 'N/A', fullWidth: true },
-          { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
-        ]
+          { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
+        ],
       })
     } else if (signal.type === 'Structure') {
       sections.push({
@@ -447,14 +523,40 @@ export default function ConfigPageSignalsSection({
         fields: [
           { label: 'Feature Type', value: signal.rawData.feature?.type || 'N/A' },
           { label: 'Source Type', value: signal.rawData.feature?.source?.type || 'N/A' },
-          { label: 'Feature', value: JSON.stringify(signal.rawData.feature || {}, null, 2), fullWidth: true },
-          { label: 'Predicate', value: signal.rawData.predicate ? JSON.stringify(signal.rawData.predicate, null, 2) : 'None', fullWidth: true },
+          {
+            label: 'Feature',
+            value: (
+              <SignalStructureFeatureEditor
+                value={signal.rawData.feature}
+                onChange={() => undefined}
+                readOnly
+              />
+            ),
+            fullWidth: true,
+          },
+          {
+            label: 'Predicate',
+            value: signal.rawData.predicate ? (
+              <SignalStructurePredicateEditor
+                value={signal.rawData.predicate}
+                onChange={() => undefined}
+                readOnly
+              />
+            ) : (
+              'None'
+            ),
+            fullWidth: true,
+          },
           { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
-        ]
+        ],
       })
     } else if (signal.type === 'Complexity') {
       const fields: Array<{ label: string; value: React.ReactNode; fullWidth?: boolean }> = [
-        { label: 'Threshold', value: signal.rawData.threshold?.toString() || 'N/A', fullWidth: true }
+        {
+          label: 'Threshold',
+          value: signal.rawData.threshold?.toString() || 'N/A',
+          fullWidth: true,
+        },
       ]
 
       if (signal.rawData.composer) {
@@ -462,24 +564,17 @@ export default function ConfigPageSignalsSection({
           label: 'Composer',
           value: (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <div><strong>Operator:</strong> {signal.rawData.composer.operator}</div>
-              <div><strong>Conditions:</strong></div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginLeft: '1rem' }}>
-                {signal.rawData.composer.conditions.map((cond: { type: string; name: string }, i: number) => (
-                  <div key={i} style={{
-                    padding: '0.5rem',
-                    background: 'rgba(255, 165, 0, 0.1)',
-                    borderRadius: '4px',
-                    fontSize: '0.875rem',
-                    fontFamily: 'var(--font-mono)'
-                  }}>
-                    {cond.type}: {cond.name}
-                  </div>
-                ))}
+              <div>
+                <strong>Operator:</strong> {signal.rawData.composer.operator}
               </div>
+              <SignalConditionsEditor
+                value={signal.rawData.composer.conditions}
+                onChange={() => undefined}
+                readOnly
+              />
             </div>
           ),
-          fullWidth: true
+          fullWidth: true,
         })
       }
 
@@ -487,38 +582,44 @@ export default function ConfigPageSignalsSection({
         {
           label: 'Hard Candidates',
           value: (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.875rem' }}>
-              {(signal.rawData.hard?.candidates || []).map((c: string, i: number) => (
-                <div key={i}>• {c}</div>
-              ))}
-            </div>
+            <SignalStringListEditor
+              value={signal.rawData.hard?.candidates}
+              onChange={() => undefined}
+              addLabel=""
+              emptyLabel="No hard candidates."
+              itemLabel="Hard candidate"
+              readOnly
+            />
           ),
-          fullWidth: true
+          fullWidth: true,
         },
         {
           label: 'Easy Candidates',
           value: (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.875rem' }}>
-              {(signal.rawData.easy?.candidates || []).map((c: string, i: number) => (
-                <div key={i}>• {c}</div>
-              ))}
-            </div>
+            <SignalStringListEditor
+              value={signal.rawData.easy?.candidates}
+              onChange={() => undefined}
+              addLabel=""
+              emptyLabel="No easy candidates."
+              itemLabel="Easy candidate"
+              readOnly
+            />
           ),
-          fullWidth: true
+          fullWidth: true,
         },
-        { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
+        { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
       )
 
       sections.push({
         title: 'Complexity Signal',
-        fields
+        fields,
       })
     } else if (signal.type === 'Modality') {
       sections.push({
         title: 'Modality Signal',
         fields: [
           { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
-        ]
+        ],
       })
     } else if (signal.type === 'Authz') {
       sections.push({
@@ -527,41 +628,100 @@ export default function ConfigPageSignalsSection({
           { label: 'Role', value: signal.rawData.role || 'N/A' },
           {
             label: 'Subjects',
-            value: signal.rawData.subjects?.length ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.875rem' }}>
-                {signal.rawData.subjects.map((subject: Subject, i: number) => (
-                  <div key={i}>{subject.kind}:{subject.name}</div>
-                ))}
-              </div>
-            ) : 'No subjects',
+            value: (
+              <SignalSubjectsEditor
+                value={signal.rawData.subjects}
+                onChange={() => undefined}
+                readOnly
+              />
+            ),
             fullWidth: true,
           },
           { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
-        ]
+        ],
       })
     } else if (signal.type === 'Jailbreak') {
-      const fields = [
+      const fields: Array<{ label: string; value: React.ReactNode; fullWidth?: boolean }> = [
         { label: 'Method', value: signal.rawData.method || 'classifier', fullWidth: true },
-        { label: 'Threshold', value: signal.rawData.threshold?.toString() || 'N/A', fullWidth: true },
-        { label: 'Include History', value: signal.rawData.include_history ? 'Yes' : 'No', fullWidth: true },
+        {
+          label: 'Threshold',
+          value: signal.rawData.threshold?.toString() || 'N/A',
+          fullWidth: true,
+        },
+        {
+          label: 'Include History',
+          value: signal.rawData.include_history ? 'Yes' : 'No',
+          fullWidth: true,
+        },
       ]
       if (signal.rawData.method === 'contrastive') {
         fields.push(
-          { label: 'Jailbreak Patterns', value: (signal.rawData.jailbreak_patterns || []).length + ' patterns', fullWidth: true },
-          { label: 'Benign Patterns', value: (signal.rawData.benign_patterns || []).length + ' patterns', fullWidth: true },
+          {
+            label: 'Jailbreak Patterns',
+            value: (
+              <SignalStringListEditor
+                value={signal.rawData.jailbreak_patterns}
+                onChange={() => undefined}
+                addLabel=""
+                emptyLabel="No jailbreak patterns."
+                itemLabel="Jailbreak pattern"
+                readOnly
+              />
+            ),
+            fullWidth: true,
+          },
+          {
+            label: 'Benign Patterns',
+            value: (
+              <SignalStringListEditor
+                value={signal.rawData.benign_patterns}
+                onChange={() => undefined}
+                addLabel=""
+                emptyLabel="No benign patterns."
+                itemLabel="Benign pattern"
+                readOnly
+              />
+            ),
+            fullWidth: true,
+          },
         )
       }
-      fields.push({ label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true })
+      fields.push({
+        label: 'Description',
+        value: signal.rawData.description || 'N/A',
+        fullWidth: true,
+      })
       sections.push({ title: 'Jailbreak Signal', fields })
     } else if (signal.type === 'PII') {
       sections.push({
         title: 'PII Signal',
         fields: [
-          { label: 'Threshold', value: signal.rawData.threshold?.toString() || 'N/A', fullWidth: true },
-          { label: 'Allowed PII Types', value: signal.rawData.pii_types_allowed?.join(', ') || 'None (deny all)', fullWidth: true },
-          { label: 'Include History', value: signal.rawData.include_history ? 'Yes' : 'No', fullWidth: true },
-          { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
-        ]
+          {
+            label: 'Threshold',
+            value: signal.rawData.threshold?.toString() || 'N/A',
+            fullWidth: true,
+          },
+          {
+            label: 'Allowed PII Types',
+            value: (
+              <SignalStringListEditor
+                value={signal.rawData.pii_types_allowed}
+                onChange={() => undefined}
+                addLabel=""
+                emptyLabel="None (deny all)"
+                itemLabel="PII type"
+                readOnly
+              />
+            ),
+            fullWidth: true,
+          },
+          {
+            label: 'Include History',
+            value: signal.rawData.include_history ? 'Yes' : 'No',
+            fullWidth: true,
+          },
+          { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
+        ],
       })
     } else if (signal.type === 'KB') {
       sections.push({
@@ -577,8 +737,8 @@ export default function ConfigPageSignalsSection({
       sections.push({
         title: 'Details',
         fields: [
-          { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
-        ]
+          { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
+        ],
       })
     }
 
@@ -586,55 +746,37 @@ export default function ConfigPageSignalsSection({
   }
 
   const openSignalEditor = (mode: 'add' | 'edit', signal?: UnifiedSignal) => {
-    const readMmluCategories = (value: unknown): string[] => {
-      if (typeof value === 'string') {
-        return listInputToArray(value)
-      }
-      if (Array.isArray(value)) {
-        return value.filter((item): item is string => typeof item === 'string')
-      }
-      return []
-    }
-
     const defaultForm: AddSignalFormState = {
       type: 'Keywords',
       name: '',
       description: '',
       operator: 'AND',
-      keywords: '',
+      keywords: [],
       case_sensitive: false,
       threshold: 0.8,
-      candidates: '',
+      candidates: [],
       aggregation_method: 'mean',
-      mmlu_categories: '',
-      preference_examples: '',
+      mmlu_categories: [],
+      preference_examples: [],
       preference_threshold: undefined,
       min_tokens: '0',
       max_tokens: '8K',
-      structure_feature: JSON.stringify({
-        type: 'count',
-        source: {
-          type: 'regex',
-          pattern: '[?？]'
-        }
-      }, null, 2),
-      structure_predicate: JSON.stringify({
-        gte: 3
-      }, null, 2),
+      structure_feature: structuredClone(DEFAULT_STRUCTURE_FEATURE),
+      structure_predicate: { ...DEFAULT_STRUCTURE_PREDICATE },
       complexity_threshold: 0.1,
       role: '',
-      subjects: '',
-      hard_candidates: '',
-      easy_candidates: '',
+      subjects: [],
+      hard_candidates: [],
+      easy_candidates: [],
       composer_operator: 'AND',
-      composer_conditions: '',
+      composer_conditions: [],
       jailbreak_threshold: 0.65,
       jailbreak_method: 'classifier',
       include_history: false,
-      jailbreak_patterns: '',
-      benign_patterns: '',
+      jailbreak_patterns: [],
+      benign_patterns: [],
       pii_threshold: 0.5,
-      pii_types_allowed: '',
+      pii_types_allowed: [],
       pii_include_history: false,
       kb_name: '',
       target_kind: 'group',
@@ -642,348 +784,53 @@ export default function ConfigPageSignalsSection({
       kb_match: 'best',
     }
 
-    const initialData: AddSignalFormState = mode === 'edit' && signal ? {
-      type: signal.type,
-      name: signal.name,
-      description: signal.rawData.description || '',
-      operator: signal.rawData.operator || 'AND',
-      keywords: (signal.rawData.keywords || []).join('\n'),
-      case_sensitive: !!signal.rawData.case_sensitive,
-      threshold: signal.rawData.threshold ?? 0.8,
-      candidates: (signal.rawData.candidates || []).join('\n'),
-      aggregation_method: signal.rawData.aggregation_method || 'mean',
-      mmlu_categories: (signal.rawData.mmlu_categories || []).join('\n'),
-      preference_examples: (signal.rawData.examples || []).join('\n'),
-      preference_threshold: signal.rawData.threshold,
-      lookback_turns: signal.rawData.lookback_turns,
-      min_tokens: signal.rawData.min_tokens || '0',
-      max_tokens: signal.rawData.max_tokens || '8K',
-      structure_feature: signal.type === 'Structure' ? JSON.stringify(signal.rawData.feature || {}, null, 2) : defaultForm.structure_feature,
-      structure_predicate: signal.type === 'Structure' && signal.rawData.predicate ? JSON.stringify(signal.rawData.predicate, null, 2) : '',
-      complexity_threshold: signal.rawData.threshold ?? 0.1,
-      role: signal.type === 'Authz' ? signal.rawData.role || '' : '',
-      subjects: signal.type === 'Authz'
-        ? (signal.rawData.subjects || []).map((subject: Subject) => `${subject.kind}:${subject.name}`).join('\n')
-        : '',
-      hard_candidates: (signal.rawData.hard?.candidates || []).join('\n'),
-      easy_candidates: (signal.rawData.easy?.candidates || []).join('\n'),
-      composer_operator: signal.rawData.composer?.operator || 'AND',
-      composer_conditions: signal.rawData.composer?.conditions?.map((c: { type: string; name: string }) => `${c.type}:${c.name}`).join('\n') || '',
-      jailbreak_threshold: signal.rawData.threshold ?? 0.65,
-      jailbreak_method: signal.rawData.method || 'classifier',
-      include_history: !!signal.rawData.include_history,
-      jailbreak_patterns: (signal.rawData.jailbreak_patterns || []).join('\n'),
-      benign_patterns: (signal.rawData.benign_patterns || []).join('\n'),
-      pii_threshold: signal.rawData.threshold ?? 0.5,
-      pii_types_allowed: (signal.rawData.pii_types_allowed || []).join('\n'),
-      pii_include_history: !!signal.rawData.include_history,
-      kb_name: signal.type === 'KB' ? signal.rawData.kb || '' : '',
-      target_kind: signal.type === 'KB' ? signal.rawData.target?.kind || 'group' : 'group',
-      target_value: signal.type === 'KB' ? signal.rawData.target?.value || '' : '',
-      kb_match: signal.type === 'KB' ? signal.rawData.match || 'best' : 'best',
-    } : defaultForm
+    const initialData: AddSignalFormState =
+      mode === 'edit' && signal
+        ? {
+            type: signal.type,
+            name: signal.name,
+            description: signal.rawData.description || '',
+            operator: signal.rawData.operator || 'AND',
+            keywords: [...(signal.rawData.keywords || [])],
+            case_sensitive: !!signal.rawData.case_sensitive,
+            threshold: signal.rawData.threshold ?? 0.8,
+            candidates: [...(signal.rawData.candidates || [])],
+            aggregation_method: signal.rawData.aggregation_method || 'mean',
+            mmlu_categories: [...(signal.rawData.mmlu_categories || [])],
+            preference_examples: [...(signal.rawData.examples || [])],
+            preference_threshold: signal.rawData.threshold,
+            lookback_turns: signal.rawData.lookback_turns,
+            min_tokens: signal.rawData.min_tokens || '0',
+            max_tokens: signal.rawData.max_tokens || '8K',
+            structure_feature:
+              signal.type === 'Structure' ? signal.rawData.feature : defaultForm.structure_feature,
+            structure_predicate:
+              signal.type === 'Structure'
+                ? signal.rawData.predicate
+                : defaultForm.structure_predicate,
+            complexity_threshold: signal.rawData.threshold ?? 0.1,
+            role: signal.type === 'Authz' ? signal.rawData.role || '' : '',
+            subjects: signal.type === 'Authz' ? [...(signal.rawData.subjects || [])] : [],
+            hard_candidates: [...(signal.rawData.hard?.candidates || [])],
+            easy_candidates: [...(signal.rawData.easy?.candidates || [])],
+            composer_operator: signal.rawData.composer?.operator || 'AND',
+            composer_conditions: [...(signal.rawData.composer?.conditions || [])],
+            jailbreak_threshold: signal.rawData.threshold ?? 0.65,
+            jailbreak_method: signal.rawData.method || 'classifier',
+            include_history: !!signal.rawData.include_history,
+            jailbreak_patterns: [...(signal.rawData.jailbreak_patterns || [])],
+            benign_patterns: [...(signal.rawData.benign_patterns || [])],
+            pii_threshold: signal.rawData.threshold ?? 0.5,
+            pii_types_allowed: [...(signal.rawData.pii_types_allowed || [])],
+            pii_include_history: !!signal.rawData.include_history,
+            kb_name: signal.type === 'KB' ? signal.rawData.kb || '' : '',
+            target_kind: signal.type === 'KB' ? signal.rawData.target?.kind || 'group' : 'group',
+            target_value: signal.type === 'KB' ? signal.rawData.target?.value || '' : '',
+            kb_match: signal.type === 'KB' ? signal.rawData.match || 'best' : 'best',
+          }
+        : defaultForm
 
-    const conditionallyHideFieldExceptType = (type: SignalType) => {
-      return (formData: AddSignalFormState) => formData.type !== type
-    }
-
-    const fields: FieldConfig<AddSignalFormState>[] = [
-      {
-        name: 'type',
-        label: 'Type',
-        type: 'select',
-        options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Reask', 'Language', 'Context', 'Structure', 'Complexity', 'Modality', 'Authz', 'Jailbreak', 'PII', 'KB'],
-        required: true,
-        description: 'Fields are validated based on the selected type.'
-      },
-      {
-        name: 'name',
-        label: 'Name',
-        type: 'text',
-        required: true,
-        placeholder: 'Enter a unique signal name here'
-      },
-      {
-        name: 'description',
-        label: 'Description',
-        type: 'textarea',
-        placeholder: 'Optional description for this signal'
-      },
-      {
-        name: 'preference_examples',
-        label: 'Examples (preference only)',
-        type: 'textarea',
-        placeholder: 'One example per line to represent this preference',
-        description: 'Few-shot hints sent to the contrastive preference classifier.',
-        shouldHide: conditionallyHideFieldExceptType('Preference')
-      },
-      {
-        name: 'preference_threshold',
-        label: 'Threshold (preference only)',
-        type: 'number',
-        min: 0,
-        max: 1,
-        step: 0.01,
-        placeholder: 'e.g., 0.35',
-        description: 'Override the global preference threshold for this specific rule.',
-        shouldHide: conditionallyHideFieldExceptType('Preference')
-      },
-      {
-        name: 'threshold',
-        label: 'Threshold (reask only)',
-        type: 'number',
-        min: 0,
-        max: 1,
-        step: 0.01,
-        placeholder: '0.80',
-        shouldHide: conditionallyHideFieldExceptType('Reask')
-      },
-      {
-        name: 'lookback_turns',
-        label: 'Lookback Turns (reask only)',
-        type: 'number',
-        min: 1,
-        step: 1,
-        placeholder: '1',
-        shouldHide: conditionallyHideFieldExceptType('Reask')
-      },
-      {
-        name: 'operator',
-        label: 'Operator (keywords only)',
-        type: 'select',
-        options: ['AND', 'OR'],
-        description: 'Used when type is Keywords',
-        shouldHide: conditionallyHideFieldExceptType('Keywords')
-      },
-      {
-        name: 'case_sensitive',
-        label: 'Case Sensitive (keywords only)',
-        type: 'boolean',
-        description: 'Whether keyword matching is case sensitive',
-        shouldHide: conditionallyHideFieldExceptType('Keywords')
-      },
-      {
-        name: 'keywords',
-        label: 'Keywords',
-        type: 'textarea',
-        placeholder: 'Comma or newline separated keywords',
-        shouldHide: conditionallyHideFieldExceptType('Keywords')
-      },
-      {
-        name: 'threshold',
-        label: 'Threshold (embeddings only)',
-        type: 'number',
-        min: 0,
-        max: 1,
-        step: 0.01,
-        placeholder: '0.80',
-        shouldHide: conditionallyHideFieldExceptType('Embeddings')
-      },
-      {
-        name: 'aggregation_method',
-        label: 'Aggregation Method (embeddings only)',
-        type: 'select',
-        options: ['mean', 'max', 'any'],
-        shouldHide: conditionallyHideFieldExceptType('Embeddings')
-      },
-      {
-        name: 'candidates',
-        label: 'Candidates (embeddings only)',
-        type: 'textarea',
-        placeholder: 'One candidate per line or comma separated',
-        shouldHide: conditionallyHideFieldExceptType('Embeddings')
-      },
-      {
-        name: 'mmlu_categories',
-        label: 'MMLU Categories (domains only)',
-        type: 'custom',
-        customRender: (value, onChange) => (
-          <ConfigPageDomainCategoryPicker
-            value={readMmluCategories(value)}
-            onChange={(nextCategories) => onChange(nextCategories.join('\n'))}
-          />
-        ),
-        shouldHide: conditionallyHideFieldExceptType('Domain')
-      },
-      {
-        name: 'min_tokens',
-        label: 'Minimum Tokens (context only)',
-        type: 'text',
-        placeholder: 'e.g., 0, 8K, 1M',
-        description: 'Minimum token count (supports K/M suffixes)',
-        shouldHide: conditionallyHideFieldExceptType('Context')
-      },
-      {
-        name: 'max_tokens',
-        label: 'Maximum Tokens (context only)',
-        type: 'text',
-        placeholder: 'e.g., 8K, 1024K',
-        description: 'Maximum token count (supports K/M suffixes)',
-        shouldHide: conditionallyHideFieldExceptType('Context')
-      },
-      {
-        name: 'structure_feature',
-        label: 'Feature (structure only)',
-        type: 'textarea',
-        placeholder: '{\n  "type": "count",\n  "source": { "type": "regex", "pattern": "[?？]" }\n}',
-        description: 'JSON object for structure.feature',
-        shouldHide: conditionallyHideFieldExceptType('Structure')
-      },
-      {
-        name: 'structure_predicate',
-        label: 'Predicate (structure only)',
-        type: 'textarea',
-        placeholder: '{\n  "gte": 3\n}',
-        description: 'Optional JSON object for structure.predicate',
-        shouldHide: conditionallyHideFieldExceptType('Structure')
-      },
-      {
-        name: 'complexity_threshold',
-        label: 'Threshold (complexity only)',
-        type: 'number',
-        placeholder: 'e.g., 0.1',
-        description: 'Similarity difference threshold for hard/easy classification',
-        shouldHide: conditionallyHideFieldExceptType('Complexity')
-      },
-      {
-        name: 'composer_operator',
-        label: 'Composer Operator (complexity only)',
-        type: 'select',
-        options: ['AND', 'OR'],
-        description: 'Logical operator for composer conditions (recommended to filter based on other signals)',
-        shouldHide: conditionallyHideFieldExceptType('Complexity')
-      },
-      {
-        name: 'composer_conditions',
-        label: 'Composer Conditions (complexity only)',
-        type: 'textarea',
-        placeholder: 'One condition per line in format type:name, e.g.:\ndomain:computer science\nkeyword:coding',
-        description: 'Filter this complexity signal based on other signals (RECOMMENDED). Format: type:name per line',
-        shouldHide: conditionallyHideFieldExceptType('Complexity')
-      },
-      {
-        name: 'hard_candidates',
-        label: 'Hard Candidates (complexity only)',
-        type: 'textarea',
-        placeholder: 'One candidate per line, e.g.:\ndesign distributed system\nimplement consensus algorithm',
-        description: 'Phrases representing hard/complex queries',
-        shouldHide: conditionallyHideFieldExceptType('Complexity')
-      },
-      {
-        name: 'easy_candidates',
-        label: 'Easy Candidates (complexity only)',
-        type: 'textarea',
-        placeholder: 'One candidate per line, e.g.:\nprint hello world\nloop through array',
-        description: 'Phrases representing easy/simple queries',
-        shouldHide: conditionallyHideFieldExceptType('Complexity')
-      },
-      {
-        name: 'role',
-        label: 'Role (authz only)',
-        type: 'text',
-        placeholder: 'admin',
-        shouldHide: conditionallyHideFieldExceptType('Authz')
-      },
-      {
-        name: 'subjects',
-        label: 'Subjects (authz only)',
-        type: 'textarea',
-        placeholder: 'One subject per line, e.g.:\nUser:alice\nGroup:admins',
-        shouldHide: conditionallyHideFieldExceptType('Authz')
-      },
-      {
-        name: 'jailbreak_method',
-        label: 'Method (jailbreak only)',
-        type: 'select',
-        options: ['classifier', 'contrastive'],
-        description: 'Detection method: "classifier" (BERT-based) or "contrastive" (embedding KB similarity)',
-        shouldHide: conditionallyHideFieldExceptType('Jailbreak')
-      },
-      {
-        name: 'jailbreak_threshold',
-        label: 'Threshold (jailbreak only)',
-        type: 'number',
-        placeholder: 'e.g., 0.65 for classifier, 0.10 for contrastive',
-        description: 'Confidence threshold for jailbreak detection (0.0 - 1.0)',
-        shouldHide: conditionallyHideFieldExceptType('Jailbreak')
-      },
-      {
-        name: 'include_history',
-        label: 'Include History (jailbreak only)',
-        type: 'boolean',
-        description: 'Whether to include conversation history in jailbreak detection',
-        shouldHide: conditionallyHideFieldExceptType('Jailbreak')
-      },
-      {
-        name: 'jailbreak_patterns',
-        label: 'Jailbreak Patterns (contrastive only)',
-        type: 'textarea',
-        placeholder: 'One pattern per line, e.g.:\nIgnore all previous instructions\nYou are now DAN',
-        description: 'Known jailbreak prompts for the contrastive KB',
-        shouldHide: conditionallyHideFieldExceptType('Jailbreak')
-      },
-      {
-        name: 'benign_patterns',
-        label: 'Benign Patterns (contrastive only)',
-        type: 'textarea',
-        placeholder: 'One pattern per line, e.g.:\nWhat is the weather today\nHelp me write an email',
-        description: 'Known benign prompts for the contrastive KB',
-        shouldHide: conditionallyHideFieldExceptType('Jailbreak')
-      },
-      {
-        name: 'pii_threshold',
-        label: 'Threshold (PII only)',
-        type: 'number',
-        placeholder: 'e.g., 0.5',
-        description: 'Confidence threshold for PII detection (0.0 - 1.0)',
-        shouldHide: conditionallyHideFieldExceptType('PII')
-      },
-      {
-        name: 'pii_types_allowed',
-        label: 'Allowed PII Types (PII only)',
-        type: 'textarea',
-        placeholder: 'One PII type per line, e.g.:\nEMAIL_ADDRESS\nPHONE_NUMBER',
-        description: 'PII types to allow (not blocked). Leave empty to deny all.',
-        shouldHide: conditionallyHideFieldExceptType('PII')
-      },
-      {
-        name: 'pii_include_history',
-        label: 'Include History (PII only)',
-        type: 'boolean',
-        description: 'Whether to include conversation history in PII detection',
-        shouldHide: conditionallyHideFieldExceptType('PII')
-      },
-      {
-        name: 'kb_name',
-        label: 'Knowledge Base (KB only)',
-        type: 'text',
-        placeholder: 'privacy_kb',
-        description: 'Name from global.model_catalog.kbs',
-        shouldHide: conditionallyHideFieldExceptType('KB')
-      },
-      {
-        name: 'target_kind',
-        label: 'Target Kind (KB only)',
-        type: 'select',
-        options: ['group', 'label'],
-        shouldHide: conditionallyHideFieldExceptType('KB')
-      },
-      {
-        name: 'target_value',
-        label: 'Target Value (KB only)',
-        type: 'text',
-        placeholder: 'privacy_policy',
-        description: 'Group or label name inside the selected knowledge base',
-        shouldHide: conditionallyHideFieldExceptType('KB')
-      },
-      {
-        name: 'kb_match',
-        label: 'Match (KB only)',
-        type: 'select',
-        options: ['best', 'threshold'],
-        shouldHide: conditionallyHideFieldExceptType('KB')
-      }
-    ]
+    const fields = buildSignalFormFields()
 
     const saveSignal = async (formData: AddSignalFormState) => {
       if (!config) {
@@ -1013,26 +860,20 @@ export default function ConfigPageSignalsSection({
 
       switch (type) {
         case 'Keywords': {
-          const keywords = listInputToArray(formData.keywords || '')
-          if (keywords.length === 0) {
-            throw new Error('Please provide at least one keyword.')
-          }
+          const keywords = normalizeStringList(formData.keywords, 'Keywords', true)
           newConfig.signals.keywords = [
             ...(newConfig.signals.keywords || []),
             {
               name,
               operator: formData.operator,
               keywords,
-              case_sensitive: !!formData.case_sensitive
-            }
+              case_sensitive: !!formData.case_sensitive,
+            },
           ]
           break
         }
         case 'Embeddings': {
-          const candidates = listInputToArray(formData.candidates || '')
-          if (candidates.length === 0) {
-            throw new Error('Please provide at least one candidate string.')
-          }
+          const candidates = normalizeStringList(formData.candidates, 'Candidates', true)
           const threshold = Number.isFinite(formData.threshold)
             ? Math.max(0, Math.min(1, formData.threshold))
             : 0
@@ -1042,31 +883,38 @@ export default function ConfigPageSignalsSection({
               name,
               threshold,
               candidates,
-              aggregation_method: formData.aggregation_method || 'mean'
-            }
+              aggregation_method: formData.aggregation_method || 'mean',
+            },
           ]
           break
         }
         case 'Domain': {
-          const mmlu_categories = listInputToArray(formData.mmlu_categories || '')
+          const mmlu_categories = normalizeStringList(formData.mmlu_categories, 'MMLU categories')
           newConfig.signals.domains = [
             ...(newConfig.signals.domains || []),
             {
               name,
               description: formData.description,
-              mmlu_categories
-            }
+              mmlu_categories,
+            },
           ]
           break
         }
         case 'Preference': {
-          const examples = listInputToArray(formData.preference_examples || '')
+          const examples = normalizeStringList(formData.preference_examples, 'Preference examples')
           const hasThreshold = Number.isFinite(formData.preference_threshold)
-          const threshold = hasThreshold ? Math.max(0, Math.min(1, Number(formData.preference_threshold))) : undefined
+          const threshold = hasThreshold
+            ? Math.max(0, Math.min(1, Number(formData.preference_threshold)))
+            : undefined
 
-          const preferenceRule: { name: string; description: string; examples?: string[]; threshold?: number } = {
+          const preferenceRule: {
+            name: string
+            description: string
+            examples?: string[]
+            threshold?: number
+          } = {
             name,
-            description: formData.description || ''
+            description: formData.description || '',
           }
 
           if (examples.length > 0) {
@@ -1077,10 +925,7 @@ export default function ConfigPageSignalsSection({
             preferenceRule.threshold = threshold
           }
 
-          newConfig.signals.preferences = [
-            ...(newConfig.signals.preferences || []),
-            preferenceRule
-          ]
+          newConfig.signals.preferences = [...(newConfig.signals.preferences || []), preferenceRule]
           break
         }
         case 'Fact Check': {
@@ -1088,8 +933,8 @@ export default function ConfigPageSignalsSection({
             ...(newConfig.signals.fact_check || []),
             {
               name,
-              description: formData.description
-            }
+              description: formData.description,
+            },
           ]
           break
         }
@@ -1098,14 +943,18 @@ export default function ConfigPageSignalsSection({
             ...(newConfig.signals.user_feedbacks || []),
             {
               name,
-              description: formData.description
-            }
+              description: formData.description,
+            },
           ]
           break
         }
         case 'Reask': {
-          const threshold = Number.isFinite(formData.threshold) ? Math.max(0, Math.min(1, Number(formData.threshold))) : undefined
-          const lookback_turns = Number.isFinite(formData.lookback_turns) ? Math.max(1, Math.trunc(Number(formData.lookback_turns))) : undefined
+          const threshold = Number.isFinite(formData.threshold)
+            ? Math.max(0, Math.min(1, Number(formData.threshold)))
+            : undefined
+          const lookback_turns = Number.isFinite(formData.lookback_turns)
+            ? Math.max(1, Math.trunc(Number(formData.lookback_turns)))
+            : undefined
 
           newConfig.signals.reasks = [
             ...(newConfig.signals.reasks || []),
@@ -1114,7 +963,7 @@ export default function ConfigPageSignalsSection({
               description: formData.description || undefined,
               threshold,
               lookback_turns,
-            }
+            },
           ]
           break
         }
@@ -1122,8 +971,8 @@ export default function ConfigPageSignalsSection({
           newConfig.signals.language = [
             ...(newConfig.signals.language || []),
             {
-              name
-            }
+              name,
+            },
           ]
           break
         }
@@ -1139,33 +988,14 @@ export default function ConfigPageSignalsSection({
               name,
               min_tokens,
               max_tokens,
-              description: formData.description || undefined
-            }
+              description: formData.description || undefined,
+            },
           ]
           break
         }
         case 'Structure': {
-          const featureText = (formData.structure_feature || '').trim()
-          if (!featureText) {
-            throw new Error('structure.feature is required.')
-          }
-
-          let feature
-          try {
-            feature = JSON.parse(featureText)
-          } catch (error) {
-            throw new Error(`Invalid structure.feature JSON: ${String(error)}`)
-          }
-
-          let predicate
-          const predicateText = (formData.structure_predicate || '').trim()
-          if (predicateText) {
-            try {
-              predicate = JSON.parse(predicateText)
-            } catch (error) {
-              throw new Error(`Invalid structure.predicate JSON: ${String(error)}`)
-            }
-          }
+          const feature = normalizeStructureFeature(formData.structure_feature)
+          const predicate = normalizeStructurePredicate(feature, formData.structure_predicate)
 
           newConfig.signals.structure = [
             ...(newConfig.signals.structure || []),
@@ -1173,52 +1003,23 @@ export default function ConfigPageSignalsSection({
               name,
               description: formData.description || undefined,
               feature,
-              ...(predicate ? { predicate } : {})
-            }
+              ...(predicate ? { predicate } : {}),
+            },
           ]
           break
         }
         case 'Complexity': {
           const complexity_threshold = formData.complexity_threshold ?? 0.1
-          const hard_candidates = (formData.hard_candidates || '').trim()
-          const easy_candidates = (formData.easy_candidates || '').trim()
-
-          if (!hard_candidates || !easy_candidates) {
-            throw new Error('Both hard and easy candidates are required.')
-          }
-
-          const hardList = hard_candidates.split('\n').map(c => c.trim()).filter(c => c.length > 0)
-          const easyList = easy_candidates.split('\n').map(c => c.trim()).filter(c => c.length > 0)
-
-          if (hardList.length === 0 || easyList.length === 0) {
-            throw new Error('Both hard and easy candidates must have at least one entry.')
-          }
-
-          const composerConditionsText = (formData.composer_conditions || '').trim()
-          let composer = undefined
-          if (composerConditionsText) {
-            const conditions = composerConditionsText
-              .split('\n')
-              .map(line => line.trim())
-              .filter(line => line.length > 0)
-              .map(line => {
-                const parts = line.split(':')
-                if (parts.length !== 2) {
-                  throw new Error(`Invalid composer condition format: "${line}". Expected format: type:name`)
+          const hardList = normalizeStringList(formData.hard_candidates, 'Hard candidates', true)
+          const easyList = normalizeStringList(formData.easy_candidates, 'Easy candidates', true)
+          const conditions = normalizeConditions(formData.composer_conditions)
+          const composer =
+            conditions.length > 0
+              ? {
+                  operator: formData.composer_operator || 'AND',
+                  conditions,
                 }
-                return {
-                  type: parts[0].trim(),
-                  name: parts[1].trim()
-                }
-              })
-
-            if (conditions.length > 0) {
-              composer = {
-                operator: formData.composer_operator || 'AND',
-                conditions
-              }
-            }
-          }
+              : undefined
 
           newConfig.signals.complexity = [
             ...(newConfig.signals.complexity || []),
@@ -1226,14 +1027,14 @@ export default function ConfigPageSignalsSection({
               name,
               threshold: complexity_threshold,
               hard: {
-                candidates: hardList
+                candidates: hardList,
               },
               easy: {
-                candidates: easyList
+                candidates: easyList,
               },
               description: formData.description || undefined,
-              ...(composer && { composer })
-            }
+              ...(composer && { composer }),
+            },
           ]
           break
         }
@@ -1243,7 +1044,7 @@ export default function ConfigPageSignalsSection({
             {
               name,
               description: formData.description || undefined,
-            }
+            },
           ]
           break
         }
@@ -1252,18 +1053,7 @@ export default function ConfigPageSignalsSection({
           if (!role) {
             throw new Error('Role is required for authz signals.')
           }
-          const subjects = listInputToArray(formData.subjects || '').map((entry) => {
-            const [kindRaw, ...nameParts] = entry.split(':')
-            const kind = (kindRaw || '').trim()
-            const subjectName = nameParts.join(':').trim()
-            if ((kind !== 'User' && kind !== 'Group') || !subjectName) {
-              throw new Error(`Invalid authz subject "${entry}". Expected User:name or Group:name.`)
-            }
-            return { kind, name: subjectName } as Subject
-          })
-          if (subjects.length === 0) {
-            throw new Error('At least one subject is required for authz signals.')
-          }
+          const subjects = normalizeSubjects(formData.subjects)
           newConfig.signals.role_bindings = [
             ...(newConfig.signals.role_bindings || []),
             {
@@ -1271,7 +1061,7 @@ export default function ConfigPageSignalsSection({
               role,
               subjects,
               description: formData.description || undefined,
-            }
+            },
           ]
           break
         }
@@ -1285,25 +1075,21 @@ export default function ConfigPageSignalsSection({
             name,
             threshold: jailbreak_threshold,
             include_history: formData.include_history || false,
-            description: formData.description || undefined
+            description: formData.description || undefined,
           }
           if (method !== 'classifier') {
             jailbreakEntry.method = method
           }
           if (method === 'contrastive') {
-            const jailbreakPatterns = (formData.jailbreak_patterns || '').trim()
-            const benignPatternsText = (formData.benign_patterns || '').trim()
-            if (jailbreakPatterns) {
-              jailbreakEntry.jailbreak_patterns = jailbreakPatterns.split('\n').map((p: string) => p.trim()).filter((p: string) => p.length > 0)
-            }
-            if (benignPatternsText) {
-              jailbreakEntry.benign_patterns = benignPatternsText.split('\n').map((p: string) => p.trim()).filter((p: string) => p.length > 0)
-            }
+            const jailbreakPatterns = normalizeStringList(
+              formData.jailbreak_patterns,
+              'Jailbreak patterns',
+            )
+            const benignPatterns = normalizeStringList(formData.benign_patterns, 'Benign patterns')
+            if (jailbreakPatterns.length > 0) jailbreakEntry.jailbreak_patterns = jailbreakPatterns
+            if (benignPatterns.length > 0) jailbreakEntry.benign_patterns = benignPatterns
           }
-          newConfig.signals.jailbreak = [
-            ...(newConfig.signals.jailbreak || []),
-            jailbreakEntry
-          ]
+          newConfig.signals.jailbreak = [...(newConfig.signals.jailbreak || []), jailbreakEntry]
           break
         }
         case 'PII': {
@@ -1311,10 +1097,11 @@ export default function ConfigPageSignalsSection({
           if (pii_threshold < 0 || pii_threshold > 1) {
             throw new Error('PII threshold must be between 0.0 and 1.0.')
           }
-          const pii_types_allowed = (formData.pii_types_allowed || '').trim()
-          const allowedList = pii_types_allowed
-            ? pii_types_allowed.split('\n').map(t => t.trim()).filter(t => t.length > 0)
-            : undefined
+          const normalizedAllowedTypes = normalizeStringList(
+            formData.pii_types_allowed,
+            'Allowed PII types',
+          )
+          const allowedList = normalizedAllowedTypes.length > 0 ? normalizedAllowedTypes : undefined
           newConfig.signals.pii = [
             ...(newConfig.signals.pii || []),
             {
@@ -1322,8 +1109,8 @@ export default function ConfigPageSignalsSection({
               threshold: pii_threshold,
               pii_types_allowed: allowedList,
               include_history: formData.pii_include_history || false,
-              description: formData.description || undefined
-            }
+              description: formData.description || undefined,
+            },
           ]
           break
         }
@@ -1364,7 +1151,7 @@ export default function ConfigPageSignalsSection({
       initialData,
       fields,
       saveSignal,
-      mode
+      mode,
     )
   }
 
@@ -1372,38 +1159,167 @@ export default function ConfigPageSignalsSection({
     openSignalEditor('edit', signal)
   }
 
-  const handleDeleteSignal = async (signal: UnifiedSignal) => {
-    if (confirm(`Are you sure you want to delete signal "${signal.name}"?`)) {
-      if (!config || !isPythonCLI) {
-        alert('Deleting signals is only supported for Python CLI configs.')
-        return
-      }
+  const handleDeleteSignal = (signal: UnifiedSignal) => {
+    const referenceCount = signalReferenceCount(signal)
+    if (referenceCount > 0) {
+      setActionError(
+        `Signal "${signal.name}" has ${referenceCount} active reference${referenceCount === 1 ? '' : 's'}. Update those decisions, projections, or composers before deleting it.`,
+      )
+      return
+    }
+    if (!config || !isPythonCLI) {
+      setActionError('Deleting signals is only supported for Python CLI configs.')
+      return
+    }
+    setActionError(null)
+    setDeleteError(null)
+    setSignalsPendingDelete([signal])
+  }
 
-      const newConfig: ConfigData = cloneConfigData(config)
-      removeSignalByName(newConfig, signal.type, signal.name)
+  const handleBulkDeleteSignals = () => {
+    if (!config || !isPythonCLI || selectedSignalKeys.size === 0) return
+    const selectedSignals = allSignals.filter((signal) => selectedSignalKeys.has(signalKey(signal)))
+    const safeSignals = selectedSignals.filter((signal) => signalReferenceCount(signal) === 0)
+    if (safeSignals.length !== selectedSignals.length) {
+      setActionError(
+        'One or more selected signals are now referenced. Refresh the selection and try again.',
+      )
+      return
+    }
+    setActionError(null)
+    setDeleteError(null)
+    setSignalsPendingDelete(safeSignals)
+  }
 
+  const confirmDeleteSignals = async () => {
+    if (!config || !isPythonCLI || signalsPendingDelete.length === 0 || deletePending) return
+
+    setDeletePending(true)
+    setDeleteError(null)
+    const newConfig: ConfigData = cloneConfigData(config)
+    signalsPendingDelete.forEach((signal) =>
+      removeSignalByName(newConfig, signal.type, signal.name),
+    )
+    try {
       await saveConfig(newConfig)
+      setSelectedSignalKeys(new Set())
+      setSignalsPendingDelete([])
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete signals')
+    } finally {
+      setDeletePending(false)
     }
   }
 
   return (
-    <ConfigPageManagerLayout title="Signals" description="Review the signal catalog that drives semantic routing, guardrails, and context-aware behavior.">
+    <ConfigPageManagerLayout
+      title="Signals"
+      description="Review the signal catalog that drives semantic routing, guardrails, and context-aware behavior."
+    >
       <div className={styles.sectionPanel}>
+        {actionError ? (
+          <div className={styles.error} role="alert">
+            {actionError}
+          </div>
+        ) : null}
         <div className={styles.sectionTableBlock}>
-          <TableHeader title="Signals" count={allSignals.length} searchPlaceholder="Search signals..." searchValue={signalsSearch} onSearchChange={onSignalsSearchChange} onAdd={() => openSignalEditor('add')} addButtonText="Add Signal" disabled={isReadonly} variant="embedded" />
+          <TableHeader
+            title="Signals"
+            count={filteredSignals.length}
+            searchPlaceholder="Search signals..."
+            searchValue={signalsSearch}
+            onSearchChange={onSignalsSearchChange}
+            onAdd={() => openSignalEditor('add')}
+            addButtonText="Add Signal"
+            disabled={isReadonly || !isPythonCLI}
+            variant="embedded"
+          />
+          {selectedSignalKeys.size > 0 ? (
+            <div className={signalStyles.bulkBar} role="status">
+              <div className={signalStyles.bulkCopy}>
+                <strong>
+                  {selectedSignalKeys.size} signal{selectedSignalKeys.size === 1 ? '' : 's'}{' '}
+                  selected
+                </strong>
+                <span className={signalStyles.bulkHint}>
+                  Referenced signals cannot be selected or deleted.
+                </span>
+              </div>
+              <div className={signalStyles.bulkActions}>
+                <button
+                  type="button"
+                  className={signalStyles.clearButton}
+                  onClick={() => setSelectedSignalKeys(new Set())}
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  className={signalStyles.deleteButton}
+                  onClick={handleBulkDeleteSignals}
+                >
+                  Delete selected
+                </button>
+              </div>
+            </div>
+          ) : null}
           <DataTable
             columns={signalsColumns}
             data={filteredSignals}
-            keyExtractor={(row) => `${row.type}-${row.name}`}
+            keyExtractor={signalKey}
             onView={handleViewSignal}
             onEdit={handleEditSignal}
             onDelete={handleDeleteSignal}
             emptyMessage={signalsSearch ? 'No signals match your search' : 'No signals configured'}
             className={styles.managerTable}
-            readonly={isReadonly}
+            readonly={isReadonly || !isPythonCLI}
+            pagination={{
+              pageSize: 25,
+              pageSizeOptions: [10, 25, 50],
+              itemLabel: 'signals',
+              resetKey: signalsSearch,
+            }}
+            selection={
+              !isReadonly && isPythonCLI
+                ? {
+                    selectedKeys: selectedSignalKeys,
+                    onChange: setSelectedSignalKeys,
+                    isRowDisabled: (signal) => signalReferenceCount(signal) > 0,
+                    label: 'signal',
+                  }
+                : undefined
+            }
           />
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={signalsPendingDelete.length > 0}
+        title={signalsPendingDelete.length === 1 ? 'Delete signal' : 'Delete signals'}
+        description={
+          signalsPendingDelete.length === 1 ? (
+            <>
+              Delete <strong>{signalsPendingDelete[0]?.name}</strong> from the routing signal
+              catalog?
+            </>
+          ) : (
+            <>
+              Delete <strong>{signalsPendingDelete.length}</strong> selected signals from the
+              routing catalog?
+            </>
+          )
+        }
+        details={deleteError ? <span role="alert">{deleteError}</span> : undefined}
+        confirmLabel={signalsPendingDelete.length === 1 ? 'Delete signal' : 'Delete signals'}
+        pending={deletePending}
+        onCancel={() => {
+          if (!deletePending) {
+            setSignalsPendingDelete([])
+            setDeleteError(null)
+          }
+        }}
+        onConfirm={confirmDeleteSignals}
+      />
     </ConfigPageManagerLayout>
   )
 }

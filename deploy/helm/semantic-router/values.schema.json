@@ -58,6 +58,63 @@
         }
       }
     },
+    "observability": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "alerts": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Render PrometheusRule alerts for Semantic Router metrics."
+            },
+            "labels": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "thresholds": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "requestErrorRate": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "completionLatencyP95Seconds": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "ttftP95Seconds": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "tpotP95Seconds": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "routingLatencyP95Seconds": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "inflightRequests": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "cacheHitRate": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "config": {
       "type": "object",
       "additionalProperties": true,

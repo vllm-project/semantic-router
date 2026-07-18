@@ -1,6 +1,9 @@
+import { useState } from 'react'
+
 import styles from './ConfigPage.module.css'
 import decisionStyles from './ConfigPageDecisionsSection.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
+import ConfirmDialog from '../components/ConfirmDialog'
 import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
 import type { FieldConfig } from '../components/EditModal'
@@ -16,6 +19,7 @@ import type {
 import { TABLE_COLUMN_WIDTH } from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { cloneConfigData } from './configPageCanonicalization'
+import ConfigPageDecisionPluginsEditor from './ConfigPageDecisionPluginsEditor'
 
 interface ConfigPageDecisionsSectionProps {
   config: ConfigData | null
@@ -42,11 +46,15 @@ export default function ConfigPageDecisionsSection({
   removeDecisionByName,
   models,
 }: ConfigPageDecisionsSectionProps) {
+  const [decisionPendingDelete, setDecisionPendingDelete] = useState<DecisionConfig | null>(null)
+  const [decisionDeletePending, setDecisionDeletePending] = useState(false)
+  const [decisionDeleteError, setDecisionDeleteError] = useState<string | null>(null)
   const decisions = config?.decisions || []
 
-  const filteredDecisions = decisions.filter(decision =>
-    decision.name.toLowerCase().includes(decisionsSearch.toLowerCase()) ||
-    decision.description?.toLowerCase().includes(decisionsSearch.toLowerCase())
+  const filteredDecisions = decisions.filter(
+    (decision) =>
+      decision.name.toLowerCase().includes(decisionsSearch.toLowerCase()) ||
+      decision.description?.toLowerCase().includes(decisionsSearch.toLowerCase()),
   )
 
   type DecisionRow = NonNullable<ConfigData['decisions']>[number]
@@ -55,7 +63,7 @@ export default function ConfigPageDecisionsSection({
       key: 'name',
       header: 'Name',
       sortable: true,
-      render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>
+      render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>,
     },
     {
       key: 'priority',
@@ -67,7 +75,7 @@ export default function ConfigPageDecisionsSection({
         <span className={`${styles.tableMetaBadge} ${styles.tableMetaBadgeMono}`}>
           P{row.priority}
         </span>
-      )
+      ),
     },
     {
       key: 'conditions',
@@ -75,8 +83,12 @@ export default function ConfigPageDecisionsSection({
       width: TABLE_COLUMN_WIDTH.medium,
       render: (row) => {
         const count = row.rules?.conditions?.length || 0
-        return <span>{count} {count === 1 ? 'condition' : 'conditions'}</span>
-      }
+        return (
+          <span>
+            {count} {count === 1 ? 'condition' : 'conditions'}
+          </span>
+        )
+      },
     },
     {
       key: 'models',
@@ -84,12 +96,19 @@ export default function ConfigPageDecisionsSection({
       width: TABLE_COLUMN_WIDTH.medium,
       render: (row) => {
         const count = row.modelRefs?.length || 0
-        return <span>{count} {count === 1 ? 'model' : 'models'}</span>
-      }
-    }
+        return (
+          <span>
+            {count} {count === 1 ? 'model' : 'models'}
+          </span>
+        )
+      },
+    },
   ]
 
-  const renderDecisionModelRefSummary = (ref: DecisionConfig['modelRefs'][number], index: number) => {
+  const renderDecisionModelRefSummary = (
+    ref: DecisionConfig['modelRefs'][number],
+    index: number,
+  ) => {
     const badges = [
       ref.use_reasoning ? 'Reasoning enabled' : 'Standard inference',
       ref.reasoning_effort ? `Effort: ${ref.reasoning_effort}` : null,
@@ -138,8 +157,8 @@ export default function ConfigPageDecisionsSection({
         fields: [
           { label: 'Name', value: decision.name },
           { label: 'Priority', value: `P${decision.priority}` },
-          { label: 'Description', value: decision.description || 'N/A', fullWidth: true }
-        ]
+          { label: 'Description', value: decision.description || 'N/A', fullWidth: true },
+        ],
       },
       {
         title: 'Rules',
@@ -150,21 +169,26 @@ export default function ConfigPageDecisionsSection({
             value: decision.rules?.conditions?.length ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {decision.rules.conditions.map((cond, i) => (
-                  <div key={i} style={{
-                    padding: '0.5rem',
-                    background: 'rgba(118, 185, 0, 0.1)',
-                    borderRadius: '4px',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '0.875rem'
-                  }}>
+                  <div
+                    key={i}
+                    style={{
+                      padding: '0.5rem',
+                      background: 'rgba(143, 148, 156, 0.1)',
+                      borderRadius: '4px',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.875rem',
+                    }}
+                  >
                     {cond.type}: {cond.name}
                   </div>
                 ))}
               </div>
-            ) : 'No conditions',
-            fullWidth: true
-          }
-        ]
+            ) : (
+              'No conditions'
+            ),
+            fullWidth: true,
+          },
+        ],
       },
       {
         title: 'Models',
@@ -175,11 +199,13 @@ export default function ConfigPageDecisionsSection({
               <div className={decisionStyles.viewStack}>
                 {decision.modelRefs.map((ref, i) => renderDecisionModelRefSummary(ref, i))}
               </div>
-            ) : 'No models',
-            fullWidth: true
-          }
-        ]
-      }
+            ) : (
+              'No models'
+            ),
+            fullWidth: true,
+          },
+        ],
+      },
     ]
 
     if (decision.plugins && decision.plugins.length > 0) {
@@ -189,34 +215,38 @@ export default function ConfigPageDecisionsSection({
           {
             label: 'Configured Plugins',
             value: (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div className={decisionStyles.viewStack}>
                 {decision.plugins.map((plugin, i) => (
-                  <div key={i} style={{
-                    padding: '0.5rem',
-                    background: 'rgba(147, 51, 234, 0.1)',
-                    borderRadius: '4px',
-                    fontSize: '0.875rem'
-                  }}>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{plugin.type}</div>
-                    <pre style={{
-                      margin: '0.5rem 0 0',
-                      padding: '0.5rem',
-                      borderRadius: '4px',
-                      background: 'rgba(0, 0, 0, 0.18)',
-                      overflowX: 'auto',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '0.8rem',
-                      whiteSpace: 'pre-wrap',
-                    }}>
-                      {JSON.stringify(plugin.configuration || {}, null, 2)}
-                    </pre>
-                  </div>
+                  <article key={`${plugin.type}-${i}`} className={decisionStyles.viewCard}>
+                    <div className={decisionStyles.viewHeading}>
+                      <span className={decisionStyles.viewTitle}>{plugin.type}</span>
+                      <span className={decisionStyles.viewBadge}>
+                        {Object.keys(plugin.configuration || {}).length} configured fields
+                      </span>
+                    </div>
+                    <div className={decisionStyles.viewMeta}>
+                      {Object.entries(plugin.configuration || {}).map(([key, value]) => (
+                        <div key={key} className={decisionStyles.viewMetaRow}>
+                          <span className={decisionStyles.viewMetaLabel}>
+                            {key.replace(/_/g, ' ')}
+                          </span>
+                          <span className={decisionStyles.viewMetaValue}>
+                            {Array.isArray(value)
+                              ? `${value.length} items`
+                              : value && typeof value === 'object'
+                                ? `${Object.keys(value).length} fields`
+                                : String(value)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
                 ))}
               </div>
             ),
-            fullWidth: true
-          }
-        ]
+            fullWidth: true,
+          },
+        ],
       })
     }
 
@@ -224,9 +254,26 @@ export default function ConfigPageDecisionsSection({
   }
 
   const openDecisionEditor = (mode: 'add' | 'edit', decision?: DecisionRow) => {
-    const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'reask', 'embedding', 'fact_check', 'language', 'context', 'structure', 'complexity', 'modality', 'authz', 'jailbreak', 'pii', 'projection'] as const
+    const conditionTypeOptions = [
+      'keyword',
+      'domain',
+      'preference',
+      'user_feedback',
+      'reask',
+      'embedding',
+      'fact_check',
+      'language',
+      'context',
+      'structure',
+      'complexity',
+      'modality',
+      'authz',
+      'jailbreak',
+      'pii',
+      'projection',
+    ] as const
     const projectionOutputs = (config?.projections?.mappings || []).flatMap((mapping) =>
-      (mapping.outputs || []).map((output) => output.name)
+      (mapping.outputs || []).map((output) => output.name),
     )
 
     const getConditionNameOptions = (type?: ConfigDecisionConditionType) => {
@@ -287,37 +334,42 @@ export default function ConfigPageDecisionsSection({
           lora_name: '',
         },
       ],
-      plugins: []
+      plugins: [],
     }
 
-    const initialData: DecisionFormState = mode === 'edit' && decision ? {
-      name: decision.name,
-      description: decision.description || '',
-      priority: decision.priority ?? 1,
-      operator: decision.rules?.operator || 'AND',
-      conditions: (decision.rules?.conditions || []).map((cond) => ({
-        type: cond.type,
-        name: cond.name
-      })),
-      modelRefs: (decision.modelRefs || []).map((ref) => ({
-        model: ref.model,
-        use_reasoning: !!ref.use_reasoning,
-        reasoning_description: ref.reasoning_description || '',
-        reasoning_effort: ref.reasoning_effort || '',
-        lora_name: ref.lora_name || '',
-        weight: typeof ref.weight === 'number' ? ref.weight : undefined,
-      })),
-      plugins: (decision.plugins || []).map((plugin) => ({
-        type: plugin.type,
-        configuration: JSON.stringify(plugin.configuration || {}, null, 2)
-      }))
-    } : defaultForm
+    const initialData: DecisionFormState =
+      mode === 'edit' && decision
+        ? {
+            name: decision.name,
+            description: decision.description || '',
+            priority: decision.priority ?? 1,
+            operator: decision.rules?.operator || 'AND',
+            conditions: (decision.rules?.conditions || []).map((cond) => ({
+              type: cond.type,
+              name: cond.name,
+            })),
+            modelRefs: (decision.modelRefs || []).map((ref) => ({
+              model: ref.model,
+              use_reasoning: !!ref.use_reasoning,
+              reasoning_description: ref.reasoning_description || '',
+              reasoning_effort: ref.reasoning_effort || '',
+              lora_name: ref.lora_name || '',
+              weight: typeof ref.weight === 'number' ? ref.weight : undefined,
+            })),
+            plugins: (decision.plugins || []).map((plugin) => ({
+              type: plugin.type,
+              configuration: JSON.stringify(plugin.configuration || {}, null, 2),
+            })),
+          }
+        : defaultForm
 
     const renderConditionsEditor = (
       value: DecisionFormState['conditions'],
-      onChange: (value: DecisionFormState['conditions']) => void
+      onChange: (value: DecisionFormState['conditions']) => void,
     ) => {
-      const rows = (Array.isArray(value) ? value : []).length ? value : [{ type: 'keyword', name: '' }]
+      const rows = (Array.isArray(value) ? value : []).length
+        ? value
+        : [{ type: 'keyword', name: '' }]
 
       const updateItem = (index: number, key: 'type' | 'name', val: string) => {
         const next = rows.map((item, idx) => {
@@ -340,10 +392,7 @@ export default function ConfigPageDecisionsSection({
       return (
         <div className={decisionStyles.editorList}>
           {rows.map((cond, idx) => (
-            <div
-              key={idx}
-              className={decisionStyles.editorGridConditions}
-            >
+            <div key={idx} className={decisionStyles.editorGridConditions}>
               <label className={decisionStyles.editorControlLabel}>
                 <span className={decisionStyles.editorControlLabelText}>Signal type</span>
                 <select
@@ -352,7 +401,9 @@ export default function ConfigPageDecisionsSection({
                   className={decisionStyles.editorSelect}
                 >
                   {conditionTypeOptions.map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
                   ))}
                 </select>
               </label>
@@ -363,12 +414,19 @@ export default function ConfigPageDecisionsSection({
                   onChange={(e) => updateItem(idx, 'name', e.target.value)}
                   className={decisionStyles.editorSelect}
                 >
-                  <option value="" disabled>Select name</option>
+                  <option value="" disabled>
+                    Select name
+                  </option>
                   {getConditionNameOptions(cond?.type as ConfigDecisionConditionType).map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
                   ))}
-                  {getConditionNameOptions(cond?.type as ConfigDecisionConditionType).length === 0 && (
-                    <option value="" disabled>No matching signals</option>
+                  {getConditionNameOptions(cond?.type as ConfigDecisionConditionType).length ===
+                    0 && (
+                    <option value="" disabled>
+                      No matching signals
+                    </option>
                   )}
                 </select>
               </label>
@@ -381,11 +439,7 @@ export default function ConfigPageDecisionsSection({
               </button>
             </div>
           ))}
-          <button
-            type="button"
-            onClick={addItem}
-            className={decisionStyles.editorButtonSecondary}
-          >
+          <button type="button" onClick={addItem} className={decisionStyles.editorButtonSecondary}>
             Add Condition
           </button>
         </div>
@@ -394,31 +448,63 @@ export default function ConfigPageDecisionsSection({
 
     const renderModelRefsEditor = (
       value: DecisionFormState['modelRefs'],
-      onChange: (value: DecisionFormState['modelRefs']) => void
+      onChange: (value: DecisionFormState['modelRefs']) => void,
     ) => {
       const modelOptions = models.map((model) => model.name)
       const rows = (Array.isArray(value) ? value : []).length
         ? value
-        : [{ model: '', use_reasoning: false, reasoning_description: '', reasoning_effort: '', lora_name: '' }]
+        : [
+            {
+              model: '',
+              use_reasoning: false,
+              reasoning_description: '',
+              reasoning_effort: '',
+              lora_name: '',
+            },
+          ]
 
       const updateItem = (
         index: number,
-        key: 'model' | 'use_reasoning' | 'reasoning_description' | 'reasoning_effort' | 'lora_name' | 'weight',
-        val: string | boolean | number | undefined
+        key:
+          | 'model'
+          | 'use_reasoning'
+          | 'reasoning_description'
+          | 'reasoning_effort'
+          | 'lora_name'
+          | 'weight',
+        val: string | boolean | number | undefined,
       ) => {
-        const next = rows.map((item, idx) => idx === index ? { ...item, [key]: val } : item)
+        const next = rows.map((item, idx) => (idx === index ? { ...item, [key]: val } : item))
         onChange(next)
       }
 
       const removeItem = (index: number) => {
         const next = rows.filter((_, idx) => idx !== index)
-        onChange(next.length ? next : [{ model: '', use_reasoning: false, reasoning_description: '', reasoning_effort: '', lora_name: '' }])
+        onChange(
+          next.length
+            ? next
+            : [
+                {
+                  model: '',
+                  use_reasoning: false,
+                  reasoning_description: '',
+                  reasoning_effort: '',
+                  lora_name: '',
+                },
+              ],
+        )
       }
 
       const addItem = () =>
         onChange([
           ...rows,
-          { model: '', use_reasoning: false, reasoning_description: '', reasoning_effort: '', lora_name: '' },
+          {
+            model: '',
+            use_reasoning: false,
+            reasoning_description: '',
+            reasoning_effort: '',
+            lora_name: '',
+          },
         ])
 
       return (
@@ -438,7 +524,9 @@ export default function ConfigPageDecisionsSection({
                       <option value={ref.model}>{ref.model}</option>
                     ) : null}
                     {modelOptions.map((option) => (
-                      <option key={option} value={option}>{option}</option>
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
                     ))}
                   </select>
                 </label>
@@ -491,7 +579,13 @@ export default function ConfigPageDecisionsSection({
                   <input
                     type="number"
                     value={typeof ref?.weight === 'number' ? ref.weight : ''}
-                    onChange={(e) => updateItem(idx, 'weight', e.target.value === '' ? undefined : Number(e.target.value))}
+                    onChange={(e) =>
+                      updateItem(
+                        idx,
+                        'weight',
+                        e.target.value === '' ? undefined : Number(e.target.value),
+                      )
+                    }
                     placeholder="Optional weight"
                     step="0.1"
                     min="0"
@@ -512,76 +606,8 @@ export default function ConfigPageDecisionsSection({
               </label>
             </div>
           ))}
-          <button
-            type="button"
-            onClick={addItem}
-            className={decisionStyles.editorButtonSecondary}
-          >
+          <button type="button" onClick={addItem} className={decisionStyles.editorButtonSecondary}>
             Add Model Reference
-          </button>
-        </div>
-      )
-    }
-
-    const renderPluginsEditor = (
-      value: DecisionFormState['plugins'],
-      onChange: (value: DecisionFormState['plugins']) => void
-    ) => {
-      const rows = Array.isArray(value) ? value : []
-
-      const updateItem = (index: number, key: 'type' | 'configuration', val: string | DecisionPluginConfiguration) => {
-        const next = rows.map((item, idx) => idx === index ? { ...item, [key]: val } : item)
-        onChange(next)
-      }
-
-      const removeItem = (index: number) => {
-        const next = rows.filter((_, idx) => idx !== index)
-        onChange(next)
-      }
-
-      const addItem = () => onChange([...rows, { type: '', configuration: '' }])
-
-      return (
-        <div className={decisionStyles.editorList}>
-          {rows.map((plugin, idx) => (
-            <div key={idx} className={decisionStyles.editorCard}>
-              <div className={decisionStyles.editorMetaRow}>
-                <label className={decisionStyles.editorControlLabel} style={{ flex: 1 }}>
-                  <span className={decisionStyles.editorControlLabelText}>Plugin type</span>
-                  <input
-                    type="text"
-                    value={plugin?.type || ''}
-                    onChange={(e) => updateItem(idx, 'type', e.target.value)}
-                    placeholder="Plugin type (e.g. logging)"
-                    className={decisionStyles.editorInput}
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => removeItem(idx)}
-                  className={decisionStyles.editorButtonDanger}
-                >
-                  Remove
-                </button>
-              </div>
-              <label className={decisionStyles.editorControlLabel}>
-                <span className={decisionStyles.editorControlLabelText}>Configuration JSON</span>
-                <textarea
-                  value={typeof plugin?.configuration === 'string' ? plugin.configuration : JSON.stringify(plugin?.configuration || {}, null, 2)}
-                  onChange={(e) => updateItem(idx, 'configuration', e.target.value)}
-                  placeholder='Configuration JSON (optional)'
-                  rows={4}
-                  className={decisionStyles.editorTextarea}
-                />
-              </label>
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={addItem}
-            className={decisionStyles.editorButtonSecondary}
-          >
-            Add Plugin
           </button>
         </div>
       )
@@ -593,59 +619,64 @@ export default function ConfigPageDecisionsSection({
         label: 'Name',
         type: 'text',
         required: true,
-        placeholder: 'Enter a unique decision name'
+        placeholder: 'Enter a unique decision name',
       },
       {
         name: 'description',
         label: 'Description',
         type: 'textarea',
-        placeholder: 'What does this decision route?'
+        placeholder: 'What does this decision route?',
       },
       {
         name: 'priority',
         label: 'Priority',
         type: 'number',
         min: 0,
-        placeholder: '1'
+        placeholder: '1',
       },
       {
         name: 'operator',
         label: 'Rules Operator',
         type: 'select',
         options: ['AND', 'OR', 'NOT'],
-        description: 'AND: all conditions must match. OR: any condition matches. NOT: none of the conditions must match (exclusion routing).',
-        required: true
+        description:
+          'AND: all conditions must match. OR: any condition matches. NOT: none of the conditions must match (exclusion routing).',
+        required: true,
       },
       {
         name: 'conditions',
         label: 'Conditions',
         type: 'custom',
         description: 'Add routing conditions (type and name).',
-        customRender: (value, onChange) => renderConditionsEditor(
-          Array.isArray(value) ? value as DecisionFormState['conditions'] : [],
-          (nextValue) => onChange(nextValue)
-        )
+        customRender: (value, onChange) =>
+          renderConditionsEditor(
+            Array.isArray(value) ? (value as DecisionFormState['conditions']) : [],
+            (nextValue) => onChange(nextValue),
+          ),
       },
       {
         name: 'modelRefs',
         label: 'Model References',
         type: 'custom',
         description: 'Set target models and whether to enable reasoning.',
-        customRender: (value, onChange) => renderModelRefsEditor(
-          Array.isArray(value) ? value as DecisionFormState['modelRefs'] : [],
-          (nextValue) => onChange(nextValue)
-        )
+        customRender: (value, onChange) =>
+          renderModelRefsEditor(
+            Array.isArray(value) ? (value as DecisionFormState['modelRefs']) : [],
+            (nextValue) => onChange(nextValue),
+          ),
       },
       {
         name: 'plugins',
         label: 'Plugins',
         type: 'custom',
         description: 'Optional plugins applied to this decision.',
-        customRender: (value, onChange) => renderPluginsEditor(
-          Array.isArray(value) ? value as DecisionFormState['plugins'] : [],
-          (nextValue) => onChange(nextValue)
-        )
-      }
+        customRender: (value, onChange) => (
+          <ConfigPageDecisionPluginsEditor
+            value={Array.isArray(value) ? (value as DecisionFormState['plugins']) : []}
+            onChange={(nextValue) => onChange(nextValue)}
+          />
+        ),
+      },
     ]
 
     const saveDecision = async (formData: DecisionFormState) => {
@@ -664,7 +695,9 @@ export default function ConfigPageDecisionsSection({
 
       const priority = Number.isFinite(formData.priority) ? formData.priority : 0
 
-      const normalizedConditions = (formData.conditions || []).filter((c) => (c?.type || '').trim() || (c?.name || '').trim())
+      const normalizedConditions = (formData.conditions || []).filter(
+        (c) => (c?.type || '').trim() || (c?.name || '').trim(),
+      )
       const conditions = normalizedConditions.map((condition, idx) => {
         const type = (condition?.type || '').trim()
         const conditionName = (condition?.name || '').trim()
@@ -704,7 +737,8 @@ export default function ConfigPageDecisionsSection({
 
       const normalizedPlugins = (formData.plugins || []).filter((p) => {
         const hasType = (p?.type || '').trim()
-        const hasConfigString = typeof p?.configuration === 'string' && (p.configuration as string).trim()
+        const hasConfigString =
+          typeof p?.configuration === 'string' && (p.configuration as string).trim()
         const hasConfigObject = p?.configuration && typeof p.configuration === 'object'
         return hasType || hasConfigString || hasConfigObject
       })
@@ -738,10 +772,10 @@ export default function ConfigPageDecisionsSection({
         priority: priority || 0,
         rules: {
           operator: formData.operator,
-          conditions
+          conditions,
         },
         modelRefs,
-        plugins
+        plugins,
       }
 
       const newConfig: ConfigData = cloneConfigData(config)
@@ -760,7 +794,7 @@ export default function ConfigPageDecisionsSection({
       initialData,
       fields,
       saveDecision,
-      mode
+      mode,
     )
   }
 
@@ -768,23 +802,37 @@ export default function ConfigPageDecisionsSection({
     openDecisionEditor('edit', decision)
   }
 
-  const handleDeleteDecision = async (decision: DecisionConfig) => {
-    if (!confirm(`Are you sure you want to delete decision "${decision.name}"?`)) {
-      return
-    }
+  const handleDeleteDecision = (decision: DecisionConfig) => {
+    setDecisionDeleteError(null)
+    setDecisionPendingDelete(decision)
+  }
 
+  const confirmDeleteDecision = async () => {
+    if (!decisionPendingDelete) return
     if (!config || !isPythonCLI) {
-      alert('Deleting decisions is only supported for Python CLI configs.')
+      setDecisionDeleteError('Deleting decisions is only supported for Python CLI configs.')
       return
     }
 
-    const newConfig: ConfigData = cloneConfigData(config)
-    removeDecisionByName(newConfig, decision.name)
-    await saveConfig(newConfig)
+    setDecisionDeletePending(true)
+    setDecisionDeleteError(null)
+    try {
+      const newConfig: ConfigData = cloneConfigData(config)
+      removeDecisionByName(newConfig, decisionPendingDelete.name)
+      await saveConfig(newConfig)
+      setDecisionPendingDelete(null)
+    } catch (error) {
+      setDecisionDeleteError(error instanceof Error ? error.message : 'Failed to delete decision.')
+    } finally {
+      setDecisionDeletePending(false)
+    }
   }
 
   return (
-    <ConfigPageManagerLayout title="Decisions" description="Shape routing outcomes with ordered rules and plugins that map signals to concrete model behavior.">
+    <ConfigPageManagerLayout
+      title="Decisions"
+      description="Shape routing outcomes with ordered rules and plugins that map signals to concrete model behavior."
+    >
       <div className={styles.sectionPanel}>
         <div className={styles.sectionTableBlock}>
           <TableHeader
@@ -794,7 +842,9 @@ export default function ConfigPageDecisionsSection({
             searchValue={decisionsSearch}
             onSearchChange={onDecisionsSearchChange}
             onAdd={() => openDecisionEditor('add')}
-            addButtonText="Add Decision" disabled={isReadonly} variant="embedded"
+            addButtonText="Add Decision"
+            disabled={isReadonly}
+            variant="embedded"
           />
           <DataTable
             columns={decisionsColumns}
@@ -803,12 +853,30 @@ export default function ConfigPageDecisionsSection({
             onView={handleViewDecision}
             onEdit={handleEditDecision}
             onDelete={handleDeleteDecision}
-            emptyMessage={decisionsSearch ? 'No decisions match your search' : 'No routing decisions configured'}
+            emptyMessage={
+              decisionsSearch ? 'No decisions match your search' : 'No routing decisions configured'
+            }
             className={styles.managerTable}
             readonly={isReadonly}
           />
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={decisionPendingDelete !== null}
+        title={`Delete decision “${decisionPendingDelete?.name || ''}”?`}
+        description="Remove this decision from the active routing configuration. This change cannot be undone from the dashboard."
+        eyebrow="Destructive configuration change"
+        confirmLabel="Delete decision"
+        pending={decisionDeletePending}
+        details={decisionDeleteError ? <span role="alert">{decisionDeleteError}</span> : undefined}
+        onCancel={() => {
+          if (decisionDeletePending) return
+          setDecisionPendingDelete(null)
+          setDecisionDeleteError(null)
+        }}
+        onConfirm={confirmDeleteDecision}
+      />
     </ConfigPageManagerLayout>
   )
 }

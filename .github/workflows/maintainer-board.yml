@@ -1,0 +1,68 @@
+name: Maintainer Board
+
+# Read-only scheduled maintainer queue for open issues and pull requests.
+# Complements .github/workflows/stale.yml, which mutates GitHub by marking and
+# closing stale items. This workflow only syncs state and publishes artifacts.
+
+on:
+  schedule:
+    - cron: "0 8 * * *" # Daily at 08:00 UTC
+  workflow_dispatch:
+    inputs:
+      milestone:
+        description: Optional GitHub milestone title filter (empty = all milestones)
+        required: false
+        default: v0.4
+        type: string
+      issue_limit:
+        description: Maximum open issues to fetch
+        required: false
+        default: "100"
+        type: string
+      pr_limit:
+        description: Maximum open pull requests to fetch
+        required: false
+        default: "50"
+        type: string
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  maintainer-board:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install maintainer board dependencies
+        run: pip install PyYAML==6.0.3
+
+      - name: Generate maintainer board
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAINTAINER_BOARD_OUTPUT_DIR: ${{ runner.temp }}/maintainer-board
+          MAINTAINER_BOARD_MILESTONE: ${{ inputs.milestone || 'v0.4' }}
+          MAINTAINER_BOARD_ISSUE_LIMIT: ${{ inputs.issue_limit || '100' }}
+          MAINTAINER_BOARD_PR_LIMIT: ${{ inputs.pr_limit || '50' }}
+        run: bash tools/agent/scripts/run_maintainer_board_ci.sh
+
+      - name: Upload maintainer board artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintainer-board-${{ github.run_id }}
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/maintainer-board/today.md
+            ${{ runner.temp }}/maintainer-board/current.json
+            ${{ runner.temp }}/maintainer-board/proposed-actions.json
+            ${{ runner.temp }}/maintainer-board/milestone-*.md

@@ -28,7 +28,7 @@
   padding: 0.5rem 0.85rem;
   border-radius: 999px;
   border: 1px solid var(--site-border);
-  background: rgba(17, 17, 17, 0.04);
+  background: rgba(255, 255, 255, 0.035);
   color: var(--site-muted);
   font-size: 0.78rem;
   font-weight: 600;
@@ -58,15 +58,16 @@
 }
 
 .tabActive {
-  border-color: var(--site-border-strong);
-  background: var(--site-surface-alt);
+  border-color: rgba(48, 162, 255, 0.45);
+  background: rgba(48, 162, 255, 0.1);
   color: var(--site-text);
+  box-shadow: var(--site-hover-inset);
 }
 
 .tabActive .tabCode {
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--site-text);
+  border-color: rgba(48, 162, 255, 0.35);
+  background: rgba(48, 162, 255, 0.16);
+  color: var(--site-brand-blue);
 }
 
 .downArrow {
@@ -78,7 +79,7 @@
 .downArrowLine {
   width: 1px;
   height: 30px;
-  background: linear-gradient(180deg, rgba(79, 70, 229, 0.24), rgba(15, 23, 42, 0.78));
+  background: linear-gradient(180deg, rgba(48, 162, 255, 0.38), rgba(255, 255, 255, 0.34));
   position: relative;
 }
 
@@ -87,7 +88,7 @@
   position: absolute;
   bottom: -5px;
   left: -3px;
-  border: solid rgba(15, 23, 42, 0.76);
+  border: solid rgba(255, 255, 255, 0.44);
   border-width: 0 1px 1px 0;
   padding: 3px;
   transform: rotate(45deg);
@@ -121,6 +122,7 @@
 .inputBox {
   width: min(100%, 420px);
   padding: 0.85rem 1rem;
+  border-radius: 0.55rem;
   font-size: 0.8rem;
   line-height: 1.45;
   text-align: center;
@@ -145,12 +147,13 @@
 }
 
 .tokenSpecial {
-  background: rgba(17, 17, 17, 0.08);
-  color: var(--site-text);
+  border-color: rgba(48, 162, 255, 0.35);
+  background: rgba(48, 162, 255, 0.12);
+  color: var(--site-brand-blue-light);
 }
 
 .tokenNormal {
-  background: rgba(17, 17, 17, 0.03);
+  background: rgba(255, 255, 255, 0.035);
   color: var(--site-muted);
 }
 
@@ -168,19 +171,19 @@
 }
 
 .embBarToken {
-  background: linear-gradient(90deg, rgba(79, 70, 229, 0.24), rgba(15, 23, 42, 0.84));
+  background: linear-gradient(90deg, rgba(48, 162, 255, 0.35), rgba(255, 255, 255, 0.68));
 }
 
 .embBarSeg {
-  background: linear-gradient(90deg, rgba(79, 70, 229, 0.18), rgba(15, 23, 42, 0.7));
+  background: linear-gradient(90deg, rgba(48, 162, 255, 0.27), rgba(255, 255, 255, 0.52));
 }
 
 .embBarPos {
-  background: linear-gradient(90deg, rgba(79, 70, 229, 0.14), rgba(15, 23, 42, 0.58));
+  background: linear-gradient(90deg, rgba(48, 162, 255, 0.2), rgba(255, 255, 255, 0.38));
 }
 
 .embBarSum {
-  background: linear-gradient(90deg, rgba(15, 23, 42, 0.94), rgba(79, 70, 229, 0.36));
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.78), rgba(48, 162, 255, 0.46));
 }
 
 .embLabel {
@@ -232,7 +235,7 @@
   min-width: 2.8rem;
   padding: 0.2rem 0.34rem;
   border: 1px solid var(--site-border);
-  background: rgba(17, 17, 17, 0.05);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--site-muted-bright);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.56rem;
@@ -240,7 +243,11 @@
   text-transform: uppercase;
 }
 
-.subAttention,
+.subAttention {
+  border-color: rgba(48, 162, 255, 0.28);
+  background: rgba(48, 162, 255, 0.08);
+}
+
 .subNorm,
 .subFFN {
   background: rgba(255, 255, 255, 0.03);
@@ -248,17 +255,15 @@
 
 .branchesArea {
   width: 100%;
+  max-width: 32rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.95rem;
+  gap: 0.65rem;
 }
 
 .branchGrid {
-  width: 100%;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.8rem;
+  display: none;
 }
 
 .branch {
@@ -266,17 +271,20 @@
   grid-template-columns: auto 1fr;
   align-items: start;
   gap: 0.65rem;
-  padding: 0.78rem;
-  cursor: pointer;
+  width: 100%;
+  padding: 0.78rem 0.85rem;
+  border-radius: 0.65rem;
+  cursor: default;
   transition:
     border-color 180ms ease,
     background 180ms ease,
-    transform 180ms ease,
-    opacity 180ms ease;
+    box-shadow 180ms ease;
 }
 
-.branch:hover {
-  border-color: var(--site-border-strong);
+.branchActive {
+  border-color: rgba(48, 162, 255, 0.38);
+  background: rgba(48, 162, 255, 0.08);
+  box-shadow: var(--site-hover-inset);
 }
 
 .branchCLS,
@@ -305,6 +313,14 @@
   font-family: var(--ifm-font-family-monospace);
 }
 
+.branchTaskType {
+  font-size: 0.56rem;
+  line-height: 1.4;
+  color: var(--site-muted-bright);
+  font-family: var(--ifm-font-family-monospace);
+  font-style: italic;
+}
+
 .branchSignals {
   display: flex;
   flex-wrap: wrap;
@@ -326,8 +342,9 @@
 .signalTagToken,
 .signalTagPool,
 .signalTagCross {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--site-muted-bright);
+  border-color: rgba(48, 162, 255, 0.22);
+  background: rgba(48, 162, 255, 0.1);
+  color: var(--site-brand-blue-light);
 }
 
 @media (max-width: 768px) {

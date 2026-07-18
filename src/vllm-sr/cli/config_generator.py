@@ -45,6 +45,14 @@ def _is_ip_address(host: str) -> bool:
         return False
 
 
+def _route_request_headers(endpoint: dict) -> list[dict[str, str]]:
+    headers: dict[str, str] = {}
+    for key, value in (endpoint.get("extra_headers") or {}).items():
+        if key and value is not None:
+            headers[str(key)] = str(value)
+    return [{"key": key, "value": value} for key, value in sorted(headers.items())]
+
+
 def generate_envoy_config_from_user_config(
     user_config: UserConfig,
     output_file: str,
@@ -172,6 +180,14 @@ def generate_envoy_config_from_user_config(
             if is_domain:
                 uses_dns = True
 
+            extra_headers = dict(backend.extra_headers or {})
+            api_key = backend.resolve_api_key()
+            if api_key and backend.auth_header:
+                auth_prefix = (backend.auth_prefix or "").strip()
+                extra_headers[str(backend.auth_header)] = (
+                    f"{auth_prefix} {api_key}".strip() if auth_prefix else str(api_key)
+                )
+
             endpoints.append(
                 {
                     "name": backend.name or f"backend-{index + 1}",
@@ -185,6 +201,7 @@ def generate_envoy_config_from_user_config(
                     "protocol": protocol,
                     "is_https": is_https,
                     "is_domain": is_domain,
+                    "extra_headers": extra_headers,
                 }
             )
 
@@ -200,10 +217,12 @@ def generate_envoy_config_from_user_config(
 
         # Determine path prefix - use the first endpoint's path if all endpoints have the same path
         path_prefix = ""
+        route_request_headers = []
         if endpoints:
             first_path = endpoints[0].get("path", "")
             if first_path and all(ep.get("path", "") == first_path for ep in endpoints):
                 path_prefix = first_path
+            route_request_headers = _route_request_headers(endpoints[0])
 
         models.append(
             {
@@ -213,6 +232,7 @@ def generate_envoy_config_from_user_config(
                 "cluster_type": cluster_type,
                 "has_https": has_https,
                 "path_prefix": path_prefix,
+                "route_request_headers": route_request_headers,
             }
         )
 

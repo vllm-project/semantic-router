@@ -296,6 +296,22 @@ func TestBuildReasoningRequestFields(t *testing.T) {
 				assert.False(t, hasChatTemplate)
 			},
 		},
+		{
+			name:               "OpenRouter provider model ID uses top-level effort",
+			model:              "gpt-5-mini",
+			useReasoning:       true,
+			categoryName:       "test",
+			expectEffortReturn: "high",
+			profile:            &config.ProviderProfile{Type: "openai", BaseURL: "https://openrouter.ai/api/v1"},
+			verifyFunc: func(t *testing.T, fields map[string]interface{}) {
+				require.NotNil(t, fields)
+				reasoningEffort, exists := fields["reasoning_effort"]
+				require.True(t, exists)
+				assert.Equal(t, "high", reasoningEffort)
+				_, hasChatTemplate := fields["chat_template_kwargs"]
+				assert.False(t, hasChatTemplate)
+			},
+		},
 		{name: "Reasoning disabled", model: "deepseek-v3", categoryName: "test", expectNil: true},
 		{name: "No reasoning family", model: "phi4", useReasoning: true, categoryName: "test", expectNil: true},
 	}
@@ -484,11 +500,13 @@ func newBuildReasoningRequestFieldsRouter() *OpenAIRouter {
 				{Model: "deepseek-v3", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "high"}},
 				{Model: "gpt-oss-model", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "low"}},
 				{Model: "openai-alias", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "high"}},
+				{Model: "deepseek-v4-pro", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "max"}},
 			},
 		}},
 		map[string]config.ModelParams{
-			"deepseek-v3":   {ReasoningFamily: "deepseek"},
-			"gpt-oss-model": {ReasoningFamily: "gpt-oss"},
+			"deepseek-v3":     {ReasoningFamily: "deepseek"},
+			"deepseek-v4-pro": {ReasoningFamily: "deepseek"},
+			"gpt-oss-model":   {ReasoningFamily: "gpt-oss"},
 			"openai-alias": {
 				ReasoningFamily: "gpt-oss",
 				ExternalModelIDs: map[string]string{
@@ -542,8 +560,26 @@ func setReasoningMode(
 	categoryName string,
 ) map[string]interface{} {
 	t.Helper()
+	return setReasoningModeForProvider(t, router, model, initialReasoningEffort, enableReasoning, categoryName, nil)
+}
+
+func setReasoningModeForProvider(
+	t *testing.T,
+	router *OpenAIRouter,
+	model string,
+	initialReasoningEffort interface{},
+	enableReasoning bool,
+	categoryName string,
+	profile *config.ProviderProfile,
+) map[string]interface{} {
+	t.Helper()
 	requestBytes := marshalReasoningRequest(t, model, initialReasoningEffort)
-	modifiedBytes, err := router.setReasoningModeToRequestBody(requestBytes, enableReasoning, categoryName)
+	modifiedBytes, err := router.setReasoningModeToRequestBodyForProvider(
+		requestBytes,
+		enableReasoning,
+		categoryName,
+		profile,
+	)
 	require.NoError(t, err)
 	return unmarshalReasoningRequest(t, modifiedBytes)
 }

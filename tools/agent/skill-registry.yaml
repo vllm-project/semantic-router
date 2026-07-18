@@ -109,7 +109,7 @@ surfaces:
     paths:
     - src/vllm-sr/cli/main.py
     - src/vllm-sr/cli/core.py
-    - src/vllm-sr/cli/docker_cli.py
+    - src/vllm-sr/cli/container_cli.py
     - src/vllm-sr/cli/commands/**
     - src/vllm-sr/start-router.sh
     - tools/make/docker.mk

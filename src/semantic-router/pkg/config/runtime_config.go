@@ -2,13 +2,15 @@ package config
 
 // LooperConfig defines configuration for multi-model execution.
 type LooperConfig struct {
-	Endpoint         string              `yaml:"endpoint"`
-	ModelEndpoints   map[string]string   `yaml:"model_endpoints,omitempty"`
-	GRPCMaxMsgSizeMB int                 `yaml:"grpc_max_msg_size_mb,omitempty"`
-	TimeoutSeconds   int                 `yaml:"timeout_seconds,omitempty"`
-	RetryCount       int                 `yaml:"retry_count,omitempty"`
-	Headers          map[string]string   `yaml:"headers,omitempty"`
-	Fusion           FusionRuntimeConfig `yaml:"fusion,omitempty"`
+	Endpoint           string              `yaml:"endpoint"`
+	GRPCMaxMsgSizeMB   int                 `yaml:"grpc_max_msg_size_mb,omitempty"`
+	MaxResponseBytesMB int                 `yaml:"max_response_bytes_mb,omitempty"`
+	TimeoutSeconds     int                 `yaml:"timeout_seconds,omitempty"`
+	RetryCount         int                 `yaml:"retry_count,omitempty"`
+	Headers            map[string]string   `yaml:"headers,omitempty"`
+	ReMoM              ReMoMRuntimeConfig  `yaml:"remom,omitempty"`
+	Fusion             FusionRuntimeConfig `yaml:"fusion,omitempty"`
+	Flow               FlowRuntimeConfig   `yaml:"flow,omitempty"`
 }
 
 func (l *LooperConfig) IsEnabled() bool {
@@ -27,6 +29,21 @@ func (l *LooperConfig) GetGRPCMaxMsgSize() int {
 		return 4 * 1024 * 1024
 	}
 	return l.GRPCMaxMsgSizeMB * 1024 * 1024
+}
+
+// DefaultMaxResponseBytes caps a single upstream model response body when no
+// explicit max_response_bytes_mb is configured (32 MiB). A single chat
+// completion never approaches this, but it bounds a huge or malicious upstream
+// response so it cannot exhaust router memory.
+const DefaultMaxResponseBytes int64 = 32 * 1024 * 1024
+
+// GetMaxResponseBytes returns the per-response read ceiling in bytes, falling
+// back to DefaultMaxResponseBytes when unset or non-positive.
+func (l *LooperConfig) GetMaxResponseBytes() int64 {
+	if l.MaxResponseBytesMB <= 0 {
+		return DefaultMaxResponseBytes
+	}
+	return int64(l.MaxResponseBytesMB) * 1024 * 1024
 }
 
 // RedisConfig defines the complete configuration structure for Redis cache backend.

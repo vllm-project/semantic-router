@@ -5,8 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
+	"strings"
 	"text/template"
 	"time"
 
@@ -23,6 +24,13 @@ type ReMoMLooper struct {
 	*BaseLooper
 }
 
+const (
+	remomDistributionWeighted   = "weighted"
+	remomDistributionEqual      = "equal"
+	remomDistributionRoundRobin = "round_robin"
+	remomDistributionFirstOnly  = "first_only"
+)
+
 // NewReMoMLooper creates a new ReMoM looper
 func NewReMoMLooper(cfg *config.LooperConfig) *ReMoMLooper {
 	return &ReMoMLooper{
@@ -34,7 +42,7 @@ func NewReMoMLooper(cfg *config.LooperConfig) *ReMoMLooper {
 func getDefaultReMoMConfig() *config.ReMoMAlgorithmConfig {
 	return &config.ReMoMAlgorithmConfig{
 		BreadthSchedule:              []int{4},
-		ModelDistribution:            "weighted",
+		ModelDistribution:            remomDistributionWeighted,
 		Temperature:                  1.0,
 		IncludeReasoning:             false,
 		CompactionStrategy:           "full",
@@ -65,11 +73,19 @@ func remomParallelMaxConcurrent(numCalls, maxFromCfg int) int {
 	return numCalls
 }
 
+func remomParallelMinSuccessful(numCalls, minFromCfg int) int {
+	if minFromCfg > 0 && minFromCfg < numCalls {
+		return minFromCfg
+	}
+	return numCalls
+}
+
 // remomRunOneParallelCall performs a single gated CallModel for ReMoM parallel rounds.
 func (l *ReMoMLooper) remomRunOneParallelCall(
 	ctx context.Context,
 	idx, numCalls int,
 	mc ModelCall,
+	req *Request,
 	messages *openai.ChatCompletionNewParams,
 	cfg *config.ReMoMAlgorithmConfig,
 	streaming bool,
@@ -82,7 +98,11 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 
 	logging.Infof("[ReMoM] Goroutine %d/%d started for model %s", idx+1, numCalls, modelName)
 
-	sem <- struct{}{}
+	select {
+	case sem <- struct{}{}:
+	case <-ctx.Done():
+		return remomParallelResult{err: ctx.Err(), index: idx}
+	}
 	defer func() { <-sem }()
 
 	msgCopy := cloneRequest(messages)
@@ -98,7 +118,7 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 		streaming,
 		idx+1,
 		nil,
-		"",
+		accessKeyForModel(req, modelName),
 	)
 	elapsed := time.Since(startTime)
 
@@ -114,34 +134,73 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 func collectRemomParallelResults(
 	ctx context.Context,
 	numCalls int,
+	minSuccessful int,
 	results <-chan remomParallelResult,
 	cfg *config.ReMoMAlgorithmConfig,
 ) ([]*ModelResponse, error) {
-	var responses []*ModelResponse
-	var errs []error
+	collector := newRemomResultCollector(numCalls, minSuccessful, cfg)
 
-	for range numCalls {
+	for completed := 0; completed < numCalls; completed++ {
 		select {
 		case res := <-results:
-			if res.err == nil {
-				responses = append(responses, res.resp)
-				continue
-			}
-			errs = append(errs, res.err)
-			if cfg.OnError == "fail" {
-				return nil, fmt.Errorf("model call %d failed: %w", res.index, res.err)
+			responses, err, done := collector.handleResult(res)
+			if done {
+				return responses, err
 			}
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return collector.handleContextDone(ctx.Err())
 		}
 	}
+	return collector.finalize()
+}
 
-	if len(responses) == 0 {
-		return nil, fmt.Errorf("all %d model calls failed: %v", numCalls, errs)
+type remomResultCollector struct {
+	numCalls      int
+	minSuccessful int
+	onError       string
+	responses     []*ModelResponse
+	errs          []error
+}
+
+func newRemomResultCollector(numCalls int, minSuccessful int, cfg *config.ReMoMAlgorithmConfig) *remomResultCollector {
+	return &remomResultCollector{
+		numCalls:      numCalls,
+		minSuccessful: minSuccessful,
+		onError:       cfg.OnError,
 	}
+}
 
-	logging.Infof("[ReMoM] Collected %d/%d successful responses", len(responses), numCalls)
-	return responses, nil
+func (c *remomResultCollector) handleResult(res remomParallelResult) ([]*ModelResponse, error, bool) {
+	if res.err != nil {
+		c.errs = append(c.errs, res.err)
+		if c.onError == config.ReMoMOnErrorFail {
+			return nil, fmt.Errorf("model call %d failed: %w", res.index, res.err), true
+		}
+		return nil, nil, false
+	}
+	c.responses = append(c.responses, res.resp)
+	if len(c.responses) < c.minSuccessful {
+		return nil, nil, false
+	}
+	if len(c.responses) < c.numCalls {
+		logging.Infof("[ReMoM] Quorum reached with %d/%d successful responses", len(c.responses), c.numCalls)
+	}
+	return c.responses, nil, true
+}
+
+func (c *remomResultCollector) handleContextDone(err error) ([]*ModelResponse, error) {
+	if len(c.responses) > 0 && c.onError != config.ReMoMOnErrorFail {
+		return c.responses, err
+	}
+	return nil, err
+}
+
+func (c *remomResultCollector) finalize() ([]*ModelResponse, error) {
+	if len(c.responses) == 0 {
+		return nil, fmt.Errorf("all %d model calls failed: %v", c.numCalls, c.errs)
+	}
+	logging.Infof("[ReMoM] Collected %d/%d successful responses", len(c.responses), c.numCalls)
+	return c.responses, nil
 }
 
 // ReferenceResponse represents a response used as reference in synthesis
@@ -236,13 +295,31 @@ func (l *ReMoMLooper) Execute(ctx context.Context, req *Request) (*Response, err
 	schedule := append([]int{}, cfg.BreadthSchedule...)
 	schedule = append(schedule, 1)
 	originalContent := extractOriginalContent(req.OriginalRequest)
+	originalWithOutputContract := requestTextWithOutputContract(originalContent, req.OriginalRequest, req.OutputContract)
 
-	result, err := l.runReMoMSchedule(ctx, req, cfg, schedule, originalContent)
+	result, err := l.runReMoMSchedule(ctx, req, cfg, schedule, originalWithOutputContract)
 	if err != nil {
 		return nil, err
 	}
 
 	finalResponse := result.allRoundResponses[len(result.allRoundResponses)-1].Responses[0]
+	finalModelResp := &ModelResponse{
+		Content:          finalResponse.Content,
+		ReasoningContent: finalResponse.Reasoning,
+		Model:            finalResponse.Model,
+	}
+	candidateResponses := remomRoundResponsesToModelResponses(result.allRoundResponses)
+	applyJSONActionOutputContract(
+		req.OutputContractSpec,
+		finalModelResp,
+		candidateResponses,
+	)
+	applyReferenceSelectionOutputContract(
+		req.OutputContractSpec,
+		finalModelResp,
+		candidateResponses,
+	)
+	finalResponse.Content = finalModelResp.Content
 	modelsUsedSlice := make([]string, 0, len(result.modelsUsed))
 	for model := range result.modelsUsed {
 		modelsUsedSlice = append(modelsUsedSlice, model)
@@ -259,25 +336,33 @@ func (l *ReMoMLooper) runReMoMSchedule(
 	req *Request,
 	cfg *config.ReMoMAlgorithmConfig,
 	schedule []int,
-	originalContent string,
+	originalWithOutputContract string,
 ) (*remomScheduleResult, error) {
 	var allRoundResponses []RoundResponse
 	modelsUsed := make(map[string]bool)
 	totalIterations := 0
 	var usage TokenUsage
 	currentMessages := cloneMessages(req.OriginalRequest)
+	if requestsJSONAction(req.OutputContractSpec) {
+		currentMessages = replaceLastMessage(currentMessages, originalWithOutputContract)
+	}
 
 	for roundIdx, numCalls := range schedule {
 		logging.Infof("[ReMoM] Round %d/%d: %d parallel calls", roundIdx+1, len(schedule), numCalls)
 
-		updatedMessages, err := l.prepareReMoMRoundMessages(cfg, originalContent, roundIdx, allRoundResponses, currentMessages)
+		updatedMessages, err := l.prepareReMoMRoundMessages(cfg, originalWithOutputContract, roundIdx, allRoundResponses, currentMessages)
 		if err != nil {
 			return nil, err
 		}
 		currentMessages = updatedMessages
 
-		roundResp, responses, err := l.executeReMoMRound(ctx, req, cfg, roundIdx, numCalls, currentMessages)
+		isFinalRound := roundIdx == len(schedule)-1
+		roundResp, responses, err := l.executeReMoMRound(ctx, req, cfg, roundIdx, numCalls, currentMessages, isFinalRound)
 		if err != nil {
+			if canFallbackToPreviousReMoMRound(cfg, allRoundResponses) {
+				logging.Warnf("[ReMoM] Round %d failed; using previous round responses as fallback: %v", roundIdx+1, err)
+				break
+			}
 			return nil, err
 		}
 
@@ -294,6 +379,14 @@ func (l *ReMoMLooper) runReMoMSchedule(
 		totalIterations:   totalIterations,
 		usage:             usage,
 	}, nil
+}
+
+func canFallbackToPreviousReMoMRound(cfg *config.ReMoMAlgorithmConfig, allRoundResponses []RoundResponse) bool {
+	if cfg.OnError == config.ReMoMOnErrorFail || len(allRoundResponses) == 0 {
+		return false
+	}
+	lastRound := allRoundResponses[len(allRoundResponses)-1]
+	return len(lastRound.Responses) > 0
 }
 
 func (l *ReMoMLooper) prepareReMoMRoundMessages(
@@ -328,15 +421,27 @@ func intermediateResponsesToModelResponses(responses []IntermediateResp) []*Mode
 	return prevResponses
 }
 
+func remomRoundResponsesToModelResponses(rounds []RoundResponse) []*ModelResponse {
+	var responses []*ModelResponse
+	for _, round := range rounds {
+		responses = append(responses, intermediateResponsesToModelResponses(round.Responses)...)
+	}
+	return responses
+}
+
 func (l *ReMoMLooper) executeReMoMRound(
 	ctx context.Context,
 	req *Request,
 	cfg *config.ReMoMAlgorithmConfig,
 	roundIdx, numCalls int,
 	currentMessages *openai.ChatCompletionNewParams,
+	isFinalRound bool,
 ) (RoundResponse, []*ModelResponse, error) {
 	modelCalls := l.distributeCallsToModels(cfg, numCalls, req.ModelRefs)
-	responses, err := l.executeParallelCalls(ctx, cfg, modelCalls, currentMessages, req.IsStreaming)
+	if isFinalRound {
+		modelCalls = remomFinalRoundModelCalls(cfg, modelCalls, req.ModelRefs)
+	}
+	responses, err := l.executeParallelCalls(ctx, req, cfg, modelCalls, currentMessages, req.IsStreaming)
 	if err != nil {
 		if cfg.OnError == "fail" {
 			return RoundResponse{}, nil, fmt.Errorf("round %d failed: %w", roundIdx+1, err)
@@ -349,6 +454,22 @@ func (l *ReMoMLooper) executeReMoMRound(
 
 	responses = l.sortAndShuffle(cfg, responses)
 	return l.buildReMoMRoundResponse(cfg, roundIdx+1, numCalls, responses), responses, nil
+}
+
+func remomFinalRoundModelCalls(cfg *config.ReMoMAlgorithmConfig, defaultCalls []ModelCall, modelRefs []config.ModelRef) []ModelCall {
+	if cfg == nil || strings.TrimSpace(cfg.SynthesisModel) == "" {
+		return defaultCalls
+	}
+	synthesisModel := strings.TrimSpace(cfg.SynthesisModel)
+	for _, ref := range modelRefs {
+		if ref.Model == synthesisModel {
+			return []ModelCall{{
+				Model:    ref.Model,
+				LoRAName: ref.LoRAName,
+			}}
+		}
+	}
+	return []ModelCall{{Model: synthesisModel}}
 }
 
 func (l *ReMoMLooper) buildReMoMRoundResponse(
@@ -448,88 +569,10 @@ func (l *ReMoMLooper) formatReMoMStreamingResponse(
 	return resp, nil
 }
 
-// distributeCallsToModels distributes K calls among models based on strategy
-func (l *ReMoMLooper) distributeCallsToModels(cfg *config.ReMoMAlgorithmConfig, numCalls int, modelRefs []config.ModelRef) []ModelCall {
-	strategy := cfg.ModelDistribution
-	if strategy == "" {
-		strategy = "weighted"
-	}
-
-	switch strategy {
-	case "weighted":
-		return distributeByWeight(numCalls, modelRefs, cfg.ShuffleSeed)
-	case "equal":
-		return distributeEqually(numCalls, modelRefs, cfg.ShuffleSeed)
-	case "first_only":
-		return distributeFirstOnly(numCalls, modelRefs)
-	default:
-		logging.Warnf("[ReMoM] Unknown distribution strategy %s, using weighted", strategy)
-		return distributeByWeight(numCalls, modelRefs, cfg.ShuffleSeed)
-	}
-}
-
-// distributeByWeight distributes calls proportionally based on model weights
-// Since ModelRef doesn't have Weight field, this falls back to equal distribution
-func distributeByWeight(numCalls int, modelRefs []config.ModelRef, seed int) []ModelCall {
-	// For now, treat weighted distribution as equal distribution
-	// In the future, we could add weight support to ModelRef if needed
-	return distributeEqually(numCalls, modelRefs, seed)
-}
-
-// distributeEqually distributes calls evenly among all models
-func distributeEqually(numCalls int, modelRefs []config.ModelRef, seed int) []ModelCall {
-	if len(modelRefs) == 0 {
-		return nil
-	}
-
-	var calls []ModelCall
-	callsPerModel := numCalls / len(modelRefs)
-	remainder := numCalls % len(modelRefs)
-
-	for i, ref := range modelRefs {
-		count := callsPerModel
-		if i < remainder {
-			count++ // Distribute remainder to first N models
-		}
-
-		for j := 0; j < count; j++ {
-			calls = append(calls, ModelCall{
-				Model:    ref.Model,
-				LoRAName: ref.LoRAName,
-			})
-		}
-	}
-
-	// Shuffle
-	r := rand.New(rand.NewSource(int64(seed)))
-	r.Shuffle(len(calls), func(i, j int) {
-		calls[i], calls[j] = calls[j], calls[i]
-	})
-
-	return calls
-}
-
-// distributeFirstOnly uses only the first model (PaCoRe-compatible)
-func distributeFirstOnly(numCalls int, modelRefs []config.ModelRef) []ModelCall {
-	if len(modelRefs) == 0 {
-		return nil
-	}
-
-	ref := modelRefs[0]
-	calls := make([]ModelCall, numCalls)
-	for i := 0; i < numCalls; i++ {
-		calls[i] = ModelCall{
-			Model:    ref.Model,
-			LoRAName: ref.LoRAName,
-		}
-	}
-
-	return calls
-}
-
 // executeParallelCalls executes model calls in parallel with concurrency control.
 func (l *ReMoMLooper) executeParallelCalls(
 	ctx context.Context,
+	req *Request,
 	cfg *config.ReMoMAlgorithmConfig,
 	modelCalls []ModelCall,
 	messages *openai.ChatCompletionNewParams,
@@ -537,16 +580,24 @@ func (l *ReMoMLooper) executeParallelCalls(
 ) ([]*ModelResponse, error) {
 	numCalls := len(modelCalls)
 	maxConcurrent := remomParallelMaxConcurrent(numCalls, cfg.MaxConcurrent)
+	minSuccessful := remomParallelMinSuccessful(numCalls, cfg.MinSuccessfulResponses)
+	roundCtx := ctx
+	cancel := func() {}
+	if cfg.RoundTimeoutSeconds > 0 {
+		roundCtx, cancel = context.WithTimeout(ctx, time.Duration(cfg.RoundTimeoutSeconds)*time.Second)
+	}
+	defer cancel()
+
 	sem := make(chan struct{}, maxConcurrent)
 	results := make(chan remomParallelResult, numCalls)
 
 	for i, call := range modelCalls {
 		go func(idx int, mc ModelCall) {
-			results <- l.remomRunOneParallelCall(ctx, idx, numCalls, mc, messages, cfg, streaming, sem)
+			results <- l.remomRunOneParallelCall(roundCtx, idx, numCalls, mc, req, messages, cfg, streaming, sem)
 		}(i, call)
 	}
 
-	return collectRemomParallelResults(ctx, numCalls, results, cfg)
+	return collectRemomParallelResults(roundCtx, numCalls, minSuccessful, results, cfg)
 }
 
 // buildSynthesisPrompt builds the synthesis prompt using template
@@ -593,7 +644,7 @@ func (l *ReMoMLooper) buildSynthesisPrompt(cfg *config.ReMoMAlgorithmConfig, ori
 		return "", fmt.Errorf("failed to execute template: %w", err)
 	}
 
-	return buf.String(), nil
+	return appendOutputContractForPrompt(buf.String(), embeddedOutputContract(originalContent)), nil
 }
 
 // compactResponse compacts a response based on strategy
@@ -629,8 +680,9 @@ func (l *ReMoMLooper) sortAndShuffle(cfg *config.ReMoMAlgorithmConfig, responses
 		return len(responses[i].Content) > len(responses[j].Content)
 	})
 
-	// Shuffle with seed for reproducibility
-	r := rand.New(rand.NewSource(int64(cfg.ShuffleSeed)))
+	// Shuffle with seed for reproducibility. PCG seeds in O(1) (16-byte state)
+	// instead of the ~5KB v1 rngSource this reordered on every round.
+	r := rand.New(rand.NewPCG(uint64(cfg.ShuffleSeed), uint64(cfg.ShuffleSeed))) //nolint:gosec // deterministic shuffle seed, overflow harmless
 	r.Shuffle(len(responses), func(i, j int) {
 		responses[i], responses[j] = responses[j], responses[i]
 	})

@@ -1,5 +1,6 @@
+ARG IMAGE_REGISTRY=docker.io/
 # Stage 0: Build DSL compiler WASM assets
-FROM golang:1.24-alpine AS wasm-builder
+FROM ${IMAGE_REGISTRY}library/golang:1.25-alpine AS wasm-builder
 WORKDIR /app/src/semantic-router
 
 ENV GOPROXY=https://proxy.golang.org,direct
@@ -27,7 +28,7 @@ RUN CGO_ENABLED=0 GOOS=js GOARCH=wasm go build \
     fi
 
 # Stage 1: Build frontend with Node.js
-FROM node:20-alpine AS frontend-builder
+FROM ${IMAGE_REGISTRY}library/node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json dashboard/frontend/tsconfig.json dashboard/frontend/tsconfig.node.json dashboard/frontend/vite.config.ts ./
 COPY dashboard/frontend/src ./src
@@ -39,7 +40,7 @@ RUN npm config set registry https://registry.npmjs.org/ && \
     npm ci --include=dev  # Use npm ci for deterministic, lockfile-based installs in CI
 RUN npm run build
 
-FROM node:20-alpine AS wizmap-builder
+FROM ${IMAGE_REGISTRY}library/node:20-alpine AS wizmap-builder
 WORKDIR /app/wizmap
 COPY dashboard/wizmap/package.json dashboard/wizmap/package-lock.json ./
 RUN npm config set registry https://registry.npmjs.org/ && \
@@ -48,7 +49,7 @@ COPY dashboard/wizmap/ ./
 RUN npm run build -- --outDir /app/wizmap-dist
 
 # Stage 2: Build backend with Go
-FROM golang:1.24-bookworm AS backend-builder
+FROM ${IMAGE_REGISTRY}library/golang:1.25-bookworm AS backend-builder
 WORKDIR /app
 
 # Use Go proxy for reliable downloads
@@ -100,7 +101,7 @@ RUN PROJECT_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' /app/src/vllm-sr/pypr
       -o /app/dashboard-backend main.go
 
 # Stage 3: Final runtime image
-FROM python:3.11-slim-bookworm
+FROM ${IMAGE_REGISTRY}library/python:3.11-slim-bookworm
 ARG TORCH_CPU_INDEX_URL=https://download.pytorch.org/whl/cpu
 ARG TORCH_CPU_VERSION=2.12.0
 ENV PYTHONPATH=/app
