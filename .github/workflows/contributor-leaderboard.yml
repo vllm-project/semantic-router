@@ -48,10 +48,7 @@ jobs:
             echo "No leaderboard changes detected"
             exit 0
           fi
-          git commit -s -m "$(cat <<'EOF'
-chore(website): refresh contributor leaderboard data
+          git commit -s -m "chore(website): refresh contributor leaderboard data
 
-Regenerate commit and PR review counts for the community leaderboard.
-EOF
-)"
+Regenerate commit and PR review counts for the community leaderboard."
           git push
