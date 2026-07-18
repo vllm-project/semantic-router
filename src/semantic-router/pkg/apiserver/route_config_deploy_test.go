@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -50,6 +51,44 @@ func TestHandleConfigPutReplacesExistingConfig(t *testing.T) {
 	requireFirstDecisionName(t, routing, "new_route")
 	if projections, ok := routing["projections"].(map[string]any); ok && len(projections) > 0 {
 		t.Fatalf("expected replace deploy to drop omitted routing.projections, got %#v", projections)
+	}
+}
+
+func TestHandleConfigPatchRejectsInvalidRemoteEmbeddingProvider(t *testing.T) {
+	configPath := writeDeployTestBaseConfig(t)
+	invalidCfg := minimalDeployTestConfig("new_route")
+	invalidCfg.InlineModels.EmbeddingModels = config.EmbeddingModels{
+		EmbeddingConfig: config.HNSWConfig{
+			Backend:         config.EmbeddingBackendOpenAICompatible,
+			ModelType:       config.EmbeddingModelTypeRemote,
+			TargetDimension: 768,
+		},
+		Endpoint: config.EmbeddingEndpointConfig{
+			BaseURL:    "embedding-service:8000/v1",
+			Dimensions: 1536,
+		},
+	}
+	payloadYAML := mustMarshalCanonicalConfigYAML(t, invalidCfg)
+	body, err := json.Marshal(RouterConfigUpdateRequest{YAML: string(payloadYAML)})
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+
+	apiServer := &ClassificationAPIServer{configPath: configPath}
+	req := httptest.NewRequest(http.MethodPatch, "/config/router", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	apiServer.handleConfigPatch(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d: %s", rr.Code, rr.Body.String())
+	}
+	response := rr.Body.String()
+	for _, want := range []string{"CONFIG_VALIDATION_ERROR", "endpoint.base_url", "endpoint.model", "endpoint.dimensions"} {
+		if !strings.Contains(response, want) {
+			t.Fatalf("expected response to contain %q, got: %s", want, response)
+		}
 	}
 }
 

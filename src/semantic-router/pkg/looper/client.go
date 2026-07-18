@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -34,11 +33,12 @@ import (
 
 // Client handles HTTP requests to OpenAI-compatible endpoints
 type Client struct {
-	httpClient   *http.Client
-	endpoint     string
-	headers      map[string]string
-	decisionName string // Decision name to pass in looper requests
-	fusionDepth  int    // Recursion guard for Fusion requests
+	httpClient       *http.Client
+	endpoint         string
+	headers          map[string]string
+	decisionName     string // Decision name to pass in looper requests
+	fusionDepth      int    // Recursion guard for Fusion requests
+	maxResponseBytes int64  // Ceiling for a single upstream response body
 }
 
 // NewClient creates a new looper HTTP client
@@ -47,8 +47,9 @@ func NewClient(cfg *config.LooperConfig) *Client {
 		httpClient: &http.Client{
 			Timeout: time.Duration(cfg.GetTimeout()) * time.Second,
 		},
-		endpoint: cfg.Endpoint,
-		headers:  cfg.Headers,
+		endpoint:         cfg.Endpoint,
+		headers:          cfg.Headers,
+		maxResponseBytes: cfg.GetMaxResponseBytes(),
 	}
 	return c
 }
@@ -217,14 +218,9 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	}
 	defer resp.Body.Close()
 
-	// Read response
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := c.readResponseBody(resp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(respBody))
+		return nil, err
 	}
 
 	// Parse response based on streaming mode
@@ -292,16 +288,18 @@ func (c *Client) parseStreamingResponse(body []byte, modelName string) (*ModelRe
 		IsStreaming: true,
 	}
 
-	// Parse SSE chunks to extract content
+	// Parse SSE chunks to extract content and usage
 	content, chunks := parseSSEContent(body)
 	result.Content = content
 	result.StreamingChunks = chunks
+	result.Usage = parseStreamingUsage(body)
 
 	logging.ComponentDebugEvent("looper", "model_call_completed", map[string]interface{}{
-		"decision":    c.decisionName,
-		"model_ref":   modelName,
-		"content_len": len(content),
-		"streaming":   true,
+		"decision":     c.decisionName,
+		"model_ref":    modelName,
+		"content_len":  len(content),
+		"total_tokens": result.Usage.TotalTokens,
+		"streaming":    true,
 	})
 
 	return result, nil
@@ -656,7 +654,16 @@ func setStreamParam(body []byte, streaming bool) ([]byte, error) {
 		return nil, err
 	}
 	reqMap["stream"] = streaming
-	if !streaming {
+	if streaming {
+		// Ask the backend to emit a trailing usage chunk so token accounting
+		// works for streamed calls; preserve any caller-set stream_options.
+		opts, _ := reqMap["stream_options"].(map[string]interface{})
+		if opts == nil {
+			opts = map[string]interface{}{}
+		}
+		opts["include_usage"] = true
+		reqMap["stream_options"] = opts
+	} else {
 		delete(reqMap, "stream_options")
 	}
 	return json.Marshal(reqMap)

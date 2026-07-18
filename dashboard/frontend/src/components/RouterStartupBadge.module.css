@@ -11,10 +11,10 @@
   padding: 0.35rem 0.75rem;
   appearance: none;
   border-radius: 999px;
-  border: 1px solid rgba(118, 185, 0, 0.22);
+  border: 1px solid rgba(143, 148, 156, 0.22);
   background:
-    radial-gradient(circle at top left, rgba(143, 212, 0, 0.14), transparent 45%),
-    rgba(13, 19, 10, 0.9);
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.11), transparent 45%),
+    rgba(13, 16, 14, 0.9);
   color: var(--color-text);
   cursor: pointer;
   font: inherit;
@@ -23,10 +23,10 @@
 }
 
 .badge:hover {
-  border-color: rgba(143, 212, 0, 0.38);
+  border-color: rgba(34, 197, 94, 0.34);
   background:
-    radial-gradient(circle at top left, rgba(143, 212, 0, 0.18), transparent 45%),
-    rgba(17, 26, 12, 0.94);
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.14), transparent 45%),
+    rgba(14, 20, 16, 0.94);
 }
 
 .spinner {
@@ -34,7 +34,7 @@
   height: 0.65rem;
   border-radius: 999px;
   background: var(--color-primary);
-  box-shadow: 0 0 0 0 rgba(118, 185, 0, 0.45);
+  box-shadow: 0 0 0 0 rgba(143, 148, 156, 0.45);
   animation: pulse 1.4s ease-out infinite;
   flex-shrink: 0;
 }
@@ -67,17 +67,17 @@
 @keyframes pulse {
   0% {
     transform: scale(0.96);
-    box-shadow: 0 0 0 0 rgba(118, 185, 0, 0.45);
+    box-shadow: 0 0 0 0 rgba(143, 148, 156, 0.45);
   }
 
   70% {
     transform: scale(1);
-    box-shadow: 0 0 0 8px rgba(118, 185, 0, 0);
+    box-shadow: 0 0 0 8px rgba(143, 148, 156, 0);
   }
 
   100% {
     transform: scale(0.96);
-    box-shadow: 0 0 0 0 rgba(118, 185, 0, 0);
+    box-shadow: 0 0 0 0 rgba(143, 148, 156, 0);
   }
 }
 

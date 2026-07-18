@@ -2,7 +2,6 @@ import React, { useEffect, useMemo } from 'react'
 import Root from '@theme-original/Root'
 import Head from '@docusaurus/Head'
 import { useLocation } from '@docusaurus/router'
-import ScrollToTop from '../components/ScrollToTop'
 
 function normalizePath(pathname: string): string {
   const normalized = pathname.replace(/\/+$/, '')
@@ -49,7 +48,7 @@ function resolveRouteState(pathname: string): { pageKey: string, routeKind: stri
 
 export default function RootWrapper(props: React.ComponentProps<typeof Root>): React.ReactElement {
   const location = useLocation()
-  const base = 'https://vllm-semantic-router.com'
+  const base = 'https://vllm-sr.ai'
   const pathname = normalizePath(location.pathname || '/')
   const localeNeutralPath = stripLocalePrefix(pathname)
   const canonicalUrl = toAbsoluteUrl(base, pathname)
@@ -84,7 +83,6 @@ export default function RootWrapper(props: React.ComponentProps<typeof Root>): R
       <div className={`site-root site-root--${routeState.routeKind} site-page--${routeState.pageKey}`}>
         <Root {...props} />
       </div>
-      <ScrollToTop />
     </>
   )
 }

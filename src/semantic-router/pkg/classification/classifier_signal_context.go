@@ -50,8 +50,8 @@ func textForSignalFunc(text, uncompressedText string, skipCompressionSignals map
 // forceEvaluateAll: if true, evaluates all configured signals regardless of decision usage
 // uncompressedText: original text before prompt compression (empty = no compression happened)
 // skipCompressionSignals: signal types that must use uncompressedText instead of text
-// imageURL: optional image URL for multimodal signals
-func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, convFacts ConversationFacts, imageURL ...string) *SignalResults {
+// imageURL: image URL for multimodal signals ("" when the request carries no image)
+func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, convFacts ConversationFacts, imageURL string) *SignalResults {
 	defer c.enterSignalEvaluationLoadGate()()
 	// Determine which signals (type:name) should be evaluated
 	var usedSignals map[string]bool
@@ -73,10 +73,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	imgArg := ""
-	if len(imageURL) > 0 {
-		imgArg = imageURL[0]
-	}
+	imgArg := imageURL
 
 	// Allocate a request-scoped image embedding cache only when an image is
 	// actually attached. Two signals - complexity (image rules) and embedding

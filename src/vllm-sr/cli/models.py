@@ -1062,6 +1062,7 @@ class ModelPricing(BaseModel):
     currency: Optional[str] = "USD"
     prompt_per_1m: Optional[float] = 0.0
     cached_input_per_1m: Optional[float] = 0.0
+    cache_write_per_1m: Optional[float] = Field(default=None, ge=0)
     completion_per_1m: Optional[float] = 0.0
 
 

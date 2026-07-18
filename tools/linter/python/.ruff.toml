@@ -102,6 +102,10 @@ max-nested-blocks = 4
 "e2e/testing/anthropic-shim/tests/*.py" = ["PLR2004"]
 "bench/grounded_fusion/test_*.py" = ["PLR2004"]
 "src/vllm-sr/tests/test_config_template.py" = ["E402", "UP015"]
+"src/training/model_embeddings/cache_embeddings/lora_trainer.py" = [
+  "N812",     # torch.nn.functional as F is the PyTorch convention
+  "PLR0915",  # pre-existing main() size; not expanded by the import fix
+]
 "src/vllm-sr/tests/test_hybrid_validator.py" = ["I001"]
 "src/vllm-sr/tests/test_latency_validation.py" = ["I001"]
 "src/vllm-sr/tests/test_plugin_parsing.py" = ["I001", "RUF043"]

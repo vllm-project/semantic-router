@@ -570,6 +570,22 @@ func ClassifyMmBert32KJailbreak(text string) (ClassResult, error) {
 	return classifyWithClassifier("jailbreak", text)
 }
 
+// ClassifyMmBert32KJailbreakWithProbs classifies text for jailbreak detection and
+// returns the full probability distribution. The ONNX backend does not yet extract
+// per-class probabilities, so Probabilities is empty and callers fall back to a
+// confidence-based estimate.
+func ClassifyMmBert32KJailbreakWithProbs(text string) (ClassResultWithProbs, error) {
+	result, err := classifyWithClassifier("jailbreak", text)
+	if err != nil {
+		return ClassResultWithProbs{}, err
+	}
+	return ClassResultWithProbs{
+		Class:         result.Class,
+		Confidence:    result.Confidence,
+		Probabilities: []float32{}, // TODO: implement probability extraction
+	}, nil
+}
+
 // ClassifyMmBert32KFeedback classifies text for feedback detection
 func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
 	return classifyWithClassifier("feedback", text)
@@ -1171,13 +1187,23 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 		return nil, errors.New("only https URLs are allowed")
 	}
 
+	// Identify the client instead of sending Go's default User-Agent: hosts
+	// that enforce a User-Agent policy (e.g. Wikimedia) return HTTP 403 for
+	// generic library strings. Mirrors candle-binding's URL-encode path.
+	const userAgent = "vllm-semantic-router/onnx-binding (https://github.com/vllm-project/semantic-router)"
+
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
-	resp, err := client.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build HTTP request: %w", err)
+	}
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP GET error: %w", err)
 	}

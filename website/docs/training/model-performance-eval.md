@@ -50,7 +50,6 @@ see code in [/src/training/model_eval](https://github.com/vllm-project/semantic-
   ```
 
 - Python packages for evaluation scripts:
-  - From the repo root: matplotlib in [requirements.txt](https://github.com/vllm-project/semantic-router/blob/main/requirements.txt)
   - From `/src/training/model_eval`: [requirements.txt](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_eval/requirements.txt)
 
   ```bash
@@ -283,7 +282,7 @@ python src/training/model_eval/result_to_config.py \
 - If your production config carries **environment-specific settings (multi-endpoint weights, secrets, pricing, policies)**, merge the generated `providers/routing/global` sections into that deployment-specific config instead of replacing it wholesale.
 
 ### Example config.eval.yaml
-see more about config at [configuration](https://vllm-semantic-router.com/docs/installation/configuration)
+see more about config at [configuration](https://vllm-sr.ai/docs/installation/configuration)
 
 ```yaml
 version: v0.3

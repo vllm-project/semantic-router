@@ -21,6 +21,7 @@ Standard CI-backed profiles:
 - **routing-strategies**: Keyword, entropy, and fallback routing behavior
 - **dynamic-config**: Kubernetes CRD-based routing and embedding-signal behavior
 - **multimodal-routing**: Image-modality EmbeddingSignal routing via the multi-modal-embed-small model
+- **remote-embedding**: OpenAI-compatible remote embedding provider startup and deterministic text embedding-signal routing
 - **llm-d**: LLM-D inference-gateway health plus a minimal router smoke path
 - **istio**: Istio service mesh sidecar, traffic, mTLS, and tracing behavior
 - **agentgateway**: agentgateway gateway controller routing and extproc policy enforcement behavior
@@ -51,6 +52,7 @@ Manual-only profiles:
 | `routing-strategies` | none | Routing-strategy-specific behavior |
 | `dynamic-config` | `chat-completions-request` | CRD and embedding-signal routing |
 | `multimodal-routing` | `chat-completions-request` | Image-modality embedding-signal routing |
+| `remote-embedding` | none | Remote provider health, authentication, dimension, and text embedding-signal routing |
 | `llm-d` | `chat-completions-request` | llm-d inference-gateway health |
 | `istio` | `chat-completions-request` | Sidecar, traffic, mTLS, and tracing |
 | `agentgateway` | `chat-completions-request` | agentgateway gateway controller and extproc behavior |
@@ -138,6 +140,7 @@ The framework includes the following test cases (all in `e2e/testcases/`):
 | `response-api-get` | GET /v1/responses/{id} - Retrieve a response | Response retrieval, ID matching |
 | `response-api-delete` | DELETE /v1/responses/{id} - Delete a response | Deletion confirmation, 404 verification |
 | `response-api-input-items` | GET /v1/responses/{id}/input_items - List input items | Input items list, pagination |
+| `response-api-streaming-sse` | POST /v1/responses with `stream:true` | Responses API SSE event shape, no Chat Completions SSE passthrough |
 | `response-api-conversation-chaining` | Conversation chaining with previous_response_id (3-turn chain) | History preservation, instruction inheritance |
 | `response-api-error-missing-input` | Error handling - Invalid request format (missing input field) | 400 error, error message validation |
 | `response-api-error-nonexistent-previous-response-id` | Error handling - Non-existent previous_response_id | Graceful degradation or 404 error |
@@ -156,6 +159,7 @@ The framework includes the following test cases (all in `e2e/testcases/`):
 | `keyword-routing` | Keyword-based routing decisions | 6 cases, keyword matching (case-insensitive) |
 | `plugin-config-variations` | Plugin configuration variations (PII allowlist, cache thresholds) | 6 cases, config validation |
 | `embedding-signal-routing` | EmbeddingSignal CRD routing with semantic similarity | 31 cases, PII/security/technical/domain routing accuracy |
+| `remote-embedding-routing` | OpenAI-compatible provider startup and text embedding-signal routing | Provider health plus 2/2 exact decision matches |
 
 **Signal-Decision Engine Features Tested:**
 
@@ -168,6 +172,7 @@ The framework includes the following test cases (all in `e2e/testcases/`):
 - ✅ PII allowlist handling
 - ✅ Per-decision cache thresholds (0.75, 0.92, 0.95)
 - ✅ Embedding signal routing (semantic similarity-based routing via IntelligentRoute CRD)
+- ✅ Remote OpenAI-compatible provider authentication, startup health, dimension validation, and deterministic text routing
 
 All test cases:
 

@@ -1241,7 +1241,7 @@ routing:
           - name: complex_stem
             type: embedding
             value_source: confidence
-            weight: 0.14
+            weight: 0.18
           - name: research_synthesis
             type: embedding
             value_source: confidence

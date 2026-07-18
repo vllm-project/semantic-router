@@ -287,6 +287,36 @@ func (jm *JailbreakMapping) GetJailbreakTypeFromIndex(classIndex int) (string, b
 	return jailbreakType, ok
 }
 
+// GetIndexForJailbreakType converts a jailbreak type name to its class index using
+// the mapping. It is the inverse of GetJailbreakTypeFromIndex and supports both the
+// label_to_idx/idx_to_label and label_to_id/id_to_label naming conventions, falling
+// back to a reverse scan of the index->label maps when the label->index maps are absent.
+func (jm *JailbreakMapping) GetIndexForJailbreakType(label string) (int, bool) {
+	if idx, ok := jm.LabelToIdx[label]; ok {
+		return idx, true
+	}
+	if idx, ok := jm.LabelToID[label]; ok {
+		return idx, true
+	}
+	if idx, ok := reverseLookupIndex(jm.IdxToLabel, label); ok {
+		return idx, true
+	}
+	return reverseLookupIndex(jm.IDToLabel, label)
+}
+
+// reverseLookupIndex scans an index->label map for the given label and returns its
+// numeric index.
+func reverseLookupIndex(idxToLabel map[string]string, label string) (int, bool) {
+	for indexStr, mapped := range idxToLabel {
+		if mapped == label {
+			if idx, err := strconv.Atoi(indexStr); err == nil {
+				return idx, true
+			}
+		}
+	}
+	return 0, false
+}
+
 // GetCategoryCount returns the number of categories in the mapping
 func (cm *CategoryMapping) GetCategoryCount() int {
 	return len(cm.CategoryToIdx)

@@ -18,6 +18,9 @@ type MockJailbreakInferenceResponse struct {
 type MockJailbreakInference struct {
 	MockJailbreakInferenceResponse
 	responseMap map[string]MockJailbreakInferenceResponse
+
+	classifyProbsResult candle_binding.ClassResultWithProbs
+	classifyProbsError  error
 }
 
 func (m *MockJailbreakInference) setMockResponse(text string, class int, confidence float32, err error) {
@@ -35,6 +38,10 @@ func (m *MockJailbreakInference) Classify(text string) (candle_binding.ClassResu
 		return response.classifyResult, response.classifyError
 	}
 	return m.classifyResult, m.classifyError
+}
+
+func (m *MockJailbreakInference) ClassifyWithProbs(_ string) (candle_binding.ClassResultWithProbs, error) {
+	return m.classifyProbsResult, m.classifyProbsError
 }
 
 type MockJailbreakInitializer struct {

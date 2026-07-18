@@ -26,6 +26,7 @@ providers:
         currency: USD
         prompt_per_1m: 0.18
         cached_input_per_1m: 0.04
+        cache_write_per_1m: 0.225
         completion_per_1m: 0.42
       external_model_ids:
         openai: qwen3-8b
@@ -1494,7 +1495,7 @@ global:
           endpoint: jaeger:4317
           insecure: true
         sampling:
-          type: traceidratio
+          type: probabilistic
           rate: 0.5
         resource:
           service_name: vllm-sr
@@ -1916,6 +1917,7 @@ global:
     looper:
       endpoint: http://localhost:8899/v1/chat/completions
       grpc_max_msg_size_mb: 16
+      max_response_bytes_mb: 32
       timeout_seconds: 120
       retry_count: 2
       headers:
