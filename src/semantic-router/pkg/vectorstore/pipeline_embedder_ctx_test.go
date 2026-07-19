@@ -70,10 +70,16 @@ var _ = Describe("IngestionPipeline embedder context propagation", func() {
 	var (
 		embedder *ctxAwareEmbedder
 		f        *pipelineLifecycleFixture
+		baseline int
 	)
 
 	BeforeEach(func() {
 		embedder = newCtxAwareEmbedder(3)
+		// Capture the goroutine baseline BEFORE the fixture starts the worker,
+		// so the worker is not already counted in the baseline. Otherwise
+		// `NumGoroutine() <= baseline+1` is trivially satisfied while the worker
+		// is still unwinding, and the leak assertion stops being a real barrier.
+		baseline = runtime.NumGoroutine()
 		f = newPipelineLifecycleFixture(embedder)
 	})
 
@@ -89,8 +95,6 @@ var _ = Describe("IngestionPipeline embedder context propagation", func() {
 	})
 
 	It("unwinds an in-flight embed via lifecycle cancellation without an explicit release", func() {
-		baseline := runtime.NumGoroutine()
-
 		vs, err := f.mgr.CreateStore(f.ctx, CreateStoreRequest{Name: "ctx-embed"})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -109,16 +113,24 @@ var _ = Describe("IngestionPipeline embedder context propagation", func() {
 		defer cancel()
 		Expect(f.pipeline.Stop(ctx)).To(MatchError(context.DeadlineExceeded))
 
+		// The interrupted job is recorded as failed (eventually — failJob runs as
+		// the worker unwinds, concurrently with this read), and is classified as
+		// a cancellation rather than an embedding/backend fault.
+		Eventually(func(g Gomega) {
+			status, statusErr := f.pipeline.GetFileStatus(vsf.ID)
+			g.Expect(statusErr).NotTo(HaveOccurred())
+			g.Expect(status.Status).To(Equal("failed"))
+			g.Expect(status.LastError).NotTo(BeNil())
+			g.Expect(status.LastError.Code).To(Equal("cancelled"))
+		}, 5*time.Second, 50*time.Millisecond).Should(Succeed())
+
 		// The key A2 behavior: because the embedder now receives the (now
 		// cancelled) lifecycle context, the parked embed returns on its own —
 		// no explicit release is needed — so the worker unwinds and no
 		// goroutines are leaked. A ctx-ignoring embedder would stay parked here.
+		// The baseline was captured before the worker started, so this is a real
+		// leak barrier, not a tautology.
 		Eventually(runtime.NumGoroutine, 5*time.Second, 50*time.Millisecond).
 			Should(BeNumerically("<=", baseline+1))
-
-		// The interrupted job is recorded as failed, not left stuck in progress.
-		status, statusErr := f.pipeline.GetFileStatus(vsf.ID)
-		Expect(statusErr).NotTo(HaveOccurred())
-		Expect(status.Status).To(Equal("failed"))
 	})
 })

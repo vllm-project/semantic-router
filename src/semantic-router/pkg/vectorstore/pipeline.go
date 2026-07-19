@@ -18,6 +18,7 @@ package vectorstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -422,6 +423,15 @@ func (p *IngestionPipeline) embedChunks(ctx context.Context, job IngestionJob, f
 
 		embedding, err := p.embedder.Embed(ctx, chunk.Content)
 		if err != nil {
+			// A cooperative embedder returns context.Canceled/DeadlineExceeded
+			// when the lifecycle root is cancelled during shutdown. That is an
+			// intentional termination, not a backend fault, so record it with
+			// the "cancelled" code rather than misclassifying it as an
+			// embedding error in status/metrics.
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				p.failJob(ctx, job, "cancelled", fmt.Sprintf("ingestion cancelled while embedding chunk %d: %v", chunk.ChunkIndex, err))
+				return nil, false
+			}
 			p.failJob(ctx, job, "embedding_error", fmt.Sprintf("failed to embed chunk %d: %v", chunk.ChunkIndex, err))
 			return nil, false
 		}
