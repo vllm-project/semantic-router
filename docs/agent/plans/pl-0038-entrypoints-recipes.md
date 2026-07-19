@@ -57,7 +57,7 @@ single-profile configs.
 - [x] T2 canonical `entrypoints`/`recipes` schema and normalization with the
       default-recipe bridge
 - [ ] T3 cross-surface validation for entrypoint and recipe mappings
-- [ ] T4 canonical export and config dump emit normalized entrypoints and
+- [x] T4 canonical export and config dump emit normalized entrypoints and
       recipes
 - [ ] T5 extproc request-entry entrypoint resolution before signal evaluation
 - [ ] T6 `/v1/models` lists entrypoint model names
@@ -70,9 +70,8 @@ single-profile configs.
 
 ## Next Action
 
-Land T3 (cross-surface entrypoint/model-name collision validation) on the
-`feat/entrypoints-recipes-2331` branch, pending the maintainer confirmation
-recorded in Open Decisions.
+Land T5 (extproc request-entry entrypoint resolution). T3 stays pending the
+maintainer confirmation recorded in Open Decisions.
 
 ## Operating Rules
 

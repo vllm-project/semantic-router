@@ -134,6 +134,49 @@ func normalizeCanonicalEntrypoints(entrypoints []CanonicalEntrypoint, recipes []
 	return result, nil
 }
 
+// canonicalRecipesFromRouterConfig exports the normalized named recipes. The
+// default recipe is not exported here: it round-trips as the top-level
+// routing block.
+func canonicalRecipesFromRouterConfig(cfg *RouterConfig) []CanonicalRecipe {
+	if cfg == nil || len(cfg.Recipes) == 0 {
+		return nil
+	}
+	recipes := make([]CanonicalRecipe, 0, len(cfg.Recipes))
+	for _, recipe := range cfg.Recipes {
+		if recipe.Name == DefaultRecipeName {
+			continue
+		}
+		recipes = append(recipes, CanonicalRecipe{
+			Name:        recipe.Name,
+			Description: recipe.Description,
+			Routing: CanonicalRouting{
+				Signals:     canonicalSignalsFromSignals(recipe.Signals),
+				Projections: canonicalProjectionsFromProjections(recipe.Projections),
+				Decisions:   copyDecisions(recipe.Decisions),
+			},
+		})
+	}
+	if len(recipes) == 0 {
+		return nil
+	}
+	return recipes
+}
+
+// canonicalEntrypointsFromRouterConfig exports the normalized entrypoint table.
+func canonicalEntrypointsFromRouterConfig(cfg *RouterConfig) []CanonicalEntrypoint {
+	if cfg == nil || len(cfg.Entrypoints) == 0 {
+		return nil
+	}
+	entrypoints := make([]CanonicalEntrypoint, 0, len(cfg.Entrypoints))
+	for _, entrypoint := range cfg.Entrypoints {
+		entrypoints = append(entrypoints, CanonicalEntrypoint{
+			ModelNames: append([]string(nil), entrypoint.ModelNames...),
+			Recipe:     entrypoint.Recipe,
+		})
+	}
+	return entrypoints
+}
+
 func findRecipe(recipes []RoutingRecipe, name string) *RoutingRecipe {
 	for i := range recipes {
 		if recipes[i].Name == name {

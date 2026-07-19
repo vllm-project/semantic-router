@@ -23,17 +23,21 @@ func CanonicalConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
 			},
 			Models: canonicalProviderModelsFromRouterConfig(cfg),
 		},
-		Routing: CanonicalRoutingFromRouterConfig(cfg),
-		Global:  CanonicalGlobalFromRouterConfig(cfg),
+		Routing:     CanonicalRoutingFromRouterConfig(cfg),
+		Entrypoints: canonicalEntrypointsFromRouterConfig(cfg),
+		Recipes:     canonicalRecipesFromRouterConfig(cfg),
+		Global:      CanonicalGlobalFromRouterConfig(cfg),
 	}
 }
 
 // CanonicalStaticConfigFromRouterConfig exports the static canonical base used
 // by K8s CRD reconciliation. Dynamic routing state is expected to come from the
-// CRDs, so the routing block is intentionally left empty.
+// CRDs, so the routing block, entrypoints, and recipes are left empty.
 func CanonicalStaticConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
 	canonical := CanonicalConfigFromRouterConfig(cfg)
 	canonical.Routing = CanonicalRouting{}
+	canonical.Entrypoints = nil
+	canonical.Recipes = nil
 	return canonical
 }
 
@@ -47,40 +51,40 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 
 	return CanonicalRouting{
 		ModelCards:  routingModelsFromRouterConfig(cfg),
-		Signals:     canonicalSignalsFromRouterConfig(cfg),
-		Projections: canonicalProjectionsFromRouterConfig(cfg),
+		Signals:     canonicalSignalsFromSignals(cfg.Signals),
+		Projections: canonicalProjectionsFromProjections(cfg.Projections),
 		Decisions:   copyDecisions(cfg.Decisions),
 	}
 }
 
-func canonicalSignalsFromRouterConfig(cfg *RouterConfig) CanonicalSignals {
+func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 	return CanonicalSignals{
-		Keywords:      append([]KeywordRule(nil), cfg.KeywordRules...),
-		Embeddings:    append([]EmbeddingRule(nil), cfg.EmbeddingRules...),
-		Domains:       append([]Category(nil), cfg.Categories...),
-		FactCheck:     append([]FactCheckRule(nil), cfg.FactCheckRules...),
-		UserFeedbacks: append([]UserFeedbackRule(nil), cfg.UserFeedbackRules...),
-		Reasks:        append([]ReaskRule(nil), cfg.ReaskRules...),
-		Preferences:   append([]PreferenceRule(nil), cfg.PreferenceRules...),
-		Language:      append([]LanguageRule(nil), cfg.LanguageRules...),
-		Context:       append([]ContextRule(nil), cfg.ContextRules...),
-		Structure:     append([]StructureRule(nil), cfg.StructureRules...),
-		Complexity:    append([]ComplexityRule(nil), cfg.ComplexityRules...),
-		Modality:      append([]ModalityRule(nil), cfg.ModalityRules...),
-		RoleBindings:  append([]RoleBinding(nil), cfg.RoleBindings...),
-		Jailbreak:     append([]JailbreakRule(nil), cfg.JailbreakRules...),
-		PII:           append([]PIIRule(nil), cfg.PIIRules...),
-		KB:            append([]KBSignalRule(nil), cfg.KBRules...),
-		Conversation:  append([]ConversationRule(nil), cfg.ConversationRules...),
-		EventRules:    append([]EventRule(nil), cfg.EventRules...),
+		Keywords:      append([]KeywordRule(nil), signals.KeywordRules...),
+		Embeddings:    append([]EmbeddingRule(nil), signals.EmbeddingRules...),
+		Domains:       append([]Category(nil), signals.Categories...),
+		FactCheck:     append([]FactCheckRule(nil), signals.FactCheckRules...),
+		UserFeedbacks: append([]UserFeedbackRule(nil), signals.UserFeedbackRules...),
+		Reasks:        append([]ReaskRule(nil), signals.ReaskRules...),
+		Preferences:   append([]PreferenceRule(nil), signals.PreferenceRules...),
+		Language:      append([]LanguageRule(nil), signals.LanguageRules...),
+		Context:       append([]ContextRule(nil), signals.ContextRules...),
+		Structure:     append([]StructureRule(nil), signals.StructureRules...),
+		Complexity:    append([]ComplexityRule(nil), signals.ComplexityRules...),
+		Modality:      append([]ModalityRule(nil), signals.ModalityRules...),
+		RoleBindings:  append([]RoleBinding(nil), signals.RoleBindings...),
+		Jailbreak:     append([]JailbreakRule(nil), signals.JailbreakRules...),
+		PII:           append([]PIIRule(nil), signals.PIIRules...),
+		KB:            append([]KBSignalRule(nil), signals.KBRules...),
+		Conversation:  append([]ConversationRule(nil), signals.ConversationRules...),
+		EventRules:    append([]EventRule(nil), signals.EventRules...),
 	}
 }
 
-func canonicalProjectionsFromRouterConfig(cfg *RouterConfig) CanonicalProjections {
+func canonicalProjectionsFromProjections(projections Projections) CanonicalProjections {
 	return CanonicalProjections{
-		Partitions: append([]ProjectionPartition(nil), cfg.Projections.Partitions...),
-		Scores:     append([]ProjectionScore(nil), cfg.Projections.Scores...),
-		Mappings:   append([]ProjectionMapping(nil), cfg.Projections.Mappings...),
+		Partitions: append([]ProjectionPartition(nil), projections.Partitions...),
+		Scores:     append([]ProjectionScore(nil), projections.Scores...),
+		Mappings:   append([]ProjectionMapping(nil), projections.Mappings...),
 	}
 }
 

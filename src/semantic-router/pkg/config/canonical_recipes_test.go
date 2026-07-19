@@ -1,8 +1,11 @@
 package config
 
 import (
+	"reflect"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v2"
 )
 
 const recipeTestBaseYAML = `
@@ -172,6 +175,52 @@ providers:
 	}
 	if len(cfg.Recipes) != 1 || cfg.Recipes[0].Name != DefaultRecipeName {
 		t.Fatalf("expected a single default recipe, got %+v", cfg.Recipes)
+	}
+}
+
+func TestCanonicalExportEmitsRecipesAndEntrypoints(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + recipeTestPrivacyBlockYAML))
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	canonical := CanonicalConfigFromRouterConfig(cfg)
+	if len(canonical.Recipes) != 1 || canonical.Recipes[0].Name != "privacy" {
+		t.Fatalf("expected the privacy recipe to be exported, got %+v", canonical.Recipes)
+	}
+	if len(canonical.Recipes[0].Routing.ModelCards) != 0 {
+		t.Fatalf("exported recipes must not own model cards, got %+v", canonical.Recipes[0].Routing.ModelCards)
+	}
+	if len(canonical.Entrypoints) != 2 {
+		t.Fatalf("expected 2 exported entrypoints, got %+v", canonical.Entrypoints)
+	}
+
+	static := CanonicalStaticConfigFromRouterConfig(cfg)
+	if len(static.Recipes) != 0 || len(static.Entrypoints) != 0 {
+		t.Fatalf("static export must not carry recipes or entrypoints, got %+v / %+v", static.Recipes, static.Entrypoints)
+	}
+}
+
+func TestCanonicalExportRoundTripsRecipesAndEntrypoints(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + recipeTestPrivacyBlockYAML))
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	exported, err := yaml.Marshal(CanonicalConfigFromRouterConfig(cfg))
+	if err != nil {
+		t.Fatalf("unexpected marshal error: %v", err)
+	}
+	reparsed, err := ParseYAMLBytes(exported)
+	if err != nil {
+		t.Fatalf("exported config failed to re-parse: %v", err)
+	}
+
+	if !reflect.DeepEqual(cfg.Recipes, reparsed.Recipes) {
+		t.Fatalf("recipes did not round-trip:\nbefore: %+v\nafter: %+v", cfg.Recipes, reparsed.Recipes)
+	}
+	if !reflect.DeepEqual(cfg.Entrypoints, reparsed.Entrypoints) {
+		t.Fatalf("entrypoints did not round-trip:\nbefore: %+v\nafter: %+v", cfg.Entrypoints, reparsed.Entrypoints)
 	}
 }
 
