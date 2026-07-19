@@ -53,8 +53,8 @@ single-profile configs.
 
 ## Task List
 
-- [ ] T1 execution plan committed (this file)
-- [ ] T2 canonical `entrypoints`/`recipes` schema and normalization with the
+- [x] T1 execution plan committed (this file)
+- [x] T2 canonical `entrypoints`/`recipes` schema and normalization with the
       default-recipe bridge
 - [ ] T3 cross-surface validation for entrypoint and recipe mappings
 - [ ] T4 canonical export and config dump emit normalized entrypoints and
@@ -70,7 +70,9 @@ single-profile configs.
 
 ## Next Action
 
-Land T2 on the `feat/entrypoints-recipes-2331` branch.
+Land T3 (cross-surface entrypoint/model-name collision validation) on the
+`feat/entrypoints-recipes-2331` branch, pending the maintainer confirmation
+recorded in Open Decisions.
 
 ## Operating Rules
 
