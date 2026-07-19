@@ -18,6 +18,22 @@ func TestDefaultManagementAPIConfigUsesLoopbackAndDisabledAuth(t *testing.T) {
 	}
 }
 
+func TestResolvedManagementAPIPreservesConfigRemoteExposureWhenOverrideNil(t *testing.T) {
+	cfg := DefaultManagementAPIConfig()
+	cfg.RemoteExposure = true
+	cfg.Auth.Mode = ManagementAuthModeBearer
+	cfg.Auth.Tokens = []ManagementAPITokenRef{{Env: "VSR_MGMT_TOKEN", Role: "admin"}}
+	t.Setenv("VSR_MGMT_TOKEN", "test-token")
+
+	resolved, err := cfg.ResolvedManagementAPI(ManagementAPIRuntimeOptions{})
+	if err != nil {
+		t.Fatalf("ResolvedManagementAPI() error = %v", err)
+	}
+	if !resolved.RemoteExposure {
+		t.Fatal("nil RemoteExposure override must preserve config remote_exposure: true")
+	}
+}
+
 func TestResolvedManagementAPIRejectsRemoteExposureWithoutBearerTokens(t *testing.T) {
 	cfg := DefaultManagementAPIConfig()
 	remote := true

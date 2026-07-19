@@ -1535,7 +1535,6 @@ global:
               tokens_per_unit: 2000000
               unit: hour
     management_api:
-      enabled: true
       bind_address: 127.0.0.1
       port: 8080
       remote_exposure: false

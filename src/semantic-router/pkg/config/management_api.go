@@ -17,8 +17,9 @@ const (
 )
 
 // ManagementAPIConfig configures the router management HTTP listener (#2463).
+// Listener on/off is controlled by the legacy -enable-api flag at startup, not
+// by a config enabled field.
 type ManagementAPIConfig struct {
-	Enabled        bool                    `yaml:"enabled,omitempty"`
 	BindAddress    string                  `yaml:"bind_address,omitempty"`
 	Port           int                     `yaml:"port,omitempty"`
 	RemoteExposure bool                    `yaml:"remote_exposure,omitempty"`
@@ -49,7 +50,6 @@ type ManagementAPIRuntimeOptions struct {
 // DefaultManagementAPIConfig returns safe local defaults for the management listener.
 func DefaultManagementAPIConfig() ManagementAPIConfig {
 	return ManagementAPIConfig{
-		Enabled:        true,
 		BindAddress:    "127.0.0.1",
 		Port:           8080,
 		RemoteExposure: false,

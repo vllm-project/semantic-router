@@ -32,7 +32,7 @@ type runtimeOptions struct {
 	apiPort                int
 	apiBind                string
 	managementAuthMode     string
-	managementRemoteExpose bool
+	managementRemoteExpose *bool
 	metricsPort            int
 	enableAPI              bool
 	secure                 bool
@@ -66,12 +66,28 @@ func parseRuntimeOptions() runtimeOptions {
 		apiPort:                *apiPort,
 		apiBind:                *apiBind,
 		managementAuthMode:     *managementAuthMode,
-		managementRemoteExpose: *managementRemoteExpose,
+		managementRemoteExpose: boolFlagOverride(flag.CommandLine, "management-remote-exposure", *managementRemoteExpose),
 		metricsPort:            *metricsPort,
 		enableAPI:              *enableAPI,
 		secure:                 *secure,
 		downloadOnly:           *downloadOnly,
 	}
+}
+
+// boolFlagOverride returns a pointer to value only when the named flag was
+// explicitly supplied on the command line. Otherwise nil so config defaults
+// are preserved (e.g. management_api.remote_exposure: true).
+func boolFlagOverride(fs *flag.FlagSet, name string, value bool) *bool {
+	set := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			set = true
+		}
+	})
+	if !set {
+		return nil
+	}
+	return &value
 }
 
 func initializeRuntimeLogger() {
@@ -438,18 +454,17 @@ func startAPIServerIfEnabled(opts runtimeOptions, runtimeRegistry *routerruntime
 	}
 
 	go func() {
-		remoteExposure := opts.managementRemoteExpose
 		logging.ComponentEvent("router", "api_server_starting", map[string]interface{}{
 			"api_port":                   opts.apiPort,
 			"api_bind":                   opts.apiBind,
 			"management_auth_mode":       opts.managementAuthMode,
-			"management_remote_exposure": remoteExposure,
+			"management_remote_exposure": opts.managementRemoteExpose,
 		})
 		if err := apiserver.InitWithOptions(apiserver.InitOptions{
 			ConfigPath:      opts.configPath,
 			Port:            opts.apiPort,
 			BindAddress:     opts.apiBind,
-			RemoteExposure:  &remoteExposure,
+			RemoteExposure:  opts.managementRemoteExpose,
 			AuthMode:        opts.managementAuthMode,
 			RuntimeRegistry: runtimeRegistry,
 		}); err != nil {
