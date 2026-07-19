@@ -134,6 +134,12 @@ class LinearTrendForecaster:
                     model_class=template.model_class,
                     slo_class=template.slo_class,
                     region=template.region,
+                    p50_total_tokens=_linear_optional_int(
+                        [window.p50_total_tokens for window in history], x
+                    ),
+                    p95_total_tokens=_linear_optional_int(
+                        [window.p95_total_tokens for window in history], x
+                    ),
                     p99_ttft_ms=_linear_optional(
                         [window.p99_ttft_ms for window in history], x
                     ),
@@ -225,6 +231,12 @@ def _project_from_reference(
         model_class=template.model_class,
         slo_class=template.slo_class,
         region=template.region,
+        p50_total_tokens=_mean_optional_int(
+            [window.p50_total_tokens for window in references]
+        ),
+        p95_total_tokens=_mean_optional_int(
+            [window.p95_total_tokens for window in references]
+        ),
         p99_ttft_ms=_mean_optional([window.p99_ttft_ms for window in references]),
         uncertainty={
             "arrival_rate_stddev": _stddev(
@@ -289,6 +301,11 @@ def _linear_optional(values: Sequence[float | None], x: int) -> float | None:
     return max(0.0, _linear_predict(available, min(x, len(available))))
 
 
+def _linear_optional_int(values: Sequence[int | None], x: int) -> int | None:
+    value = _linear_optional(values, x)
+    return max(1, round(value)) if value is not None else None
+
+
 def _mean(values: Sequence[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
@@ -298,6 +315,11 @@ def _mean_optional(values: Sequence[float | None]) -> float | None:
     if not available:
         return None
     return _mean(available)
+
+
+def _mean_optional_int(values: Sequence[int | None]) -> int | None:
+    value = _mean_optional(values)
+    return max(1, round(value)) if value is not None else None
 
 
 def _stddev(values: Sequence[float]) -> float:

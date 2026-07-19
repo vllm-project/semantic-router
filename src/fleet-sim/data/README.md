@@ -51,6 +51,10 @@ latency summary, model class, SLO class, region, archetype weights, and
 uncertainty. The privacy policy rejects caller/session/user/request ids,
 arbitrary domains/hosts/URLs, and raw prompt/response fields. Windows below the
 configured minimum request count fail validation unless explicitly redacted.
+Window fields fail closed against the forecast schema and
+`privacy.allowed_dimensions` is enforced for low-cardinality dimensions, so new
+caller, device, or arbitrary identifier fields must be explicitly modeled before
+they can validate.
 
 | File | Scenario | Description |
 |---|---|---|
@@ -61,9 +65,11 @@ configured minimum request count fail validation unless explicitly redacted.
 Use `vllm-sr-sim forecast-backtest --scenario data/workload_forecast_seasonal.json`
 to compare static mean, reactive last-window, moving-window, seasonal-naive, and
 linear-trend forecasts. The command converts each forecast into a FleetSim
-mixture scenario from the source mixture archetypes, reports backtest error,
-uncertainty coverage, burst/drift/oscillation diagnostics, and states when
-forecasting does not beat simpler controls.
+mixture scenario from the source mixture archetypes. Each composition window
+scales the source token CDF using aggregate mean/p50/p95 token demand, then the
+report includes arrival-rate, token-demand, p95-token, latency, and mixture
+backtest error, uncertainty coverage, burst/drift/oscillation diagnostics, and
+states when forecasting does not beat simpler controls.
 
 Forecast backtests are advise-only. The generated recommendation is recorded
 separately from downstream actuation; FleetSim does not apply cooldowns, quotas,

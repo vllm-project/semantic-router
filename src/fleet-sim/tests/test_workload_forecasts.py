@@ -48,6 +48,24 @@ def test_high_cardinality_or_content_fields_fail_validation():
         validate_forecast_scenario(scenario, raw_data=data)
 
 
+def test_unknown_window_dimensions_fail_closed():
+    data = json.loads((_DATA / "workload_forecast_seasonal.json").read_text())
+    data["aggregate_windows"][0]["device_fingerprint"] = "unique-device-123"
+    scenario = WorkloadForecastScenario.from_dict(data, base_dir=_DATA)
+
+    with pytest.raises(ForecastValidationError, match="device_fingerprint"):
+        validate_forecast_scenario(scenario, raw_data=data)
+
+
+def test_privacy_allowed_dimensions_are_enforced():
+    data = json.loads((_DATA / "workload_forecast_seasonal.json").read_text())
+    data["privacy"]["allowed_dimensions"] = ["archetype_weights", "model_class"]
+    scenario = WorkloadForecastScenario.from_dict(data, base_dir=_DATA)
+
+    with pytest.raises(ForecastValidationError, match="slo_class"):
+        validate_forecast_scenario(scenario, raw_data=data)
+
+
 def test_low_count_window_fails_privacy_threshold():
     data = json.loads((_DATA / "workload_forecast_seasonal.json").read_text())
     data["aggregate_windows"][0]["request_count"] = 5
@@ -75,8 +93,19 @@ def test_seasonal_forecast_converts_to_reproducible_mixture_scenario():
 
     validate_mixture_scenario(mixture)
     assert len(mixture.composition_schedule) == 2
+    assert all(window.token_scale > 0 for window in mixture.composition_schedule)
     assert windows[0].archetype_weights == scenario.holdout_windows[0].archetype_weights
     assert windows[1].request_count == scenario.holdout_windows[1].request_count
+
+
+def test_forecast_horizon_requires_available_holdout_windows():
+    data = json.loads((_DATA / "workload_forecast_seasonal.json").read_text())
+    data["forecast_horizon_windows"] = 5
+    data["holdout_windows"] = data["holdout_windows"][:2]
+    scenario = WorkloadForecastScenario.from_dict(data, base_dir=_DATA)
+
+    with pytest.raises(ForecastValidationError, match="exceeds available holdout"):
+        validate_forecast_scenario(scenario, raw_data=data)
 
 
 def test_linear_trend_projects_drift_and_normalizes_weights():

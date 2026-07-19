@@ -49,6 +49,15 @@ class ForecastWindowBacktest:
     actual_arrival_rate: float
     forecast_arrival_rate: float
     arrival_rate_error_pct: float
+    actual_tokens_per_request: float
+    forecast_tokens_per_request: float
+    tokens_per_request_error_pct: float
+    actual_p95_total_tokens: int | None
+    forecast_p95_total_tokens: int | None
+    p95_total_tokens_error_pct: float | None
+    actual_p99_ttft_ms: float | None
+    forecast_p99_ttft_ms: float | None
+    p99_ttft_error_pct: float | None
     weight_l1_error: float
     actual_weights: dict[str, float]
     forecast_weights: dict[str, float]
@@ -87,8 +96,40 @@ class ForecastMethodBacktest:
         )
 
     @property
+    def mean_abs_tokens_per_request_error_pct(self) -> float:
+        if not self.window_results:
+            return 0.0
+        return sum(
+            abs(item.tokens_per_request_error_pct) for item in self.window_results
+        ) / len(self.window_results)
+
+    @property
+    def mean_abs_p95_total_tokens_error_pct(self) -> float:
+        values = [
+            abs(item.p95_total_tokens_error_pct)
+            for item in self.window_results
+            if item.p95_total_tokens_error_pct is not None
+        ]
+        return sum(values) / len(values) if values else 0.0
+
+    @property
+    def mean_abs_p99_ttft_error_pct(self) -> float:
+        values = [
+            abs(item.p99_ttft_error_pct)
+            for item in self.window_results
+            if item.p99_ttft_error_pct is not None
+        ]
+        return sum(values) / len(values) if values else 0.0
+
+    @property
     def score(self) -> float:
-        return self.mean_weight_l1_error + self.mean_abs_arrival_rate_error_pct / 100.0
+        demand_error_pct = (
+            self.mean_abs_arrival_rate_error_pct
+            + self.mean_abs_tokens_per_request_error_pct
+            + self.mean_abs_p95_total_tokens_error_pct
+            + self.mean_abs_p99_ttft_error_pct
+        ) / 4.0
+        return self.mean_weight_l1_error + demand_error_pct / 100.0
 
     @property
     def headroom_gpus_vs_actual(self) -> int | None:
@@ -169,7 +210,8 @@ class ForecastBacktestReport:
             print("  actuation: none recorded")
         print("\n  Methods:")
         print(
-            "  method                 kind       err_rate  err_mix  GPUs  headroom  status"
+            "  method                 kind       err_rate err_token  err_mix  GPUs  "
+            "headroom  status"
         )
         for method in self.methods:
             rec = method.recommendation
@@ -180,6 +222,7 @@ class ForecastBacktestReport:
             print(
                 f"  {method.method:<22} {method.control_kind:<10} "
                 f"{method.mean_abs_arrival_rate_error_pct:>7.1f}% "
+                f"{method.mean_abs_tokens_per_request_error_pct:>8.1f}% "
                 f"{method.mean_weight_l1_error:>7.3f} "
                 f"{gpus:>5} {headroom_text:>9}  {status}"
             )
@@ -194,6 +237,13 @@ def _method_to_dict(method: ForecastMethodBacktest) -> dict[str, Any]:
         "method": method.method,
         "control_kind": method.control_kind,
         "mean_abs_arrival_rate_error_pct": method.mean_abs_arrival_rate_error_pct,
+        "mean_abs_tokens_per_request_error_pct": (
+            method.mean_abs_tokens_per_request_error_pct
+        ),
+        "mean_abs_p95_total_tokens_error_pct": (
+            method.mean_abs_p95_total_tokens_error_pct
+        ),
+        "mean_abs_p99_ttft_error_pct": method.mean_abs_p99_ttft_error_pct,
         "mean_weight_l1_error": method.mean_weight_l1_error,
         "score": method.score,
         "beats_static_control": method.beats_static_control,

@@ -22,6 +22,7 @@ class MixtureStressCase:
     weights: dict[str, float]
     cdf: list[tuple[int, float]]
     description: str = ""
+    token_scale: float = 1.0
 
 
 @dataclass
@@ -32,6 +33,7 @@ class MixtureCaseResult:
     kind: str
     lam: float
     weights: dict[str, float]
+    token_scale: float
     best: SweepResult | None
     baseline: SweepResult | None
     sweep: tuple[SweepResult, ...]
@@ -152,6 +154,7 @@ def _case_to_dict(case: MixtureCaseResult) -> dict[str, Any]:
         "kind": case.kind,
         "lam": case.lam,
         "weights": case.weights,
+        "token_scale": case.token_scale,
         "best": asdict(case.best) if case.best is not None else None,
         "baseline": asdict(case.baseline) if case.baseline is not None else None,
         "sweep": [asdict(item) for item in case.sweep],

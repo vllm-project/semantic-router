@@ -93,6 +93,7 @@ class CompositionWindow:
     duration_s: float
     weights: dict[str, float]
     arrival_rate_multiplier: float = 1.0
+    token_scale: float = 1.0
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> CompositionWindow:
@@ -103,6 +104,7 @@ class CompositionWindow:
                 str(k): float(v) for k, v in dict(data.get("weights") or {}).items()
             },
             arrival_rate_multiplier=float(data.get("arrival_rate_multiplier", 1.0)),
+            token_scale=float(data.get("token_scale", 1.0)),
         )
 
     @property
@@ -254,6 +256,8 @@ def validate_mixture_scenario(scenario: MixtureScenario) -> None:
             errors.append(f"{label}: duration_s must be positive")
         if window.arrival_rate_multiplier <= 0:
             errors.append(f"{label}: arrival_rate_multiplier must be positive")
+        if window.token_scale <= 0:
+            errors.append(f"{label}: token_scale must be positive")
         if last_end is not None and window.start_s < last_end:
             errors.append(f"{label}: windows must not overlap")
         last_end = window.end_s

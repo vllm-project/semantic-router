@@ -18,12 +18,42 @@ from .mixture import (
     CompositionWindow,
     MixtureScenario,
     MixtureValidationError,
+    WorkloadArchetype,
+    _load_cdf_source,
     load_mixture_scenario,
 )
+from .trace import TraceWorkload
 
 SCHEMA_VERSION = "fleet-sim.workload-archetype-forecast/v1alpha1"
 TAXONOMY_VERSION = "fleet-sim.workload-archetype-taxonomy/v1alpha1"
 WEIGHT_TOLERANCE = 1e-6
+
+WINDOW_DIMENSIONS = frozenset(
+    {
+        "archetype_weights",
+        "model_class",
+        "region",
+        "slo_class",
+    }
+)
+WINDOW_SCHEMA_FIELDS = frozenset(
+    {
+        "archetype_weights",
+        "duration_s",
+        "model_class",
+        "p50_total_tokens",
+        "p95_total_tokens",
+        "p99_ttft_ms",
+        "redacted",
+        "region",
+        "request_count",
+        "slo_class",
+        "start_s",
+        "total_tokens",
+        "uncertainty",
+        "weights",
+    }
+)
 
 DEFAULT_FORBIDDEN_DIMENSIONS = (
     "account_id",
@@ -106,10 +136,12 @@ class AggregateWindow:
     p99_ttft_ms: float | None = None
     uncertainty: dict[str, Any] = field(default_factory=dict)
     redacted: bool = False
+    extra_fields: tuple[str, ...] = ()
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AggregateWindow:
         weights = data.get("archetype_weights", data.get("weights", {}))
+        extra_fields = tuple(sorted(set(data) - WINDOW_SCHEMA_FIELDS))
         return cls(
             start_s=float(data.get("start_s", 0.0)),
             duration_s=float(data.get("duration_s", 0.0)),
@@ -136,6 +168,7 @@ class AggregateWindow:
             ),
             uncertainty=dict(data.get("uncertainty") or {}),
             redacted=bool(data.get("redacted", False)),
+            extra_fields=extra_fields,
         )
 
     @property
@@ -168,6 +201,8 @@ class ForecastedWindow:
     model_class: str
     slo_class: str
     region: str
+    p50_total_tokens: int | None = None
+    p95_total_tokens: int | None = None
     p99_ttft_ms: float | None = None
     uncertainty: dict[str, Any] = field(default_factory=dict)
 
@@ -180,6 +215,12 @@ class ForecastedWindow:
         if self.duration_s <= 0:
             return 0.0
         return self.request_count / self.duration_s
+
+    @property
+    def tokens_per_request(self) -> float:
+        if self.request_count <= 0:
+            return 0.0
+        return self.total_tokens / self.request_count
 
 
 ForecastWindowLike = AggregateWindow | ForecastedWindow
@@ -313,6 +354,14 @@ def validate_forecast_scenario(
         errors.append("forecast_horizon_windows must be positive")
     if not scenario.aggregate_windows:
         errors.append("aggregate_windows must not be empty")
+    if scenario.holdout_windows and scenario.forecast_horizon_windows > len(
+        scenario.holdout_windows
+    ):
+        errors.append(
+            "forecast_horizon_windows exceeds available holdout_windows: "
+            f"horizon={scenario.forecast_horizon_windows} "
+            f"holdout_windows={len(scenario.holdout_windows)}"
+        )
 
     expected_ids: set[str] | None = None
     if scenario.source_mixture_path:
@@ -355,12 +404,14 @@ def forecast_to_mixture_scenario(
         raise ValueError("base_lam must be positive")
     if not windows:
         raise ValueError("windows must not be empty")
+    source_cdfs = _source_archetype_cdfs(source_mixture)
     schedule = tuple(
         CompositionWindow(
             start_s=window.start_s,
             duration_s=window.duration_s,
             weights=dict(window.archetype_weights),
             arrival_rate_multiplier=max(window.arrival_rate / base_lam, 1e-9),
+            token_scale=_window_token_scale(window, source_cdfs),
         )
         for window in windows
     )
@@ -422,9 +473,15 @@ def _validate_windows(
     expected_ids: set[str] | None,
     errors: list[str],
 ) -> None:
+    allowed_dimensions = {_normalise_key(item) for item in privacy.allowed_dimensions}
     last_end = None
     for idx, window in enumerate(windows):
         item = f"{label}[{idx}]"
+        if window.extra_fields:
+            errors.append(
+                f"{item}: fields are not allowed by forecast window schema: "
+                f"{list(window.extra_fields)}"
+            )
         if window.start_s < 0:
             errors.append(f"{item}: start_s must be non-negative")
         if window.duration_s <= 0:
@@ -442,13 +499,35 @@ def _validate_windows(
             )
         if window.total_tokens <= 0:
             errors.append(f"{item}: total_tokens must be positive")
+        if window.p50_total_tokens is not None and window.p50_total_tokens <= 0:
+            errors.append(f"{item}: p50_total_tokens must be positive")
+        if window.p95_total_tokens is not None and window.p95_total_tokens <= 0:
+            errors.append(f"{item}: p95_total_tokens must be positive")
+        if (
+            window.p50_total_tokens is not None
+            and window.p95_total_tokens is not None
+            and window.p50_total_tokens > window.p95_total_tokens
+        ):
+            errors.append(f"{item}: p50_total_tokens must be <= p95_total_tokens")
+        if window.p99_ttft_ms is not None and window.p99_ttft_ms <= 0:
+            errors.append(f"{item}: p99_ttft_ms must be positive")
         for dim_name, dim_value in (
             ("model_class", window.model_class),
             ("slo_class", window.slo_class),
             ("region", window.region),
         ):
+            if _normalise_key(dim_name) not in allowed_dimensions:
+                errors.append(
+                    f"{item}: dimension {dim_name!r} is not allowed by "
+                    "privacy.allowed_dimensions"
+                )
             if not dim_value:
                 errors.append(f"{item}: {dim_name} is required")
+        if "archetype_weights" not in allowed_dimensions:
+            errors.append(
+                f"{item}: dimension 'archetype_weights' is not allowed by "
+                "privacy.allowed_dimensions"
+            )
         _validate_weight_map(
             window.archetype_weights,
             expected_ids,
@@ -506,6 +585,126 @@ def _privacy_key_errors(
                 f"privacy violation: high-cardinality/content field {key!r} at {path}"
             )
     return errors
+
+
+def _source_archetype_cdfs(
+    source_mixture: MixtureScenario,
+) -> dict[str, list[tuple[int, float]]]:
+    return {
+        archetype.id: _cdf_for_archetype(archetype, source_mixture)
+        for archetype in source_mixture.archetypes
+    }
+
+
+def _cdf_for_archetype(
+    archetype: WorkloadArchetype,
+    source_mixture: MixtureScenario,
+) -> list[tuple[int, float]]:
+    if archetype.source.kind == "cdf":
+        return _load_cdf_source(archetype.source, source_mixture.base_dir)
+    trace = TraceWorkload(
+        str(archetype.source.resolve_path(source_mixture.base_dir)),
+        fmt=archetype.source.format or "semantic_router",
+        max_reqs=archetype.source.max_reqs,
+        field_map=archetype.source.field_map,
+        model_id_field=archetype.source.model_id_field,
+        default_model_id=archetype.source.default_model_id,
+    )
+    totals = sorted(req.total_tokens() for _, req in trace.generate())
+    if not totals:
+        raise ForecastValidationError(
+            f"{archetype.id}: trace source produced no requests"
+        )
+    return _empirical_cdf(totals)
+
+
+def _window_token_scale(
+    window: ForecastWindowLike,
+    source_cdfs: dict[str, list[tuple[int, float]]],
+) -> float:
+    baseline_cdf = _aggregate_cdf(source_cdfs, window.archetype_weights)
+    baseline_mean = _cdf_mean(baseline_cdf)
+    baseline_p50 = _cdf_quantile(baseline_cdf, 0.50)
+    baseline_p95 = _cdf_quantile(baseline_cdf, 0.95)
+    ratios = []
+    if window.tokens_per_request > 0 and baseline_mean > 0:
+        ratios.append(window.tokens_per_request / baseline_mean)
+    p50_total_tokens = getattr(window, "p50_total_tokens", None)
+    if p50_total_tokens is not None and baseline_p50 > 0:
+        ratios.append(float(p50_total_tokens) / baseline_p50)
+    p95_total_tokens = getattr(window, "p95_total_tokens", None)
+    if p95_total_tokens is not None and baseline_p95 > 0:
+        ratios.append(float(p95_total_tokens) / baseline_p95)
+    if not ratios:
+        return 1.0
+    return max(*ratios, 1e-9)
+
+
+def _aggregate_cdf(
+    cdfs: dict[str, list[tuple[int, float]]],
+    weights: dict[str, float],
+) -> list[tuple[int, float]]:
+    points = sorted(
+        {threshold for archetype_id in weights for threshold, _ in cdfs[archetype_id]}
+    )
+    aggregate = [
+        (
+            threshold,
+            min(
+                1.0,
+                max(
+                    0.0,
+                    sum(
+                        weights[archetype_id] * _cdf_eval(cdfs[archetype_id], threshold)
+                        for archetype_id in weights
+                    ),
+                ),
+            ),
+        )
+        for threshold in points
+    ]
+    if aggregate:
+        aggregate[-1] = (aggregate[-1][0], 1.0)
+    return aggregate
+
+
+def _cdf_eval(cdf: list[tuple[int, float]], threshold: int) -> float:
+    previous = 0.0
+    for token_threshold, fraction in cdf:
+        if threshold < token_threshold:
+            return previous
+        previous = fraction
+    return previous
+
+
+def _cdf_mean(cdf: list[tuple[int, float]]) -> float:
+    total = 0.0
+    previous_fraction = 0.0
+    for threshold, fraction in cdf:
+        probability = max(0.0, fraction - previous_fraction)
+        total += threshold * probability
+        previous_fraction = fraction
+    return total
+
+
+def _cdf_quantile(cdf: list[tuple[int, float]], quantile: float) -> float:
+    for threshold, fraction in cdf:
+        if fraction >= quantile:
+            return float(threshold)
+    return float(cdf[-1][0]) if cdf else 0.0
+
+
+def _empirical_cdf(totals: list[int]) -> list[tuple[int, float]]:
+    n = len(totals)
+    cdf: list[tuple[int, float]] = []
+    last = None
+    for idx, total in enumerate(totals, start=1):
+        if total == last and idx < n:
+            continue
+        cdf.append((total, idx / n))
+        last = total
+    cdf[-1] = (cdf[-1][0], 1.0)
+    return cdf
 
 
 def _walk_keys(value: Any, prefix: str = "$") -> list[tuple[str, str]]:

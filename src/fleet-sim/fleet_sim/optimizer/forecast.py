@@ -44,12 +44,8 @@ def evaluate_forecast_backtest(
     """Backtest proactive forecast recommendations against observed holdout windows."""
 
     validate_forecast_scenario(scenario)
-    if not scenario.holdout_windows:
-        raise ForecastBacktestError("holdout_windows are required for backtesting")
     gammas = gammas or [round(1.0 + 0.1 * k, 1) for k in range(11)]
-    actual_windows = scenario.holdout_windows[: scenario.forecast_horizon_windows]
-    if not actual_windows:
-        raise ForecastBacktestError("forecast_horizon_windows selects no holdout data")
+    actual_windows = _actual_windows_for_backtest(scenario)
 
     source_mixture = scenario.load_source_mixture()
     base_lam = _mean([window.arrival_rate for window in scenario.aggregate_windows])
@@ -123,6 +119,23 @@ def evaluate_forecast_backtest(
         fallback_control=fallback_control,
         rollback_reason=rollback_reason,
     )
+
+
+def _actual_windows_for_backtest(
+    scenario: WorkloadForecastScenario,
+) -> tuple[AggregateWindow, ...]:
+    if not scenario.holdout_windows:
+        raise ForecastBacktestError("holdout_windows are required for backtesting")
+    if scenario.forecast_horizon_windows > len(scenario.holdout_windows):
+        raise ForecastBacktestError(
+            "forecast_horizon_windows exceeds available holdout_windows: "
+            f"horizon={scenario.forecast_horizon_windows} "
+            f"holdout_windows={len(scenario.holdout_windows)}"
+        )
+    actual_windows = scenario.holdout_windows[: scenario.forecast_horizon_windows]
+    if not actual_windows:
+        raise ForecastBacktestError("forecast_horizon_windows selects no holdout data")
+    return actual_windows
 
 
 def _final_decision(
@@ -337,6 +350,18 @@ def _window_results(
             if actual_rate > 0
             else 0.0
         )
+        token_error_pct = _pct_error(
+            forecast.tokens_per_request,
+            actual.tokens_per_request,
+        )
+        p95_error_pct = _optional_pct_error(
+            forecast.p95_total_tokens,
+            actual.p95_total_tokens,
+        )
+        ttft_error_pct = _optional_pct_error(
+            forecast.p99_ttft_ms,
+            actual.p99_ttft_ms,
+        )
         uncertainty = float(forecast.uncertainty.get("arrival_rate_stddev", 0.0) or 0.0)
         rows.append(
             ForecastWindowBacktest(
@@ -345,6 +370,15 @@ def _window_results(
                 actual_arrival_rate=actual_rate,
                 forecast_arrival_rate=forecast_rate,
                 arrival_rate_error_pct=error_pct,
+                actual_tokens_per_request=actual.tokens_per_request,
+                forecast_tokens_per_request=forecast.tokens_per_request,
+                tokens_per_request_error_pct=token_error_pct,
+                actual_p95_total_tokens=actual.p95_total_tokens,
+                forecast_p95_total_tokens=forecast.p95_total_tokens,
+                p95_total_tokens_error_pct=p95_error_pct,
+                actual_p99_ttft_ms=actual.p99_ttft_ms,
+                forecast_p99_ttft_ms=forecast.p99_ttft_ms,
+                p99_ttft_error_pct=ttft_error_pct,
                 weight_l1_error=_weight_l1(
                     forecast.archetype_weights, actual.archetype_weights
                 ),
@@ -356,6 +390,19 @@ def _window_results(
             )
         )
     return tuple(rows)
+
+
+def _optional_pct_error(
+    forecast: float | int | None,
+    actual: float | int | None,
+) -> float | None:
+    if forecast is None or actual is None:
+        return None
+    return _pct_error(float(forecast), float(actual))
+
+
+def _pct_error(forecast: float, actual: float) -> float:
+    return (forecast - actual) / actual * 100.0 if actual > 0 else 0.0
 
 
 def _annotate_control_comparison(methods: Sequence[ForecastMethodBacktest]) -> None:
@@ -391,7 +438,8 @@ def _recommendation_diagnostics(
         if best_forecast.score >= best_simple.score:
             diagnostics.append(
                 "forecasting did not beat simpler controls: "
-                f"best_forecast={best_forecast.method} score={best_forecast.score:.3f}, "
+                f"best_forecast={best_forecast.method} "
+                f"score={best_forecast.score:.3f}, "
                 f"best_simple={best_simple.method} score={best_simple.score:.3f}"
             )
     return diagnostics

@@ -213,11 +213,12 @@ def _window_case(
         "composition_window",
         lam * window.arrival_rate_multiplier,
         window.weights,
-        cdfs,
+        _scaled_cdfs(cdfs, window.token_scale),
         (
             f"Composition window {index} from {window.start_s:.0f}s to "
             f"{window.end_s:.0f}s."
         ),
+        token_scale=window.token_scale,
     )
 
 
@@ -228,6 +229,7 @@ def _case(
     weights: dict[str, float],
     cdfs: dict[str, list[tuple[int, float]]],
     description: str,
+    token_scale: float = 1.0,
 ) -> MixtureStressCase:
     return MixtureStressCase(
         id=case_id,
@@ -236,7 +238,35 @@ def _case(
         weights=dict(weights),
         cdf=aggregate_mixture_cdf(cdfs, weights),
         description=description,
+        token_scale=token_scale,
     )
+
+
+def _scaled_cdfs(
+    cdfs: dict[str, list[tuple[int, float]]],
+    token_scale: float,
+) -> dict[str, list[tuple[int, float]]]:
+    if abs(token_scale - 1.0) <= 1e-9:
+        return cdfs
+    return {
+        archetype_id: _scaled_cdf(cdf, token_scale)
+        for archetype_id, cdf in cdfs.items()
+    }
+
+
+def _scaled_cdf(
+    cdf: list[tuple[int, float]],
+    token_scale: float,
+) -> list[tuple[int, float]]:
+    scaled = []
+    previous = 0
+    for threshold, fraction in cdf:
+        scaled_threshold = max(previous + 1, round(threshold * token_scale))
+        scaled.append((scaled_threshold, fraction))
+        previous = scaled_threshold
+    if scaled:
+        scaled[-1] = (scaled[-1][0], 1.0)
+    return scaled
 
 
 def _evaluate_case(
@@ -264,6 +294,7 @@ def _evaluate_case(
         kind=case.kind,
         lam=case.lam,
         weights=case.weights,
+        token_scale=case.token_scale,
         best=best,
         baseline=baseline,
         sweep=tuple(report.analytical + report.simulated),

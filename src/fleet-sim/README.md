@@ -64,9 +64,11 @@ changing production request-path routing.
 `forecast-backtest` evaluates proactive workload-archetype forecasts from
 content-free aggregate windows. It compares static, reactive last-window,
 moving-window, seasonal-naive, and linear-trend baselines, converts each
-forecast back into reproducible FleetSim mixture scenarios, reports uncertainty,
-burst/drift/oscillation diagnostics, and keeps advise-only recommendations
-separate from downstream actuation records.
+forecast back into reproducible FleetSim mixture scenarios, scales each
+composition window's token CDF from aggregate mean/p50/p95 token demand,
+reports token/latency calibration error, uncertainty, burst/drift/oscillation
+diagnostics, and keeps advise-only recommendations separate from downstream
+actuation records.
 
 `vllm-sr serve` also starts `vllm-sr-sim` by default as a sibling container on the shared runtime network so the dashboard can proxy it without rebuilding the router image.
 

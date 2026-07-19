@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
+import pytest
 from fleet_sim.gpu_profiles.profiles import A100_80GB
-from fleet_sim.optimizer import FleetOptimizer, evaluate_forecast_backtest
-from fleet_sim.workload import load_forecast_scenario
+from fleet_sim.optimizer import (
+    FleetOptimizer,
+    evaluate_forecast_backtest,
+)
+from fleet_sim.workload import (
+    ForecastValidationError,
+    WorkloadForecastScenario,
+    load_forecast_scenario,
+)
 
 _DATA = Path(__file__).parent.parent / "fleet_sim" / "data"
 
@@ -25,6 +34,10 @@ def _scenario(name: str):
     return load_forecast_scenario(_DATA / f"workload_forecast_{name}.json")
 
 
+def _scenario_from_data(data: dict):
+    return WorkloadForecastScenario.from_dict(data, base_dir=_DATA)
+
+
 def test_forecast_backtest_reports_baselines_recommendations_and_no_actuation():
     report = evaluate_forecast_backtest(
         optimizer=_optimizer(),
@@ -41,7 +54,7 @@ def test_forecast_backtest_reports_baselines_recommendations_and_no_actuation():
         "linear_trend",
     }
     assert report.actual_required is not None
-    assert methods["seasonal_naive"].score == 0
+    assert methods["seasonal_naive"].score < 0.001
     assert methods["seasonal_naive"].beats_static_control is True
     assert methods["seasonal_naive"].beats_reactive_control is True
     assert report.recommended_method == "seasonal_naive"
@@ -50,6 +63,50 @@ def test_forecast_backtest_reports_baselines_recommendations_and_no_actuation():
     data = report.to_dict()
     assert data["actuation_records"] == []
     assert data["methods"][0]["mixture_report"]["cases"]
+
+
+def test_backtest_capacity_and_score_include_token_demand():
+    data = json.loads((_DATA / "workload_forecast_seasonal.json").read_text())
+    baseline = evaluate_forecast_backtest(
+        optimizer=_optimizer(),
+        scenario=_scenario_from_data(data),
+        gammas=[1.0],
+    )
+
+    heavier = json.loads(json.dumps(data))
+    for window in heavier["holdout_windows"]:
+        window["total_tokens"] *= 100
+        window["p50_total_tokens"] *= 100
+        window["p95_total_tokens"] *= 100
+    heavier_report = evaluate_forecast_backtest(
+        optimizer=_optimizer(),
+        scenario=_scenario_from_data(heavier),
+        gammas=[1.0],
+    )
+
+    assert baseline.actual_required is not None
+    assert heavier_report.actual_required is not None
+    assert (
+        heavier_report.actual_required.total_gpus > baseline.actual_required.total_gpus
+    )
+    seasonal = next(
+        method for method in heavier_report.methods if method.method == "seasonal_naive"
+    )
+    assert seasonal.mean_abs_tokens_per_request_error_pct > 0
+    assert seasonal.score > 0
+
+
+def test_forecast_backtest_rejects_incomplete_holdout_horizon():
+    data = json.loads((_DATA / "workload_forecast_seasonal.json").read_text())
+    data["forecast_horizon_windows"] = 5
+    data["holdout_windows"] = data["holdout_windows"][:2]
+
+    with pytest.raises(ForecastValidationError, match="exceeds available holdout"):
+        evaluate_forecast_backtest(
+            optimizer=_optimizer(),
+            scenario=_scenario_from_data(data),
+            gammas=[1.0],
+        )
 
 
 def test_forecast_backtest_reports_drift_and_statistical_baseline():
