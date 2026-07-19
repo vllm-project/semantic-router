@@ -106,7 +106,9 @@ class MaintainerBoardGAReadinessTests(unittest.TestCase):
         )
         pr_list_call = gh_json.call_args_list[1].args[0]
         pr_list_fields = pr_list_call[pr_list_call.index("--json") + 1]
-        self.assertIn("reviewDecision,mergeStateStatus,headRefName,baseRefName", pr_list_fields)
+        self.assertIn(
+            "reviewDecision,mergeStateStatus,headRefName,baseRefName", pr_list_fields
+        )
         self.assertNotIn("statusCheckRollup", pr_list_fields)
         self.assertEqual(
             gh_json.call_args_list[2].args[0],

@@ -128,18 +128,21 @@ def fetch_github_state(
             "number,title,labels,milestone,assignees,createdAt,updatedAt,author,url",
         ]
     )
-    prs = gh_json(
-        [
-            "pr",
-            "list",
-            "--state",
-            "open",
-            "--limit",
-            pr_limit,
-            "--json",
-            "number,title,labels,milestone,assignees,createdAt,updatedAt,author,url,isDraft,reviewDecision,mergeStateStatus,headRefName,baseRefName",
-        ]
-    ) or []
+    prs = (
+        gh_json(
+            [
+                "pr",
+                "list",
+                "--state",
+                "open",
+                "--limit",
+                pr_limit,
+                "--json",
+                "number,title,labels,milestone,assignees,createdAt,updatedAt,author,url,isDraft,reviewDecision,mergeStateStatus,headRefName,baseRefName",
+            ]
+        )
+        or []
+    )
     attach_pr_status_rollups(prs)
     milestones = gh_json(["api", "repos/{owner}/{repo}/milestones?state=open"])
     labels = gh_json(["label", "list", "--json", "name,description,color"])
