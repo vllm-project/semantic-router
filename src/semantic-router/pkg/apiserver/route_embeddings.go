@@ -12,6 +12,7 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
@@ -34,6 +35,26 @@ func (e *imageEncodeError) Error() string {
 
 func (e *imageEncodeError) Unwrap() error { return e.err }
 
+func isEmbeddingModelNotReady(err error) bool {
+	return errors.Is(err, services.ErrModelNotReady) ||
+		errors.Is(err, candle_binding.ErrEmbeddingModelNotReady)
+}
+
+// checkEmbeddingReadiness validates that the models required for the request
+// are initialized. Text inputs require text-model readiness; image inputs
+// require multimodal-model readiness. This prevents a text-ready-only
+// deployment from attempting image inference (which would 500) and a
+// multimodal-only deployment from being rejected for text-only requests.
+func checkEmbeddingReadiness(req EmbeddingRequest) error {
+	if len(req.Texts) > 0 && !candle_binding.IsEmbeddingReady() {
+		return candle_binding.ErrEmbeddingModelNotReady
+	}
+	if len(req.Images) > 0 && !candle_binding.IsMultiModalReady() {
+		return candle_binding.ErrEmbeddingModelNotReady
+	}
+	return nil
+}
+
 // classifyEmbeddingError maps a buildEmbeddingResults error to the HTTP status,
 // error code, and client message. Input-caused image-encode failures are 400
 // INVALID_IMAGE; every other failure is a genuine 500.
@@ -42,6 +63,10 @@ func classifyEmbeddingError(err error) (int, string, string) {
 	if errors.As(err, &imgErr) {
 		return http.StatusBadRequest, "INVALID_IMAGE",
 			fmt.Sprintf("images[%d] could not be decoded as an image", imgErr.index)
+	}
+	if isEmbeddingModelNotReady(err) {
+		return http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+			fmt.Sprintf("failed to generate embedding: %v", err)
 	}
 	return http.StatusInternalServerError, "EMBEDDING_GENERATION_FAILED",
 		fmt.Sprintf("failed to generate embedding: %v", err)
@@ -72,6 +97,12 @@ func validatePriority(name string, value float32) (string, string, bool) {
 func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	req, ok := s.parseEmbeddingRequest(w, r)
 	if !ok {
+		return
+	}
+
+	if err := checkEmbeddingReadiness(req); err != nil {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+			fmt.Sprintf("failed to generate embedding: %v", err))
 		return
 	}
 
@@ -237,21 +268,48 @@ func embeddingOutput(req EmbeddingRequest, text string) (*candle_binding.Embeddi
 	}
 }
 
-// handleSimilarity handles text similarity calculation requests
-func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *http.Request) {
+// parseSimilarityRequest parses, validates, and defaults a SimilarityRequest.
+func (s *ClassificationAPIServer) parseSimilarityRequest(w http.ResponseWriter, r *http.Request) (SimilarityRequest, bool) {
 	var req SimilarityRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
+		return SimilarityRequest{}, false
+	}
+	if req.Text1 == "" || req.Text2 == "" {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "both text1 and text2 must be provided")
+		return SimilarityRequest{}, false
+	}
+	if req.Model == "" {
+		req.Model = "auto"
+	}
+	if req.Dimension == 0 {
+		req.Dimension = 768
+	}
+	if req.Model == "auto" && req.QualityPriority == 0 && req.LatencyPriority == 0 {
+		req.QualityPriority = 0.5
+		req.LatencyPriority = 0.5
+	}
+	if !isValidDimension(req.Dimension) {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_DIMENSION",
+			fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension))
+		return SimilarityRequest{}, false
+	}
+	return req, true
+}
+
+// handleSimilarity handles text similarity calculation requests
+func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *http.Request) {
+	req, ok := s.parseSimilarityRequest(w, r)
+	if !ok {
 		return
 	}
 
-	applySimilarityDefaults(&req)
-	if code, message, ok := validateSimilarityRequest(req); !ok {
-		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
+	if !candle_binding.IsEmbeddingReady() {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+			"Embedding models are not initialized — configure an embedding model in your router config")
 		return
 	}
 
-	// Calculate similarity
 	result, err := candle_binding.CalculateEmbeddingSimilarity(
 		req.Text1,
 		req.Text2,
@@ -259,6 +317,11 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		req.Dimension,
 	)
 	if err != nil {
+		if isEmbeddingModelNotReady(err) {
+			s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+				fmt.Sprintf("failed to calculate similarity: %v", err))
+			return
+		}
 		s.writeErrorResponse(w, http.StatusInternalServerError, "SIMILARITY_CALCULATION_FAILED",
 			fmt.Sprintf("failed to calculate similarity: %v", err))
 		return
@@ -312,6 +375,12 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		return
 	}
 
+	if !candle_binding.IsEmbeddingReady() {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+			"Embedding models are not initialized — configure an embedding model in your router config")
+		return
+	}
+
 	// Calculate batch similarity
 	result, err := candle_binding.CalculateSimilarityBatch(
 		req.Query,
@@ -321,6 +390,11 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		req.Dimension,
 	)
 	if err != nil {
+		if isEmbeddingModelNotReady(err) {
+			s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+				fmt.Sprintf("failed to calculate batch similarity: %v", err))
+			return
+		}
 		s.writeErrorResponse(w, http.StatusInternalServerError, "BATCH_SIMILARITY_FAILED",
 			fmt.Sprintf("failed to calculate batch similarity: %v", err))
 		return

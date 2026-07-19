@@ -63,6 +63,12 @@ var AnthropicShimContract = []string{
 	"anthropic-messages-stop-sequence",
 }
 
+// ReadinessContract covers 503 readiness responses when models are not loaded.
+// It must run against a no-model profile, not the full baseline.
+var ReadinessContract = []string{
+	"model-not-ready-503",
+}
+
 // Combine preserves order while removing duplicate testcase names.
 func Combine(groups ...[]string) []string {
 	size := 0

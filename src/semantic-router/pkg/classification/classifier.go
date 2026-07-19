@@ -32,6 +32,12 @@ type Classifier struct {
 	// Preference classifier for route matching via external LLM
 	preferenceClassifier *PreferenceClassifier
 
+	// Model readiness flags — set true after successful model initialization.
+	// Handlers use these to distinguish "model not loaded" (503) from runtime
+	// failures (500).
+	piiModelReady       bool
+	jailbreakModelReady bool
+
 	// Language classifier
 	languageClassifier *LanguageClassifier
 
@@ -157,6 +163,18 @@ func withAuthzClassifier(authzClassifier *AuthzClassifier) option {
 	return func(c *Classifier) {
 		c.authzClassifier = authzClassifier
 	}
+}
+
+// IsPIIModelReady reports whether the PII token classifier model was loaded
+// successfully during runtime initialization.
+func (c *Classifier) IsPIIModelReady() bool {
+	return c.piiModelReady
+}
+
+// IsJailbreakModelReady reports whether the jailbreak detection model was
+// loaded successfully during runtime initialization.
+func (c *Classifier) IsJailbreakModelReady() bool {
+	return c.jailbreakModelReady
 }
 
 // newClassifierWithOptions creates a new classifier with the given options

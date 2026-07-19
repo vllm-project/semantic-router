@@ -6,6 +6,7 @@ replace (
 	github.com/vllm-project/semantic-router/candle-binding => ../../candle-binding
 	github.com/vllm-project/semantic-router/ml-binding => ../../ml-binding
 	github.com/vllm-project/semantic-router/nlp-binding => ../../nlp-binding
+	github.com/vllm-project/semantic-router/onnx-binding => ../../onnx-binding
 	github.com/vllm-project/semantic-router/openvino-binding => ../../openvino-binding
 	github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache => ./pkg/cache
 	github.com/vllm-project/semantic-router/src/semantic-router/pkg/config => ./pkg/config

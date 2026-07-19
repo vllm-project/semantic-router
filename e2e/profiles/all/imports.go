@@ -15,6 +15,7 @@ import (
 	mlmodelselection "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
 	multiendpoint "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
 	multimodalrouting "github.com/vllm-project/semantic-router/e2e/profiles/multimodal-routing"
+	nomodel "github.com/vllm-project/semantic-router/e2e/profiles/no-model"
 	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
 	raghybridsearch "github.com/vllm-project/semantic-router/e2e/profiles/rag-hybrid-search"
 	remoteembedding "github.com/vllm-project/semantic-router/e2e/profiles/remote-embedding"
@@ -53,6 +54,7 @@ func init() {
 	)
 	register("multi-endpoint", func() framework.Profile { return multiendpoint.NewProfile() }, framework.ProfileCapabilities{})
 	register("multimodal-routing", func() framework.Profile { return multimodalrouting.NewProfile() }, framework.ProfileCapabilities{})
+	register("no-model", func() framework.Profile { return nomodel.NewProfile() }, framework.ProfileCapabilities{})
 	register("production-stack", func() framework.Profile { return productionstack.NewProfile() }, framework.ProfileCapabilities{})
 	register("rag-hybrid-search", func() framework.Profile { return raghybridsearch.NewProfile() }, framework.ProfileCapabilities{})
 	register(

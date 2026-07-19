@@ -33,6 +33,7 @@ Standard CI-backed profiles:
 - **streaming**: Streamed request-body and streaming-cache behavior
 - **anthropic-shim**: Anthropic-shape backend (llama.cpp + shim) for verifying outbound translation cells — cache-cycle, stop-reason mapping, and request-side field preservation
 - **dashboard**: Dashboard API surface — health, status, config read, deploy preview, config versions, and input validation
+- **no-model**: Readiness 503 responses when no embedding or classifier models are loaded, including per-modality and partial-initialization behavior
 
 Manual-only profiles:
 
@@ -64,6 +65,7 @@ Manual-only profiles:
 | `streaming` | none | Streaming request-body and SSE cache behavior |
 | `anthropic-shim` | none | Outbound Anthropic translation cell — cache, stop-reason, and request-side field preservation |
 | `dashboard` | none | Dashboard HTTP API contract |
+| `no-model` | none | Readiness 503 contract when no models loaded |
 | `dynamo` | none | GPU and batching behavior |
 | `rag-hybrid-search` | none | RAG vector-store and hybrid-search behavior |
 
