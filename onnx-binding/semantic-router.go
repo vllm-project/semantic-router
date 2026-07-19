@@ -633,6 +633,22 @@ func ClassifyMmBert32KJailbreak(text string) (ClassResult, error) {
 	return classifyWithClassifier("jailbreak", text)
 }
 
+// ClassifyMmBert32KJailbreakWithProbs classifies text for jailbreak detection and
+// returns the full probability distribution. The ONNX backend does not yet extract
+// per-class probabilities, so Probabilities is empty and callers fall back to a
+// confidence-based estimate.
+func ClassifyMmBert32KJailbreakWithProbs(text string) (ClassResultWithProbs, error) {
+	result, err := classifyWithClassifier("jailbreak", text)
+	if err != nil {
+		return ClassResultWithProbs{}, err
+	}
+	return ClassResultWithProbs{
+		Class:         result.Class,
+		Confidence:    result.Confidence,
+		Probabilities: []float32{}, // TODO: implement probability extraction
+	}, nil
+}
+
 // ClassifyMmBert32KFeedback classifies text for feedback detection
 func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
 	return classifyWithClassifier("feedback", text)

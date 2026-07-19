@@ -836,6 +836,18 @@ func ClassifyMmBert32KJailbreak(text string) (ClassResult, error) {
 	return ClassResult{Class: 0, Confidence: 0.95}, nil
 }
 
+// ClassifyMmBert32KJailbreakWithProbs classifies text with mmBERT-32K jailbreak
+// classifier and returns the full probability distribution
+func ClassifyMmBert32KJailbreakWithProbs(text string) (ClassResultWithProbs, error) {
+	_ = text
+	return ClassResultWithProbs{
+		Class:         0,
+		Confidence:    0.95,
+		Probabilities: []float32{0.95, 0.05},
+		NumClasses:    2,
+	}, nil
+}
+
 // InitMmBert32KFeedbackClassifier initializes mmBERT-32K feedback classifier
 func InitMmBert32KFeedbackClassifier(modelPath string, useCPU bool) error {
 	log.Printf("[MOCK] Initializing mmBERT-32K Feedback Classifier: %s", modelPath)
