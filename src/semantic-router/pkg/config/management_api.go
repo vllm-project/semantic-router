@@ -61,6 +61,10 @@ func DefaultManagementAPIConfig() ManagementAPIConfig {
 }
 
 // DefaultManagementAPIRoles returns the built-in role-to-permission map.
+//
+// secret_view is admin-only (via ManagementPermWildcard). Viewer and operator
+// may call config.read routes such as GET /config/router, but secret fields are
+// redacted unless the principal has secret_view.
 func DefaultManagementAPIRoles() map[string][]string {
 	return map[string][]string{
 		"viewer": {
@@ -84,6 +88,7 @@ func DefaultManagementAPIRoles() map[string][]string {
 			"data.read",
 			"data.write",
 		},
+		// Wildcard includes secret_view so admin can read plaintext secrets.
 		"admin": {ManagementPermWildcard},
 	}
 }

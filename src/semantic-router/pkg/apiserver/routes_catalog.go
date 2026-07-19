@@ -122,7 +122,7 @@ func apiInfoRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleModelsInfo,
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/info/classifier", Method: "GET", Description: "Get classifier information and status"},
+			EndpointMetadata{Path: "/info/classifier", Method: "GET", Description: "Get classifier information and status (secrets redacted without secret_view)"},
 			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivitySecretView},
 			(*ClassificationAPIServer).handleClassifierInfo,
 		),
@@ -190,7 +190,7 @@ func apiConfigRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleDeleteKnowledgeBase,
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/config/router", Method: "GET", Description: "Get the current router config as JSON"},
+			EndpointMetadata{Path: "/config/router", Method: "GET", Description: "Get the current router config as JSON (secrets redacted without secret_view)"},
 			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivitySecretView},
 			(*ClassificationAPIServer).handleConfigGet,
 		),
