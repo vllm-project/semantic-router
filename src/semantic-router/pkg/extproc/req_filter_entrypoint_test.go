@@ -1,9 +1,11 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -134,6 +136,108 @@ func TestDecisionCandidatesForRequest(t *testing.T) {
 	ctx = &RequestContext{}
 	if candidates := router.decisionCandidatesForRequest(config.DefaultVSRAutoModelName, ctx); candidates != nil {
 		t.Fatalf("expected nil candidates for the auto model, got %+v", candidates)
+	}
+}
+
+// newEntrypointFlowRouter builds a router with a real classifier so decision
+// evaluation runs the full signal → decision → model-selection chain. The
+// fixture only uses keyword signals, which need no local model artifacts.
+func newEntrypointFlowRouter(t *testing.T) *OpenAIRouter {
+	t.Helper()
+	cfg, err := config.ParseYAMLBytes([]byte(entrypointTestConfigYAML))
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to build classifier: %v", err)
+	}
+	return &OpenAIRouter{Config: cfg, Classifier: classifier}
+}
+
+func TestPerformDecisionEvaluationSelectsRecipeByEntrypoint(t *testing.T) {
+	router := newEntrypointFlowRouter(t)
+
+	cases := []struct {
+		name         string
+		model        string
+		message      string
+		wantDecision string
+		wantModel    string
+	}{
+		{
+			name:         "privacy entrypoint routes through the privacy recipe",
+			model:        "vllm-sr/privacy",
+			message:      "my ssn is exposed",
+			wantDecision: "privacy_route",
+			wantModel:    "model-b",
+		},
+		{
+			// The pii signal matches globally, but the default recipe's
+			// decisions do not reference it: the request falls back to the
+			// default model instead of leaking into another recipe's routes.
+			name:         "auto model ignores other recipes' decisions",
+			model:        config.DefaultVSRAutoModelName,
+			message:      "my ssn is exposed",
+			wantDecision: "",
+			wantModel:    "model-a",
+		},
+		{
+			name:         "auto model matches the default recipe decision",
+			model:        config.DefaultVSRAutoModelName,
+			message:      "this is urgent",
+			wantDecision: "default_route",
+			wantModel:    "model-a",
+		},
+		{
+			name:         "privacy entrypoint falls back to the default model when its recipe matches nothing",
+			model:        "vllm-sr/privacy",
+			message:      "this is urgent",
+			wantDecision: "",
+			wantModel:    "model-a",
+		},
+		{
+			name:         "default recipe alias behaves like the auto model",
+			model:        "vllm-sr/default-alias",
+			message:      "this is urgent",
+			wantDecision: "default_route",
+			wantModel:    "model-a",
+		},
+		{
+			name:         "explicit model preserves the client selection",
+			model:        "model-a",
+			message:      "this is urgent",
+			wantDecision: "default_route",
+			wantModel:    "",
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ctx := &RequestContext{
+				TraceContext: context.Background(),
+				Headers:      map[string]string{},
+			}
+			router.resolveEntrypointForRequest(testCase.model, ctx)
+
+			decisionName, _, _, selectedModel, err := router.performDecisionEvaluation(
+				testCase.model,
+				signalConversationHistory{currentUserMessage: testCase.message},
+				ctx,
+			)
+			if err != nil {
+				t.Fatalf("performDecisionEvaluation failed: %v", err)
+			}
+			if decisionName != testCase.wantDecision {
+				t.Fatalf("expected decision %q, got %q", testCase.wantDecision, decisionName)
+			}
+			if selectedModel != testCase.wantModel {
+				t.Fatalf("expected selected model %q, got %q", testCase.wantModel, selectedModel)
+			}
+			if testCase.wantDecision != "" && ctx.VSRSelectedDecision != nil && ctx.VSRSelectedDecision.Name != testCase.wantDecision {
+				t.Fatalf("expected ctx.VSRSelectedDecision %q, got %q", testCase.wantDecision, ctx.VSRSelectedDecision.Name)
+			}
+		})
 	}
 }
 

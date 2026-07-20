@@ -64,7 +64,7 @@ single-profile configs.
       recipes
 - [x] T5 extproc request-entry entrypoint resolution before signal evaluation
 - [x] T6 `/v1/models` lists entrypoint model names
-- [ ] T7 multi-recipe unit tests in config and extproc
+- [x] T7 multi-recipe unit tests in config and extproc
 - [ ] T8 config-contract docs, reference config, and tutorials
 - [ ] T9 E2E coverage for multi-recipe entrypoints
 - [ ] T10 DSL round-trip for recipes and entrypoints (follow-up PR)
@@ -73,8 +73,8 @@ single-profile configs.
 
 ## Next Action
 
-Land T7 (multi-recipe unit tests in config and extproc). T3 stays pending the
-maintainer confirmation recorded in Open Decisions. Deferred from T5: signal
+Land T8 (config-contract docs, reference config, and tutorials). T3 stays
+pending the maintainer confirmation recorded in Open Decisions. Deferred from T5: signal
 evaluation runs over the global registry filtered by all recipes' decisions;
 scoping the evaluated signal set to the per-request recipe is a performance
 follow-up, not a correctness gap.
