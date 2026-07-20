@@ -26,6 +26,7 @@ providers:
         currency: USD
         prompt_per_1m: 0.18
         cached_input_per_1m: 0.04
+        cache_write_per_1m: 0.225
         completion_per_1m: 0.42
       external_model_ids:
         openai: qwen3-8b
@@ -1488,7 +1489,7 @@ global:
           endpoint: jaeger:4317
           insecure: true
         sampling:
-          type: traceidratio
+          type: probabilistic
           rate: 0.5
         resource:
           service_name: vllm-sr
@@ -1533,6 +1534,30 @@ global:
               requests_per_unit: 1000
               tokens_per_unit: 2000000
               unit: hour
+    management_api:
+      bind_address: 127.0.0.1
+      port: 8080
+      remote_exposure: false
+      auth:
+        mode: disabled
+        tokens:
+          - env: VSR_MGMT_TOKEN
+            role: admin
+        roles:
+          viewer:
+            - health.read
+            - ready.read
+            - docs.read
+            - metrics.read
+            - classify.invoke
+            - config.read
+            - data.read
+          operator:
+            - config.write
+            - learning.ingest
+            - data.write
+          admin:
+            - "*"
     startup_status:
       store_backend: file
     router_replay:
@@ -1910,6 +1935,7 @@ global:
     looper:
       endpoint: http://localhost:8899/v1/chat/completions
       grpc_max_msg_size_mb: 16
+      max_response_bytes_mb: 32
       timeout_seconds: 120
       retry_count: 2
       headers:
@@ -1963,6 +1989,13 @@ global:
             best_weight: 0.75
             top_m: 2
             margin_threshold: 0.0
+        endpoint:
+          base_url: http://embedding-service:8000/v1
+          model: BAAI/bge-m3
+          api_key_env: EMBEDDING_API_KEY
+          timeout_seconds: 5
+          max_retries: 2
+          dimensions: 1024
     system:
       prompt_guard: models/mmbert32k-jailbreak-detector-merged
       domain_classifier: models/mmbert32k-intent-classifier-merged

@@ -2,7 +2,12 @@ import React, { useState } from 'react'
 import { motion, useInView } from 'motion/react'
 import styles from './index.module.css'
 
-type BranchMode = 'cls' | 'token' | 'pool' | 'cross'
+export type BranchMode = 'cls' | 'token' | 'pool' | 'cross'
+
+interface TransformerPipelineAnimationProps {
+  mode?: BranchMode
+  onModeChange?: (mode: BranchMode) => void
+}
 
 const TOKENS = ['[CLS]', 'Is', 'machine', 'learning', 'related', 'to', 'AI', '?', '[SEP]']
 
@@ -65,24 +70,34 @@ const BRANCH_DATA: Record<BranchMode, {
   },
 }
 
-/* ------------------------------------------------------------------ */
-
 const DownArrow: React.FC = () => (
   <div className={styles.downArrow}>
     <div className={styles.downArrowLine} />
   </div>
 )
 
-/* ---- Animated stage wrappers ---- */
 const stageVariants = {
   hidden: { opacity: 0, y: -16 },
   visible: { opacity: 1, y: 0 },
 }
 
-const TransformerPipelineAnimation: React.FC = () => {
-  const [mode, setMode] = useState<BranchMode>('cls')
+const TransformerPipelineAnimation: React.FC<TransformerPipelineAnimationProps> = ({
+  mode: controlledMode,
+  onModeChange,
+}) => {
+  const [internalMode, setInternalMode] = useState<BranchMode>('cls')
+  const mode = controlledMode ?? internalMode
   const ref = React.useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true, margin: '-80px' })
+
+  function setMode(nextMode: BranchMode): void {
+    if (controlledMode === undefined) {
+      setInternalMode(nextMode)
+    }
+    onModeChange?.(nextMode)
+  }
+
+  const activeBranch = BRANCH_DATA[mode]
 
   const containerVariants = {
     hidden: {},
@@ -96,14 +111,15 @@ const TransformerPipelineAnimation: React.FC = () => {
 
   return (
     <div ref={ref} className={styles.pipelineWrapper}>
-      {/* Mode tabs */}
-      <div className={styles.tabRow}>
+      <div className={styles.tabRow} role="tablist" aria-label="Encoder pipeline modes">
         {(['cls', 'token', 'pool', 'cross'] as BranchMode[]).map(m => (
           <button
             key={m}
             className={`${styles.tab} ${mode === m ? styles.tabActive : ''}`}
             onClick={() => setMode(m)}
             type="button"
+            role="tab"
+            aria-selected={mode === m}
           >
             <span className={styles.tabCode}>{BRANCH_DATA[m].icon}</span>
             <span>{BRANCH_DATA[m].tabLabel}</span>
@@ -111,14 +127,12 @@ const TransformerPipelineAnimation: React.FC = () => {
         ))}
       </div>
 
-      {/* Pipeline — vertical layout */}
       <motion.div
         className={styles.pipeline}
         variants={containerVariants}
         initial="hidden"
         animate={inView ? 'visible' : 'hidden'}
       >
-        {/* Stage 1: Input */}
         <motion.div className={styles.stage} variants={stageVariants} transition={{ duration: 0.5 }}>
           <span className={styles.stageLabel}>Input</span>
           <div className={styles.inputBox}>
@@ -128,7 +142,6 @@ const TransformerPipelineAnimation: React.FC = () => {
 
         <DownArrow />
 
-        {/* Stage 2: Tokenizer */}
         <motion.div className={styles.stage} variants={stageVariants} transition={{ duration: 0.5 }}>
           <span className={styles.stageLabel}>Tokenizer</span>
           <div className={styles.tokenRow}>
@@ -148,7 +161,6 @@ const TransformerPipelineAnimation: React.FC = () => {
 
         <DownArrow />
 
-        {/* Stage 3: Embedding */}
         <motion.div className={styles.stage} variants={stageVariants} transition={{ duration: 0.5 }}>
           <span className={styles.stageLabel}>Embedding</span>
           <div className={styles.embeddingStack}>
@@ -165,7 +177,6 @@ const TransformerPipelineAnimation: React.FC = () => {
 
         <DownArrow />
 
-        {/* Stage 4: Encoder Block */}
         <motion.div className={styles.stage} variants={stageVariants} transition={{ duration: 0.5 }}>
           <span className={styles.stageLabel}>Encoder Block</span>
           <div className={styles.encoderBlock}>
@@ -187,50 +198,30 @@ const TransformerPipelineAnimation: React.FC = () => {
 
         <DownArrow />
 
-        {/* Stage 5: Signals */}
         <motion.div
+          key={mode}
           className={styles.branchesArea}
           variants={stageVariants}
           transition={{ duration: 0.5 }}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
         >
           <span className={styles.stageLabel}>Signals</span>
-          <div className={styles.branchGrid}>
-            {(['cls', 'token', 'pool', 'cross'] as BranchMode[]).map((key) => {
-              const b = BRANCH_DATA[key]
-              const isActive = mode === key
-              return (
-                <motion.div
-                  key={key}
-                  className={`${styles.branch} ${b.cls}`}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={inView
-                    ? {
-                        opacity: isActive ? 1 : 0.4,
-                        y: 0,
-                        scale: isActive ? 1 : 0.96,
-                      }
-                    : {}}
-                  transition={{ duration: 0.2 }}
-                  onClick={() => setMode(key)}
-                  whileHover={{ scale: 1.02 }}
-                >
-                  <span className={styles.branchIcon}>{b.icon}</span>
-                  <div className={styles.branchContent}>
-                    <span className={styles.branchTitle}>{b.title}</span>
-                    <span className={styles.branchDetail}>{b.detail}</span>
-                    <span className={styles.branchDetail} style={{ fontStyle: 'italic' }}>
-                      {'TaskType: '}
-                      {b.taskType}
-                    </span>
-                    <div className={styles.branchSignals}>
-                      {b.signals.map(s => (
-                        <span key={s} className={`${styles.signalTag} ${b.tagCls}`}>{s}</span>
-                      ))}
-                    </div>
-                  </div>
-                </motion.div>
-              )
-            })}
+          <div className={`${styles.branch} ${styles.branchActive} ${activeBranch.cls}`}>
+            <span className={styles.branchIcon}>{activeBranch.icon}</span>
+            <div className={styles.branchContent}>
+              <span className={styles.branchTitle}>{activeBranch.title}</span>
+              <span className={styles.branchDetail}>{activeBranch.detail}</span>
+              <span className={styles.branchTaskType}>
+                {'TaskType: '}
+                {activeBranch.taskType}
+              </span>
+              <div className={styles.branchSignals}>
+                {activeBranch.signals.map(s => (
+                  <span key={s} className={`${styles.signalTag} ${activeBranch.tagCls}`}>{s}</span>
+                ))}
+              </div>
+            </div>
           </div>
         </motion.div>
       </motion.div>

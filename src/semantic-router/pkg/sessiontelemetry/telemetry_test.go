@@ -449,8 +449,23 @@ func TestComputeCost(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := computeCost(tc.prompt, 0, tc.compl, tc.pricing)
+			got := computeCost(tc.prompt, 0, 0, tc.compl, tc.pricing)
 			assert.InDelta(t, tc.wantCost, got, 1e-9)
 		})
 	}
+}
+
+func TestComputeCostIncludesCacheWrites(t *testing.T) {
+	cacheWriteRate := 6.25
+	pricing := TurnPricing{
+		Currency:         "USD",
+		PromptPer1M:      5,
+		CachedInputPer1M: 0.5,
+		CacheWritePer1M:  &cacheWriteRate,
+		CompletionPer1M:  30,
+	}
+
+	got := computeCost(1_000, 200, 300, 100, pricing)
+	want := (500*5.0 + 200*0.5 + 300*6.25 + 100*30.0) / 1_000_000.0
+	assert.InDelta(t, want, got, 1e-9)
 }

@@ -27,8 +27,12 @@ jobs:
 
   test-and-build:
     needs: changes
+    # Skip WIP draft PRs, but always run for Mergify's merge-queue draft PRs
+    # (head ref mergify/merge-queue/*) so the .mergify.yml merge gate that
+    # requires test-and-build actually executes CI before the queue merges.
     if: >-
-      ${{ !github.event.pull_request.draft
+      ${{ (!github.event.pull_request.draft
+          || startsWith(github.head_ref, 'mergify/merge-queue/'))
           && (github.event_name == 'schedule'
           || needs.changes.outputs.core == 'true'
           || needs.changes.outputs.helm == 'true'
@@ -49,7 +53,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.25"
 
       - name: Install system dependencies
         run: |
@@ -218,6 +222,12 @@ jobs:
           CI_MINIMAL_MODELS: ${{ github.event_name == 'pull_request' }}
           CGO_ENABLED: 1
           LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
+          # make test runs download-models first, which fetches the multimodal
+          # embedding model (config.yaml model_catalog references
+          # models/mom-embedding-multimodal -> llm-semantic-router/multi-modal-embed-small).
+          # Exporting the path here un-gates the model-gated multimodal tests in
+          # test-semantic-router and test-binding-minimal (issue #2319).
+          MULTIMODAL_MODEL_PATH: ${{ github.workspace }}/models/mom-embedding-multimodal
           MILVUS_URI: localhost:19530
           SKIP_MILVUS_TESTS: false
           SKIP_QDRANT_TESTS: false

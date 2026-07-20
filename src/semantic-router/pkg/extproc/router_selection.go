@@ -2,12 +2,11 @@ package extproc
 
 import (
 	"context"
-	"os"
-	"strings"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -49,49 +48,70 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Re
 }
 
 func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) func(string) ([]float32, error) {
-	backend := strings.TrimSpace(strings.ToLower(os.Getenv("EMBEDDING_BACKEND_OVERRIDE")))
-	if backend == "" {
-		backend = strings.TrimSpace(strings.ToLower(cfg.EmbeddingConfig.Backend))
+	provider, err := resolveSelectionEmbeddingProvider(cfg)
+	if err != nil {
+		return func(string) ([]float32, error) {
+			return nil, err
+		}
 	}
+	return func(text string) ([]float32, error) {
+		return provider.Embed(context.Background(), text)
+	}
+}
+
+func resolveSelectionEmbeddingProvider(cfg *config.RouterConfig) (embedding.Provider, error) {
+	backend := embedding.BackendOverrideFromEnv()
 	if backend == "" {
-		backend = "candle"
+		backend = cfg.EmbeddingModels.EmbeddingBackend()
+	}
+	if backend == config.EmbeddingBackendOpenAICompatible {
+		return embedding.NewProvider(cfg.EmbeddingModels, embedding.ProviderOptions{})
 	}
 
-	modelType := strings.TrimSpace(strings.ToLower(cfg.EmbeddingConfig.ModelType))
-	if modelType == "" {
-		modelType = "qwen3"
-	}
-
+	modelType := selectionEmbeddingModelType(cfg, backend)
 	switch backend {
-	case "openvino":
-		return openvinoEmbeddingFunc(modelType)
+	case config.EmbeddingBackendOpenVINO:
+		openvinoEmbed := openvinoEmbeddingFunc(modelType)
+		return embedding.NewFuncProvider(backend, 0, func(_ context.Context, text string) ([]float32, error) {
+			return openvinoEmbed(text)
+		})
 	default:
-		// Batched FFI only supports qwen3 (1024-dim). Other types (default
-		// mmbert, gemma, ...) use the single-text FFI with target_dim 0 so
-		// each model returns its native dimension.
-		if candleEmbeddingSupportsBatched(modelType) {
-			return func(text string) ([]float32, error) {
-				output, err := candle_binding.GetEmbeddingBatched(text, modelType, 1024)
+		return embedding.NewFuncProvider(config.EmbeddingBackendCandle, selectionEmbeddingDimension(cfg, modelType), func(_ context.Context, text string) ([]float32, error) {
+			if modelType == config.EmbeddingModelTypeQwen3 {
+				output, err := candle_binding.GetEmbeddingBatched(text, modelType, selectionEmbeddingDimension(cfg, modelType))
 				if err != nil {
 					return nil, err
 				}
 				return output.Embedding, nil
 			}
-		}
-		return func(text string) ([]float32, error) {
 			output, err := candle_binding.GetEmbeddingWithModelType(text, modelType, 0)
 			if err != nil {
 				return nil, err
 			}
 			return output.Embedding, nil
-		}
+		})
 	}
 }
 
-// candleEmbeddingSupportsBatched reports whether the batched embedding FFI
-// supports the model type. Only qwen3 does; others use the single-text FFI.
-func candleEmbeddingSupportsBatched(modelType string) bool {
-	return modelType == "qwen3"
+func selectionEmbeddingModelType(cfg *config.RouterConfig, backend string) string {
+	modelType := cfg.EmbeddingConfig.ModelType
+	if modelType != "" {
+		return modelType
+	}
+	if backend == config.EmbeddingBackendOpenAICompatible {
+		return config.EmbeddingModelTypeRemote
+	}
+	return config.EmbeddingModelTypeQwen3
+}
+
+func selectionEmbeddingDimension(cfg *config.RouterConfig, modelType string) int {
+	if cfg.EmbeddingConfig.TargetDimension > 0 {
+		return cfg.EmbeddingConfig.TargetDimension
+	}
+	if modelType == config.EmbeddingModelTypeQwen3 {
+		return 1024
+	}
+	return 0
 }
 
 func collectConfiguredAlgorithmMethods(cfg *config.RouterConfig) []selection.SelectionMethod {
@@ -524,7 +544,7 @@ func buildLookupTableStorage(ltCfg config.LookupTableConfig) (lookuptable.Lookup
 
 	cancel := func() { _ = fs.Close() }
 	if ltCfg.AutoSaveInterval != "" {
-		if interval, err := time.ParseDuration(ltCfg.AutoSaveInterval); err == nil {
+		if interval, err := config.ParsePeriodicInterval(ltCfg.AutoSaveInterval, 0); err == nil {
 			fs.StartAutoSave(interval)
 		} else {
 			logging.Warnf("[RouterSelection] Invalid lookup table auto_save_interval %q: %v", ltCfg.AutoSaveInterval, err)
@@ -549,7 +569,7 @@ func maybePopulateFromReplay(
 	if ltCfg.PopulateInterval == "" {
 		return
 	}
-	interval, err := time.ParseDuration(ltCfg.PopulateInterval)
+	interval, err := config.ParsePeriodicInterval(ltCfg.PopulateInterval, 0)
 	if err != nil {
 		logging.Warnf("[RouterSelection] Invalid lookup table populate_interval %q: %v", ltCfg.PopulateInterval, err)
 		return
@@ -597,10 +617,22 @@ func populateFromReplay(storage lookuptable.LookupTableStorage, reader store.Rea
 	})
 }
 
+// defaultPopulateInterval is the fallback cadence used when
+// startLookupTablePopulator is given a non-positive interval, so a
+// misconfigured value can neither panic time.NewTicker nor silently disable
+// periodic replay re-derivation.
+const defaultPopulateInterval = 15 * time.Minute
+
 // startLookupTablePopulator launches a background goroutine that periodically
 // re-derives lookup table entries from the replay store.
-// The returned cancel function stops the goroutine.
+// The returned cancel function stops the goroutine. A non-positive interval is
+// defensively replaced with defaultPopulateInterval (time.NewTicker panics on a
+// non-positive duration).
 func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader store.Reader, interval time.Duration) func() {
+	if interval <= 0 {
+		logging.Warnf("[RouterSelection] Non-positive lookup table populate interval %s; using default %s", interval, defaultPopulateInterval)
+		interval = defaultPopulateInterval
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	// goSafely so a panic in populateFromReplay (e.g. malformed
 	// replay-store entry) is logged instead of crashing the whole

@@ -134,6 +134,45 @@ impl Default for MatryoshkaConfig {
 }
 
 impl MatryoshkaConfig {
+    /// Build a config for a specific model directory, reading the early-exit
+    /// layer list from the model's own `onnx/model_config.json`
+    /// (`available_layers`) so the layers are a single source of truth rather
+    /// than a hardcoded list that can drift from the shipped model.
+    ///
+    /// Falls back to the built-in default layers when the manifest is absent
+    /// or does not declare `available_layers`.
+    pub fn from_model_dir<P: AsRef<Path>>(model_path: P) -> Self {
+        let model_dir = model_path.as_ref();
+        let manifest_candidates = [
+            model_dir.join("onnx").join("model_config.json"),
+            model_dir.join("model_config.json"),
+        ];
+
+        let layers = manifest_candidates
+            .iter()
+            .find(|p| p.exists())
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+            .and_then(|json| {
+                json.get("available_layers")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|l| l.as_u64().map(|n| n as usize))
+                            .collect::<Vec<usize>>()
+                    })
+            })
+            .filter(|layers| !layers.is_empty());
+
+        match layers {
+            Some(layers) => Self {
+                layers,
+                ..Self::default()
+            },
+            None => Self::default(),
+        }
+    }
+
     pub fn validate_dimension(&self, dim: usize) -> bool {
         self.dimensions.contains(&dim)
     }
@@ -263,6 +302,10 @@ impl MmBertEmbeddingModel {
         // Load configuration
         let config = MmBertEmbeddingConfig::from_pretrained(&model_path)?;
 
+        // Resolve the early-exit layer list from the model's own manifest
+        // (single source of truth) so it never drifts from what is shipped.
+        let matryoshka_config = MatryoshkaConfig::from_model_dir(&model_path);
+
         // Load tokenizer
         let tokenizer_candidates = [
             model_dir.join("tokenizer.json"),
@@ -283,7 +326,7 @@ impl MmBertEmbeddingModel {
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
         // Find ONNX model candidates (priority order)
-        let onnx_candidates = Self::find_onnx_models(&model_path)?;
+        let onnx_candidates = Self::find_onnx_models(&model_path, &matryoshka_config.layers)?;
 
         // Create ONNX Runtime session with fallback across candidates.
         // We intentionally prefer GPU-optimized model variants first.
@@ -321,13 +364,14 @@ impl MmBertEmbeddingModel {
         }
 
         // Check for layer-specific ONNX files (for early exit support)
-        let (supports_layer_exit, layer_sessions) = Self::load_layer_sessions(&model_path, use_cpu);
+        let (supports_layer_exit, layer_sessions) =
+            Self::load_layer_sessions(&model_path, use_cpu, &matryoshka_config.layers);
 
         Ok(Self {
             session,
             tokenizer: Arc::new(tokenizer),
             config,
-            matryoshka_config: MatryoshkaConfig::default(),
+            matryoshka_config,
             model_path: model_path_str,
             supports_layer_exit,
             layer_sessions,
@@ -338,7 +382,10 @@ impl MmBertEmbeddingModel {
     ///
     /// Searches: model_path/, model_path/onnx/, and HuggingFace-style
     /// model_path/onnx/layer-{N}/ subdirectories (highest layer first as primary).
-    fn find_onnx_models<P: AsRef<Path>>(model_path: P) -> UnifiedResult<Vec<std::path::PathBuf>> {
+    fn find_onnx_models<P: AsRef<Path>>(
+        model_path: P,
+        layers: &[usize],
+    ) -> UnifiedResult<Vec<std::path::PathBuf>> {
         let dir = model_path.as_ref();
         let onnx_subdir = dir.join("onnx");
 
@@ -369,8 +416,7 @@ impl MmBertEmbeddingModel {
         let mut search_dirs: Vec<std::path::PathBuf> = vec![dir.to_path_buf(), onnx_subdir.clone()];
 
         // HuggingFace-style layer subdirectories (highest layer first for primary model).
-        let matryoshka = MatryoshkaConfig::default();
-        let mut layers_desc: Vec<usize> = matryoshka.layers.clone();
+        let mut layers_desc: Vec<usize> = layers.to_vec();
         layers_desc.sort_unstable_by(|a, b| b.cmp(a));
         for layer in &layers_desc {
             let layer_dir = onnx_subdir.join(format!("layer-{}", layer));
@@ -498,7 +544,8 @@ impl MmBertEmbeddingModel {
                 // Bound the per-session CUDA arena and request-sized arena
                 // growth, mirroring the classifier path. The 2D-Matryoshka
                 // embedding model opens one primary session plus one session
-                // per early-exit layer (3, 6, 11, 22), so without a memory
+                // per early-exit layer declared in the model manifest, so
+                // without a memory
                 // limit each unbounded BFC arena tries to grab a large block
                 // up front and later sessions OOM (CUBLAS_STATUS_ALLOC_FAILED)
                 // on a shared/busy GPU, silently falling back to CPU.
@@ -541,8 +588,8 @@ impl MmBertEmbeddingModel {
     fn load_layer_sessions<P: AsRef<Path>>(
         model_path: P,
         use_cpu: bool,
+        layers: &[usize],
     ) -> (bool, Vec<Option<Session>>) {
-        let matryoshka = MatryoshkaConfig::default();
         let mut sessions = Vec::new();
         let mut any_loaded = false;
         let model_dir = model_path.as_ref();
@@ -553,7 +600,7 @@ impl MmBertEmbeddingModel {
             .filter(|s| !s.is_empty())
             .is_some();
 
-        for layer in &matryoshka.layers {
+        for layer in layers {
             let layer_filename = format!("model_layer_{}.onnx", layer);
             let hf_layer_dir = onnx_dir.join(format!("layer-{}", layer));
 
@@ -873,6 +920,34 @@ mod tests {
         let config = MatryoshkaConfig::default();
         assert_eq!(config.dimensions, vec![768, 512, 256, 128, 64]);
         assert_eq!(config.layers, vec![3, 6, 11, 22]);
+    }
+
+    #[test]
+    fn test_matryoshka_from_model_dir_reads_manifest() {
+        // SSoT: early-exit layers must come from the model's own
+        // onnx/model_config.json (available_layers), NOT a hardcoded list.
+        // The official mmbert-embed-32k-2d-matryoshka ships [6, 11, 16, 22].
+        let dir = tempfile::tempdir().unwrap();
+        let onnx_dir = dir.path().join("onnx");
+        std::fs::create_dir_all(&onnx_dir).unwrap();
+        std::fs::write(
+            onnx_dir.join("model_config.json"),
+            r#"{"total_layers": 22, "available_layers": [6, 11, 16, 22]}"#,
+        )
+        .unwrap();
+
+        let config = MatryoshkaConfig::from_model_dir(dir.path());
+
+        assert_eq!(config.layers, vec![6, 11, 16, 22]);
+    }
+
+    #[test]
+    fn test_matryoshka_from_model_dir_fallback_without_manifest() {
+        // No model_config.json present -> fall back to the built-in default
+        // rather than erroring, preserving backward compat.
+        let dir = tempfile::tempdir().unwrap();
+        let config = MatryoshkaConfig::from_model_dir(dir.path());
+        assert_eq!(config.layers, MatryoshkaConfig::default().layers);
     }
 
     #[test]

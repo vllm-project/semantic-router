@@ -204,6 +204,7 @@ FactCHD_dataset/
 
 .vllm-sr/
 .codex-go-cache/
+.copilot-tmp/
 
 # AWS deployment files (contain instance IPs and IDs)
 src/training/cache_embeddings/aws/vllm-instance-*.txt
@@ -220,3 +221,4 @@ Makefile.local
 # Candle binding build outputs (use target/ for default Cargo builds)
 candle-binding/target-mkl/
 candle-binding/target-cpu/
+.npm-cache/

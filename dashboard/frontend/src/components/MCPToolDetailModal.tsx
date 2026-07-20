@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useId } from 'react'
+import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import styles from './MCPConfigPanel.module.css'
 import type { UnifiedTool } from './mcpConfigPanelTypes'
 
@@ -7,17 +8,28 @@ interface MCPToolDetailModalProps {
   onClose: () => void
 }
 
-export const MCPToolDetailModal: React.FC<MCPToolDetailModalProps> = ({
-  tool,
-  onClose,
-}) => {
+export const MCPToolDetailModal: React.FC<MCPToolDetailModalProps> = ({ tool, onClose }) => {
+  const dialogId = useId()
+  const titleId = `${dialogId}-title`
+  const descriptionId = `${dialogId}-description`
+  const dialogRef = useAccessibleDialog<HTMLDivElement>({ isOpen: true, onClose })
+
   return (
-    <div className={styles.dialogOverlay} onClick={onClose}>
-      <div className={styles.toolDetailDialog} onClick={event => event.stopPropagation()}>
+    <div className={styles.dialogOverlay} role="presentation" onMouseDown={onClose}>
+      <div
+        ref={dialogRef}
+        className={styles.toolDetailDialog}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        tabIndex={-1}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <div className={styles.dialogHeader}>
           <div className={styles.toolDetailTitle}>
             <span className={styles.toolDetailIcon}>🔧</span>
-            <h3>{tool.name}</h3>
+            <h3 id={titleId}>{tool.name}</h3>
             <span className={`${styles.sourceTypeBadge} ${styles[tool.sourceType]}`}>
               {tool.sourceType === 'mcp'
                 ? '🔌 MCP'
@@ -26,7 +38,15 @@ export const MCPToolDetailModal: React.FC<MCPToolDetailModalProps> = ({
                   : '🌐 Backend'}
             </span>
           </div>
-          <button className={styles.closeBtn} onClick={onClose}>×</button>
+          <button
+            type="button"
+            className={styles.closeBtn}
+            onClick={onClose}
+            aria-label="Close tool details"
+            data-dialog-initial-focus
+          >
+            ×
+          </button>
         </div>
 
         <div className={styles.toolDetailContent}>
@@ -37,7 +57,7 @@ export const MCPToolDetailModal: React.FC<MCPToolDetailModalProps> = ({
 
           <div className={styles.toolDetailDescription}>
             <span className={styles.detailLabel}>Description:</span>
-            <p>{tool.description || 'No description'}</p>
+            <p id={descriptionId}>{tool.description || 'No description'}</p>
           </div>
 
           <div className={styles.toolDetailParams}>
@@ -46,7 +66,7 @@ export const MCPToolDetailModal: React.FC<MCPToolDetailModalProps> = ({
               <p className={styles.noParamsHint}>This tool requires no parameters</p>
             ) : (
               <div className={styles.paramDetailList}>
-                {tool.parameters.map(parameter => (
+                {tool.parameters.map((parameter) => (
                   <div key={parameter.name} className={styles.paramDetailItem}>
                     <div className={styles.paramDetailHeader}>
                       <span className={styles.paramDetailName}>{parameter.name}</span>
@@ -66,7 +86,7 @@ export const MCPToolDetailModal: React.FC<MCPToolDetailModalProps> = ({
         </div>
 
         <div className={styles.dialogFooter}>
-          <button className={styles.cancelBtn} onClick={onClose}>
+          <button type="button" className={styles.cancelBtn} onClick={onClose}>
             Close
           </button>
         </div>

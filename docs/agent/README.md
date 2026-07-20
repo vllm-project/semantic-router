@@ -71,6 +71,7 @@ make agent-ci-gate CHANGED_FILES="..."
 - [reviews/2026/2026-05-22-memory-assisted-review-bot.md](reviews/2026/2026-05-22-memory-assisted-review-bot.md)
 - [glossary.md](glossary.md)
 - [amd-local.md](amd-local.md)
+- [nvidia-local.md](nvidia-local.md)
 
 ## Executable Contract
 

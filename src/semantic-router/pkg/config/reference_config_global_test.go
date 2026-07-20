@@ -46,7 +46,19 @@ func assertReferenceConfigServiceGlobalCoverage(t testingT, services map[string]
 	assertReferenceConfigObservabilityCoverage(t, mustMapAt(t, services, "observability"))
 	assertReferenceConfigAuthzCoverage(t, mustMapAt(t, services, "authz"))
 	assertReferenceConfigRateLimitCoverage(t, mustMapAt(t, services, "ratelimit"))
+	assertReferenceConfigManagementAPICoverage(t, mustMapAt(t, services, "management_api"))
 	assertReferenceConfigRouterReplayCoverage(t, mustMapAt(t, services, "router_replay"))
+}
+
+func assertReferenceConfigManagementAPICoverage(t testingT, managementAPI map[string]interface{}) {
+	assertMapCoversStructFields(t, managementAPI, reflect.TypeOf(ManagementAPIConfig{}), "global.services.management_api")
+	assertMapCoversStructFields(t, mustMapAt(t, managementAPI, "auth"), reflect.TypeOf(ManagementAPIAuthConfig{}), "global.services.management_api.auth")
+	assertSliceUnionCoversStructFields(
+		t,
+		mustSliceAt(t, managementAPI, "auth", "tokens"),
+		reflect.TypeOf(ManagementAPITokenRef{}),
+		"global.services.management_api.auth.tokens",
+	)
 }
 
 func assertReferenceConfigAPIServiceCoverage(t testingT, api map[string]interface{}) {
@@ -204,6 +216,12 @@ func assertReferenceConfigEmbeddingCatalogCoverage(t testingT, embeddings map[st
 		mustMapAt(t, embeddings, "semantic", "embedding_config", "prototype_scoring"),
 		reflect.TypeOf(PrototypeScoringConfig{}),
 		"global.model_catalog.embeddings.semantic.embedding_config.prototype_scoring",
+	)
+	assertMapCoversStructFields(
+		t,
+		mustMapAt(t, embeddings, "semantic", "endpoint"),
+		reflect.TypeOf(EmbeddingEndpointConfig{}),
+		"global.model_catalog.embeddings.semantic.endpoint",
 	)
 }
 

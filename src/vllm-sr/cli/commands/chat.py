@@ -18,8 +18,8 @@ from cli.chat_client import (
     resolve_chat_base_url,
 )
 from cli.commands.common import exit_with_logged_error
+from cli.container_backend import ContainerBackend
 from cli.deployment_backend import resolve_target
-from cli.docker_backend import DockerBackend
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -37,7 +37,7 @@ log = get_logger(__name__)
     "model",
     default=DEFAULT_CHAT_MODEL,
     show_default=True,
-    help="Model name sent to the router (default: MoM).",
+    help="Model name sent to the router.",
 )
 @click.option(
     "--system",
@@ -87,13 +87,13 @@ def chat(
     Send a one-shot chat completion through the Envoy-routed HTTP API.
 
     Uses the first listener port in config.yaml plus the stack port offset.
-    Default model is MoM.
+    The default model is the namespaced automatic-routing alias vllm-sr/auto.
 
     Examples:
 
         vllm-sr chat "hello"
 
-        vllm-sr chat --model MoM --prompt "Explain mixture of models"
+        vllm-sr chat --model vllm-sr/auto --prompt "Explain mixture of models"
 
         vllm-sr chat --json "hello"
     """
@@ -107,8 +107,8 @@ def chat(
         raise click.ClickException(str(exc)) from exc
 
     if resolve_target(target) == "docker":
-        logging.getLogger("cli.docker_runtime").setLevel(logging.WARNING)
-        backend = DockerBackend()
+        logging.getLogger("cli.container_runtime").setLevel(logging.WARNING)
+        backend = ContainerBackend()
         if not backend.is_running():
             raise click.ClickException(
                 "vLLM Semantic Router does not appear to be running locally "

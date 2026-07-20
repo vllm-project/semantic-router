@@ -3,6 +3,8 @@
 package apiserver
 
 import (
+	"sync"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelinventory"
@@ -13,6 +15,7 @@ import (
 // ClassificationAPIServer holds the server state and dependencies
 type ClassificationAPIServer struct {
 	classificationSvc     classificationService
+	configMu              sync.RWMutex
 	config                *config.RouterConfig
 	runtimeConfig         *liveRuntimeConfig
 	runtimeRegistry       *routerruntime.Registry
@@ -87,6 +90,7 @@ type ClassificationOptions struct {
 // EmbeddingRequest represents a request for embedding generation
 type EmbeddingRequest struct {
 	Texts           []string `json:"texts"`
+	Images          []string `json:"images,omitempty"`           // Inline base64 image data URIs (data:image/...;base64,...); encoded via the multi-modal model
 	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
 	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128, 64
 	TargetLayer     int      `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
@@ -98,6 +102,7 @@ type EmbeddingRequest struct {
 // EmbeddingResult represents a single embedding result
 type EmbeddingResult struct {
 	Text             string    `json:"text"`
+	Modality         string    `json:"modality,omitempty"` // "image" for image inputs; empty for text (backward compatible)
 	Embedding        []float32 `json:"embedding"`
 	Dimension        int       `json:"dimension"`
 	ModelUsed        string    `json:"model_used"`

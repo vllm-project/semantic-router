@@ -1,0 +1,105 @@
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.field,
+.wideField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.wideField {
+  grid-column: 1 / -1;
+}
+
+.label {
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.input,
+.select {
+  width: 100%;
+  min-height: 2.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  padding: 0.65rem 0.75rem;
+  font: inherit;
+}
+
+.checkField {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.5rem;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+.sequenceList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sequenceCard {
+  border: 1px solid var(--color-border);
+  border-radius: 0.625rem;
+  background: color-mix(in srgb, var(--color-surface) 86%, transparent);
+  padding: 0.75rem;
+}
+
+.sequenceHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.625rem;
+}
+
+.sequenceHeader strong {
+  font-size: 0.8rem;
+}
+
+.removeButton,
+.addButton {
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  padding: 0.35rem 0.7rem;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.removeButton:hover {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.addButton {
+  align-self: flex-start;
+  color: var(--color-text-primary);
+}
+
+.readonlyValue {
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+}
+
+@media (max-width: 720px) {
+  .fieldGrid {
+    grid-template-columns: 1fr;
+  }
+}

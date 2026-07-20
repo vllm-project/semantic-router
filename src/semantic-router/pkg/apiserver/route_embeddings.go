@@ -3,17 +3,70 @@
 package apiserver
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
+
+// multiModalEncodeImage is the FFI image-encode entry point, kept as a
+// package-level var so tests can inject a failing encoder without a loaded model.
+var multiModalEncodeImage = candle_binding.MultiModalEncodeImageFromBase64
+
+// imageEncodeError marks an image-encode failure driven by the request input:
+// the payload validated as a safe base64 data URI but was not a decodable image.
+// The handler maps it to 400 INVALID_IMAGE rather than 500, so a client-supplied
+// bad image is reported as a client error, not an internal one.
+type imageEncodeError struct {
+	index int
+	err   error
+}
+
+func (e *imageEncodeError) Error() string {
+	return fmt.Sprintf("images[%d]: %v", e.index, e.err)
+}
+
+func (e *imageEncodeError) Unwrap() error { return e.err }
+
+// classifyEmbeddingError maps a buildEmbeddingResults error to the HTTP status,
+// error code, and client message. Input-caused image-encode failures are 400
+// INVALID_IMAGE; every other failure is a genuine 500.
+func classifyEmbeddingError(err error) (int, string, string) {
+	var imgErr *imageEncodeError
+	if errors.As(err, &imgErr) {
+		return http.StatusBadRequest, "INVALID_IMAGE",
+			fmt.Sprintf("images[%d] could not be decoded as an image", imgErr.index)
+	}
+	return http.StatusInternalServerError, "EMBEDDING_GENERATION_FAILED",
+		fmt.Sprintf("failed to generate embedding: %v", err)
+}
 
 const (
 	defaultEmbeddingDimension = 768
 	defaultEmbeddingPriority  = 0.5
+	// maxImagesPerRequest bounds images per request; each is a full SigLIP
+	// forward pass and the body-size cap alone admits very many minimal images.
+	maxImagesPerRequest = 8
 )
+
+// invalidDimensionMessage matches the dimensions accepted by isValidDimension,
+// including 64 (which the similarity error messages previously omitted).
+const invalidDimensionMessage = "dimension must be one of: 64, 128, 256, 512, 768, 1024 (got %d)"
+
+// validatePriority rejects a priority weight outside the documented [0.0, 1.0]
+// range; out-of-range values were previously accepted and passed to the model.
+func validatePriority(name string, value float32) (string, string, bool) {
+	if value < 0 || value > 1 {
+		return "INVALID_PARAMETER", fmt.Sprintf("%s must be between 0.0 and 1.0 (got %g)", name, value), false
+	}
+	return "", "", true
+}
 
 // handleEmbeddings handles embedding generation requests
 func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
@@ -24,12 +77,12 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 
 	results, totalProcessingTime, err := buildEmbeddingResults(req)
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "EMBEDDING_GENERATION_FAILED",
-			fmt.Sprintf("failed to generate embedding: %v", err))
+		status, code, message := classifyEmbeddingError(err)
+		s.writeErrorResponse(w, status, code, message)
 		return
 	}
 
-	avgProcessingTime := float64(totalProcessingTime) / float64(len(req.Texts))
+	avgProcessingTime := averageEmbeddingProcessingTime(totalProcessingTime, req)
 	response := EmbeddingResponse{
 		Embeddings:            results,
 		TotalCount:            len(results),
@@ -51,12 +104,25 @@ func (s *ClassificationAPIServer) parseEmbeddingRequest(w http.ResponseWriter, r
 	}
 
 	applyEmbeddingDefaults(&req)
-	if code, message, ok := validateEmbeddingRequest(req); !ok {
+	mmbertPath := ""
+	if cfg := s.currentConfig(); cfg != nil {
+		mmbertPath = cfg.EmbeddingModels.MmBertModelPath
+	}
+	availableLayers := config.MmBertAvailableLayers(mmbertPath)
+	if code, message, ok := validateEmbeddingRequest(req, availableLayers); !ok {
 		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
 		return EmbeddingRequest{}, false
 	}
 
 	return req, true
+}
+
+func averageEmbeddingProcessingTime(totalProcessingTime int64, req EmbeddingRequest) float64 {
+	inputCount := len(req.Texts) + len(req.Images)
+	if inputCount == 0 {
+		return 0
+	}
+	return float64(totalProcessingTime) / float64(inputCount)
 }
 
 func applyEmbeddingDefaults(req *EmbeddingRequest) {
@@ -72,9 +138,12 @@ func applyEmbeddingDefaults(req *EmbeddingRequest) {
 	}
 }
 
-func validateEmbeddingRequest(req EmbeddingRequest) (string, string, bool) {
-	if len(req.Texts) == 0 {
-		return "INVALID_INPUT", "texts array cannot be empty", false
+func validateEmbeddingRequest(req EmbeddingRequest, mmbertLayers []int) (string, string, bool) {
+	if len(req.Texts) == 0 && len(req.Images) == 0 {
+		return "INVALID_INPUT", "at least one of texts or images must be provided", false
+	}
+	if code, message, ok := validateEmbeddingImages(req.Images); !ok {
+		return code, message, false
 	}
 	if !isValidDimension(req.Dimension) {
 		return "INVALID_DIMENSION", fmt.Sprintf("dimension must be one of: 64, 128, 256, 512, 768, 1024 (got %d)", req.Dimension), false
@@ -82,14 +151,31 @@ func validateEmbeddingRequest(req EmbeddingRequest) (string, string, bool) {
 	if req.TargetLayer != 0 && req.Model != "mmbert" {
 		return "INVALID_PARAMETER", "target_layer is only supported for model='mmbert'", false
 	}
-	if req.Model == "mmbert" && req.TargetLayer != 0 && !isValidMmBertLayer(req.TargetLayer) {
-		return "INVALID_LAYER", fmt.Sprintf("target_layer must be one of: 3, 6, 11, 22 (got %d)", req.TargetLayer), false
+	if req.Model == "mmbert" && req.TargetLayer != 0 && !config.IsValidMmBertLayer(req.TargetLayer, mmbertLayers) {
+		return "INVALID_LAYER", fmt.Sprintf("target_layer must be one of: %s (got %d)", formatLayerList(mmbertLayers), req.TargetLayer), false
+	}
+	return "", "", true
+}
+
+// validateEmbeddingImages enforces the image-input contract: a bounded count of
+// safe inline base64 image data URIs whose payloads decode.
+func validateEmbeddingImages(images []string) (string, string, bool) {
+	if len(images) > maxImagesPerRequest {
+		return "INVALID_INPUT", fmt.Sprintf("at most %d images may be provided per request (got %d)", maxImagesPerRequest, len(images)), false
+	}
+	for i, image := range images {
+		if !imageurl.IsSafeImageDataURL(image) {
+			return "INVALID_IMAGE", fmt.Sprintf("images[%d] must be an inline base64 image data URI (data:image/<type>;base64,...)", i), false
+		}
+		if _, ok := imageurl.DecodeBase64(image); !ok {
+			return "INVALID_IMAGE", fmt.Sprintf("images[%d] is not valid base64-encoded image data", i), false
+		}
 	}
 	return "", "", true
 }
 
 func buildEmbeddingResults(req EmbeddingRequest) ([]EmbeddingResult, int64, error) {
-	results := make([]EmbeddingResult, 0, len(req.Texts))
+	results := make([]EmbeddingResult, 0, len(req.Texts)+len(req.Images))
 	var totalProcessingTime int64
 
 	for _, text := range req.Texts {
@@ -104,6 +190,33 @@ func buildEmbeddingResults(req EmbeddingRequest) ([]EmbeddingResult, int64, erro
 			Embedding:        output.Embedding,
 			Dimension:        len(output.Embedding),
 			ModelUsed:        output.ModelType,
+			ProcessingTimeMs: processingTime,
+		})
+
+		totalProcessingTime += processingTime
+	}
+
+	for i, image := range req.Images {
+		// Canonicalize so the FFI's case-sensitive ";base64," scan finds the
+		// payload boundary (validation already guaranteed a safe data URI).
+		encodeInput := image
+		if canonical, ok := imageurl.CanonicalDataURL(image); ok {
+			encodeInput = canonical
+		}
+		output, err := multiModalEncodeImage(encodeInput, req.Dimension)
+		if err != nil {
+			// The image already passed the safe-data-URI + base64-decode gate, so
+			// an encode failure here is input-caused (undecodable image bytes);
+			// surface it as a 400 rather than a 500.
+			return nil, 0, &imageEncodeError{index: i, err: err}
+		}
+
+		processingTime := int64(output.ProcessingTimeMs)
+		results = append(results, EmbeddingResult{
+			Modality:         output.Modality,
+			Embedding:        output.Embedding,
+			Dimension:        len(output.Embedding),
+			ModelUsed:        "multi-modal-embed",
 			ProcessingTimeMs: processingTime,
 		})
 
@@ -126,35 +239,15 @@ func embeddingOutput(req EmbeddingRequest, text string) (*candle_binding.Embeddi
 
 // handleSimilarity handles text similarity calculation requests
 func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *http.Request) {
-	// Parse request
 	var req SimilarityRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
 		return
 	}
 
-	// Validate input
-	if req.Text1 == "" || req.Text2 == "" {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "both text1 and text2 must be provided")
-		return
-	}
-
-	// Set defaults
-	if req.Model == "" {
-		req.Model = "auto"
-	}
-	if req.Dimension == 0 {
-		req.Dimension = 768 // Default to full dimension
-	}
-	if req.Model == "auto" && req.QualityPriority == 0 && req.LatencyPriority == 0 {
-		req.QualityPriority = 0.5
-		req.LatencyPriority = 0.5
-	}
-
-	// Validate dimension
-	if !isValidDimension(req.Dimension) {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_DIMENSION",
-			fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension))
+	applySimilarityDefaults(&req)
+	if code, message, ok := validateSimilarityRequest(req); !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
 		return
 	}
 
@@ -181,6 +274,35 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		result.Similarity, result.ModelType, result.ProcessingTimeMs)
 
 	s.writeJSONResponse(w, http.StatusOK, response)
+}
+
+func applySimilarityDefaults(req *SimilarityRequest) {
+	if req.Model == "" {
+		req.Model = "auto"
+	}
+	if req.Dimension == 0 {
+		req.Dimension = defaultEmbeddingDimension
+	}
+	if req.Model == "auto" && req.QualityPriority == 0 && req.LatencyPriority == 0 {
+		req.QualityPriority = defaultEmbeddingPriority
+		req.LatencyPriority = defaultEmbeddingPriority
+	}
+}
+
+func validateSimilarityRequest(req SimilarityRequest) (string, string, bool) {
+	if strings.TrimSpace(req.Text1) == "" || strings.TrimSpace(req.Text2) == "" {
+		return "INVALID_INPUT", "both text1 and text2 must be provided", false
+	}
+	if !isValidDimension(req.Dimension) {
+		return "INVALID_DIMENSION", fmt.Sprintf(invalidDimensionMessage, req.Dimension), false
+	}
+	if code, message, ok := validatePriority("quality_priority", req.QualityPriority); !ok {
+		return code, message, false
+	}
+	if code, message, ok := validatePriority("latency_priority", req.LatencyPriority); !ok {
+		return code, message, false
+	}
+	return "", "", true
 }
 
 // handleBatchSimilarity handles batch similarity matching requests
@@ -257,17 +379,28 @@ func applyBatchSimilarityDefaults(req *BatchSimilarityRequest) {
 }
 
 func validateBatchSimilarityRequest(req BatchSimilarityRequest) (string, string, bool) {
-	if req.Query == "" {
+	if strings.TrimSpace(req.Query) == "" {
 		return "INVALID_INPUT", "query must be provided", false
 	}
 	if len(req.Candidates) == 0 {
 		return "INVALID_INPUT", "candidates array cannot be empty", false
 	}
+	for i, c := range req.Candidates {
+		if strings.TrimSpace(c) == "" {
+			return "INVALID_INPUT", fmt.Sprintf("candidates[%d] must not be empty or whitespace", i), false
+		}
+	}
 	if req.TopK < 0 {
 		return "INVALID_INPUT", "top_k cannot be negative", false
 	}
 	if !isValidDimension(req.Dimension) {
-		return "INVALID_DIMENSION", fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension), false
+		return "INVALID_DIMENSION", fmt.Sprintf(invalidDimensionMessage, req.Dimension), false
+	}
+	if code, message, ok := validatePriority("quality_priority", req.QualityPriority); !ok {
+		return code, message, false
+	}
+	if code, message, ok := validatePriority("latency_priority", req.LatencyPriority); !ok {
+		return code, message, false
 	}
 	return "", "", true
 }
@@ -303,8 +436,12 @@ func isValidDimension(dim int) bool {
 	return validDimensions[dim]
 }
 
-// isValidMmBertLayer checks if the provided layer is valid for mmBERT early exit
-func isValidMmBertLayer(layer int) bool {
-	validLayers := map[int]bool{3: true, 6: true, 11: true, 22: true}
-	return validLayers[layer]
+// formatLayerList renders a layer set as a comma-separated string for error
+// messages, e.g. [6 11 16 22] -> "6, 11, 16, 22".
+func formatLayerList(layers []int) string {
+	parts := make([]string, len(layers))
+	for i, l := range layers {
+		parts[i] = strconv.Itoa(l)
+	}
+	return strings.Join(parts, ", ")
 }

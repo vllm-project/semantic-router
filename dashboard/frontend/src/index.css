@@ -1,61 +1,75 @@
 :root {
-  /* NVIDIA Brev Console - Dark Theme as default */
-  /* Primary brand colors - NVIDIA Green */
-  --color-primary: #76b900;
-  --color-primary-dark: #5a8f00;
-  --color-primary-light: #8fd400;
+  /* AMD Graphite Control Plane */
+  --surface-canvas: #050505;
+  --surface-shell: #09090a;
+  --surface-panel: #101012;
+  --surface-raised: #18181b;
+  --surface-glass: rgba(16, 16, 18, 0.76);
+  --text-primary: #f5f5f7;
+  --text-secondary: #b2b2b8;
+  --text-muted: #73737c;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --brand-amd: #e31b23;
+  --brand-amd-soft: rgba(227, 27, 35, 0.14);
+  --action-primary-bg: #f5f5f7;
+  --focus-ring: rgba(245, 245, 247, 0.72);
 
-  /* Accent colors - Cyber/Neon palette */
-  --color-accent-cyan: #00d4ff;
-  --color-accent-purple: #9333ea;
-  --color-accent-blue: #3b82f6;
-  --color-accent-pink: #ec4899;
+  /* Shared geometry for public and authenticated app headers. */
+  --app-header-height: 80px;
+  --app-shell-gutter: clamp(1.5rem, 3.5vw, 4.5rem);
+
+  /* Compatibility aliases while feature surfaces migrate to semantic tokens. */
+  --color-primary: #f5f5f7;
+  --color-primary-dark: #d4d4d8;
+  --color-primary-light: #ffffff;
+
+  /* Restrained alloy accents. Semantic charts may still use their own colors. */
+  --color-accent-cyan: #a6abb3;
+  --color-accent-purple: #92969d;
+  --color-accent-blue: #b4b7bd;
+  --color-accent-pink: #858a92;
 
   /* Semantic colors */
   --color-success: #22c55e;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
-  --color-info: #00d4ff;
+  --color-info: #a6abb3;
 
-  /* Dark theme - NVIDIA Brev style (default) */
-  /* Header is pure black, content area is dark gray */
-  --color-bg: #1a1a1a;
-  --color-bg-header: #000000;
-  --color-bg-secondary: #141414;
-  --color-bg-tertiary: #1f1f1f;
-  --color-bg-elevated: #252525;
-  --color-text: #e8e8e8;
-  --color-text-secondary: #999999;
-  --color-text-muted: #666666;
-  --color-border: #333333;
-  --color-border-hover: #444444;
-  --color-shadow: rgba(0, 0, 0, 0.5);
-  --color-surface: #1f1f1f;
-  --color-primary-hover: #8fd400;
+  --color-bg: var(--surface-canvas);
+  --color-bg-header: var(--surface-shell);
+  --color-bg-secondary: var(--surface-panel);
+  --color-bg-tertiary: var(--surface-raised);
+  --color-bg-elevated: #202024;
+  --color-text: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-border: var(--border-subtle);
+  --color-border-hover: var(--border-strong);
+  --color-shadow: rgba(0, 0, 0, 0.64);
+  --color-surface: var(--surface-panel);
+  --color-primary-hover: #ffffff;
 
   /* Glow effects */
-  --glow-primary: 0 0 20px rgba(118, 185, 0, 0.3);
-  --glow-cyan: 0 0 20px rgba(0, 212, 255, 0.3);
-  --glow-purple: 0 0 20px rgba(147, 51, 234, 0.3);
+  --glow-primary: 0 12px 32px rgba(0, 0, 0, 0.38);
+  --glow-cyan: 0 12px 32px rgba(0, 0, 0, 0.32);
+  --glow-purple: 0 12px 32px rgba(0, 0, 0, 0.32);
 
   /* Topology-specific dark theme variables */
-  --bg-primary: #1a1a1a;
-  --bg-secondary: #141414;
-  --bg-hover: #222222;
-  --text-primary: #e8e8e8;
-  --text-secondary: #888888;
-  --border-color: #333333;
-  --accent-color: #76b900;
-  --accent-hover: #8ed100;
+  --bg-primary: var(--surface-canvas);
+  --bg-secondary: var(--surface-panel);
+  --bg-hover: var(--surface-raised);
+  --border-color: var(--border-subtle);
+  --accent-color: #a6abb3;
+  --accent-hover: #d4d4d8;
 
   /* Flow background for dark mode */
-  --flow-bg-gradient-start: #0f0f0f;
-  --flow-bg-gradient-mid: #1a1a1a;
-  --flow-bg-gradient-end: #0f0f0f;
-  --flow-dot-color: rgba(255, 255, 255, 0.05);
+  --flow-bg-gradient-start: #050505;
+  --flow-bg-gradient-mid: #0d0d0f;
+  --flow-bg-gradient-end: #050505;
+  --flow-dot-color: rgba(255, 255, 255, 0.045);
 
-  /* Typography - NVIDIA uses clean sans-serif */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
 
   /* Font sizes - Readable, clean */
@@ -86,6 +100,13 @@
   --transition-slow: 350ms ease;
 }
 
+@media (max-width: 1023px) {
+  :root {
+    --app-header-height: 56px;
+    --app-shell-gutter: 1rem;
+  }
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -103,7 +124,12 @@ html {
 
 body {
   font-family: var(--font-sans);
-  background-color: var(--color-bg);
+  background:
+    radial-gradient(circle at 78% -12%, rgba(255, 255, 255, 0.055), transparent 27rem),
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    var(--surface-canvas);
+  background-size: auto, 40px 40px, 40px 40px, auto;
   color: var(--color-text);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
@@ -126,14 +152,14 @@ pre {
 }
 
 a {
-  color: var(--color-primary);
+  color: #d4d4d8;
   text-decoration: none;
   transition: color var(--transition-fast);
 }
 
 a:hover {
-  color: var(--color-primary-light);
-  text-shadow: var(--glow-primary);
+  color: #ffffff;
+  text-shadow: none;
 }
 
 button {
@@ -142,6 +168,11 @@ button {
   border: none;
   outline: none;
   background: none;
+}
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 input,
@@ -162,8 +193,8 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(118, 185, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.38);
+  box-shadow: 0 0 0 3px rgba(245, 245, 247, 0.09);
 }
 
 ::-webkit-scrollbar {
@@ -181,7 +212,7 @@ textarea:focus {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-primary);
+  background: #6b6b72;
 }
 
 /* Fullscreen mode - hide Layout header */
@@ -199,7 +230,6 @@ body.playground-fullscreen main {
   padding: 0 !important;
 }
 
-/* NVIDIA Brev Button Styles */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -216,13 +246,13 @@ body.playground-fullscreen main {
 }
 
 .btn-primary {
-  background: var(--color-primary);
-  color: #000000;
+  background: var(--action-primary-bg);
+  color: #09090a;
 }
 
 .btn-primary:hover {
-  background: var(--color-primary-light);
-  box-shadow: var(--glow-primary);
+  background: #ffffff;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.36);
 }
 
 .btn-secondary {
@@ -232,8 +262,8 @@ body.playground-fullscreen main {
 }
 
 .btn-secondary:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  border-color: var(--border-strong);
+  color: #ffffff;
 }
 
 .btn-ghost {
@@ -287,8 +317,24 @@ body.playground-fullscreen main {
 }
 
 .badge-primary {
-  background: rgba(118, 185, 0, 0.15);
-  color: var(--color-primary);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+::selection {
+  background: rgba(227, 27, 35, 0.34);
+  color: #ffffff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ========================================

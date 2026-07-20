@@ -47,7 +47,7 @@ routing:
               - type: keyword
                 name: urgent_keywords
               - type: complexity
-                name: needs_reasoning
+                name: needs_reasoning:hard
           - operator: NOT
             conditions:
               - type: jailbreak
