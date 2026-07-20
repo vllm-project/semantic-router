@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 )
@@ -80,6 +81,16 @@ func (c *RouterConfig) RecipeForRequestModel(modelName string) (*RoutingRecipe, 
 func (c *RouterConfig) IsEntrypointModelName(modelName string) bool {
 	_, ok := c.RecipeForRequestModel(modelName)
 	return ok
+}
+
+// EntrypointRecipeDescription returns the model-listing description for an
+// entrypoint's recipe: the recipe's own description when set, otherwise a
+// generic label naming the recipe.
+func (c *RouterConfig) EntrypointRecipeDescription(recipeName string) string {
+	if recipe, ok := c.RecipeByName(recipeName); ok && strings.TrimSpace(recipe.Description) != "" {
+		return recipe.Description
+	}
+	return fmt.Sprintf("Entrypoint for the %s routing recipe", recipeName)
 }
 
 // AllRoutingDecisions returns the decisions of every routing profile, for

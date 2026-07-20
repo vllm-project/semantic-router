@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -133,5 +134,37 @@ func TestDecisionCandidatesForRequest(t *testing.T) {
 	ctx = &RequestContext{}
 	if candidates := router.decisionCandidatesForRequest(config.DefaultVSRAutoModelName, ctx); candidates != nil {
 		t.Fatalf("expected nil candidates for the auto model, got %+v", candidates)
+	}
+}
+
+func TestModelsListingIncludesEntrypointNames(t *testing.T) {
+	router := newEntrypointTestRouter(t)
+
+	response, err := router.handleModelsRequest("/v1/models")
+	if err != nil {
+		t.Fatalf("handleModelsRequest failed: %v", err)
+	}
+	immediateResp := response.GetImmediateResponse()
+	if immediateResp == nil {
+		t.Fatal("expected an immediate response")
+	}
+
+	var modelList OpenAIModelList
+	if err := json.Unmarshal(immediateResp.Body, &modelList); err != nil {
+		t.Fatalf("failed to parse response body: %v", err)
+	}
+
+	descriptionByID := make(map[string]string, len(modelList.Data))
+	for _, model := range modelList.Data {
+		descriptionByID[model.ID] = model.Description
+	}
+	if _, ok := descriptionByID["vllm-sr/privacy"]; !ok {
+		t.Fatalf("expected vllm-sr/privacy in the model list, got %+v", descriptionByID)
+	}
+	if _, ok := descriptionByID["vllm-sr/default-alias"]; !ok {
+		t.Fatalf("expected vllm-sr/default-alias in the model list, got %+v", descriptionByID)
+	}
+	if got := descriptionByID["vllm-sr/default-alias"]; got != "Entrypoint for the default routing recipe" {
+		t.Fatalf("expected the generic entrypoint description for the default alias, got %q", got)
 	}
 }
