@@ -10,9 +10,12 @@ import (
 const DefaultRecipeName = "default"
 
 // RoutingRecipe is one normalized routing profile. The recipe named
-// DefaultRecipeName always mirrors the flat routing fields on RouterConfig,
+// DefaultRecipeName always mirrors the flat Decisions field on RouterConfig,
 // so existing single-profile read sites and recipe-aware read sites observe
-// the same default behavior.
+// the same default behavior. The flat Signals and Projections fields instead
+// hold the global registry: the union of every recipe's profile, so one
+// classifier evaluates any recipe's rules (issue #2331 keeps the signal
+// registry global).
 type RoutingRecipe struct {
 	Name        string
 	Description string
@@ -69,4 +72,59 @@ func (c *RouterConfig) RecipeForRequestModel(modelName string) (*RoutingRecipe, 
 		}
 	}
 	return nil, false
+}
+
+// IsEntrypointModelName reports whether the name is a request-facing virtual
+// model name from the entrypoint table. Such names never reach a backend; the
+// router resolves them like auto-model aliases.
+func (c *RouterConfig) IsEntrypointModelName(modelName string) bool {
+	_, ok := c.RecipeForRequestModel(modelName)
+	return ok
+}
+
+// AllRoutingDecisions returns the decisions of every routing profile, for
+// callers that reason about routing as a whole (signal usage analysis,
+// contract validation). Configs built without the canonical loader carry no
+// recipes; their flat decisions are the only profile.
+func (c *RouterConfig) AllRoutingDecisions() []Decision {
+	if c == nil {
+		return nil
+	}
+	if len(c.Recipes) == 0 {
+		return c.Decisions
+	}
+	if len(c.Recipes) == 1 {
+		return c.Recipes[0].Decisions
+	}
+	all := make([]Decision, 0, 2*len(c.Decisions))
+	for i := range c.Recipes {
+		all = append(all, c.Recipes[i].Decisions...)
+	}
+	return all
+}
+
+// RoutingProfileSignals returns the default profile's signals for canonical
+// export. The flat Signals field holds the global registry (union across
+// recipes); exporting it would leak other recipes' rules into the top-level
+// routing block.
+func (c *RouterConfig) RoutingProfileSignals() Signals {
+	if c == nil {
+		return Signals{}
+	}
+	if recipe := c.DefaultRecipe(); recipe != nil {
+		return recipe.Signals
+	}
+	return c.Signals
+}
+
+// RoutingProfileProjections is the projections counterpart of
+// RoutingProfileSignals.
+func (c *RouterConfig) RoutingProfileProjections() Projections {
+	if c == nil {
+		return Projections{}
+	}
+	if recipe := c.DefaultRecipe(); recipe != nil {
+		return recipe.Projections
+	}
+	return c.Projections
 }

@@ -45,9 +45,7 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 
 	if explicitDefault := findRecipe(recipes, DefaultRecipeName); explicitDefault != nil {
 		// Recipes-only layout: bridge the explicit default recipe into the
-		// flat routing fields so existing read sites keep working.
-		cfg.Signals = explicitDefault.Signals
-		cfg.Projections = explicitDefault.Projections
+		// flat decisions so existing single-profile read sites keep working.
 		cfg.Decisions = explicitDefault.Decisions
 	} else {
 		// The top-level routing profile is the default recipe.
@@ -60,11 +58,103 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 	}
 	cfg.Recipes = recipes
 
+	// The signal registry is global (#2331): every recipe's signals and
+	// projections merge into the flat fields so one classifier evaluates any
+	// recipe's rules, while decisions stay per-recipe.
+	signals, projections, err := mergeRecipeRegistries(recipes)
+	if err != nil {
+		return err
+	}
+	cfg.Signals = signals
+	cfg.Projections = projections
+
 	entrypoints, err := normalizeCanonicalEntrypoints(canonical.Entrypoints, recipes)
 	if err != nil {
 		return err
 	}
 	cfg.Entrypoints = entrypoints
+	return nil
+}
+
+// mergeRecipeRegistries builds the global signal and projection registries
+// from every recipe's profile. Single-recipe configs pass through untouched so
+// single-profile behavior cannot change.
+func mergeRecipeRegistries(recipes []RoutingRecipe) (Signals, Projections, error) {
+	if len(recipes) == 1 {
+		return recipes[0].Signals, recipes[0].Projections, nil
+	}
+	signals, err := mergeRecipeSignals(recipes)
+	if err != nil {
+		return Signals{}, Projections{}, err
+	}
+	projections, err := mergeRecipeProjections(recipes)
+	if err != nil {
+		return Signals{}, Projections{}, err
+	}
+	return signals, projections, nil
+}
+
+// mergeRecipeSignals appends every recipe's rules field by field. Rule names
+// share one global namespace per signal kind, so a name declared by two
+// profiles is ambiguous and rejected.
+func mergeRecipeSignals(recipes []RoutingRecipe) (Signals, error) {
+	var merged Signals
+	mergedValue := reflect.ValueOf(&merged).Elem()
+	owners := make(map[string]string)
+	for _, recipe := range recipes {
+		recipeValue := reflect.ValueOf(recipe.Signals)
+		for i := 0; i < mergedValue.NumField(); i++ {
+			kind := strings.Split(mergedValue.Type().Field(i).Tag.Get("yaml"), ",")[0]
+			rules := recipeValue.Field(i)
+			for j := 0; j < rules.Len(); j++ {
+				rule := rules.Index(j)
+				name := rule.FieldByName("Name").String()
+				if err := claimRegistryName(owners, kind, name, recipe.Name, "signal"); err != nil {
+					return Signals{}, err
+				}
+				mergedValue.Field(i).Set(reflect.Append(mergedValue.Field(i), rule))
+			}
+		}
+	}
+	return merged, nil
+}
+
+// mergeRecipeProjections is the projections counterpart of mergeRecipeSignals.
+func mergeRecipeProjections(recipes []RoutingRecipe) (Projections, error) {
+	var merged Projections
+	owners := make(map[string]string)
+	for _, recipe := range recipes {
+		for _, partition := range recipe.Projections.Partitions {
+			if err := claimRegistryName(owners, "partitions", partition.Name, recipe.Name, "projection"); err != nil {
+				return Projections{}, err
+			}
+			merged.Partitions = append(merged.Partitions, partition)
+		}
+		for _, score := range recipe.Projections.Scores {
+			if err := claimRegistryName(owners, "scores", score.Name, recipe.Name, "projection"); err != nil {
+				return Projections{}, err
+			}
+			merged.Scores = append(merged.Scores, score)
+		}
+		for _, mapping := range recipe.Projections.Mappings {
+			if err := claimRegistryName(owners, "mappings", mapping.Name, recipe.Name, "projection"); err != nil {
+				return Projections{}, err
+			}
+			merged.Mappings = append(merged.Mappings, mapping)
+		}
+	}
+	return merged, nil
+}
+
+func claimRegistryName(owners map[string]string, kind, name, recipeName, registry string) error {
+	key := kind + ":" + name
+	if owner, exists := owners[key]; exists {
+		return fmt.Errorf(
+			"recipes: %s %s %q is defined by both the %q and %q profiles; the %s registry is global, define it once",
+			registry, kind, name, owner, recipeName, registry,
+		)
+	}
+	owners[key] = recipeName
 	return nil
 }
 

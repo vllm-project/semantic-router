@@ -178,6 +178,63 @@ providers:
 	}
 }
 
+func TestCanonicalRecipeSignalsMergeIntoGlobalRegistry(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + recipeTestPrivacyBlockYAML))
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	registry := make(map[string]bool, len(cfg.Signals.KeywordRules))
+	for _, rule := range cfg.Signals.KeywordRules {
+		registry[rule.Name] = true
+	}
+	if !registry["urgent_keywords"] || !registry["pii_keywords"] {
+		t.Fatalf("expected the flat signal registry to union all recipes, got %+v", registry)
+	}
+
+	canonical := CanonicalConfigFromRouterConfig(cfg)
+	if len(canonical.Routing.Signals.Keywords) != 1 || canonical.Routing.Signals.Keywords[0].Name != "urgent_keywords" {
+		t.Fatalf("expected the exported top-level routing block to keep only the default profile, got %+v", canonical.Routing.Signals.Keywords)
+	}
+
+	if got := len(cfg.AllRoutingDecisions()); got != 2 {
+		t.Fatalf("expected AllRoutingDecisions to cover both recipes, got %d", got)
+	}
+}
+
+func TestUsesSignalTypeInRoutingCoversRecipeDecisions(t *testing.T) {
+	contextRecipeYAML := `
+recipes:
+  - name: privacy
+    routing:
+      signals:
+        context:
+          - name: short_context
+            max_tokens: 1K
+      decisions:
+        - name: privacy_route
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: short_context
+          modelRefs:
+            - model: model-b
+              use_reasoning: false
+`
+	cfg, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + contextRecipeYAML))
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	if !cfg.UsesSignalTypeInRouting("context") {
+		t.Fatal("expected a signal type used only by a recipe decision to count as used in routing")
+	}
+	if cfg.UsesSignalTypeInRouting("embedding") {
+		t.Fatal("expected an unused signal type to stay unused")
+	}
+}
+
 func TestCanonicalExportEmitsRecipesAndEntrypoints(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + recipeTestPrivacyBlockYAML))
 	if err != nil {
@@ -278,6 +335,20 @@ recipes:
               use_reasoning: false
 `,
 		wantErr: "references unknown model",
+	},
+	{
+		name: "duplicate signal name across recipes",
+		extra: `
+recipes:
+  - name: privacy
+    routing:
+      signals:
+        keywords:
+          - name: urgent_keywords
+            operator: OR
+            keywords: ["classified"]
+`,
+		wantErr: "is defined by both",
 	},
 	{
 		name: "entrypoint references unknown recipe",

@@ -15,8 +15,11 @@ of it.
   `recipes` adds named additional profiles. A recipe named `default` may only
   appear when the top-level `routing` block carries no profile of its own.
 - Internal representation: normalized `Recipes`/`Entrypoints` on `RouterConfig`;
-  the default recipe stays bridged into the existing flat routing fields so
-  current read sites keep working unchanged.
+  the default recipe's decisions stay bridged into the flat `Decisions` field so
+  current read sites keep working unchanged, while the flat
+  `Signals`/`Projections` fields hold the global registry (the union across
+  recipes, per the issue's "signal registry stays global" non-goal) so one
+  classifier evaluates any recipe's rules.
 - Request path: resolve model name → entrypoint → recipe before signal
   evaluation in `pkg/extproc`; decision evaluation reads the per-request recipe.
 - Validation: structural recipe/entrypoint checks first, then cross-surface
@@ -80,8 +83,10 @@ T3 stays pending the maintainer confirmation recorded in Open Decisions.
   `recipes.go` and canonical normalization in `canonical_recipes.go`.
 - `processor_req_body.go` stays an orchestrator; entrypoint resolution lives in
   a dedicated `req_filter_entrypoint.go`.
-- The flat routing fields on `RouterConfig` must always equal the default
-  recipe; runtime code moves to recipe reads, never the reverse.
+- The flat `Decisions` field on `RouterConfig` must always equal the default
+  recipe; the flat `Signals`/`Projections` fields hold the global registry
+  (union of every recipe's profile). Runtime code moves to recipe reads, never
+  the reverse.
 - Every step passes `make agent-lint` and the affected package tests before the
   next step starts.
 
