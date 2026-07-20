@@ -62,7 +62,7 @@ single-profile configs.
 - [ ] T5 extproc request-entry entrypoint resolution before signal evaluation
 - [ ] T6 `/v1/models` lists entrypoint model names
 - [ ] T7 multi-recipe unit tests in config and extproc
-- [ ] T8 config-contract docs, reference config, and tutorials
+- [x] T8 config-contract docs, reference config, and tutorials
 - [ ] T9 E2E coverage for multi-recipe entrypoints
 - [ ] T10 DSL round-trip for recipes and entrypoints (follow-up PR)
 - [ ] T11 CLI and operator surfaces (follow-up PR)
@@ -70,8 +70,9 @@ single-profile configs.
 
 ## Next Action
 
-Land T5 (extproc request-entry entrypoint resolution). T3 stays pending the
-maintainer confirmation recorded in Open Decisions.
+This branch carries the config contract only (T1, T2, T4, T8). The runtime
+tasks T5–T7 land in the follow-up runtime PR together with T9 E2E coverage.
+T3 stays pending the maintainer confirmation recorded in Open Decisions.
 
 ## Operating Rules
 
