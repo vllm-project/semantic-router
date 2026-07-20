@@ -111,7 +111,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		},
 	}
 
-	isAutoModel := r.Config != nil && r.Config.IsAutoModelName(originalModel)
+	isAutoModel := r.requestModelActsAsAuto(originalModel)
 
 	targetModel := originalModel
 	if isAutoModel && selectedModel != "" {

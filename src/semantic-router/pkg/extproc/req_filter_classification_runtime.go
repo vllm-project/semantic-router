@@ -170,7 +170,7 @@ func (r *OpenAIRouter) runDecisionEngine(
 }
 
 func (r *OpenAIRouter) defaultModelForUnmatchedDecision(originalModel string) string {
-	if r.Config.IsAutoModelName(originalModel) {
+	if r.requestModelActsAsAuto(originalModel) {
 		return r.Config.DefaultModel
 	}
 	return ""
@@ -196,7 +196,7 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 		"matched_rules": result.MatchedRules,
 	})
 
-	if !r.Config.IsAutoModelName(originalModel) {
+	if !r.requestModelActsAsAuto(originalModel) {
 		logging.ComponentDebugEvent("extproc", "explicit_model_preserved", map[string]interface{}{
 			"request_id":     ctx.RequestID,
 			"original_model": originalModel,

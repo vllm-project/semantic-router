@@ -33,7 +33,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 
 	// Check if decisions are configured
 	if len(r.Config.Decisions) == 0 {
-		if r.Config.IsAutoModelName(originalModel) {
+		if r.requestModelActsAsAuto(originalModel) {
 			logging.Warnf("No decisions configured, using default model")
 			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel, nil
 		}
@@ -51,7 +51,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 		return "", 0, entropy.ReasoningDecision{}, "", authzErr
 	}
 
-	result, defaultModel := r.runDecisionEngine(originalModel, ctx, signals, r.decisionCandidatesForRequestModel(originalModel))
+	result, defaultModel := r.runDecisionEngine(originalModel, ctx, signals, r.decisionCandidatesForRequest(originalModel, ctx))
 	if result == nil {
 		return "", 0.0, entropy.ReasoningDecision{}, defaultModel, nil
 	}
