@@ -40,6 +40,85 @@ def empty_snapshot() -> dict:
 
 
 class MaintainerBoardGAReadinessTests(unittest.TestCase):
+    def test_gh_json_retries_transient_gateway_errors(self) -> None:
+        transient = maintainer_board.subprocess.CompletedProcess(
+            ["gh", "pr", "list"],
+            1,
+            stdout="",
+            stderr="HTTP 502: 502 Bad Gateway (https://api.github.com/graphql)",
+        )
+        success = maintainer_board.subprocess.CompletedProcess(
+            ["gh", "pr", "list"],
+            0,
+            stdout='{"ok": true}',
+            stderr="",
+        )
+
+        with (
+            mock.patch.object(
+                maintainer_board.subprocess,
+                "run",
+                side_effect=[transient, success],
+            ) as run,
+            mock.patch.object(maintainer_board.time, "sleep") as sleep,
+        ):
+            payload = maintainer_board.gh_json(["pr", "list"])
+
+        self.assertEqual(payload, {"ok": True})
+        self.assertEqual(run.call_count, 2)
+        sleep.assert_called_once_with(1)
+
+    def test_fetch_github_state_fetches_pr_status_rollups_separately(self) -> None:
+        policy = {"default_issue_limit": 100, "default_pr_limit": 50}
+        prs = [
+            {"number": 12, "title": "ready"},
+            {"number": 13, "title": "blocked"},
+        ]
+
+        with mock.patch.object(
+            maintainer_board,
+            "gh_json",
+            side_effect=[
+                [],
+                prs,
+                {"statusCheckRollup": [{"conclusion": "SUCCESS"}]},
+                {"statusCheckRollup": [{"conclusion": "FAILURE"}]},
+                [{"title": "v0.4"}],
+                [{"name": "bug"}],
+            ],
+        ) as gh_json:
+            state = maintainer_board.fetch_github_state(policy)
+
+        self.assertEqual(
+            state["pull_requests"],
+            [
+                {
+                    "number": 12,
+                    "title": "ready",
+                    "statusCheckRollup": [{"conclusion": "SUCCESS"}],
+                },
+                {
+                    "number": 13,
+                    "title": "blocked",
+                    "statusCheckRollup": [{"conclusion": "FAILURE"}],
+                },
+            ],
+        )
+        pr_list_call = gh_json.call_args_list[1].args[0]
+        pr_list_fields = pr_list_call[pr_list_call.index("--json") + 1]
+        self.assertIn(
+            "reviewDecision,mergeStateStatus,headRefName,baseRefName", pr_list_fields
+        )
+        self.assertNotIn("statusCheckRollup", pr_list_fields)
+        self.assertEqual(
+            gh_json.call_args_list[2].args[0],
+            ["pr", "view", "12", "--json", "statusCheckRollup"],
+        )
+        self.assertEqual(
+            gh_json.call_args_list[3].args[0],
+            ["pr", "view", "13", "--json", "statusCheckRollup"],
+        )
+
     def test_latest_ga_readiness_report_summarizes_blockers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
