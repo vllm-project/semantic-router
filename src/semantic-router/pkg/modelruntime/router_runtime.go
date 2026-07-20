@@ -83,6 +83,7 @@ func PrepareRouterRuntime(
 	tasks = append(tasks, vectorStoreBERTTask(cfg, component)...)
 	tasks = append(tasks, memoryBERTTask(cfg, component)...)
 	tasks = append(tasks, modalityClassifierTask(cfg, component, options.InitModalityClassifierFunc)...)
+	tasks = append(tasks, crossEncoderTask(component)...)
 	if len(tasks) == 0 {
 		return state, nil
 	}
@@ -301,6 +302,45 @@ func modalityClassifierTask(
 			}
 			logging.ComponentEvent(component, "modality_classifier_initialized", map[string]interface{}{
 				"method": method,
+			})
+			return nil
+		},
+	}}
+}
+
+// crossEncoderTask loads the optional cross-encoder reranker into the shared
+// model runtime when SR_CROSS_ENCODER_MODEL_PATH is set. Loading happens here,
+// alongside the other model assets, so the reranker follows the same runtime
+// lifecycle as the rest of the router's models rather than being initialized
+// locally by the API server. Best-effort: a failure leaves the bi-encoder
+// rerank path working.
+//
+// INTERIM: the model path is still sourced from an env var. Declaring rerankers
+// in model_catalog (so they parse like the other models) is the planned
+// follow-up; this keeps loading on the model-runtime path in the meantime.
+func crossEncoderTask(component string) []Task {
+	modelPath := strings.TrimSpace(os.Getenv("SR_CROSS_ENCODER_MODEL_PATH"))
+	if modelPath == "" {
+		return nil
+	}
+	useCPU := !strings.EqualFold(strings.TrimSpace(os.Getenv("SR_CROSS_ENCODER_USE_CPU")), "false")
+	return []Task{{
+		Name:       "router.rerank.cross_encoder",
+		BestEffort: true,
+		Run: func(context.Context) error {
+			logging.ComponentEvent(component, "cross_encoder_init_started", map[string]interface{}{
+				"model_ref": modelPath,
+				"use_cpu":   useCPU,
+			})
+			if err := candle_binding.InitCrossEncoder(modelPath, useCPU); err != nil {
+				logging.ComponentWarnEvent(component, "cross_encoder_init_failed", map[string]interface{}{
+					"model_ref": modelPath,
+					"error":     err.Error(),
+				})
+				return fmt.Errorf("failed to initialize cross-encoder reranker: %w", err)
+			}
+			logging.ComponentEvent(component, "cross_encoder_initialized", map[string]interface{}{
+				"model_ref": modelPath,
 			})
 			return nil
 		},

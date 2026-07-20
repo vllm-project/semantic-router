@@ -10,6 +10,7 @@ pub mod generative_guard; // Qwen3Guard safety classifier
 pub mod init; //  initialization functions
 pub mod memory; //  memory management functions
 pub mod mlp; // MLP selector for model selection (GPU-accelerated)
+pub mod rerank; //  cross-encoder reranking functions
 pub mod similarity; //  similarity functions
 pub mod tokenization; //  tokenization function
 pub mod types; //  C structure definitions
@@ -26,6 +27,7 @@ pub use generative_guard::*; // Qwen3Guard safety classifier functions
 pub use init::*;
 pub use memory::*;
 pub use mlp::*; // MLP selector FFI functions
+pub use rerank::*; // Cross-encoder reranking FFI functions
 
 pub use similarity::*;
 pub use tokenization::*;

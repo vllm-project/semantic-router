@@ -552,6 +552,40 @@ func FindMostSimilar(query string, candidates []string, maxLength int) (int, flo
 }
 
 // ============================================================================
+// Cross-Encoder Rerank Compatibility
+// ============================================================================
+
+// RerankMatch represents a single cross-encoder rerank result.
+type RerankMatch struct {
+	Index int
+	Score float32
+}
+
+// RerankOutput holds the result of cross-encoder reranking.
+type RerankOutput struct {
+	Matches          []RerankMatch
+	ProcessingTimeMs float32
+}
+
+// InitCrossEncoder is a candle-binding compatibility shim for ONNX builds.
+// Cross-encoder reranking is currently implemented in candle-binding only; ONNX
+// builds keep the bi-encoder rerank path available and report the cross-encoder
+// backend as unavailable.
+func InitCrossEncoder(modelPath string, useCPU bool) error {
+	return fmt.Errorf("cross-encoder rerank is not available in onnx-binding")
+}
+
+// IsCrossEncoderInitialized reports whether an ONNX cross-encoder is loaded.
+func IsCrossEncoderInitialized() bool {
+	return false
+}
+
+// RerankDocuments is a candle-binding compatibility shim for ONNX builds.
+func RerankDocuments(query string, documents []string, topN int) (*RerankOutput, error) {
+	return nil, fmt.Errorf("cross-encoder rerank is not available in onnx-binding")
+}
+
+// ============================================================================
 // Classification Functions
 // ============================================================================
 

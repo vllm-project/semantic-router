@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -34,6 +36,11 @@ func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime
 
 	classificationSvc := resolveClassificationService(cfg, runtimeRegistry)
 	classificationSvc = ensureClassificationService(cfg, runtimeRegistry, classificationSvc)
+
+	// The cross-encoder reranker is loaded on the model-runtime path
+	// (see modelruntime.PrepareRouterRuntime). Here we only resolve the public
+	// model id used to dispatch /v1/rerank requests to that reranker.
+	configureCrossEncoderServedName()
 
 	// Initialize batch metrics configuration
 	if cfg.API.BatchClassification.Metrics.Enabled {
@@ -97,6 +104,20 @@ func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime
 		"port": port,
 	})
 	return server.ListenAndServe()
+}
+
+// configureCrossEncoderServedName resolves the public model id that maps to the
+// loaded cross-encoder reranker for /v1/rerank dispatch. The reranker itself is
+// loaded on the model-runtime path (see modelruntime.PrepareRouterRuntime);
+// SR_CROSS_ENCODER_MODEL_NAME optionally sets the served id clients use to
+// request it (e.g. "cross-encoder/ms-marco-MiniLM-L-6-v2"); the "cross-encoder"
+// alias always works regardless. Cleared first so a missing value never leaves
+// stale dispatch state.
+//
+// INTERIM: name resolution is still env-based; it moves into model_catalog with
+// the rest of the rerank config in the planned follow-up. See the PR/issue.
+func configureCrossEncoderServedName() {
+	crossEncoderServedName = strings.TrimSpace(os.Getenv("SR_CROSS_ENCODER_MODEL_NAME"))
 }
 
 func resolveAPIServerConfig(runtimeRegistry *routerruntime.Registry) *config.RouterConfig {

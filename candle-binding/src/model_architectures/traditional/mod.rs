@@ -13,6 +13,7 @@
 
 // Traditional model modules
 pub mod bert;
+pub mod cross_encoder;
 pub mod deberta_v3;
 
 pub mod base_model;
@@ -45,6 +46,7 @@ pub mod candle_models;
 
 // Re-export main traditional models
 pub use bert::TraditionalBertClassifier;
+pub use cross_encoder::{BertCrossEncoder, CROSS_ENCODER};
 pub use deberta_v3::DebertaV3Classifier;
 
 // Re-export ModernBERT and mmBERT (mmBERT is a type alias for ModernBERT with Multilingual variant)

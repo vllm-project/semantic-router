@@ -139,6 +139,25 @@ typedef struct {
     bool error;               // Whether an error occurred
 } BatchSimilarityResult;
 
+// Cross-encoder rerank match structure
+typedef struct {
+    int index;   // Index of the document in the input array
+    float score; // Relevance score in [0, 1] (higher = more relevant)
+} RerankMatch;
+
+// Cross-encoder rerank result structure
+typedef struct {
+    RerankMatch* matches;     // Array of matches, sorted by score (descending)
+    int num_matches;          // Number of matches returned (≤ top_n)
+    float processing_time_ms; // Processing time in milliseconds
+    bool error;               // Whether an error occurred
+} RerankResult;
+
+extern int init_cross_encoder(const char* model_path, bool use_cpu);
+extern bool is_cross_encoder_initialized();
+extern int rerank_documents(const char* query, const char** documents, int num_documents, int top_n, RerankResult* result);
+extern void free_rerank_result(RerankResult* result);
+
 // Single embedding model information
 typedef struct {
     char* model_name;          // "qwen3" or "gemma"
@@ -1809,6 +1828,89 @@ func CalculateSimilarityBatch(query string, candidates []string, topK int, model
 	return &BatchSimilarityOutput{
 		Matches:          matches,
 		ModelType:        actualModelType,
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
+}
+
+// RerankMatch represents a single cross-encoder rerank result.
+type RerankMatch struct {
+	Index int     // Index of the document in the input array
+	Score float32 // Relevance score in [0, 1] (higher = more relevant)
+}
+
+// RerankOutput holds the result of cross-encoder reranking.
+type RerankOutput struct {
+	Matches          []RerankMatch // Matches, sorted by score (descending)
+	ProcessingTimeMs float32       // Processing time in milliseconds
+}
+
+// InitCrossEncoder loads the global cross-encoder reranker from a model path
+// (local directory or HuggingFace Hub id). It is idempotent: a second call with
+// a model already loaded is a no-op.
+func InitCrossEncoder(modelPath string, useCPU bool) error {
+	cModelPath := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cModelPath))
+
+	status := C.init_cross_encoder(cModelPath, C.bool(useCPU))
+	if status != 0 {
+		return fmt.Errorf("failed to initialize cross-encoder from %q (status: %d)", modelPath, status)
+	}
+	return nil
+}
+
+// IsCrossEncoderInitialized reports whether the cross-encoder reranker is loaded.
+func IsCrossEncoderInitialized() bool {
+	return bool(C.is_cross_encoder_initialized())
+}
+
+// RerankDocuments scores each document against the query with the cross-encoder
+// and returns matches sorted by relevance (descending). topN <= 0 returns all.
+func RerankDocuments(query string, documents []string, topN int) (*RerankOutput, error) {
+	if len(documents) == 0 {
+		return nil, fmt.Errorf("documents array cannot be empty")
+	}
+
+	cQuery := C.CString(query)
+	defer C.free(unsafe.Pointer(cQuery))
+
+	cDocs := make([]*C.char, len(documents))
+	for i, doc := range documents {
+		cDocs[i] = C.CString(doc)
+		defer C.free(unsafe.Pointer(cDocs[i]))
+	}
+
+	var result C.RerankResult
+	status := C.rerank_documents(
+		cQuery,
+		(**C.char)(unsafe.Pointer(&cDocs[0])),
+		C.int(len(documents)),
+		C.int(topN),
+		&result,
+	)
+
+	if status != 0 {
+		return nil, fmt.Errorf("failed to rerank documents (status: %d)", status)
+	}
+	if bool(result.error) {
+		return nil, fmt.Errorf("rerank returned error")
+	}
+
+	numMatches := int(result.num_matches)
+	matches := make([]RerankMatch, numMatches)
+	if numMatches > 0 && result.matches != nil {
+		matchesSlice := (*[1 << 30]C.RerankMatch)(unsafe.Pointer(result.matches))[:numMatches:numMatches]
+		for i := 0; i < numMatches; i++ {
+			matches[i] = RerankMatch{
+				Index: int(matchesSlice[i].index),
+				Score: float32(matchesSlice[i].score),
+			}
+		}
+	}
+
+	C.free_rerank_result(&result)
+
+	return &RerankOutput{
+		Matches:          matches,
 		ProcessingTimeMs: float32(result.processing_time_ms),
 	}, nil
 }
