@@ -392,12 +392,10 @@ def run_reasoning_eval(args):
         cmd.extend(["--model", args.model])
 
     if args.no_plots:
-        cmd.append("--generate-plots")
-        cmd.append("False")
+        cmd.append("--no-generate-plots")
 
     if args.no_report:
-        cmd.append("--generate-report")
-        cmd.append("False")
+        cmd.append("--no-generate-report")
 
     return subprocess.call(cmd)
 
