@@ -10,8 +10,11 @@ interface ProgressTrackerProps {
 }
 
 export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTrackerProps) {
-  const { task, refresh: refreshTask } = useTask(taskId, true, 1000);
-  const { progress, connected, completed, error, disconnect } = useProgress(taskId, true);
+  const { task, loading, error: taskError, refresh: refreshTask } = useTask(taskId, true, 1000);
+  const { progress, connected, completed, error, disconnect } = useProgress(
+    taskId,
+    task?.status === 'running',
+  );
 
   useEffect(() => {
     if (completed) {
@@ -35,12 +38,24 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
     }
   }, [task, disconnect, onComplete]);
 
+  if (taskError && !task) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.loadError} role="alert">
+          <h3>Evaluation progress is unavailable</h3>
+          <p>{taskError}</p>
+          <button type="button" onClick={() => void refreshTask()}>Retry</button>
+        </div>
+      </div>
+    );
+  }
+
   if (!task) {
     return (
       <div className={styles.container}>
         <div className={styles.loading}>
           <div className={styles.spinner} />
-          <span>Loading task...</span>
+          <span>{loading ? 'Loading task…' : 'Waiting for task state…'}</span>
         </div>
       </div>
     );
@@ -53,6 +68,8 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
   };
 
   const statusInfo = STATUS_INFO[task.status];
+  const streamLabel =
+    task.status === 'running' ? (connected ? 'Connected' : 'Reconnecting') : 'Not active';
 
   return (
     <div className={styles.container}>
@@ -79,7 +96,7 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
         <div className={styles.progressBar}>
           <div
             className={`${styles.progressFill} ${task.status === 'running' ? styles.animated : ''}`}
-            style={{ width: `${displayProgress.progress_percent}%` }}
+            style={{ width: `${Math.min(100, Math.max(0, displayProgress.progress_percent))}%` }}
           />
         </div>
         {displayProgress.message && (
@@ -109,7 +126,7 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
         <div className={styles.detailItem}>
           <span className={styles.detailLabel}>Connection</span>
           <span className={`${styles.detailValue} ${connected ? styles.connected : styles.disconnected}`}>
-            {connected ? 'Connected' : 'Disconnected'}
+            {streamLabel}
           </span>
         </div>
       </div>
@@ -140,6 +157,12 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
         </div>
       )}
 
+      {taskError && (
+        <div className={styles.error} role="alert">
+          <span>Task refresh error: {taskError}</span>
+        </div>
+      )}
+
       {task.error_message && (
         <div className={styles.taskError}>
           <h4>Error</h4>
@@ -149,7 +172,7 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
 
       {task.status === 'running' && onCancel && (
         <div className={styles.actions}>
-          <button className={styles.cancelButton} onClick={onCancel}>
+          <button type="button" className={styles.cancelButton} onClick={onCancel}>
             Cancel Evaluation
           </button>
         </div>

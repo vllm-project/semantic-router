@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type KeyboardEventHandler, type ReactNode, type Ref } from 'react'
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type KeyboardEventHandler, type Ref } from 'react'
 
 import styles from './ChatComponent.module.css'
-import { ClawModeToggle, ToolToggle } from './ChatComponentControls'
+import ChatComposerAddMenu from './ChatComposerAddMenu'
 import { useSpeechDictation } from '../hooks/useSpeechDictation'
 import {
   formatPlaygroundFileSize,
@@ -26,8 +26,11 @@ interface ChatComponentInputBarProps {
   onSend: () => void
   onStop: () => void
   onToggleClawMode: () => void
+  onToggleClawRoom: () => void
   onToggleWebSearch: () => void
-  roomChatToggleControl: ReactNode
+  sendDisabled?: boolean
+  sendDisabledReason?: string
+  showClawRoom: boolean
 }
 
 export default function ChatComponentInputBar({
@@ -48,8 +51,11 @@ export default function ChatComponentInputBar({
   onSend,
   onStop,
   onToggleClawMode,
+  onToggleClawRoom,
   onToggleWebSearch,
-  roomChatToggleControl,
+  sendDisabled = false,
+  sendDisabledReason,
+  showClawRoom,
 }: ChatComponentInputBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const canSend = Boolean(inputValue.trim()) || attachments.length > 0
@@ -145,31 +151,25 @@ export default function ChatComponentInputBar({
               onChange={handleFileInputChange}
               aria-hidden="true"
               tabIndex={-1}
+              data-testid="playground-attachment-input"
             />
-            <button
-              type="button"
-              className={styles.attachButton}
-              onClick={handleAttachClick}
-              disabled={attachFilesDisabled || isLoading || isTogglingClawMode}
-              title="Attach files (max 10 MB each)"
-              aria-label="Attach files"
-              data-testid="playground-attach-files"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21.44 11.05l-9.19 9.19a6 6 0 1 1-8.49-8.49l9.19-9.19a4 4 0 1 1 5.66 5.66l-9.2 9.19a2 2 0 1 1-2.83-2.83l8.49-8.48" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            <ToolToggle
-              enabled={enableWebSearch}
-              onToggle={onToggleWebSearch}
-              disabled={isLoading || isTogglingClawMode}
+            <ChatComposerAddMenu
+              attachFilesDisabled={attachFilesDisabled || isLoading || isTogglingClawMode}
+              clawModeDisabled={modeToggleDisabled}
+              clawModeEnabled={enableClawMode}
+              clawRoom={showClawRoom
+                ? {
+                    active: false,
+                    disabled: modeToggleDisabled,
+                    onToggle: onToggleClawRoom,
+                  }
+                : undefined}
+              onAttachFiles={handleAttachClick}
+              onToggleClawMode={onToggleClawMode}
+              onToggleWebSearch={onToggleWebSearch}
+              webSearchDisabled={isLoading || isTogglingClawMode}
+              webSearchEnabled={enableWebSearch}
             />
-            <ClawModeToggle
-              enabled={enableClawMode}
-              onToggle={onToggleClawMode}
-              disabled={modeToggleDisabled}
-            />
-            {roomChatToggleControl}
           </div>
           <div className={styles.composerButtons}>
             {isLoading ? (
@@ -209,8 +209,8 @@ export default function ChatComponentInputBar({
             <button
               className={styles.sendButton}
               onClick={onSend}
-              disabled={!canSend}
-              title="Send message"
+              disabled={!canSend || sendDisabled}
+              title={sendDisabled ? sendDisabledReason : 'Send message'}
               aria-label="Send message"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

@@ -99,6 +99,20 @@ spec:
                     pricing:
                       description: Pricing defines the cost structure for this model
                       properties:
+                        cacheWriteTokenPrice:
+                          description: CacheWriteTokenPrice is the cost per input
+                            token written to prompt cache
+                          minimum: 0
+                          type: number
+                        cachedInputTokenPrice:
+                          description: CachedInputTokenPrice is the cost per cached
+                            input token
+                          minimum: 0
+                          type: number
+                        currency:
+                          description: Currency is the unit for all configured token
+                            prices
+                          type: string
                         inputTokenPrice:
                           description: InputTokenPrice is the cost per input token
                           minimum: 0

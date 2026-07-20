@@ -183,8 +183,10 @@
       </div>
 
       <button
+        type="button"
         class="svg-icon cancel-icon"
         class:hidden="{searchInputValue.length === 0}"
+        aria-label="Clear search"
         on:click="{() => {
           searchInputValue = '';
           mySearchPanel?.cancelSearch();

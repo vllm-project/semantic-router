@@ -329,12 +329,14 @@ func addRetentionDirectiveHeaders(builder *responseHeaderMutationBuilder, ctx *R
 
 // addFinalDecisionHeaders adds the final routing facts that ride on the default
 // surface of every successful non-cache-hit response: the selected decision and
-// its confidence, the selected model, and the replay-id entry point.
+// its confidence, the selection algorithm, the selected model, and the replay-id
+// entry point.
 func addFinalDecisionHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
 	builder.addString(headers.VSRSelectedDecision, ctx.VSRSelectedDecisionName)
 	if ctx.VSRSelectedDecisionName != "" {
 		builder.addNonNegativeFloat(headers.VSRSelectedConfidence, ctx.VSRSelectedDecisionConfidence)
 	}
+	builder.addString(headers.VSRSelectedAlgorithm, ctx.VSRSelectionMethod)
 	builder.addString(headers.VSRSelectedModel, ctx.VSRSelectedModel)
 	builder.addString(headers.RouterReplayID, ctx.RouterReplayID)
 }

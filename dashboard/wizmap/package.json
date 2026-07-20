@@ -93,6 +93,7 @@
     "deploy:github": "sh ./publish-github.sh",
     "deploy": "pnpm run deploy:vercel",
     "preview": "vite preview",
-    "check": "svelte-check --tsconfig ./tsconfig.json"
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test:theme": "node scripts/check-theme.mjs"
   }
 }

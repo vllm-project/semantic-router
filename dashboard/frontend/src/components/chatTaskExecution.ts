@@ -115,7 +115,10 @@ export const runPlaygroundTask = async ({
     const requestBody = buildChatRequestBody(task.requestOptions.model, chatMessages, activeTools)
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-vsr-debug': 'true',
+      },
       body: JSON.stringify(requestBody),
       signal: abortController.signal,
     })

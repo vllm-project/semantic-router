@@ -38,6 +38,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `models`
   - `providers.defaults` holds `default_model`, `reasoning_families`, and `default_reasoning_effort`
   - `providers.models[*]` holds `provider_model_id`, `backend_refs`, `pricing`, `api_format`, and `external_model_ids`
+  - `providers.models[*].pricing` uses per-million-token rates for prompt, cached input, optional cache writes, and completion; `cache_write_per_1m` defaults to `prompt_per_1m` when omitted
 - `global` owns router-wide runtime overrides.
   - `global.router` groups router-engine control knobs such as config-source selection, route-cache, and model-selection defaults
   - `global.router.config_source` selects whether runtime config comes from the canonical YAML file (`file`) or from in-process Kubernetes CRD reconciliation (`kubernetes`)
@@ -51,6 +52,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
 - `global.integrations.looper.flow` defines direct Router Flow model slugs. The built-in default is `vllm-sr/flow`; workflow planning and worker policy stay per-decision under `routing.decisions[].algorithm.workflows`.
 - `global.model_catalog` groups router-owned model assets such as embeddings, system models, external models, reusable classifiers, and model-backed modules
 - `global.model_catalog.embeddings.semantic.embedding_config.top_k` limits how many ranked embedding rules are emitted for routing after scoring; the built-in default is `1`
+- `global.model_catalog.embeddings.semantic` can use an external text embedding service with `model_type: remote` and `backend: openai_compatible`; see [Remote Embedding Providers](../tutorials/global/remote-embeddings) for endpoint, secret, Dashboard, Operator, and status configuration
 - `prototype_scoring` is the shared prototype-aware scoring block for embedding-backed signal families; use it under `global.model_catalog.embeddings.semantic.embedding_config`, `global.model_catalog.modules.classifier.preference`, `global.model_catalog.kbs[]`, and `global.model_catalog.modules.complexity` when you want exemplar banks compressed into representative prototypes
 - built-in knowledge bases keep canonical source paths like `knowledge_bases/privacy/`; local runtime seeds missing KBs into `.vllm-sr/knowledge_bases/<dir>/` once and then reads the shared runtime KB store from there
 - `global.model_catalog.classifiers[]` is the reusable registry for startup-loaded classifier packages such as taxonomy classifiers

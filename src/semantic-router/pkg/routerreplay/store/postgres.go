@@ -33,11 +33,11 @@ const postgresInsertQueryTemplate = `
 			prompt, prompt_truncated, tool_definitions, tool_definitions_truncated,
 			rag_enabled, rag_backend, rag_context_length, rag_similarity_score,
 			hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans,
-			prompt_tokens, cached_prompt_tokens, completion_tokens, total_tokens,
+			prompt_tokens, cached_prompt_tokens, cache_write_tokens, completion_tokens, total_tokens,
 			actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 			session_id, turn_index, previous_response_id, conversation_id,
 			cache_similarity, context_token_count
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59)
 	`
 
 const postgresCreateTableQueryTemplate = `
@@ -87,6 +87,7 @@ const postgresCreateTableQueryTemplate = `
 			hallucination_spans JSONB,
 			prompt_tokens INTEGER,
 			cached_prompt_tokens INTEGER,
+			cache_write_tokens INTEGER,
 			completion_tokens INTEGER,
 			total_tokens INTEGER,
 			actual_cost DOUBLE PRECISION,
@@ -114,6 +115,7 @@ const postgresCreateTableQueryTemplate = `
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS tool_definitions_truncated BOOLEAN DEFAULT FALSE;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS prompt_tokens INTEGER;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS cached_prompt_tokens INTEGER;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS cache_write_tokens INTEGER;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS completion_tokens INTEGER;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS total_tokens INTEGER;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS actual_cost DOUBLE PRECISION;
@@ -469,13 +471,14 @@ func (p *PostgresStore) UpdateUsageCost(ctx context.Context, id string, usage Us
 		UPDATE %s
 		SET prompt_tokens = $2,
 		    cached_prompt_tokens = $3,
-		    completion_tokens = $4,
-		    total_tokens = $5,
-		    actual_cost = $6,
-		    baseline_cost = $7,
-		    cost_savings = $8,
-		    currency = $9,
-		    baseline_model = $10
+		    cache_write_tokens = $4,
+		    completion_tokens = $5,
+		    total_tokens = $6,
+		    actual_cost = $7,
+		    baseline_cost = $8,
+		    cost_savings = $9,
+		    currency = $10,
+		    baseline_model = $11
 		WHERE id = $1
 	`, p.tableName)
 
@@ -486,6 +489,7 @@ func (p *PostgresStore) UpdateUsageCost(ctx context.Context, id string, usage Us
 			id,
 			nullableIntArg(usage.PromptTokens),
 			nullableIntArg(usage.CachedPromptTokens),
+			nullableIntArg(usage.CacheWriteTokens),
 			nullableIntArg(usage.CompletionTokens),
 			nullableIntArg(usage.TotalTokens),
 			nullableFloat64Arg(usage.ActualCost),

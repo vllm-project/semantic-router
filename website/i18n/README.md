@@ -134,7 +134,7 @@ Recommended order for a full zh-Hans sync:
 
 ## CI Automation
 
-A daily GitHub Action ([check-translation-staleness.yml](../.github/workflows/check-translation-staleness.yml)) automatically manages the `outdated` status:
+A daily GitHub Action ([check-translation-staleness.yml](../../.github/workflows/check-translation-staleness.yml)) automatically manages the `outdated` status:
 
 | Condition | Action |
 | --------- | ------ |

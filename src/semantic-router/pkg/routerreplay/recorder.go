@@ -373,6 +373,9 @@ func appendUsageCostLogFields(fields map[string]interface{}, r RoutingRecord) {
 	if r.CachedPromptTokens != nil {
 		fields["cached_prompt_tokens"] = *r.CachedPromptTokens
 	}
+	if r.CacheWriteTokens != nil {
+		fields["cache_write_tokens"] = *r.CacheWriteTokens
+	}
 	if r.CompletionTokens != nil {
 		fields["completion_tokens"] = *r.CompletionTokens
 	}
