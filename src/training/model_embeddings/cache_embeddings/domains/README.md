@@ -7,7 +7,7 @@ This directory contains configuration files for training domain-specific cache e
 ### Train a Domain Model
 
 ```bash
-# From src/training/cache_embeddings/
+# From src/training/model_embeddings/cache_embeddings/
 ./train-domain.sh medical
 ```
 
@@ -192,6 +192,4 @@ ssh -i ~/.ssh/your-key.pem ubuntu@<instance-ip>
 
 ## See Also
 
-- [Main README](../docs/README.md) - Complete technical documentation
-- [AWS Deployment Guide](../docs/QUICK_START_AWS.md) - AWS setup details
-- [Validation Guide](../docs/blog.md) - How to test trained models
+- [Main README](../README.md) - Complete technical documentation
