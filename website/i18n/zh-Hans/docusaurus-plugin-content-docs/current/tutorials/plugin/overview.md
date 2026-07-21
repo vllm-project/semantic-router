@@ -2,7 +2,7 @@
 translation:
   source_commit: "baa07413"
   source_file: "docs/tutorials/plugin/overview.md"
-  outdated: false
+  outdated: true
 ---
 
 # 插件（Plugin）
