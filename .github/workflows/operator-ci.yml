@@ -15,17 +15,22 @@ on:
     branches:
       - main
       - develop
-    paths:
-      - 'deploy/operator/**'
-      - 'src/semantic-router/pkg/config/**'
-      - '.github/workflows/operator-ci.yml'
 
 env:
   GO_VERSION: '1.25'
 
 jobs:
+  # Always run change detection so operator checks report a conclusion
+  # (success or skipped) on every PR. Trigger-level path filtering would
+  # leave the checks missing entirely on unrelated PRs, deadlocking any
+  # branch protection or merge gate that requires them.
+  changes:
+    uses: ./.github/workflows/ci-changes.yml
+
   lint:
     name: Lint
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.operator == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -63,6 +68,8 @@ jobs:
 
   test:
     name: Unit Tests
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.operator == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -91,6 +98,8 @@ jobs:
 
   manifests:
     name: Verify Manifests
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.operator == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -120,7 +129,10 @@ jobs:
 
   docker-build:
     name: Docker Build and Push
-    if: github.repository == 'vllm-project/semantic-router'
+    needs: changes
+    if: >-
+      github.repository == 'vllm-project/semantic-router' &&
+      (github.event_name != 'pull_request' || needs.changes.outputs.operator == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -269,6 +281,8 @@ jobs:
 
   bundle-validate:
     name: Validate OLM Bundle
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.operator == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
