@@ -83,3 +83,4 @@ Tasks use stable IDs and checkbox status:
 - [pl-0035-router-flow-workflows.md](pl-0035-router-flow-workflows.md)
 - [pl-0036-router-learning-followups.md](pl-0036-router-learning-followups.md)
 - [pl-0037-router-flow-eval-campaign.md](pl-0037-router-flow-eval-campaign.md)
+- [pl-0038-entrypoints-recipes.md](pl-0038-entrypoints-recipes.md)
