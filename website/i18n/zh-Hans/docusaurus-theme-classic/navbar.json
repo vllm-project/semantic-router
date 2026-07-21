@@ -1,8 +1,4 @@
 {
-  "title": {
-    "message": "vLLM-SR",
-    "description": "The title in the navbar"
-  },
   "logo.alt": {
     "message": "vLLM Semantic Router 标志",
     "description": "The alt text of navbar logo"
