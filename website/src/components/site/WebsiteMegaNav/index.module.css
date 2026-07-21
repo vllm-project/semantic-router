@@ -326,7 +326,7 @@
   gap: 0.7rem;
   justify-content: space-between;
   min-height: 5rem;
-  padding: 0.9rem 0.2rem;
+  padding: 0.9rem 0.8rem 0.9rem 0.2rem;
   border-bottom: 1px solid #c7c7c3;
   color: #111;
   transition:
@@ -337,7 +337,7 @@
 
 .link:hover,
 .link:focus-visible {
-  padding-right: 0;
+  padding-right: 0.8rem;
   padding-left: 0.45rem;
   background: rgba(48, 162, 255, 0.07);
   color: #111;

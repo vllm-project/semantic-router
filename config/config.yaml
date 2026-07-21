@@ -1534,6 +1534,30 @@ global:
               requests_per_unit: 1000
               tokens_per_unit: 2000000
               unit: hour
+    management_api:
+      bind_address: 127.0.0.1
+      port: 8080
+      remote_exposure: false
+      auth:
+        mode: disabled
+        tokens:
+          - env: VSR_MGMT_TOKEN
+            role: admin
+        roles:
+          viewer:
+            - health.read
+            - ready.read
+            - docs.read
+            - metrics.read
+            - classify.invoke
+            - config.read
+            - data.read
+          operator:
+            - config.write
+            - learning.ingest
+            - data.write
+          admin:
+            - "*"
     startup_status:
       store_backend: file
     router_replay:
@@ -1911,6 +1935,7 @@ global:
     looper:
       endpoint: http://localhost:8899/v1/chat/completions
       grpc_max_msg_size_mb: 16
+      max_response_bytes_mb: 32
       timeout_seconds: 120
       retry_count: 2
       headers:

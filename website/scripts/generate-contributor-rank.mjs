@@ -12,6 +12,106 @@ const releaseTags = {
   v02: 'v0.2.0',
   v03: 'v0.3.0',
 }
+const reviewStates = new Set(['APPROVED', 'CHANGES_REQUESTED', 'COMMENTED'])
+const GH_MAX_ATTEMPTS = Number(process.env.GH_API_MAX_ATTEMPTS || 6)
+const GH_RETRY_BASE_MS = Number(process.env.GH_API_RETRY_BASE_MS || 2000)
+const GH_PAGE_DELAY_MS = Number(process.env.GH_API_PAGE_DELAY_MS || 400)
+
+function sleepSync(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) {
+    return
+  }
+
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.trunc(ms))
+}
+
+function errorText(error) {
+  return [error?.message, error?.stderr, error?.stdout]
+    .filter(Boolean)
+    .map(value => String(value))
+    .join('\n')
+}
+
+function isRetryableGhError(error) {
+  return /(?:\b429\b|\b502\b|\b503\b|\b504\b|rate[- ]?limit|Bad Gateway|Gateway Time-out|secondary rate limit|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|HTTP 5\d\d)/i
+    .test(errorText(error))
+}
+
+function runGh(args, options = {}) {
+  const {
+    maxBuffer = 1024 * 1024 * 8,
+    attempts = GH_MAX_ATTEMPTS,
+  } = options
+
+  let lastError
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return execFileSync('gh', args, {
+        cwd: repoRoot,
+        encoding: 'utf8',
+        maxBuffer,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }).trim()
+    }
+    catch (error) {
+      lastError = error
+      if (attempt >= attempts || !isRetryableGhError(error)) {
+        throw error
+      }
+
+      const delay = GH_RETRY_BASE_MS * (2 ** (attempt - 1))
+      const summary = errorText(error).split('\n').find(Boolean) || 'unknown error'
+      console.warn(
+        `gh ${args.slice(0, 3).join(' ')} failed (attempt ${attempt}/${attempts}): ${summary}; retrying in ${delay}ms`,
+      )
+      sleepSync(delay)
+    }
+  }
+
+  throw lastError
+}
+
+function ensureGitHubAuth() {
+  if (!(process.env.GH_TOKEN || process.env.GITHUB_TOKEN)) {
+    console.warn('GH_TOKEN/GITHUB_TOKEN unset; unauthenticated GitHub API limits are very low')
+  }
+
+  try {
+    const output = runGh(['api', 'rate_limit'], { maxBuffer: 1024 * 1024, attempts: 3 })
+    const core = JSON.parse(output)?.resources?.core
+    if (!core) {
+      return
+    }
+
+    console.log(`GitHub API rate limit: ${core.remaining}/${core.limit} remaining`)
+    if (core.remaining < 50) {
+      console.warn('GitHub core rate limit is low; requests may still fail after retries')
+    }
+  }
+  catch (error) {
+    console.warn(`Unable to check GitHub rate limit: ${errorText(error).split('\n')[0]}`)
+  }
+}
+
+const pullRequestsQuery = `
+query($cursor: String) {
+  repository(owner: "vllm-project", name: "semantic-router") {
+    pullRequests(states: MERGED, first: 50, after: $cursor, orderBy: { field: UPDATED_AT, direction: DESC }) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        number
+        reviews(first: 100) {
+          nodes {
+            author { login }
+            state
+            submittedAt
+          }
+        }
+      }
+    }
+  }
+}`
 
 const identityOverrides = [
   {
@@ -252,6 +352,7 @@ for (const identity of identityOverrides) {
 }
 
 try {
+  ensureGitHubAuth()
   const generatedAt = formatLocalDate(new Date())
   const allRows = readContributorRows(null)
   const releaseTimeline = readReleaseTimeline()
@@ -265,9 +366,18 @@ try {
     targetRelease: releaseTimeline.v03,
   }
   const rangeDefinitions = buildReleaseRangeDefinitions(releaseTimeline, generatedAt)
-  const newContributorsSinceRelease = buildNewContributorsSinceRelease(releaseWindow, allRows)
+  let pullRequests = []
+
+  try {
+    pullRequests = fetchMergedPullRequests()
+  }
+  catch (error) {
+    console.warn(`Skipping PR review stats: ${error.message}`)
+  }
+
+  const newContributorsSinceRelease = buildNewContributorsSinceRelease(releaseWindow, allRows, pullRequests)
   const snapshots = Object.fromEntries(
-    rangeDefinitions.map(range => [range.id, buildSnapshot(range, generatedAt, allRows)]),
+    rangeDefinitions.map(range => [range.id, buildSnapshot(range, generatedAt, allRows, pullRequests)]),
   )
 
   mkdirSync(dirname(outputPath), { recursive: true })
@@ -332,13 +442,15 @@ function buildReleaseRangeDefinitions(releaseTimeline, generatedAt) {
   ]
 }
 
-function buildSnapshot(range, generatedAt, allRows) {
+function buildSnapshot(range, generatedAt, allRows, pullRequests) {
   const rows = readRowsForRange(range, allRows)
   const byContributor = collectContributorStats(rows)
   const newContributorKeys = readNewContributorKeysForRange(range, allRows, byContributor)
   const totalCommits = [...byContributor.values()].reduce((sum, entry) => sum + entry.commits, 0)
-  const entries = rankContributorEntries(byContributor, totalCommits, newContributorKeys)
+  const reviewStats = collectReviewStatsByContributorKey(pullRequests, range)
+  const entries = rankContributorEntries(byContributor, totalCommits, newContributorKeys, reviewStats)
   const newContributors = entries.filter(entry => entry.isNewContributorSinceRelease).length
+  const totalReviews = entries.reduce((sum, entry) => sum + entry.reviews, 0)
 
   return {
     id: range.id,
@@ -348,6 +460,7 @@ function buildSnapshot(range, generatedAt, allRows) {
     endDate: range.endDate,
     description: range.description,
     totalCommits,
+    totalReviews,
     totalContributors: entries.length,
     newContributors,
     entries,
@@ -409,7 +522,7 @@ function readRowsBeforeRange(range, allRows) {
   return allRows.filter(row => row.date.slice(0, 10) < range.startDate)
 }
 
-function buildNewContributorsSinceRelease(releaseWindow, allRows) {
+function buildNewContributorsSinceRelease(releaseWindow, allRows, pullRequests = []) {
   if (!releaseWindow) {
     return {
       tagName: null,
@@ -439,7 +552,11 @@ function buildNewContributorsSinceRelease(releaseWindow, allRows) {
   }
 
   const totalCommits = [...byContributor.values()].reduce((sum, entry) => sum + entry.commits, 0)
-  const entries = rankContributorEntries(byContributor, totalCommits, new Set(byContributor.keys()))
+  const reviewStats = collectReviewStatsByContributorKey(pullRequests, {
+    startDate: baseRelease.publishedAt.slice(0, 10),
+    endDate: targetRelease.publishedAt.slice(0, 10),
+  })
+  const entries = rankContributorEntries(byContributor, totalCommits, new Set(byContributor.keys()), reviewStats)
 
   return {
     tagName: baseRelease.tagName,
@@ -514,17 +631,12 @@ function collectContributorStats(rows) {
   return byContributor
 }
 
-function rankContributorEntries(byContributor, totalCommits, newContributorKeys) {
-  return [...byContributor.values()]
-    .sort((left, right) => {
-      if (right.commits !== left.commits) {
-        return right.commits - left.commits
-      }
+function rankContributorEntries(byContributor, totalCommits, newContributorKeys, reviewStats = new Map()) {
+  const merged = mergeReviewOnlyContributors(byContributor, reviewStats)
 
-      return left.name.localeCompare(right.name)
-    })
-    .map((entry, index) => ({
-      rank: index + 1,
+  return [...merged.values()]
+    .map(entry => ({
+      rank: 0,
       name: entry.name,
       login: entry.login,
       avatarLogin: entry.avatarLogin,
@@ -532,11 +644,204 @@ function rankContributorEntries(byContributor, totalCommits, newContributorKeys)
       avatarSeed: entry.avatarSeed,
       key: entry.key,
       commits: entry.commits,
+      reviews: reviewStats.get(entry.key)?.count ?? 0,
       share: totalCommits > 0 ? Number((entry.commits / totalCommits).toFixed(4)) : 0,
       firstCommitDate: entry.firstCommitDate.slice(0, 10),
       latestCommitDate: entry.latestCommitDate.slice(0, 10),
       isNewContributorSinceRelease: newContributorKeys.has(entry.key),
     }))
+    .filter(entry => entry.commits > 0 || entry.reviews > 0)
+    .sort((left, right) => {
+      if (right.commits !== left.commits) {
+        return right.commits - left.commits
+      }
+
+      if (right.reviews !== left.reviews) {
+        return right.reviews - left.reviews
+      }
+
+      return left.name.localeCompare(right.name)
+    })
+    .map((entry, index) => ({
+      ...entry,
+      rank: index + 1,
+    }))
+}
+
+function mergeReviewOnlyContributors(byContributor, reviewStats) {
+  const merged = new Map(byContributor)
+
+  for (const [key, review] of reviewStats) {
+    if (merged.has(key)) {
+      continue
+    }
+
+    const login = review.login
+    const override = overrideByLogin.get(normalizeLogin(login))
+    const profile = login ? readGitHubUserProfile(login) : null
+    const resolvedLogin = profile?.login ?? login
+
+    merged.set(key, {
+      key,
+      name: override?.name ?? profile?.name ?? resolvedLogin ?? 'Unknown contributor',
+      login: resolvedLogin,
+      avatarLogin: override?.avatarLogin ?? resolvedLogin,
+      avatarUrl: profile?.avatarUrl,
+      avatarSeed: override?.key ?? normalizeLogin(resolvedLogin ?? key),
+      commits: 0,
+      firstCommitDate: `${review.latestDate}T00:00:00Z`,
+      latestCommitDate: `${review.latestDate}T00:00:00Z`,
+    })
+  }
+
+  return merged
+}
+
+function fetchMergedPullRequests() {
+  const pullRequests = []
+  let cursor = null
+
+  do {
+    const page = graphqlRequest(pullRequestsQuery, { cursor })
+    const connection = page.repository.pullRequests
+    pullRequests.push(...connection.nodes)
+    cursor = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : null
+    if (cursor) {
+      sleepSync(GH_PAGE_DELAY_MS)
+    }
+  } while (cursor)
+
+  return pullRequests
+}
+
+function graphqlRequest(query, variables) {
+  const args = ['api', 'graphql', '-f', `query=${query}`]
+
+  for (const [key, value] of Object.entries(variables)) {
+    if (value != null) {
+      args.push('-f', `${key}=${value}`)
+    }
+  }
+
+  let lastError
+
+  for (let attempt = 1; attempt <= GH_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const output = runGh(args, {
+        maxBuffer: 1024 * 1024 * 32,
+        attempts: 1,
+      })
+      const payload = JSON.parse(output)
+      if (payload.errors?.length) {
+        const message = payload.errors.map(error => error.message).join('; ')
+        const error = new Error(message)
+        if (attempt < GH_MAX_ATTEMPTS && isRetryableGhError(error)) {
+          const delay = GH_RETRY_BASE_MS * (2 ** (attempt - 1))
+          console.warn(
+            `GraphQL errors (attempt ${attempt}/${GH_MAX_ATTEMPTS}): ${message}; retrying in ${delay}ms`,
+          )
+          sleepSync(delay)
+          lastError = error
+          continue
+        }
+
+        throw error
+      }
+
+      return payload.data
+    }
+    catch (error) {
+      lastError = error
+      if (attempt >= GH_MAX_ATTEMPTS || !isRetryableGhError(error)) {
+        throw error
+      }
+
+      const delay = GH_RETRY_BASE_MS * (2 ** (attempt - 1))
+      const summary = errorText(error).split('\n').find(Boolean) || 'unknown error'
+      console.warn(
+        `GraphQL request failed (attempt ${attempt}/${GH_MAX_ATTEMPTS}): ${summary}; retrying in ${delay}ms`,
+      )
+      sleepSync(delay)
+    }
+  }
+
+  throw lastError
+}
+
+function collectReviewStatsByContributorKey(pullRequests, range) {
+  const stats = new Map()
+
+  for (const pullRequest of pullRequests) {
+    const reviewedInPr = new Set()
+
+    for (const review of pullRequest.reviews?.nodes ?? []) {
+      const reviewer = normalizeLogin(review.author?.login)
+      const submittedAt = review.submittedAt?.slice(0, 10) ?? null
+
+      if (
+        !reviewer
+        || isBotLogin(reviewer)
+        || reviewedInPr.has(reviewer)
+        || !reviewStates.has(review.state)
+        || !submittedAt
+        || !isDateInRange(submittedAt, range)
+      ) {
+        continue
+      }
+
+      reviewedInPr.add(reviewer)
+
+      const key = resolveReviewerContributorKey(reviewer)
+      if (!key) {
+        continue
+      }
+
+      const login = key.slice('github:'.length)
+      const current = stats.get(key) ?? {
+        key,
+        login,
+        count: 0,
+        latestDate: submittedAt,
+      }
+      current.count += 1
+      current.latestDate = maxDate(current.latestDate, submittedAt)
+      stats.set(key, current)
+    }
+  }
+
+  return stats
+}
+
+function resolveReviewerContributorKey(login) {
+  const normalized = normalizeLogin(login)
+  if (!normalized || isBotLogin(normalized)) {
+    return null
+  }
+
+  const override = overrideByLogin.get(normalized)
+  const canonicalLogin = normalizeLogin(override?.login ?? login)
+
+  return `github:${canonicalLogin}`
+}
+
+function isDateInRange(date, range) {
+  return (!range.startDate || date >= range.startDate) && (!range.endDate || date <= range.endDate)
+}
+
+function isBotLogin(login) {
+  const normalized = normalizeLogin(login)
+  if (!normalized) {
+    return true
+  }
+
+  return (
+    normalized.includes('[bot]')
+    || normalized.endsWith('-bot')
+    || normalized === 'dependabot'
+    || normalized === 'github-actions'
+    || normalized.includes('copilot')
+    || normalized.includes('codex-connector')
+  )
 }
 
 function readContributorRows(startDate) {
@@ -565,12 +870,9 @@ function readReleaseTimeline() {
 
 function readGitHubReleaseMap() {
   try {
-    const output = execFileSync('gh', ['api', `repos/${githubRepo}/releases`], {
-      cwd: repoRoot,
-      encoding: 'utf8',
+    const output = runGh(['api', `repos/${githubRepo}/releases`], {
       maxBuffer: 1024 * 1024 * 4,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }).trim()
+    })
 
     const releases = uniqueReleasesByTag(JSON.parse(output)
       .filter(candidate => !candidate.draft)
@@ -639,17 +941,14 @@ function readCommitShasBetweenTags(baseTagName, targetTagName) {
   }
 
   try {
-    const output = execFileSync('gh', [
+    const output = runGh([
       'api',
       '--paginate',
       '--slurp',
       `repos/${githubRepo}/compare/${baseTagName}...${targetTagName}?per_page=100`,
     ], {
-      cwd: repoRoot,
-      encoding: 'utf8',
       maxBuffer: 1024 * 1024 * 64,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }).trim()
+    })
     const pages = JSON.parse(output)
     const shas = pages.flatMap(page => page.commits ?? []).map(commit => commit.sha).filter(Boolean)
 
@@ -695,17 +994,14 @@ function readCommitShasSinceTag(tagName) {
   }
 
   try {
-    const output = execFileSync('gh', [
+    const output = runGh([
       'api',
       '--paginate',
       '--slurp',
       `repos/${githubRepo}/compare/${tagName}...main?per_page=100`,
     ], {
-      cwd: repoRoot,
-      encoding: 'utf8',
       maxBuffer: 1024 * 1024 * 64,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }).trim()
+    })
     const pages = JSON.parse(output)
     const shas = pages.flatMap(page => page.commits ?? []).map(commit => commit.sha).filter(Boolean)
 
@@ -771,12 +1067,9 @@ function readCommitShasThroughTag(tagName) {
 function readGitHubCommitRows(startDate) {
   const since = startDate ? `&since=${startDate}T00:00:00Z` : ''
   const endpoint = `repos/${githubRepo}/commits?sha=main&per_page=100${since}`
-  const output = execFileSync('gh', ['api', '--paginate', '--slurp', endpoint], {
-    cwd: repoRoot,
-    encoding: 'utf8',
+  const output = runGh(['api', '--paginate', '--slurp', endpoint], {
     maxBuffer: 1024 * 1024 * 64,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  }).trim()
+  })
 
   if (!output) {
     return []
@@ -925,17 +1218,14 @@ function readAssociatedPullAuthor(sha) {
   }
 
   try {
-    const output = execFileSync('gh', [
+    const output = runGh([
       'api',
       '-H',
       'Accept: application/vnd.github+json',
       `repos/${githubRepo}/commits/${sha}/pulls`,
     ], {
-      cwd: repoRoot,
-      encoding: 'utf8',
       maxBuffer: 1024 * 1024 * 2,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim()
+    })
     const pull = JSON.parse(output).find((candidate) => {
       const login = normalizeLogin(candidate?.user?.login)
 
@@ -971,12 +1261,9 @@ function readGitHubUserProfile(login) {
   }
 
   try {
-    const output = execFileSync('gh', ['api', `users/${encodeURIComponent(String(login))}`], {
-      cwd: repoRoot,
-      encoding: 'utf8',
+    const output = runGh(['api', `users/${encodeURIComponent(String(login))}`], {
       maxBuffer: 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim()
+    })
     const user = JSON.parse(output)
     const profile = {
       login: user.login ?? login,
@@ -1043,7 +1330,7 @@ function formatLocalDate(date) {
 function renderTypeScript(generatedAt, snapshots, newContributorsSinceRelease) {
   return `/* eslint-disable */
 // This file is generated by \`npm run contributors:rank\`.
-// Source: GitHub commits API with local git fallback.
+// Source: GitHub commits API with local git fallback, plus merged PR reviews.
 
 export type ContributorRankRange = 'v03ToNow' | 'v02ToV03' | 'v01ToV02' | 'v0ToV01' | 'all'
 
@@ -1056,6 +1343,7 @@ export interface ContributorRankEntry {
   avatarUrl?: string
   avatarSeed: string
   commits: number
+  reviews: number
   share: number
   firstCommitDate: string
   latestCommitDate: string
@@ -1070,6 +1358,7 @@ export interface ContributorRankSnapshot {
   endDate: string
   description: string
   totalCommits: number
+  totalReviews: number
   totalContributors: number
   newContributors: number
   entries: ContributorRankEntry[]
