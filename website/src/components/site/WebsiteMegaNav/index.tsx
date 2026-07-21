@@ -290,9 +290,16 @@ export default function WebsiteMegaNav(): ReactNode {
                     aria-pressed={group.key === openGroup.key}
                     onClick={() => setOpenKey(group.key)}
                   >
-                    <span>{String(index + 1).padStart(2, '0')}</span>
-                    <strong>{group.label}</strong>
-                    <span aria-hidden="true">→</span>
+                    <span className={styles.railGroupIndex}>
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
+                    <span className={styles.railGroupCopy}>
+                      <strong>{group.label}</strong>
+                      <span>{group.description}</span>
+                    </span>
+                    <span className={styles.railGroupArrow} aria-hidden="true">
+                      →
+                    </span>
                   </button>
                 ))}
               </div>
@@ -302,20 +309,25 @@ export default function WebsiteMegaNav(): ReactNode {
                 to={openGroup.landingTo}
                 onClick={closeMenu}
               >
-                Explore all
-                {' '}
-                {openGroup.label}
+                <span>
+                  Explore all
+                  {' '}
+                  {openGroup.label}
+                </span>
                 <span aria-hidden="true">↗</span>
               </Link>
             </aside>
 
             <div className={styles.content}>
               <div className={styles.contentHeader}>
-                <span>
-                  {openGroup.label}
-                  {' '}
-                  directory
-                </span>
+                <div className={styles.contentHeaderCopy}>
+                  <span className={styles.contentEyebrow}>
+                    {openGroup.label}
+                    {' '}
+                    directory
+                  </span>
+                  <p>{openGroup.description}</p>
+                </div>
                 <button
                   className={styles.closeButton}
                   type="button"
@@ -338,9 +350,13 @@ export default function WebsiteMegaNav(): ReactNode {
                 {openGroup.sections.map((section, index) => (
                   <section className={styles.section} key={section.key}>
                     <header className={styles.sectionHeader}>
-                      <span>{String(index + 1).padStart(2, '0')}</span>
-                      <h2>{section.title}</h2>
-                      <p>{section.description}</p>
+                      <span className={styles.sectionIndex}>
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <div className={styles.sectionHeaderCopy}>
+                        <h2>{section.title}</h2>
+                        <p>{section.description}</p>
+                      </div>
                     </header>
                     <div className={styles.sectionLinks}>
                       {section.links.map(link => (
