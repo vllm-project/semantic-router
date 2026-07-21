@@ -10,7 +10,7 @@ numpy>=1.21.0
 
 # torch dependency
 --extra-index-url=https://download.pytorch.org/whl/xpu
-torch==2.9.0+xpu
+torch==2.13.0
 # may need oneapi packages
 
 # Optional dependencies
