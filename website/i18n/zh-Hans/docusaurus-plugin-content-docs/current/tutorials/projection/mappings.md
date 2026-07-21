@@ -2,7 +2,7 @@
 translation:
   source_commit: "45bfd49e"
   source_file: "docs/tutorials/projection/mappings.md"
-  outdated: false
+  outdated: true
 sidebar_position: 4
 ---
 
