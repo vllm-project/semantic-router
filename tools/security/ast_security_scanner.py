@@ -171,7 +171,7 @@ SKIP_DIRS = {
     "supply-chain-security-scan",
 }
 
-SELF_DIR = str(Path(__file__).resolve().parent) + os.sep
+SELF_DIR_PARTS = Path(__file__).resolve().parent.parts[-2:]
 SKIP_DIR_PATTERNS = {
     "model",
     "models",
@@ -196,9 +196,18 @@ def should_skip_dir(d: str) -> bool:
 
 
 def _is_own_source(filepath: str) -> bool:
-    """Skip scanning the scanner's own source files."""
+    """Skip scanning the scanner's own source files.
+
+    Matches by trailing directory components (tools/security), not an
+    absolute path. CI checks out the trusted scanner and the untrusted PR
+    code into separate roots (e.g. base/ vs pr-code/); an absolute-path
+    prefix match only recognizes "self" in the tree the scanner happens to
+    run from, so the PR's own copy of these files would otherwise trip the
+    scanner's own credential/dropper detection rules.
+    """
     try:
-        return str(Path(filepath).resolve()).startswith(SELF_DIR)
+        parent_parts = Path(filepath).resolve().parent.parts
+        return parent_parts[-len(SELF_DIR_PARTS):] == SELF_DIR_PARTS
     except (OSError, ValueError):
         return False
 
