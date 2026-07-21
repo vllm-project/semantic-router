@@ -41,7 +41,11 @@ func newBlockingEmbedder(dim int) *blockingEmbedder {
 	}
 }
 
-func (e *blockingEmbedder) Embed(_ string) ([]float32, error) {
+// Embed intentionally ignores ctx and blocks until released, modelling a
+// stage that does not honor cancellation mid-call. This is what the bounded
+// Stop(ctx) path must defend against; making stages natively ctx-interruptible
+// is a deliberate follow-up tracked under #2474.
+func (e *blockingEmbedder) Embed(_ context.Context, _ string) ([]float32, error) {
 	e.once.Do(func() {
 		close(e.started)
 	})
@@ -96,7 +100,7 @@ func newPipelineLifecycleFixture(embedder Embedder) *pipelineLifecycleFixture {
 }
 
 func (f *pipelineLifecycleFixture) cleanup() {
-	f.pipeline.Stop()
+	_ = f.pipeline.Stop(context.Background())
 	_ = os.RemoveAll(f.tempDir)
 }
 
@@ -118,7 +122,7 @@ var _ = Describe("IngestionPipeline lifecycle", func() {
 		record, err := f.store.Save("stopped.txt", []byte("content"), "assistants")
 		Expect(err).NotTo(HaveOccurred())
 
-		f.pipeline.Stop()
+		_ = f.pipeline.Stop(context.Background())
 		_, err = f.pipeline.AttachFile(vs.ID, record.ID, nil)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("ingestion pipeline is not running"))
@@ -130,7 +134,7 @@ var _ = Describe("IngestionPipeline lifecycle", func() {
 	})
 
 	It("restarts workers after a stop", func() {
-		f.pipeline.Stop()
+		_ = f.pipeline.Stop(context.Background())
 		f.pipeline.Start()
 
 		vs, err := f.mgr.CreateStore(f.ctx, CreateStoreRequest{Name: "restarted"})
@@ -193,7 +197,7 @@ var _ = Describe("IngestionPipeline queued shutdown", func() {
 		stopped := make(chan struct{})
 		go func() {
 			defer close(stopped)
-			f.pipeline.Stop()
+			_ = f.pipeline.Stop(context.Background())
 		}()
 
 		Eventually(func() string {
@@ -223,5 +227,71 @@ var _ = Describe("IngestionPipeline queued shutdown", func() {
 		Expect(updated.FileCounts.Failed).To(Equal(1))
 		Expect(updated.FileCounts.InProgress).To(Equal(0))
 		Expect(updated.FileCounts.Total).To(Equal(2))
+	})
+})
+
+var _ = Describe("IngestionPipeline bounded Stop", func() {
+	var (
+		embedder *blockingEmbedder
+		f        *pipelineLifecycleFixture
+	)
+
+	BeforeEach(func() {
+		embedder = newBlockingEmbedder(3)
+		f = newPipelineLifecycleFixture(embedder)
+	})
+
+	AfterEach(func() {
+		// Release the wedged embedder so the worker can unwind, then clean up.
+		close(embedder.release)
+		_ = os.RemoveAll(f.tempDir)
+	})
+
+	It("returns within the deadline when a job is wedged inside a stage", func() {
+		vs, err := f.mgr.CreateStore(f.ctx, CreateStoreRequest{Name: "wedged-stop"})
+		Expect(err).NotTo(HaveOccurred())
+
+		record, err := f.store.Save("wedged.txt", []byte("content"), "assistants")
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = f.pipeline.AttachFile(vs.ID, record.ID, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Wait until the worker is blocked inside Embed, so Stop cannot drain
+		// gracefully and must fall back to its bounded deadline path.
+		Eventually(embedder.started, 5*time.Second).Should(BeClosed())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		defer cancel()
+
+		start := time.Now()
+		stopErr := make(chan error, 1)
+		go func() { stopErr <- f.pipeline.Stop(ctx) }()
+
+		var err2 error
+		Eventually(stopErr, 5*time.Second, 20*time.Millisecond).Should(Receive(&err2))
+		Expect(err2).To(MatchError(context.DeadlineExceeded))
+		// Stop must return promptly once the deadline elapses, not hang on the
+		// wedged worker.
+		Expect(time.Since(start)).To(BeNumerically("<", 3*time.Second))
+	})
+
+	It("is idempotent and safe to call after a bounded Stop", func() {
+		vs, err := f.mgr.CreateStore(f.ctx, CreateStoreRequest{Name: "double-stop"})
+		Expect(err).NotTo(HaveOccurred())
+
+		record, err := f.store.Save("double.txt", []byte("content"), "assistants")
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = f.pipeline.AttachFile(vs.ID, record.ID, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(embedder.started, 5*time.Second).Should(BeClosed())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		Expect(f.pipeline.Stop(ctx)).To(MatchError(context.DeadlineExceeded))
+
+		// A second Stop on an already-stopped pipeline is a no-op returning nil.
+		Expect(f.pipeline.Stop(context.Background())).To(BeNil())
 	})
 })
