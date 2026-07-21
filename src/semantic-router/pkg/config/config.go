@@ -85,8 +85,9 @@ type RouterConfig struct {
 	BackendModels      `yaml:",inline"`
 	ToolSelection      `yaml:",inline"`
 
-	Authz     AuthzConfig     `yaml:"authz,omitempty"`
-	RateLimit RateLimitConfig `yaml:"ratelimit,omitempty"`
+	Authz         AuthzConfig         `yaml:"authz,omitempty"`
+	RateLimit     RateLimitConfig     `yaml:"ratelimit,omitempty"`
+	ManagementAPI ManagementAPIConfig `yaml:"management_api,omitempty"`
 
 	// Runtime-only knowledge bases loaded from global.model_catalog.
 	KnowledgeBases []KnowledgeBaseConfig `yaml:"knowledge_bases,omitempty"`
