@@ -18,15 +18,18 @@ package vectorstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 )
 
 // Embedder generates vector embeddings from text. Implementations
-// wrap the actual embedding model (e.g. Candle FFI).
+// wrap the actual embedding model (e.g. Candle FFI). Embed takes a
+// context so a cancelled lifecycle or request aborts embedding work at
+// the next checkpoint instead of running to completion.
 type Embedder interface {
-	Embed(text string) ([]float32, error)
+	Embed(ctx context.Context, text string) ([]float32, error)
 	Dimension() int
 }
 
@@ -37,6 +40,11 @@ type IngestionJob struct {
 	FileID            string
 	ChunkingStrategy  *ChunkingStrategy
 }
+
+// defaultStopTimeout bounds a Stop call from a shutdown path that does not
+// supply its own deadline. It keeps process shutdown responsive even when a
+// backend or embedder is wedged.
+const defaultStopTimeout = 30 * time.Second
 
 // IngestionPipeline processes file attachment jobs asynchronously.
 // It reads files, extracts text, chunks, embeds, and stores the
@@ -53,7 +61,12 @@ type IngestionPipeline struct {
 	fileStatuses map[string]*VectorStoreFile // vsf_id -> status
 	wg           sync.WaitGroup
 	stopCh       chan struct{}
-	running      bool
+	// rootCtx is the pipeline lifecycle context. All per-job work derives from
+	// it, so cancelling rootCancel signals every in-flight job to abort at its
+	// next checkpoint. It is (re)created on each Start.
+	rootCtx    context.Context
+	rootCancel context.CancelFunc
+	running    bool
 }
 
 // PipelineConfig holds configuration for the ingestion pipeline.
@@ -97,32 +110,74 @@ func (p *IngestionPipeline) Start() {
 	}
 	p.stopCh = make(chan struct{})
 	stopCh := p.stopCh
+	p.rootCtx, p.rootCancel = context.WithCancel(context.Background())
+	rootCtx := p.rootCtx
 	p.running = true
 	p.mu.Unlock()
 
 	for i := 0; i < p.workers; i++ {
 		p.wg.Add(1)
-		go p.worker(stopCh)
+		go p.worker(rootCtx, stopCh)
 	}
 }
 
-// Stop gracefully shuts down the pipeline.
-func (p *IngestionPipeline) Stop() {
+// Stop gracefully shuts down the pipeline, bounded by ctx.
+//
+// It stops accepting new jobs, fails any still queued, and waits for in-flight
+// jobs to drain. If ctx is cancelled or its deadline elapses before draining
+// completes, the pipeline root context is cancelled so in-flight jobs abort at
+// their next checkpoint, and Stop returns ctx.Err() without blocking further.
+// A nil ctx is treated as a bounded shutdown with defaultStopTimeout.
+func (p *IngestionPipeline) Stop(ctx context.Context) error {
 	p.lifecycleMu.Lock()
 	defer p.lifecycleMu.Unlock()
 
 	p.mu.Lock()
 	if !p.running {
 		p.mu.Unlock()
-		return
+		return nil
 	}
 	stopCh := p.stopCh
+	rootCancel := p.rootCancel
 	p.running = false
 	p.mu.Unlock()
 
+	if ctx == nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), defaultStopTimeout)
+		defer cancel()
+	}
+
 	p.failQueuedJobs("pipeline_stopped", "ingestion pipeline stopped before processing job")
 	close(stopCh)
-	p.wg.Wait()
+
+	// Wait for workers to drain, bounded by ctx. On timeout, cancel the root
+	// context so in-flight jobs abort at their next stage checkpoint, then
+	// return without waiting further — Stop must not block past ctx.
+	//
+	// Note: a job wedged *inside* a single stage (e.g. an embedder or backend
+	// call that ignores context) cannot be interrupted here; that worker unwinds
+	// only once the stage returns. Making individual stages ctx-aware is handled
+	// by the follow-up embedder/backend context work. Stop's own contract —
+	// returning within ctx — holds regardless.
+	done := make(chan struct{})
+	go func() {
+		p.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		if rootCancel != nil {
+			rootCancel()
+		}
+		return nil
+	case <-ctx.Done():
+		if rootCancel != nil {
+			rootCancel()
+		}
+		return ctx.Err()
+	}
 }
 
 // AttachFile queues a file for processing and returns the VectorStoreFile status.
@@ -269,96 +324,141 @@ func (p *IngestionPipeline) DetachFile(ctx context.Context, vectorStoreID, vsfID
 }
 
 // worker is the background goroutine that processes ingestion jobs.
-func (p *IngestionPipeline) worker(stopCh <-chan struct{}) {
+func (p *IngestionPipeline) worker(ctx context.Context, stopCh <-chan struct{}) {
 	defer p.wg.Done()
 
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case <-stopCh:
 			return
 		case job, ok := <-p.jobQueue:
 			if !ok {
 				return
 			}
-			p.processJob(job)
+			p.processJob(ctx, job)
 		}
 	}
 }
 
-// processJob executes the full ingestion pipeline for a single file.
-func (p *IngestionPipeline) processJob(job IngestionJob) {
-	ctx := context.Background()
+// processJob executes the full ingestion pipeline for a single file. It derives
+// all backend work from ctx, and checks ctx between stages so a Stop that
+// cancels the lifecycle context aborts the job promptly instead of running to
+// completion.
+func (p *IngestionPipeline) processJob(ctx context.Context, job IngestionJob) {
+	if err := ctx.Err(); err != nil {
+		p.failJob(ctx, job, "cancelled", "ingestion cancelled before start")
+		return
+	}
 
 	// Step 1: Read file content.
 	content, err := p.fileStore.Read(job.FileID)
 	if err != nil {
-		p.failJob(job, "read_error", fmt.Sprintf("failed to read file: %v", err))
+		p.failJob(ctx, job, "read_error", fmt.Sprintf("failed to read file: %v", err))
 		return
 	}
 
 	// Step 2: Get filename for parser.
 	record, err := p.fileStore.Get(job.FileID)
 	if err != nil {
-		p.failJob(job, "metadata_error", fmt.Sprintf("failed to get file metadata: %v", err))
+		p.failJob(ctx, job, "metadata_error", fmt.Sprintf("failed to get file metadata: %v", err))
 		return
 	}
 
 	// Step 3: Extract text.
 	text, err := ExtractText(content, record.Filename)
 	if err != nil {
-		p.failJob(job, "parse_error", fmt.Sprintf("failed to extract text: %v", err))
+		p.failJob(ctx, job, "parse_error", fmt.Sprintf("failed to extract text: %v", err))
+		return
+	}
+
+	if err := ctx.Err(); err != nil {
+		p.failJob(ctx, job, "cancelled", "ingestion cancelled before chunking")
 		return
 	}
 
 	// Step 4: Chunk text.
 	chunks := ChunkText(text, job.ChunkingStrategy)
 	if len(chunks) == 0 {
-		p.failJob(job, "empty_content", "file produced no text chunks")
+		p.failJob(ctx, job, "empty_content", "file produced no text chunks")
 		return
 	}
 
 	// Step 5: Embed each chunk.
-	embeddedChunks := make([]EmbeddedChunk, 0, len(chunks))
-	for _, chunk := range chunks {
-		embedding, err := p.embedder.Embed(chunk.Content)
-		if err != nil {
-			p.failJob(job, "embedding_error", fmt.Sprintf("failed to embed chunk %d: %v", chunk.ChunkIndex, err))
-			return
-		}
+	embeddedChunks, ok := p.embedChunks(ctx, job, record.Filename, chunks)
+	if !ok {
+		return
+	}
 
-		ec := EmbeddedChunk{
-			ID:            fmt.Sprintf("%s_chunk_%d", job.FileID, chunk.ChunkIndex),
-			FileID:        job.FileID,
-			Filename:      record.Filename,
-			Content:       chunk.Content,
-			Embedding:     embedding,
-			ChunkIndex:    chunk.ChunkIndex,
-			VectorStoreID: job.VectorStoreID,
-		}
-		embeddedChunks = append(embeddedChunks, ec)
+	if err := ctx.Err(); err != nil {
+		p.failJob(ctx, job, "cancelled", "ingestion cancelled before storage")
+		return
 	}
 
 	// Step 6: Insert into backend.
 	if err := p.backend.InsertChunks(ctx, job.VectorStoreID, embeddedChunks); err != nil {
-		p.failJob(job, "storage_error", fmt.Sprintf("failed to store chunks: %v", err))
+		p.failJob(ctx, job, "storage_error", fmt.Sprintf("failed to store chunks: %v", err))
 		return
 	}
 
 	// Mark as completed.
 	p.setFileStatus(job.VectorStoreFileID, "completed", nil)
-	_ = p.manager.UpdateFileCounts(context.Background(), job.VectorStoreID, func(fc *FileCounts) {
+	_ = p.manager.UpdateFileCounts(ctx, job.VectorStoreID, func(fc *FileCounts) {
 		fc.InProgress--
 		fc.Completed++
 	})
 }
 
+// embedChunks embeds each chunk, checking ctx before each embedding call so a
+// cancelled lifecycle context aborts promptly. On any error it fails the job
+// and returns ok=false; the caller should stop processing.
+func (p *IngestionPipeline) embedChunks(ctx context.Context, job IngestionJob, filename string, chunks []TextChunk) ([]EmbeddedChunk, bool) {
+	embeddedChunks := make([]EmbeddedChunk, 0, len(chunks))
+	for _, chunk := range chunks {
+		if err := ctx.Err(); err != nil {
+			p.failJob(ctx, job, "cancelled", fmt.Sprintf("ingestion cancelled before embedding chunk %d", chunk.ChunkIndex))
+			return nil, false
+		}
+
+		embedding, err := p.embedder.Embed(ctx, chunk.Content)
+		if err != nil {
+			// A cooperative embedder returns context.Canceled/DeadlineExceeded
+			// when the lifecycle root is cancelled during shutdown. That is an
+			// intentional termination, not a backend fault, so record it with
+			// the "cancelled" code rather than misclassifying it as an
+			// embedding error in status/metrics.
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				p.failJob(ctx, job, "cancelled", fmt.Sprintf("ingestion cancelled while embedding chunk %d: %v", chunk.ChunkIndex, err))
+				return nil, false
+			}
+			p.failJob(ctx, job, "embedding_error", fmt.Sprintf("failed to embed chunk %d: %v", chunk.ChunkIndex, err))
+			return nil, false
+		}
+
+		embeddedChunks = append(embeddedChunks, EmbeddedChunk{
+			ID:            fmt.Sprintf("%s_chunk_%d", job.FileID, chunk.ChunkIndex),
+			FileID:        job.FileID,
+			Filename:      filename,
+			Content:       chunk.Content,
+			Embedding:     embedding,
+			ChunkIndex:    chunk.ChunkIndex,
+			VectorStoreID: job.VectorStoreID,
+		})
+	}
+	return embeddedChunks, true
+}
+
 // failJob marks a job as failed and updates file counts.
-func (p *IngestionPipeline) failJob(job IngestionJob, code, message string) {
+func (p *IngestionPipeline) failJob(ctx context.Context, job IngestionJob, code, message string) {
 	p.setFileStatus(job.VectorStoreFileID, "failed", &FileError{
 		Code:    code,
 		Message: message,
 	})
-	_ = p.manager.UpdateFileCounts(context.Background(), job.VectorStoreID, func(fc *FileCounts) {
+	// Count updates use a background context: even when the job context is
+	// cancelled, the in-memory counts and durable metadata must stay consistent
+	// with the file status we just wrote.
+	_ = p.manager.UpdateFileCounts(context.WithoutCancel(ctx), job.VectorStoreID, func(fc *FileCounts) {
 		fc.InProgress--
 		fc.Failed++
 	})
@@ -368,7 +468,7 @@ func (p *IngestionPipeline) failQueuedJobs(code, message string) {
 	for {
 		select {
 		case job := <-p.jobQueue:
-			p.failJob(job, code, message)
+			p.failJob(context.Background(), job, code, message)
 		default:
 			return
 		}
