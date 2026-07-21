@@ -67,7 +67,7 @@ def _is_self_path(fpath: Path) -> bool:
     untrusted pr-code/ tree) that contains its own copy of these files.
     """
     try:
-        return fpath.resolve().parent.parts[-len(SELF_DIR_PARTS):] == SELF_DIR_PARTS
+        return fpath.resolve().parent.parts[-len(SELF_DIR_PARTS) :] == SELF_DIR_PARTS
     except (OSError, ValueError):
         return False
 

@@ -46,12 +46,8 @@ class TestASTScannerSelfExclusion(unittest.TestCase):
                     )
 
     def test_files_outside_tools_security_are_not_excluded(self):
-        self.assertFalse(
-            ast_scanner._is_own_source("/repo/pkg/extproc/recorder.go")
-        )
-        self.assertFalse(
-            ast_scanner._is_own_source("/repo/some_module/bad.py")
-        )
+        self.assertFalse(ast_scanner._is_own_source("/repo/pkg/extproc/recorder.go"))
+        self.assertFalse(ast_scanner._is_own_source("/repo/some_module/bad.py"))
 
 
 class TestRegexScannerSelfExclusion(unittest.TestCase):
@@ -69,9 +65,7 @@ class TestRegexScannerSelfExclusion(unittest.TestCase):
         self.assertFalse(
             regex_scanner._is_self_path(Path("/repo/pkg/extproc/recorder.go"))
         )
-        self.assertFalse(
-            regex_scanner._is_self_path(Path("/repo/some_module/bad.py"))
-        )
+        self.assertFalse(regex_scanner._is_self_path(Path("/repo/some_module/bad.py")))
 
 
 if __name__ == "__main__":

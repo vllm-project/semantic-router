@@ -207,7 +207,7 @@ def _is_own_source(filepath: str) -> bool:
     """
     try:
         parent_parts = Path(filepath).resolve().parent.parts
-        return parent_parts[-len(SELF_DIR_PARTS):] == SELF_DIR_PARTS
+        return parent_parts[-len(SELF_DIR_PARTS) :] == SELF_DIR_PARTS
     except (OSError, ValueError):
         return False
 
