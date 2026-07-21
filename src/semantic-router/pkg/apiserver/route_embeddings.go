@@ -105,8 +105,8 @@ func (s *ClassificationAPIServer) parseEmbeddingRequest(w http.ResponseWriter, r
 
 	applyEmbeddingDefaults(&req)
 	mmbertPath := ""
-	if s.config != nil {
-		mmbertPath = s.config.EmbeddingModels.MmBertModelPath
+	if cfg := s.currentConfig(); cfg != nil {
+		mmbertPath = cfg.EmbeddingModels.MmBertModelPath
 	}
 	availableLayers := config.MmBertAvailableLayers(mmbertPath)
 	if code, message, ok := validateEmbeddingRequest(req, availableLayers); !ok {

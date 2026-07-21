@@ -155,6 +155,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			Observability: cfg.Observability,
 			Authz:         cfg.Authz,
 			RateLimit:     cfg.RateLimit,
+			ManagementAPI: cfg.ManagementAPI,
 			RouterReplay:  cfg.RouterReplay,
 			StartupStatus: cfg.StartupStatus,
 		},
