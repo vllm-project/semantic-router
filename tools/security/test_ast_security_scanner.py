@@ -5,7 +5,6 @@ import sys
 import unittest
 from pathlib import Path
 
-
 SCANNER_PATH = Path(__file__).with_name("ast_security_scanner.py")
 SPEC = importlib.util.spec_from_file_location("ast_security_scanner", SCANNER_PATH)
 if SPEC is None or SPEC.loader is None:
