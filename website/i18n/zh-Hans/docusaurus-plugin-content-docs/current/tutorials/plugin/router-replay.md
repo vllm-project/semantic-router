@@ -2,7 +2,7 @@
 translation:
   source_commit: "043cee97"
   source_file: "docs/tutorials/plugin/router-replay.md"
-  outdated: false
+  outdated: true
 ---
 
 # Router Replay

@@ -221,6 +221,7 @@ const sidebars: SidebarsConfig = {
           label: 'Global',
           items: [
             'tutorials/global/overview',
+            'tutorials/global/entrypoints-and-recipes',
             'tutorials/global/api-and-observability',
             'tutorials/global/stores-and-tools',
             'tutorials/global/safety-models-and-policy',
