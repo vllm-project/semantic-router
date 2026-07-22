@@ -1231,3 +1231,31 @@ func decodeAndResizeImageOnnx(data []byte, targetW, targetH int) ([]float32, err
 	}
 	return pixels, nil
 }
+
+var (
+	mmDimMu     sync.Mutex
+	mmDimCached int // 0 = not yet probed; >0 = native dim; -1 = probe failed / no model
+)
+
+// MultiModalGetEmbeddingDim returns the loaded multimodal model's native
+// embedding dimension, or -1 if no multimodal model is loaded.
+//
+// The router uses this to enforce the over-dimension contract with the real
+// model value instead of a hardcoded constant. The ONNX C ABI exposes no
+// dedicated dimension getter, so the native dimension is discovered by encoding
+// a minimal probe at the native dimension (targetDim=0) and reading the output
+// length. The result is constant per loaded model, so it is cached after the
+// first successful probe.
+func MultiModalGetEmbeddingDim() int {
+	mmDimMu.Lock()
+	defer mmDimMu.Unlock()
+	if mmDimCached > 0 {
+		return mmDimCached
+	}
+	out, err := MultiModalEncodeText(" ", 0)
+	if err != nil || out == nil || len(out.Embedding) == 0 {
+		return -1
+	}
+	mmDimCached = len(out.Embedding)
+	return mmDimCached
+}
