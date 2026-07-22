@@ -21,8 +21,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import ast_security_scanner as ast_scanner  # noqa: E402
-import scan_malicious_code as regex_scanner  # noqa: E402
+import ast_security_scanner as ast_scanner
+import scan_malicious_code as regex_scanner
 
 # Roots a real checkout could plausibly use: the developer's own working
 # copy, and the base/ and pr-code/ split CI uses under pull_request_target.
