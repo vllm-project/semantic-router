@@ -17,54 +17,9 @@ import type {
   WebsiteMegaNavGroup,
   WebsiteMegaNavKey,
   WebsiteMegaNavLink,
+  WebsiteMegaNavSection,
 } from './navigation'
 import styles from './index.module.css'
-
-function MegaNavLink({
-  link,
-  onNavigate,
-}: {
-  link: WebsiteMegaNavLink
-  onNavigate: () => void
-}): ReactNode {
-  const content = (
-    <>
-      <span className={styles.linkCopy}>
-        <strong>{link.label}</strong>
-        <span>{link.description}</span>
-      </span>
-      <span className={styles.linkArrow} aria-hidden="true">
-        {link.href ? '↗' : '→'}
-      </span>
-    </>
-  )
-
-  if (link.href) {
-    return (
-      <a
-        className={styles.link}
-        href={link.href}
-        target="_blank"
-        rel="noreferrer"
-        data-mega-nav-link
-        onClick={onNavigate}
-      >
-        {content}
-      </a>
-    )
-  }
-
-  return (
-    <Link
-      className={styles.link}
-      to={link.to ?? '/'}
-      data-mega-nav-link
-      onClick={onNavigate}
-    >
-      {content}
-    </Link>
-  )
-}
 
 function getRouteActiveGroup(pathname: string): WebsiteMegaNavGroup | undefined {
   return (
@@ -76,6 +31,74 @@ function getRouteActiveGroup(pathname: string): WebsiteMegaNavGroup | undefined 
     ?? WEBSITE_MEGA_NAV_GROUPS.find(group =>
       isWebsiteMegaNavGroupActive(group, pathname),
     )
+  )
+}
+
+function getFeaturedLink(group: WebsiteMegaNavGroup): WebsiteMegaNavLink | undefined {
+  return group.sections[0]?.links[0]
+}
+
+function getSupportingSections(group: WebsiteMegaNavGroup): WebsiteMegaNavSection[] {
+  const featuredKey = getFeaturedLink(group)?.key
+
+  return group.sections
+    .map(section => ({
+      ...section,
+      links: section.links.filter(link => link.key !== featuredKey),
+    }))
+    .filter(section => section.links.length > 0)
+}
+
+function DestinationCard({
+  link,
+  onNavigate,
+  featured = false,
+}: {
+  link: WebsiteMegaNavLink
+  onNavigate: () => void
+  featured?: boolean
+}): ReactNode {
+  const className = clsx(styles.card, featured && styles.featuredCard)
+  const arrow = link.href ? '↗' : '→'
+
+  const body = (
+    <>
+      {featured && <span className={styles.featuredLabel}>Featured</span>}
+      <span className={styles.cardCopy}>
+        <strong>{link.label}</strong>
+        <span>{link.description}</span>
+      </span>
+      <span className={styles.cardCta}>
+        {featured ? `Open ${link.label}` : 'Open'}
+        <span aria-hidden="true">{arrow}</span>
+      </span>
+    </>
+  )
+
+  if (link.href) {
+    return (
+      <a
+        className={className}
+        href={link.href}
+        target="_blank"
+        rel="noreferrer"
+        data-mega-nav-link
+        onClick={onNavigate}
+      >
+        {body}
+      </a>
+    )
+  }
+
+  return (
+    <Link
+      className={className}
+      to={link.to ?? '/'}
+      data-mega-nav-link
+      onClick={onNavigate}
+    >
+      {body}
+    </Link>
   )
 }
 
@@ -93,6 +116,14 @@ export default function WebsiteMegaNav(): ReactNode {
   const openGroup = useMemo(
     () => WEBSITE_MEGA_NAV_GROUPS.find(group => group.key === openKey),
     [openKey],
+  )
+  const featuredLink = useMemo(
+    () => (openGroup ? getFeaturedLink(openGroup) : undefined),
+    [openGroup],
+  )
+  const supportingSections = useMemo(
+    () => (openGroup ? getSupportingSections(openGroup) : []),
+    [openGroup],
   )
 
   const closeMenu = useCallback(() => {
@@ -272,95 +303,45 @@ export default function WebsiteMegaNav(): ReactNode {
             role="region"
             aria-labelledby={`website-mega-nav-trigger-${openGroup.key}`}
           >
-            <aside className={styles.rail}>
-              <div className={styles.railHeading}>
-                <span className={styles.eyebrow}>Explore</span>
-                <strong>{openGroup.label}</strong>
-                <p>{openGroup.description}</p>
+            <header className={styles.panelHeader}>
+              <div className={styles.panelHeading}>
+                <h2 className={styles.panelTitle}>{openGroup.label}</h2>
+                <p className={styles.panelDescription}>{openGroup.description}</p>
               </div>
-
-              <div className={styles.railGroups} aria-label="Navigation groups">
-                {WEBSITE_MEGA_NAV_GROUPS.map((group, index) => (
-                  <button
-                    key={group.key}
-                    type="button"
-                    className={clsx(styles.railGroup, {
-                      [styles.railGroupActive]: group.key === openGroup.key,
-                    })}
-                    aria-pressed={group.key === openGroup.key}
-                    onClick={() => setOpenKey(group.key)}
-                  >
-                    <span className={styles.railGroupIndex}>
-                      {String(index + 1).padStart(2, '0')}
-                    </span>
-                    <span className={styles.railGroupCopy}>
-                      <strong>{group.label}</strong>
-                      <span>{group.description}</span>
-                    </span>
-                    <span className={styles.railGroupArrow} aria-hidden="true">
-                      →
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              <Link
-                className={styles.landingLink}
-                to={openGroup.landingTo}
-                onClick={closeMenu}
+              <button
+                className={styles.closeButton}
+                type="button"
+                onClick={() => {
+                  const keyToFocus = openGroup.key
+                  closeMenu()
+                  focusTrigger(keyToFocus)
+                }}
+                aria-label="Close navigation menu"
               >
-                <span>
-                  Explore all
-                  {' '}
-                  {openGroup.label}
-                </span>
-                <span aria-hidden="true">↗</span>
-              </Link>
-            </aside>
+                Close
+                <span aria-hidden="true">×</span>
+              </button>
+            </header>
 
-            <div className={styles.content}>
-              <div className={styles.contentHeader}>
-                <div className={styles.contentHeaderCopy}>
-                  <span className={styles.contentEyebrow}>
-                    {openGroup.label}
-                    {' '}
-                    directory
-                  </span>
-                  <p>{openGroup.description}</p>
-                </div>
-                <button
-                  className={styles.closeButton}
-                  type="button"
-                  onClick={() => {
-                    const keyToFocus = openGroup.key
-                    closeMenu()
-                    focusTrigger(keyToFocus)
-                  }}
-                  aria-label="Close navigation menu"
-                >
-                  Close
-                  <span aria-hidden="true">×</span>
-                </button>
-              </div>
+            <div className={styles.panelBody}>
+              {featuredLink && (
+                <DestinationCard
+                  link={featuredLink}
+                  featured
+                  onNavigate={closeMenu}
+                />
+              )}
 
-              <div
-                className={styles.sections}
-                data-section-count={openGroup.sections.length}
-              >
-                {openGroup.sections.map((section, index) => (
+              <div className={styles.sections}>
+                {supportingSections.map(section => (
                   <section className={styles.section} key={section.key}>
                     <header className={styles.sectionHeader}>
-                      <span className={styles.sectionIndex}>
-                        {String(index + 1).padStart(2, '0')}
-                      </span>
-                      <div className={styles.sectionHeaderCopy}>
-                        <h2>{section.title}</h2>
-                        <p>{section.description}</p>
-                      </div>
+                      <h3>{section.title}</h3>
+                      <p>{section.description}</p>
                     </header>
-                    <div className={styles.sectionLinks}>
+                    <div className={styles.cardGrid}>
                       {section.links.map(link => (
-                        <MegaNavLink
+                        <DestinationCard
                           key={link.key}
                           link={link}
                           onNavigate={closeMenu}
@@ -371,6 +352,19 @@ export default function WebsiteMegaNav(): ReactNode {
                 ))}
               </div>
             </div>
+
+            <footer className={styles.panelFooter}>
+              <Link
+                className={styles.exploreAll}
+                to={openGroup.landingTo}
+                onClick={closeMenu}
+              >
+                Explore all
+                {' '}
+                {openGroup.label}
+                <span aria-hidden="true">↗</span>
+              </Link>
+            </footer>
           </div>
         </>
       )}
