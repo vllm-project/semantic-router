@@ -76,13 +76,18 @@ type RouterConfig struct {
 	RouterOptions    `yaml:",inline"`
 	RouterLearning   RouterLearningConfig `yaml:"learning,omitempty"`
 
-	// Dynamic user-facing routing configuration.
+	// Dynamic user-facing routing configuration. Entrypoints and Recipes are
+	// the normalized multi-recipe state produced by the canonical loader; the
+	// inline IntelligentRouting fields always mirror the default recipe.
 	IntelligentRouting `yaml:",inline"`
+	Entrypoints        []EntrypointMapping `yaml:"-"`
+	Recipes            []RoutingRecipe     `yaml:"-"`
 	BackendModels      `yaml:",inline"`
 	ToolSelection      `yaml:",inline"`
 
-	Authz     AuthzConfig     `yaml:"authz,omitempty"`
-	RateLimit RateLimitConfig `yaml:"ratelimit,omitempty"`
+	Authz         AuthzConfig         `yaml:"authz,omitempty"`
+	RateLimit     RateLimitConfig     `yaml:"ratelimit,omitempty"`
+	ManagementAPI ManagementAPIConfig `yaml:"management_api,omitempty"`
 
 	// Runtime-only knowledge bases loaded from global.model_catalog.
 	KnowledgeBases []KnowledgeBaseConfig `yaml:"knowledge_bases,omitempty"`
