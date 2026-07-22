@@ -9,6 +9,29 @@ WEBSITE_DIR="$(dirname "$SCRIPT_DIR")"
 DOCS_DIR="$WEBSITE_DIR/docs"
 I18N_BASE="$WEBSITE_DIR/i18n"
 
+find_git_bin() {
+    local candidate
+    local candidates=()
+
+    [[ -x "/usr/bin/git" ]] && candidates+=("/usr/bin/git")
+    if candidate="$(command -v git 2>/dev/null)"; then
+        candidates+=("$candidate")
+    fi
+
+    for candidate in "${candidates[@]}"; do
+        [[ -n "$candidate" ]] || continue
+        if "$candidate" --version >/dev/null 2>&1; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    echo "No usable git executable found" >&2
+    return 1
+}
+
+GIT_BIN="$(find_git_bin)" || exit 2
+
 LOCALE=""
 FIX_STATUS=false
 
@@ -90,7 +113,7 @@ source_update_count() {
     local source_commit="$1"
     local source_path="$2"
 
-    git log --oneline "$source_commit"..HEAD -- "$source_path" 2>/dev/null \
+    "$GIT_BIN" log --oneline "$source_commit"..HEAD -- "$source_path" 2>/dev/null \
         | wc -l \
         | tr -d '[:space:]'
 }
@@ -98,8 +121,8 @@ source_update_count() {
 source_commit_is_usable() {
     local source_commit="$1"
 
-    git cat-file -e "$source_commit^{commit}" >/dev/null 2>&1 \
-        && git merge-base --is-ancestor "$source_commit" HEAD >/dev/null 2>&1
+    "$GIT_BIN" cat-file -e "$source_commit^{commit}" >/dev/null 2>&1 \
+        && "$GIT_BIN" merge-base --is-ancestor "$source_commit" HEAD >/dev/null 2>&1
 }
 
 set_outdated_status() {
@@ -204,12 +227,12 @@ check_locale() {
         local i18n_timestamp
         local i18n_commit
         local i18n_date
-        source_timestamp="$(git log -1 --format="%ct" -- "$source_path" 2>/dev/null || echo "0")"
-        source_commit="$(git log -1 --format="%h" -- "$source_path" 2>/dev/null || echo "?")"
-        source_date="$(git log -1 --format="%cs" -- "$source_path" 2>/dev/null || echo "?")"
-        i18n_timestamp="$(git log -1 --format="%ct" -- "$i18n_rel_path" 2>/dev/null || echo "0")"
-        i18n_commit="$(git log -1 --format="%h" -- "$i18n_rel_path" 2>/dev/null || echo "?")"
-        i18n_date="$(git log -1 --format="%cs" -- "$i18n_rel_path" 2>/dev/null || echo "?")"
+        source_timestamp="$("$GIT_BIN" log -1 --format="%ct" -- "$source_path" 2>/dev/null || echo "0")"
+        source_commit="$("$GIT_BIN" log -1 --format="%h" -- "$source_path" 2>/dev/null || echo "?")"
+        source_date="$("$GIT_BIN" log -1 --format="%cs" -- "$source_path" 2>/dev/null || echo "?")"
+        i18n_timestamp="$("$GIT_BIN" log -1 --format="%ct" -- "$i18n_rel_path" 2>/dev/null || echo "0")"
+        i18n_commit="$("$GIT_BIN" log -1 --format="%h" -- "$i18n_rel_path" 2>/dev/null || echo "?")"
+        i18n_date="$("$GIT_BIN" log -1 --format="%cs" -- "$i18n_rel_path" 2>/dev/null || echo "?")"
         [[ -n "$source_timestamp" ]] || source_timestamp=0
         [[ -n "$i18n_timestamp" ]] || i18n_timestamp=0
 
