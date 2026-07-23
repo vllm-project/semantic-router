@@ -48,12 +48,12 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 	}
 
 	candidates := r.decisionCandidatesForRequest(originalModel, ctx)
-	signals, authzErr := r.evaluateSignalsForDecision(originalModel, signalInput, history.nonUserMessages, ctx, candidates)
+	signals, scopedCandidates, authzErr := r.evaluateSignalsForDecision(originalModel, signalInput, history.nonUserMessages, ctx, candidates)
 	if authzErr != nil {
 		return "", 0, entropy.ReasoningDecision{}, "", authzErr
 	}
 
-	result, defaultModel := r.runDecisionEngine(originalModel, ctx, signals, candidates)
+	result, defaultModel := r.runDecisionEngine(originalModel, ctx, signals, scopedCandidates)
 	if result == nil {
 		return "", 0.0, entropy.ReasoningDecision{}, defaultModel, nil
 	}
