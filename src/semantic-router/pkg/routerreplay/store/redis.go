@@ -371,7 +371,7 @@ func (r *RedisStore) AppendOutcome(ctx context.Context, id string, outcome Outco
 }
 
 // UpdateHallucinationStatus updates hallucination detection results for a record.
-func (r *RedisStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error {
+func (r *RedisStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan) error {
 	record, found, err := r.Get(ctx, id)
 	if err != nil {
 		return err
@@ -383,6 +383,7 @@ func (r *RedisStore) UpdateHallucinationStatus(ctx context.Context, id string, d
 	record.HallucinationDetected = detected
 	record.HallucinationConfidence = confidence
 	record.HallucinationSpans = spans
+	record.HallucinationSpanDetails = spanDetails
 
 	data, err := json.Marshal(record)
 	if err != nil {
