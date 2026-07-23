@@ -49,6 +49,15 @@ class TestASTScannerSelfExclusion(unittest.TestCase):
         self.assertFalse(ast_scanner._is_own_source("/repo/pkg/extproc/recorder.go"))
         self.assertFalse(ast_scanner._is_own_source("/repo/some_module/bad.py"))
 
+    def test_unknown_files_in_own_directory_are_not_excluded(self):
+        for root in CANDIDATE_ROOTS:
+            path = f"{root}/tools/security/backdoor.py"
+            with self.subTest(path=path):
+                self.assertFalse(
+                    ast_scanner._is_own_source(path),
+                    f"expected {path} to still be scanned, not treated as self",
+                )
+
 
 class TestRegexScannerSelfExclusion(unittest.TestCase):
     def test_own_source_files_excluded_under_any_root(self):
@@ -66,6 +75,15 @@ class TestRegexScannerSelfExclusion(unittest.TestCase):
             regex_scanner._is_self_path(Path("/repo/pkg/extproc/recorder.go"))
         )
         self.assertFalse(regex_scanner._is_self_path(Path("/repo/some_module/bad.py")))
+
+    def test_unknown_files_in_own_directory_are_not_excluded(self):
+        for root in CANDIDATE_ROOTS:
+            path = Path(f"{root}/tools/security/backdoor.py")
+            with self.subTest(path=str(path)):
+                self.assertFalse(
+                    regex_scanner._is_self_path(path),
+                    f"expected {path} to still be scanned, not treated as self",
+                )
 
 
 if __name__ == "__main__":
