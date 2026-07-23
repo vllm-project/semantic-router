@@ -158,9 +158,7 @@ routing:
     assert route_action["regex_rewrite"]["substitution"] == "/v1\\1"
 
 
-def test_backend_ref_static_endpoint_slice_expands_envoy_cluster(
-    tmp_path, monkeypatch
-):
+def test_backend_ref_static_endpoint_slice_expands_envoy_cluster(tmp_path, monkeypatch):
     rendered = _render_envoy_config(
         tmp_path,
         monkeypatch,

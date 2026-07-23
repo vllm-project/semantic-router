@@ -19,8 +19,8 @@ def _uses_shared_anthropic_cluster(model) -> bool:
     if not model.backend_refs:
         return True
     for backend in model.backend_refs:
-        for upstream in _backend_upstream_values(backend):
-            upstream = upstream.lower()
+        for raw_upstream in _backend_upstream_values(backend):
+            upstream = raw_upstream.lower()
             if not upstream:
                 continue
             if "api.anthropic.com" in upstream:

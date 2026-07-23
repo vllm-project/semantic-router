@@ -417,7 +417,11 @@ def _build_legacy_backend_catalog(source: dict[str, Any]) -> dict[str, dict[str,
                 "name": endpoint_name,
                 "endpoint": endpoint_value,
             }
-            _set_if_missing(endpoint_member, "metrics_endpoint", raw_endpoint.get("metrics_endpoint"))
+            _set_if_missing(
+                endpoint_member,
+                "metrics_endpoint",
+                raw_endpoint.get("metrics_endpoint"),
+            )
             _set_if_missing(endpoint_member, "protocol", raw_endpoint.get("protocol"))
             _set_if_missing(endpoint_member, "weight", raw_endpoint.get("weight"))
             backend_ref["endpoints"] = [

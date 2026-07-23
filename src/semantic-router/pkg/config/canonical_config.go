@@ -426,56 +426,21 @@ func normalizeCanonicalProviderModels(models []CanonicalProviderModel) (map[stri
 				backendEndpoints = []CanonicalBackendEndpoint{{Name: backendRefName}}
 			}
 
-			for endpointIndex, backendEndpoint := range backendEndpoints {
-				endpointName := canonicalEndpointName(model.Name, backendRef, refIndex, backendEndpoint, endpointIndex)
-				endpoint := VLLMEndpoint{
-					Name:            endpointName,
-					BackendRefName:  backendRefName,
-					Runtime:         backendRef.Runtime,
-					Weight:          canonicalEndpointWeight(backendRef, backendEndpoint),
-					Type:            backendType,
-					Protocol:        defaultProtocol(firstNonEmpty(backendEndpoint.Protocol, backendRef.Protocol)),
-					Model:           model.Name,
-					APIKey:          resolveBackendAPIKey(backendRef),
-					MetricsEndpoint: backendEndpoint.MetricsEndpoint,
-				}
-				if endpoint.Weight == 0 {
-					endpoint.Weight = 1
-				}
-
-				if backendEndpoint.Endpoint != "" {
-					address, port, err := splitEndpointAddress(endpointForParse(backendEndpoint.Endpoint), endpoint.Protocol)
-					if err != nil {
-						return nil, nil, nil, fmt.Errorf("providers.models[%s].backend_refs[%d].endpoints[%d]: %w", model.Name, refIndex, endpointIndex, err)
-					}
-					endpoint.Address = address
-					endpoint.Port = port
-				}
-
-				params.PreferredEndpoints = append(params.PreferredEndpoints, endpointName)
-				if params.AccessKey == "" {
-					params.AccessKey = endpoint.APIKey
-				}
-				endpoints = append(endpoints, endpoint)
+			var err error
+			endpoints, err = appendCanonicalBackendRefEndpoints(
+				endpoints,
+				&params,
+				model.Name,
+				backendRef,
+				refIndex,
+				backendType,
+				backendRefName,
+				backendEndpoints,
+			)
+			if err != nil {
+				return nil, nil, nil, err
 			}
-
-			if len(backendEndpoints) > 0 && (backendRef.BaseURL != "" || backendRef.Provider != "" || backendRef.AuthHeader != "" || backendRef.AuthPrefix != "" || backendRef.ChatPath != "" || len(backendRef.ExtraHeaders) > 0 || backendRef.APIVersion != "") {
-				profileName := canonicalEndpointName(model.Name, backendRef, refIndex, backendEndpoints[0], 0)
-				profiles[profileName] = ProviderProfile{
-					Type:         backendRef.Provider,
-					BaseURL:      backendRef.BaseURL,
-					AuthHeader:   backendRef.AuthHeader,
-					AuthPrefix:   backendRef.AuthPrefix,
-					ExtraHeaders: copyStringMap(backendRef.ExtraHeaders),
-					APIVersion:   backendRef.APIVersion,
-					ChatPath:     backendRef.ChatPath,
-				}
-				for i := len(endpoints) - len(backendEndpoints); i < len(endpoints); i++ {
-					if endpoints[i].BackendRefName == backendRefName && endpoints[i].Model == model.Name {
-						endpoints[i].ProviderProfileName = profileName
-					}
-				}
-			}
+			applyCanonicalProviderProfile(profiles, endpoints, model.Name, backendRef, refIndex, backendRefName, backendEndpoints)
 		}
 
 		modelParams[model.Name] = params
@@ -485,6 +450,86 @@ func normalizeCanonicalProviderModels(models []CanonicalProviderModel) (map[stri
 		profiles = nil
 	}
 	return profiles, endpoints, modelParams, nil
+}
+
+func appendCanonicalBackendRefEndpoints(
+	endpoints []VLLMEndpoint,
+	params *ModelParams,
+	modelName string,
+	backendRef CanonicalBackendRef,
+	refIndex int,
+	backendType string,
+	backendRefName string,
+	backendEndpoints []CanonicalBackendEndpoint,
+) ([]VLLMEndpoint, error) {
+	for endpointIndex, backendEndpoint := range backendEndpoints {
+		endpointName := canonicalEndpointName(modelName, backendRef, refIndex, backendEndpoint, endpointIndex)
+		endpoint := VLLMEndpoint{
+			Name:            endpointName,
+			BackendRefName:  backendRefName,
+			Runtime:         backendRef.Runtime,
+			Weight:          canonicalEndpointWeight(backendRef, backendEndpoint),
+			Type:            backendType,
+			Protocol:        defaultProtocol(firstNonEmpty(backendEndpoint.Protocol, backendRef.Protocol)),
+			Model:           modelName,
+			APIKey:          resolveBackendAPIKey(backendRef),
+			MetricsEndpoint: backendEndpoint.MetricsEndpoint,
+		}
+		if endpoint.Weight == 0 {
+			endpoint.Weight = 1
+		}
+
+		if backendEndpoint.Endpoint != "" {
+			address, port, err := splitEndpointAddress(endpointForParse(backendEndpoint.Endpoint), endpoint.Protocol)
+			if err != nil {
+				return nil, fmt.Errorf("providers.models[%s].backend_refs[%d].endpoints[%d]: %w", modelName, refIndex, endpointIndex, err)
+			}
+			endpoint.Address = address
+			endpoint.Port = port
+		}
+
+		params.PreferredEndpoints = append(params.PreferredEndpoints, endpointName)
+		if params.AccessKey == "" {
+			params.AccessKey = endpoint.APIKey
+		}
+		endpoints = append(endpoints, endpoint)
+	}
+	return endpoints, nil
+}
+
+func applyCanonicalProviderProfile(
+	profiles map[string]ProviderProfile,
+	endpoints []VLLMEndpoint,
+	modelName string,
+	backendRef CanonicalBackendRef,
+	refIndex int,
+	backendRefName string,
+	backendEndpoints []CanonicalBackendEndpoint,
+) {
+	if len(backendEndpoints) == 0 || !canonicalBackendRefHasProfile(backendRef) {
+		return
+	}
+
+	profileName := canonicalEndpointName(modelName, backendRef, refIndex, backendEndpoints[0], 0)
+	profiles[profileName] = ProviderProfile{
+		Type:         backendRef.Provider,
+		BaseURL:      backendRef.BaseURL,
+		AuthHeader:   backendRef.AuthHeader,
+		AuthPrefix:   backendRef.AuthPrefix,
+		ExtraHeaders: copyStringMap(backendRef.ExtraHeaders),
+		APIVersion:   backendRef.APIVersion,
+		ChatPath:     backendRef.ChatPath,
+	}
+	for i := len(endpoints) - len(backendEndpoints); i < len(endpoints); i++ {
+		if endpoints[i].BackendRefName != backendRefName || endpoints[i].Model != modelName {
+			continue
+		}
+		endpoints[i].ProviderProfileName = profileName
+	}
+}
+
+func canonicalBackendRefHasProfile(backendRef CanonicalBackendRef) bool {
+	return backendRef.BaseURL != "" || backendRef.Provider != "" || backendRef.AuthHeader != "" || backendRef.AuthPrefix != "" || backendRef.ChatPath != "" || len(backendRef.ExtraHeaders) > 0 || backendRef.APIVersion != ""
 }
 
 func canonicalBackendRefStaticEndpoints(backendRef CanonicalBackendRef) []CanonicalBackendEndpoint {

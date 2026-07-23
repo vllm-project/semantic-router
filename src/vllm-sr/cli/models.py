@@ -1113,11 +1113,17 @@ class BackendRef(BaseModel):
         has_discovery = self.discovery is not None
 
         if has_static_endpoints and has_discovery:
-            raise ValueError("backend ref must define either endpoints or discovery, not both")
+            raise ValueError(
+                "backend ref must define either endpoints or discovery, not both"
+            )
         if has_endpoint and (has_static_endpoints or has_discovery):
-            raise ValueError("backend ref must not mix legacy endpoint with endpoints or discovery")
+            raise ValueError(
+                "backend ref must not mix legacy endpoint with endpoints or discovery"
+            )
         if (has_static_endpoints or has_discovery) and not (self.runtime or "").strip():
-            raise ValueError("backend ref runtime is required for endpoints or discovery")
+            raise ValueError(
+                "backend ref runtime is required for endpoints or discovery"
+            )
         for index, endpoint in enumerate(self.endpoints or []):
             if not (endpoint.endpoint or "").strip():
                 raise ValueError(f"backend ref endpoints[{index}].endpoint is required")
@@ -1126,7 +1132,9 @@ class BackendRef(BaseModel):
             if not discovery_type:
                 raise ValueError("backend ref discovery.type is required")
             if discovery_type != "kubernetes":
-                raise ValueError(f"backend ref discovery.type {discovery_type!r} is not supported")
+                raise ValueError(
+                    f"backend ref discovery.type {discovery_type!r} is not supported"
+                )
             if self.discovery.kubernetes is None:
                 raise ValueError("backend ref discovery.kubernetes is required")
         return self
