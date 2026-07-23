@@ -37,6 +37,7 @@ const (
 type FusionAlgorithmConfig struct {
 	Model                        string                 `yaml:"model,omitempty" json:"model,omitempty"`
 	AnalysisModels               []string               `yaml:"analysis_models,omitempty" json:"analysis_models,omitempty"`
+	AnalysisOverrides            []FusionModelOverride  `yaml:"analysis_overrides,omitempty" json:"analysis_overrides,omitempty"`
 	MaxConcurrent                int                    `yaml:"max_concurrent,omitempty" json:"max_concurrent,omitempty"`
 	MaxCompletionTokens          int                    `yaml:"max_completion_tokens,omitempty" json:"max_completion_tokens,omitempty"`
 	RoundTimeoutSeconds          int                    `yaml:"round_timeout_seconds,omitempty" json:"round_timeout_seconds,omitempty"`
@@ -79,6 +80,7 @@ type FusionRequestConfig struct {
 	Enabled                      *bool                  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	Model                        string                 `json:"model,omitempty" yaml:"model,omitempty"`
 	AnalysisModels               []string               `json:"analysis_models,omitempty" yaml:"analysis_models,omitempty"`
+	AnalysisOverrides            []FusionModelOverride  `json:"analysis_overrides,omitempty" yaml:"analysis_overrides,omitempty"`
 	MaxConcurrent                int                    `json:"max_concurrent,omitempty" yaml:"max_concurrent,omitempty"`
 	MaxCompletionTokens          int                    `json:"max_completion_tokens,omitempty" yaml:"max_completion_tokens,omitempty"`
 	RoundTimeoutSeconds          int                    `json:"round_timeout_seconds,omitempty" yaml:"round_timeout_seconds,omitempty"`
@@ -91,6 +93,13 @@ type FusionRequestConfig struct {
 	SynthesisTemplate            string                 `json:"synthesis_template,omitempty" yaml:"synthesis_template,omitempty"`
 	JudgePromptVersion           string                 `json:"judge_prompt_version,omitempty" yaml:"judge_prompt_version,omitempty"`
 	Grounding                    *FusionGroundingConfig `json:"grounding,omitempty" yaml:"grounding,omitempty"`
+}
+
+// FusionModelOverride allows per-analysis-model sampling overrides.
+type FusionModelOverride struct {
+	Model               string   `json:"model,omitempty" yaml:"model,omitempty"`
+	Temperature         *float64 `json:"temperature,omitempty" yaml:"temperature,omitempty"`
+	MaxCompletionTokens int      `json:"max_completion_tokens,omitempty" yaml:"max_completion_tokens,omitempty"`
 }
 
 func DefaultFusionModelNames() []string {
@@ -178,6 +187,9 @@ func ValidateFusionAlgorithmConfig(cfg *FusionAlgorithmConfig) error {
 	if cfg.Temperature != nil && *cfg.Temperature < 0 {
 		return fmt.Errorf("temperature must be >= 0 when set")
 	}
+	if err := validateFusionModelOverrides(cfg.AnalysisOverrides); err != nil {
+		return err
+	}
 	if err := ValidateFusionGroundingConfig(cfg.Grounding); err != nil {
 		return err
 	}
@@ -245,8 +257,32 @@ func (c *FusionRequestConfig) Validate() error {
 	if c.Temperature != nil && *c.Temperature < 0 {
 		return fmt.Errorf("temperature must be >= 0 when set")
 	}
+	if err := validateFusionModelOverrides(c.AnalysisOverrides); err != nil {
+		return err
+	}
 	if err := ValidateFusionGroundingConfig(c.Grounding); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateFusionModelOverrides(overrides []FusionModelOverride) error {
+	seen := map[string]bool{}
+	for i, override := range overrides {
+		name := strings.TrimSpace(override.Model)
+		if name == "" {
+			return fmt.Errorf("analysis_overrides[%d].model cannot be empty", i)
+		}
+		if seen[name] {
+			return fmt.Errorf("analysis_overrides[%d].model %q is duplicated", i, name)
+		}
+		seen[name] = true
+		if override.Temperature != nil && *override.Temperature < 0 {
+			return fmt.Errorf("analysis_overrides[%d].temperature must be >= 0 when set", i)
+		}
+		if override.MaxCompletionTokens < 0 {
+			return fmt.Errorf("analysis_overrides[%d].max_completion_tokens must be >= 1 when set", i)
+		}
 	}
 	return nil
 }
