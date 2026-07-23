@@ -282,10 +282,11 @@ type ClassifierVLLMEndpoint struct {
 
 type VLLMEndpoint struct {
 	Name                string `yaml:"name"`
-	BackendID           string `yaml:"backend_id,omitempty"`
-	EngineKind          string `yaml:"engine_kind,omitempty"`
+	BackendRefName      string `yaml:"backend_ref,omitempty"`
+	Runtime             string `yaml:"runtime,omitempty"`
 	Address             string `yaml:"address"`
 	Port                int    `yaml:"port"`
+	MetricsEndpoint     string `yaml:"metrics_endpoint,omitempty"`
 	Weight              int    `yaml:"weight,omitempty"`
 	Type                string `yaml:"type,omitempty"`
 	APIKey              string `yaml:"api_key,omitempty" json:"-"`
@@ -313,21 +314,22 @@ type ModelPricing struct {
 }
 
 type ModelParams struct {
-	PreferredEndpoints []string          `yaml:"preferred_endpoints,omitempty"`
-	Pricing            ModelPricing      `yaml:"pricing,omitempty"`
-	ReasoningFamily    string            `yaml:"reasoning_family,omitempty"`
-	LoRAs              []LoRAAdapter     `yaml:"loras,omitempty"`
-	AccessKey          string            `yaml:"access_key,omitempty" json:"-"`
-	ParamSize          string            `yaml:"param_size,omitempty"`
-	ContextWindowSize  int               `yaml:"context_window_size,omitempty"`
-	APIFormat          string            `yaml:"api_format,omitempty"`
-	Description        string            `yaml:"description,omitempty"`
-	Capabilities       []string          `yaml:"capabilities,omitempty"`
-	Tags               []string          `yaml:"tags,omitempty"`
-	QualityScore       float64           `yaml:"quality_score,omitempty"`
-	ExternalModelIDs   map[string]string `yaml:"external_model_ids,omitempty"`
-	Modality           string            `yaml:"modality,omitempty"`
-	ImageGenBackend    string            `yaml:"image_gen_backend,omitempty"`
+	PreferredEndpoints []string              `yaml:"preferred_endpoints,omitempty"`
+	BackendRefs        []CanonicalBackendRef `yaml:"backend_refs,omitempty"`
+	Pricing            ModelPricing          `yaml:"pricing,omitempty"`
+	ReasoningFamily    string                `yaml:"reasoning_family,omitempty"`
+	LoRAs              []LoRAAdapter         `yaml:"loras,omitempty"`
+	AccessKey          string                `yaml:"access_key,omitempty" json:"-"`
+	ParamSize          string                `yaml:"param_size,omitempty"`
+	ContextWindowSize  int                   `yaml:"context_window_size,omitempty"`
+	APIFormat          string                `yaml:"api_format,omitempty"`
+	Description        string                `yaml:"description,omitempty"`
+	Capabilities       []string              `yaml:"capabilities,omitempty"`
+	Tags               []string              `yaml:"tags,omitempty"`
+	QualityScore       float64               `yaml:"quality_score,omitempty"`
+	ExternalModelIDs   map[string]string     `yaml:"external_model_ids,omitempty"`
+	Modality           string                `yaml:"modality,omitempty"`
+	ImageGenBackend    string                `yaml:"image_gen_backend,omitempty"`
 }
 
 type LoRAAdapter struct {

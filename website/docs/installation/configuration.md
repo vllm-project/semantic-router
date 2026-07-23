@@ -47,7 +47,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `providers.defaults` holds `default_model`, `reasoning_families`, and `default_reasoning_effort`
   - `providers.models[*]` holds `provider_model_id`, `backend_refs`, `pricing`, `api_format`, and `external_model_ids`
   - `providers.models[*].pricing` uses per-million-token rates for prompt, cached input, optional cache writes, and completion; `cache_write_per_1m` defaults to `prompt_per_1m` when omitted
-  - `providers.models[*].backend_refs[]` can include optional `backend_id` and `engine_kind` identity hints for backend telemetry adapters
+  - `providers.models[*].backend_refs[]` names runtime backend pools. Use `runtime` with `endpoints[]` for static members, `discovery` for dynamic membership, legacy singleton `endpoint` for compatibility, or hosted-provider metadata such as `base_url`
 - `global` owns router-wide runtime overrides.
   - `global.router` groups router-engine control knobs such as config-source selection, route-cache, and model-selection defaults
   - `global.router.config_source` selects whether runtime config comes from the canonical YAML file (`file`) or from in-process Kubernetes CRD reconciliation (`kubernetes`)

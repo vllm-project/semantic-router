@@ -19,13 +19,61 @@ def _uses_shared_anthropic_cluster(model) -> bool:
     if not model.backend_refs:
         return True
     for backend in model.backend_refs:
-        upstream = (backend.endpoint or backend.base_url or "").lower()
-        if not upstream:
-            continue
-        if "api.anthropic.com" in upstream:
-            continue
-        return False
+        for upstream in _backend_upstream_values(backend):
+            upstream = upstream.lower()
+            if not upstream:
+                continue
+            if "api.anthropic.com" in upstream:
+                continue
+            return False
     return True
+
+
+def _backend_upstream_values(backend) -> list[str]:
+    values: list[str] = []
+    for member in getattr(backend, "endpoints", None) or []:
+        if member.endpoint:
+            values.append(member.endpoint)
+    if not values:
+        upstream = backend.endpoint or backend.base_url or ""
+        if upstream:
+            values.append(upstream)
+    return values
+
+
+def _backend_upstream_specs(backend, backend_index: int) -> list[dict]:
+    members = list(getattr(backend, "endpoints", None) or [])
+    if members:
+        specs = []
+        for member_index, member in enumerate(members):
+            endpoint_str = (member.endpoint or "").strip()
+            if not endpoint_str:
+                continue
+            backend_name = backend.name or f"backend-{backend_index + 1}"
+            member_name = member.name or f"endpoint-{member_index + 1}"
+            specs.append(
+                {
+                    "name": f"{backend_name}/{member_name}",
+                    "endpoint": endpoint_str,
+                    "protocol": member.protocol or backend.protocol or "http",
+                    "weight": (
+                        member.weight if member.weight is not None else backend.weight
+                    ),
+                }
+            )
+        return specs
+
+    upstream = (backend.endpoint or backend.base_url or "").strip()
+    if not upstream:
+        return []
+    return [
+        {
+            "name": backend.name or f"backend-{backend_index + 1}",
+            "endpoint": upstream,
+            "protocol": backend.protocol or "http",
+            "weight": backend.weight,
+        }
+    ]
 
 
 def _is_ip_address(host: str) -> bool:
@@ -138,72 +186,75 @@ def generate_envoy_config_from_user_config(
 
         backend_refs = model.backend_refs
         for index, backend in enumerate(backend_refs):
-            # Parse endpoint: can be "host", "host:port", or "host/path" or "host:port/path"
-            endpoint_str = backend.endpoint or backend.base_url or ""
-            if not endpoint_str:
-                continue
-            path = ""
+            for upstream in _backend_upstream_specs(backend, index):
+                # Parse endpoint: can be "host", "host:port", or "host/path" or "host:port/path"
+                endpoint_str = upstream["endpoint"]
+                if not endpoint_str:
+                    continue
+                path = ""
 
-            if "://" in endpoint_str:
-                parsed = urlparse(endpoint_str)
-                host = parsed.hostname or parsed.netloc
-                path = parsed.path.rstrip("/")
-                protocol = parsed.scheme or backend.protocol
-                port = parsed.port or (443 if protocol == "https" else 80)
-            else:
-                protocol = backend.protocol
-
-                # Extract path if present (e.g., "host/path" or "host:port/path")
-                if "/" in endpoint_str:
-                    # Split by first "/" to separate host[:port] from path
-                    parts = endpoint_str.split("/", 1)
-                    endpoint_str = parts[0]  # host or host:port
-                    path = "/" + parts[1]  # /path
-
-                # Parse host and port
-                if ":" in endpoint_str:
-                    host, port = endpoint_str.split(":", 1)
-                    port = int(port)
+                if "://" in endpoint_str:
+                    parsed = urlparse(endpoint_str)
+                    host = parsed.hostname or parsed.netloc
+                    path = parsed.path.rstrip("/")
+                    protocol = parsed.scheme or upstream["protocol"]
+                    port = parsed.port or (443 if protocol == "https" else 80)
                 else:
-                    host = endpoint_str
-                    # Default port based on protocol
-                    port = 443 if protocol == "https" else 80
+                    protocol = upstream["protocol"]
 
-            # Check if this is HTTPS (for transport_socket)
-            is_https = protocol == "https"
-            if is_https:
-                has_https = True
+                    # Extract path if present (e.g., "host/path" or "host:port/path")
+                    if "/" in endpoint_str:
+                        # Split by first "/" to separate host[:port] from path
+                        parts = endpoint_str.split("/", 1)
+                        endpoint_str = parts[0]  # host or host:port
+                        path = "/" + parts[1]  # /path
 
-            # Check if host is a domain name (for cluster type)
-            # Simple heuristic: if it contains letters or dots in non-IP pattern, it's a domain
-            is_domain = not _is_ip_address(host)
-            if is_domain:
-                uses_dns = True
+                    # Parse host and port
+                    if ":" in endpoint_str:
+                        host, port = endpoint_str.split(":", 1)
+                        port = int(port)
+                    else:
+                        host = endpoint_str
+                        # Default port based on protocol
+                        port = 443 if protocol == "https" else 80
 
-            extra_headers = dict(backend.extra_headers or {})
-            api_key = backend.resolve_api_key()
-            if api_key and backend.auth_header:
-                auth_prefix = (backend.auth_prefix or "").strip()
-                extra_headers[str(backend.auth_header)] = (
-                    f"{auth_prefix} {api_key}".strip() if auth_prefix else str(api_key)
+                # Check if this is HTTPS (for transport_socket)
+                is_https = protocol == "https"
+                if is_https:
+                    has_https = True
+
+                # Check if host is a domain name (for cluster type)
+                # Simple heuristic: if it contains letters or dots in non-IP pattern, it's a domain
+                is_domain = not _is_ip_address(host)
+                if is_domain:
+                    uses_dns = True
+
+                extra_headers = dict(backend.extra_headers or {})
+                api_key = backend.resolve_api_key()
+                if api_key and backend.auth_header:
+                    auth_prefix = (backend.auth_prefix or "").strip()
+                    extra_headers[str(backend.auth_header)] = (
+                        f"{auth_prefix} {api_key}".strip()
+                        if auth_prefix
+                        else str(api_key)
+                    )
+
+                endpoints.append(
+                    {
+                        "name": upstream["name"],
+                        "address": host,
+                        "port": int(port),
+                        "host_authority": (
+                            f"{host}:{port}" if int(port) not in (80, 443) else host
+                        ),
+                        "path": path,
+                        "weight": upstream["weight"],
+                        "protocol": protocol,
+                        "is_https": is_https,
+                        "is_domain": is_domain,
+                        "extra_headers": extra_headers,
+                    }
                 )
-
-            endpoints.append(
-                {
-                    "name": backend.name or f"backend-{index + 1}",
-                    "address": host,
-                    "port": int(port),
-                    "host_authority": (
-                        f"{host}:{port}" if int(port) not in (80, 443) else host
-                    ),
-                    "path": path,
-                    "weight": backend.weight,
-                    "protocol": protocol,
-                    "is_https": is_https,
-                    "is_domain": is_domain,
-                    "extra_headers": extra_headers,
-                }
-            )
 
         # Sanitize model name for cluster name (replace / with _)
         if not endpoints:

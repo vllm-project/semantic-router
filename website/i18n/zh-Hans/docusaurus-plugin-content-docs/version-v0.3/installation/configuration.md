@@ -41,7 +41,7 @@ global:
   - `defaults`
   - `models`
   - `providers.defaults` 存放 `default_model`、`reasoning_families`、`default_reasoning_effort`
-  - `providers.models[*]` 存放 `provider_model_id`、`backend_refs`、`pricing`、`api_format`、`external_model_ids`；每个 backend ref 可包含可选的 `backend_id` 与 `engine_kind`，作为 backend telemetry adapter 的身份提示
+  - `providers.models[*]` 存放 `provider_model_id`、`backend_refs`、`pricing`、`api_format`、`external_model_ids`；每个 backend ref 表示一个 runtime backend pool，可用 `runtime` + `endpoints[]` 表达静态成员，用 `discovery` 表达动态成员，用 legacy singleton `endpoint` 兼容旧配置，或用 `base_url` 等字段表达托管 provider
 - `global` 拥有路由器级运行时覆盖。
   - `global.router` 聚合路由引擎控制项（如配置来源选择、route-cache、模型选择默认等）
   - `global.router.config_source` 选择运行时配置来自 canonical YAML 文件（`file`）还是进程内 Kubernetes CRD 协调（`kubernetes`）

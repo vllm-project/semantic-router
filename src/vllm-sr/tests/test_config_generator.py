@@ -158,6 +158,67 @@ routing:
     assert route_action["regex_rewrite"]["substitution"] == "/v1\\1"
 
 
+def test_backend_ref_static_endpoint_slice_expands_envoy_cluster(
+    tmp_path, monkeypatch
+):
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.3
+listeners:
+  - name: "http-8899"
+    address: "0.0.0.0"
+    port: 8899
+providers:
+  defaults:
+    default_model: "test-model"
+  models:
+    - name: "test-model"
+      backend_refs:
+        - name: "local-vllm"
+          runtime: "vllm"
+          protocol: "http"
+          endpoints:
+            - name: "primary-a"
+              endpoint: "10.0.0.1:8000"
+              weight: 80
+            - name: "primary-b"
+              endpoint: "10.0.0.2:8001"
+              weight: 20
+routing:
+  modelCards:
+    - name: "test-model"
+  decisions:
+    - name: "default-route"
+      description: "default route"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "test-model"
+          use_reasoning: false
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+
+    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    lb_endpoints = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"]
+    assert len(lb_endpoints) == 2
+    assert (
+        lb_endpoints[0]["endpoint"]["address"]["socket_address"]["address"]
+        == "10.0.0.1"
+    )
+    assert lb_endpoints[0]["load_balancing_weight"] == 80
+    assert (
+        lb_endpoints[1]["endpoint"]["address"]["socket_address"]["address"]
+        == "10.0.0.2"
+    )
+    assert lb_endpoints[1]["load_balancing_weight"] == 20
+
+
 def test_backend_ref_domain_with_path_produces_correct_envoy_cluster_and_route(
     tmp_path, monkeypatch
 ):

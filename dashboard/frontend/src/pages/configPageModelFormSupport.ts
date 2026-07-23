@@ -1,4 +1,6 @@
 import type {
+  BackendDiscoveryEntry,
+  BackendEndpointEntry,
   BackendRefEntry,
   ConfigData,
   LoRAAdapter,
@@ -27,9 +29,12 @@ export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
     .map((entry) => {
       const normalized: BackendRefEntry = {}
       if (typeof entry.name === 'string' && entry.name.trim()) normalized.name = entry.name.trim()
-      if (typeof entry.backend_id === 'string' && entry.backend_id.trim()) normalized.backend_id = entry.backend_id.trim()
-      if (typeof entry.engine_kind === 'string' && entry.engine_kind.trim()) normalized.engine_kind = entry.engine_kind.trim()
+      if (typeof entry.runtime === 'string' && entry.runtime.trim()) normalized.runtime = entry.runtime.trim()
       if (typeof entry.endpoint === 'string' && entry.endpoint.trim()) normalized.endpoint = entry.endpoint.trim()
+      const endpoints = normalizeBackendEndpointEntries(entry.endpoints)
+      if (endpoints.length > 0) normalized.endpoints = endpoints
+      const discovery = normalizeBackendDiscovery(entry.discovery)
+      if (discovery) normalized.discovery = discovery
       if (entry.protocol === 'https') normalized.protocol = 'https'
       else if (entry.protocol === 'http') normalized.protocol = 'http'
       if (typeof entry.weight === 'number' && Number.isFinite(entry.weight)) normalized.weight = entry.weight
@@ -51,6 +56,43 @@ export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
       if (typeof entry.api_key_env === 'string' && entry.api_key_env.trim()) normalized.api_key_env = entry.api_key_env.trim()
       return normalized
     })
+}
+
+function normalizeBackendEndpointEntries(value: unknown): BackendEndpointEntry[] {
+  if (!Array.isArray(value)) return []
+
+  return value
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry))
+    .map((entry) => {
+      const normalized: BackendEndpointEntry = {}
+      if (typeof entry.name === 'string' && entry.name.trim()) normalized.name = entry.name.trim()
+      if (typeof entry.endpoint === 'string' && entry.endpoint.trim()) normalized.endpoint = entry.endpoint.trim()
+      if (typeof entry.metrics_endpoint === 'string' && entry.metrics_endpoint.trim()) normalized.metrics_endpoint = entry.metrics_endpoint.trim()
+      if (entry.protocol === 'https') normalized.protocol = 'https'
+      else if (entry.protocol === 'http') normalized.protocol = 'http'
+      if (typeof entry.weight === 'number' && Number.isFinite(entry.weight)) normalized.weight = entry.weight
+      const labels = normalizeModelStringMap(entry.labels)
+      if (labels) normalized.labels = labels
+      return normalized
+    })
+}
+
+function normalizeBackendDiscovery(value: unknown): BackendDiscoveryEntry | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+
+  const raw = value as Record<string, unknown>
+  const discovery: BackendDiscoveryEntry = {}
+  if (typeof raw.type === 'string' && raw.type.trim()) discovery.type = raw.type.trim()
+  if (raw.kubernetes && typeof raw.kubernetes === 'object' && !Array.isArray(raw.kubernetes)) {
+    const kubernetes = raw.kubernetes as Record<string, unknown>
+    const normalizedKubernetes: NonNullable<BackendDiscoveryEntry['kubernetes']> = {}
+    if (typeof kubernetes.service === 'string' && kubernetes.service.trim()) normalizedKubernetes.service = kubernetes.service.trim()
+    if (typeof kubernetes.namespace === 'string' && kubernetes.namespace.trim()) normalizedKubernetes.namespace = kubernetes.namespace.trim()
+    if (typeof kubernetes.endpoint_port === 'string' && kubernetes.endpoint_port.trim()) normalizedKubernetes.endpoint_port = kubernetes.endpoint_port.trim()
+    if (typeof kubernetes.metrics_port === 'string' && kubernetes.metrics_port.trim()) normalizedKubernetes.metrics_port = kubernetes.metrics_port.trim()
+    if (Object.keys(normalizedKubernetes).length > 0) discovery.kubernetes = normalizedKubernetes
+  }
+  return Object.keys(discovery).length > 0 ? discovery : undefined
 }
 
 export function normalizeModelStringMap(value: unknown): Record<string, string> | undefined {

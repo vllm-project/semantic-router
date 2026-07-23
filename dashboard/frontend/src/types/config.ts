@@ -14,15 +14,35 @@
 
 export interface ProviderEndpoint {
   name: string
-  backend_id?: string
-  engine_kind?: string
+  runtime?: string
   weight: number
-  endpoint: string  // e.g., "host.docker.internal:8000" or "api.openai.com"
+  endpoint?: string  // legacy singleton, e.g. "host.docker.internal:8000"
+  endpoints?: ProviderBackendEndpoint[]
+  discovery?: ProviderBackendDiscovery
   protocol: 'http' | 'https'
   base_url?: string
   provider?: 'openai' | 'anthropic'
   api_key?: string
   api_key_env?: string
+}
+
+export interface ProviderBackendEndpoint {
+  name?: string
+  endpoint?: string
+  metrics_endpoint?: string
+  protocol?: 'http' | 'https'
+  weight?: number
+  labels?: Record<string, string>
+}
+
+export interface ProviderBackendDiscovery {
+  type: string
+  kubernetes?: {
+    service: string
+    namespace: string
+    endpoint_port: string
+    metrics_port?: string
+  }
 }
 
 export interface ProviderModel {
@@ -300,8 +320,8 @@ export interface PythonCLIConfig {
 
 export interface LegacyVLLMEndpoint {
   name: string
-  backend_id?: string
-  engine_kind?: string
+  backend_ref?: string
+  runtime?: string
   address: string
   port: number
   weight: number

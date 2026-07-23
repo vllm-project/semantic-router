@@ -74,10 +74,16 @@ def _print_provider_models(user_config) -> None:
                 # Never print api_key / api_key_env values; expose only the
                 # transport identity so credentials cannot leak via CLI output.
                 provider = ref.provider or "-"
-                base_url = _redact_url(ref.base_url or ref.endpoint or "-")
+                endpoint_count = len(ref.endpoints or [])
+                source = ref.endpoint or ref.base_url or "-"
+                if endpoint_count:
+                    source = f"{endpoint_count} static endpoint{'s' if endpoint_count != 1 else ''}"
+                elif ref.discovery:
+                    source = f"{ref.discovery.type} discovery"
+                base_url = _redact_url(source)
                 label = ref.name or "(unnamed)"
                 log.info(
-                    f"        * {label}  provider={provider}  base_url={base_url}  "
+                    f"        * {label}  runtime={ref.runtime or '-'}  provider={provider}  target={base_url}  "
                     f"protocol={ref.protocol}  weight={ref.weight}"
                 )
 

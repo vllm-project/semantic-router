@@ -25,48 +25,48 @@ type AdapterConfig struct {
 
 // TelemetryAdapter normalizes engine-specific metrics into BackendTelemetry.
 type TelemetryAdapter interface {
-	EngineKind() EngineKind
+	Runtime() Runtime
 	Collect(ctx context.Context) ([]BackendTelemetry, error)
 }
 
 // AdapterConstructor creates a telemetry adapter.
 type AdapterConstructor func(AdapterConfig) (TelemetryAdapter, error)
 
-// Registry stores telemetry adapter constructors by engine kind.
+// Registry stores telemetry adapter constructors by runtime.
 type Registry struct {
 	mu           sync.RWMutex
-	constructors map[EngineKind]AdapterConstructor
+	constructors map[Runtime]AdapterConstructor
 }
 
 var defaultRegistry = NewRegistry()
 
 // NewRegistry creates an empty adapter registry.
 func NewRegistry() *Registry {
-	return &Registry{constructors: map[EngineKind]AdapterConstructor{}}
+	return &Registry{constructors: map[Runtime]AdapterConstructor{}}
 }
 
 // RegisterAdapter registers an adapter constructor on the package-level registry.
-func RegisterAdapter(kind EngineKind, constructor AdapterConstructor) error {
+func RegisterAdapter(kind Runtime, constructor AdapterConstructor) error {
 	return defaultRegistry.Register(kind, constructor)
 }
 
 // NewAdapter constructs an adapter from the package-level registry.
-func NewAdapter(kind EngineKind, cfg AdapterConfig) (TelemetryAdapter, error) {
+func NewAdapter(kind Runtime, cfg AdapterConfig) (TelemetryAdapter, error) {
 	return defaultRegistry.Create(kind, cfg)
 }
 
-// AdapterRegistered reports whether an engine kind has a package-level constructor.
-func AdapterRegistered(kind EngineKind) bool {
+// AdapterRegistered reports whether a runtime has a package-level constructor.
+func AdapterRegistered(kind Runtime) bool {
 	return defaultRegistry.Has(kind)
 }
 
-// Register associates an engine kind with an adapter constructor.
-func (r *Registry) Register(kind EngineKind, constructor AdapterConstructor) error {
+// Register associates a runtime with an adapter constructor.
+func (r *Registry) Register(kind Runtime, constructor AdapterConstructor) error {
 	if r == nil {
 		return fmt.Errorf("backend telemetry adapter registry is nil")
 	}
 	if kind == "" {
-		return fmt.Errorf("backend telemetry adapter engine kind is required")
+		return fmt.Errorf("backend telemetry adapter runtime is required")
 	}
 	if constructor == nil {
 		return fmt.Errorf("backend telemetry adapter constructor is required")
@@ -78,8 +78,8 @@ func (r *Registry) Register(kind EngineKind, constructor AdapterConstructor) err
 	return nil
 }
 
-// Create builds an adapter for an engine kind.
-func (r *Registry) Create(kind EngineKind, cfg AdapterConfig) (TelemetryAdapter, error) {
+// Create builds an adapter for a runtime.
+func (r *Registry) Create(kind Runtime, cfg AdapterConfig) (TelemetryAdapter, error) {
 	if r == nil {
 		return nil, fmt.Errorf("backend telemetry adapter registry is nil")
 	}
@@ -93,8 +93,8 @@ func (r *Registry) Create(kind EngineKind, cfg AdapterConfig) (TelemetryAdapter,
 	return constructor(cfg)
 }
 
-// Has reports whether an engine kind is registered.
-func (r *Registry) Has(kind EngineKind) bool {
+// Has reports whether a runtime is registered.
+func (r *Registry) Has(kind Runtime) bool {
 	if r == nil {
 		return false
 	}

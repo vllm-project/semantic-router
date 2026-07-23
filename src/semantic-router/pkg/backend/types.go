@@ -5,14 +5,14 @@ import (
 	"time"
 )
 
-// EngineKind identifies the serving engine that produced backend telemetry.
-type EngineKind string
+// Runtime identifies the serving runtime that produced backend telemetry.
+type Runtime string
 
 const (
-	EngineKindVLLM        EngineKind = "vllm"
-	EngineKindSGLang      EngineKind = "sglang"
-	EngineKindATOM        EngineKind = "atom"
-	EngineKindTensorRTLLM EngineKind = "tensorrt-llm"
+	RuntimeVLLM        Runtime = "vllm"
+	RuntimeSGLang      Runtime = "sglang"
+	RuntimeATOM        Runtime = "atom"
+	RuntimeTensorRTLLM Runtime = "tensorrt-llm"
 )
 
 // HealthState reports the adapter's normalized view of backend health.
@@ -25,33 +25,33 @@ const (
 	HealthStateUnhealthy HealthState = "unhealthy"
 )
 
-// BackendIdentity names one logical backend and optional serving replica.
+// BackendIdentity names one backend pool and optional serving replica.
 type BackendIdentity struct {
-	BackendID     string
-	ModelName     string
-	ReplicaID     string
-	Endpoint      string
-	EngineKind    EngineKind
-	EngineVersion string
+	BackendRefName string
+	ModelName      string
+	ReplicaID      string
+	Endpoint       string
+	Runtime        Runtime
+	RuntimeVersion string
 }
 
 // Normalize trims string identity fields while preserving engine metadata.
 func (id BackendIdentity) Normalize() BackendIdentity {
-	id.BackendID = strings.TrimSpace(id.BackendID)
+	id.BackendRefName = strings.TrimSpace(id.BackendRefName)
 	id.ModelName = strings.TrimSpace(id.ModelName)
 	id.ReplicaID = strings.TrimSpace(id.ReplicaID)
 	id.Endpoint = strings.TrimSpace(id.Endpoint)
-	id.EngineVersion = strings.TrimSpace(id.EngineVersion)
+	id.RuntimeVersion = strings.TrimSpace(id.RuntimeVersion)
 	return id
 }
 
-// Key returns the stable store key for a model/backend/replica tuple.
+// Key returns the stable store key for a model/backend-ref/replica tuple.
 func (id BackendIdentity) Key() string {
 	id = id.Normalize()
 	if id.ReplicaID == "" {
-		return id.ModelName + "|" + id.BackendID
+		return id.ModelName + "|" + id.BackendRefName
 	}
-	return id.ModelName + "|" + id.BackendID + "|" + id.ReplicaID
+	return id.ModelName + "|" + id.BackendRefName + "|" + id.ReplicaID
 }
 
 // BackendTelemetry is the engine-neutral telemetry contract consumed by
@@ -102,33 +102,33 @@ type BackendAffinity struct {
 
 // BackendCandidate is the minimal input shape for second-stage backend policy.
 type BackendCandidate struct {
-	BackendID    string
-	ReplicaID    string
-	ModelName    string
-	EndpointName string
-	Weight       int
+	BackendRefName string
+	ReplicaID      string
+	ModelName      string
+	EndpointName   string
+	Weight         int
 }
 
 // BackendPolicyResult explains the selected backend or why policy failed open.
 type BackendPolicyResult struct {
-	SelectedBackendID string                   `json:"selected_backend_id,omitempty"`
-	SelectedReplicaID string                   `json:"selected_replica_id,omitempty"`
-	FailOpen          bool                     `json:"fail_open"`
-	Reason            string                   `json:"reason,omitempty"`
-	Diagnostics       BackendPolicyDiagnostics `json:"diagnostics"`
+	SelectedBackendRefName string                   `json:"selected_backend_ref_name,omitempty"`
+	SelectedReplicaID      string                   `json:"selected_replica_id,omitempty"`
+	FailOpen               bool                     `json:"fail_open"`
+	Reason                 string                   `json:"reason,omitempty"`
+	Diagnostics            BackendPolicyDiagnostics `json:"diagnostics"`
 }
 
 // BackendPolicyDiagnostics is safe to persist in replay/debug records.
 type BackendPolicyDiagnostics struct {
-	SelectedModel       string `json:"selected_model,omitempty"`
-	SelectedBackendID   string `json:"selected_backend_id,omitempty"`
-	SelectedReplicaID   string `json:"selected_replica_id,omitempty"`
-	TelemetryFresh      bool   `json:"telemetry_fresh"`
-	TelemetryAgeMS      int64  `json:"telemetry_age_ms,omitempty"`
-	PolicyReason        string `json:"policy_reason,omitempty"`
-	FallbackReason      string `json:"fallback_reason,omitempty"`
-	CandidateCount      int    `json:"candidate_count"`
-	FreshCandidateCount int    `json:"fresh_candidate_count"`
+	SelectedModel          string `json:"selected_model,omitempty"`
+	SelectedBackendRefName string `json:"selected_backend_ref_name,omitempty"`
+	SelectedReplicaID      string `json:"selected_replica_id,omitempty"`
+	TelemetryFresh         bool   `json:"telemetry_fresh"`
+	TelemetryAgeMS         int64  `json:"telemetry_age_ms,omitempty"`
+	PolicyReason           string `json:"policy_reason,omitempty"`
+	FallbackReason         string `json:"fallback_reason,omitempty"`
+	CandidateCount         int    `json:"candidate_count"`
+	FreshCandidateCount    int    `json:"fresh_candidate_count"`
 	// UnhealthyCount counts candidates with fresh telemetry but no selectable replica.
 	UnhealthyCount int `json:"unhealthy_count"`
 }

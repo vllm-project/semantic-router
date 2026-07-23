@@ -14,14 +14,14 @@ func TestSelectBackendCandidatePrefersFreshLowestQueue(t *testing.T) {
 	activeHigh := 7
 	for _, telemetry := range []BackendTelemetry{
 		{
-			Identity:       BackendIdentity{BackendID: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-0"},
+			Identity:       BackendIdentity{BackendRefName: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-0"},
 			QueueDepth:     &queueHigh,
 			ActiveRequests: &activeLow,
 			Health:         HealthStateHealthy,
 			CollectedAt:    base,
 		},
 		{
-			Identity:       BackendIdentity{BackendID: "backend-b", ModelName: "qwen3-8b", ReplicaID: "b-0"},
+			Identity:       BackendIdentity{BackendRefName: "backend-b", ModelName: "qwen3-8b", ReplicaID: "b-0"},
 			QueueDepth:     &queueLow,
 			ActiveRequests: &activeHigh,
 			Health:         HealthStateHealthy,
@@ -34,13 +34,13 @@ func TestSelectBackendCandidatePrefersFreshLowestQueue(t *testing.T) {
 	}
 
 	result := SelectBackendCandidate("qwen3-8b", []BackendCandidate{
-		{BackendID: "backend-a", Weight: 100},
-		{BackendID: "backend-b", Weight: 1},
+		{BackendRefName: "backend-a", Weight: 100},
+		{BackendRefName: "backend-b", Weight: 1},
 	}, store)
 	if result.FailOpen {
 		t.Fatalf("expected backend selection, got fail-open result %#v", result)
 	}
-	if result.SelectedBackendID != "backend-b" || result.SelectedReplicaID != "b-0" {
+	if result.SelectedBackendRefName != "backend-b" || result.SelectedReplicaID != "b-0" {
 		t.Fatalf("expected backend-b/b-0, got %#v", result)
 	}
 	if result.Reason != PolicyReasonSelectedFreshTelemetry {
@@ -51,7 +51,7 @@ func TestSelectBackendCandidatePrefersFreshLowestQueue(t *testing.T) {
 	}
 }
 
-func TestSelectBackendCandidateTieBreaksWithActiveRequestsWeightThenBackendID(t *testing.T) {
+func TestSelectBackendCandidateTieBreaksWithActiveRequestsWeightThenBackendRefName(t *testing.T) {
 	base := time.Unix(400, 0)
 	store := newStoreWithClock(5*time.Second, func() time.Time { return base })
 	queue := 1
@@ -60,21 +60,21 @@ func TestSelectBackendCandidateTieBreaksWithActiveRequestsWeightThenBackendID(t 
 
 	samples := []BackendTelemetry{
 		{
-			Identity:       BackendIdentity{BackendID: "backend-a", ModelName: "qwen3-8b"},
+			Identity:       BackendIdentity{BackendRefName: "backend-a", ModelName: "qwen3-8b"},
 			QueueDepth:     &queue,
 			ActiveRequests: &activeBusy,
 			Health:         HealthStateHealthy,
 			CollectedAt:    base,
 		},
 		{
-			Identity:       BackendIdentity{BackendID: "backend-b", ModelName: "qwen3-8b"},
+			Identity:       BackendIdentity{BackendRefName: "backend-b", ModelName: "qwen3-8b"},
 			QueueDepth:     &queue,
 			ActiveRequests: &activeIdle,
 			Health:         HealthStateHealthy,
 			CollectedAt:    base,
 		},
 		{
-			Identity:       BackendIdentity{BackendID: "backend-c", ModelName: "qwen3-8b"},
+			Identity:       BackendIdentity{BackendRefName: "backend-c", ModelName: "qwen3-8b"},
 			QueueDepth:     &queue,
 			ActiveRequests: &activeIdle,
 			Health:         HealthStateHealthy,
@@ -88,20 +88,20 @@ func TestSelectBackendCandidateTieBreaksWithActiveRequestsWeightThenBackendID(t 
 	}
 
 	result := SelectBackendCandidate("qwen3-8b", []BackendCandidate{
-		{BackendID: "backend-a", Weight: 100},
-		{BackendID: "backend-b", Weight: 10},
-		{BackendID: "backend-c", Weight: 20},
+		{BackendRefName: "backend-a", Weight: 100},
+		{BackendRefName: "backend-b", Weight: 10},
+		{BackendRefName: "backend-c", Weight: 20},
 	}, store)
-	if result.SelectedBackendID != "backend-c" {
+	if result.SelectedBackendRefName != "backend-c" {
 		t.Fatalf("expected higher-weight idle backend-c, got %#v", result)
 	}
 
 	result = SelectBackendCandidate("qwen3-8b", []BackendCandidate{
-		{BackendID: "backend-b", Weight: 20},
-		{BackendID: "backend-c", Weight: 20},
+		{BackendRefName: "backend-b", Weight: 20},
+		{BackendRefName: "backend-c", Weight: 20},
 	}, store)
-	if result.SelectedBackendID != "backend-b" {
-		t.Fatalf("expected stable backend ID tie-break to choose backend-b, got %#v", result)
+	if result.SelectedBackendRefName != "backend-b" {
+		t.Fatalf("expected stable backend ref name tie-break to choose backend-b, got %#v", result)
 	}
 }
 
@@ -114,20 +114,20 @@ func TestSelectBackendCandidateFailOpenReasons(t *testing.T) {
 	})
 
 	t.Run("missing telemetry", func(t *testing.T) {
-		result := SelectBackendCandidate("qwen3-8b", []BackendCandidate{{BackendID: "missing"}}, NewStore(DefaultTelemetryTTL))
+		result := SelectBackendCandidate("qwen3-8b", []BackendCandidate{{BackendRefName: "missing"}}, NewStore(DefaultTelemetryTTL))
 		assertFailOpenReason(t, result, FallbackReasonMissingTelemetry)
 	})
 
 	t.Run("stale telemetry", func(t *testing.T) {
 		store := newStoreWithClock(5*time.Second, func() time.Time { return base })
 		if err := store.Upsert(BackendTelemetry{
-			Identity:    BackendIdentity{BackendID: "stale", ModelName: "qwen3-8b"},
+			Identity:    BackendIdentity{BackendRefName: "stale", ModelName: "qwen3-8b"},
 			Health:      HealthStateHealthy,
 			CollectedAt: base.Add(-6 * time.Second),
 		}); err != nil {
 			t.Fatalf("Upsert returned error: %v", err)
 		}
-		result := SelectBackendCandidate("qwen3-8b", []BackendCandidate{{BackendID: "stale"}}, store)
+		result := SelectBackendCandidate("qwen3-8b", []BackendCandidate{{BackendRefName: "stale"}}, store)
 		assertFailOpenReason(t, result, FallbackReasonStaleTelemetry)
 		if result.Diagnostics.TelemetryFresh {
 			t.Fatal("expected stale telemetry to report TelemetryFresh=false")
@@ -140,13 +140,13 @@ func TestSelectBackendCandidateFailOpenReasons(t *testing.T) {
 	t.Run("all unhealthy", func(t *testing.T) {
 		store := newStoreWithClock(5*time.Second, func() time.Time { return base })
 		if err := store.Upsert(BackendTelemetry{
-			Identity:    BackendIdentity{BackendID: "unhealthy", ModelName: "qwen3-8b"},
+			Identity:    BackendIdentity{BackendRefName: "unhealthy", ModelName: "qwen3-8b"},
 			Health:      HealthStateUnhealthy,
 			CollectedAt: base,
 		}); err != nil {
 			t.Fatalf("Upsert returned error: %v", err)
 		}
-		result := SelectBackendCandidate("qwen3-8b", []BackendCandidate{{BackendID: "unhealthy"}}, store)
+		result := SelectBackendCandidate("qwen3-8b", []BackendCandidate{{BackendRefName: "unhealthy"}}, store)
 		assertFailOpenReason(t, result, FallbackReasonAllUnhealthy)
 		if !result.Diagnostics.TelemetryFresh {
 			t.Fatal("expected fresh unhealthy telemetry to report TelemetryFresh=true")
@@ -164,12 +164,12 @@ func TestSelectBackendCandidateCountsUnhealthyByCandidate(t *testing.T) {
 		store := newStoreWithClock(5*time.Second, func() time.Time { return base })
 		for _, telemetry := range []BackendTelemetry{
 			{
-				Identity:    BackendIdentity{BackendID: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-0"},
+				Identity:    BackendIdentity{BackendRefName: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-0"},
 				Health:      HealthStateUnhealthy,
 				CollectedAt: base,
 			},
 			{
-				Identity:    BackendIdentity{BackendID: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-1"},
+				Identity:    BackendIdentity{BackendRefName: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-1"},
 				Health:      HealthStateUnhealthy,
 				CollectedAt: base,
 			},
@@ -180,8 +180,8 @@ func TestSelectBackendCandidateCountsUnhealthyByCandidate(t *testing.T) {
 		}
 
 		result := SelectBackendCandidate("qwen3-8b", []BackendCandidate{
-			{BackendID: "backend-a"},
-			{BackendID: "backend-b"},
+			{BackendRefName: "backend-a"},
+			{BackendRefName: "backend-b"},
 		}, store)
 		assertFailOpenReason(t, result, FallbackReasonMissingTelemetry)
 		if result.Diagnostics.UnhealthyCount != 1 {
@@ -196,17 +196,17 @@ func TestSelectBackendCandidateCountsUnhealthyByCandidate(t *testing.T) {
 		store := newStoreWithClock(5*time.Second, func() time.Time { return base })
 		for _, telemetry := range []BackendTelemetry{
 			{
-				Identity:    BackendIdentity{BackendID: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-0"},
+				Identity:    BackendIdentity{BackendRefName: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-0"},
 				Health:      HealthStateUnhealthy,
 				CollectedAt: base,
 			},
 			{
-				Identity:    BackendIdentity{BackendID: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-1"},
+				Identity:    BackendIdentity{BackendRefName: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-1"},
 				Health:      HealthStateUnhealthy,
 				CollectedAt: base,
 			},
 			{
-				Identity:    BackendIdentity{BackendID: "backend-b", ModelName: "qwen3-8b", ReplicaID: "b-0"},
+				Identity:    BackendIdentity{BackendRefName: "backend-b", ModelName: "qwen3-8b", ReplicaID: "b-0"},
 				Health:      HealthStateUnhealthy,
 				CollectedAt: base,
 			},
@@ -217,8 +217,8 @@ func TestSelectBackendCandidateCountsUnhealthyByCandidate(t *testing.T) {
 		}
 
 		result := SelectBackendCandidate("qwen3-8b", []BackendCandidate{
-			{BackendID: "backend-a"},
-			{BackendID: "backend-b"},
+			{BackendRefName: "backend-a"},
+			{BackendRefName: "backend-b"},
 		}, store)
 		assertFailOpenReason(t, result, FallbackReasonAllUnhealthy)
 		if result.Diagnostics.UnhealthyCount != 2 {
@@ -238,19 +238,19 @@ func TestSelectBackendCandidateSelectsBackendWithAnyHealthyReplica(t *testing.T)
 	queueOther := 1
 	for _, telemetry := range []BackendTelemetry{
 		{
-			Identity:    BackendIdentity{BackendID: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-0"},
+			Identity:    BackendIdentity{BackendRefName: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-0"},
 			QueueDepth:  &queueUnhealthy,
 			Health:      HealthStateUnhealthy,
 			CollectedAt: base,
 		},
 		{
-			Identity:    BackendIdentity{BackendID: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-1"},
+			Identity:    BackendIdentity{BackendRefName: "backend-a", ModelName: "qwen3-8b", ReplicaID: "a-1"},
 			QueueDepth:  &queueHealthy,
 			Health:      HealthStateHealthy,
 			CollectedAt: base,
 		},
 		{
-			Identity:    BackendIdentity{BackendID: "backend-b", ModelName: "qwen3-8b", ReplicaID: "b-0"},
+			Identity:    BackendIdentity{BackendRefName: "backend-b", ModelName: "qwen3-8b", ReplicaID: "b-0"},
 			QueueDepth:  &queueOther,
 			Health:      HealthStateUnhealthy,
 			CollectedAt: base,
@@ -262,13 +262,13 @@ func TestSelectBackendCandidateSelectsBackendWithAnyHealthyReplica(t *testing.T)
 	}
 
 	result := SelectBackendCandidate("qwen3-8b", []BackendCandidate{
-		{BackendID: "backend-a"},
-		{BackendID: "backend-b"},
+		{BackendRefName: "backend-a"},
+		{BackendRefName: "backend-b"},
 	}, store)
 	if result.FailOpen {
 		t.Fatalf("expected selectable healthy replica, got fail-open result %#v", result)
 	}
-	if result.SelectedBackendID != "backend-a" || result.SelectedReplicaID != "a-1" {
+	if result.SelectedBackendRefName != "backend-a" || result.SelectedReplicaID != "a-1" {
 		t.Fatalf("expected backend-a/a-1, got %#v", result)
 	}
 	if result.Diagnostics.UnhealthyCount != 1 {
@@ -287,7 +287,7 @@ func assertFailOpenReason(t *testing.T, result BackendPolicyResult, reason strin
 	if result.Reason != reason || result.Diagnostics.FallbackReason != reason {
 		t.Fatalf("expected reason %q, got %#v", reason, result)
 	}
-	if result.SelectedBackendID != "" || result.SelectedReplicaID != "" {
+	if result.SelectedBackendRefName != "" || result.SelectedReplicaID != "" {
 		t.Fatalf("expected no selected backend on fail-open, got %#v", result)
 	}
 }

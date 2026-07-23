@@ -1084,12 +1084,15 @@ class ReasoningFamily(BaseModel):
 
 
 class BackendRef(BaseModel):
-    """Inline backend access details carried under providers.models[].backend_refs."""
+    """One runtime backend pool carried under providers.models[].backend_refs."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: Optional[str] = None
-    backend_id: Optional[str] = None
-    engine_kind: Optional[str] = None
+    runtime: Optional[str] = None
     endpoint: Optional[str] = None
+    endpoints: List["BackendEndpoint"] = Field(default_factory=list)
+    discovery: Optional["BackendDiscovery"] = None
     protocol: str = "http"
     weight: int = 1
     type: Optional[str] = None
@@ -1103,6 +1106,31 @@ class BackendRef(BaseModel):
     api_key: Optional[str] = None
     api_key_env: Optional[str] = None
 
+    @model_validator(mode="after")
+    def validate_endpoint_sources(self):
+        has_endpoint = bool((self.endpoint or "").strip())
+        has_static_endpoints = len(self.endpoints or []) > 0
+        has_discovery = self.discovery is not None
+
+        if has_static_endpoints and has_discovery:
+            raise ValueError("backend ref must define either endpoints or discovery, not both")
+        if has_endpoint and (has_static_endpoints or has_discovery):
+            raise ValueError("backend ref must not mix legacy endpoint with endpoints or discovery")
+        if (has_static_endpoints or has_discovery) and not (self.runtime or "").strip():
+            raise ValueError("backend ref runtime is required for endpoints or discovery")
+        for index, endpoint in enumerate(self.endpoints or []):
+            if not (endpoint.endpoint or "").strip():
+                raise ValueError(f"backend ref endpoints[{index}].endpoint is required")
+        if has_discovery:
+            discovery_type = (self.discovery.type or "").strip()
+            if not discovery_type:
+                raise ValueError("backend ref discovery.type is required")
+            if discovery_type != "kubernetes":
+                raise ValueError(f"backend ref discovery.type {discovery_type!r} is not supported")
+            if self.discovery.kubernetes is None:
+                raise ValueError("backend ref discovery.kubernetes is required")
+        return self
+
     def resolve_api_key(self) -> Optional[str]:
         if self.api_key:
             return self.api_key
@@ -1111,6 +1139,39 @@ class BackendRef(BaseModel):
 
             return os.getenv(self.api_key_env)
         return None
+
+
+class BackendEndpoint(BaseModel):
+    """One static endpoint member inside a runtime backend pool."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Optional[str] = None
+    endpoint: Optional[str] = None
+    metrics_endpoint: Optional[str] = None
+    protocol: Optional[str] = None
+    weight: Optional[int] = None
+    labels: Optional[Dict[str, str]] = None
+
+
+class KubernetesBackendDiscovery(BaseModel):
+    """Kubernetes Service-backed backend endpoint discovery."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    service: str
+    namespace: str
+    endpoint_port: str
+    metrics_port: Optional[str] = None
+
+
+class BackendDiscovery(BaseModel):
+    """Typed dynamic endpoint source for a backend ref."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: str
+    kubernetes: Optional[KubernetesBackendDiscovery] = None
 
 
 class ProviderDefaults(BaseModel):
@@ -1210,4 +1271,5 @@ class UserConfig(BaseModel):
 
 # Resolve forward references for recursive condition trees.
 Condition.model_rebuild()
+BackendRef.model_rebuild()
 Model.model_rebuild()

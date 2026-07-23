@@ -76,18 +76,18 @@ func SelectBackendCandidate(modelName string, candidates []BackendCandidate, sto
 	})
 	selected := summary.options[0]
 	age := store.Age(selected.telemetry)
-	diag.SelectedBackendID = selected.candidate.BackendID
+	diag.SelectedBackendRefName = selected.candidate.BackendRefName
 	diag.SelectedReplicaID = selected.telemetry.Identity.ReplicaID
 	diag.TelemetryFresh = true
 	diag.TelemetryAgeMS = age.Milliseconds()
 	diag.PolicyReason = PolicyReasonSelectedFreshTelemetry
 
 	return BackendPolicyResult{
-		SelectedBackendID: selected.candidate.BackendID,
-		SelectedReplicaID: selected.telemetry.Identity.ReplicaID,
-		FailOpen:          false,
-		Reason:            PolicyReasonSelectedFreshTelemetry,
-		Diagnostics:       diag,
+		SelectedBackendRefName: selected.candidate.BackendRefName,
+		SelectedReplicaID:      selected.telemetry.Identity.ReplicaID,
+		FailOpen:               false,
+		Reason:                 PolicyReasonSelectedFreshTelemetry,
+		Diagnostics:            diag,
 	}
 }
 
@@ -122,11 +122,11 @@ func collectPolicyCandidates(modelName string, candidates []BackendCandidate, st
 
 func evaluateCandidate(modelName string, candidate BackendCandidate, store *Store) candidateEvaluation {
 	candidate = normalizeCandidate(modelName, candidate)
-	if candidate.BackendID == "" || candidate.ModelName == "" {
+	if candidate.BackendRefName == "" || candidate.ModelName == "" {
 		return candidateEvaluation{status: candidateMissing}
 	}
 
-	rawTelemetry := store.ListByBackend(candidate.ModelName, candidate.BackendID)
+	rawTelemetry := store.ListByBackend(candidate.ModelName, candidate.BackendRefName)
 	if candidate.ReplicaID != "" {
 		rawTelemetry = filterTelemetryByReplica(rawTelemetry, candidate.ReplicaID)
 	}
@@ -185,15 +185,15 @@ func failOpenResult(diag BackendPolicyDiagnostics, reason string) BackendPolicyR
 }
 
 func normalizeCandidate(modelName string, candidate BackendCandidate) BackendCandidate {
-	candidate.BackendID = strings.TrimSpace(candidate.BackendID)
+	candidate.BackendRefName = strings.TrimSpace(candidate.BackendRefName)
 	candidate.ReplicaID = strings.TrimSpace(candidate.ReplicaID)
 	candidate.ModelName = strings.TrimSpace(candidate.ModelName)
 	candidate.EndpointName = strings.TrimSpace(candidate.EndpointName)
 	if candidate.ModelName == "" {
 		candidate.ModelName = strings.TrimSpace(modelName)
 	}
-	if candidate.BackendID == "" {
-		candidate.BackendID = candidate.EndpointName
+	if candidate.BackendRefName == "" {
+		candidate.BackendRefName = candidate.EndpointName
 	}
 	return candidate
 }
@@ -238,8 +238,8 @@ func policyOptionLess(a, b policyOption) bool {
 	if a.candidate.Weight != b.candidate.Weight {
 		return a.candidate.Weight > b.candidate.Weight
 	}
-	if a.candidate.BackendID != b.candidate.BackendID {
-		return a.candidate.BackendID < b.candidate.BackendID
+	if a.candidate.BackendRefName != b.candidate.BackendRefName {
+		return a.candidate.BackendRefName < b.candidate.BackendRefName
 	}
 	return a.telemetry.Identity.ReplicaID < b.telemetry.Identity.ReplicaID
 }
@@ -255,8 +255,8 @@ func telemetryLess(a, b BackendTelemetry) bool {
 	if aActive != bActive {
 		return aActive < bActive
 	}
-	if a.Identity.BackendID != b.Identity.BackendID {
-		return a.Identity.BackendID < b.Identity.BackendID
+	if a.Identity.BackendRefName != b.Identity.BackendRefName {
+		return a.Identity.BackendRefName < b.Identity.BackendRefName
 	}
 	return a.Identity.ReplicaID < b.Identity.ReplicaID
 }

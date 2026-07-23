@@ -169,7 +169,7 @@ const buildLegacyBackendCatalog = (cfg: ConfigData): Record<string, BackendRefEn
       continue
     }
 
-    const backendRef: BackendRefEntry = { name }
+    const backendRef: BackendRefEntry = { name: endpoint.backend_ref?.trim() || name }
     const profileName =
       typeof endpoint.provider_profile === 'string' ? endpoint.provider_profile.trim() : ''
     const profile = profileName ? asRecord(providerProfiles[profileName]) : undefined
@@ -186,16 +186,22 @@ const buildLegacyBackendCatalog = (cfg: ConfigData): Record<string, BackendRefEn
 
     const address = endpoint.address?.trim()
     if (address) {
-      backendRef.endpoint = endpoint.port > 0 ? `${address}:${endpoint.port}` : address
+      backendRef.endpoints = [{
+        name,
+        endpoint: endpoint.port > 0 ? `${address}:${endpoint.port}` : address,
+        metrics_endpoint: endpoint.metrics_endpoint,
+        protocol: endpoint.protocol,
+        weight: endpoint.weight,
+      }]
     }
     if (endpoint.protocol) {
       backendRef.protocol = endpoint.protocol
     }
-    if (endpoint.backend_id) {
-      backendRef.backend_id = endpoint.backend_id
-    }
-    if (endpoint.engine_kind) {
-      backendRef.engine_kind = endpoint.engine_kind
+    const runtime = endpoint.runtime
+    if (runtime) {
+      backendRef.runtime = runtime
+    } else if (backendRef.endpoints?.length) {
+      backendRef.runtime = 'vllm'
     }
     if (typeof endpoint.weight === 'number') {
       backendRef.weight = endpoint.weight

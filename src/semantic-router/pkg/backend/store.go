@@ -9,7 +9,7 @@ import (
 
 const DefaultTelemetryTTL = 5 * time.Second
 
-// Store keeps the latest telemetry sample per model/backend/replica tuple.
+// Store keeps the latest telemetry sample per model/backend-ref/replica tuple.
 type Store struct {
 	mu         sync.RWMutex
 	items      map[string]BackendTelemetry
@@ -73,8 +73,8 @@ func (s *Store) Upsert(telemetry BackendTelemetry) error {
 		return fmt.Errorf("backend telemetry store is nil")
 	}
 	telemetry.Identity = telemetry.Identity.Normalize()
-	if telemetry.Identity.BackendID == "" {
-		return fmt.Errorf("backend telemetry requires backend identity")
+	if telemetry.Identity.BackendRefName == "" {
+		return fmt.Errorf("backend telemetry requires backend ref name")
 	}
 	if telemetry.Identity.ModelName == "" {
 		return fmt.Errorf("backend telemetry requires model name")
@@ -141,19 +141,19 @@ func (s *Store) ListFreshByModel(modelName string) []BackendTelemetry {
 	return results
 }
 
-// ListByBackend returns raw telemetry for a model/backend pair.
-func (s *Store) ListByBackend(modelName string, backendID string) []BackendTelemetry {
+// ListByBackend returns raw telemetry for a model/backend-ref pair.
+func (s *Store) ListByBackend(modelName string, backendRefName string) []BackendTelemetry {
 	if s == nil {
 		return nil
 	}
 	modelName = strings.TrimSpace(modelName)
-	backendID = strings.TrimSpace(backendID)
+	backendRefName = strings.TrimSpace(backendRefName)
 	results := []BackendTelemetry{}
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, telemetry := range s.items {
-		if telemetry.Identity.ModelName == modelName && telemetry.Identity.BackendID == backendID {
+		if telemetry.Identity.ModelName == modelName && telemetry.Identity.BackendRefName == backendRefName {
 			results = append(results, telemetry)
 		}
 	}

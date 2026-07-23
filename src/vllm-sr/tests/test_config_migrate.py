@@ -412,11 +412,17 @@ def test_migrate_config_data_promotes_legacy_lora_catalog_and_backend_refs():
             "backend_refs": [
                 {
                     "name": "local-primary",
-                    "backend_id": "qwen3-local-primary",
-                    "engine_kind": "vllm",
-                    "endpoint": "127.0.0.1:8000",
+                    "runtime": "vllm",
                     "protocol": "http",
                     "weight": 80,
+                    "endpoints": [
+                        {
+                            "name": "local-primary",
+                            "endpoint": "127.0.0.1:8000",
+                            "protocol": "http",
+                            "weight": 80,
+                        }
+                    ],
                     "api_key": "sk-test-openai",
                 },
                 {
