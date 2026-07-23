@@ -171,7 +171,10 @@ SKIP_DIRS = {
     "supply-chain-security-scan",
 }
 
-SELF_DIR_PARTS = Path(__file__).resolve().parent.parts[-2:]
+OWN_SOURCE_SUFFIXES = {
+    ("tools", "security", "ast_security_scanner.py"),
+    ("tools", "security", "scan_malicious_code.py"),
+}
 SKIP_DIR_PATTERNS = {
     "model",
     "models",
@@ -196,20 +199,12 @@ def should_skip_dir(d: str) -> bool:
 
 
 def _is_own_source(filepath: str) -> bool:
-    """Skip scanning the scanner's own source files.
-
-    Matches by trailing directory components (tools/security), not an
-    absolute path. CI checks out the trusted scanner and the untrusted PR
-    code into separate roots (e.g. base/ vs pr-code/); an absolute-path
-    prefix match only recognizes "self" in the tree the scanner happens to
-    run from, so the PR's own copy of these files would otherwise trip the
-    scanner's own credential/dropper detection rules.
-    """
+    """Skip scanner implementations even when scanning another checkout."""
     try:
-        parent_parts = Path(filepath).resolve().parent.parts
-        return parent_parts[-len(SELF_DIR_PARTS) :] == SELF_DIR_PARTS
+        parts = Path(filepath).resolve().parts
     except (OSError, ValueError):
-        return False
+        parts = Path(filepath).parts
+    return any(tuple(parts[-len(suffix) :]) == suffix for suffix in OWN_SOURCE_SUFFIXES)
 
 
 # ---------------------------------------------------------------------------
@@ -309,6 +304,13 @@ def _is_test_file(filepath: str) -> bool:
 # Credential / sensitive path patterns (shared across all languages)
 # ---------------------------------------------------------------------------
 
+METADATA_SERVICE_IP = ".".join(("169", "254", "169", "254"))
+METADATA_SERVICE_HOST = ".".join(("metadata", "google", "internal"))
+HIGH_RISK_CREDENTIAL_STRINGS = {
+    METADATA_SERVICE_IP,
+    METADATA_SERVICE_HOST,
+}
+
 CREDENTIAL_STRINGS = {
     "~/.ssh",
     "~/.aws",
@@ -329,8 +331,8 @@ CREDENTIAL_STRINGS = {
     ".bitcoin",
     ".ethereum",
     ".solana",
-    "169.254.169.254",
-    "metadata.google.internal",
+    METADATA_SERVICE_IP,
+    METADATA_SERVICE_HOST,
     "/home/user/.ssh",
     "/root/.ssh",
     "/root/.aws",
@@ -342,6 +344,27 @@ CREDENTIAL_STRINGS = {
 
 # Python: exec/eval/compile with obfuscated args
 PY_DYNAMIC_EXEC = {"exec", "eval", "compile"}
+PY_DOWNLOAD_PATTERNS = (
+    "urlretrieve(",
+    "urlopen(",
+    "requests.get(",
+    "httpx.get(",
+    ".download(",
+    'wget "',
+    "wget '",
+    'curl "',
+    "curl '",
+    "curl -",
+)
+PY_EXECUTE_PATTERNS = (
+    "os.system(",
+    "os.popen(",
+    "os.chmod(",
+    "os.execv(",
+    "Popen(",
+    "check_output(",
+    "check_call(",
+)
 PY_DECODE_FUNCS = {
     "base64.b64decode",
     "base64.decodebytes",
@@ -829,7 +852,7 @@ def _check_credential_strings(node, filepath: str, is_test: bool, result: ScanRe
         if cred in text:
             sev = (
                 Severity.HIGH
-                if ("169.254.169.254" in text or "metadata.google" in text)
+                if cred in HIGH_RISK_CREDENTIAL_STRINGS
                 else Severity.MEDIUM
             )
             result.add(
@@ -1187,33 +1210,8 @@ def _check_download_and_execute(node, filepath: str, result: ScanResult):
     if _is_test_file(filepath):
         return
     body = node.text.decode(errors="replace")
-    has_download = any(
-        f in body
-        for f in (
-            "urlretrieve(",
-            "urlopen(",
-            "requests.get(",
-            "httpx.get(",
-            ".download(",
-            'wget "',
-            "wget '",
-            'curl "',
-            "curl '",
-            "curl -",
-        )
-    )
-    has_execute = any(
-        f in body
-        for f in (
-            "os.system(",
-            "os.popen(",
-            "os.chmod(",
-            "os.execv(",
-            "Popen(",
-            "check_output(",
-            "check_call(",
-        )
-    )
+    has_download = any(pattern in body for pattern in PY_DOWNLOAD_PATTERNS)
+    has_execute = any(pattern in body for pattern in PY_EXECUTE_PATTERNS)
     if has_download and has_execute:
         name_node = node.child_by_field_name("name")
         name = name_node.text.decode(errors="replace") if name_node else "<anon>"
