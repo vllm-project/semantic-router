@@ -34,29 +34,32 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	nonUserMessages []string,
 	ctx *RequestContext,
 	candidates []config.Decision,
-) (*classification.SignalResults, error) {
+) (*classification.SignalResults, []config.Decision, error) {
 	signalStart := time.Now()
 	signalCtx, signalSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanSignalEvaluation)
 
 	classifier := r.classifierForRequest(ctx)
 	if classifier == nil {
-		return nil, fmt.Errorf("classifier for routing recipe %q is unavailable", ctx.Routing.RecipeName())
+		return nil, nil, fmt.Errorf("classifier for routing recipe %q is unavailable", ctx.Routing.RecipeName())
 	}
 
-	signals, authzErr := classifier.EvaluateAllSignalsWithHeaders(classification.SignalEvaluationInput{
-		Text:                   signalInput.compressedText,
-		ContextText:            signalInput.allMessagesText,
-		CurrentUserText:        signalInput.currentUserText,
-		PriorUserMessages:      signalInput.priorUserMessages,
-		NonUserMessages:        nonUserMessages,
-		HasPriorAssistantReply: signalInput.hasAssistantReply,
-		Headers:                ctx.Headers,
-		ImageURL:               ctx.RequestImageURL,
-		UncompressedText:       signalInput.evaluationText,
-		SkipCompressionSignals: signalInput.skipCompressionSignals,
-		ConversationFacts:      signalInput.conversationFacts,
-		RequestFacts:           signalInput.requestFacts,
-	})
+	signals, scopedCandidates, authzErr := classifier.EvaluateAllSignalsWithHeadersForDecisions(
+		classification.SignalEvaluationInput{
+			Text:                   signalInput.compressedText,
+			ContextText:            signalInput.allMessagesText,
+			CurrentUserText:        signalInput.currentUserText,
+			PriorUserMessages:      signalInput.priorUserMessages,
+			NonUserMessages:        nonUserMessages,
+			HasPriorAssistantReply: signalInput.hasAssistantReply,
+			Headers:                ctx.Headers,
+			ImageURL:               ctx.RequestImageURL,
+			UncompressedText:       signalInput.evaluationText,
+			SkipCompressionSignals: signalInput.skipCompressionSignals,
+			ConversationFacts:      signalInput.conversationFacts,
+			RequestFacts:           signalInput.requestFacts,
+		},
+		candidates,
+	)
 	if authzErr != nil {
 		signalSpan.End()
 		logging.ComponentErrorEvent("extproc", "signal_evaluation_failed", map[string]interface{}{
@@ -64,7 +67,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 			"stage":      "authz",
 			"error":      authzErr.Error(),
 		})
-		return nil, authzErr
+		return nil, nil, authzErr
 	}
 
 	signalLatency := time.Since(signalStart).Milliseconds()
@@ -73,7 +76,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	logSignalEvaluationResults(ctx, signalLatency, signals)
 	tracing.EndSignalSpan(signalSpan, collectMatchedSignalRules(signals), 1.0, signalLatency)
 	ctx.TraceContext = signalCtx
-	return signals, nil
+	return signals, scopedCandidates, nil
 }
 
 func ensureContextTokenCount(ctx *RequestContext, signalInput signalEvaluationInput) {

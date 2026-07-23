@@ -47,17 +47,60 @@ func (c *Classifier) EvaluateAllSignalsWithHeaders(input SignalEvaluationInput) 
 		nil,
 		false,
 	)
-	if err := c.appendAuthzFromHeaders(results, input.Headers, input.ForceEvaluateAll); err != nil {
+	usedSignals := c.getUsedSignals()
+	if input.ForceEvaluateAll {
+		usedSignals = c.getAllSignalTypes()
+	}
+	if err := c.evaluateAuthzFromHeaders(results, input.Headers, usedSignals); err != nil {
 		return nil, err
 	}
 	return results, nil
 }
 
-func (c *Classifier) appendAuthzFromHeaders(results *SignalResults, headers map[string]string, forceEvaluateAll bool) error {
-	usedSignals := c.getUsedSignals()
-	if forceEvaluateAll {
+// EvaluateAllSignalsWithHeadersForDecisions evaluates authz first, removes
+// candidates that are already impossible, and evaluates non-authz signals only
+// for the remaining decisions. The returned candidates must also be used for
+// final decision evaluation to keep computation and result scopes aligned.
+func (c *Classifier) EvaluateAllSignalsWithHeadersForDecisions(input SignalEvaluationInput, decisions []config.Decision) (*SignalResults, []config.Decision, error) {
+	usedSignals := c.getUsedSignalsForDecisions(decisions)
+	if input.ForceEvaluateAll {
 		usedSignals = c.getAllSignalTypes()
 	}
+
+	authzResults := newSignalResults()
+	if err := c.evaluateAuthzFromHeaders(authzResults, input.Headers, usedSignals); err != nil {
+		return nil, nil, err
+	}
+
+	candidates := decisions
+	if !input.ForceEvaluateAll {
+		candidates = filterDecisionsByAuthz(decisions, authzResults.MatchedAuthzRules)
+		logging.Debugf("[Signal Computation] Authz scoped decision candidates from %d to %d", len(decisions), len(candidates))
+	}
+
+	results := c.evaluateAllSignalsWithContext(
+		input.Text,
+		input.ContextText,
+		input.CurrentUserText,
+		input.PriorUserMessages,
+		input.NonUserMessages,
+		input.HasPriorAssistantReply,
+		input.ForceEvaluateAll,
+		input.UncompressedText,
+		input.SkipCompressionSignals,
+		input.ConversationFacts,
+		input.ImageURL,
+		input.RequestFacts,
+		candidates,
+		true,
+	)
+
+	results.MatchedAuthzRules = authzResults.MatchedAuthzRules
+	results.Metrics.Authz = authzResults.Metrics.Authz
+	return results, candidates, nil
+}
+
+func (c *Classifier) evaluateAuthzFromHeaders(results *SignalResults, headers map[string]string, usedSignals map[string]bool) error {
 	if !isSignalTypeUsed(usedSignals, config.SignalTypeAuthz) {
 		logging.Debugf("[Signal Computation] Authz signal not used in any decision, skipping evaluation")
 		return nil
