@@ -113,10 +113,6 @@ If you find Semantic Router helpful in your research or projects, please conside
 }
 ```
 
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=vllm-project/semantic-router&type=Date)](https://www.star-history.com/#vllm-project/semantic-router&Date)
-
 ## Sponsors
 
 We are grateful to our sponsors who support us:
