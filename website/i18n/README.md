@@ -40,7 +40,7 @@ translation:
 
 ### Auditing Translation Drift
 
-Run the local audit before updating or reviewing translated docs:
+Run the audit before updating or reviewing translated docs:
 
 ```bash
 make docs-check-translations
@@ -52,46 +52,34 @@ The default locale is `zh-Hans`. Override it when adding another locale:
 make docs-check-translations DOCS_TRANSLATION_LOCALE=zh-Hans
 ```
 
-The audit checks the English `website/docs/` tree against `i18n/{locale}/docusaurus-plugin-content-docs/current/` and reports:
+The audit uses two signals:
+
+1. **Latest Git commit time (primary):** if the English file was committed after the translated file, the translation is definitely outdated. If the translated file is at least as new, it is considered likely synced.
+2. **`translation.source_commit` (secondary):** if the recorded source commit is behind while the translated file is not older, the file is reported for metadata verification instead of being treated as definitely outdated.
 
 | Status | Meaning |
 | ------ | ------- |
-| `Missing translations` | English docs that fall back to English in the translated locale |
-| `Metadata issues` | Existing translated files missing `translation.source_commit`, `translation.source_file`, or `translation.outdated` |
-| `Outdated translations` | English source files with commits after the recorded `source_commit` |
-| `Status metadata mismatches` | `outdated` frontmatter does not match the computed source status |
+| `Missing translations` | English docs that do not have a translated file |
+| `Outdated translations` | English source has a newer latest commit than the translated file |
+| `Metadata issues` | Translation metadata is missing, invalid, or points to the wrong source file |
+| `Metadata needs verification` | The translated file is not older, but its recorded `source_commit` is behind |
+| `Status metadata mismatches` | The `outdated` flag disagrees with an unambiguous timestamp result |
 
-The audit is read-only. It does not generate translations or update frontmatter. It returns nonzero when drift or metadata issues are found, so a failing `make docs-check-translations` can mean the check worked and found stale translations.
+The audit is read-only and returns nonzero while translation or metadata work remains.
 
-To update only the `translation.outdated` status flags, run:
+To update only unambiguous `translation.outdated` flags, run:
 
 ```bash
 make docs-fix-translation-status
 ```
 
-This mode does not change translated prose or advance `source_commit`. It only makes the banner state honest while translators update the content. The make target succeeds when only translation drift remains and fails only for setup or usage errors.
+This command does not translate prose or advance `source_commit`. It does not automatically change ambiguous `Metadata needs verification` entries.
 
-Underlying script exit status guide:
-
-| Exit | Meaning |
-| ---- | ------- |
-| `0` | All checked translations are synced and have valid metadata |
-| `1` | The audit ran successfully and found missing, outdated, or metadata-incomplete translations |
-| `2` | Usage or setup error, such as an unknown option, missing locale directory, or no usable `git` executable |
-
-To inspect a report without failing a local shell session, append `|| true`:
+To inspect the report without failing a local shell session:
 
 ```bash
 make docs-check-translations || true
 ```
-
-To verify a reported outdated file manually, compare the listed `source_commit` with the current English source history. For example:
-
-```bash
-git log --oneline 45bfd49e..HEAD -- website/docs/tutorials/projection/scores.md
-```
-
-The check currently covers only the `current` docs translation directory. Versioned docs under `version-v0.1`, `version-v0.2`, and `version-v0.3` are not audited by this script.
 
 ### Adding a New Translation
 
@@ -119,17 +107,6 @@ The check currently covers only the `current` docs translation directory. Versio
 
 5. Submit a PR
 
-If the local audit reports `Status metadata mismatches`, update the translated content first when needed, then set `outdated: false` only after `source_commit` has been advanced to the reviewed English source commit.
-
-Recommended order for a full zh-Hans sync:
-
-1. Run `--fix-status` so pages with stale Chinese content show the outdated banner.
-2. Add missing `translation` frontmatter to metadata-only files after checking which English source revision they match.
-3. Translate missing files from `website/docs/` into `i18n/zh-Hans/docusaurus-plugin-content-docs/current/`.
-4. Update outdated files by comparing `source_commit..HEAD` against each English source file.
-5. For each reviewed translation, update `source_commit` to the latest English source commit and set `outdated: false`.
-6. Run the audit again and build the Chinese site.
-
 > **Note**: Do NOT manually change `outdated` field. CI will automatically set it to `false` after your PR is merged.
 
 ## CI Automation
@@ -138,15 +115,16 @@ A daily GitHub Action ([check-translation-staleness.yml](../../.github/workflows
 
 | Condition | Action |
 | --------- | ------ |
-| `source_commit` is behind English source | Sets `outdated: true` |
-| `source_commit` matches English source | Sets `outdated: false` |
+| English latest commit is newer than translation | Sets `outdated: true` |
+| Translation is not older and `source_commit` is current | Sets `outdated: false` |
+| Translation is not older but `source_commit` is behind | Reports for verification without changing status |
 | No changes needed | Skips PR creation |
 
 ### How It Works
 
 1. Runs daily at UTC 00:00
 2. Scans all locales under `website/i18n/*/`
-3. Compares each translation's `source_commit` with current source file
+3. Runs the same timestamp-primary and metadata-secondary check used locally
 4. Creates a single PR with all status updates (if any changes)
 5. Closes any existing stale PR before creating a new one
 
