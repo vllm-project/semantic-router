@@ -141,6 +141,7 @@ docs:
 - docs/agent/plans/pl-0035-router-flow-workflows.md
 - docs/agent/plans/pl-0036-router-learning-followups.md
 - docs/agent/plans/pl-0037-router-flow-eval-campaign.md
+- docs/agent/plans/pl-0038-entrypoints-recipes.md
 - docs/agent/tech-debt/td-006-structural-rule-exceptions.md
 - docs/agent/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
 - docs/agent/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
@@ -289,6 +290,9 @@ doc_governance:
   - path: docs/agent/plans/pl-0037-router-flow-eval-campaign.md
     steward: router-core
     freshness: update while the Router Flow four-mode benchmark campaign is active
+  - path: docs/agent/plans/pl-0038-entrypoints-recipes.md
+    steward: router-core
+    freshness: update while entrypoints and multi-recipe routing implementation is active
   - path: docs/agent/tech-debt/td-006-structural-rule-exceptions.md
     steward: agent-contract
     freshness: update when the TD006 debt record changes materially

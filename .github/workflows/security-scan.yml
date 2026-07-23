@@ -30,12 +30,42 @@ jobs:
       issues: write
 
     steps:
-      - name: Check out the repo
+      # Trusted tooling: always the base repo, never fork-controlled. The
+      # scanner and github-script code we execute come from here.
+      - name: Check out base repo (trusted tooling)
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          path: base
           fetch-depth: 0
+
+      # Untrusted PR code: checked out as DATA only. The trusted scanner
+      # parses these files with tree-sitter; they are never executed, so
+      # `allow-unsafe-pr-checkout` does not expose a pwn-request path here.
+      - name: Check out PR code (untrusted, data only)
+        if: github.event_name == 'pull_request_target'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr-code
+          fetch-depth: 0
+          # Requires actions/checkout >= v4.4.0 / v5.1.0 / v6.1.0 / v7.0.1,
+          # which introduced this opt-in. Safe here: PR code is only parsed,
+          # never executed (see comment above).
+          allow-unsafe-pr-checkout: true
+
+      # Pin the trusted allowlist over the fork's copy so a PR cannot
+      # whitelist its own exfil domains to evade the URL scanner.
+      - name: Pin trusted security allowlist
+        if: github.event_name == 'pull_request_target'
+        run: |
+          if [ -f base/.security-scan-allowlist ]; then
+            cp base/.security-scan-allowlist pr-code/.security-scan-allowlist
+          else
+            rm -f pr-code/.security-scan-allowlist
+          fi
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -55,13 +85,17 @@ jobs:
             tree-sitter-go==0.25.0 \
             tree-sitter-rust==0.24.0
 
+      - name: Test trusted AST scanner
+        run: python3 base/tools/security/test_ast_security_scanner.py
+
       - name: Run AST codebase scan
         id: ast_scan
         continue-on-error: true
         run: |
           set +e
-          python3 tools/security/ast_security_scanner.py \
-            scan . --fail-on HIGH --json > /tmp/ast_scan.json
+          TARGET="${{ github.event_name == 'pull_request_target' && 'pr-code' || 'base' }}"
+          python3 base/tools/security/ast_security_scanner.py \
+            scan "$TARGET" --fail-on HIGH --json > /tmp/ast_scan.json
           EXIT_CODE=$?
           if [ ! -s /tmp/ast_scan.json ]; then
             echo '{"findings":[],"counts":{},"error":"scanner produced no output"}' > /tmp/ast_scan.json
@@ -74,8 +108,20 @@ jobs:
         continue-on-error: true
         run: |
           set +e
-          python3 tools/security/ast_security_scanner.py \
-            diff "origin/${{ github.base_ref }}" --fail-on HIGH --json \
+          # Bring the base ref into the PR checkout so the diff scan can
+          # compute base...HEAD. No --depth: keep enough history for the
+          # merge-base (three-dot) diff; the scanner falls back to two-dot
+          # if the merge-base is unreachable.
+          git -C pr-code remote add base "${GITHUB_SERVER_URL}/${{ github.repository }}.git" 2>/dev/null || true
+          # Hard-fail on fetch failure: without the base ref the diff would
+          # silently resolve to an empty changeset and report a false "clean",
+          # masking findings introduced by the PR.
+          if ! git -C pr-code fetch --no-tags base "${{ github.base_ref }}"; then
+            echo "::error::diff scan: failed to fetch base ref '${{ github.base_ref }}'"
+            exit 1
+          fi
+          python3 base/tools/security/ast_security_scanner.py \
+            diff "base/${{ github.base_ref }}" --repo-root pr-code --fail-on HIGH --json \
             > /tmp/diff_scan.json
           EXIT_CODE=$?
           if [ ! -s /tmp/diff_scan.json ]; then
@@ -87,8 +133,9 @@ jobs:
         id: regex_scan
         continue-on-error: true
         run: |
-          python3 tools/security/scan_malicious_code.py \
-            . --fail-on HIGH 2>&1 \
+          TARGET="${{ github.event_name == 'pull_request_target' && 'pr-code' || 'base' }}"
+          python3 base/tools/security/scan_malicious_code.py \
+            "$TARGET" --fail-on HIGH 2>&1 \
             | tee /tmp/regex_report.txt
 
       - name: Post security report on PR
