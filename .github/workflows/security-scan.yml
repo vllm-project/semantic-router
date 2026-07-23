@@ -85,6 +85,9 @@ jobs:
             tree-sitter-go==0.25.0 \
             tree-sitter-rust==0.24.0
 
+      - name: Test trusted AST scanner
+        run: python3 base/tools/security/test_ast_security_scanner.py
+
       - name: Run AST codebase scan
         id: ast_scan
         continue-on-error: true
