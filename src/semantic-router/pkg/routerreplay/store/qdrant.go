@@ -250,11 +250,12 @@ func (q *QdrantStore) AppendOutcome(ctx context.Context, id string, outcome Outc
 	})
 }
 
-func (q *QdrantStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error {
+func (q *QdrantStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan) error {
 	return q.updateRecord(ctx, id, func(r *Record) {
 		r.HallucinationDetected = detected
 		r.HallucinationConfidence = confidence
 		r.HallucinationSpans = spans
+		r.HallucinationSpanDetails = spanDetails
 	})
 }
 
