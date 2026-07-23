@@ -47,10 +47,10 @@ jobs:
           git push origin --delete i18n/mark-outdated 2>/dev/null || true
           git checkout -b i18n/mark-outdated
 
-          # Mark translation status using the same source_commit logic as local audits.
-          # The script exits 1 when drift remains, which is expected here because
-          # this workflow only updates outdated flags and does not translate content.
-          website/scripts/check-translation-sync.sh --fix-status || true
+          # Use the same timestamp-primary, metadata-secondary logic as local checks.
+          # This updates only unambiguous outdated flags; translation and metadata
+          # work remains visible in the report without failing this workflow step.
+          make docs-fix-translation-status
 
           # Check for changes
           if git diff --quiet; then
@@ -80,9 +80,10 @@ jobs:
             This PR updates translation status based on source file changes.
 
             ### What this PR does
-            - Runs \`website/scripts/check-translation-sync.sh --fix-status\`
-            - Marks translations as \`outdated: true\` when their English source has been updated
-            - Marks translations as \`outdated: false\` when their \`source_commit\` matches the latest source
+            - Runs \`make docs-fix-translation-status\`
+            - Marks translations as \`outdated: true\` when the English file has a newer latest commit
+            - Marks translations as \`outdated: false\` only when the translation is not older and \`source_commit\` is current
+            - Leaves ambiguous metadata verification items unchanged
             - Does not translate content or advance \`source_commit\`
 
             ---

@@ -46,11 +46,15 @@ docs-check-translations: ## Audit documentation translation coverage, metadata, 
 	@$(LOG_TARGET)
 	website/scripts/check-translation-sync.sh --locale $(DOCS_TRANSLATION_LOCALE)
 
-docs-fix-translation-status: ## Update documentation translation outdated flags
+docs-test-translation-sync: ## Test documentation translation status synchronization
+	@$(LOG_TARGET)
+	website/scripts/check-translation-sync.test.sh
+
+docs-fix-translation-status: ## Update unambiguous documentation translation outdated flags
 	@$(LOG_TARGET)
 	@website/scripts/check-translation-sync.sh --locale $(DOCS_TRANSLATION_LOCALE) --fix-status; \
-	status=$$?; \
-	if [ $$status -eq 2 ]; then exit $$status; fi
+	exit_code=$$?; \
+	if [ $$exit_code -ne 0 ] && [ $$exit_code -ne 1 ]; then exit $$exit_code; fi
 
 ##@ CRD Documentation
 
