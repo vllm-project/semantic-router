@@ -16,21 +16,34 @@ on:
       - main
       - develop
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Cancel superseded PR runs only; never cancel in-flight image publishing
+  # on main/tag pushes.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   GO_VERSION: '1.25'
 
 jobs:
-  # Always run change detection so operator checks report a conclusion
-  # (success or skipped) on every PR. Trigger-level path filtering would
-  # leave the checks missing entirely on unrelated PRs, deadlocking any
-  # branch protection or merge gate that requires them.
+  # Run change detection on every PR so operator checks report a conclusion
+  # (success or skipped) instead of being missing entirely, which would
+  # deadlock any branch protection or merge gate that requires them.
+  # PR-only: on push/tag events every downstream condition short-circuits,
+  # and the release path must not depend on this job (a failed need would
+  # silently skip image publishing).
   changes:
+    if: github.event_name == 'pull_request'
     uses: ./.github/workflows/ci-changes.yml
 
+  # Downstream conditions use "!cancelled() &&" so they are evaluated even
+  # when `changes` is skipped (push/tag) or failed; without a status-check
+  # function a failed `changes` would dependency-skip the merge-gate checks
+  # and Mergify would accept them as passing via check-skipped.
   lint:
     name: Lint
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.operator != 'false'
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.operator != 'false') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -69,7 +82,7 @@ jobs:
   test:
     name: Unit Tests
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.operator != 'false'
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.operator != 'false') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -99,7 +112,7 @@ jobs:
   manifests:
     name: Verify Manifests
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.operator != 'false'
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.operator != 'false') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -130,9 +143,13 @@ jobs:
   docker-build:
     name: Docker Build and Push
     needs: changes
+    # "== 'true'" (not "!= 'false'") on purpose: this job is not a merge
+    # gate, and a malformed change signal must not spin up the image build
+    # and the integration-test matrix on every PR.
     if: >-
+      ${{ !cancelled() &&
       github.repository == 'vllm-project/semantic-router' &&
-      (github.event_name != 'pull_request' || needs.changes.outputs.operator == 'true')
+      (github.event_name != 'pull_request' || needs.changes.outputs.operator == 'true') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -282,7 +299,7 @@ jobs:
   bundle-validate:
     name: Validate OLM Bundle
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.operator != 'false'
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.operator != 'false') }}
     runs-on: ubuntu-latest
     defaults:
       run:
