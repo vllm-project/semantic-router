@@ -6,6 +6,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WEBSITE_DIR="$(dirname "$SCRIPT_DIR")"
+DOCS_DIR="$WEBSITE_DIR/docs"
+I18N_BASE="$WEBSITE_DIR/i18n"
 
 find_git_bin() {
     local candidate
@@ -29,9 +31,6 @@ find_git_bin() {
 }
 
 GIT_BIN="$(find_git_bin)" || exit 2
-REPO_ROOT="$("$GIT_BIN" -C "$WEBSITE_DIR" rev-parse --show-toplevel 2>/dev/null || { cd "$WEBSITE_DIR/.." && pwd; })"
-DOCS_DIR="$REPO_ROOT/website/docs"
-I18N_BASE="$REPO_ROOT/website/i18n"
 
 LOCALE=""
 FIX_STATUS=false
@@ -40,6 +39,10 @@ FIX_STATUS=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         -l|--locale)
+            if [[ -z "${2:-}" ]]; then
+                echo "Missing value for $1" >&2
+                exit 2
+            fi
             LOCALE="$2"
             shift 2
             ;;
@@ -53,16 +56,16 @@ Usage: $(basename "$0") [OPTIONS]
 
 Check translation sync status between English source docs and translations.
 
-The check uses each translated file's translation.source_commit metadata, not
-file modification time, so translations remain stale until their source_commit is
-advanced to the English source revision they were reviewed against.
+Latest Git commit times are the primary drift signal. translation.source_commit
+is a secondary metadata signal: when it is behind but the translated file is not
+older, the file is reported for verification instead of definitely outdated.
 
-Exit status is 0 when translations are fully synced, 1 when drift or metadata
-issues are found, and 2 for usage or setup errors.
+Exit status is 0 when translations are fully synced, 1 when translation or
+metadata work remains, and 2 for usage or setup errors.
 
 Options:
   -l, --locale LOCALE   Check specific locale only (default: all)
-    --fix-status          Update translation.outdated to match computed drift
+    --fix-status          Update unambiguous translation.outdated flags
   -h, --help            Show this help message
 EOF
             exit 0
@@ -87,24 +90,39 @@ frontmatter_value() {
     local key="$1"
     local file="$2"
 
-    grep -m1 -E "^[[:space:]]*$key:" "$file" 2>/dev/null \
-        | sed -E "s/^[[:space:]]*$key:[[:space:]]*//; s/[[:space:]]+#.*$//; s/^['\"]//; s/['\"]$//"
+    awk -v key="$key" '
+        NR == 1 {
+            if ($0 != "---") exit
+            in_frontmatter = 1
+            next
+        }
+        in_frontmatter && $0 == "---" { exit }
+        in_frontmatter {
+            pattern = "^[[:space:]]*" key ":[[:space:]]*"
+            if ($0 ~ pattern) {
+                value = $0
+                sub(pattern, "", value)
+                print value
+                exit
+            }
+        }
+    ' "$file" | sed -E "s/[[:space:]]+#.*$//; s/^['\"]//; s/['\"]$//"
 }
 
 source_update_count() {
     local source_commit="$1"
-    local source_repo_path="$2"
+    local source_path="$2"
 
-    "$GIT_BIN" log --oneline "$source_commit"..HEAD -- "$source_repo_path" 2>/dev/null \
+    "$GIT_BIN" log --oneline "$source_commit"..HEAD -- "$source_path" 2>/dev/null \
         | wc -l \
         | tr -d '[:space:]'
 }
 
 source_commit_is_usable() {
     local source_commit="$1"
-    local source_repo_path="$2"
 
-    "$GIT_BIN" log -1 --format="%h" "$source_commit" -- "$source_repo_path" >/dev/null 2>&1
+    "$GIT_BIN" cat-file -e "$source_commit^{commit}" >/dev/null 2>&1 \
+        && "$GIT_BIN" merge-base --is-ancestor "$source_commit" HEAD >/dev/null 2>&1
 }
 
 set_outdated_status() {
@@ -112,11 +130,21 @@ set_outdated_status() {
     local expected="$2"
     local tmp_file
 
-    tmp_file="$(mktemp)"
+    tmp_file="$(mktemp "${file}.tmp.XXXXXX")"
     awk -v expected="$expected" '
-        /^[[:space:]]*outdated:[[:space:]]*(true|false)[[:space:]]*$/ && !done {
+        NR == 1 && $0 == "---" {
+            in_frontmatter = 1
+            print
+            next
+        }
+        in_frontmatter && $0 == "---" {
+            in_frontmatter = 0
+            print
+            next
+        }
+        in_frontmatter && /^[[:space:]]*outdated:[[:space:]]*(true|false)[[:space:]]*$/ && !updated {
             sub(/outdated:[[:space:]]*(true|false)/, "outdated: " expected)
-            done = 1
+            updated = 1
         }
         { print }
     ' "$file" > "$tmp_file"
@@ -143,34 +171,37 @@ if [[ ${#LOCALES[@]} -eq 0 ]]; then
     exit 2
 fi
 
-cd "$REPO_ROOT"
+cd "$WEBSITE_DIR"
 
-total_synced=0
+total_likely_synced=0
 total_outdated=0
 total_missing=0
 total_metadata=0
+total_verification=0
 total_status_mismatch=0
 total_status_fixed=0
 
 check_locale() {
     local locale="$1"
-    local i18n_dir="website/i18n/$locale/docusaurus-plugin-content-docs/current"
+    local i18n_dir="i18n/$locale/docusaurus-plugin-content-docs/current"
 
-    if [[ ! -d "$REPO_ROOT/$i18n_dir" ]]; then
+    if [[ ! -d "$WEBSITE_DIR/$i18n_dir" ]]; then
         echo -e "${RED}Error: Translation directory not found: $i18n_dir${NC}" >&2
         return 1
     fi
 
     local outdated_count=0
     local missing_count=0
-    local synced_count=0
+    local likely_synced_count=0
     local metadata_count=0
+    local verification_count=0
     local status_mismatch_count=0
     local status_fixed_count=0
 
     declare -a outdated_files
     declare -a missing_files
     declare -a metadata_files
+    declare -a verification_files
     declare -a status_mismatches
     declare -a status_fixed
 
@@ -179,86 +210,100 @@ check_locale() {
 
         [[ "$rel_path" == "OWNER" ]] && continue
 
-        local source_repo_path="website/docs/$rel_path"
+        local source_path="docs/$rel_path"
         local expected_source_file="docs/$rel_path"
         local i18n_rel_path="$i18n_dir/$rel_path"
-        local i18n_file="$REPO_ROOT/$i18n_rel_path"
+        local i18n_file="$WEBSITE_DIR/$i18n_rel_path"
 
         if [[ ! -f "$i18n_file" ]]; then
             missing_files+=("$rel_path")
-            ((missing_count++))
+            missing_count=$((missing_count + 1))
             continue
         fi
 
+        local source_timestamp
         local source_commit
+        local source_date
+        local i18n_timestamp
+        local i18n_commit
+        local i18n_date
+        source_timestamp="$("$GIT_BIN" log -1 --format="%ct" -- "$source_path" 2>/dev/null || echo "0")"
+        source_commit="$("$GIT_BIN" log -1 --format="%h" -- "$source_path" 2>/dev/null || echo "?")"
+        source_date="$("$GIT_BIN" log -1 --format="%cs" -- "$source_path" 2>/dev/null || echo "?")"
+        i18n_timestamp="$("$GIT_BIN" log -1 --format="%ct" -- "$i18n_rel_path" 2>/dev/null || echo "0")"
+        i18n_commit="$("$GIT_BIN" log -1 --format="%h" -- "$i18n_rel_path" 2>/dev/null || echo "?")"
+        i18n_date="$("$GIT_BIN" log -1 --format="%cs" -- "$i18n_rel_path" 2>/dev/null || echo "?")"
+        [[ -n "$source_timestamp" ]] || source_timestamp=0
+        [[ -n "$i18n_timestamp" ]] || i18n_timestamp=0
+
+        local source_commit_meta
         local source_file_meta
         local outdated_meta
-        source_commit="$(frontmatter_value "source_commit" "$i18n_file")"
+        local metadata_reason=""
+        local metadata_state="unknown"
+        local updates=0
+        source_commit_meta="$(frontmatter_value "source_commit" "$i18n_file")"
         source_file_meta="$(frontmatter_value "source_file" "$i18n_file")"
         outdated_meta="$(frontmatter_value "outdated" "$i18n_file")"
 
-        if [[ -z "$source_commit" ]]; then
-            metadata_files+=("$rel_path|missing translation.source_commit")
-            ((metadata_count++))
-            continue
+        if [[ -z "$source_commit_meta" ]]; then
+            metadata_reason="missing translation.source_commit"
+        elif ! source_commit_is_usable "$source_commit_meta"; then
+            metadata_reason="invalid translation.source_commit $source_commit_meta"
         fi
 
         if [[ -z "$source_file_meta" ]]; then
-            metadata_files+=("$rel_path|missing translation.source_file")
-            ((metadata_count++))
-            continue
+            metadata_reason="${metadata_reason:+$metadata_reason; }missing translation.source_file"
+        elif [[ "$source_file_meta" != "$expected_source_file" ]]; then
+            metadata_reason="${metadata_reason:+$metadata_reason; }source_file is $source_file_meta, expected $expected_source_file"
         fi
 
-        if [[ -z "$outdated_meta" ]]; then
-            metadata_files+=("$rel_path|missing translation.outdated")
-            ((metadata_count++))
-            continue
+        if [[ "$outdated_meta" != "true" && "$outdated_meta" != "false" ]]; then
+            metadata_reason="${metadata_reason:+$metadata_reason; }missing or invalid translation.outdated"
         fi
 
-        if [[ "$source_file_meta" != "$expected_source_file" ]]; then
-            metadata_files+=("$rel_path|source_file is $source_file_meta, expected $expected_source_file")
-            ((metadata_count++))
-            continue
-        fi
-
-        if ! source_commit_is_usable "$source_commit" "$source_repo_path"; then
-            metadata_files+=("$rel_path|invalid source_commit $source_commit")
-            ((metadata_count++))
-            continue
-        fi
-
-        local latest_source_commit
-        local updates
-        latest_source_commit="$("$GIT_BIN" log -1 --format="%h" -- "$source_repo_path" 2>/dev/null || echo "?")"
-        updates="$(source_update_count "$source_commit" "$source_repo_path")"
-        [[ -n "$updates" ]] || updates=0
-
-        if [[ "$updates" -gt 0 ]]; then
-            outdated_files+=("$rel_path|$source_commit|$latest_source_commit|$updates")
-            ((outdated_count++))
-
-            if [[ "$outdated_meta" != "true" ]]; then
-                if $FIX_STATUS; then
-                    set_outdated_status "$i18n_file" "true"
-                    status_fixed+=("$rel_path|outdated set to true")
-                    ((status_fixed_count++))
-                else
-                    status_mismatches+=("$rel_path|outdated is $outdated_meta, expected true")
-                    ((status_mismatch_count++))
-                fi
-            fi
+        if [[ -n "$metadata_reason" ]]; then
+            metadata_files+=("$rel_path|$metadata_reason")
+            metadata_count=$((metadata_count + 1))
         else
-            ((synced_count++))
+            updates="$(source_update_count "$source_commit_meta" "$source_path")"
+            [[ -n "$updates" ]] || updates=0
+            if [[ "$updates" -gt 0 ]]; then
+                metadata_state="behind"
+            else
+                metadata_state="current"
+            fi
+        fi
 
-            if [[ "$outdated_meta" == "true" ]]; then
-                if $FIX_STATUS; then
-                    set_outdated_status "$i18n_file" "false"
-                    status_fixed+=("$rel_path|outdated set to false")
-                    ((status_fixed_count++))
-                else
-                    status_mismatches+=("$rel_path|outdated is true, expected false")
-                    ((status_mismatch_count++))
-                fi
+        local expected_outdated=""
+        if [[ "$i18n_timestamp" == "0" ]]; then
+            if [[ -z "$metadata_reason" ]]; then
+                metadata_files+=("$rel_path|translation file has no Git history")
+                metadata_count=$((metadata_count + 1))
+            fi
+            likely_synced_count=$((likely_synced_count + 1))
+        elif [[ "$source_timestamp" -gt "$i18n_timestamp" ]]; then
+            outdated_files+=("$rel_path|$i18n_commit|$i18n_date|$source_commit|$source_date")
+            outdated_count=$((outdated_count + 1))
+            expected_outdated="true"
+        else
+            likely_synced_count=$((likely_synced_count + 1))
+            if [[ "$metadata_state" == "behind" ]]; then
+                verification_files+=("$rel_path|$source_commit_meta|$source_commit|$i18n_commit|$updates")
+                verification_count=$((verification_count + 1))
+            elif [[ "$metadata_state" == "current" ]]; then
+                expected_outdated="false"
+            fi
+        fi
+
+        if [[ -n "$expected_outdated" && ( "$outdated_meta" == "true" || "$outdated_meta" == "false" ) && "$outdated_meta" != "$expected_outdated" ]]; then
+            if $FIX_STATUS; then
+                set_outdated_status "$i18n_file" "$expected_outdated"
+                status_fixed+=("$rel_path|outdated set to $expected_outdated")
+                status_fixed_count=$((status_fixed_count + 1))
+            else
+                status_mismatches+=("$rel_path|outdated is $outdated_meta, expected $expected_outdated")
+                status_mismatch_count=$((status_mismatch_count + 1))
             fi
         fi
 
@@ -273,6 +318,15 @@ check_locale() {
         done
     fi
 
+    if [[ ${#outdated_files[@]} -gt 0 ]]; then
+        echo -e "  ${YELLOW}Outdated translations (English commit is newer):${NC}"
+        for entry in "${outdated_files[@]}"; do
+            IFS='|' read -r file i18n_commit i18n_date source_commit source_date <<< "$entry"
+            echo -e "    ${YELLOW}↓${NC} $file"
+            echo -e "      $i18n_commit ($i18n_date) -> $source_commit ($source_date)"
+        done
+    fi
+
     if [[ ${#metadata_files[@]} -gt 0 ]]; then
         echo -e "  ${MAGENTA}Metadata issues:${NC}"
         for entry in "${metadata_files[@]}"; do
@@ -282,12 +336,12 @@ check_locale() {
         done
     fi
 
-    if [[ ${#outdated_files[@]} -gt 0 ]]; then
-        echo -e "  ${YELLOW}Outdated translations:${NC}"
-        for entry in "${outdated_files[@]}"; do
-            IFS='|' read -r file source_commit latest_source_commit updates <<< "$entry"
-            echo -e "    ${YELLOW}↓${NC} $file"
-            echo -e "      source_commit $source_commit -> $latest_source_commit ($updates source commits)"
+    if [[ ${#verification_files[@]} -gt 0 ]]; then
+        echo -e "  ${CYAN}Metadata needs verification (Chinese is not older):${NC}"
+        for entry in "${verification_files[@]}"; do
+            IFS='|' read -r file recorded_commit source_commit i18n_commit updates <<< "$entry"
+            echo -e "    ${CYAN}?${NC} $file"
+            echo -e "      source_commit $recorded_commit -> $source_commit ($updates source commits); Chinese latest $i18n_commit"
         done
     fi
 
@@ -309,21 +363,22 @@ check_locale() {
         done
     fi
 
-    local total=$((synced_count + outdated_count + missing_count + metadata_count))
+    local total=$((likely_synced_count + outdated_count + missing_count))
     local sync_rate=0
-    [[ $total -gt 0 ]] && sync_rate=$((synced_count * 100 / total))
+    [[ $total -gt 0 ]] && sync_rate=$((likely_synced_count * 100 / total))
 
-    echo -e "  ${GREEN}✓${NC} $synced_count  ${YELLOW}↓${NC} $outdated_count  ${RED}✗${NC} $missing_count  ${MAGENTA}!${NC} $metadata_count  ${YELLOW}~${NC} $status_mismatch_count  ${GREEN}+${NC} $status_fixed_count  (${sync_rate}%)"
+    echo -e "  ${GREEN}✓${NC} $likely_synced_count likely synced  ${YELLOW}↓${NC} $outdated_count  ${RED}✗${NC} $missing_count  ${MAGENTA}!${NC} $metadata_count  ${CYAN}?${NC} $verification_count  ${YELLOW}~${NC} $status_mismatch_count  ${GREEN}+${NC} $status_fixed_count  (${sync_rate}%)"
     echo ""
 
-    ((total_synced += synced_count))
-    ((total_outdated += outdated_count))
-    ((total_missing += missing_count))
-    ((total_metadata += metadata_count))
-    ((total_status_mismatch += status_mismatch_count))
-    ((total_status_fixed += status_fixed_count))
+    total_likely_synced=$((total_likely_synced + likely_synced_count))
+    total_outdated=$((total_outdated + outdated_count))
+    total_missing=$((total_missing + missing_count))
+    total_metadata=$((total_metadata + metadata_count))
+    total_verification=$((total_verification + verification_count))
+    total_status_mismatch=$((total_status_mismatch + status_mismatch_count))
+    total_status_fixed=$((total_status_fixed + status_fixed_count))
 
-    [[ $outdated_count -gt 0 ]] || [[ $missing_count -gt 0 ]] || [[ $metadata_count -gt 0 ]] || [[ $status_mismatch_count -gt 0 ]]
+    [[ $outdated_count -gt 0 ]] || [[ $missing_count -gt 0 ]] || [[ $metadata_count -gt 0 ]] || [[ $verification_count -gt 0 ]] || [[ $status_mismatch_count -gt 0 ]]
 }
 
 echo -e "${BLUE}=== Translation Sync Check ===${NC}"
@@ -338,11 +393,11 @@ done
 
 if [[ ${#LOCALES[@]} -gt 1 ]]; then
     echo -e "${BLUE}=== Total ===${NC}"
-    total=$((total_synced + total_outdated + total_missing + total_metadata))
+    total=$((total_likely_synced + total_outdated + total_missing))
     sync_rate=0
-    [[ $total -gt 0 ]] && sync_rate=$((total_synced * 100 / total))
-    echo -e "${GREEN}✓ Synced: $total_synced${NC}  ${YELLOW}↓ Outdated: $total_outdated${NC}  ${RED}✗ Missing: $total_missing${NC}  ${MAGENTA}! Metadata: $total_metadata${NC}  ${YELLOW}~ Status: $total_status_mismatch${NC}  ${GREEN}+ Fixed: $total_status_fixed${NC}"
-    echo -e "Sync rate: ${sync_rate}% ($total_synced / $total)"
+    [[ $total -gt 0 ]] && sync_rate=$((total_likely_synced * 100 / total))
+    echo -e "${GREEN}✓ Likely synced: $total_likely_synced${NC}  ${YELLOW}↓ Outdated: $total_outdated${NC}  ${RED}✗ Missing: $total_missing${NC}  ${MAGENTA}! Metadata: $total_metadata${NC}  ${CYAN}? Verify: $total_verification${NC}  ${YELLOW}~ Status: $total_status_mismatch${NC}  ${GREEN}+ Fixed: $total_status_fixed${NC}"
+    echo -e "Likely sync rate: ${sync_rate}% ($total_likely_synced / $total)"
 fi
 
 if $locale_has_issues; then
