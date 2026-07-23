@@ -13,13 +13,8 @@ package candle_binding
 // backend cannot be packaged as a working production router that returns fake
 // safety, classification, similarity, or adapter results.
 
-import "errors"
-
-// ErrBackendUnavailable is returned by every inference and mutation API in the
-// non-CGO build to signal that the native Candle backend is not linked. It is a
-// typed sentinel so callers can detect the unavailable-backend condition with
-// errors.Is.
-var ErrBackendUnavailable = errors.New("candle: native backend unavailable (built without cgo)")
+// ErrBackendUnavailable, the sentinel returned by every API below, is declared
+// in errors.go so that it is also referenceable from CGO builds.
 
 // TokenizeResult represents the result of tokenization
 type TokenizeResult struct {
