@@ -13,7 +13,7 @@ Most routing systems start with a prompt and choose a model endpoint. vLLM Seman
 
 That idea started with text. Iris introduced the Signal-Decision architecture, moving VSR beyond a fixed domain classifier and into a richer system where intent, keywords, embeddings, safety, PII, semantic cache, and plugins can all participate in routing. Athena pushed the same idea further: Semantic Router is not only a fast classifier in front of vLLM, but a system-level intelligence layer for mixture-of-models and agentic deployments.
 
-![](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/hero.png)
+![From Text to Multimodal Routing: Hardening Vision Signals in vLLM Semantic Router: Hero](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/hero.png)
 
 The next boundary is multimodal routing. Once an image, screenshot, scan, or document page enters the request, the router is no longer reasoning over a prompt alone. It is reasoning over request evidence. The image may be the part that makes the request clinical, regulated, security-sensitive, out of domain, or worth routing to a stronger vision-language model. A router that only sees text is routing a partial request.
 
@@ -36,7 +36,7 @@ Multimodal routing keeps that same shape, but changes the unit of analysis from 
 
 The innovation is not that VSR can compute an image embedding. The innovation is that the image embedding becomes a typed signal in the same fabric as text intent, PII, jailbreak, domain, semantic similarity, plugins, and model selection. In other words, multimodal support turns VSR from prompt-level routing into request-level policy.
 
-![](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/policy-layer.png)
+![From Text to Multimodal Routing: Hardening Vision Signals in vLLM Semantic Router: Policy Layer](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/policy-layer.png)
 
 That is also why signal correctness becomes a control-plane requirement. If a text signal is wrong, a policy can route to the wrong model or skip the wrong plugin. If a vision signal is anti-correlated, the problem is worse: the router can become confidently wrong while still leaving a clean, repeatable audit trail for the wrong decision.
 
@@ -48,7 +48,7 @@ The first symptom was not a small accuracy drop. On an 11-image probe across thr
 
 That is an 82% inversion rate. The signal was anti-correlated, not merely noisy.
 
-![](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/inversion-heatmap.png)
+![From Text to Multimodal Routing: Hardening Vision Signals in vLLM Semantic Router: Inversion Heatmap](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/inversion-heatmap.png)
 
 For a router, this failure mode matters more than a benchmark score. A classifier that is weak usually produces uncertainty. A classifier that is inverted produces confidence in the wrong direction. In a multimodal policy layer, that can be worse than having no image signal at all.
 
@@ -65,7 +65,7 @@ We tested that hypothesis directly:
 - mmEL, whose vision tower is based on SigLIP2, scored 10/10.
 - The mmes model card loaded directly through the PyTorch reference path also scored 10/10.
 
-![](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/encoder-eliminated.png)
+![From Text to Multimodal Routing: Hardening Vision Signals in vLLM Semantic Router: Encoder Eliminated](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/encoder-eliminated.png)
 
 That result changed the shape of the investigation. The encoder family was not the root problem. Even the supposedly failing mmes model behaved correctly when loaded through the reference path.
 
@@ -77,7 +77,7 @@ The decisive test was simple: run the same mmes model on the same passport fixtu
 
 The PyTorch reference path returned cosine **0.7204** against the relevant passport anchor. The deployed Candle-binding path returned **0.1576** on the same image and conceptual pipeline. That is a 5-8x magnitude gap on the same model and fixture.
 
-![](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/diagnostic-gap.png)
+![From Text to Multimodal Routing: Hardening Vision Signals in vLLM Semantic Router: Diagnostic Gap](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/diagnostic-gap.png)
 
 At that point, the investigation stopped being a model-selection question. The useful question became: where does the production path diverge from the reference path?
 
@@ -95,7 +95,7 @@ Second, the image normalization path was incomplete. The Go image loader produce
 
 Third, preprocessing still carried residual drift after the pooling and normalization fixes. The old Go-side resize path used a 4-tap bilinear implementation. The PyTorch reference path uses PIL-style image preprocessing through `SiglipProcessor`. [PR #1943](https://github.com/vllm-project/semantic-router/pull/1943) moves image decode, resize, and CHW float32 conversion into Rust using the `image` crate with Catmull-Rom filtering to approximate the PIL bicubic + antialias behavior.
 
-![](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/hardening-arc.png)
+![From Text to Multimodal Routing: Hardening Vision Signals in vLLM Semantic Router: Hardening Arc](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/hardening-arc.png)
 
 This is the class of bug that is easy to miss in a cross-language serving stack. The Go layer, Rust FFI layer, Candle model implementation, and PyTorch reference can all appear individually reasonable while still producing a route-breaking mismatch end to end.
 
@@ -119,7 +119,7 @@ Across a 20-image corpus covering identifier, ambient, code, adversarial, and ou
 - **20 / 20 images at cosine >= 0.999 vs PyTorch reference**
 - Pre-fix preprocessing cosine on the canonical fixture was **0.990145**
 
-![](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/corpus-alignment.png)
+![From Text to Multimodal Routing: Hardening Vision Signals in vLLM Semantic Router: Corpus Alignment](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/corpus-alignment.png)
 
 The important result is not just the final cosine number. It is the isolation method: compare the production path against the reference path, split model-forward drift from preprocessing drift, then make the production path use the same preprocessing semantics in tests and serving.
 
@@ -138,11 +138,11 @@ This is the natural continuation of the Iris and Athena direction. Iris made rou
 
 The public demo associated with this work is [shrader.dev](https://shrader.dev). Today it demonstrates the text-routing version of the policy pattern: domain relevance checks, privacy-sensitive routing, and blocked outcomes before model invocation. That demo is important because it shows the policy shape before images are added.
 
-![](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/cyclotron-demo.png)
+![From Text to Multimodal Routing: Hardening Vision Signals in vLLM Semantic Router: Cyclotron Demo](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/cyclotron-demo.png)
 
 The text-routing path also illustrates a performance property that matters for multimodal production. Classifier signals can run concurrently through `runSignalDispatchers`, so wall-clock latency is bounded by the slowest enabled classifier rather than the sum of all classifiers. In a representative trace, the full classification decision completes in roughly 1.3 seconds on CPU.
 
-![](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/parallel-dispatch.png)
+![From Text to Multimodal Routing: Hardening Vision Signals in vLLM Semantic Router: Parallel Dispatch](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/parallel-dispatch.png)
 
 The multimodal version of that story is not a separate product path. It is the same policy engine with a larger evidence surface. Image and text signals should be extracted, validated, composed, replayed, and audited through the same routing semantics.
 
@@ -162,7 +162,7 @@ From there, the next steps are architectural:
 
 Text routing was the first control surface. Multimodal routing is the next one. The goal is not to build a one-off visual classifier beside the router, but to make every meaningful part of a request available to the same programmable routing brain.
 
-![](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/next-steps.png)
+![From Text to Multimodal Routing: Hardening Vision Signals in vLLM Semantic Router: Next Steps](/img/blog/vllm/2026-05-28-vllm-sr-vision-encoder-hardening/next-steps.png)
 
 Getting started:
 

@@ -22,7 +22,7 @@ This single example reveals the fundamental constraint: **classification-based r
 
 Today, we're introducing the **Signal-Decision Architecture**—a complete reimagining of semantic routing that scales from 14 fixed categories to unlimited intelligent routing decisions. This new architecture combines multi-dimensional signal extraction, flexible decision logic with AND/OR operators, and built-in plugin orchestration to deliver production-ready semantic intelligence.
 
-![](/img/blog/vllm/semantic-router/signal-0.png)
+![Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale: Signal 0](/img/blog/vllm/semantic-router/signal-0.png)
 
 ## The Problem: Why Classification-Based Routing Doesn't Scale
 
@@ -66,7 +66,7 @@ Cannot combine multiple conditions or implement complex routing strategies:
 
 **Real Impact**: Cannot implement layered routing strategies like "high-priority security issues get reasoning + jailbreak protection, while general questions get cached responses."
 
-![](/img/blog/vllm/semantic-router/signal.png)
+![Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale: Signal](/img/blog/vllm/semantic-router/signal.png)
 
 ## Introducing Signal-Decision Architecture
 
@@ -74,7 +74,7 @@ The Signal-Decision Architecture fundamentally reimagines semantic routing by se
 
 ### Architecture Overview
 
-![](/img/blog/vllm/semantic-router/signal-1.png)
+![Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale: Signal 1](/img/blog/vllm/semantic-router/signal-1.png)
 
 The new architecture introduces three key innovations:
 
@@ -84,7 +84,7 @@ The new architecture introduces three key innovations:
 
 ### Complete Request Flow
 
-![](/img/blog/vllm/semantic-router/signal-2.png)
+![Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale: Signal 2](/img/blog/vllm/semantic-router/signal-2.png)
 
 ## Core Concepts
 
@@ -92,7 +92,7 @@ The new architecture introduces three key innovations:
 
 Instead of relying solely on domain classification, the Signal-Decision Architecture extracts three complementary types of signals from each user query. Each signal type leverages different AI/ML techniques and serves distinct purposes in the routing decision process.
 
-![](/img/blog/vllm/semantic-router/signal-3.png)
+![Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale: Signal 3](/img/blog/vllm/semantic-router/signal-3.png)
 
 #### Keyword Signals: Interpretable Pattern Matching
 
@@ -153,7 +153,7 @@ Domain signals use MMLU-trained classification models to identify the academic o
 
 This enables organizations to extend domain classification to their specific verticals while maintaining the base model's general knowledge.
 
-![](/img/blog/vllm/semantic-router/signal-4.png)
+![Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale: Signal 4](/img/blog/vllm/semantic-router/signal-4.png)
 
 **Use Cases**:
 
@@ -213,7 +213,7 @@ Each decision consists of:
 
 #### Decision Evaluation Flow
 
-![](/img/blog/vllm/semantic-router/signal-5.png)
+![Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale: Signal 5](/img/blog/vllm/semantic-router/signal-5.png)
 
 When multiple decisions match, the system selects the one with the highest priority. If no decisions match, the system falls back to the default model.
 
@@ -233,7 +233,7 @@ Plugins execute in the configured order, with each plugin able to modify the req
 
 #### Plugin Chain Execution Flow
 
-![](/img/blog/vllm/semantic-router/signal-6.png)
+![Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale: Signal 6](/img/blog/vllm/semantic-router/signal-6.png)
 
 ## Scaling from 14 to Unlimited
 
@@ -298,7 +298,7 @@ Let's walk through a complete example that demonstrates how IntelligentPool and 
 
 First, we define the available models and their LoRA adapters:
 
-![](/img/blog/vllm/semantic-router/signal-code-0.png)
+![Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale: Signal Code 0](/img/blog/vllm/semantic-router/signal-code-0.png)
 
 This pool defines:
 
@@ -310,7 +310,7 @@ This pool defines:
 
 Next, we define the routing decisions with multi-signal extraction:
 
-![](/img/blog/vllm/semantic-router/signal-code-1.png)
+![Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale: Signal Code 1](/img/blog/vllm/semantic-router/signal-code-1.png)
 
 This configuration demonstrates:
 
@@ -341,7 +341,7 @@ This configuration demonstrates:
 
 ### Dynamic Configuration Flow
 
-![](/img/blog/vllm/semantic-router/signal-7.png)
+![Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale: Signal 7](/img/blog/vllm/semantic-router/signal-7.png)
 
 The Kubernetes-native design enables:
 
@@ -431,7 +431,7 @@ The Signal-Decision Architecture provides a foundation for future enhancements a
 
 **Intent-Aware Internal/External Model Selection**: Smart routing between internal private models and external APIs (OpenAI, Anthropic, etc.) based on intent analysis. Sensitive data and proprietary information automatically route to internal models for privacy and compliance, while general queries leverage external APIs for broader knowledge. Cost, latency, and compliance requirements are balanced dynamically based on query characteristics.
 
-![](/img/blog/vllm/semantic-router/signal-8.png)
+![Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale: Signal 8](/img/blog/vllm/semantic-router/signal-8.png)
 
 ## Conclusion
 

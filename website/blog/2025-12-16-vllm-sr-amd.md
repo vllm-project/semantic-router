@@ -17,7 +17,7 @@ AMD has been a long-term technology partner for the vLLM community, from acceler
 
 As AI moves from single models to multi-model architectures, the challenge is no longer "how big is your model" but **how intelligently and safely you orchestrate many models together**. VSR is designed to be the **intelligent control plane** for this new era—making routing decisions based on semantic understanding, enforcing safety policies, and maintaining trust as systems scale toward AGI-level capabilities.
 
-![](/img/blog/vllm/semantic-router/amd-0.png)
+![AMD × vLLM Semantic Router: Building the System Intelligence Together: Amd 0](/img/blog/vllm/semantic-router/amd-0.png)
 
 This collaboration focuses on three strategic pillars:
 
@@ -70,7 +70,7 @@ From single-turn to multi-turn conversations, VSR provides:
 
 Our near-term objective is execution-oriented: **deliver a production-grade VSR solution that runs efficiently on AMD GPUs**. We're building two complementary deployment paths:
 
-![](/img/blog/vllm/semantic-router/amd-1.png)
+![AMD × vLLM Semantic Router: Building the System Intelligence Together: Amd 1](/img/blog/vllm/semantic-router/amd-1.png)
 
 ### Path 1: vLLM-Based Inference on AMD GPUs
 
@@ -83,6 +83,7 @@ Using the vLLM engine on AMD GPUs, we run:
 - Tool and workflow selection
 
 **LLMs and specialized models** for:
+
 - General assistance
 - Domain-specific tasks (finance, legal, code, healthcare)
 
@@ -99,6 +100,7 @@ Not all routing needs a full inference stack. For ultra-high-frequency, latency-
 - Forwarding complex generative work to vLLM or other back-end LLMs
 
 This lightweight path is designed for:
+
 - Front-of-funnel traffic classification and triage
 - Large-scale policy evaluation and offline experiments
 - Enterprises that want to **standardize on AMD GPUs while keeping model providers flexible**
@@ -107,7 +109,7 @@ This lightweight path is designed for:
 
 When we first built vLLM Semantic Router, the goal was clear and practical: **intelligent model selection**—routing requests to the right model based on task type, cost constraints, and performance requirements.
 
-![](/img/blog/vllm/semantic-router/amd-2.png)
+![AMD × vLLM Semantic Router: Building the System Intelligence Together: Amd 2](/img/blog/vllm/semantic-router/amd-2.png)
 
 **vLLM Engine** delivers the foundation—running large models stably and efficiently. **vLLM Semantic Router** provides the scheduler—dispatching requests to the right capabilities.
 
@@ -125,7 +127,7 @@ This shift changes how we think about the collaboration. We're not just optimizi
 
 As we architect VSR on AMD's infrastructure, we're designing around three critical control points that determine whether AI systems remain trustworthy at scale:
 
-![](/img/blog/vllm/semantic-router/amd-3.png)
+![AMD × vLLM Semantic Router: Building the System Intelligence Together: Amd 3](/img/blog/vllm/semantic-router/amd-3.png)
 
 **1. World Output (Actions)**
 
@@ -170,6 +172,7 @@ The outcome will be an **open encoder model** designed to integrate with vLLM Se
 As part of this collaboration, each major release of vLLM Semantic Router will be accompanied by a **public beta environment** hosted on AMD-sponsored infrastructure, available free of charge to the community.
 
 These public betas will allow users to:
+
 - Validate new routing, caching, and safety features
 - Gain hands-on experience with Semantic Router running on AMD GPUs
 - Provide early feedback that helps improve performance, usability, and system design
@@ -181,6 +184,7 @@ By lowering the barrier to experimentation and validation, this initiative aims 
 In the long run, we aim to use AMD GPUs to underpin how **VSR as an open-source project is built, validated, and shipped**, ensuring VSR works consistently well with AMD GPUs as the project grows.
 
 We are designing a GPU-backed **CI/CD and end-to-end testbed** where:
+
 - Router SLMs, LLMs, domain models, retrieval, and tools run together on AMD GPU clusters
 - Multi-domain, multi-risk-level datasets are replayed as traffic
 - Each VSR change runs through an automated evaluation pipeline, including:
@@ -200,11 +204,13 @@ AMD GPUs, in this model, are not only for serving models; they are the **verific
 In parallel, we are planning an **online Mixture-of-Models playground** powered by AMD GPUs, open to the community and partners.
 
 This playground will allow users to:
+
 - Experiment with different routing strategies and model topologies under real workloads
 - Observe, in a visual way, how VSR decides which model to call, when to retrieve, and when to apply additional checks or fallbacks
 - Compare **quality, latency, and cost trade-offs** across configurations
 
 For model vendors, tool builders, and platform providers, this becomes a **neutral, AMD GPU-backed test environment** to:
+
 - Integrate their components into a MoM stack
 - Benchmark under realistic routing and governance constraints
 - Showcase capabilities within a transparent, observable system
@@ -215,15 +221,15 @@ Through the AMD × vLLM Semantic Router collaboration, we are aiming beyond “d
 
 The joint ambitions are:
 
-* To define a **reference architecture for intelligent, GPU-accelerated routing** on AMD platforms, including:
-  * vLLM-based inference paths,
-  * ONNX-based lightweight router paths,
-  * multi-model coordination and safety enforcement.
-* To treat routing as **trusted infrastructure**, supported by:
-  * GPU-powered CI/CD and end-to-end evaluation,
-  * hallucination-aware and risk-aware policies,
-  * online learning and adaptive strategies.
-* To provide the ecosystem with a **long-lived, AMD GPU–backed MoM playground** where ideas, models, and routing policies can be tested and evolved in the open.
+- To define a **reference architecture for intelligent, GPU-accelerated routing** on AMD platforms, including:
+  - vLLM-based inference paths,
+  - ONNX-based lightweight router paths,
+  - multi-model coordination and safety enforcement.
+- To treat routing as **trusted infrastructure**, supported by:
+  - GPU-powered CI/CD and end-to-end evaluation,
+  - hallucination-aware and risk-aware policies,
+  - online learning and adaptive strategies.
+- To provide the ecosystem with a **long-lived, AMD GPU–backed MoM playground** where ideas, models, and routing policies can be tested and evolved in the open.
 
 In short, this is about **co-building trustworthy, evolvable multi-model AI infrastructure**—with AMD GPUs as a core execution and validation layer, and vLLM Semantic Router as the intelligent control plane that makes the entire system understandable, governable, and ready for real workloads.
 
@@ -243,6 +249,7 @@ We're excited to keep refining and expanding our optimizations to unlock even gr
 **Looking for Collaborations!** Calling all passionate community developers and researchers: join us in training the next-generation router model on AMD GPUs and building the future of trustworthy AI infrastructure.
 
 Interested? Reach out to us:
+
 - Haichen Zhang: haichzha@amd.com
 - Xunzhuo Liu: xunzhuo@vllm-semantic-router.ai
 

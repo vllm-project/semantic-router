@@ -9,7 +9,7 @@ tags: ["ecosystem"]
 image: "/img/blog/vllm/semantic-router/architecture.png"
 source_url: "https://github.com/vllm-project/vllm-project.github.io/blob/main/_posts/2025-09-11-semantic-router.md"
 ---
-![](/img/blog/vllm/semantic-router/request.png)
+![vLLM Semantic Router: Next Phase in LLM inference: Request](/img/blog/vllm/semantic-router/request.png)
 
 ## Industry Status: Inference ≠ More Is Better
 
@@ -42,7 +42,7 @@ vLLM enables scalable LLM serving—but lacks semantic decision-making around re
 
 The Semantic Router fills this gap by classifying queries semantically and routing them appropriately, giving accurate results where needed and efficiency where reasoning is unnecessary.
 
-![](/img/blog/vllm/semantic-router/architecture.png)
+![vLLM Semantic Router: Next Phase in LLM inference: Architecture](/img/blog/vllm/semantic-router/architecture.png)
 
 ### Architecture Design
 

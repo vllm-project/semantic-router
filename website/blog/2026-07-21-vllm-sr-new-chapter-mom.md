@@ -92,13 +92,13 @@ Routing remains fundamental. It is how a Mixture-of-Models allocates work, appli
 
 Today's AI stack is fragmented along four axes:
 
-+ **Models are fragmented.** Closed frontier models, open general models, domain experts, compact local models, verifiers, and multimodal models will coexist. None wins simultaneously on quality, cost, latency, trust, privacy, and domain fit.
+- **Models are fragmented.** Closed frontier models, open general models, domain experts, compact local models, verifiers, and multimodal models will coexist. None wins simultaneously on quality, cost, latency, trust, privacy, and domain fit.
 
-+ **Compute is fragmented.** GPUs, CPUs, specialized accelerators, edge devices, cloud capacity, and private clusters differ in memory, kernels, availability, price, and energy use. Model choice and placement are becoming the same decision.
+- **Compute is fragmented.** GPUs, CPUs, specialized accelerators, edge devices, cloud capacity, and private clusters differ in memory, kernels, availability, price, and energy use. Model choice and placement are becoming the same decision.
 
-+ **Location is fragmented.** Inference spans cloud, data center, and edge. Privacy or residency may rule out a stronger remote model, while a local workload may still need an on-demand cloud expert.
+- **Location is fragmented.** Inference spans cloud, data center, and edge. Privacy or residency may rule out a stronger remote model, while a local workload may still need an on-demand cloud expert.
 
-+ **Preference is fragmented.** There is no universal “best.” Products and users make different tradeoffs among accuracy, latency, price, privacy, safety, style, and multimodality. Those choices should shape execution directly.
+- **Preference is fragmented.** There is no universal “best.” Products and users make different tradeoffs among accuracy, latency, price, privacy, safety, style, and multimodality. Those choices should shape execution directly.
 
 Today, each application has to reconcile these fragments on its own.
 

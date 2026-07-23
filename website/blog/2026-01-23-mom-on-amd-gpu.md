@@ -39,7 +39,7 @@ With **vLLM Semantic Router (vLLM-SR) v0.1**, we've deployed a live MoM system o
 
 Before diving in, let's clarify a common confusion: **MoM is not MoE**.
 
-![](/img/blog/vllm/semantic-router/mom-1.png)
+![Building Mixture-of-Models on AMD GPUs with vLLM-SR: Mom 1](/img/blog/vllm/semantic-router/mom-1.png)
 
 ### Mixture-of-Experts (MoE): Intra-Model Routing
 
@@ -75,7 +75,7 @@ MoM is a **system architecture pattern** that orchestrates multiple independent 
 
 **The insight**: MoE and MoM are complementary. You can use MoE models (like Qwen3-30B-A3B) as components within a MoM system—getting the best of both worlds.
 
-![](/img/blog/vllm/semantic-router/mom-0.png)
+![Building Mixture-of-Models on AMD GPUs with vLLM-SR: Mom 0](/img/blog/vllm/semantic-router/mom-0.png)
 
 ---
 
@@ -94,7 +94,7 @@ The "one model to rule them all" approach has fundamental limitations:
 
 MoM treats AI deployment like building a **team of specialists** with a smart dispatcher:
 
-![](/img/blog/vllm/semantic-router/mom-2.png)
+![Building Mixture-of-Models on AMD GPUs with vLLM-SR: Mom 2](/img/blog/vllm/semantic-router/mom-2.png)
 
 **Core Principles:**
 
@@ -144,7 +144,7 @@ The AMD demo system implements a complete MoM pipeline with **6 specialized mode
 | 120 | `fast_qa_english` | `embedding: fast_qa` + `language: en` | gpt-oss-20b | off |
 | 100 | `casual_chat` | Any (default) | gpt-oss-20b | off |
 
-![](/img/blog/vllm/semantic-router/mom-3.png)
+![Building Mixture-of-Models on AMD GPUs with vLLM-SR: Mom 3](/img/blog/vllm/semantic-router/mom-3.png)
 
 ### Playground Capabilities
 
@@ -153,6 +153,7 @@ The interactive playground provides real-time visibility into every routing deci
 **Signal Transparency**
 
 After each response, the UI displays:
+
 - **Selected Model**: Which model actually processed your request
 - **Selected Decision**: Which routing rule matched
 - **Matched Signals**: Keywords, Embeddings, Domain, Language, Fact-check, User Feedback, Preference, Latency
@@ -160,6 +161,7 @@ After each response, the UI displays:
 - **Cache Status**: Whether semantic cache was hit
 
 **Safety Indicators**
+
 - Jailbreak blocked (if triggered)
 - PII violation detected
 - Hallucination warnings
@@ -169,9 +171,10 @@ After each response, the UI displays:
 
 One highlight worth emphasizing: we've implemented a [topology visualization](https://play.vllm-semantic-router.com/topology) capability. Beyond displaying static signal-decision relations, it reveals **real-time thinking chains** triggered by different queries—like watching a giant neural network built from semantics come alive. Each question illuminates different pathways through the model constellation, making the MoM routing logic intuitive and debuggable.
 
-![](/img/blog/vllm/semantic-router/mom-7.png)
+![Building Mixture-of-Models on AMD GPUs with vLLM-SR: Mom 7](/img/blog/vllm/semantic-router/mom-7.png)
 
 **Settings Panel**
+
 - Custom model override
 - System prompt customization
 - Multi-turn conversation support
@@ -183,6 +186,7 @@ One highlight worth emphasizing: we've implemented a [topology visualization](ht
 ```text
 A simple question: Who are you?
 ```
+
 → Routes to `gpt-oss-20b` via `fast_qa` + `en` (no reasoning, fast response)
 
 **Deep Thinking in Chinese:**
@@ -322,7 +326,7 @@ export HF_TOKEN=[your_token]
 vllm-sr serve --platform=amd
 ```
 
-![](/img/blog/vllm/semantic-router/mom-5.png)
+![Building Mixture-of-Models on AMD GPUs with vLLM-SR: Mom 5](/img/blog/vllm/semantic-router/mom-5.png)
 
 ### Step 5: Test It
 
@@ -337,7 +341,7 @@ curl -X POST http://localhost:8888/v1/chat/completions \
   }'
 ```
 
-![](/img/blog/vllm/semantic-router/mom-6.png)
+![Building Mixture-of-Models on AMD GPUs with vLLM-SR: Mom 6](/img/blog/vllm/semantic-router/mom-6.png)
 
 ---
 
@@ -381,6 +385,7 @@ We would like to thank the following teams and individuals for their contributio
 **Looking for Collaborations!** Calling all passionate community developers and researchers: join us in building the system intelligence on AMD GPUs.
 
 Interested? Reach out to us:
+
 - Haichen Zhang: haichzha@amd.com
 - Xunzhuo Liu: xunzhuo@vllm-semantic-router.ai
 

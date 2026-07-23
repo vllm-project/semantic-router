@@ -23,7 +23,7 @@ These constraints motivated a broader refactoring that would enable the system t
 
 ## Architectural Restructuring
 
-![](/img/blog/vllm/semantic-router/modular.png)
+![From Monolithic to Modular: Scaling Semantic Routing with Extensible LoRA: Modular](/img/blog/vllm/semantic-router/modular.png)
 
 The refactoring introduces a layered architecture in the candle-binding crate. This structure separates concerns: core functionality remains independent of specific models, while new model architectures can be added without modifying existing code. The `DualPathUnifiedClassifier` implements routing logic that selects between traditional fine-tuned models and LoRA-adapted models based on the task requirements.
 
@@ -47,13 +47,13 @@ The architecture uses Multi-Query Attention (MQA) with 3 query heads and 1 key-v
 
 LoRA addresses a fundamental inefficiency in the previous system. When a classification system needs to determine intent, detect PII, and check for security issues, the naive approach runs three separate fine-tuned models:
 
-![](/img/blog/vllm/semantic-router/full-params.png)
+![From Monolithic to Modular: Scaling Semantic Routing with Extensible LoRA: Full Params](/img/blog/vllm/semantic-router/full-params.png)
 
 Each model processes the input through its entire network, including the expensive base transformer layers. This results in O(n) complexity where n is the number of classification tasks.
 
 LoRA changes this by sharing the base model computation:
 
-![](/img/blog/vllm/semantic-router/lora.png)
+![From Monolithic to Modular: Scaling Semantic Routing with Extensible LoRA: Lora](/img/blog/vllm/semantic-router/lora.png)
 
 The base model runs once, producing intermediate representations. Each LoRA adapter then applies task-specific low-rank weight updates to specialize the output. Since LoRA adapters typically modify less than 1% of the model's parameters, this final step is much faster than running complete models.
 

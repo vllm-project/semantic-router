@@ -17,7 +17,7 @@ Across **21,600** deterministic turns, SAAR cuts model switches by **79.29%**, e
 
 <p align="center">
 <picture>
-<img src="/img/blog/vllm/2026-06-02-session-aware-agentic-routing/hero-v2.png" width="94%" />
+<img src="/img/blog/vllm/2026-06-02-session-aware-agentic-routing/hero-v2.png" alt="Session-aware agentic routing overview" width="94%" />
 </picture>
 <br />
 <em>Figure 1: Long-horizon agents need routing decisions that understand the session trajectory, not only the latest prompt.</em>
@@ -76,7 +76,7 @@ SAAR adds a session-control layer around that result.
 
 <p align="center">
 <picture>
-<img src="/img/blog/vllm/2026-06-02-session-aware-agentic-routing/policy-flow.png" width="92%" />
+<img src="/img/blog/vllm/2026-06-02-session-aware-agentic-routing/policy-flow.png" alt="Session-aware agentic routing policy flow" width="92%" />
 </picture>
 <br />
 <em>Figure 2: SAAR combines router memory, hard locks, reset boundaries, switch economics, and replayable traces before selecting a physical model.</em>
@@ -100,7 +100,7 @@ The safest model switch is not always the one with the best score on the latest 
 
 <p align="center">
 <picture>
-<img src="/img/blog/vllm/2026-06-02-session-aware-agentic-routing/switch-boundaries.png" width="92%" />
+<img src="/img/blog/vllm/2026-06-02-session-aware-agentic-routing/switch-boundaries.png" alt="Safe and unsafe model-switch boundaries" width="92%" />
 </picture>
 <br />
 <em>Figure 3: Tool loops and provider-managed continuation state are hard continuity constraints; idle and decision-drift boundaries permit safe reselection.</em>
@@ -149,7 +149,7 @@ For long agent sessions, model switching is not just a quality decision. It is a
 
 <p align="center">
 <picture>
-<img src="/img/blog/vllm/2026-06-02-session-aware-agentic-routing/cache-checkout-discipline.png" width="92%" />
+<img src="/img/blog/vllm/2026-06-02-session-aware-agentic-routing/cache-checkout-discipline.png" alt="Prefix-cache checkout discipline" width="92%" />
 </picture>
 <br />
 <em>Figure 4: The same switch has a different cost depending on model tier, session length, and physical prefix reuse.</em>
@@ -208,7 +208,7 @@ Model selection behind `auto` is only useful if operators can explain it.
 
 <p align="center">
 <picture>
-<img src="/img/blog/vllm/2026-06-02-session-aware-agentic-routing/observability-trace.png" width="92%" />
+<img src="/img/blog/vllm/2026-06-02-session-aware-agentic-routing/observability-trace.png" alt="Session-routing observability trace" width="92%" />
 </picture>
 <br />
 <em>Figure 5: SAAR turns hidden physical routing choices behind a logical model into inspectable traces and response headers.</em>
@@ -247,7 +247,7 @@ The deterministic policy matrix covers balanced, tool-heavy, frontier-heavy, idl
 
 <p align="center">
 <picture>
-<img src="/img/blog/vllm/2026-06-02-session-aware-agentic-routing/synthetic-headline.png" width="92%" />
+<img src="/img/blog/vllm/2026-06-02-session-aware-agentic-routing/synthetic-headline.png" alt="Deterministic session-routing benchmark results" width="92%" />
 </picture>
 <br />
 <em>Figure 6: Headline policy result across 21,600 deterministic turns.</em>
@@ -272,7 +272,7 @@ The second result isolates the most important invariant: when switching is unsaf
 
 <p align="center">
 <picture>
-<img src="/img/blog/vllm/2026-06-02-session-aware-agentic-routing/safety-effect.png" width="92%" />
+<img src="/img/blog/vllm/2026-06-02-session-aware-agentic-routing/safety-effect.png" alt="Hard-lock safety effect" width="92%" />
 </picture>
 <br />
 <em>Figure 7: Hard locks remove unsafe switching during tool loops and non-portable provider state.</em>
@@ -292,7 +292,7 @@ Sticky routing is attractive because it is easy to reason about. It also solves 
 
 <p align="center">
 <picture>
-<img src="/img/blog/vllm/2026-06-02-session-aware-agentic-routing/ablation-effect.png" width="92%" />
+<img src="/img/blog/vllm/2026-06-02-session-aware-agentic-routing/ablation-effect.png" alt="Session-aware routing ablation against sticky routing" width="92%" />
 </picture>
 <br />
 <em>Figure 8: SAAR is not just sticky sessions; it balances continuity with movement.</em>
@@ -317,7 +317,7 @@ Policy simulation is useful, but a router has to work through real request flow.
 
 <p align="center">
 <picture>
-<img src="/img/blog/vllm/2026-06-02-session-aware-agentic-routing/live-rocm-effect.png" width="92%" />
+<img src="/img/blog/vllm/2026-06-02-session-aware-agentic-routing/live-rocm-effect.png" alt="Live ROCm session-routing results" width="92%" />
 </picture>
 <br />
 <em>Figure 9: Live ROCm runs preserve continuity under long sessions and injected backend failures.</em>
