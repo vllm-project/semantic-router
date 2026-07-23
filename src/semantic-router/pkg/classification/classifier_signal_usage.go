@@ -6,13 +6,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// getUsedSignals analyzes all decisions and returns which signals (type:name) are actually used.
-// This allows us to skip evaluation of unused signals for performance optimization.
+// getUsedSignalsForDecisions analyzes only the supplied decision candidates.
 // Returns a map with keys in format "type:name" (e.g., "keyword:math_keywords").
-func (c *Classifier) getUsedSignals() map[string]bool {
+func (c *Classifier) getUsedSignalsForDecisions(decisions []config.Decision) map[string]bool {
 	usedSignals := make(map[string]bool)
 
-	for _, decision := range c.Config.Decisions {
+	for _, decision := range decisions {
 		c.analyzeRuleCombination(decision.Rules, usedSignals)
 	}
 	c.expandProjectionDependencies(usedSignals)
