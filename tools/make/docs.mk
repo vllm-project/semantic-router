@@ -4,6 +4,8 @@
 
 ##@ Docs
 
+DOCS_TRANSLATION_LOCALE ?= zh-Hans
+
 docs-install: ## Install documentation website dependencies
 	@$(LOG_TARGET)
 	cd website && npm install
@@ -39,6 +41,20 @@ docs-lint-fix: ## Fix lint issues in documentation website source files
 docs-contributors-rank: ## Generate contributor leaderboard data
 	@$(LOG_TARGET)
 	cd website && npm run contributors:rank
+
+docs-check-translations: ## Audit documentation translation coverage, metadata, and source drift
+	@$(LOG_TARGET)
+	website/scripts/check-translation-sync.sh --locale $(DOCS_TRANSLATION_LOCALE)
+
+docs-test-translation-sync: ## Test documentation translation status synchronization
+	@$(LOG_TARGET)
+	website/scripts/check-translation-sync.test.sh
+
+docs-fix-translation-status: ## Update unambiguous documentation translation outdated flags
+	@$(LOG_TARGET)
+	@website/scripts/check-translation-sync.sh --locale $(DOCS_TRANSLATION_LOCALE) --fix-status; \
+	exit_code=$$?; \
+	if [ $$exit_code -ne 0 ] && [ $$exit_code -ne 1 ]; then exit $$exit_code; fi
 
 ##@ CRD Documentation
 

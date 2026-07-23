@@ -24,7 +24,9 @@ func (s *ClassificationAPIServer) handleEmbeddingModelsInfo(w http.ResponseWrite
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
-func (s *ClassificationAPIServer) handleClassifierInfo(w http.ResponseWriter, _ *http.Request) {
+// handleClassifierInfo returns live classifier/runtime config.
+// Access requires config.read; plaintext secrets require secret_view (otherwise redacted).
+func (s *ClassificationAPIServer) handleClassifierInfo(w http.ResponseWriter, r *http.Request) {
 	cfg := s.currentConfig()
 	if cfg == nil {
 		s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
@@ -34,10 +36,9 @@ func (s *ClassificationAPIServer) handleClassifierInfo(w http.ResponseWriter, _ 
 		return
 	}
 
-	// Return the config directly
 	s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
 		"status": "config_loaded",
-		"config": jsonCompatibleValue(cfg),
+		"config": s.maybeRedactConfigView(r, jsonCompatibleValue(cfg)),
 	})
 }
 

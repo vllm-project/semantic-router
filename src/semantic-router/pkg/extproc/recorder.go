@@ -424,6 +424,29 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 	}
 }
 
+// hallucinationSpanDetailsForReplay converts NLI span analysis into the
+// replay store's shape. Returns nil when NLI detection did not run for this
+// request, so basic (non-NLI) detection continues to persist plain spans only.
+func hallucinationSpanDetailsForReplay(info *EnhancedHallucinationInfo) []routerreplay.HallucinationSpan {
+	if info == nil {
+		return nil
+	}
+	details := make([]routerreplay.HallucinationSpan, len(info.Spans))
+	for i, span := range info.Spans {
+		details[i] = routerreplay.HallucinationSpan{
+			Text:                    span.Text,
+			Start:                   span.Start,
+			End:                     span.End,
+			HallucinationConfidence: span.HallucinationConfidence,
+			NLILabel:                span.NLILabel,
+			NLIConfidence:           span.NLIConfidence,
+			Severity:                span.Severity,
+			Explanation:             span.Explanation,
+		}
+	}
+	return details
+}
+
 // updateRouterReplayHallucinationStatus updates the hallucination detection results in the replay record.
 func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext) {
 	if ctx == nil || ctx.RouterReplayID == "" {
@@ -452,6 +475,7 @@ func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext
 		ctx.HallucinationDetected,
 		ctx.HallucinationConfidence,
 		ctx.HallucinationSpans,
+		hallucinationSpanDetailsForReplay(ctx.EnhancedHallucinationInfo),
 	)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "router_replay_hallucination_update_failed", map[string]interface{}{
