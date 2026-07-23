@@ -20,6 +20,8 @@ on:
         value: ${{ jobs.filter.outputs.docker }}
       make:
         value: ${{ jobs.filter.outputs.make }}
+      bindings:
+        value: ${{ jobs.filter.outputs.bindings }}
       agent_text:
         value: ${{ jobs.filter.outputs.agent_text }}
       agent_exec:
@@ -81,6 +83,7 @@ jobs:
       ci: ${{ steps.changes.outputs.ci }}
       docker: ${{ steps.changes.outputs.docker }}
       make: ${{ steps.changes.outputs.make }}
+      bindings: ${{ steps.changes.outputs.bindings }}
       agent_text: ${{ steps.changes.outputs.agent_text }}
       agent_exec: ${{ steps.changes.outputs.agent_exec }}
       # Per-profile e2e outputs
