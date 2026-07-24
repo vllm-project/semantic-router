@@ -32,12 +32,30 @@ providers:
         openai: qwen3-8b
         analytics: qwen3-routing
       backend_refs:
-        - name: local-primary
-          endpoint: 127.0.0.1:8000
+        - name: local-vllm
+          runtime: vllm
           protocol: http
-          weight: 80
           type: chat
           api_key_env: VLLM_SR_PRIMARY_API_KEY
+          endpoints:
+            - name: primary-a
+              endpoint: 127.0.0.1:8000
+              metrics_endpoint: 127.0.0.1:9000
+              weight: 80
+            - name: primary-b
+              endpoint: 127.0.0.1:8001
+              metrics_endpoint: 127.0.0.1:9001
+              weight: 20
+        - name: k8s-vllm
+          runtime: vllm
+          protocol: http
+          discovery:
+            type: kubernetes
+            kubernetes:
+              service: qwen3-vllm
+              namespace: inference
+              endpoint_port: http
+              metrics_port: metrics
         - name: remote-secondary
           base_url: https://api.example.com/v1
           provider: openai
@@ -49,6 +67,10 @@ providers:
           chat_path: /chat/completions
           api_key: static-demo-key
           weight: 20
+        - name: compat-singleton
+          endpoint: 127.0.0.1:8010
+          protocol: http
+          weight: 1
     - name: qwen3-32b
       reasoning_family: gpt
       provider_model_id: qwen3-32b-instruct
@@ -62,9 +84,12 @@ providers:
         internal: qwen3-32b
       backend_refs:
         - name: large-primary
-          endpoint: 127.0.0.1:8001
+          runtime: vllm
           protocol: http
-          weight: 100
+          endpoints:
+            - name: primary-a
+              endpoint: 127.0.0.1:8001
+              weight: 100
     - name: llava-omni
       provider_model_id: llava-omni-preview
       api_format: openai
@@ -77,9 +102,12 @@ providers:
         openai: llava-omni-preview
       backend_refs:
         - name: omni-primary
-          endpoint: 127.0.0.1:8002
+          runtime: vllm
           protocol: http
-          weight: 100
+          endpoints:
+            - name: primary-a
+              endpoint: 127.0.0.1:8002
+              weight: 100
     - name: sdxl-image
       provider_model_id: sdxl-image
       api_format: openai
@@ -91,9 +119,12 @@ providers:
         openai: gpt-image-1
       backend_refs:
         - name: image-primary
-          endpoint: 127.0.0.1:8003
+          runtime: vllm
           protocol: http
-          weight: 100
+          endpoints:
+            - name: primary-a
+              endpoint: 127.0.0.1:8003
+              weight: 100
 
 routing:
   modelCards:

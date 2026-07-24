@@ -26,22 +26,49 @@ type CanonicalProviderModel struct {
 	ExternalModelIDs map[string]string     `yaml:"external_model_ids,omitempty"`
 }
 
-// CanonicalBackendRef defines one physical backend target for a provider model.
+// CanonicalBackendRef defines one runtime backend pool for a provider model.
 type CanonicalBackendRef struct {
-	Name         string            `yaml:"name,omitempty"`
-	Endpoint     string            `yaml:"endpoint,omitempty"`
-	Protocol     string            `yaml:"protocol,omitempty"`
-	Weight       int               `yaml:"weight,omitempty"`
-	Type         string            `yaml:"type,omitempty"`
-	BaseURL      string            `yaml:"base_url,omitempty"`
-	Provider     string            `yaml:"provider,omitempty"`
-	AuthHeader   string            `yaml:"auth_header,omitempty"`
-	AuthPrefix   string            `yaml:"auth_prefix,omitempty"`
-	ExtraHeaders map[string]string `yaml:"extra_headers,omitempty"`
-	APIVersion   string            `yaml:"api_version,omitempty"`
-	ChatPath     string            `yaml:"chat_path,omitempty"`
-	APIKey       string            `yaml:"api_key,omitempty"`
-	APIKeyEnv    string            `yaml:"api_key_env,omitempty"`
+	Name         string                     `yaml:"name,omitempty"`
+	Runtime      string                     `yaml:"runtime,omitempty"`
+	Endpoint     string                     `yaml:"endpoint,omitempty"`
+	Endpoints    []CanonicalBackendEndpoint `yaml:"endpoints,omitempty"`
+	Discovery    *CanonicalBackendDiscovery `yaml:"discovery,omitempty"`
+	Protocol     string                     `yaml:"protocol,omitempty"`
+	Weight       int                        `yaml:"weight,omitempty"`
+	Type         string                     `yaml:"type,omitempty"`
+	BaseURL      string                     `yaml:"base_url,omitempty"`
+	Provider     string                     `yaml:"provider,omitempty"`
+	AuthHeader   string                     `yaml:"auth_header,omitempty"`
+	AuthPrefix   string                     `yaml:"auth_prefix,omitempty"`
+	ExtraHeaders map[string]string          `yaml:"extra_headers,omitempty"`
+	APIVersion   string                     `yaml:"api_version,omitempty"`
+	ChatPath     string                     `yaml:"chat_path,omitempty"`
+	APIKey       string                     `yaml:"api_key,omitempty"`
+	APIKeyEnv    string                     `yaml:"api_key_env,omitempty"`
+}
+
+// CanonicalBackendEndpoint defines one static member of a runtime backend pool.
+type CanonicalBackendEndpoint struct {
+	Name            string            `yaml:"name,omitempty"`
+	Endpoint        string            `yaml:"endpoint,omitempty"`
+	MetricsEndpoint string            `yaml:"metrics_endpoint,omitempty"`
+	Protocol        string            `yaml:"protocol,omitempty"`
+	Weight          int               `yaml:"weight,omitempty"`
+	Labels          map[string]string `yaml:"labels,omitempty"`
+}
+
+// CanonicalBackendDiscovery defines a typed dynamic endpoint source.
+type CanonicalBackendDiscovery struct {
+	Type       string                        `yaml:"type,omitempty"`
+	Kubernetes *CanonicalKubernetesDiscovery `yaml:"kubernetes,omitempty"`
+}
+
+// CanonicalKubernetesDiscovery describes Kubernetes Service-backed endpoint discovery.
+type CanonicalKubernetesDiscovery struct {
+	Service      string `yaml:"service,omitempty"`
+	Namespace    string `yaml:"namespace,omitempty"`
+	EndpointPort string `yaml:"endpoint_port,omitempty"`
+	MetricsPort  string `yaml:"metrics_port,omitempty"`
 }
 
 func canonicalProviderDefaults(providers CanonicalProviders) CanonicalProviderDefaults {

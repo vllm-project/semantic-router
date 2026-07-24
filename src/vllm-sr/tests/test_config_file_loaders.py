@@ -104,6 +104,81 @@ def test_parse_user_config_preserves_cache_pricing(tmp_path: Path) -> None:
     assert pricing.model_dump()["cache_write_per_1m"] == 2.5
 
 
+def test_parse_user_config_preserves_backend_endpoint_sources(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["providers"]["models"][0]["backend_refs"] = [
+        {
+            "name": "local-vllm",
+            "runtime": "vllm",
+            "protocol": "http",
+            "endpoints": [
+                {
+                    "name": "primary-a",
+                    "endpoint": "127.0.0.1:8000",
+                    "metrics_endpoint": "127.0.0.1:9000",
+                    "weight": 80,
+                }
+            ],
+        },
+        {
+            "name": "k8s-vllm",
+            "runtime": "vllm",
+            "discovery": {
+                "type": "kubernetes",
+                "kubernetes": {
+                    "service": "qwen3-vllm",
+                    "namespace": "inference",
+                    "endpoint_port": "http",
+                    "metrics_port": "metrics",
+                },
+            },
+        },
+    ]
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    parsed = parse_user_config(str(config_path))
+
+    static_backend = parsed.providers.models[0].backend_refs[0]
+    assert static_backend.runtime == "vllm"
+    assert static_backend.endpoints[0].metrics_endpoint == "127.0.0.1:9000"
+    discovery_backend = parsed.providers.models[0].backend_refs[1]
+    assert discovery_backend.discovery is not None
+    assert discovery_backend.discovery.kubernetes is not None
+    assert discovery_backend.discovery.kubernetes.endpoint_port == "http"
+    dumped = discovery_backend.model_dump(exclude_none=True)
+    assert dumped["runtime"] == "vllm"
+    assert dumped["discovery"]["kubernetes"]["service"] == "qwen3-vllm"
+
+
+def test_parse_user_config_rejects_conflicting_backend_endpoint_sources(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["providers"]["models"][0]["backend_refs"] = [
+        {
+            "name": "bad-vllm",
+            "runtime": "vllm",
+            "endpoints": [{"endpoint": "127.0.0.1:8000"}],
+            "discovery": {
+                "type": "kubernetes",
+                "kubernetes": {
+                    "service": "qwen3-vllm",
+                    "namespace": "inference",
+                    "endpoint_port": "http",
+                },
+            },
+        }
+    ]
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ConfigParseError, match="either endpoints or discovery"):
+        parse_user_config(str(config_path))
+
+
 def test_embedding_models_config_accepts_remote_endpoint() -> None:
     config = EmbeddingModelsConfig(
         embedding_config={

@@ -208,13 +208,31 @@ def _migrate_legacy_endpoints_to_backend_refs(
         endpoint_value = endpoint.get("endpoint")
         if not endpoint_value:
             continue
+        endpoint_name = endpoint.get("name") or "primary"
+        runtime = endpoint.get("runtime") or endpoint.get("engine_kind")
         backend_ref = {
-            "name": endpoint.get("name") or "primary",
-            "endpoint": endpoint.get("endpoint"),
+            "name": endpoint.get("backend_ref") or endpoint_name,
             "protocol": endpoint.get("protocol"),
-            "weight": endpoint.get("weight"),
             "type": endpoint.get("type"),
         }
+        if runtime:
+            backend_ref["runtime"] = runtime
+            backend_ref["endpoints"] = [
+                {
+                    key: value
+                    for key, value in {
+                        "name": endpoint_name,
+                        "endpoint": endpoint.get("endpoint"),
+                        "metrics_endpoint": endpoint.get("metrics_endpoint"),
+                        "protocol": endpoint.get("protocol"),
+                        "weight": endpoint.get("weight"),
+                    }.items()
+                    if value not in (None, "", [])
+                }
+            ]
+        else:
+            backend_ref["endpoint"] = endpoint.get("endpoint")
+            backend_ref["weight"] = endpoint.get("weight")
         if model.get("access_key"):
             backend_ref["api_key"] = model["access_key"]
         backend_refs.append(
@@ -395,9 +413,36 @@ def _build_legacy_backend_catalog(source: dict[str, Any]) -> dict[str, dict[str,
             endpoint_value = address.strip()
             if isinstance(port, int) and port > 0:
                 endpoint_value = f"{endpoint_value}:{port}"
-            _set_if_missing(backend_ref, "endpoint", endpoint_value)
+            endpoint_member = {
+                "name": endpoint_name,
+                "endpoint": endpoint_value,
+            }
+            _set_if_missing(
+                endpoint_member,
+                "metrics_endpoint",
+                raw_endpoint.get("metrics_endpoint"),
+            )
+            _set_if_missing(endpoint_member, "protocol", raw_endpoint.get("protocol"))
+            _set_if_missing(endpoint_member, "weight", raw_endpoint.get("weight"))
+            backend_ref["endpoints"] = [
+                {
+                    key: value
+                    for key, value in endpoint_member.items()
+                    if value not in (None, "", [])
+                }
+            ]
 
-        for key in ("protocol", "weight", "type", "api_key", "api_key_env"):
+        runtime = raw_endpoint.get("runtime") or raw_endpoint.get("engine_kind")
+        if runtime or "endpoints" in backend_ref:
+            _set_if_missing(backend_ref, "runtime", runtime or "vllm")
+
+        for key in (
+            "protocol",
+            "weight",
+            "type",
+            "api_key",
+            "api_key_env",
+        ):
             _set_if_missing(backend_ref, key, raw_endpoint.get(key))
 
         catalog[endpoint_name] = backend_ref
@@ -455,8 +500,13 @@ def _convert_model_targets_to_provider_models(
             if not isinstance(backend, dict):
                 continue
             backend_ref = {"name": backend_name}
+            runtime = backend.get("runtime") or backend.get("engine_kind")
+            if runtime:
+                backend_ref["runtime"] = runtime
             for key in (
                 "endpoint",
+                "endpoints",
+                "discovery",
                 "protocol",
                 "weight",
                 "type",

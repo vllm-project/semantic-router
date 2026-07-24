@@ -603,6 +603,93 @@ routing:
 	}
 }
 
+func TestCanonicalBackendRefEndpointSourcesRoundTrip(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+providers:
+  defaults:
+    default_model: qwen-worker
+  models:
+    - name: qwen-worker
+      backend_refs:
+        - name: local-vllm
+          runtime: vllm
+          protocol: http
+          endpoints:
+            - name: primary-a
+              endpoint: 127.0.0.1:8000
+              metrics_endpoint: 127.0.0.1:9000
+              weight: 80
+            - name: primary-b
+              endpoint: 127.0.0.1:8001
+              weight: 20
+        - name: k8s-vllm
+          runtime: vllm
+          protocol: http
+          discovery:
+            type: kubernetes
+            kubernetes:
+              service: qwen3-vllm
+              namespace: inference
+              endpoint_port: http
+              metrics_port: metrics
+routing:
+  modelCards:
+    - name: qwen-worker
+  decisions:
+    - name: default
+      priority: 1
+      rules:
+        operator: OR
+        conditions: []
+      modelRefs:
+        - model: qwen-worker
+`)
+
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+	if len(cfg.VLLMEndpoints) != 2 {
+		t.Fatalf("expected two static runtime endpoints, got %#v", cfg.VLLMEndpoints)
+	}
+	endpoint := cfg.VLLMEndpoints[0]
+	if endpoint.BackendRefName != "local-vllm" {
+		t.Fatalf("BackendRefName = %q, want local-vllm", endpoint.BackendRefName)
+	}
+	if endpoint.Runtime != "vllm" {
+		t.Fatalf("Runtime = %q, want vllm", endpoint.Runtime)
+	}
+	if endpoint.MetricsEndpoint != "127.0.0.1:9000" {
+		t.Fatalf("MetricsEndpoint = %q, want 127.0.0.1:9000", endpoint.MetricsEndpoint)
+	}
+	if got := cfg.ModelConfig["qwen-worker"].PreferredEndpoints; len(got) != 2 {
+		t.Fatalf("expected static endpoints to populate preferred endpoints, got %#v", got)
+	}
+	if got := cfg.ModelConfig["qwen-worker"].BackendRefs; len(got) != 2 || got[1].Discovery == nil {
+		t.Fatalf("expected model params to preserve static and discovery refs, got %#v", got)
+	}
+
+	exported := CanonicalConfigFromRouterConfig(cfg)
+	if len(exported.Providers.Models) != 1 || len(exported.Providers.Models[0].BackendRefs) != 2 {
+		t.Fatalf("expected one exported backend ref, got %#v", exported.Providers.Models)
+	}
+	ref := exported.Providers.Models[0].BackendRefs[0]
+	if ref.Runtime != "vllm" {
+		t.Fatalf("exported Runtime = %q, want vllm", ref.Runtime)
+	}
+	if len(ref.Endpoints) != 2 || ref.Endpoints[1].Endpoint != "127.0.0.1:8001" {
+		t.Fatalf("exported static endpoints not preserved: %#v", ref.Endpoints)
+	}
+	discoveryRef := exported.Providers.Models[0].BackendRefs[1]
+	if discoveryRef.Discovery == nil || discoveryRef.Discovery.Kubernetes == nil {
+		t.Fatalf("exported discovery not preserved: %#v", discoveryRef)
+	}
+	if discoveryRef.Discovery.Kubernetes.EndpointPort != "http" {
+		t.Fatalf("exported endpoint_port = %q, want http", discoveryRef.Discovery.Kubernetes.EndpointPort)
+	}
+}
+
 func TestGetModelPricingTreatsExplicitZeroPricingAsConfigured(t *testing.T) {
 	cfg := &RouterConfig{
 		BackendModels: BackendModels{

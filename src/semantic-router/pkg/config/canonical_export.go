@@ -349,6 +349,10 @@ func canonicalProviderBackendRefs(
 	endpointsByModel map[string][]VLLMEndpoint,
 	profiles map[string]ProviderProfile,
 ) []CanonicalBackendRef {
+	if len(params.BackendRefs) > 0 {
+		return cloneCanonicalBackendRefs(params.BackendRefs)
+	}
+
 	preferred := params.PreferredEndpoints
 	if len(preferred) == 0 {
 		modelEndpoints := endpointsByModel[modelName]
@@ -375,7 +379,8 @@ func canonicalProviderBackendRefs(
 
 func canonicalBackendRefFromRuntime(endpoint VLLMEndpoint, fallbackAPIKey string, profile ProviderProfile) CanonicalBackendRef {
 	ref := CanonicalBackendRef{
-		Name:       endpoint.Name,
+		Name:       firstNonEmpty(endpoint.BackendRefName, endpoint.Name),
+		Runtime:    endpoint.Runtime,
 		Protocol:   endpoint.Protocol,
 		Weight:     endpoint.Weight,
 		Type:       endpoint.Type,
@@ -388,9 +393,20 @@ func canonicalBackendRefFromRuntime(endpoint VLLMEndpoint, fallbackAPIKey string
 		APIKey:     endpoint.APIKey,
 	}
 	if endpoint.Address != "" {
-		ref.Endpoint = endpoint.Address
+		staticEndpoint := CanonicalBackendEndpoint{
+			Name:            endpoint.Name,
+			Endpoint:        endpoint.Address,
+			MetricsEndpoint: endpoint.MetricsEndpoint,
+			Protocol:        endpoint.Protocol,
+			Weight:          endpoint.Weight,
+		}
 		if endpoint.Port > 0 {
-			ref.Endpoint = fmt.Sprintf("%s:%d", endpoint.Address, endpoint.Port)
+			staticEndpoint.Endpoint = fmt.Sprintf("%s:%d", endpoint.Address, endpoint.Port)
+		}
+		if endpoint.BackendRefName != "" || endpoint.Runtime != "" || endpoint.MetricsEndpoint != "" {
+			ref.Endpoints = []CanonicalBackendEndpoint{staticEndpoint}
+		} else {
+			ref.Endpoint = staticEndpoint.Endpoint
 		}
 	}
 	if ref.APIKey == "" {

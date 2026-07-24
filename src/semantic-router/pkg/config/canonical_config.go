@@ -156,6 +156,9 @@ func mergeCanonicalProviderModelParams(modelConfig map[string]ModelParams, model
 		if len(providerParams.PreferredEndpoints) > 0 {
 			params.PreferredEndpoints = append([]string(nil), providerParams.PreferredEndpoints...)
 		}
+		if len(params.BackendRefs) == 0 {
+			params.BackendRefs = cloneCanonicalBackendRefs(providerParams.BackendRefs)
+		}
 		if params.AccessKey == "" {
 			params.AccessKey = providerParams.AccessKey
 		}
@@ -213,9 +216,9 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 			}
 			continue
 		}
-		for _, backendRef := range canonicalBackendRefs(model) {
-			if strings.TrimSpace(backendRef.Endpoint) == "" && strings.TrimSpace(backendRef.BaseURL) == "" {
-				return fmt.Errorf("providers.models[%s].backend_refs requires endpoint or base_url", model.Name)
+		for index, backendRef := range canonicalBackendRefs(model) {
+			if err := validateCanonicalBackendRef(model.Name, index, backendRef); err != nil {
+				return err
 			}
 		}
 	}
@@ -239,6 +242,81 @@ func validateCanonicalDecisions(decisions []Decision, modelsByName map[string]Ro
 	}
 
 	return nil
+}
+
+func validateCanonicalBackendRef(modelName string, index int, backendRef CanonicalBackendRef) error {
+	hasInlineEndpoint := strings.TrimSpace(backendRef.Endpoint) != ""
+	hasStaticEndpoints := len(backendRef.Endpoints) > 0
+	hasDiscovery := canonicalBackendDiscoverySet(backendRef.Discovery)
+	hasBaseURL := strings.TrimSpace(backendRef.BaseURL) != ""
+
+	if hasStaticEndpoints && hasDiscovery {
+		return fmt.Errorf("providers.models[%s].backend_refs[%d] must define either endpoints or discovery, not both", modelName, index)
+	}
+	if hasInlineEndpoint && (hasStaticEndpoints || hasDiscovery) {
+		return fmt.Errorf("providers.models[%s].backend_refs[%d] must not mix legacy endpoint with endpoints or discovery", modelName, index)
+	}
+	if (hasStaticEndpoints || hasDiscovery) && strings.TrimSpace(backendRef.Runtime) == "" {
+		return fmt.Errorf("providers.models[%s].backend_refs[%d].runtime is required for backend-aware endpoint sources", modelName, index)
+	}
+	if !hasInlineEndpoint && !hasStaticEndpoints && !hasDiscovery && !hasBaseURL && !canonicalBackendRefHasProviderMetadata(backendRef) {
+		return fmt.Errorf("providers.models[%s].backend_refs[%d] requires endpoint, endpoints, discovery, or base_url", modelName, index)
+	}
+
+	names := map[string]bool{}
+	for endpointIndex, endpoint := range backendRef.Endpoints {
+		if strings.TrimSpace(endpoint.Endpoint) == "" {
+			return fmt.Errorf("providers.models[%s].backend_refs[%d].endpoints[%d].endpoint is required", modelName, index, endpointIndex)
+		}
+		name := strings.TrimSpace(endpoint.Name)
+		if name == "" {
+			continue
+		}
+		if names[name] {
+			return fmt.Errorf("providers.models[%s].backend_refs[%d].endpoints[%s]: duplicate endpoint name", modelName, index, name)
+		}
+		names[name] = true
+	}
+
+	if hasDiscovery {
+		return validateCanonicalBackendDiscovery(modelName, index, backendRef.Discovery)
+	}
+	return nil
+}
+
+func validateCanonicalBackendDiscovery(modelName string, index int, discovery *CanonicalBackendDiscovery) error {
+	discoveryType := strings.TrimSpace(discovery.Type)
+	if discoveryType == "" {
+		return fmt.Errorf("providers.models[%s].backend_refs[%d].discovery.type is required", modelName, index)
+	}
+	if discoveryType != "kubernetes" {
+		return fmt.Errorf("providers.models[%s].backend_refs[%d].discovery.type %q is not supported", modelName, index, discoveryType)
+	}
+	if discovery.Kubernetes == nil {
+		return fmt.Errorf("providers.models[%s].backend_refs[%d].discovery.kubernetes is required", modelName, index)
+	}
+	kubernetes := discovery.Kubernetes
+	if strings.TrimSpace(kubernetes.Service) == "" {
+		return fmt.Errorf("providers.models[%s].backend_refs[%d].discovery.kubernetes.service is required", modelName, index)
+	}
+	if strings.TrimSpace(kubernetes.Namespace) == "" {
+		return fmt.Errorf("providers.models[%s].backend_refs[%d].discovery.kubernetes.namespace is required", modelName, index)
+	}
+	if strings.TrimSpace(kubernetes.EndpointPort) == "" {
+		return fmt.Errorf("providers.models[%s].backend_refs[%d].discovery.kubernetes.endpoint_port is required", modelName, index)
+	}
+	return nil
+}
+
+func canonicalBackendDiscoverySet(discovery *CanonicalBackendDiscovery) bool {
+	if discovery == nil {
+		return false
+	}
+	return strings.TrimSpace(discovery.Type) != "" || discovery.Kubernetes != nil
+}
+
+func canonicalBackendRefHasProviderMetadata(backendRef CanonicalBackendRef) bool {
+	return backendRef.Provider != "" || backendRef.AuthHeader != "" || backendRef.AuthPrefix != "" || backendRef.APIVersion != "" || backendRef.ChatPath != "" || len(backendRef.ExtraHeaders) > 0
 }
 
 func validateCanonicalDecisionModelRefs(decision Decision, modelsByName map[string]RoutingModel, modelCards []RoutingModel) error {
@@ -336,51 +414,33 @@ func normalizeCanonicalProviderModels(models []CanonicalProviderModel) (map[stri
 		params.Pricing = model.Pricing
 		params.APIFormat = model.APIFormat
 		params.ExternalModelIDs = normalizeExternalModelIDsFromProviderModel(model)
+		params.BackendRefs = cloneCanonicalBackendRefs(canonicalBackendRefs(model))
 
 		backendRefs := canonicalBackendRefs(model)
 		params.PreferredEndpoints = make([]string, 0, len(backendRefs))
-		for index, backendRef := range backendRefs {
-			endpointName := canonicalEndpointName(model.Name, backendRef, index)
+		for refIndex, backendRef := range backendRefs {
 			backendType := canonicalBackendType(backendRef)
-			endpoint := VLLMEndpoint{
-				Name:     endpointName,
-				Weight:   backendRef.Weight,
-				Type:     backendType,
-				Protocol: defaultProtocol(backendRef.Protocol),
-				Model:    model.Name,
-				APIKey:   resolveBackendAPIKey(backendRef),
-			}
-			if endpoint.Weight == 0 {
-				endpoint.Weight = 1
+			backendRefName := canonicalBackendRefName(backendRef, refIndex)
+			backendEndpoints := canonicalBackendRefStaticEndpoints(backendRef)
+			if len(backendEndpoints) == 0 && !canonicalBackendDiscoverySet(backendRef.Discovery) {
+				backendEndpoints = []CanonicalBackendEndpoint{{Name: backendRefName}}
 			}
 
-			if backendRef.BaseURL != "" || backendRef.Provider != "" || backendRef.AuthHeader != "" || backendRef.AuthPrefix != "" || backendRef.ChatPath != "" || len(backendRef.ExtraHeaders) > 0 || backendRef.APIVersion != "" {
-				profiles[endpointName] = ProviderProfile{
-					Type:         backendRef.Provider,
-					BaseURL:      backendRef.BaseURL,
-					AuthHeader:   backendRef.AuthHeader,
-					AuthPrefix:   backendRef.AuthPrefix,
-					ExtraHeaders: copyStringMap(backendRef.ExtraHeaders),
-					APIVersion:   backendRef.APIVersion,
-					ChatPath:     backendRef.ChatPath,
-				}
-				endpoint.ProviderProfileName = endpointName
+			var err error
+			endpoints, err = appendCanonicalBackendRefEndpoints(
+				endpoints,
+				&params,
+				model.Name,
+				backendRef,
+				refIndex,
+				backendType,
+				backendRefName,
+				backendEndpoints,
+			)
+			if err != nil {
+				return nil, nil, nil, err
 			}
-
-			if backendRef.Endpoint != "" {
-				address, port, err := splitEndpointAddress(backendRef.Endpoint, backendRef.Protocol)
-				if err != nil {
-					return nil, nil, nil, fmt.Errorf("providers.models[%s].backend_refs[%d]: %w", model.Name, index, err)
-				}
-				endpoint.Address = address
-				endpoint.Port = port
-			}
-
-			params.PreferredEndpoints = append(params.PreferredEndpoints, endpointName)
-			if params.AccessKey == "" {
-				params.AccessKey = endpoint.APIKey
-			}
-			endpoints = append(endpoints, endpoint)
+			applyCanonicalProviderProfile(profiles, endpoints, model.Name, backendRef, refIndex, backendRefName, backendEndpoints)
 		}
 
 		modelParams[model.Name] = params
@@ -390,6 +450,112 @@ func normalizeCanonicalProviderModels(models []CanonicalProviderModel) (map[stri
 		profiles = nil
 	}
 	return profiles, endpoints, modelParams, nil
+}
+
+func appendCanonicalBackendRefEndpoints(
+	endpoints []VLLMEndpoint,
+	params *ModelParams,
+	modelName string,
+	backendRef CanonicalBackendRef,
+	refIndex int,
+	backendType string,
+	backendRefName string,
+	backendEndpoints []CanonicalBackendEndpoint,
+) ([]VLLMEndpoint, error) {
+	for endpointIndex, backendEndpoint := range backendEndpoints {
+		endpointName := canonicalEndpointName(modelName, backendRef, refIndex, backendEndpoint, endpointIndex)
+		endpoint := VLLMEndpoint{
+			Name:            endpointName,
+			BackendRefName:  backendRefName,
+			Runtime:         backendRef.Runtime,
+			Weight:          canonicalEndpointWeight(backendRef, backendEndpoint),
+			Type:            backendType,
+			Protocol:        defaultProtocol(firstNonEmpty(backendEndpoint.Protocol, backendRef.Protocol)),
+			Model:           modelName,
+			APIKey:          resolveBackendAPIKey(backendRef),
+			MetricsEndpoint: backendEndpoint.MetricsEndpoint,
+		}
+		if endpoint.Weight == 0 {
+			endpoint.Weight = 1
+		}
+
+		if backendEndpoint.Endpoint != "" {
+			address, port, err := splitEndpointAddress(endpointForParse(backendEndpoint.Endpoint), endpoint.Protocol)
+			if err != nil {
+				return nil, fmt.Errorf("providers.models[%s].backend_refs[%d].endpoints[%d]: %w", modelName, refIndex, endpointIndex, err)
+			}
+			endpoint.Address = address
+			endpoint.Port = port
+		}
+
+		params.PreferredEndpoints = append(params.PreferredEndpoints, endpointName)
+		if params.AccessKey == "" {
+			params.AccessKey = endpoint.APIKey
+		}
+		endpoints = append(endpoints, endpoint)
+	}
+	return endpoints, nil
+}
+
+func applyCanonicalProviderProfile(
+	profiles map[string]ProviderProfile,
+	endpoints []VLLMEndpoint,
+	modelName string,
+	backendRef CanonicalBackendRef,
+	refIndex int,
+	backendRefName string,
+	backendEndpoints []CanonicalBackendEndpoint,
+) {
+	if len(backendEndpoints) == 0 || !canonicalBackendRefHasProfile(backendRef) {
+		return
+	}
+
+	profileName := canonicalEndpointName(modelName, backendRef, refIndex, backendEndpoints[0], 0)
+	profiles[profileName] = ProviderProfile{
+		Type:         backendRef.Provider,
+		BaseURL:      backendRef.BaseURL,
+		AuthHeader:   backendRef.AuthHeader,
+		AuthPrefix:   backendRef.AuthPrefix,
+		ExtraHeaders: copyStringMap(backendRef.ExtraHeaders),
+		APIVersion:   backendRef.APIVersion,
+		ChatPath:     backendRef.ChatPath,
+	}
+	for i := len(endpoints) - len(backendEndpoints); i < len(endpoints); i++ {
+		if endpoints[i].BackendRefName != backendRefName || endpoints[i].Model != modelName {
+			continue
+		}
+		endpoints[i].ProviderProfileName = profileName
+	}
+}
+
+func canonicalBackendRefHasProfile(backendRef CanonicalBackendRef) bool {
+	return backendRef.BaseURL != "" || backendRef.Provider != "" || backendRef.AuthHeader != "" || backendRef.AuthPrefix != "" || backendRef.ChatPath != "" || len(backendRef.ExtraHeaders) > 0 || backendRef.APIVersion != ""
+}
+
+func canonicalBackendRefStaticEndpoints(backendRef CanonicalBackendRef) []CanonicalBackendEndpoint {
+	if len(backendRef.Endpoints) > 0 {
+		return append([]CanonicalBackendEndpoint(nil), backendRef.Endpoints...)
+	}
+	if backendRef.Endpoint == "" {
+		return nil
+	}
+	return []CanonicalBackendEndpoint{{
+		Name:     canonicalBackendRefName(backendRef, 0),
+		Endpoint: backendRef.Endpoint,
+		Protocol: backendRef.Protocol,
+		Weight:   backendRef.Weight,
+	}}
+}
+
+func canonicalEndpointWeight(backendRef CanonicalBackendRef, endpoint CanonicalBackendEndpoint) int {
+	if endpoint.Weight != 0 {
+		return endpoint.Weight
+	}
+	return backendRef.Weight
+}
+
+func endpointForParse(endpoint string) string {
+	return strings.TrimSpace(endpoint)
 }
 
 func normalizeExternalModelIDsFromProviderModel(model CanonicalProviderModel) map[string]string {
@@ -423,7 +589,7 @@ func canonicalBackendType(backendRef CanonicalBackendRef) string {
 	return "vllm"
 }
 
-func canonicalEndpointName(modelName string, backendRef CanonicalBackendRef, index int) string {
+func canonicalBackendRefName(backendRef CanonicalBackendRef, index int) string {
 	suffix := strings.TrimSpace(backendRef.Name)
 	if suffix == "" {
 		if index == 0 {
@@ -432,7 +598,46 @@ func canonicalEndpointName(modelName string, backendRef CanonicalBackendRef, ind
 			suffix = fmt.Sprintf("backend-%d", index+1)
 		}
 	}
-	return modelName + "_" + suffix
+	return suffix
+}
+
+func canonicalEndpointName(modelName string, backendRef CanonicalBackendRef, refIndex int, endpoint CanonicalBackendEndpoint, endpointIndex int) string {
+	refName := canonicalBackendRefName(backendRef, refIndex)
+	endpointName := strings.TrimSpace(endpoint.Name)
+	if len(backendRef.Endpoints) == 0 {
+		return modelName + "_" + refName
+	}
+	if endpointName == "" {
+		endpointName = fmt.Sprintf("endpoint-%d", endpointIndex+1)
+	}
+	return modelName + "_" + refName + "_" + endpointName
+}
+
+func cloneCanonicalBackendRefs(refs []CanonicalBackendRef) []CanonicalBackendRef {
+	if len(refs) == 0 {
+		return nil
+	}
+	cloned := make([]CanonicalBackendRef, len(refs))
+	for i, ref := range refs {
+		cloned[i] = ref
+		if len(ref.Endpoints) > 0 {
+			cloned[i].Endpoints = make([]CanonicalBackendEndpoint, len(ref.Endpoints))
+			for j, endpoint := range ref.Endpoints {
+				cloned[i].Endpoints[j] = endpoint
+				cloned[i].Endpoints[j].Labels = copyStringMap(endpoint.Labels)
+			}
+		}
+		if ref.Discovery != nil {
+			discovery := *ref.Discovery
+			if ref.Discovery.Kubernetes != nil {
+				kubernetes := *ref.Discovery.Kubernetes
+				discovery.Kubernetes = &kubernetes
+			}
+			cloned[i].Discovery = &discovery
+		}
+		cloned[i].ExtraHeaders = copyStringMap(ref.ExtraHeaders)
+	}
+	return cloned
 }
 
 func splitEndpointAddress(raw string, protocol string) (string, int, error) {

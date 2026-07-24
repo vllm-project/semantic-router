@@ -85,7 +85,7 @@ DSL 仅拥有：
 - `routing.modelCards[].loras` 承载每个逻辑模型的 canonical LoRA 适配器目录
 - `providers.defaults` 承载提供商级默认，如 `default_model`、`reasoning_families`、`default_reasoning_effort`
 - `providers.models` 直接承载各模型的访问绑定
-- 每个 `providers.models[].backend_refs[]` 项自带传输与鉴权字段，如 `endpoint`、`base_url`、`protocol`、`auth_header`、`auth_prefix`、`api_key`、`api_key_env`
+- 每个 `providers.models[].backend_refs[]` 项表示一个 runtime backend pool。它携带 `runtime` 与一种 endpoint source：legacy singleton `endpoint`、静态 `endpoints[]`、typed dynamic `discovery`，或 `base_url` 等托管 provider 元数据；`protocol`、`auth_header`、`auth_prefix`、`api_key`、`api_key_env` 等传输与鉴权字段仍保留在 backend ref 上
 - `routing.decisions[].modelRefs[].lora_name` 与对应 `routing.modelCards[].loras` 条目解析，故 `lora_name` 现为受支持的路由契约的一部分，而非仅运行时逃生舱
 
 ## 全局默认
