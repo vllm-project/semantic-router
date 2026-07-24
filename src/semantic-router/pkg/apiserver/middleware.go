@@ -69,7 +69,7 @@ func (s *ClassificationAPIServer) writeManagementError(
 	s.writeJSONResponse(w, statusCode, map[string]interface{}{
 		"error": map[string]interface{}{
 			"code":       code,
-			"message":    message,
+			"message":    scrubSecretsInErrorMessage(message),
 			"request_id": requestID,
 			"timestamp":  time.Now().UTC().Format(time.RFC3339),
 		},
