@@ -6,11 +6,35 @@ queue_rules:
       - or:
           - check-success = test-and-build
           - check-skipped = test-and-build
+      - or:
+          - check-success = Lint
+          - check-skipped = Lint
+      - or:
+          - check-success = Unit Tests
+          - check-skipped = Unit Tests
+      - or:
+          - check-success = Verify Manifests
+          - check-skipped = Verify Manifests
+      - or:
+          - check-success = Validate OLM Bundle
+          - check-skipped = Validate OLM Bundle
     merge_conditions:
       - base = main
       - or:
           - check-success = test-and-build
           - check-skipped = test-and-build
+      - or:
+          - check-success = Lint
+          - check-skipped = Lint
+      - or:
+          - check-success = Unit Tests
+          - check-skipped = Unit Tests
+      - or:
+          - check-success = Verify Manifests
+          - check-skipped = Verify Manifests
+      - or:
+          - check-success = Validate OLM Bundle
+          - check-skipped = Validate OLM Bundle
     merge_method: squash
     update_method: merge
     batch_size: 1
