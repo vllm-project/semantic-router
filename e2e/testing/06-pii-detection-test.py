@@ -419,7 +419,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
                         .get("message", {})
                         .get("content", "")
                     )
-            except:
+            except (json.JSONDecodeError, KeyError, IndexError, Exception):
                 response_content = "Could not parse response"
 
         # Check if response potentially exposes PII patterns
@@ -550,7 +550,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
                             "content"
                         ]
                     model_used = response_json.get("model", "unknown")
-                except:
+                except (json.JSONDecodeError, KeyError, IndexError, Exception):
                     response_content = "Could not parse response"
 
             # Check for PII-related routing decisions

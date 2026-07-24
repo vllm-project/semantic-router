@@ -427,7 +427,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
                         .get("message", {})
                         .get("content", "")
                     )
-            except:
+            except (json.JSONDecodeError, KeyError, IndexError, Exception):
                 response_content = "Could not parse response"
 
         # Check if response contains harmful instructions
