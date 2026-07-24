@@ -121,8 +121,12 @@ func TestMergeFusionRequestConfigCoversAdvancedOptions(t *testing.T) {
 	}
 
 	mergeFusionRequestConfig(&dst, &config.FusionRequestConfig{
-		Model:                        "judge",
-		AnalysisModels:               []string{"panel-a", "panel-b"},
+		Model:          "judge",
+		AnalysisModels: []string{"panel-a", "panel-b"},
+		AnalysisOverrides: []config.FusionModelOverride{
+			{Model: "panel-a", Temperature: float64Ptr(0.0)},
+			{Model: "panel-b", Temperature: float64Ptr(0.8), MaxCompletionTokens: 222},
+		},
 		MaxConcurrent:                2,
 		MaxCompletionTokens:          512,
 		RoundTimeoutSeconds:          12,
@@ -147,6 +151,8 @@ func TestMergeFusionRequestConfigCoversAdvancedOptions(t *testing.T) {
 
 	assert.Equal(t, "judge", dst.Model)
 	assert.Equal(t, []string{"panel-a", "panel-b"}, dst.AnalysisModels)
+	require.Len(t, dst.AnalysisOverrides, 2)
+	assert.Equal(t, 222, dst.AnalysisOverrides["panel-b"].MaxCompletionTokens)
 	assert.Equal(t, 2, dst.MaxConcurrent)
 	assert.Equal(t, 512, dst.MaxCompletionTokens)
 	assert.Equal(t, 12, dst.RoundTimeoutSeconds)
@@ -166,6 +172,64 @@ func TestMergeFusionRequestConfigCoversAdvancedOptions(t *testing.T) {
 	assert.Equal(t, 2, dst.GroundingMinKeep)
 	assert.Equal(t, 0.7, dst.GroundingNLIContradictionPenalty)
 	assert.Equal(t, config.FusionOnErrorFail, dst.GroundingOnError)
+}
+
+func TestFusionLooperAppliesPerAnalysisOverrides(t *testing.T) {
+	type callParams struct {
+		temperature         *float64
+		maxCompletionTokens *int64
+	}
+	seen := map[string]callParams{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload struct {
+			Model               string   `json:"model"`
+			Temperature         *float64 `json:"temperature,omitempty"`
+			MaxCompletionTokens *int64   `json:"max_completion_tokens,omitempty"`
+			Messages            []struct {
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		seen[payload.Model] = callParams{
+			temperature:         payload.Temperature,
+			maxCompletionTokens: payload.MaxCompletionTokens,
+		}
+		prompt := ""
+		if len(payload.Messages) > 0 {
+			prompt = payload.Messages[len(payload.Messages)-1].Content
+		}
+		if payload.Model == "judge" && strings.Contains(prompt, "return only valid JSON") {
+			writeFusionTestCompletion(w, payload.Model, `{"consensus":["ok"],"contradictions":[],"partial_coverage":[],"unique_insights":[],"blind_spots":[]}`, http.StatusOK)
+			return
+		}
+		writeFusionTestCompletion(w, payload.Model, "ok", http.StatusOK)
+	}))
+	defer server.Close()
+
+	req := newFusionTestRequest()
+	req.Algorithm = &config.AlgorithmConfig{
+		Type: "fusion",
+		Fusion: &config.FusionAlgorithmConfig{
+			Model:          "judge",
+			AnalysisModels: []string{"panel-a", "panel-b"},
+			Temperature:    float64Ptr(0.2),
+			AnalysisOverrides: []config.FusionModelOverride{
+				{Model: "panel-a", Temperature: float64Ptr(0.0)},
+				{Model: "panel-b", Temperature: float64Ptr(0.8), MaxCompletionTokens: 128},
+			},
+		},
+	}
+	_, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
+	require.NoError(t, err)
+
+	require.NotNil(t, seen["panel-a"].temperature)
+	assert.Equal(t, 0.0, *seen["panel-a"].temperature)
+	require.NotNil(t, seen["panel-b"].temperature)
+	assert.Equal(t, 0.8, *seen["panel-b"].temperature)
+	require.NotNil(t, seen["panel-b"].maxCompletionTokens)
+	assert.Equal(t, int64(128), *seen["panel-b"].maxCompletionTokens)
+	require.NotNil(t, seen["judge"].temperature)
+	assert.Equal(t, 0.2, *seen["judge"].temperature)
 }
 
 func TestFusionLooperPanelQuorumSkipsSlowWorker(t *testing.T) {
@@ -656,4 +720,8 @@ func fusionTestUsage(model string) map[string]int64 {
 	default:
 		return map[string]int64{"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
 	}
+}
+
+func float64Ptr(v float64) *float64 {
+	return &v
 }
