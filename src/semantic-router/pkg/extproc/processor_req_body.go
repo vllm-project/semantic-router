@@ -227,6 +227,7 @@ func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompleti
 	modifiedBody, err := r.modifyRequestBodyForAutoRouting(
 		openAIRequest,
 		upstreamModel,
+		matchedModel,
 		decisionName,
 		reasoningDecision.UseReasoning,
 		profile,
