@@ -179,6 +179,11 @@ pub enum ClassifierExecutionProvider {
     OpenVino,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BaselineAmdPolicy {
+    CpuOnly,
+}
+
 // ============================================================================
 // Sequence Classification Model
 // ============================================================================
@@ -195,6 +200,7 @@ pub struct MmBertSequenceClassifier {
     tokenizer: Arc<Tokenizer>,
     config: MmBertClassifierConfig,
     model_path: String,
+    input_len_buckets: Vec<usize>,
 }
 
 impl MmBertSequenceClassifier {
@@ -233,50 +239,73 @@ impl MmBertSequenceClassifier {
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
         // Find ONNX model candidates and initialize with fallback.
-        let onnx_candidates = Self::find_onnx_models(&model_path)?;
-        let (session, onnx_path) =
-            Self::create_session_with_fallback(onnx_candidates, provider, &model_path_str)?;
+        let onnx_candidates = Self::find_onnx_models(&model_path, provider)?;
+        let (session, onnx_path) = Self::create_session_with_fallback(
+            onnx_candidates,
+            provider,
+            &model_path_str,
+            BaselineAmdPolicy::CpuOnly,
+        )?;
         println!(
             "INFO: Selected classifier ONNX file: {}",
             onnx_path.display()
         );
 
-        Ok(Self {
+        let input_len_buckets = Self::sequence_input_len_buckets_for_artifact(
+            &onnx_path,
+            provider,
+            &config,
+            std::env::var("VSR_AMD_MIGRAPHX_SEQUENCE_BUCKETS")
+                .ok()
+                .as_deref(),
+        );
+        if !input_len_buckets.is_empty() {
+            println!(
+                "INFO: Using sequence-classifier input buckets {:?} for AMD MIGraphX sequence experiment {}",
+                input_len_buckets,
+                onnx_path.display(),
+            );
+        }
+
+        let mut classifier = Self {
             session,
             tokenizer: Arc::new(tokenizer),
             config,
             model_path: model_path_str,
-        })
+            input_len_buckets,
+        };
+        classifier.warmup_if_requested(&onnx_path);
+
+        Ok(classifier)
     }
 
     /// Find ONNX model candidates in priority order.
-    fn find_onnx_models<P: AsRef<Path>>(model_path: P) -> UnifiedResult<Vec<std::path::PathBuf>> {
+    fn find_onnx_models<P: AsRef<Path>>(
+        model_path: P,
+        provider: ClassifierExecutionProvider,
+    ) -> UnifiedResult<Vec<std::path::PathBuf>> {
+        let has_ck_fa = crate::core::ort_migraphx::ck_flash_attention_available();
+        let candidates = Self::onnx_candidate_filenames(provider, has_ck_fa);
+        Self::find_onnx_models_from_candidates(model_path, &candidates, false)
+    }
+
+    fn find_token_onnx_models<P: AsRef<Path>>(
+        model_path: P,
+        provider: ClassifierExecutionProvider,
+    ) -> UnifiedResult<Vec<std::path::PathBuf>> {
+        let has_ck_fa = crate::core::ort_migraphx::ck_flash_attention_available();
+        let candidates = Self::token_onnx_candidate_filenames(provider, has_ck_fa);
+        Self::find_onnx_models_from_candidates(model_path, &candidates, true)
+    }
+
+    fn find_onnx_models_from_candidates<P: AsRef<Path>>(
+        model_path: P,
+        candidates: &[&str],
+        skip_sequence_optimized_fallbacks: bool,
+    ) -> UnifiedResult<Vec<std::path::PathBuf>> {
         let dir = model_path.as_ref();
         let onnx_subdir = dir.join("onnx");
         let search_dirs = [dir, onnx_subdir.as_path()];
-
-        // Prefer FA-optimized variant when CK Flash Attention is available.
-        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .is_some();
-        let candidates: &[&str] = if has_fa {
-            &[
-                "model_fa_fp16.onnx",
-                "model_fa.onnx",
-                "model_sdpa_fp16.onnx",
-                "model.onnx",
-                "classifier.onnx",
-                "model_optimized.onnx",
-            ]
-        } else {
-            &[
-                "model_sdpa_fp16.onnx",
-                "model.onnx",
-                "classifier.onnx",
-                "model_optimized.onnx",
-            ]
-        };
 
         let mut results: Vec<std::path::PathBuf> = Vec::new();
         // Try known ONNX filenames first in both model root and `onnx/` subdirectory.
@@ -284,7 +313,7 @@ impl MmBertSequenceClassifier {
             if !base_dir.exists() || !base_dir.is_dir() {
                 continue;
             }
-            for candidate in candidates {
+            for &candidate in candidates {
                 let path = base_dir.join(candidate);
                 if path.exists() && !results.iter().any(|p| p == &path) {
                     results.push(path);
@@ -300,6 +329,11 @@ impl MmBertSequenceClassifier {
             if let Ok(entries) = std::fs::read_dir(base_dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();
+                    if skip_sequence_optimized_fallbacks
+                        && Self::is_sequence_optimized_onnx_artifact(&path)
+                    {
+                        continue;
+                    }
                     if path.extension().is_some_and(|ext| ext == "onnx")
                         && !results.iter().any(|p| p == &path)
                     {
@@ -318,15 +352,337 @@ impl MmBertSequenceClassifier {
         Ok(results)
     }
 
+    fn onnx_candidate_filenames(
+        provider: ClassifierExecutionProvider,
+        has_ck_fa: bool,
+    ) -> Vec<&'static str> {
+        Self::onnx_candidate_filenames_with_order(
+            provider,
+            has_ck_fa,
+            std::env::var("VSR_AMD_SEQUENCE_PROVIDER_ORDER")
+                .ok()
+                .as_deref(),
+        )
+    }
+
+    fn onnx_candidate_filenames_with_order(
+        provider: ClassifierExecutionProvider,
+        has_ck_fa: bool,
+        provider_order_env: Option<&str>,
+    ) -> Vec<&'static str> {
+        let mut candidates = Vec::new();
+        let mut push_candidate = |name: &'static str| {
+            if !candidates.contains(&name) {
+                candidates.push(name);
+            }
+        };
+
+        if Self::prefers_amd_onnx_artifacts(provider) {
+            if Self::sequence_sdpa_migraphx_first_enabled(provider_order_env) {
+                push_candidate("model_sdpa_migraphx.onnx");
+            }
+            push_candidate("model_sdpa_fp16.onnx");
+            if has_ck_fa {
+                push_candidate("model_fa_fp16.onnx");
+                push_candidate("model_fa.onnx");
+            }
+            push_candidate("model.onnx");
+        } else {
+            push_candidate("model.onnx");
+            push_candidate("classifier.onnx");
+            push_candidate("model_optimized.onnx");
+            push_candidate("model_sdpa_fp16.onnx");
+        }
+
+        push_candidate("classifier.onnx");
+        push_candidate("model_optimized.onnx");
+        candidates
+    }
+
+    fn token_onnx_candidate_filenames(
+        provider: ClassifierExecutionProvider,
+        has_ck_fa: bool,
+    ) -> Vec<&'static str> {
+        let mut candidates = Vec::new();
+        let mut push_candidate = |name: &'static str| {
+            if !candidates.contains(&name) {
+                candidates.push(name);
+            }
+        };
+
+        if Self::prefers_amd_onnx_artifacts(provider) && Self::migraphx_token_artifacts_enabled() {
+            push_candidate("model_token_sdpa.onnx");
+            push_candidate("token_classifier_sdpa.onnx");
+            push_candidate("model_token_sdpa_fp16.onnx");
+            push_candidate("token_classifier_sdpa_fp16.onnx");
+            push_candidate("model_token_eager.onnx");
+            push_candidate("token_classifier_eager.onnx");
+            push_candidate("model_token_eager_fp16.onnx");
+            push_candidate("token_classifier_eager_fp16.onnx");
+        } else {
+            if Self::prefers_amd_onnx_artifacts(provider) && has_ck_fa {
+                push_candidate("model_fa_fp16.onnx");
+                push_candidate("model_fa.onnx");
+            }
+        }
+
+        push_candidate("model.onnx");
+        push_candidate("token_classifier.onnx");
+        push_candidate("classifier.onnx");
+        push_candidate("model_optimized.onnx");
+        push_candidate("model_token_sdpa.onnx");
+        push_candidate("token_classifier_sdpa.onnx");
+        push_candidate("model_token_sdpa_fp16.onnx");
+        push_candidate("token_classifier_sdpa_fp16.onnx");
+        push_candidate("model_token_eager.onnx");
+        push_candidate("token_classifier_eager.onnx");
+        push_candidate("model_token_eager_fp16.onnx");
+        push_candidate("token_classifier_eager_fp16.onnx");
+        candidates
+    }
+
+    fn prefers_amd_onnx_artifacts(provider: ClassifierExecutionProvider) -> bool {
+        match provider {
+            ClassifierExecutionProvider::Rocm => true,
+            ClassifierExecutionProvider::Auto => cfg!(any(feature = "migraphx", feature = "rocm")),
+            ClassifierExecutionProvider::Cpu
+            | ClassifierExecutionProvider::Cuda
+            | ClassifierExecutionProvider::OpenVino => false,
+        }
+    }
+
+    fn is_baseline_onnx_artifact(onnx_path: &Path) -> bool {
+        matches!(
+            onnx_path.file_name().and_then(|name| name.to_str()),
+            Some("model.onnx" | "classifier.onnx" | "model_optimized.onnx")
+        )
+    }
+
+    fn is_sequence_optimized_onnx_artifact(onnx_path: &Path) -> bool {
+        matches!(
+            onnx_path.file_name().and_then(|name| name.to_str()),
+            Some(
+                "model_sdpa_migraphx.onnx"
+                    | "model_sdpa_fp16.onnx"
+                    | "model_fa_fp16.onnx"
+                    | "model_fa.onnx"
+            )
+        )
+    }
+
+    fn is_sequence_sdpa_onnx_artifact(onnx_path: &Path) -> bool {
+        matches!(
+            onnx_path.file_name().and_then(|name| name.to_str()),
+            Some("model_sdpa_migraphx.onnx" | "model_sdpa_fp16.onnx")
+        )
+    }
+
+    fn sequence_input_len_buckets_from_env(
+        config: &MmBertClassifierConfig,
+        value: Option<&str>,
+    ) -> Vec<usize> {
+        let max_len = MAX_CLASSIFICATION_SEQ_LEN.min(config.max_position_embeddings);
+        let Some(value) = value else {
+            return vec![64.min(max_len), 128.min(max_len), max_len]
+                .into_iter()
+                .filter(|bucket| *bucket > 0)
+                .collect();
+        };
+        if matches!(
+            value,
+            "0" | "dynamic" | "none" | "false" | "FALSE" | "no" | "NO"
+        ) {
+            return Vec::new();
+        }
+
+        let mut buckets: Vec<usize> = value
+            .split(',')
+            .filter_map(|part| part.trim().parse::<usize>().ok())
+            .filter(|bucket| *bucket > 0)
+            .map(|bucket| bucket.min(max_len))
+            .collect();
+        buckets.sort_unstable();
+        buckets.dedup();
+        buckets
+    }
+
+    fn sequence_input_len_buckets_for_artifact(
+        onnx_path: &Path,
+        provider: ClassifierExecutionProvider,
+        config: &MmBertClassifierConfig,
+        buckets_env: Option<&str>,
+    ) -> Vec<usize> {
+        Self::sequence_input_len_buckets_for_artifact_with_order(
+            onnx_path,
+            provider,
+            config,
+            buckets_env,
+            std::env::var("VSR_AMD_SEQUENCE_PROVIDER_ORDER")
+                .ok()
+                .as_deref(),
+        )
+    }
+
+    fn sequence_input_len_buckets_for_artifact_with_order(
+        onnx_path: &Path,
+        provider: ClassifierExecutionProvider,
+        config: &MmBertClassifierConfig,
+        buckets_env: Option<&str>,
+        provider_order_env: Option<&str>,
+    ) -> Vec<usize> {
+        if Self::prefers_amd_onnx_artifacts(provider)
+            && Self::is_sequence_sdpa_onnx_artifact(onnx_path)
+            && Self::sequence_sdpa_migraphx_first_enabled(provider_order_env)
+        {
+            Self::sequence_input_len_buckets_from_env(config, buckets_env)
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn sequence_warmup_enabled() -> bool {
+        std::env::var("VSR_AMD_MIGRAPHX_WARMUP")
+            .ok()
+            .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+    }
+
+    fn is_token_optimized_onnx_artifact(onnx_path: &Path) -> bool {
+        matches!(
+            onnx_path.file_name().and_then(|name| name.to_str()),
+            Some(
+                "model_token_sdpa.onnx"
+                    | "token_classifier_sdpa.onnx"
+                    | "model_token_sdpa_fp16.onnx"
+                    | "token_classifier_sdpa_fp16.onnx"
+                    | "model_token_eager.onnx"
+                    | "token_classifier_eager.onnx"
+                    | "model_token_eager_fp16.onnx"
+                    | "token_classifier_eager_fp16.onnx"
+            )
+        )
+    }
+
+    fn experimental_migraphx_token_artifacts_enabled() -> bool {
+        std::env::var("VSR_ENABLE_EXPERIMENTAL_MIGRAPHX_TOKEN_ARTIFACTS")
+            .ok()
+            .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+    }
+
+    fn migraphx_token_artifacts_enabled() -> bool {
+        Self::token_artifacts_migraphx_enabled(
+            Self::experimental_migraphx_token_artifacts_enabled(),
+            std::env::var("MIGRAPHX_MLIR_USE_SPECIFIC_OPS")
+                .ok()
+                .as_deref(),
+            std::env::var("MIGRAPHX_DISABLE_MLIR").ok().as_deref(),
+        )
+    }
+
+    fn token_artifacts_migraphx_enabled(
+        experimental_enabled: bool,
+        mlir_specific_ops: Option<&str>,
+        disable_mlir: Option<&str>,
+    ) -> bool {
+        experimental_enabled
+            && (Self::migraphx_attention_mlir_disabled(mlir_specific_ops)
+                || Self::migraphx_mlir_disabled(disable_mlir))
+    }
+
+    fn migraphx_attention_mlir_disabled(value: Option<&str>) -> bool {
+        value
+            .map(|value| {
+                value
+                    .split(',')
+                    .map(str::trim)
+                    .any(|op| op.eq_ignore_ascii_case("~attention"))
+            })
+            .unwrap_or(false)
+    }
+
+    fn migraphx_mlir_disabled(value: Option<&str>) -> bool {
+        value
+            .map(|value| matches!(value, "1" | "true" | "TRUE" | "yes" | "YES"))
+            .unwrap_or(false)
+    }
+
+    fn sequence_sdpa_migraphx_first_enabled(value: Option<&str>) -> bool {
+        value
+            .map(|value| {
+                matches!(
+                    value.trim().to_ascii_lowercase().as_str(),
+                    "migraphx" | "migraphx-first" | "mgx" | "mgx-first"
+                )
+            })
+            .unwrap_or(false)
+    }
+
+    fn amd_provider_preference_for_artifact(
+        onnx_path: &Path,
+    ) -> crate::core::ort_migraphx::AmdProviderPreference {
+        Self::amd_provider_preference_for_artifact_with_order(
+            onnx_path,
+            std::env::var("VSR_AMD_SEQUENCE_PROVIDER_ORDER")
+                .ok()
+                .as_deref(),
+        )
+    }
+
+    fn amd_provider_preference_for_artifact_with_order(
+        onnx_path: &Path,
+        provider_order_env: Option<&str>,
+    ) -> crate::core::ort_migraphx::AmdProviderPreference {
+        if Self::is_sequence_sdpa_onnx_artifact(onnx_path)
+            && !Self::sequence_sdpa_migraphx_first_enabled(provider_order_env)
+        {
+            crate::core::ort_migraphx::AmdProviderPreference::RocmFirst
+        } else {
+            crate::core::ort_migraphx::AmdProviderPreference::MigraphxFirst
+        }
+    }
+
+    fn session_provider_for_candidate(
+        onnx_path: &Path,
+        provider: ClassifierExecutionProvider,
+        baseline_amd_policy: BaselineAmdPolicy,
+    ) -> ClassifierExecutionProvider {
+        if Self::prefers_amd_onnx_artifacts(provider)
+            && baseline_amd_policy == BaselineAmdPolicy::CpuOnly
+            && Self::is_baseline_onnx_artifact(onnx_path)
+        {
+            ClassifierExecutionProvider::Cpu
+        } else if Self::prefers_amd_onnx_artifacts(provider)
+            && Self::is_token_optimized_onnx_artifact(onnx_path)
+            && !Self::migraphx_token_artifacts_enabled()
+        {
+            ClassifierExecutionProvider::Cpu
+        } else {
+            provider
+        }
+    }
+
     /// Create session from candidates with fallback across files.
     fn create_session_with_fallback(
         onnx_candidates: Vec<std::path::PathBuf>,
         provider: ClassifierExecutionProvider,
         model_path: &str,
+        baseline_amd_policy: BaselineAmdPolicy,
     ) -> UnifiedResult<(Session, std::path::PathBuf)> {
         let mut last_error: Option<String> = None;
         for onnx_path in onnx_candidates {
-            match Self::create_session(&onnx_path, provider) {
+            let session_provider =
+                Self::session_provider_for_candidate(&onnx_path, provider, baseline_amd_policy);
+            if session_provider == ClassifierExecutionProvider::Cpu
+                && provider != ClassifierExecutionProvider::Cpu
+                && baseline_amd_policy == BaselineAmdPolicy::CpuOnly
+                && Self::is_baseline_onnx_artifact(&onnx_path)
+            {
+                println!(
+                    "WARNING: Using CPU for baseline classifier artifact {} because this raw artifact is not MIGraphX-safe on AMD paths; provide a validated optimized artifact for AMD acceleration",
+                    onnx_path.display()
+                );
+            }
+
+            match Self::create_session(&onnx_path, session_provider) {
                 Ok(session) => return Ok((session, onnx_path)),
                 Err(e) => {
                     let reason = format!("{:?}", e);
@@ -359,97 +715,43 @@ impl MmBertSequenceClassifier {
                     .map_err(|e: ort::Error| errors::model_load(&onnx_path_str, &e.to_string()))
             }
             ClassifierExecutionProvider::Rocm | ClassifierExecutionProvider::Auto => {
-                #[cfg(feature = "rocm")]
+                #[cfg(any(feature = "migraphx", feature = "rocm"))]
                 {
-                    use crate::core::gpu_memory;
-                    use ort::execution_providers::{
-                        ArenaExtendStrategy, MIGraphXExecutionProvider, ROCmExecutionProvider,
-                    };
-
-                    let ck_fa_lib = std::env::var("ORT_CK_FLASH_ATTN_LIB")
-                        .ok()
-                        .filter(|s| !s.is_empty());
-                    if let Some(ref lib) = ck_fa_lib {
-                        println!("INFO: CK Flash Attention custom op library: {}", lib);
-                    }
-
-                    let maybe_register_custom_ops = |builder: ort::session::builder::SessionBuilder| -> Result<ort::session::builder::SessionBuilder, ort::Error> {
-                        if let Some(ref lib) = ck_fa_lib {
-                            builder.with_operator_library(lib)
-                        } else {
-                            Ok(builder)
-                        }
-                    };
-
-                    match Session::builder()
-                        .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                        .with_execution_providers([MIGraphXExecutionProvider::default()
-                            .build()
-                            .error_on_failure()])
-                        .and_then(|b| maybe_register_custom_ops(b))
-                        .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
-                    {
-                        Ok(session) => {
-                            println!(
-                                "INFO: Using MIGraphX execution provider (AMD GPU) — verified"
-                            );
-                            return Ok(session);
-                        }
-                        Err(e) => {
-                            println!("INFO: MIGraphX EP failed to register: {}", e);
-                        }
-                    }
-
-                    let mem_limit = gpu_memory::get_gpu_mem_limit();
-                    match Session::builder()
-                        .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                        .with_execution_providers([ROCmExecutionProvider::default()
-                            .with_mem_limit(mem_limit)
-                            .with_arena_extend_strategy(ArenaExtendStrategy::SameAsRequested)
-                            .build()
-                            .error_on_failure()])
-                        .and_then(|b| maybe_register_custom_ops(b))
-                        .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
-                    {
-                        Ok(session) => {
-                            println!("INFO: Using ROCm execution provider (AMD GPU) — verified");
-                            return Ok(session);
-                        }
-                        Err(e) => {
-                            println!("INFO: ROCm EP failed to register: {}", e);
-                        }
+                    let ck_fa_lib = crate::core::ort_migraphx::ck_flash_attention_library_for_model(
+                        onnx_path.as_ref(),
+                    );
+                    let preference = Self::amd_provider_preference_for_artifact(onnx_path.as_ref());
+                    match crate::core::ort_migraphx::create_amd_session_with_preference(
+                        onnx_path.as_ref(),
+                        ck_fa_lib.as_deref(),
+                        preference,
+                    ) {
+                        Ok(amd_session) => return Ok(amd_session.session),
+                        Err(e) => println!("WARNING: AMD execution providers failed: {e}"),
                     }
 
                     println!("WARNING: All GPU execution providers failed, falling back to CPU");
                 }
-
-                #[cfg(not(feature = "rocm"))]
+                #[cfg(not(any(feature = "migraphx", feature = "rocm")))]
                 {
                     if matches!(provider, ClassifierExecutionProvider::Rocm) {
                         println!(
-                            "WARNING: ROCm requested but 'rocm' feature not enabled, using CPU"
+                            "WARNING: AMD GPU requested but no AMD ORT feature enabled, using CPU"
                         );
                     }
                 }
 
                 // Auto selection priority is ROCm > CUDA > CPU. OpenVINO is not
-                // part of the Auto chain; it is only used for an explicit
+                // included in Auto because OpenVINO deployments require an explicit
                 // `OpenVino` request. On a CUDA build the ROCm block above is
-                // compiled out, so Auto must also try CUDA here before falling
-                // back to CPU. Without this,
-                // Auto silently ran every classifier (PII, jailbreak, intent,
-                // factcheck) on CPU even on NVIDIA GPUs, because the dedicated
-                // CUDA arm below is only reached for an explicit `Cuda` request.
-                // Gated to `Auto` so an explicit `Rocm` request on a CUDA build
-                // still falls through to CPU rather than silently using NVIDIA.
+                // compiled out, so CUDA is tried next.
                 #[cfg(feature = "cuda")]
                 {
                     if matches!(provider, ClassifierExecutionProvider::Auto) {
-                        use crate::core::gpu_memory;
                         use ort::execution_providers::{
                             ArenaExtendStrategy as CudaArenaStrategy, CUDAExecutionProvider,
                         };
-                        let mem_limit = gpu_memory::get_gpu_mem_limit();
+                        let mem_limit = crate::core::gpu_memory::get_gpu_mem_limit();
                         match Session::builder()
                             .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
                             .with_execution_providers([CUDAExecutionProvider::default()
@@ -466,10 +768,7 @@ impl MmBertSequenceClassifier {
                                 return Ok(session);
                             }
                             Err(e) => {
-                                println!(
-                                    "WARNING: CUDA EP failed: {}, falling back to CPU",
-                                    e
-                                );
+                                println!("WARNING: CUDA EP failed: {}, falling back to CPU", e);
                             }
                         }
                     }
@@ -484,11 +783,10 @@ impl MmBertSequenceClassifier {
             ClassifierExecutionProvider::Cuda => {
                 #[cfg(feature = "cuda")]
                 {
-                    use crate::core::gpu_memory;
                     use ort::execution_providers::{
                         ArenaExtendStrategy as CudaArenaStrategy, CUDAExecutionProvider,
                     };
-                    let mem_limit = gpu_memory::get_gpu_mem_limit();
+                    let mem_limit = crate::core::gpu_memory::get_gpu_mem_limit();
                     match Session::builder()
                         .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
                         .with_execution_providers([CUDAExecutionProvider::default()
@@ -507,9 +805,10 @@ impl MmBertSequenceClassifier {
                         }
                     }
                 }
-
                 #[cfg(not(feature = "cuda"))]
-                println!("WARNING: CUDA requested but 'cuda' feature not enabled, using CPU");
+                {
+                    println!("WARNING: CUDA requested but 'cuda' feature not enabled, using CPU");
+                }
 
                 println!("INFO: Using CPU execution provider");
                 Session::builder()
@@ -537,11 +836,12 @@ impl MmBertSequenceClassifier {
                         }
                     }
                 }
-
                 #[cfg(not(feature = "openvino"))]
-                println!(
-                    "WARNING: OpenVINO requested but 'openvino' feature not enabled, using CPU"
-                );
+                {
+                    println!(
+                        "WARNING: OpenVINO requested but 'openvino' feature not enabled, using CPU"
+                    );
+                }
 
                 println!("INFO: Using CPU execution provider");
                 Session::builder()
@@ -574,8 +874,17 @@ impl MmBertSequenceClassifier {
         // the classification safety cap. The tokenizer already enforces
         // MAX_CLASSIFICATION_SEQ_LEN via truncation, but this second guard ensures
         // correctness even if the tokenizer is replaced or called without truncation.
-        let max_len = encodings.iter().map(|e| e.len()).max().unwrap_or(0);
-        let max_len = max_len
+        let dynamic_max_len = encodings.iter().map(|e| e.len()).max().unwrap_or(0);
+        let dynamic_max_len = dynamic_max_len
+            .min(self.config.max_position_embeddings)
+            .min(MAX_CLASSIFICATION_SEQ_LEN);
+        let max_len = self
+            .input_len_buckets
+            .iter()
+            .copied()
+            .find(|bucket| *bucket >= dynamic_max_len)
+            .unwrap_or(dynamic_max_len)
+            .max(dynamic_max_len)
             .min(self.config.max_position_embeddings)
             .min(MAX_CLASSIFICATION_SEQ_LEN);
 
@@ -620,6 +929,42 @@ impl MmBertSequenceClassifier {
         let results = logits_to_classification_results(&logits, &self.config);
 
         Ok(results)
+    }
+
+    fn warmup_if_requested(&mut self, onnx_path: &Path) {
+        if self.input_len_buckets.is_empty() || !Self::sequence_warmup_enabled() {
+            return;
+        }
+
+        let started = std::time::Instant::now();
+        println!(
+            "INFO: Warming AMD MIGraphX sequence-classifier artifact {}",
+            onnx_path.display()
+        );
+        for bucket in self.input_len_buckets.clone() {
+            let warmup_text = Self::warmup_text_for_bucket(bucket);
+            if let Err(error) = self.classify_batch(&[warmup_text.as_str()]) {
+                println!(
+                    "WARNING: AMD MIGraphX sequence-classifier warmup failed for {} at bucket {}: {}",
+                    onnx_path.display(),
+                    bucket,
+                    error
+                );
+                return;
+            }
+        }
+        println!(
+            "INFO: AMD MIGraphX sequence-classifier warmup completed for buckets {:?} in {:.3} ms",
+            self.input_len_buckets,
+            started.elapsed().as_secs_f64() * 1000.0
+        );
+    }
+
+    fn warmup_text_for_bucket(bucket: usize) -> String {
+        let repeated_terms = if bucket <= 128 { 16 } else { 180 };
+        std::iter::repeat_n("semantic-router-migraphx-warmup", repeated_terms)
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     /// Get model configuration
@@ -881,6 +1226,7 @@ pub struct MmBertTokenClassifier {
     tokenizer: Arc<Tokenizer>,
     config: MmBertClassifierConfig,
     model_path: String,
+    pad_to_max_length: bool,
 }
 
 impl MmBertTokenClassifier {
@@ -912,22 +1258,27 @@ impl MmBertTokenClassifier {
             }))
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
-        let onnx_candidates = MmBertSequenceClassifier::find_onnx_models(&model_path)?;
+        let onnx_candidates =
+            MmBertSequenceClassifier::find_token_onnx_models(&model_path, provider)?;
         let (session, onnx_path) = MmBertSequenceClassifier::create_session_with_fallback(
             onnx_candidates,
             provider,
             &model_path_str,
+            BaselineAmdPolicy::CpuOnly,
         )?;
         println!(
             "INFO: Selected token-classifier ONNX file: {}",
             onnx_path.display()
         );
+        let pad_to_max_length =
+            MmBertSequenceClassifier::is_token_optimized_onnx_artifact(&onnx_path);
 
         Ok(Self {
             session,
             tokenizer: Arc::new(tokenizer),
             config,
             model_path: model_path_str,
+            pad_to_max_length,
         })
     }
 
@@ -944,9 +1295,18 @@ impl MmBertTokenClassifier {
             .min(self.config.max_position_embeddings)
             .min(MAX_CLASSIFICATION_SEQ_LEN);
 
-        // Prepare inputs
-        let mut input_ids = vec![self.config.pad_token_id as i64; seq_len];
-        let mut attention_mask = vec![0i64; seq_len];
+        let input_len = if self.pad_to_max_length {
+            MAX_CLASSIFICATION_SEQ_LEN
+                .min(self.config.max_position_embeddings)
+                .max(seq_len)
+        } else {
+            seq_len
+        };
+
+        // Prepare inputs. Token-specific optimized artifacts are exported with a
+        // fixed 512-token contract for MIGraphX, so they receive padded inputs.
+        let mut input_ids = vec![self.config.pad_token_id as i64; input_len];
+        let mut attention_mask = vec![0i64; input_len];
         let enc_attention_mask = encoding.get_attention_mask();
 
         for i in 0..seq_len {
@@ -956,11 +1316,11 @@ impl MmBertTokenClassifier {
         }
 
         // Create tensors (batch size 1)
-        let input_ids_tensor = Tensor::from_array(([1, seq_len], input_ids))
+        let input_ids_tensor = Tensor::from_array(([1, input_len], input_ids))
             .map_err(|e: ort::Error| errors::inference_error("create_input_ids", &e.to_string()))?;
 
         let attention_mask_tensor =
-            Tensor::from_array(([1, seq_len], attention_mask)).map_err(|e: ort::Error| {
+            Tensor::from_array(([1, input_len], attention_mask)).map_err(|e: ort::Error| {
                 errors::inference_error("create_attention_mask", &e.to_string())
             })?;
 
@@ -975,6 +1335,16 @@ impl MmBertTokenClassifier {
 
         // Extract token logits [1, seq_len, num_labels]
         let token_logits = extract_token_logits_from_outputs(&outputs)?;
+        if token_logits.nrows() < seq_len {
+            return Err(errors::inference_error(
+                "extract_token_logits",
+                &format!(
+                    "token logits length {} is shorter than tokenizer sequence length {}; selected artifact is not compatible with token classification",
+                    token_logits.nrows(),
+                    seq_len
+                ),
+            ));
+        }
 
         // Convert to entities using BIO scheme
         let entities = bio_decode_entities(text, &encoding, &token_logits, &self.config)?;
@@ -1192,6 +1562,362 @@ mod tests {
     fn test_classifier_execution_provider_auto() {
         let provider = ClassifierExecutionProvider::Auto;
         assert!(matches!(provider, ClassifierExecutionProvider::Auto));
+    }
+
+    #[test]
+    fn test_classifier_cpu_prefers_baseline_onnx_artifact() {
+        let candidates = MmBertSequenceClassifier::onnx_candidate_filenames(
+            ClassifierExecutionProvider::Cpu,
+            true,
+        );
+
+        assert_eq!(
+            candidates,
+            vec![
+                "model.onnx",
+                "classifier.onnx",
+                "model_optimized.onnx",
+                "model_sdpa_fp16.onnx",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_classifier_rocm_prefers_sdpa_artifact() {
+        let candidates = MmBertSequenceClassifier::onnx_candidate_filenames(
+            ClassifierExecutionProvider::Rocm,
+            false,
+        );
+
+        assert_eq!(
+            candidates,
+            vec![
+                "model_sdpa_fp16.onnx",
+                "model.onnx",
+                "classifier.onnx",
+                "model_optimized.onnx",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_classifier_rocm_prefers_ck_fa_artifact_when_enabled() {
+        let candidates = MmBertSequenceClassifier::onnx_candidate_filenames(
+            ClassifierExecutionProvider::Rocm,
+            true,
+        );
+
+        assert_eq!(
+            candidates,
+            vec![
+                "model_sdpa_fp16.onnx",
+                "model_fa_fp16.onnx",
+                "model_fa.onnx",
+                "model.onnx",
+                "classifier.onnx",
+                "model_optimized.onnx",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_classifier_migraphx_first_prefers_migraphx_rewritten_sdpa_artifact() {
+        let candidates = MmBertSequenceClassifier::onnx_candidate_filenames_with_order(
+            ClassifierExecutionProvider::Rocm,
+            false,
+            Some("migraphx-first"),
+        );
+
+        assert_eq!(
+            candidates,
+            vec![
+                "model_sdpa_migraphx.onnx",
+                "model_sdpa_fp16.onnx",
+                "model.onnx",
+                "classifier.onnx",
+                "model_optimized.onnx",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_sequence_baseline_artifact_uses_cpu_on_amd() {
+        let provider = MmBertSequenceClassifier::session_provider_for_candidate(
+            Path::new("/models/intent/onnx/model.onnx"),
+            ClassifierExecutionProvider::Rocm,
+            BaselineAmdPolicy::CpuOnly,
+        );
+
+        assert!(matches!(provider, ClassifierExecutionProvider::Cpu));
+    }
+
+    #[test]
+    fn test_sequence_sdpa_artifact_uses_amd_on_amd() {
+        let provider = MmBertSequenceClassifier::session_provider_for_candidate(
+            Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
+            ClassifierExecutionProvider::Rocm,
+            BaselineAmdPolicy::CpuOnly,
+        );
+
+        assert!(matches!(provider, ClassifierExecutionProvider::Rocm));
+    }
+
+    #[test]
+    fn test_sequence_sdpa_artifact_does_not_bucket_by_default_on_amd() {
+        let config = MmBertClassifierConfig::default();
+        let buckets = MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact_with_order(
+            Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
+            ClassifierExecutionProvider::Rocm,
+            &config,
+            None,
+            None,
+        );
+
+        assert!(buckets.is_empty());
+    }
+
+    #[test]
+    fn test_sequence_sdpa_artifact_uses_buckets_for_migraphx_first_experiment() {
+        let config = MmBertClassifierConfig::default();
+        let buckets = MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact_with_order(
+            Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
+            ClassifierExecutionProvider::Rocm,
+            &config,
+            None,
+            Some("migraphx-first"),
+        );
+
+        assert_eq!(buckets, vec![64, 128, MAX_CLASSIFICATION_SEQ_LEN]);
+    }
+
+    #[test]
+    fn test_sequence_buckets_can_be_disabled() {
+        let config = MmBertClassifierConfig::default();
+        let buckets = MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact_with_order(
+            Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
+            ClassifierExecutionProvider::Rocm,
+            &config,
+            Some("dynamic"),
+            Some("migraphx-first"),
+        );
+
+        assert!(buckets.is_empty());
+    }
+
+    #[test]
+    fn test_sequence_buckets_accept_operator_override() {
+        let config = MmBertClassifierConfig::default();
+        let buckets = MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact_with_order(
+            Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
+            ClassifierExecutionProvider::Rocm,
+            &config,
+            Some("64, 512, 512, 9999"),
+            Some("migraphx-first"),
+        );
+
+        assert_eq!(buckets, vec![64, MAX_CLASSIFICATION_SEQ_LEN]);
+    }
+
+    #[test]
+    fn test_sequence_buckets_do_not_apply_to_cpu_or_ck_fa() {
+        let config = MmBertClassifierConfig::default();
+
+        assert_eq!(
+            MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact_with_order(
+                Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
+                ClassifierExecutionProvider::Cpu,
+                &config,
+                None,
+                Some("migraphx-first"),
+            ),
+            Vec::<usize>::new()
+        );
+        assert_eq!(
+            MmBertSequenceClassifier::sequence_input_len_buckets_for_artifact_with_order(
+                Path::new("/models/intent/onnx/model_fa_fp16.onnx"),
+                ClassifierExecutionProvider::Rocm,
+                &config,
+                None,
+                Some("migraphx-first"),
+            ),
+            Vec::<usize>::new()
+        );
+    }
+
+    #[test]
+    fn test_sequence_sdpa_artifact_prefers_rocm_by_default() {
+        let preference = MmBertSequenceClassifier::amd_provider_preference_for_artifact_with_order(
+            Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
+            None,
+        );
+
+        assert_eq!(
+            preference,
+            crate::core::ort_migraphx::AmdProviderPreference::RocmFirst
+        );
+    }
+
+    #[test]
+    fn test_sequence_sdpa_artifact_can_opt_into_migraphx_first() {
+        let preference = MmBertSequenceClassifier::amd_provider_preference_for_artifact_with_order(
+            Path::new("/models/intent/onnx/model_sdpa_fp16.onnx"),
+            Some("migraphx-first"),
+        );
+
+        assert_eq!(
+            preference,
+            crate::core::ort_migraphx::AmdProviderPreference::MigraphxFirst
+        );
+    }
+
+    #[test]
+    fn test_token_classifier_token_specific_artifact_uses_cpu_without_experimental_opt_in() {
+        let provider = MmBertSequenceClassifier::session_provider_for_candidate(
+            Path::new("/models/pii/onnx/model_token_sdpa.onnx"),
+            ClassifierExecutionProvider::Rocm,
+            BaselineAmdPolicy::CpuOnly,
+        );
+
+        assert!(matches!(provider, ClassifierExecutionProvider::Cpu));
+    }
+
+    #[test]
+    fn test_token_artifacts_require_attention_mlir_workaround_for_migraphx() {
+        assert!(!MmBertSequenceClassifier::token_artifacts_migraphx_enabled(
+            true, None, None
+        ));
+        assert!(!MmBertSequenceClassifier::token_artifacts_migraphx_enabled(
+            true,
+            Some("attention,pointwise"),
+            None
+        ));
+        assert!(MmBertSequenceClassifier::token_artifacts_migraphx_enabled(
+            true,
+            Some("dot, ~attention"),
+            None
+        ));
+        assert!(MmBertSequenceClassifier::token_artifacts_migraphx_enabled(
+            true,
+            None,
+            Some("1")
+        ));
+    }
+
+    #[test]
+    fn test_token_artifacts_still_require_experimental_opt_in() {
+        assert!(!MmBertSequenceClassifier::token_artifacts_migraphx_enabled(
+            false,
+            Some("~attention"),
+            None
+        ));
+        assert!(!MmBertSequenceClassifier::token_artifacts_migraphx_enabled(
+            false,
+            None,
+            Some("1")
+        ));
+    }
+
+    #[test]
+    fn test_token_classifier_candidates_do_not_reuse_sequence_sdpa_artifact() {
+        let candidates = MmBertSequenceClassifier::token_onnx_candidate_filenames(
+            ClassifierExecutionProvider::Cpu,
+            false,
+        );
+
+        assert_eq!(candidates[0], "model.onnx");
+        assert!(!candidates.contains(&"model_sdpa_fp16.onnx"));
+        assert!(!candidates.contains(&"model_fa_fp16.onnx"));
+    }
+
+    #[test]
+    fn test_token_classifier_amd_keeps_baseline_before_experimental_artifact_by_default() {
+        let candidates = MmBertSequenceClassifier::token_onnx_candidate_filenames(
+            ClassifierExecutionProvider::Rocm,
+            false,
+        );
+
+        assert_eq!(candidates[0], "model.onnx");
+        assert!(
+            candidates
+                .iter()
+                .position(|candidate| *candidate == "model_token_sdpa.onnx")
+                > candidates
+                    .iter()
+                    .position(|candidate| *candidate == "model.onnx")
+        );
+        assert!(
+            candidates
+                .iter()
+                .position(|candidate| *candidate == "model_token_eager.onnx")
+                > candidates
+                    .iter()
+                    .position(|candidate| *candidate == "model.onnx")
+        );
+        assert!(!candidates.contains(&"model_sdpa_fp16.onnx"));
+    }
+
+    #[test]
+    fn test_token_classifier_amd_prefers_ck_fa_artifact_when_available() {
+        let candidates = MmBertSequenceClassifier::token_onnx_candidate_filenames(
+            ClassifierExecutionProvider::Rocm,
+            true,
+        );
+
+        assert_eq!(candidates[0], "model_fa_fp16.onnx");
+        assert_eq!(candidates[1], "model_fa.onnx");
+        assert!(!candidates.contains(&"model_sdpa_fp16.onnx"));
+    }
+
+    #[test]
+    fn test_token_classifier_baseline_artifact_uses_cpu_on_amd() {
+        let provider = MmBertSequenceClassifier::session_provider_for_candidate(
+            Path::new("/models/pii/onnx/model.onnx"),
+            ClassifierExecutionProvider::Rocm,
+            BaselineAmdPolicy::CpuOnly,
+        );
+
+        assert!(matches!(provider, ClassifierExecutionProvider::Cpu));
+    }
+
+    #[test]
+    fn test_token_optimized_artifact_requires_fixed_padding() {
+        assert!(MmBertSequenceClassifier::is_token_optimized_onnx_artifact(
+            Path::new("/models/pii/onnx/model_token_sdpa.onnx")
+        ));
+        assert!(MmBertSequenceClassifier::is_token_optimized_onnx_artifact(
+            Path::new("/models/pii/onnx/token_classifier_sdpa.onnx")
+        ));
+        assert!(MmBertSequenceClassifier::is_token_optimized_onnx_artifact(
+            Path::new("/models/pii/onnx/token_classifier_sdpa_fp16.onnx")
+        ));
+        assert!(MmBertSequenceClassifier::is_token_optimized_onnx_artifact(
+            Path::new("/models/pii/onnx/model_token_eager.onnx")
+        ));
+        assert!(MmBertSequenceClassifier::is_token_optimized_onnx_artifact(
+            Path::new("/models/pii/onnx/token_classifier_eager_fp16.onnx")
+        ));
+        assert!(!MmBertSequenceClassifier::is_token_optimized_onnx_artifact(
+            Path::new("/models/pii/onnx/model.onnx")
+        ));
+    }
+
+    #[test]
+    fn test_sequence_optimized_artifact_is_skipped_for_token_fallback() {
+        assert!(
+            MmBertSequenceClassifier::is_sequence_optimized_onnx_artifact(Path::new(
+                "/models/pii/onnx/model_sdpa_fp16.onnx"
+            ))
+        );
+        assert!(
+            MmBertSequenceClassifier::is_sequence_optimized_onnx_artifact(Path::new(
+                "/models/pii/onnx/model_fa_fp16.onnx"
+            ))
+        );
+        assert!(
+            !MmBertSequenceClassifier::is_sequence_optimized_onnx_artifact(Path::new(
+                "/models/pii/onnx/model.onnx"
+            ))
+        );
     }
 
     #[test]
