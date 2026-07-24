@@ -105,15 +105,38 @@ def _add_output_args(parser: argparse.ArgumentParser) -> None:
         default="results/reasoning_mode_eval",
         help="Output directory for results",
     )
-    parser.add_argument(
+
+    # argparse.BooleanOptionalAction (which would give us free --foo/--no-foo
+    # pairs) was only added in Python 3.9, but this package still declares
+    # and supports python_requires >= 3.8. Build the --generate-plots /
+    # --no-generate-plots pair manually with a mutually exclusive group so
+    # the parser keeps working on 3.8.
+    plots_group = parser.add_mutually_exclusive_group()
+    plots_group.add_argument(
         "--generate-plots",
-        action=argparse.BooleanOptionalAction,
+        dest="generate_plots",
+        action="store_true",
         default=True,
-        help="Generate comparison plots",
+        help="Generate comparison plots (default: enabled)",
     )
-    parser.add_argument(
+    plots_group.add_argument(
+        "--no-generate-plots",
+        dest="generate_plots",
+        action="store_false",
+        help="Skip generating comparison plots",
+    )
+
+    report_group = parser.add_mutually_exclusive_group()
+    report_group.add_argument(
         "--generate-report",
-        action=argparse.BooleanOptionalAction,
+        dest="generate_report",
+        action="store_true",
         default=True,
-        help="Generate markdown report",
+        help="Generate markdown report (default: enabled)",
+    )
+    report_group.add_argument(
+        "--no-generate-report",
+        dest="generate_report",
+        action="store_false",
+        help="Skip generating the markdown report",
     )
