@@ -29,15 +29,12 @@ use crate::model_architectures::traditional::modernbert::{
     TRADITIONAL_MODERNBERT_JAILBREAK_CLASSIFIER, TRADITIONAL_MODERNBERT_PII_CLASSIFIER,
     TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER,
 };
+use crate::registry::get_registry;
 use crate::BertClassifier;
 use std::ffi::CString;
 use std::ffi::{c_char, CStr};
 use std::sync::{Arc, OnceLock};
 
-use crate::ffi::init::{
-    FEEDBACK_DETECTOR_CLASSIFIER, LORA_INTENT_CLASSIFIER, LORA_JAILBREAK_CLASSIFIER,
-    PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER,
-};
 // Import DeBERTa classifier for jailbreak detection
 use super::init::DEBERTA_JAILBREAK_CLASSIFIER;
 
@@ -68,9 +65,6 @@ pub fn load_id2label_from_config(
 
 // Legacy classifiers for backward compatibility using OnceLock pattern
 // These are kept for old API paths but new code should use the dual-path architecture
-static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
 
 /// Classify text using basic classifier
 ///
@@ -91,7 +85,7 @@ pub extern "C" fn classify_text(text: *const c_char) -> ClassificationResult {
     };
 
     // Get Arc from OnceLock (zero lock overhead!)
-    if let Some(classifier) = BERT_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry().get::<crate::BertClassifier>("legacy_bert") {
         let classifier = classifier.clone(); // Cheap Arc clone for concurrent access
         match classifier.classify_text(text) {
             Ok((class_idx, confidence)) => ClassificationResult {
@@ -131,7 +125,7 @@ pub extern "C" fn classify_text_with_probabilities(
         }
     };
 
-    if let Some(classifier) = BERT_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry().get::<crate::BertClassifier>("legacy_bert") {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
             Ok((class_idx, confidence)) => {
@@ -176,7 +170,7 @@ pub extern "C" fn classify_pii_text(text: *const c_char) -> ClassificationResult
         }
     };
 
-    if let Some(classifier) = BERT_PII_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry().get::<crate::BertClassifier>("legacy_bert_pii") {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
             Ok((class_idx, confidence)) => ClassificationResult {
@@ -216,7 +210,10 @@ pub extern "C" fn classify_jailbreak_text(text: *const c_char) -> Classification
     };
 
     // Try LoRA jailbreak classifier first (preferred for higher accuracy)
-    if let Some(classifier) = LORA_JAILBREAK_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry()
+        .get::<crate::classifiers::lora::security_lora::SecurityLoRAClassifier>(
+        "lora_jailbreak_classifier",
+    ) {
         let classifier = classifier.clone();
         match classifier.classify_with_index(text) {
             Ok((class_idx, confidence, ref label)) => {
@@ -240,7 +237,7 @@ pub extern "C" fn classify_jailbreak_text(text: *const c_char) -> Classification
     }
 
     // Fallback to Traditional BERT classifier
-    if let Some(classifier) = BERT_JAILBREAK_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry().get::<crate::BertClassifier>("legacy_bert_jailbreak") {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
             Ok((class_idx, confidence)) => ClassificationResult {
@@ -308,7 +305,9 @@ pub extern "C" fn classify_unified_batch(
     };
 
     // Get classifier from OnceLock (now with interior mutability support)
-    let classifier = match UNIFIED_CLASSIFIER.get() {
+    let classifier = match get_registry()
+        .get::<crate::classifiers::unified::DualPathUnifiedClassifier>("unified_classifier")
+    {
         Some(c) => c,
         None => {
             return UnifiedBatchResult {
@@ -568,7 +567,10 @@ pub extern "C" fn classify_candle_bert_tokens_with_labels(
     // Intelligent routing: Check LoRA token classifier first, then fall back to traditional
 
     // Try LoRA token classifier first
-    if let Some(classifier) = crate::ffi::init::LORA_TOKEN_CLASSIFIER.get() {
+    if let Some(classifier) = crate::ffi::init::get_registry()
+        .get::<crate::classifiers::lora::token_lora::LoRATokenClassifier>(
+        "lora_token_classifier",
+    ) {
         let classifier = classifier.clone();
         match classifier.classify_tokens(text) {
             Ok(token_results) => {
@@ -654,7 +656,10 @@ pub extern "C" fn classify_candle_bert_tokens(
 
     // Use intelligent routing to determine which classifier to use
     // First check if LoRA token classifier is available
-    if let Some(lora_classifier) = crate::ffi::init::LORA_TOKEN_CLASSIFIER.get() {
+    if let Some(lora_classifier) = crate::ffi::init::get_registry()
+        .get::<crate::classifiers::lora::token_lora::LoRATokenClassifier>(
+        "lora_token_classifier",
+    ) {
         let lora_classifier = lora_classifier.clone();
         match lora_classifier.classify_tokens(text) {
             Ok(lora_results) => {
@@ -778,7 +783,10 @@ pub extern "C" fn classify_candle_bert_text(text: *const c_char) -> Classificati
     };
 
     // Try LoRA intent classifier first (preferred for higher accuracy)
-    if let Some(classifier) = LORA_INTENT_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry()
+        .get::<crate::classifiers::lora::intent_lora::IntentLoRAClassifier>(
+        "lora_intent_classifier",
+    ) {
         let classifier = classifier.clone();
         match classifier.classify_with_index(text) {
             Ok((class_idx, confidence, ref intent)) => {
@@ -802,7 +810,8 @@ pub extern "C" fn classify_candle_bert_text(text: *const c_char) -> Classificati
     }
 
     // Fallback to Traditional BERT classifier
-    if let Some(classifier) = TRADITIONAL_BERT_CLASSIFIER.get() {
+    if let Some(classifier) = TRADITIONAL_get_registry().get::<crate::BertClassifier>("legacy_bert")
+    {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
             Ok((class_id, confidence)) => {
@@ -851,7 +860,8 @@ pub extern "C" fn classify_bert_text(text: *const c_char) -> ClassificationResul
             Err(_) => return default_result,
         }
     };
-    if let Some(classifier) = TRADITIONAL_BERT_CLASSIFIER.get() {
+    if let Some(classifier) = TRADITIONAL_get_registry().get::<crate::BertClassifier>("legacy_bert")
+    {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
             Ok((class_id, confidence)) => {
@@ -920,7 +930,10 @@ pub extern "C" fn classify_batch_with_lora(
 
     // Get Arc from OnceLock (zero lock overhead!)
     // OnceLock.get() is just an atomic load - no mutex, no contention
-    let engine = match PARALLEL_LORA_ENGINE.get() {
+    let engine = match get_registry()
+        .get::<crate::classifiers::lora::parallel_engine::ParallelLoRAEngine>(
+            "parallel_lora_engine",
+        ) {
         Some(e) => e.clone(), // Cheap Arc clone for concurrent access
         None => {
             eprintln!("PARALLEL_LORA_ENGINE not initialized");
@@ -1006,7 +1019,8 @@ pub extern "C" fn classify_modernbert_text(text: *const c_char) -> ModernBertCla
         }
     };
     if let Some(classifier) =
-        crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_CLASSIFIER.get()
+        crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNget_registry()
+            .get::<crate::BertClassifier>("legacy_bert")
     {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
@@ -1046,7 +1060,9 @@ pub extern "C" fn classify_modernbert_text_with_probabilities(
         }
     };
 
-    if let Some(classifier) = TRADITIONAL_MODERNBERT_CLASSIFIER.get() {
+    if let Some(classifier) =
+        TRADITIONAL_MODERNget_registry().get::<crate::BertClassifier>("legacy_bert")
+    {
         let classifier = classifier.clone();
         match classifier.classify_text_with_probabilities(text) {
             Ok((class_id, confidence, probabilities)) => {
@@ -1101,7 +1117,9 @@ pub extern "C" fn classify_modernbert_pii_text(
         }
     };
 
-    if let Some(classifier) = TRADITIONAL_MODERNBERT_PII_CLASSIFIER.get() {
+    if let Some(classifier) =
+        TRADITIONAL_MODERNget_registry().get::<crate::BertClassifier>("legacy_bert_pii")
+    {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
             Ok((class_id, confidence)) => ModernBertClassificationResult {
@@ -1144,7 +1162,9 @@ pub extern "C" fn classify_modernbert_jailbreak_text(
         }
     };
 
-    if let Some(classifier) = TRADITIONAL_MODERNBERT_JAILBREAK_CLASSIFIER.get() {
+    if let Some(classifier) =
+        TRADITIONAL_MODERNget_registry().get::<crate::BertClassifier>("legacy_bert_jailbreak")
+    {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
             Ok((class_id, confidence)) => ModernBertClassificationResult {
@@ -1208,7 +1228,12 @@ pub extern "C" fn classify_deberta_jailbreak_text(text: *const c_char) -> Classi
         }
     };
 
-    if let Some(classifier) = DEBERTA_JAILBREAK_CLASSIFIER.get() {
+    if let Some(classifier) =
+        get_registry()
+            .get::<crate::model_architectures::traditional::deberta_v3::DebertaV3Classifier>(
+                "deberta_jailbreak",
+            )
+    {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
             Ok((label, confidence)) => {
@@ -1339,7 +1364,7 @@ pub extern "C" fn classify_feedback_text(text: *const c_char) -> ModernBertClass
         }
     };
 
-    if let Some(classifier) = FEEDBACK_DETECTOR_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("feedback_detector") {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
             Ok((class_id, confidence)) => ModernBertClassificationResult {
@@ -1513,7 +1538,7 @@ pub extern "C" fn detect_hallucinations(
     };
 
     // Check if model is initialized
-    let classifier = match crate::ffi::init::HALLUCINATION_CLASSIFIER.get() {
+    let classifier = match crate::ffi::init::get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier>("hallucination_classifier") {
         Some(c) => c.clone(),
         None => {
             return HallucinationDetectionResult {
@@ -1759,7 +1784,7 @@ pub extern "C" fn classify_nli(premise: *const c_char, hypothesis: *const c_char
     };
 
     // Check if NLI model is initialized
-    let classifier = match crate::ffi::init::NLI_CLASSIFIER.get() {
+    let classifier = match crate::ffi::init::get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("nli_classifier") {
         Some(c) => c.clone(),
         None => {
             return NLIResult {
@@ -1912,7 +1937,7 @@ pub extern "C" fn detect_hallucinations_with_nli(
     }
 
     // Check if NLI model is available
-    let nli_available = crate::ffi::init::NLI_CLASSIFIER.get().is_some();
+    let nli_available = crate::ffi::init::get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("nli_classifier").is_some();
 
     // Step 2: Process each span with NLI
     let mut enhanced_spans: Vec<EnhancedHallucinationSpan> = Vec::new();
@@ -2042,11 +2067,6 @@ pub extern "C" fn detect_hallucinations_with_nli(
 // Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
 // ============================================================================
 
-use crate::ffi::init::{
-    MMBERT_32K_FACTCHECK_CLASSIFIER, MMBERT_32K_FEEDBACK_CLASSIFIER, MMBERT_32K_INTENT_CLASSIFIER,
-    MMBERT_32K_JAILBREAK_CLASSIFIER, MMBERT_32K_MODALITY_CLASSIFIER, MMBERT_32K_PII_CLASSIFIER,
-};
-
 /// Classify text using mmBERT-32K intent classifier
 ///
 /// Classifies text into MMLU-Pro academic categories for intelligent request routing.
@@ -2077,7 +2097,7 @@ pub extern "C" fn classify_mmbert_32k_intent(
         }
     };
 
-    if let Some(classifier) = MMBERT_32K_INTENT_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("mmbert_32k_intent_classifier") {
         match classifier.classify_text(text) {
             Ok((class_id, confidence)) => ModernBertClassificationResult {
                 predicted_class: class_id as i32,
@@ -2124,7 +2144,7 @@ pub extern "C" fn classify_mmbert_32k_factcheck(
         }
     };
 
-    if let Some(classifier) = MMBERT_32K_FACTCHECK_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("mmbert_32k_factcheck_classifier") {
         match classifier.classify_text(text) {
             Ok((class_id, confidence)) => ModernBertClassificationResult {
                 predicted_class: class_id as i32,
@@ -2171,7 +2191,7 @@ pub extern "C" fn classify_mmbert_32k_jailbreak(
         }
     };
 
-    if let Some(classifier) = MMBERT_32K_JAILBREAK_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("mmbert_32k_jailbreak_classifier") {
         match classifier.classify_text(text) {
             Ok((class_id, confidence)) => ModernBertClassificationResult {
                 predicted_class: class_id as i32,
@@ -2280,7 +2300,7 @@ pub extern "C" fn classify_mmbert_32k_feedback(
         }
     };
 
-    if let Some(classifier) = MMBERT_32K_FEEDBACK_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("mmbert_32k_feedback_classifier") {
         match classifier.classify_text(text) {
             Ok((class_id, confidence)) => ModernBertClassificationResult {
                 predicted_class: class_id as i32,
@@ -2326,7 +2346,7 @@ pub extern "C" fn classify_mmbert_32k_pii_tokens(
         }
     };
 
-    if let Some(classifier) = MMBERT_32K_PII_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier>("mmbert_32k_pii_classifier") {
         match classifier.classify_tokens(text) {
             Ok(entities) => {
                 let num_entities = entities.len() as i32;
@@ -2415,7 +2435,7 @@ pub extern "C" fn classify_mmbert_32k_modality(
         }
     };
 
-    if let Some(classifier) = MMBERT_32K_MODALITY_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("mmbert_32k_modality_classifier") {
         match classifier.classify_text(text) {
             Ok((class_id, confidence)) => ModernBertClassificationResult {
                 predicted_class: class_id as i32,
