@@ -1076,6 +1076,7 @@ routing:
               request_format: custom
               request_template: "{\"query\":\"{{.Query}}\",\"top_k\":{{.TopK}},\"threshold\":{{.Threshold}}}"
               timeout_seconds: 15
+              max_response_body_bytes: 16777216
               headers:
                 X-Environment: admin
 

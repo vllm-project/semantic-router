@@ -4,7 +4,7 @@
 
 `rag` is a route-local plugin for retrieval-augmented generation.
 
-It aligns to `config/plugin/rag/milvus.yaml` (Milvus) and `config/plugin/rag/qdrant.yaml` (Qdrant).
+It aligns to `config/plugin/rag/milvus.yaml` (Milvus), `config/plugin/rag/qdrant.yaml` (Qdrant), and `config/plugin/rag/external-api.yaml` (external HTTP API).
 
 ## Key Advantages
 
@@ -62,3 +62,35 @@ plugin:
       reuse_cache_connection: true
       content_field: content
 ```
+
+**External API backend:**
+
+```yaml
+plugin:
+  type: rag
+  configuration:
+    enabled: true
+    backend: external_api
+    top_k: 5
+    similarity_threshold: 0.78
+    injection_mode: tool_role
+    on_failure: warn
+    backend_config:
+      endpoint: https://search.example.com/query
+      request_format: custom
+      request_template: '{"query":"${user_content}","top_k":${top_k},"threshold":${threshold}}'
+      timeout_seconds: 15
+      max_response_body_bytes: 16777216
+```
+
+The supported request formats are `pinecone`, `weaviate`, `elasticsearch`, and `custom`. Custom
+request templates are parsed as non-null JSON objects or arrays at configuration load, including
+when `external_api` is a hybrid child. Exact placeholder nodes such as `${top_k}` stay typed,
+placeholders cannot be used as object keys, user content cannot add fields or change the configured
+object/array shape, and configured JSON numbers retain their original precision. The lowercase
+`${user_content}`, `${top_k}`, and `${threshold}` names are reserved for runtime substitution;
+other braced lowercase names fail before environment expansion. Use uppercase names such as
+`${RAG_TENANT}` for intentional environment references. Successful response bodies default to an
+exact 16 MiB limit. Set `max_response_body_bytes` to a positive byte count up to 64 MiB to override
+it; a response at the limit is accepted and a response one byte larger is rejected without decoding
+a truncated prefix.

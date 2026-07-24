@@ -710,6 +710,14 @@ class MemoryPluginConfig(BaseModel):
     )
 
 
+class ExternalAPIRAGBackendConfig(BaseModel):
+    """Request-format contract for the external API RAG backend."""
+
+    model_config = ConfigDict(extra="allow")
+
+    request_format: Literal["pinecone", "weaviate", "elasticsearch", "custom"]
+
+
 class RAGPluginConfig(BaseModel):
     """Configuration for RAG (Retrieval-Augmented Generation) plugin.
 
@@ -718,7 +726,7 @@ class RAGPluginConfig(BaseModel):
 
     Supported backends:
     - milvus: Milvus vector database (reuses semantic cache connection)
-    - external_api: External REST API (OpenAI, Pinecone, Weaviate, Elasticsearch)
+    - external_api: External REST API (Pinecone, Weaviate, Elasticsearch, or custom)
     - mcp: MCP tool-based retrieval
     - openai: OpenAI file_search with vector stores
     - hybrid: Multi-backend with fallback strategy
@@ -768,7 +776,8 @@ class RAGPluginConfig(BaseModel):
     # Structure depends on backend type (see Go: rag_plugin.go lines 64-174)
     backend_config: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Backend-specific configuration",
+        description="Backend-specific configuration; external_api requires request_format "
+        "pinecone, weaviate, elasticsearch, or custom",
     )
 
     # Optional: Fallback behavior on retrieval failure
@@ -800,6 +809,13 @@ class RAGPluginConfig(BaseModel):
         le=1.0,
         description="Minimum confidence for triggering retrieval",
     )
+
+    @model_validator(mode="after")
+    def validate_external_api_request_format(self):
+        """Validate the router-owned request format without rewriting backend data."""
+        if self.backend == "external_api":
+            ExternalAPIRAGBackendConfig.model_validate(self.backend_config or {})
+        return self
 
 
 class PluginConfig(BaseModel):

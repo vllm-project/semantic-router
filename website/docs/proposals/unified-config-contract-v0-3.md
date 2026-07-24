@@ -151,6 +151,7 @@ The repo no longer ships large full-example trees under `config/intelligent-rout
 
 - `config/config.yaml` is the exhaustive canonical reference config
 - `config/signal/`, `config/decision/`, `config/algorithm/`, and `config/plugin/` hold reusable routing fragments
+- external API RAG configuration keeps non-null JSON object or array request-template roots typed, validates supported formats and hybrid children at load time, rejects unsupported lowercase runtime-like tokens before expanding uppercase environment references, and bounds successful response bodies with the positive, exact `backend_config.max_response_body_bytes` field (16 MiB by default, 64 MiB maximum)
 - `config/decision/` is organized by boolean rule shape (`single`, `and`, `or`, `not`, `composite`)
 - `config/algorithm/` is organized by routing policy family (`looper`, `selection`), with `fusion` as the looper fragment for panel-and-judge deliberation
 - latest `docs/tutorials/` source tree mirrors `signal/decision/algorithm/plugin/global`, and the older tutorial trees were removed from the active docs surface

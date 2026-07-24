@@ -1,6 +1,8 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // Validate validates the RAG plugin configuration.
 func (c *RAGPluginConfig) Validate() error {
@@ -76,8 +78,33 @@ func validateExternalAPIRAGBackend(c *RAGPluginConfig) error {
 	if apiConfig.Endpoint == "" {
 		return fmt.Errorf("external API endpoint is required")
 	}
-	if apiConfig.RequestFormat == "" {
+	switch apiConfig.RequestFormat {
+	case ExternalAPIRequestFormatPinecone,
+		ExternalAPIRequestFormatWeaviate,
+		ExternalAPIRequestFormatElasticsearch:
+	case ExternalAPIRequestFormatCustom:
+		if _, err := ParseExternalAPICustomRequestTemplate(apiConfig.RequestTemplate); err != nil {
+			return err
+		}
+	case "":
 		return fmt.Errorf("request format is required for external API")
+	default:
+		return fmt.Errorf(
+			"unsupported external API request format %q; supported formats are pinecone, weaviate, elasticsearch, and custom",
+			apiConfig.RequestFormat,
+		)
+	}
+	if apiConfig.MaxResponseBodyBytes != nil {
+		if *apiConfig.MaxResponseBodyBytes <= 0 {
+			return fmt.Errorf("external API max_response_body_bytes must be greater than 0, got %d", *apiConfig.MaxResponseBodyBytes)
+		}
+		if *apiConfig.MaxResponseBodyBytes > MaximumExternalAPIResponseBodyBytes {
+			return fmt.Errorf(
+				"external API max_response_body_bytes must not exceed %d, got %d",
+				MaximumExternalAPIResponseBodyBytes,
+				*apiConfig.MaxResponseBodyBytes,
+			)
+		}
 	}
 	return nil
 }
@@ -117,6 +144,29 @@ func validateHybridRAGBackend(c *RAGPluginConfig) error {
 	}
 	if hybridConfig.Primary == "" {
 		return fmt.Errorf("primary backend is required for hybrid RAG")
+	}
+	if err := validateHybridRAGChildBackend("primary", hybridConfig.Primary, hybridConfig.PrimaryConfig); err != nil {
+		return err
+	}
+	if hybridConfig.Fallback != "" {
+		if err := validateHybridRAGChildBackend("fallback", hybridConfig.Fallback, hybridConfig.FallbackConfig); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateHybridRAGChildBackend(role, backend string, backendConfig *StructuredPayload) error {
+	if backend == "hybrid" {
+		return fmt.Errorf("hybrid %s backend cannot itself be hybrid", role)
+	}
+	childConfig := &RAGPluginConfig{
+		Enabled:       true,
+		Backend:       backend,
+		BackendConfig: backendConfig,
+	}
+	if err := validateRAGBackendConfig(childConfig); err != nil {
+		return fmt.Errorf("invalid hybrid %s backend %q: %w", role, backend, err)
 	}
 	return nil
 }

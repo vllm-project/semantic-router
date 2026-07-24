@@ -1,0 +1,76 @@
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: general-expert
+      reasoning_families:
+        qwen3:
+          type: chat_template_kwargs
+          parameter: enable_thinking
+    models:
+      - name: base-model
+        reasoning_family: qwen3
+        backend_refs:
+          - name: local-vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    decisions:
+      - name: external_rag_e2e
+        description: Deterministic external API RAG contract route
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: external_rag_e2e
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: rag
+            configuration:
+              enabled: true
+              backend: external_api
+              top_k: 7
+              similarity_threshold: 0.625
+              injection_mode: tool_role
+              on_failure: block
+              backend_config:
+                endpoint: http://external-rag-mock.default.svc.cluster.local:8080/query
+                request_format: custom
+                request_template: '{"query":"${user_content}","top_k":${top_k},"threshold":${threshold}}'
+                timeout_seconds: 15
+                max_response_body_bytes: 38
+    signals:
+      keywords:
+        - name: external_rag_e2e
+          operator: OR
+          keywords:
+            - __EXTERNAL_RAG_E2E__
+            - __EXTERNAL_RAG_E2E_OVERSIZE__
+          case_sensitive: false
+    modelCards:
+      - name: base-model
+        loras:
+          - name: general-expert
+            description: General-purpose adapter
+      - name: general-expert
+  global:
+    router:
+      strategy: priority
+    services: {}
+    stores: {}
+    integrations: {}
+    model_catalog:
+      kbs: []
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 8Gi
+  requests:
+    cpu: 500m
+    memory: 2Gi
