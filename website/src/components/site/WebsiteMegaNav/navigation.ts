@@ -1,4 +1,4 @@
-export type WebsiteMegaNavKey = 'docs' | 'research' | 'community'
+export type WebsiteMegaNavKey = 'docs' | 'research' | 'community' | 'blog'
 
 export interface WebsiteMegaNavLink {
   key: string
@@ -94,13 +94,12 @@ export const WEBSITE_MEGA_NAV_GROUPS: WebsiteMegaNavGroup[] = [
   {
     key: 'research',
     label: 'Research',
-    description: 'The project’s published research and engineering updates.',
+    description: 'Published research papers and talks from the project.',
     landingTo: '/publications',
     activePrefixes: [
       '/publications',
       '/white-paper',
       '/vision-paper',
-      '/blog',
     ],
     sections: [
       {
@@ -125,19 +124,6 @@ export const WEBSITE_MEGA_NAV_GROUPS: WebsiteMegaNavGroup[] = [
             label: 'Vision Paper',
             description: 'See the long-range direction for intelligent routing.',
             to: '/vision-paper',
-          },
-        ],
-      },
-      {
-        key: 'updates',
-        title: 'Project updates',
-        description: 'Follow engineering progress and field reports.',
-        links: [
-          {
-            key: 'blog',
-            label: 'Engineering Blog',
-            description: 'Read release notes, experiments, and field reports.',
-            to: '/blog',
           },
         ],
       },
@@ -226,6 +212,14 @@ export const WEBSITE_MEGA_NAV_GROUPS: WebsiteMegaNavGroup[] = [
         ],
       },
     ],
+  },
+  {
+    key: 'blog',
+    label: 'Blog',
+    description: 'Engineering blog posts, release notes, and field reports.',
+    landingTo: '/blog',
+    activePrefixes: ['/blog'],
+    sections: [],
   },
 ]
 
