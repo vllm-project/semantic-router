@@ -520,3 +520,28 @@ test-modality-routing:
 	@echo "=============================================="
 	@echo " Modality Routing Tests Complete"
 	@echo "=============================================="
+
+# Run the MAB algorithm comparison harness (synthetic, pure Python)
+# See bench/mab_comparison/README.md for the design and KEEP/KILL protocol.
+bench-mab-comparison: ## Run MAB algorithm comparison harness (synthetic, ~5 min)
+bench-mab-comparison:
+	@echo "Running MAB algorithm comparison (30 seeds, 6 workloads, 3 algorithms)..."
+	python3 -m bench.mab_comparison.runner \
+		--seeds $${SEEDS:-30} \
+		--out-dir $${OUT_DIR:-.agent-harness/experiments/mab-comparison}
+	python3 -m bench.mab_comparison.compare \
+		--results-dir $${OUT_DIR:-.agent-harness/experiments/mab-comparison} \
+		--json-out $${OUT_DIR:-.agent-harness/experiments/mab-comparison}/mab_verdict.json
+	@echo ""
+	@echo "Verdict written to $${OUT_DIR:-.agent-harness/experiments/mab-comparison}/mab_verdict.json"
+	@echo "Optional figures: make bench-mab-comparison-figures (requires matplotlib)"
+
+bench-mab-comparison-quick: ## Run MAB comparison harness with 3 seeds (smoke)
+bench-mab-comparison-quick:
+	@$(MAKE) bench-mab-comparison SEEDS=3 OUT_DIR=.agent-harness/experiments/mab-comparison-smoke
+
+bench-mab-comparison-figures: ## Plot MAB comparison results (requires matplotlib)
+bench-mab-comparison-figures:
+	python3 -m bench.mab_comparison.plot \
+		--results-dir $${OUT_DIR:-.agent-harness/experiments/mab-comparison} \
+		--out-dir $${OUT_DIR:-.agent-harness/experiments/mab-comparison}/figures

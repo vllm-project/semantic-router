@@ -20,6 +20,13 @@ type routerLearningAdaptationDiagnostics struct {
 	decisionTier  int
 	sampling      routerLearningSamplingDiagnostics
 	scores        []routerLearningCandidateScore
+	// Contextual-bandit hyperparameters (LinUCB / Linear Thompson). Zero
+	// values are emitted as omitted in the replay map; routing_sampling
+	// leaves them at zero.
+	dim    int
+	alpha  float64
+	lambda float64
+	sigma  float64
 }
 
 type routerLearningSamplingDiagnostics struct {
@@ -503,6 +510,18 @@ func (d *routerLearningAdaptationDiagnostics) toPolicyMap() map[string]interface
 	setLearningPolicyString(out, learningPolicyFieldDecision, d.decision)
 	if d.decisionTier > 0 {
 		setLearningPolicyInt(out, learningPolicyFieldDecisionTier, d.decisionTier)
+	}
+	if d.dim > 0 {
+		setLearningPolicyInt(out, learningPolicyFieldDim, d.dim)
+	}
+	if d.alpha != 0 {
+		setLearningPolicyNumber(out, learningPolicyFieldAlpha, d.alpha)
+	}
+	if d.lambda != 0 {
+		setLearningPolicyNumber(out, learningPolicyFieldLambda, d.lambda)
+	}
+	if d.sigma != 0 {
+		setLearningPolicyNumber(out, learningPolicyFieldSigma, d.sigma)
 	}
 	sampling := map[string]interface{}{"used": d.sampling.used}
 	if d.sampling.seed > 0 {
