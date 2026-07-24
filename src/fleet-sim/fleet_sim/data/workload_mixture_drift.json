@@ -1,0 +1,82 @@
+{
+  "schema_version": "fleet-sim.workload-mixture/v1alpha1",
+  "id": "composition-drift-chat-to-agent",
+  "version": "2026-07-18",
+  "seed": 2557,
+  "description": "Two-window scenario where traffic drifts from chat-dominated to agent-heavy demand.",
+  "archetypes": [
+    {
+      "id": "interactive-chat",
+      "version": "lmsys-single-turn-v1",
+      "source": {
+        "kind": "cdf",
+        "path": "lmsys_cdf.json",
+        "l_in_frac": 0.8,
+        "l_out_frac": 0.2
+      },
+      "arrival_process": {
+        "kind": "poisson"
+      },
+      "slo_class": "interactive",
+      "model_eligibility": ["llama-3.1-8b", "llama-3.1-70b", "qwen3-8b"],
+      "residency": ["global", "us"],
+      "weight": 0.55
+    },
+    {
+      "id": "multiturn-chat",
+      "version": "lmsys-multiturn-v1",
+      "source": {
+        "kind": "cdf",
+        "path": "lmsys_multiturn_cdf.json",
+        "l_in_frac": 0.85,
+        "l_out_frac": 0.15
+      },
+      "arrival_process": {
+        "kind": "poisson"
+      },
+      "slo_class": "interactive",
+      "model_eligibility": ["llama-3.1-8b", "llama-3.1-70b"],
+      "residency": ["global", "us"],
+      "weight": 0.25
+    },
+    {
+      "id": "agent-heavy",
+      "version": "agent-heavy-v1",
+      "source": {
+        "kind": "cdf",
+        "path": "agent_heavy_cdf.json",
+        "l_in_frac": 0.9,
+        "l_out_frac": 0.1
+      },
+      "arrival_process": {
+        "kind": "poisson"
+      },
+      "slo_class": "batch",
+      "model_eligibility": ["llama-3.1-70b", "deepseek-v3"],
+      "residency": ["us"],
+      "weight": 0.2
+    }
+  ],
+  "composition_schedule": [
+    {
+      "start_s": 0,
+      "duration_s": 60,
+      "arrival_rate_multiplier": 1.0,
+      "weights": {
+        "interactive-chat": 0.7,
+        "multiturn-chat": 0.2,
+        "agent-heavy": 0.1
+      }
+    },
+    {
+      "start_s": 60,
+      "duration_s": 60,
+      "arrival_rate_multiplier": 1.0,
+      "weights": {
+        "interactive-chat": 0.35,
+        "multiturn-chat": 0.25,
+        "agent-heavy": 0.4
+      }
+    }
+  ]
+}

@@ -13,6 +13,38 @@ that trace.
 | `lmsys_multiturn_cdf.json` | LMSYS-Chat-1M (multi-turn) | Accumulated context per turn |
 | `agent_heavy_cdf.json` | Synthetic agent-heavy | SWE-bench 40% + BFCL 25% + RAG 35% |
 
+## Workload mixture scenarios
+
+FleetSim also includes versioned workload-archetype mixture fixtures. They use
+privacy-safe aggregate CDF references by default and are intended for simulation
+and evaluation evidence only; they do not change production routing behavior.
+
+| File | Scenario | Description |
+|---|---|---|
+| `workload_mixture_nominal.json` | Fixed mixture | Interactive chat, multi-turn chat, and agent-heavy demand at nominal weights |
+| `workload_mixture_drift.json` | Composition drift | Two windows that shift from chat-dominated to agent-heavy demand |
+| `workload_mixture_burst.json` | Burst | Three windows with a higher-arrival agent-heavy burst |
+
+Mixture scenario files use schema
+`fleet-sim.workload-mixture/v1alpha1`. Each archetype defines an `id`,
+`version`, `source`, `arrival_process`, `slo_class`, `model_eligibility`,
+`residency`, and nominal `weight`. Optional `composition_schedule` windows can
+override weights and arrival-rate multipliers over time.
+
+CDF-only archetypes validate marginal token-length distributions. They do not
+preserve unknown cross-feature correlations. Trace archetypes can preserve
+correlations that are explicitly present in the trace rows.
+
+When a stress case combines archetypes with no common non-empty
+`model_eligibility` or `residency` intersection, the CDF-only optimizer marks
+the case infeasible instead of returning a misleading robust recommendation.
+
+Use `vllm-sr-sim mixture-optimize --scenario data/workload_mixture_burst.json`
+to evaluate these fixtures with the repository's `FleetOptimizer`, including
+aggregate-CDF baselines, individual archetype stress cases, nominal mixtures,
+composition drift/burst windows, robust recommendations, sensitivity, and
+explicit infeasibility diagnostics.
+
 ## Bring your own CDF
 
 A CDF file is a JSON array of `[token_length, cumulative_fraction]` pairs,
