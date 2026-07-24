@@ -1586,8 +1586,15 @@ global:
             - config.read
             - data.read
           operator:
+            - health.read
+            - ready.read
+            - docs.read
+            - metrics.read
+            - classify.invoke
+            - config.read
             - config.write
             - learning.ingest
+            - data.read
             - data.write
           admin:
             - "*"
