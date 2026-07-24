@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"sort"
@@ -67,7 +68,7 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	// Retention ttl_turns (when set) overrides the decision/global default,
 	// scoping this entry to a turn-bounded lifetime (§2.8 order: ... -> TTL -> write).
 	ttlSeconds = applyRetentionTTLOverride(ttlSeconds, ctx)
-	if err := r.Cache.UpdateWithResponse(ctx.RequestID, responseBody, ttlSeconds); err != nil {
+	if err := r.Cache.UpdateWithResponse(ctx.TraceContext, ctx.RequestID, responseBody, ttlSeconds); err != nil {
 		logging.Errorf("Error updating cache: %v", err)
 		return
 	}
@@ -286,15 +287,16 @@ func (r *OpenAIRouter) cacheReconstructedStreamingResponse(
 	// Must finalize in place (by request_id) like the non-streaming path.
 	// AddEntry would mint a new key and orphan the empty pending entry,
 	// which then shadows KNN lookups and causes cache misses (issue #2030).
-	return r.updateStreamingCacheEntry(ctx.RequestID, reconstructedJSON, ttlSeconds)
+	return r.updateStreamingCacheEntry(ctx.TraceContext, ctx.RequestID, reconstructedJSON, ttlSeconds)
 }
 
 func (r *OpenAIRouter) updateStreamingCacheEntry(
+	goCtx context.Context,
 	requestID string,
 	reconstructedJSON []byte,
 	ttlSeconds int,
 ) error {
-	if err := r.Cache.UpdateWithResponse(requestID, reconstructedJSON, ttlSeconds); err != nil {
+	if err := r.Cache.UpdateWithResponse(goCtx, requestID, reconstructedJSON, ttlSeconds); err != nil {
 		logging.Errorf("Cache update failed for streaming %s: %v", requestID, err)
 		return err
 	}

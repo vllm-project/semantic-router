@@ -19,7 +19,6 @@ import (
 const pendingResponseMarker = "__pending__"
 
 type QdrantCache struct {
-	SimilarityTracker
 	client              *qdrant.Client
 	cfg                 *config.QdrantConfig
 	collectionName      string
@@ -78,7 +77,7 @@ func NewQdrantCache(opts QdrantCacheOptions) (*QdrantCache, error) {
 		embeddingModel:      embeddingModel,
 	}
 
-	if err := c.CheckConnection(); err != nil {
+	if err := c.CheckConnection(context.Background()); err != nil {
 		_ = client.Close()
 		return nil, err
 	}
@@ -138,7 +137,15 @@ func (c *QdrantCache) ensureCollection() error {
 	return nil
 }
 
-func (c *QdrantCache) getEmbedding(text string) ([]float32, error) {
+// getEmbedding generates an embedding based on the configured embedding model.
+//
+// Embedding is a synchronous CGO call that cannot be interrupted mid-flight, so
+// ctx cancellation is honored on a best-effort basis: an already-cancelled ctx
+// short-circuits before the expensive embed work starts (#2473).
+func (c *QdrantCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
+	if err := ctxErr(ctx); err != nil {
+		return nil, err
+	}
 	modelName := c.embeddingModel
 
 	switch modelName {
@@ -207,8 +214,11 @@ func (c *QdrantCache) expiresAt(ttlSeconds int) int64 {
 
 func (c *QdrantCache) IsEnabled() bool { return c.enabled }
 
-func (c *QdrantCache) CheckConnection() error {
-	ctx, cancel := context.WithTimeout(context.Background(), c.connTimeout())
+func (c *QdrantCache) CheckConnection(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.connTimeout())
 	defer cancel()
 	_, err := c.client.ListCollections(ctx)
 	if err != nil {
@@ -217,19 +227,22 @@ func (c *QdrantCache) CheckConnection() error {
 	return nil
 }
 
-func (c *QdrantCache) AddPendingRequest(requestID, model, query string, requestBody []byte, ttlSeconds int) error {
+func (c *QdrantCache) AddPendingRequest(ctx context.Context, requestID, model, query string, requestBody []byte, ttlSeconds int) error {
 	if !c.enabled || ttlSeconds == 0 {
 		return nil
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
-	emb, err := c.getEmbedding(query)
+	emb, err := c.getEmbedding(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
 	id := fmt.Sprintf("%x", md5.Sum([]byte(requestID))) //nolint:gosec
 	wait := true
-	_, err = c.client.Upsert(context.Background(), &qdrant.UpsertPoints{
+	_, err = c.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: c.collectionName,
 		Wait:           &wait,
 		Points: []*qdrant.PointStruct{{
@@ -254,12 +267,14 @@ func (c *QdrantCache) AddPendingRequest(requestID, model, query string, requestB
 	return nil
 }
 
-func (c *QdrantCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
+func (c *QdrantCache) UpdateWithResponse(ctx context.Context, requestID string, responseBody []byte, ttlSeconds int) error {
 	if !c.enabled {
 		return nil
 	}
 
-	ctx := context.Background()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	scrollResult, _, err := c.client.ScrollAndOffset(ctx, &qdrant.ScrollPoints{
 		CollectionName: c.collectionName,
@@ -316,19 +331,22 @@ func (c *QdrantCache) UpdateWithResponse(requestID string, responseBody []byte, 
 	return nil
 }
 
-func (c *QdrantCache) AddEntry(requestID, model, query string, requestBody, responseBody []byte, ttlSeconds int) error {
+func (c *QdrantCache) AddEntry(ctx context.Context, requestID, model, query string, requestBody, responseBody []byte, ttlSeconds int) error {
 	if !c.enabled || ttlSeconds == 0 {
 		return nil
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
-	emb, err := c.getEmbedding(query)
+	emb, err := c.getEmbedding(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
 	id := fmt.Sprintf("%x", md5.Sum([]byte(requestID))) //nolint:gosec
 	wait := true
-	_, err = c.client.Upsert(context.Background(), &qdrant.UpsertPoints{
+	_, err = c.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: c.collectionName,
 		Wait:           &wait,
 		Points: []*qdrant.PointStruct{{
@@ -353,21 +371,24 @@ func (c *QdrantCache) AddEntry(requestID, model, query string, requestBody, resp
 	return nil
 }
 
-func (c *QdrantCache) FindSimilar(model, query string) ([]byte, bool, error) {
-	return c.FindSimilarWithThreshold(model, query, c.similarityThreshold)
+func (c *QdrantCache) FindSimilar(ctx context.Context, model, query string) (LookupResult, error) {
+	return c.FindSimilarWithThreshold(ctx, model, query, c.similarityThreshold)
 }
 
-func (c *QdrantCache) FindSimilarWithThreshold(model, query string, threshold float32) ([]byte, bool, error) {
+func (c *QdrantCache) FindSimilarWithThreshold(ctx context.Context, model, query string, threshold float32) (LookupResult, error) {
 	start := time.Now()
 
 	if !c.enabled {
-		return nil, false, nil
+		return LookupResult{}, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
-	emb, err := c.getEmbedding(query)
+	emb, err := c.getEmbedding(ctx, query)
 	if err != nil {
 		metrics.RecordCacheOperation("qdrant", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
+		return LookupResult{}, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
 	now := time.Now().Unix()
@@ -390,7 +411,7 @@ func (c *QdrantCache) FindSimilarWithThreshold(model, query string, threshold fl
 		},
 	}
 
-	scored, err := c.client.Query(context.Background(), &qdrant.QueryPoints{
+	scored, err := c.client.Query(ctx, &qdrant.QueryPoints{
 		CollectionName: c.collectionName,
 		Query:          qdrant.NewQueryDense(emb),
 		Limit:          qdrant.PtrOf(uint64(1)), //nolint:gosec
@@ -401,30 +422,32 @@ func (c *QdrantCache) FindSimilarWithThreshold(model, query string, threshold fl
 	if err != nil {
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("qdrant", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, nil
+		return LookupResult{}, nil
 	}
 
 	if len(scored) == 0 {
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("qdrant", "find_similar", "miss", time.Since(start).Seconds())
-		return nil, false, nil
+		return LookupResult{}, nil
 	}
 
 	best := scored[0]
-	c.StoreSimilarity(best.Score)
-
 	responseBody := best.Payload["response_body"].GetStringValue()
 	if responseBody == "" || responseBody == pendingResponseMarker {
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("qdrant", "find_similar", "miss", time.Since(start).Seconds())
-		return nil, false, nil
+		// best.Score is above threshold here (Qdrant filters server-side), but
+		// the entry is still pending or has an empty body, so it is not a hit.
+		// Per the LookupResult contract this path carries zero similarity, not
+		// the hit-level score, to avoid leaking it as a miss (#2473).
+		return LookupResult{}, nil
 	}
 
 	atomic.AddInt64(&c.hitCount, 1)
 	logging.Debugf("QdrantCache: CACHE HIT similarity=%.4f threshold=%.4f response_size=%d",
 		best.Score, threshold, len(responseBody))
 	metrics.RecordCacheOperation("qdrant", "find_similar", "hit", time.Since(start).Seconds())
-	return []byte(responseBody), true, nil
+	return LookupResult{Body: []byte(responseBody), Found: true, Similarity: best.Score}, nil
 }
 
 func (c *QdrantCache) GetStats() CacheStats {

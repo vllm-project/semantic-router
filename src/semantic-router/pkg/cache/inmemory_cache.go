@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -14,7 +15,6 @@ import (
 
 // InMemoryCache provides a high-performance semantic cache using BERT embeddings in memory
 type InMemoryCache struct {
-	SimilarityTracker   // embedded — provides LastSimilarity()
 	entries             []CacheEntry
 	entryMap            map[string]int // requestID -> index for O(1) lookup
 	mu                  sync.RWMutex
@@ -185,7 +185,7 @@ func (c *InMemoryCache) IsEnabled() bool {
 
 // CheckConnection verifies the cache connection is healthy
 // For in-memory cache, this is always healthy (no external connection)
-func (c *InMemoryCache) CheckConnection() error {
+func (c *InMemoryCache) CheckConnection(_ context.Context) error {
 	// In-memory cache has no external connection to check
 	return nil
 }
@@ -193,7 +193,14 @@ func (c *InMemoryCache) CheckConnection() error {
 // generateEmbedding returns an embedding for text using the configured model,
 // served from the embedding memo when the same text was embedded recently
 // (e.g. the lookup + pending-write pair of a single cache-miss request).
-func (c *InMemoryCache) generateEmbedding(text string) ([]float32, error) {
+//
+// The embedding is a synchronous CGO call that cannot be interrupted mid-flight,
+// so ctx cancellation is honored on a best-effort basis: an already-cancelled
+// ctx short-circuits before the expensive embed work starts (#2473).
+func (c *InMemoryCache) generateEmbedding(ctx context.Context, text string) ([]float32, error) {
+	if err := ctxErr(ctx); err != nil {
+		return nil, err
+	}
 	if c.embMemo != nil {
 		return c.embMemo.getOrCompute(text, c.computeEmbedding)
 	}
@@ -245,6 +252,7 @@ func (c *InMemoryCache) computeEmbedding(text string) ([]float32, error) {
 
 // AddPendingRequest stores a request that is awaiting its response
 func (c *InMemoryCache) AddPendingRequest(
+	ctx context.Context,
 	requestID string,
 	model string,
 	query string,
@@ -270,7 +278,7 @@ func (c *InMemoryCache) AddPendingRequest(
 	}
 
 	// Generate semantic embedding using the configured model
-	embedding, err := c.generateEmbedding(query)
+	embedding, err := c.generateEmbedding(ctx, query)
 	if err != nil {
 		metrics.RecordCacheOperation("memory", "add_pending", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to generate embedding: %w", err)
@@ -278,6 +286,14 @@ func (c *InMemoryCache) AddPendingRequest(
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// Re-check cancellation after the synchronous embedding (a CGO call that can
+	// block) and before mutating cache state: a request canceled mid-embedding
+	// must not publish an orphaned pending entry (#2473).
+	if err := ctxErr(ctx); err != nil {
+		metrics.RecordCacheOperation("memory", "add_pending", "canceled", time.Since(start).Seconds())
+		return err
+	}
 
 	// Remove expired entries to maintain cache hygiene, but defer the HNSW rebuild to the insertion below if HNSW is enabled.
 	c.cleanupExpiredEntriesDeferred()
@@ -332,7 +348,7 @@ func (c *InMemoryCache) AddPendingRequest(
 }
 
 // UpdateWithResponse completes a pending request by adding the response
-func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
+func (c *InMemoryCache) UpdateWithResponse(ctx context.Context, requestID string, responseBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !c.enabled {
@@ -341,6 +357,13 @@ func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// Honor cancellation before mutating cache state so a canceled request does
+	// not complete a pending entry (#2473).
+	if err := ctxErr(ctx); err != nil {
+		metrics.RecordCacheOperation("memory", "update_response", "canceled", time.Since(start).Seconds())
+		return err
+	}
 
 	// Clean up expired entries during the update
 	c.cleanupExpiredEntries()
@@ -393,6 +416,7 @@ func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte
 
 // AddEntry stores a complete request-response pair in the cache
 func (c *InMemoryCache) AddEntry(
+	ctx context.Context,
 	requestID string,
 	model string,
 	query string,
@@ -417,7 +441,7 @@ func (c *InMemoryCache) AddEntry(
 	}
 
 	// Generate semantic embedding using the configured model
-	embedding, err := c.generateEmbedding(query)
+	embedding, err := c.generateEmbedding(ctx, query)
 	if err != nil {
 		metrics.RecordCacheOperation("memory", "add_entry", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to generate embedding: %w", err)
@@ -425,6 +449,14 @@ func (c *InMemoryCache) AddEntry(
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// Re-check cancellation after the synchronous embedding (a CGO call that can
+	// block) and before mutating cache state: a request canceled mid-embedding
+	// must not publish an orphaned entry (#2473).
+	if err := ctxErr(ctx); err != nil {
+		metrics.RecordCacheOperation("memory", "add_entry", "canceled", time.Since(start).Seconds())
+		return err
+	}
 
 	// Remove expired entries to maintain cache hygiene, but defer the HNSW rebuild to the insertion below if HNSW is enabled.
 	c.cleanupExpiredEntriesDeferred()

@@ -21,7 +21,6 @@ import (
 
 // MilvusCache provides a scalable semantic cache implementation using Milvus vector database
 type MilvusCache struct {
-	SimilarityTracker   // embedded — provides LastSimilarity()
 	client              client.Client
 	config              *config.MilvusConfig
 	collectionName      string
@@ -104,7 +103,7 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	}
 
 	// Test connection using the new CheckConnection method
-	if err := cache.CheckConnection(); err != nil {
+	if err := cache.CheckConnection(context.Background()); err != nil {
 		logging.Debugf("MilvusCache: connection check failed: %v", err)
 		_ = milvusClient.Close() // best-effort close
 		return nil, err
@@ -247,8 +246,15 @@ func (c *MilvusCache) initializeCollection() error {
 	return nil
 }
 
-// getEmbedding generates an embedding based on the configured embedding model
-func (c *MilvusCache) getEmbedding(text string) ([]float32, error) {
+// getEmbedding generates an embedding based on the configured embedding model.
+//
+// Embedding is a synchronous CGO call that cannot be interrupted mid-flight, so
+// ctx cancellation is honored on a best-effort basis: an already-cancelled ctx
+// short-circuits before the expensive embed work starts (#2473).
+func (c *MilvusCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
+	if err := ctxErr(ctx); err != nil {
+		return nil, err
+	}
 	modelName := c.embeddingModel
 
 	switch modelName {
@@ -381,7 +387,7 @@ func (c *MilvusCache) IsEnabled() bool {
 }
 
 // CheckConnection verifies the Milvus connection is healthy
-func (c *MilvusCache) CheckConnection() error {
+func (c *MilvusCache) CheckConnection(ctx context.Context) error {
 	if !c.enabled {
 		return nil
 	}
@@ -390,7 +396,9 @@ func (c *MilvusCache) CheckConnection() error {
 		return fmt.Errorf("milvus client is not initialized")
 	}
 
-	ctx := context.Background()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if c.config != nil && c.config.Connection.Timeout > 0 {
 		timeout := time.Duration(c.config.Connection.Timeout) * time.Second
 		var cancel context.CancelFunc
@@ -409,7 +417,7 @@ func (c *MilvusCache) CheckConnection() error {
 }
 
 // AddPendingRequest stores a request that is awaiting its response
-func (c *MilvusCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error {
+func (c *MilvusCache) AddPendingRequest(ctx context.Context, requestID string, model string, query string, requestBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !c.enabled {
@@ -423,7 +431,7 @@ func (c *MilvusCache) AddPendingRequest(requestID string, model string, query st
 	}
 
 	// Store incomplete entry for later completion with response
-	err := c.addEntry("", requestID, model, query, requestBody, nil, ttlSeconds)
+	err := c.addEntry(ctx, "", requestID, model, query, requestBody, nil, ttlSeconds)
 
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "add_pending", "error", time.Since(start).Seconds())
@@ -437,7 +445,7 @@ func (c *MilvusCache) AddPendingRequest(requestID string, model string, query st
 // UpdateWithResponse completes a pending request by adding the response
 //
 //nolint:gocognit,cyclop,funlen
-func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
+func (c *MilvusCache) UpdateWithResponse(ctx context.Context, requestID string, responseBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !c.enabled {
@@ -449,7 +457,9 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, 
 
 	// Find the pending entry and complete it with the response
 	// Query for the incomplete entry to retrieve its metadata
-	ctx := context.Background()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	queryExpr := fmt.Sprintf("request_id == \"%s\" && response_body == \"\"", requestID)
 
 	logging.Debugf("MilvusCache.UpdateWithResponse: searching for pending entry with expr: %s", queryExpr)
@@ -524,7 +534,7 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, 
 	logging.Debugf("MilvusCache.UpdateWithResponse: found pending entry, adding complete entry (id: %s, model: %s)", id, model)
 
 	// Create the complete entry with response data and TTL
-	err = c.addEntry(id, requestID, model, query, []byte(requestBody), responseBody, ttlSeconds)
+	err = c.addEntry(ctx, id, requestID, model, query, []byte(requestBody), responseBody, ttlSeconds)
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to add complete entry: %w", err)
@@ -537,7 +547,7 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, 
 }
 
 // AddEntry stores a complete request-response pair in the cache
-func (c *MilvusCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
+func (c *MilvusCache) AddEntry(ctx context.Context, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !c.enabled {
@@ -550,7 +560,7 @@ func (c *MilvusCache) AddEntry(requestID string, model string, query string, req
 		return nil
 	}
 
-	err := c.addEntry("", requestID, model, query, requestBody, responseBody, ttlSeconds)
+	err := c.addEntry(ctx, "", requestID, model, query, requestBody, responseBody, ttlSeconds)
 
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "add_entry", "error", time.Since(start).Seconds())
@@ -577,6 +587,8 @@ func (c *MilvusCache) AddEntriesBatch(entries []CacheEntry) error {
 
 	logging.Debugf("MilvusCache.AddEntriesBatch: adding %d entries in batch", len(entries))
 
+	ctx := context.Background()
+
 	// Prepare slices for all entries
 	ids := make([]string, len(entries))
 	requestIDs := make([]string, len(entries))
@@ -590,7 +602,7 @@ func (c *MilvusCache) AddEntriesBatch(entries []CacheEntry) error {
 	// Generate embeddings and prepare data for all entries
 	for i, entry := range entries {
 		// Generate semantic embedding for the query
-		embedding, err := c.getEmbedding(entry.Query)
+		embedding, err := c.getEmbedding(ctx, entry.Query)
 		if err != nil {
 			return fmt.Errorf("failed to generate embedding for entry %d: %w", i, err)
 		}
@@ -607,8 +619,6 @@ func (c *MilvusCache) AddEntriesBatch(entries []CacheEntry) error {
 		embeddings[i] = embedding
 		timestamps[i] = time.Now().Unix()
 	}
-
-	ctx := context.Background()
 
 	// Get embedding dimension from first entry
 	embeddingDim := len(embeddings[0])
@@ -662,7 +672,11 @@ func (c *MilvusCache) Flush() error {
 // addEntry handles the internal logic for storing entries in Milvus
 //
 //nolint:funlen
-func (c *MilvusCache) addEntry(id string, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
+func (c *MilvusCache) addEntry(ctx context.Context, id string, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	// Determine effective TTL: use provided value or fall back to cache default
 	effectiveTTL := ttlSeconds
 	if ttlSeconds == -1 {
@@ -670,7 +684,7 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 	}
 
 	// Generate semantic embedding for the query
-	embedding, err := c.getEmbedding(query)
+	embedding, err := c.getEmbedding(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
@@ -679,8 +693,6 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 	if id == "" {
 		id = fmt.Sprintf("%x", md5.Sum(fmt.Appendf(nil, "%s_%s_%d", model, query, time.Now().UnixNano())))
 	}
-
-	ctx := context.Background()
 
 	now := time.Now()
 	var expiresAt int64

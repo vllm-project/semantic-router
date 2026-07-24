@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"math/rand/v2"
@@ -29,6 +30,20 @@ import (
 func TestCache(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Cache Suite")
+}
+
+// findSimilar is a test-local shim that preserves the pre-#2473 three-value
+// return shape used across this Ginkgo suite. Production code uses the
+// LookupResult return of CacheBackend.FindSimilar directly.
+func findSimilar(c CacheBackend, model, query string) ([]byte, bool, error) {
+	r, err := c.FindSimilar(context.Background(), model, query)
+	return r.Body, r.Found, err
+}
+
+// findSimilarWithThreshold mirrors findSimilar for the explicit-threshold path.
+func findSimilarWithThreshold(c CacheBackend, model, query string, threshold float32) ([]byte, bool, error) {
+	r, err := c.FindSimilarWithThreshold(context.Background(), model, query, threshold)
+	return r.Body, r.Found, err
 }
 
 var _ = BeforeSuite(func() {
@@ -848,7 +863,7 @@ development:
 		})
 
 		It("should handle AddEntry operation with embeddings", func() {
-			err := inMemoryCache.AddEntry("test-request-id", "test-model", "test query", []byte("request"), []byte("response"), -1)
+			err := inMemoryCache.AddEntry(context.Background(), "test-request-id", "test-model", "test query", []byte("request"), []byte("response"), -1)
 			Expect(err).NotTo(HaveOccurred())
 
 			stats := inMemoryCache.GetStats()
@@ -857,33 +872,33 @@ development:
 
 		It("should handle FindSimilar operation with embeddings", func() {
 			// First add an entry
-			err := inMemoryCache.AddEntry("test-request-id", "test-model", "test query", []byte("request"), []byte("response"), -1)
+			err := inMemoryCache.AddEntry(context.Background(), "test-request-id", "test-model", "test query", []byte("request"), []byte("response"), -1)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Search for similar query
-			response, found, err := inMemoryCache.FindSimilar("test-model", "test query")
+			response, found, err := findSimilar(inMemoryCache, "test-model", "test query")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(found).To(BeTrue()) // Should find exact match
 			Expect(response).To(Equal([]byte("response")))
 
 			// Search for different model - should match due to cross-model cache sharing
 			// (model filtering removed to improve cache hit rates)
-			response, found, err = inMemoryCache.FindSimilar("different-model", "test query")
+			response, found, err = findSimilar(inMemoryCache, "different-model", "test query")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(found).To(BeTrue())
 			Expect(response).To(Equal([]byte("response")))
 		})
 
 		It("should handle AddPendingRequest and UpdateWithResponse", func() {
-			err := inMemoryCache.AddPendingRequest("test-request-id", "test-model", "test query", []byte("request"), -1)
+			err := inMemoryCache.AddPendingRequest(context.Background(), "test-request-id", "test-model", "test query", []byte("request"), -1)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Update with response
-			err = inMemoryCache.UpdateWithResponse("test-request-id", []byte("response"), -1)
+			err = inMemoryCache.UpdateWithResponse(context.Background(), "test-request-id", []byte("response"), -1)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Should now be able to find it
-			response, found, err := inMemoryCache.FindSimilar("test-model", "test query")
+			response, found, err := findSimilar(inMemoryCache, "test-model", "test query")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(found).To(BeTrue())
 			Expect(response).To(Equal([]byte("response")))
@@ -902,14 +917,14 @@ development:
 				EmbeddingModel:      "bert",
 			})
 
-			err := inMemoryCache.AddPendingRequest("expired-request-id", "test-model", "stale query", []byte("request"), -1)
+			err := inMemoryCache.AddPendingRequest(context.Background(), "expired-request-id", "test-model", "stale query", []byte("request"), -1)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(testutil.ToFloat64(metrics.CacheEntriesTotal.WithLabelValues("memory"))).To(Equal(float64(1)))
 
 			// Wait for TTL to expire before triggering the update path
 			time.Sleep(2 * time.Second)
 
-			err = inMemoryCache.UpdateWithResponse("expired-request-id", []byte("response"), -1)
+			err = inMemoryCache.UpdateWithResponse(context.Background(), "expired-request-id", []byte("response"), -1)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("no pending request"))
 
@@ -928,17 +943,17 @@ development:
 			highThresholdCache := NewInMemoryCache(highThresholdOptions)
 			defer highThresholdCache.Close()
 
-			err := highThresholdCache.AddEntry("test-request-id", "test-model", "machine learning", []byte("request"), []byte("ml response"), -1)
+			err := highThresholdCache.AddEntry(context.Background(), "test-request-id", "test-model", "machine learning", []byte("request"), []byte("ml response"), -1)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Exact match should work
-			response, found, err := highThresholdCache.FindSimilar("test-model", "machine learning")
+			response, found, err := findSimilar(highThresholdCache, "test-model", "machine learning")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(found).To(BeTrue())
 			Expect(response).To(Equal([]byte("ml response")))
 
 			// Different query should not match due to high threshold
-			response, found, err = highThresholdCache.FindSimilar("test-model", "artificial intelligence")
+			response, found, err = findSimilar(highThresholdCache, "test-model", "artificial intelligence")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(found).To(BeFalse())
 			Expect(response).To(BeNil())
@@ -946,17 +961,17 @@ development:
 
 		It("should track hit and miss statistics", func() {
 			// Add an entry with a specific query
-			err := inMemoryCache.AddEntry("test-request-id", "test-model", "What is machine learning?", []byte("request"), []byte("ML is a subset of AI"), -1)
+			err := inMemoryCache.AddEntry(context.Background(), "test-request-id", "test-model", "What is machine learning?", []byte("request"), []byte("ML is a subset of AI"), -1)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Search for the exact cached query (should be a hit)
-			response, found, err := inMemoryCache.FindSimilar("test-model", "What is machine learning?")
+			response, found, err := findSimilar(inMemoryCache, "test-model", "What is machine learning?")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(found).To(BeTrue())
 			Expect(response).To(Equal([]byte("ML is a subset of AI")))
 
 			// Search for a completely unrelated query (should be a miss)
-			response, found, err = inMemoryCache.FindSimilar("test-model", "How do I cook pasta?")
+			response, found, err = findSimilar(inMemoryCache, "test-model", "How do I cook pasta?")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(found).To(BeFalse())
 			Expect(response).To(BeNil())
@@ -978,12 +993,12 @@ development:
 			})
 			defer ttlCache.Close()
 
-			err := ttlCache.AddEntry("ttl-request-id", "ttl-model", "time-sensitive query", []byte("request"), []byte("response"), -1)
+			err := ttlCache.AddEntry(context.Background(), "ttl-request-id", "ttl-model", "time-sensitive query", []byte("request"), []byte("response"), -1)
 			Expect(err).NotTo(HaveOccurred())
 
 			time.Sleep(1100 * time.Millisecond)
 
-			response, found, err := ttlCache.FindSimilar("ttl-model", "time-sensitive query")
+			response, found, err := findSimilar(ttlCache, "ttl-model", "time-sensitive query")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(found).To(BeFalse())
 			Expect(response).To(BeNil())
@@ -994,7 +1009,7 @@ development:
 		})
 
 		It("should handle error when updating non-existent pending request", func() {
-			err := inMemoryCache.UpdateWithResponse("non-existent-query", []byte("response"), -1)
+			err := inMemoryCache.UpdateWithResponse(context.Background(), "non-existent-query", []byte("response"), -1)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("no pending request found"))
 		})
@@ -1021,16 +1036,16 @@ development:
 
 			// Disabled cache operations should not error but should be no-ops
 			// They should NOT try to generate embeddings
-			err := disabledCache.AddPendingRequest("test-request-id", "test-model", "test query", []byte("request"), -1)
+			err := disabledCache.AddPendingRequest(context.Background(), "test-request-id", "test-model", "test query", []byte("request"), -1)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = disabledCache.UpdateWithResponse("test-request-id", []byte("response"), -1)
+			err = disabledCache.UpdateWithResponse(context.Background(), "test-request-id", []byte("response"), -1)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = disabledCache.AddEntry("test-request-id", "test-model", "test query", []byte("request"), []byte("response"), -1)
+			err = disabledCache.AddEntry(context.Background(), "test-request-id", "test-model", "test query", []byte("request"), []byte("response"), -1)
 			Expect(err).NotTo(HaveOccurred())
 
-			response, found, err := disabledCache.FindSimilar("model", "query")
+			response, found, err := findSimilar(disabledCache, "model", "query")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(found).To(BeFalse())
 			Expect(response).To(BeNil())
@@ -1057,24 +1072,24 @@ development:
 			})
 			defer cacheWithHNSW.Close()
 
-			err := cacheWithHNSW.AddEntry("req-1", "test-model", "first query text", []byte("request-1"), []byte("response-1"), -1)
+			err := cacheWithHNSW.AddEntry(context.Background(), "req-1", "test-model", "first query text", []byte("request-1"), []byte("response-1"), -1)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = cacheWithHNSW.AddEntry("req-2", "test-model", "second query text", []byte("request-2"), []byte("response-2"), -1)
+			err = cacheWithHNSW.AddEntry(context.Background(), "req-2", "test-model", "second query text", []byte("request-2"), []byte("response-2"), -1)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Sanity check: the second entry should be retrievable before any eviction occurs.
-			resp, found, err := cacheWithHNSW.FindSimilar("test-model", "second query text")
+			resp, found, err := findSimilar(cacheWithHNSW, "test-model", "second query text")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(found).To(BeTrue())
 			Expect(resp).To(Equal([]byte("response-2")))
 
 			// Adding a third entry triggers eviction (max entries = 2).
-			err = cacheWithHNSW.AddEntry("req-3", "test-model", "third query text", []byte("request-3"), []byte("response-3"), -1)
+			err = cacheWithHNSW.AddEntry(context.Background(), "req-3", "test-model", "third query text", []byte("request-3"), []byte("response-3"), -1)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Entry 2 should still be searchable even after eviction reshuffles the slice.
-			resp, found, err = cacheWithHNSW.FindSimilar("test-model", "second query text")
+			resp, found, err = findSimilar(cacheWithHNSW, "test-model", "second query text")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(found).To(BeTrue())
 			Expect(resp).To(Equal([]byte("response-2")))
@@ -1343,14 +1358,14 @@ func BenchmarkComprehensive(b *testing.B) {
 				// Populate cache
 				for i, query := range testQueries {
 					reqID := fmt.Sprintf("req%d", i)
-					_ = cache.AddEntry(reqID, "test-model", query, []byte(query), []byte("response"), -1)
+					_ = cache.AddEntry(context.Background(), reqID, "test-model", query, []byte(query), []byte("response"), -1)
 				}
 
 				searchQuery := generateQuery(contentLen, cacheSize/2)
 				b.ResetTimer()
 
 				for i := 0; i < b.N; i++ {
-					_, _, _ = cache.FindSimilar("test-model", searchQuery)
+					_, _, _ = findSimilar(cache, "test-model", searchQuery)
 				}
 
 				b.StopTimer()
@@ -1383,14 +1398,14 @@ func BenchmarkComprehensive(b *testing.B) {
 					// Populate cache
 					for i, query := range testQueries {
 						reqID := fmt.Sprintf("req%d", i)
-						_ = cache.AddEntry(reqID, "test-model", query, []byte(query), []byte("response"), -1)
+						_ = cache.AddEntry(context.Background(), reqID, "test-model", query, []byte(query), []byte("response"), -1)
 					}
 
 					searchQuery := generateQuery(contentLen, cacheSize/2)
 					b.ResetTimer()
 
 					for i := 0; i < b.N; i++ {
-						_, _, _ = cache.FindSimilar("test-model", searchQuery)
+						_, _, _ = findSimilar(cache, "test-model", searchQuery)
 					}
 
 					b.StopTimer()
@@ -1446,7 +1461,7 @@ func BenchmarkIndexConstruction(b *testing.B) {
 					// Build index by adding entries
 					for j, query := range testQueries {
 						reqID := fmt.Sprintf("req%d", j)
-						_ = cache.AddEntry(reqID, "test-model", query, []byte(query), []byte("response"), -1)
+						_ = cache.AddEntry(context.Background(), reqID, "test-model", query, []byte(query), []byte("response"), -1)
 					}
 				}
 			})
@@ -1770,12 +1785,12 @@ func TestHybridCacheDisabled(t *testing.T) {
 	}
 
 	// All operations should be no-ops
-	err = cache.AddEntry("req1", "model1", "test query", []byte("request"), []byte("response"), -1)
+	err = cache.AddEntry(context.Background(), "req1", "model1", "test query", []byte("request"), []byte("response"), -1)
 	if err != nil {
 		t.Errorf("AddEntry should not error on disabled cache: %v", err)
 	}
 
-	_, found, err := cache.FindSimilar("model1", "test query")
+	_, found, err := findSimilar(cache, "model1", "test query")
 	if err != nil {
 		t.Errorf("FindSimilar should not error on disabled cache: %v", err)
 	}
@@ -1830,7 +1845,7 @@ func TestHybridCacheGenerateEmbeddingUsesMilvusEmbeddingModel(t *testing.T) {
 		},
 	}
 
-	_, err := cache.generateEmbedding("test")
+	_, err := cache.generateEmbedding(context.Background(), "test")
 	if err == nil {
 		t.Fatal("expected unsupported embedding model error")
 	}
@@ -1877,7 +1892,7 @@ func TestHybridCacheBasicOperations(t *testing.T) {
 	testQuery := "What is the meaning of life?"
 	testResponse := []byte(`{"response": "42"}`)
 
-	err = cache.AddEntry("req1", "gpt-4", testQuery, []byte("{}"), testResponse, -1)
+	err = cache.AddEntry(context.Background(), "req1", "gpt-4", testQuery, []byte("{}"), testResponse, -1)
 	if err != nil {
 		t.Fatalf("Failed to add entry: %v", err)
 	}
@@ -1892,7 +1907,7 @@ func TestHybridCacheBasicOperations(t *testing.T) {
 	// Wait for Milvus to index the entry
 	time.Sleep(2 * time.Second)
 
-	response, found, err := cache.FindSimilar("gpt-4", testQuery)
+	response, found, err := findSimilar(cache, "gpt-4", testQuery)
 	if err != nil {
 		t.Fatalf("FindSimilar failed: %v", err)
 	}
@@ -1904,7 +1919,7 @@ func TestHybridCacheBasicOperations(t *testing.T) {
 	}
 
 	// Test FindSimilar with similar query (should hit)
-	_, found, err = cache.FindSimilar("gpt-4", "What's the meaning of life?")
+	_, found, err = findSimilar(cache, "gpt-4", "What's the meaning of life?")
 	if err != nil {
 		t.Fatalf("FindSimilar failed: %v", err)
 	}
@@ -1913,7 +1928,7 @@ func TestHybridCacheBasicOperations(t *testing.T) {
 	}
 
 	// Test FindSimilar with dissimilar query (should miss)
-	_, found, err = cache.FindSimilar("gpt-4", "How to cook pasta?")
+	_, found, err = findSimilar(cache, "gpt-4", "How to cook pasta?")
 	if err != nil {
 		t.Fatalf("FindSimilar failed: %v", err)
 	}
@@ -1960,14 +1975,14 @@ func TestHybridCachePendingRequest(t *testing.T) {
 
 	// Add pending request
 	testQuery := "Explain quantum computing"
-	err = cache.AddPendingRequest("req1", "gpt-4", testQuery, []byte("{}"), -1)
+	err = cache.AddPendingRequest(context.Background(), "req1", "gpt-4", testQuery, []byte("{}"), -1)
 	if err != nil {
 		t.Fatalf("Failed to add pending request: %v", err)
 	}
 
 	// Update with response
 	testResponse := []byte(`{"answer": "Quantum computing uses qubits..."}`)
-	err = cache.UpdateWithResponse("req1", testResponse, -1)
+	err = cache.UpdateWithResponse(context.Background(), "req1", testResponse, -1)
 	if err != nil {
 		t.Fatalf("Failed to update with response: %v", err)
 	}
@@ -1976,7 +1991,7 @@ func TestHybridCachePendingRequest(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Try to find it
-	response, found, err := cache.FindSimilar("gpt-4", testQuery)
+	response, found, err := findSimilar(cache, "gpt-4", testQuery)
 	if err != nil {
 		t.Fatalf("FindSimilar failed: %v", err)
 	}
@@ -2020,7 +2035,7 @@ func TestHybridCacheEviction(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		query := fmt.Sprintf("Query number %d", i)
 		response := []byte(fmt.Sprintf(`{"answer": "Response %d"}`, i))
-		err = cache.AddEntry(fmt.Sprintf("req%d", i), "gpt-4", query, []byte("{}"), response, -1)
+		err = cache.AddEntry(context.Background(), fmt.Sprintf("req%d", i), "gpt-4", query, []byte("{}"), response, -1)
 		if err != nil {
 			t.Fatalf("Failed to add entry %d: %v", i, err)
 		}
@@ -2036,7 +2051,7 @@ func TestHybridCacheEviction(t *testing.T) {
 	// Try to find a recent entry (should be in memory)
 	// Wait for Milvus to index all entries
 	time.Sleep(2 * time.Second)
-	_, found, err := cache.FindSimilar("gpt-4", "Query number 9")
+	_, found, err := findSimilar(cache, "gpt-4", "Query number 9")
 	if err != nil {
 		t.Fatalf("FindSimilar failed: %v", err)
 	}
@@ -2045,7 +2060,7 @@ func TestHybridCacheEviction(t *testing.T) {
 	}
 
 	// Try to find an old evicted entry (should be in Milvus)
-	_, _, err = cache.FindSimilar("gpt-4", "Query number 0")
+	_, _, err = findSimilar(cache, "gpt-4", "Query number 0")
 	if err != nil {
 		t.Fatalf("FindSimilar failed: %v", err)
 	}
@@ -2083,7 +2098,7 @@ func TestHybridCacheLocalCacheHit(t *testing.T) {
 	// Add an entry
 	testQuery := "What is machine learning?"
 	testResponse := []byte(`{"answer": "ML is..."}`)
-	err = cache.AddEntry("req1", "gpt-4", testQuery, []byte("{}"), testResponse, -1)
+	err = cache.AddEntry(context.Background(), "req1", "gpt-4", testQuery, []byte("{}"), testResponse, -1)
 	if err != nil {
 		t.Fatalf("Failed to add entry: %v", err)
 	}
@@ -2092,7 +2107,7 @@ func TestHybridCacheLocalCacheHit(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// First search - should populate local cache
-	response1, found, err := cache.FindSimilar("gpt-4", testQuery)
+	response1, found, err := findSimilar(cache, "gpt-4", testQuery)
 	if err != nil {
 		t.Fatalf("FindSimilar failed: %v", err)
 	}
@@ -2103,7 +2118,7 @@ func TestHybridCacheLocalCacheHit(t *testing.T) {
 
 	// Second search - should hit local cache (much faster)
 	startTime := time.Now()
-	response, found, err := cache.FindSimilar("gpt-4", testQuery)
+	response, found, err := findSimilar(cache, "gpt-4", testQuery)
 	localLatency := time.Since(startTime)
 	if err != nil {
 		t.Fatalf("FindSimilar failed: %v", err)
@@ -2253,7 +2268,7 @@ milvus:
 	for i := 0; i < b.N; i++ {
 		query := fmt.Sprintf("Benchmark query number %d", i)
 		response := []byte(fmt.Sprintf(`{"answer": "Response %d"}`, i))
-		err := cache.AddEntry(fmt.Sprintf("req%d", i), "gpt-4", query, []byte("{}"), response, -1)
+		err := cache.AddEntry(context.Background(), fmt.Sprintf("req%d", i), "gpt-4", query, []byte("{}"), response, -1)
 		if err != nil {
 			b.Fatalf("AddEntry failed: %v", err)
 		}
@@ -2297,7 +2312,7 @@ milvus:
 	for i := 0; i < 100; i++ {
 		query := fmt.Sprintf("Benchmark query number %d", i)
 		response := []byte(fmt.Sprintf(`{"answer": "Response %d"}`, i))
-		err := cache.AddEntry(fmt.Sprintf("req%d", i), "gpt-4", query, []byte("{}"), response, -1)
+		err := cache.AddEntry(context.Background(), fmt.Sprintf("req%d", i), "gpt-4", query, []byte("{}"), response, -1)
 		if err != nil {
 			b.Fatalf("AddEntry failed: %v", err)
 		}
@@ -2308,7 +2323,7 @@ milvus:
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		query := fmt.Sprintf("Benchmark query number %d", i%100)
-		_, _, err := cache.FindSimilar("gpt-4", query)
+		_, _, err := findSimilar(cache, "gpt-4", query)
 		if err != nil {
 			b.Fatalf("FindSimilar failed: %v", err)
 		}
@@ -2628,7 +2643,7 @@ func BenchmarkHybridVsMilvus(b *testing.B) {
 							// Every Milvus FindSimilar is a database call
 							dbCallCounter.Increment()
 
-							_, found, err := milvusCache.FindSimilar("test-model", searchQueries[queryIdx])
+							_, found, err := findSimilar(milvusCache, "test-model", searchQueries[queryIdx])
 							searchLatency := time.Since(searchStart)
 
 							if err != nil {
@@ -2791,7 +2806,7 @@ func BenchmarkHybridVsMilvus(b *testing.B) {
 							queryIdx := i % len(searchQueries)
 							searchStart := time.Now()
 
-							_, found, err := hybridCache.FindSimilar("test-model", searchQueries[queryIdx])
+							_, found, err := findSimilar(hybridCache, "test-model", searchQueries[queryIdx])
 							searchLatency := time.Since(searchStart)
 
 							if err != nil {
@@ -2921,7 +2936,7 @@ func BenchmarkComponentLatency(b *testing.B) {
 
 		b.Logf("Building HNSW index with %d entries...", cacheSize)
 		for i := 0; i < cacheSize; i++ {
-			_ = cache.AddEntry(fmt.Sprintf("req-%d", i), "model", testQueries[i], []byte("req"), []byte("resp"), -1)
+			_ = cache.AddEntry(context.Background(), fmt.Sprintf("req-%d", i), "model", testQueries[i], []byte("req"), []byte("resp"), -1)
 		}
 		b.Logf("HNSW index built")
 
@@ -2931,7 +2946,7 @@ func BenchmarkComponentLatency(b *testing.B) {
 		start := time.Now()
 		for i := 0; i < b.N; i++ {
 			// Note: HNSW search uses entries slice internally
-			_, _, _ = cache.FindSimilar("model", query)
+			_, _, _ = findSimilar(cache, "model", query)
 		}
 		elapsed := time.Since(start)
 		avgMs := float64(elapsed.Nanoseconds()) / float64(b.N) / 1e6
@@ -2955,7 +2970,7 @@ func BenchmarkComponentLatency(b *testing.B) {
 
 		b.Logf("Populating Milvus with %d entries...", cacheSize)
 		for i := 0; i < cacheSize; i++ {
-			_ = milvusCache.AddEntry(fmt.Sprintf("req-%d", i), "model", testQueries[i], []byte("req"), []byte("resp"), -1)
+			_ = milvusCache.AddEntry(context.Background(), fmt.Sprintf("req-%d", i), "model", testQueries[i], []byte("req"), []byte("resp"), -1)
 		}
 		time.Sleep(2 * time.Second)
 		b.Logf("Milvus populated")
@@ -2965,7 +2980,7 @@ func BenchmarkComponentLatency(b *testing.B) {
 		b.ResetTimer()
 		start := time.Now()
 		for i := 0; i < b.N; i++ {
-			_, _, _ = milvusCache.FindSimilar("model", query)
+			_, _, _ = findSimilar(milvusCache, "model", query)
 		}
 		elapsed := time.Since(start)
 		avgMs := float64(elapsed.Nanoseconds()) / float64(b.N) / 1e6
@@ -3013,7 +3028,7 @@ func BenchmarkThroughputUnderLoad(b *testing.B) {
 
 			// Populate
 			for i := 0; i < cacheSize; i++ {
-				_ = milvusCache.AddEntry(fmt.Sprintf("req-%d", i), "model", testQueries[i], []byte("req"), []byte("resp"), -1)
+				_ = milvusCache.AddEntry(context.Background(), fmt.Sprintf("req-%d", i), "model", testQueries[i], []byte("req"), []byte("resp"), -1)
 			}
 			time.Sleep(2 * time.Second)
 
@@ -3025,7 +3040,7 @@ func BenchmarkThroughputUnderLoad(b *testing.B) {
 				i := 0
 				for pb.Next() {
 					query := testQueries[i%len(testQueries)]
-					_, _, _ = milvusCache.FindSimilar("model", query)
+					_, _, _ = findSimilar(milvusCache, "model", query)
 					i++
 				}
 			})
@@ -3055,7 +3070,7 @@ func BenchmarkThroughputUnderLoad(b *testing.B) {
 
 			// Populate
 			for i := 0; i < cacheSize; i++ {
-				_ = hybridCache.AddEntry(fmt.Sprintf("req-%d", i), "model", testQueries[i], []byte("req"), []byte("resp"), -1)
+				_ = hybridCache.AddEntry(context.Background(), fmt.Sprintf("req-%d", i), "model", testQueries[i], []byte("req"), []byte("resp"), -1)
 			}
 			time.Sleep(2 * time.Second)
 
@@ -3067,7 +3082,7 @@ func BenchmarkThroughputUnderLoad(b *testing.B) {
 				i := 0
 				for pb.Next() {
 					query := testQueries[i%len(testQueries)]
-					_, _, _ = hybridCache.FindSimilar("model", query)
+					_, _, _ = findSimilar(hybridCache, "model", query)
 					i++
 				}
 			})
@@ -3166,7 +3181,7 @@ func TestHybridVsMilvusSmoke(t *testing.T) {
 		time.Sleep(1 * time.Second)
 
 		// Add entry
-		err = cache.AddEntry("req-1", "model", "What is machine learning?", []byte("req"), []byte("ML is..."), -1)
+		err = cache.AddEntry(context.Background(), "req-1", "model", "What is machine learning?", []byte("req"), []byte("ML is..."), -1)
 		if err != nil {
 			t.Fatalf("Failed to add entry: %v", err)
 		}
@@ -3174,7 +3189,7 @@ func TestHybridVsMilvusSmoke(t *testing.T) {
 		time.Sleep(1 * time.Second)
 
 		// Find similar
-		resp, found, err := cache.FindSimilar("model", "What is machine learning?")
+		resp, found, err := findSimilar(cache, "model", "What is machine learning?")
 		if err != nil {
 			t.Fatalf("FindSimilar failed: %v", err)
 		}
@@ -3207,7 +3222,7 @@ func TestHybridVsMilvusSmoke(t *testing.T) {
 		time.Sleep(1 * time.Second)
 
 		// Add entry
-		err = cache.AddEntry("req-1", "model", "What is deep learning?", []byte("req"), []byte("DL is..."), -1)
+		err = cache.AddEntry(context.Background(), "req-1", "model", "What is deep learning?", []byte("req"), []byte("DL is..."), -1)
 		if err != nil {
 			t.Fatalf("Failed to add entry: %v", err)
 		}
@@ -3215,7 +3230,7 @@ func TestHybridVsMilvusSmoke(t *testing.T) {
 		time.Sleep(1 * time.Second)
 
 		// Find similar
-		resp, found, err := cache.FindSimilar("model", "What is deep learning?")
+		resp, found, err := findSimilar(cache, "model", "What is deep learning?")
 		if err != nil {
 			t.Fatalf("FindSimilar failed: %v", err)
 		}
@@ -3246,14 +3261,14 @@ func TestInMemoryCacheIntegration(t *testing.T) {
 
 	t.Run("InMemoryCacheIntegration", func(t *testing.T) {
 		// Step 1: Add first entry
-		err := cache.AddEntry("req1", "test-model", "Hello world",
+		err := cache.AddEntry(context.Background(), "req1", "test-model", "Hello world",
 			[]byte("request1"), []byte("response1"), -1)
 		if err != nil {
 			t.Fatalf("Failed to add first entry: %v", err)
 		}
 
 		// Step 2: Add second entry (cache at capacity)
-		err = cache.AddEntry("req2", "test-model", "Good morning",
+		err = cache.AddEntry(context.Background(), "req2", "test-model", "Good morning",
 			[]byte("request2"), []byte("response2"), -1)
 		if err != nil {
 			t.Fatalf("Failed to add second entry: %v", err)
@@ -3269,7 +3284,7 @@ func TestInMemoryCacheIntegration(t *testing.T) {
 
 		// Step 3: Access first entry multiple times to increase its frequency
 		for range 2 {
-			responseBody, found, findErr := cache.FindSimilar("test-model", "Hello world")
+			responseBody, found, findErr := findSimilar(cache, "test-model", "Hello world")
 			if findErr != nil {
 				t.Logf("FindSimilar failed (expected due to high threshold): %v", findErr)
 			}
@@ -3282,7 +3297,7 @@ func TestInMemoryCacheIntegration(t *testing.T) {
 		}
 
 		// Step 4: Access second entry once
-		responseBody, found, err := cache.FindSimilar("test-model", "Good morning")
+		responseBody, found, err := findSimilar(cache, "test-model", "Good morning")
 		if err != nil {
 			t.Logf("FindSimilar failed (expected due to high threshold): %v", err)
 		}
@@ -3294,7 +3309,7 @@ func TestInMemoryCacheIntegration(t *testing.T) {
 		}
 
 		// Step 5: Add third entry - should trigger LFU eviction
-		err = cache.AddEntry("req3", "test-model", "Bye",
+		err = cache.AddEntry(context.Background(), "req3", "test-model", "Bye",
 			[]byte("request3"), []byte("response3"), -1)
 		if err != nil {
 			t.Fatalf("Failed to add third entry: %v", err)
@@ -3333,7 +3348,7 @@ func TestInMemoryCachePendingRequestWorkflow(t *testing.T) {
 
 	t.Run("PendingRequestFlow", func(t *testing.T) {
 		// Step 1: Add pending request
-		err := cache.AddPendingRequest("req1", "test-model", "test query", []byte("request"), -1)
+		err := cache.AddPendingRequest(context.Background(), "req1", "test-model", "test query", []byte("request"), -1)
 		if err != nil {
 			t.Fatalf("Failed to add pending request: %v", err)
 		}
@@ -3348,13 +3363,13 @@ func TestInMemoryCachePendingRequestWorkflow(t *testing.T) {
 		}
 
 		// Step 2: Update with response
-		err = cache.UpdateWithResponse("req1", []byte("response1"), -1)
+		err = cache.UpdateWithResponse(context.Background(), "req1", []byte("response1"), -1)
 		if err != nil {
 			t.Fatalf("Failed to update with response: %v", err)
 		}
 
 		// Step 3: Try to find similar
-		response, found, err := cache.FindSimilar("test-model", "test query")
+		response, found, err := findSimilar(cache, "test-model", "test query")
 		if err != nil {
 			t.Logf("FindSimilar error (may be due to embedding): %v", err)
 		}
@@ -3437,12 +3452,12 @@ func TestInMemoryCacheHNSW(t *testing.T) {
 		// Add entries to both caches
 		for i, q := range testQueries {
 			reqID := fmt.Sprintf("req%d", i)
-			err := cacheHNSW.AddEntry(reqID, q.model, q.query, []byte(q.query), []byte(q.response), -1)
+			err := cacheHNSW.AddEntry(context.Background(), reqID, q.model, q.query, []byte(q.query), []byte(q.response), -1)
 			if err != nil {
 				t.Fatalf("Failed to add entry to HNSW cache: %v", err)
 			}
 
-			err = cacheLinear.AddEntry(reqID, q.model, q.query, []byte(q.query), []byte(q.response), -1)
+			err = cacheLinear.AddEntry(context.Background(), reqID, q.model, q.query, []byte(q.query), []byte(q.response), -1)
 			if err != nil {
 				t.Fatalf("Failed to add entry to linear cache: %v", err)
 			}
@@ -3457,7 +3472,7 @@ func TestInMemoryCacheHNSW(t *testing.T) {
 		}
 
 		// Test exact match search
-		response, found, err := cacheHNSW.FindSimilar("test-model", "What is machine learning?")
+		response, found, err := findSimilar(cacheHNSW, "test-model", "What is machine learning?")
 		if err != nil {
 			t.Fatalf("HNSW FindSimilar error: %v", err)
 		}
@@ -3469,7 +3484,7 @@ func TestInMemoryCacheHNSW(t *testing.T) {
 		}
 
 		// Test similar query search
-		response, found, err = cacheHNSW.FindSimilar("test-model", "What is ML?")
+		response, found, err = findSimilar(cacheHNSW, "test-model", "What is ML?")
 		if err != nil {
 			t.Logf("HNSW FindSimilar error (may not find due to threshold): %v", err)
 		}
@@ -3500,7 +3515,7 @@ func TestInMemoryCacheHNSW(t *testing.T) {
 		})
 
 		// Add an entry
-		err := cacheTTL.AddEntry("req1", "test-model", "test query", []byte("request"), []byte("response"), -1)
+		err := cacheTTL.AddEntry(context.Background(), "req1", "test-model", "test query", []byte("request"), []byte("response"), -1)
 		if err != nil {
 			t.Fatalf("Failed to add entry: %v", err)
 		}
@@ -3556,14 +3571,14 @@ func BenchmarkInMemoryCacheSearch(b *testing.B) {
 			// Populate cache
 			for i, entry := range entries {
 				reqID := fmt.Sprintf("req%d", i)
-				_ = cache.AddEntry(reqID, "test-model", entry.query, []byte(entry.query), []byte(entry.response), -1)
+				_ = cache.AddEntry(context.Background(), reqID, "test-model", entry.query, []byte(entry.query), []byte(entry.response), -1)
 			}
 
 			// Benchmark search
 			searchQuery := "What is machine learning and artificial intelligence?"
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				_, _, _ = cache.FindSimilar("test-model", searchQuery)
+				_, _, _ = findSimilar(cache, "test-model", searchQuery)
 			}
 		})
 
@@ -3582,14 +3597,14 @@ func BenchmarkInMemoryCacheSearch(b *testing.B) {
 			// Populate cache
 			for i, entry := range entries {
 				reqID := fmt.Sprintf("req%d", i)
-				_ = cache.AddEntry(reqID, "test-model", entry.query, []byte(entry.query), []byte(entry.response), -1)
+				_ = cache.AddEntry(context.Background(), reqID, "test-model", entry.query, []byte(entry.query), []byte(entry.response), -1)
 			}
 
 			// Benchmark search
 			searchQuery := "What is machine learning and artificial intelligence?"
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				_, _, _ = cache.FindSimilar("test-model", searchQuery)
+				_, _, _ = findSimilar(cache, "test-model", searchQuery)
 			}
 		})
 	}
@@ -3628,7 +3643,7 @@ func BenchmarkHNSWIndexConstruction(b *testing.B) {
 				// Add entries and build index
 				for j := 0; j < count; j++ {
 					reqID := fmt.Sprintf("req%d", j)
-					_ = cache.AddEntry(reqID, "test-model", testQueries[j], []byte(testQueries[j]), []byte("response"), -1)
+					_ = cache.AddEntry(context.Background(), reqID, "test-model", testQueries[j], []byte(testQueries[j]), []byte("response"), -1)
 				}
 			}
 		})
@@ -3678,14 +3693,14 @@ func BenchmarkHNSWParameters(b *testing.B) {
 			// Populate cache
 			for i, entry := range entries {
 				reqID := fmt.Sprintf("req%d", i)
-				_ = cache.AddEntry(reqID, "test-model", entry.query, []byte(entry.query), []byte(entry.response), -1)
+				_ = cache.AddEntry(context.Background(), reqID, "test-model", entry.query, []byte(entry.query), []byte(entry.response), -1)
 			}
 
 			// Benchmark search
 			searchQuery := "What is artificial intelligence and machine learning?"
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				_, _, _ = cache.FindSimilar("test-model", searchQuery)
+				_, _, _ = findSimilar(cache, "test-model", searchQuery)
 			}
 		})
 	}
@@ -3712,10 +3727,10 @@ func BenchmarkCacheOperations(b *testing.B) {
 			reqID := fmt.Sprintf("req%d", i)
 
 			// Add entry
-			_ = cache.AddEntry(reqID, "test-model", query, []byte(query), []byte("response"), -1)
+			_ = cache.AddEntry(context.Background(), reqID, "test-model", query, []byte(query), []byte("response"), -1)
 
 			// Find similar
-			_, _, _ = cache.FindSimilar("test-model", query)
+			_, _, _ = findSimilar(cache, "test-model", query)
 		}
 	})
 
@@ -3736,10 +3751,10 @@ func BenchmarkCacheOperations(b *testing.B) {
 			reqID := fmt.Sprintf("req%d", i)
 
 			// Add entry
-			_ = cache.AddEntry(reqID, "test-model", query, []byte(query), []byte("response"), -1)
+			_ = cache.AddEntry(context.Background(), reqID, "test-model", query, []byte(query), []byte("response"), -1)
 
 			// Find similar
-			_, _, _ = cache.FindSimilar("test-model", query)
+			_, _, _ = findSimilar(cache, "test-model", query)
 		}
 	})
 }
@@ -3769,7 +3784,7 @@ func BenchmarkHNSWRebuild(b *testing.B) {
 			for i := 0; i < size; i++ {
 				query := fmt.Sprintf("Query %d about machine learning", i)
 				reqID := fmt.Sprintf("req%d", i)
-				_ = cache.AddEntry(reqID, "test-model", query, []byte(query), []byte("response"), -1)
+				_ = cache.AddEntry(context.Background(), reqID, "test-model", query, []byte(query), []byte("response"), -1)
 			}
 
 			b.ResetTimer()
@@ -4164,7 +4179,7 @@ func BenchmarkLargeScale(b *testing.B) {
 				}
 
 				for i := 0; i < cacheSize; i++ {
-					err := cache.AddEntry(
+					err := cache.AddEntry(context.Background(),
 						fmt.Sprintf("req-%d", i),
 						"test-model",
 						testQueries[i],
@@ -4187,7 +4202,7 @@ func BenchmarkLargeScale(b *testing.B) {
 				b.ResetTimer()
 				start := time.Now()
 				for i := 0; i < b.N; i++ {
-					_, _, err := cache.FindSimilar("test-model", searchQuery)
+					_, _, err := findSimilar(cache, "test-model", searchQuery)
 					if err != nil {
 						b.Fatalf("FindSimilar failed: %v", err)
 					}
@@ -4234,7 +4249,7 @@ func BenchmarkLargeScale(b *testing.B) {
 					}
 
 					for i := 0; i < cacheSize; i++ {
-						err := cache.AddEntry(
+						err := cache.AddEntry(context.Background(),
 							fmt.Sprintf("req-%d", i),
 							"test-model",
 							testQueries[i],
@@ -4268,7 +4283,7 @@ func BenchmarkLargeScale(b *testing.B) {
 					b.ResetTimer()
 					start := time.Now()
 					for i := 0; i < b.N; i++ {
-						_, _, err := cache.FindSimilar("test-model", searchQuery)
+						_, _, err := findSimilar(cache, "test-model", searchQuery)
 						if err != nil {
 							b.Fatalf("FindSimilar failed: %v", err)
 						}
@@ -4356,7 +4371,7 @@ func BenchmarkScalability(b *testing.B) {
 					})
 
 					for i := 0; i < cacheSize; i++ {
-						if err := cache.AddEntry(fmt.Sprintf("req-%d", i), "model",
+						if err := cache.AddEntry(context.Background(), fmt.Sprintf("req-%d", i), "model",
 							testQueries[i], []byte("req"), []byte("resp"), -1); err != nil {
 							b.Fatalf("AddEntry failed: %v", err)
 						}
@@ -4365,7 +4380,7 @@ func BenchmarkScalability(b *testing.B) {
 					b.ResetTimer()
 					start := time.Now()
 					for i := 0; i < b.N; i++ {
-						if _, _, err := cache.FindSimilar("model", searchQuery); err != nil {
+						if _, _, err := findSimilar(cache, "model", searchQuery); err != nil {
 							b.Fatalf("FindSimilar failed: %v", err)
 						}
 					}
@@ -4400,7 +4415,7 @@ func BenchmarkScalability(b *testing.B) {
 
 				buildStart := time.Now()
 				for i := 0; i < cacheSize; i++ {
-					if err := cache.AddEntry(fmt.Sprintf("req-%d", i), "model",
+					if err := cache.AddEntry(context.Background(), fmt.Sprintf("req-%d", i), "model",
 						testQueries[i], []byte("req"), []byte("resp"), -1); err != nil {
 						b.Fatalf("AddEntry failed: %v", err)
 					}
@@ -4413,7 +4428,7 @@ func BenchmarkScalability(b *testing.B) {
 				b.ResetTimer()
 				start := time.Now()
 				for i := 0; i < b.N; i++ {
-					if _, _, err := cache.FindSimilar("model", searchQuery); err != nil {
+					if _, _, err := findSimilar(cache, "model", searchQuery); err != nil {
 						b.Fatalf("FindSimilar failed: %v", err)
 					}
 				}
@@ -4520,7 +4535,7 @@ func BenchmarkHNSWParameterSweep(b *testing.B) {
 			b.Logf("Building HNSW index: M=%d, efConstruction=200, efSearch=%d", config.m, config.efSearch)
 			buildStart := time.Now()
 			for i := 0; i < cacheSize; i++ {
-				if err := cache.AddEntry(fmt.Sprintf("req-%d", i), "model",
+				if err := cache.AddEntry(context.Background(), fmt.Sprintf("req-%d", i), "model",
 					testQueries[i], []byte("req"), []byte("resp"), -1); err != nil {
 					b.Fatalf("AddEntry failed: %v", err)
 				}
@@ -4543,7 +4558,7 @@ func BenchmarkHNSWParameterSweep(b *testing.B) {
 			b.ResetTimer()
 			start := time.Now()
 			for i := 0; i < b.N; i++ {
-				if _, _, err := cache.FindSimilar("model", searchQuery); err != nil {
+				if _, _, err := findSimilar(cache, "model", searchQuery); err != nil {
 					b.Fatalf("FindSimilar failed: %v", err)
 				}
 			}

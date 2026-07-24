@@ -2,10 +2,11 @@
 
 package cache
 
+import "context"
+
 // InMemoryCache provides high-performance in-memory semantic caching
 type InMemoryCache struct {
-	SimilarityTracker // embedded — provides LastSimilarity()
-	enabled           bool
+	enabled bool
 }
 
 // InMemoryCacheOptions contains configuration for the in-memory cache
@@ -34,35 +35,28 @@ func (c *InMemoryCache) IsEnabled() bool {
 }
 
 // AddPendingRequest stores a request awaiting its response
-func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte) error {
+func (c *InMemoryCache) AddPendingRequest(_ context.Context, requestID string, model string, query string, requestBody []byte, ttlSeconds int) error {
 	return nil
 }
 
 // UpdateWithResponse completes a pending request with its response
-func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte) error {
+func (c *InMemoryCache) UpdateWithResponse(_ context.Context, requestID string, responseBody []byte, ttlSeconds int) error {
 	return nil
 }
 
 // AddEntry stores a complete request-response pair
-func (c *InMemoryCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte) error {
+func (c *InMemoryCache) AddEntry(_ context.Context, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
 	return nil
 }
 
 // FindSimilar searches for semantically similar cached requests
-func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, error) {
-	if !c.enabled {
-		return nil, false, nil
-	}
-	// Always return miss for mock unless we want to simulate hits
-	return nil, false, nil
+func (c *InMemoryCache) FindSimilar(_ context.Context, model string, query string) (LookupResult, error) {
+	return LookupResult{}, nil
 }
 
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
-func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
-	if !c.enabled {
-		return nil, false, nil
-	}
-	return nil, false, nil
+func (c *InMemoryCache) FindSimilarWithThreshold(_ context.Context, model string, query string, threshold float32) (LookupResult, error) {
+	return LookupResult{}, nil
 }
 
 // Close releases all resources
@@ -76,6 +70,6 @@ func (c *InMemoryCache) GetStats() CacheStats {
 }
 
 // CheckConnection checks if the cache backend is reachable
-func (c *InMemoryCache) CheckConnection() error {
+func (c *InMemoryCache) CheckConnection(_ context.Context) error {
 	return nil
 }
