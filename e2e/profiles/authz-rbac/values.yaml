@@ -60,6 +60,19 @@ config:
             type: vllm
   routing:
     decisions:
+      - name: admin_marker
+        description: Admin-only marker used to verify authz-aware signal evaluation
+        priority: 310
+        rules:
+          operator: AND
+          conditions:
+            - type: authz
+              name: admin
+            - type: keyword
+              name: admin_only_marker
+        modelRefs:
+          - model: Qwen/Qwen2.5-14B-Instruct
+            use_reasoning: false
       - name: admin_unrestricted
         description: Admin users get 14B with reasoning
         priority: 300
@@ -123,6 +136,10 @@ config:
             use_reasoning: false
     signals:
       keywords:
+        - name: admin_only_marker
+          operator: OR
+          keywords:
+            - authz-scope-marker-2647
         - name: complex_analysis
           operator: OR
           keywords:

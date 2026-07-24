@@ -131,6 +131,7 @@ The authz-rbac profile includes the following test cases:
 - **chat-completions-request**: Basic functional test that validates end-to-end routing
 - **chat-completions-request-authz**: Sends identity headers from the client; Lua strips them before ext_proc (same as spoofing defense). Asserts HTTP 200.
 - **authz-header-spoofing**: Security test that verifies client-supplied identity headers are stripped and cannot be used for unauthorized access
+- **authz-signal-scope**: Sends an unauthenticated request containing a marker used only by an admin decision. Asserts fallback routing is unchanged and the marker signal's extraction counter does not increase.
 
 **Rate limiting (`ratelimit-limitor`)** is intentionally **not** part of this profile: that test requires `x-authz-user-id` / `x-authz-user-groups` to reach the router from the HTTP client, which conflicts with the Lua filter that strips client-supplied identity headers (Issue #1447). Run `ratelimit-limitor` from a profile without that strip, or drive identity via JWT placed **after** the strip in the filter chain.
 
