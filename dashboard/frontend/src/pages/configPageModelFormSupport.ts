@@ -27,6 +27,8 @@ export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
     .map((entry) => {
       const normalized: BackendRefEntry = {}
       if (typeof entry.name === 'string' && entry.name.trim()) normalized.name = entry.name.trim()
+      if (typeof entry.backend_id === 'string' && entry.backend_id.trim()) normalized.backend_id = entry.backend_id.trim()
+      if (typeof entry.engine_kind === 'string' && entry.engine_kind.trim()) normalized.engine_kind = entry.engine_kind.trim()
       if (typeof entry.endpoint === 'string' && entry.endpoint.trim()) normalized.endpoint = entry.endpoint.trim()
       if (entry.protocol === 'https') normalized.protocol = 'https'
       else if (entry.protocol === 'http') normalized.protocol = 'http'

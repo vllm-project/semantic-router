@@ -210,6 +210,8 @@ def _migrate_legacy_endpoints_to_backend_refs(
             continue
         backend_ref = {
             "name": endpoint.get("name") or "primary",
+            "backend_id": endpoint.get("backend_id"),
+            "engine_kind": endpoint.get("engine_kind"),
             "endpoint": endpoint.get("endpoint"),
             "protocol": endpoint.get("protocol"),
             "weight": endpoint.get("weight"),
@@ -397,7 +399,17 @@ def _build_legacy_backend_catalog(source: dict[str, Any]) -> dict[str, dict[str,
                 endpoint_value = f"{endpoint_value}:{port}"
             _set_if_missing(backend_ref, "endpoint", endpoint_value)
 
-        for key in ("protocol", "weight", "type", "api_key", "api_key_env"):
+        for key in (
+            "backend_id",
+            "engine_kind",
+            "metrics_port",
+            "metrics_path",
+            "protocol",
+            "weight",
+            "type",
+            "api_key",
+            "api_key_env",
+        ):
             _set_if_missing(backend_ref, key, raw_endpoint.get(key))
 
         catalog[endpoint_name] = backend_ref
@@ -456,7 +468,11 @@ def _convert_model_targets_to_provider_models(
                 continue
             backend_ref = {"name": backend_name}
             for key in (
+                "backend_id",
+                "engine_kind",
                 "endpoint",
+                "metrics_port",
+                "metrics_path",
                 "protocol",
                 "weight",
                 "type",

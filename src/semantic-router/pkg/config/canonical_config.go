@@ -343,12 +343,16 @@ func normalizeCanonicalProviderModels(models []CanonicalProviderModel) (map[stri
 			endpointName := canonicalEndpointName(model.Name, backendRef, index)
 			backendType := canonicalBackendType(backendRef)
 			endpoint := VLLMEndpoint{
-				Name:     endpointName,
-				Weight:   backendRef.Weight,
-				Type:     backendType,
-				Protocol: defaultProtocol(backendRef.Protocol),
-				Model:    model.Name,
-				APIKey:   resolveBackendAPIKey(backendRef),
+				Name:        endpointName,
+				BackendID:   backendRef.BackendID,
+				EngineKind:  backendRef.EngineKind,
+				MetricsPort: backendRef.MetricsPort,
+				MetricsPath: backendRef.MetricsPath,
+				Weight:      backendRef.Weight,
+				Type:        backendType,
+				Protocol:    defaultProtocol(backendRef.Protocol),
+				Model:       model.Name,
+				APIKey:      resolveBackendAPIKey(backendRef),
 			}
 			if endpoint.Weight == 0 {
 				endpoint.Weight = 1

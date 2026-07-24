@@ -5,8 +5,20 @@ type APIConfig struct {
 }
 
 type ObservabilityConfig struct {
-	Tracing TracingConfig `yaml:"tracing"`
-	Metrics MetricsConfig `yaml:"metrics"`
+	Tracing          TracingConfig          `yaml:"tracing"`
+	Metrics          MetricsConfig          `yaml:"metrics"`
+	BackendTelemetry BackendTelemetryConfig `yaml:"backend_telemetry"`
+}
+
+// BackendTelemetryConfig controls the engine-neutral backend telemetry
+// collector. It carries only collection cadence knobs; per-backend metrics
+// surfaces (engine kind, metrics port/path) are self-described on each
+// providers.models[].backend_refs[] entry.
+type BackendTelemetryConfig struct {
+	Enabled        bool   `yaml:"enabled"`
+	PollInterval   string `yaml:"poll_interval,omitempty"`
+	TTL            string `yaml:"ttl,omitempty"`
+	RequestTimeout string `yaml:"request_timeout,omitempty"`
 }
 
 type MetricsConfig struct {

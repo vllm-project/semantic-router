@@ -375,17 +375,21 @@ func canonicalProviderBackendRefs(
 
 func canonicalBackendRefFromRuntime(endpoint VLLMEndpoint, fallbackAPIKey string, profile ProviderProfile) CanonicalBackendRef {
 	ref := CanonicalBackendRef{
-		Name:       endpoint.Name,
-		Protocol:   endpoint.Protocol,
-		Weight:     endpoint.Weight,
-		Type:       endpoint.Type,
-		Provider:   profile.Type,
-		BaseURL:    profile.BaseURL,
-		AuthHeader: profile.AuthHeader,
-		AuthPrefix: profile.AuthPrefix,
-		APIVersion: profile.APIVersion,
-		ChatPath:   profile.ChatPath,
-		APIKey:     endpoint.APIKey,
+		Name:        endpoint.Name,
+		BackendID:   endpoint.BackendID,
+		EngineKind:  endpoint.EngineKind,
+		MetricsPort: endpoint.MetricsPort,
+		MetricsPath: endpoint.MetricsPath,
+		Protocol:    endpoint.Protocol,
+		Weight:      endpoint.Weight,
+		Type:        endpoint.Type,
+		Provider:    profile.Type,
+		BaseURL:     profile.BaseURL,
+		AuthHeader:  profile.AuthHeader,
+		AuthPrefix:  profile.AuthPrefix,
+		APIVersion:  profile.APIVersion,
+		ChatPath:    profile.ChatPath,
+		APIKey:      endpoint.APIKey,
 	}
 	if endpoint.Address != "" {
 		ref.Endpoint = endpoint.Address

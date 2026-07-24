@@ -1087,7 +1087,11 @@ class BackendRef(BaseModel):
     """Inline backend access details carried under providers.models[].backend_refs."""
 
     name: Optional[str] = None
+    backend_id: Optional[str] = None
+    engine_kind: Optional[str] = None
     endpoint: Optional[str] = None
+    metrics_port: Optional[int] = None
+    metrics_path: Optional[str] = None
     protocol: str = "http"
     weight: int = 1
     type: Optional[str] = None
