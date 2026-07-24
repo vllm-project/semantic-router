@@ -84,4 +84,4 @@ data:
   config.yaml: |
     {{- toYaml $config | nindent 4 }}
   tools_db.json: |
-    {{- toJson .Values.toolsDb | nindent 4 }}
+    {{- toPrettyJson .Values.toolsDb | nindent 4 }}

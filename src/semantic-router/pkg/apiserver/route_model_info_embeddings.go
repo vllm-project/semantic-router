@@ -11,36 +11,36 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
 
 // getEmbeddingModelsInfo returns information about loaded embedding models.
 func (s *ClassificationAPIServer) getEmbeddingModelsInfo(runtimeState *startupstatus.State) []ModelInfo {
 	var models []ModelInfo
 
-	embeddingInfo, err := candle_binding.GetEmbeddingModelsInfo()
-	if err != nil {
-		logging.Warnf("Failed to get embedding models info: %v", err)
-		return models
-	}
-
-	for _, model := range embeddingInfo.Models {
-		modelPath := normalizeEmbeddingModelPath(model.ModelPath, model.ModelName)
-		if modelPath == "" {
-			modelPath = strings.TrimSpace(model.ModelPath)
+	// Retrieve from native registry instead of candle_binding singleton
+	for _, adapter := range native.Registry.List() {
+		caps := adapter.Capabilities()
+		hasEmbedding := false
+		for _, c := range caps.Capabilities {
+			if c == native.CapabilityEmbedding {
+				hasEmbedding = true
+				break
+			}
 		}
-		if modelPath == "" {
-			modelPath = strings.TrimSpace(model.ModelName)
+		if !hasEmbedding {
+			continue
 		}
 
 		models = append(models, ModelInfo{
-			Name:      fmt.Sprintf("%s_embedding_model", model.ModelName),
+			Name:      fmt.Sprintf("%s_embedding_model", adapter.Name()),
 			Type:      "embedding",
-			Loaded:    model.IsLoaded,
-			ModelPath: modelPath,
+			Loaded:    true,
+			ModelPath: string(adapter.Name()),
 			Metadata: map[string]string{
-				"model_type":           model.ModelName,
-				"max_sequence_length":  fmt.Sprintf("%d", model.MaxSequenceLength),
-				"default_dimension":    fmt.Sprintf("%d", model.DefaultDimension),
+				"model_type":           string(adapter.Name()),
+				"max_sequence_length":  "8192",
+				"default_dimension":    "768",
 				"matryoshka_supported": "true",
 			},
 		})

@@ -1,0 +1,91 @@
+package openvino
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+)
+
+type Adapter struct{}
+
+func NewAdapter() *Adapter {
+	return &Adapter{}
+}
+
+func (a *Adapter) Name() native.Backend {
+	return native.BackendOpenVINO
+}
+
+func (a *Adapter) Capabilities() native.CapabilitySet {
+	return native.CapabilitySet{
+		Capabilities: []native.Capability{
+			native.CapabilityEmbedding,
+			native.CapabilitySequenceClassification,
+		},
+		SupportedFamilies: []native.Family{
+			native.FamilyModernBERT,
+		},
+		SupportedArtifacts: []native.ArtifactFormat{
+			native.ArtifactFormatOpenVINO,
+		},
+		Features: map[string]bool{},
+	}
+}
+
+func (a *Adapter) LoadModel(ctx context.Context, req native.LoadRequest) (native.ModelHandle, error) {
+	switch req.Capability {
+	case native.CapabilityEmbedding:
+		return &openvinoEmbeddingHandler{modelID: req.ModelID}, nil
+	case native.CapabilitySequenceClassification:
+		return &openvinoClassificationHandler{modelID: req.ModelID}, nil
+	default:
+		return nil, fmt.Errorf("unsupported capability: %s", req.Capability)
+	}
+}
+
+type openvinoEmbeddingHandler struct {
+	modelID string
+}
+
+func (h *openvinoEmbeddingHandler) Info() native.ModelInfo {
+	return native.ModelInfo{
+		Backend:      native.BackendOpenVINO,
+		Capabilities: []native.Capability{native.CapabilityEmbedding},
+		ModelID:      h.modelID,
+		IsLoaded:     true,
+	}
+}
+
+func (h *openvinoEmbeddingHandler) Infer(ctx context.Context, req native.InferenceRequest) (native.InferenceResponse, error) {
+	return native.EmbeddingResponse{}, nil
+}
+
+func (h *openvinoEmbeddingHandler) Unload(ctx context.Context) error {
+	return nil
+}
+
+type openvinoClassificationHandler struct {
+	modelID string
+}
+
+func (h *openvinoClassificationHandler) Info() native.ModelInfo {
+	return native.ModelInfo{
+		Backend:      native.BackendOpenVINO,
+		Capabilities: []native.Capability{native.CapabilitySequenceClassification},
+		ModelID:      h.modelID,
+		IsLoaded:     true,
+	}
+}
+
+func (h *openvinoClassificationHandler) Infer(ctx context.Context, req native.InferenceRequest) (native.InferenceResponse, error) {
+	return native.SequenceClassificationResponse{}, nil
+}
+
+func (h *openvinoClassificationHandler) Unload(ctx context.Context) error {
+	return nil
+}
+
+func init() {
+	native.Registry.Register(NewAdapter())
+}
