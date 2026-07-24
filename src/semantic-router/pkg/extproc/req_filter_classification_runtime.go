@@ -31,11 +31,15 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	signalInput signalEvaluationInput,
 	nonUserMessages []string,
 	ctx *RequestContext,
-) (*classification.SignalResults, error) {
+) (*classification.SignalResults, []config.Decision, error) {
 	signalStart := time.Now()
 	signalCtx, signalSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanSignalEvaluation)
 
-	signals, authzErr := r.Classifier.EvaluateAllSignalsWithHeaders(
+	decisionCandidates := r.decisionCandidatesForRequestModel(originalModel)
+	if decisionCandidates == nil {
+		decisionCandidates = r.Config.Decisions
+	}
+	signals, scopedCandidates, authzErr := r.Classifier.EvaluateAllSignalsWithHeadersForDecisions(
 		signalInput.compressedText,
 		signalInput.allMessagesText,
 		signalInput.currentUserText,
@@ -45,6 +49,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 		ctx.Headers,
 		false,
 		ctx.RequestImageURL,
+		decisionCandidates,
 		signalInput.evaluationText,
 		signalInput.skipCompressionSignals,
 		signalInput.conversationFacts,
@@ -56,7 +61,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 			"stage":      "authz",
 			"error":      authzErr.Error(),
 		})
-		return nil, authzErr
+		return nil, nil, authzErr
 	}
 
 	signalLatency := time.Since(signalStart).Milliseconds()
@@ -65,7 +70,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	logSignalEvaluationResults(ctx, signalLatency, signals)
 	tracing.EndSignalSpan(signalSpan, collectMatchedSignalRules(signals), 1.0, signalLatency)
 	ctx.TraceContext = signalCtx
-	return signals, nil
+	return signals, scopedCandidates, nil
 }
 
 func ensureContextTokenCount(ctx *RequestContext, signalInput signalEvaluationInput) {
@@ -142,7 +147,7 @@ func (r *OpenAIRouter) runDecisionEngine(
 		if len(candidates) == 0 {
 			tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
 			ctx.TraceContext = decisionCtx
-			return nil, ""
+			return nil, r.defaultModelForUnmatchedDecision(originalModel)
 		}
 		result, err = r.Classifier.EvaluateDecisionWithEngineForDecisions(signals, candidates)
 	} else {
