@@ -13,9 +13,21 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native/candle"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native/onnx"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native/openvino"
 )
 
+func registerNativeAdapters() {
+	native.Registry.Register(candle.NewAdapter())
+	native.Registry.Register(onnx.NewAdapter())
+	native.Registry.Register(openvino.NewAdapter())
+}
+
 func main() {
+	registerNativeAdapters()
 	logo.PrintVLLMLogo()
 	opts := parseRuntimeOptions()
 	initializeRuntimeLogger()
