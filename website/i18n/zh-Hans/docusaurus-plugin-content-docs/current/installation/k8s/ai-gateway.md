@@ -107,7 +107,7 @@ kind create cluster --name semantic-router-cluster
 kubectl wait --for=condition=Ready nodes --all --timeout=300s
 ```
 
-## 步骤 2：部署 vLLM Semantic Router 
+## 步骤 2：部署 vLLM Semantic Router
 
 使用 Helm 部署包含所有必需组件的 Semantic Router 服务：
 
@@ -253,7 +253,7 @@ kubectl logs -n vllm-semantic-router-system deployment/semantic-router
 kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml
 kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml
 
-# 删除 Semantic Router 
+# 删除 Semantic Router
 helm uninstall semantic-router -n vllm-semantic-router-system
 
 # 删除 AI gateway
