@@ -69,8 +69,9 @@ func (r *OpenAIRouter) retrieveFromVectorStore(traceCtx context.Context, ctx *Re
 		return "", nil
 	}
 
-	// Store best similarity score for observability.
+	// Store best similarity score and result count for observability.
 	ctx.RAGSimilarityScore = bestScore
+	ctx.RAGResultCount = len(results)
 
 	logging.Debugf("RAG vectorstore: retrieved %d chunks from store %s (best score: %.4f)",
 		len(results), params.storeID, bestScore)

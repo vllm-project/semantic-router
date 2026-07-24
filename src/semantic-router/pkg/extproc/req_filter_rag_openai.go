@@ -95,8 +95,9 @@ func (r *OpenAIRouter) retrieveFromOpenAI(traceCtx context.Context, ctx *Request
 	// Combine contexts
 	retrievedContext := strings.Join(contexts, "\n\n---\n\n")
 
-	// Store best similarity score
+	// Store best similarity score and result count
 	ctx.RAGSimilarityScore = float32(bestScore)
+	ctx.RAGResultCount = len(contexts)
 
 	logging.Infof("Retrieved %d documents from OpenAI vector store (similarity: %.3f, vector_store_id: %s)",
 		len(contexts), bestScore, openaiConfig.VectorStoreID)
