@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -339,6 +340,38 @@ func (r *OpenAIRouter) injectAsToolRole(messages []interface{}, context string, 
 }
 
 // injectAsSystemPrompt injects context into system prompt
+// ragSystemMessageText extracts the text of a system message's content, which
+// may be a plain string or a structured array of content parts ({type,text}
+// with type text/input_text). Flattening to text mirrors the system_prompt
+// plugin's handling and ensures structured system content is preserved rather
+// than silently dropped when RAG context is prepended.
+func ragSystemMessageText(content interface{}) string {
+	switch v := content.(type) {
+	case string:
+		return v
+	case []interface{}:
+		var b strings.Builder
+		for _, part := range v {
+			pm, ok := part.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if t, _ := pm["type"].(string); t != "" && t != "text" && t != "input_text" {
+				continue
+			}
+			if txt, ok := pm["text"].(string); ok && txt != "" {
+				if b.Len() > 0 {
+					b.WriteString("\n")
+				}
+				b.WriteString(txt)
+			}
+		}
+		return b.String()
+	default:
+		return ""
+	}
+}
+
 func (r *OpenAIRouter) injectAsSystemPrompt(messages []interface{}, context string, requestMap map[string]interface{}, ctx *RequestContext) error {
 	// Check if system message exists
 	hasSystemMessage := false
@@ -350,7 +383,10 @@ func (r *OpenAIRouter) injectAsSystemPrompt(messages []interface{}, context stri
 			role, _ := firstMsg["role"].(string)
 			if role == "system" {
 				hasSystemMessage = true
-				systemContent, _ = firstMsg["content"].(string)
+				// Content may be a plain string or a structured array of content
+				// parts (valid OpenAI input); extract the text either way so the
+				// original system instructions are not silently dropped.
+				systemContent = ragSystemMessageText(firstMsg["content"])
 			}
 		}
 	}
