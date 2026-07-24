@@ -4,8 +4,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 )
+
+// complexityDifficultyLabels is the set of difficulty labels the complexity
+// signal can emit. The runtime consumers — classifyComplexityDifficulty in
+// complexity_rule_scoring.go and the neutral-band/margin logic in
+// classifier_signal_complexity.go — hardcode exactly these lowercase values, so
+// a trained-model mapping that emits anything else (a different case, a synonym)
+// produces a signal the decision schema can never reference. Keep in sync with
+// those consumers and with complexityDifficultyLevels in
+// pkg/config/validator_complexity.go.
+var complexityDifficultyLabels = map[string]struct{}{
+	"easy":   {},
+	"medium": {},
+	"hard":   {},
+}
 
 // CategoryMapping holds the mapping between indices and domain categories
 type CategoryMapping struct {
@@ -29,6 +44,24 @@ type JailbreakMapping struct {
 	// Alternative naming (for HuggingFace compatibility)
 	LabelToID map[string]int    `json:"label_to_id"`
 	IDToLabel map[string]string `json:"id_to_label"`
+}
+
+// ComplexityMapping holds the mapping between class indices and difficulty labels
+// (e.g. easy/medium/hard) for the trained complexity classifier. It accepts several
+// common naming conventions so a model's existing mapping file can be used directly:
+//   - label_to_idx / idx_to_label (router convention)
+//   - label_to_id / id_to_label (HuggingFace config convention)
+//   - category_to_idx / idx_to_category (category-classifier mapping convention,
+//     e.g. category_mapping.json shipped alongside merged classifier checkpoints)
+type ComplexityMapping struct {
+	LabelToIdx map[string]int    `json:"label_to_idx"`
+	IdxToLabel map[string]string `json:"idx_to_label"`
+	// Alternative naming (for HuggingFace compatibility)
+	LabelToID map[string]int    `json:"label_to_id"`
+	IDToLabel map[string]string `json:"id_to_label"`
+	// Alternative naming (category-classifier mapping convention)
+	CategoryToIdx map[string]int    `json:"category_to_idx"`
+	IdxToCategory map[string]string `json:"idx_to_category"`
 }
 
 // LoadCategoryMapping loads the category mapping from a JSON file
@@ -90,6 +123,85 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 	}
 
 	return &mapping, nil
+}
+
+// LoadComplexityMapping loads the complexity difficulty mapping from a JSON file.
+// Supports both label_to_idx/idx_to_label and label_to_id/id_to_label formats.
+func LoadComplexityMapping(path string) (*ComplexityMapping, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read complexity mapping file: %w", err)
+	}
+
+	var mapping ComplexityMapping
+	if err := json.Unmarshal(data, &mapping); err != nil {
+		return nil, fmt.Errorf("failed to parse complexity mapping JSON: %w", err)
+	}
+
+	// If the canonical fields are empty but an alternative naming convention is
+	// populated, copy it into the canonical fields for internal use.
+	if len(mapping.LabelToIdx) == 0 {
+		if len(mapping.LabelToID) > 0 {
+			mapping.LabelToIdx = mapping.LabelToID
+		} else if len(mapping.CategoryToIdx) > 0 {
+			mapping.LabelToIdx = mapping.CategoryToIdx
+		}
+	}
+	if len(mapping.IdxToLabel) == 0 {
+		if len(mapping.IDToLabel) > 0 {
+			mapping.IdxToLabel = mapping.IDToLabel
+		} else if len(mapping.IdxToCategory) > 0 {
+			mapping.IdxToLabel = mapping.IdxToCategory
+		}
+	}
+
+	if err := validateComplexityMapping(&mapping); err != nil {
+		return nil, fmt.Errorf("invalid complexity mapping %q: %w", path, err)
+	}
+
+	return &mapping, nil
+}
+
+// validateComplexityMapping checks that a normalized complexity mapping is
+// usable at runtime: it must map a contiguous block of class indices [0, N)
+// onto the supported lowercase difficulty labels easy/medium/hard.
+//
+// Without this, a JSON file that parses but carries none of the recognized keys
+// yields empty maps and every classification silently misses
+// (GetDifficultyFromIndex returns ok=false); and a mapping with a stray label
+// like "HARD" or an arbitrary class name loads successfully but emits a
+// difficulty the decision schema can never match.
+func validateComplexityMapping(cm *ComplexityMapping) error {
+	if len(cm.IdxToLabel) == 0 {
+		return fmt.Errorf("mapping is empty; expected an idx_to_label (or id_to_label / idx_to_category) block")
+	}
+
+	indices := make([]int, 0, len(cm.IdxToLabel))
+	for idxStr, label := range cm.IdxToLabel {
+		idx, err := strconv.Atoi(idxStr)
+		if err != nil {
+			return fmt.Errorf("class index %q is not an integer", idxStr)
+		}
+		if _, ok := complexityDifficultyLabels[label]; !ok {
+			return fmt.Errorf("class index %d maps to unsupported label %q; supported labels are easy, medium, hard", idx, label)
+		}
+		indices = append(indices, idx)
+	}
+
+	sort.Ints(indices)
+	for i, idx := range indices {
+		if idx != i {
+			return fmt.Errorf("class indices must be contiguous starting at 0; got %v", indices)
+		}
+	}
+
+	return nil
+}
+
+// GetDifficultyFromIndex converts a class index to a difficulty label using the mapping.
+func (cm *ComplexityMapping) GetDifficultyFromIndex(classIndex int) (string, bool) {
+	label, ok := cm.IdxToLabel[fmt.Sprintf("%d", classIndex)]
+	return label, ok
 }
 
 // GetCategoryFromIndex converts a class index to category name using the mapping

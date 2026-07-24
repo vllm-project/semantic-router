@@ -135,6 +135,20 @@ spec:
             - type: "domain"
               name: "medical"
 
+      # Rule 4: Trained-classifier (model) mode — no hard/easy prototype banks.
+      # Difficulty is predicted by the classifier configured under
+      # complexity_classifier below.
+      - name: "needs-reasoning"
+        description: "Classify reasoning difficulty with the trained complexity classifier"
+        method: model
+
+    # Trained complexity classifier for complexity rules with method: model.
+    # Maps to global.model_catalog.modules.complexity.classifier.
+    complexity_classifier:
+      model_id: "models/mom-complexity-classifier"
+      use_cpu: true
+      complexity_mapping_path: "models/mom-complexity-classifier/category_mapping.json"
+
     # Semantic cache configuration
     semantic_cache:
       enabled: true

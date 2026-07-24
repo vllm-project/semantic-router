@@ -340,7 +340,13 @@ routing:
           lt: 0.05
 
     complexity:
+      # method selects how the rule decides difficulty:
+      #   embedding (default) uses the hard/easy prototype banks below.
+      #   model uses the trained classifier under
+      #   global.model_catalog.modules.complexity.classifier (set model_id +
+      #   complexity_mapping_path); in model mode hard/easy are not required.
       - name: needs_reasoning
+        method: embedding
         threshold: 0.75
         description: Escalate multi-step reasoning or synthesis-heavy prompts.
         hard:
@@ -2218,6 +2224,14 @@ global:
           best_weight: 0.75
           top_m: 2
           margin_threshold: 0.0
+        # Optional trained classifier for complexity rules with method: model.
+        # Inert by default; set model_id (HF repo or local path) and
+        # complexity_mapping_path (class-index -> easy/medium/hard JSON) to enable.
+        # The confidence floor is the per-rule threshold under routing.signals.complexity.
+        classifier:
+          model_id: ""
+          use_cpu: false
+          complexity_mapping_path: ""
       hallucination_mitigation:
         enabled: true
         on_hallucination_detected: annotate

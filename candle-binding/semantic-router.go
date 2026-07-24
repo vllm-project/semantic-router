@@ -46,6 +46,8 @@ extern bool init_deberta_jailbreak_classifier(const char* model_id, bool use_cpu
 
 extern bool init_fact_check_classifier(const char* model_id, bool use_cpu);
 
+extern bool init_complexity_classifier(const char* model_id, bool use_cpu);
+
 extern bool init_feedback_detector(const char* model_id, bool use_cpu);
 
 extern bool init_modernbert_pii_token_classifier(const char* model_id, bool use_cpu);
@@ -276,6 +278,7 @@ extern ModernBertClassificationResult classify_modernbert_jailbreak_text(const c
 extern ClassificationResult classify_deberta_jailbreak_text(const char* text);
 extern ModernBertClassificationResult classify_fact_check_text(const char* text);
 extern ModernBertClassificationResult classify_feedback_text(const char* text);
+extern ModernBertClassificationResult classify_complexity_text(const char* text);
 
 // mmBERT-32K classification functions (32K context, YaRN RoPE scaling)
 extern ModernBertClassificationResult classify_mmbert_32k_intent(const char* text);
@@ -478,6 +481,8 @@ var (
 	factCheckClassifierInitErr            error
 	feedbackDetectorInitOnce              sync.Once
 	feedbackDetectorInitErr               error
+	complexityClassifierInitOnce          sync.Once
+	complexityClassifierInitErr           error
 	qwenPreferenceInitOnce                sync.Once
 	qwenPreferenceInitErr                 error
 )
@@ -2667,6 +2672,65 @@ func ClassifyFactCheckText(text string) (ClassResult, error) {
 
 	if result.class < 0 {
 		return ClassResult{}, fmt.Errorf("failed to classify text for fact-checking")
+	}
+
+	return ClassResult{
+		Class:      int(result.class),
+		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// InitComplexityClassifier initializes the ModernBERT complexity classifier.
+// This model predicts prompt reasoning difficulty; the predicted class index is mapped
+// to a difficulty label (conventionally easy/medium/hard) by the caller's complexity mapping.
+func InitComplexityClassifier(modelPath string, useCPU bool) error {
+	var err error
+	complexityClassifierInitOnce.Do(func() {
+		if modelPath == "" {
+			// Default complexity classifier model path
+			modelPath = "./models/mom-complexity-classifier"
+		}
+
+		log.Printf("Initializing complexity classifier: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_complexity_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize complexity classifier model")
+			return
+		}
+
+		log.Printf("Complexity classifier initialized successfully")
+	})
+
+	// Reset the once so a later call can retry with a different model.
+	if err != nil {
+		complexityClassifierInitOnce = sync.Once{}
+	}
+
+	// Cache the error at package level so subsequent calls (which skip the
+	// sync.Once closure and would otherwise see a fresh nil err) still observe
+	// the failure instead of falsely reporting success.
+	complexityClassifierInitErr = err
+	return complexityClassifierInitErr
+}
+
+// ClassifyComplexityText classifies the provided text for reasoning complexity.
+// Returns the predicted difficulty class index and confidence.
+func ClassifyComplexityText(text string) (ClassResult, error) {
+	if complexityClassifierInitErr != nil {
+		return ClassResult{}, fmt.Errorf("complexity classifier not initialized: %v", complexityClassifierInitErr)
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_complexity_text(cText)
+
+	if result.class < 0 {
+		return ClassResult{}, fmt.Errorf("failed to classify text for complexity")
 	}
 
 	return ClassResult{

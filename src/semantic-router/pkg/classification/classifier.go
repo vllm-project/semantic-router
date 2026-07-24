@@ -46,6 +46,10 @@ type Classifier struct {
 	// Complexity classifier for complexity-based routing using embedding similarity
 	complexityClassifier *ComplexityClassifier
 
+	// Complexity model classifier (trained ModernBERT) for complexity rules with method "model".
+	complexityModelInitializer ComplexityInitializer
+	complexityModelInference   ComplexityInference
+
 	// Event classifier for event-driven request routing
 	eventClassifier *EventClassifier
 
@@ -66,10 +70,11 @@ type Classifier struct {
 	// authzFailOpen: cfg.Authz.FailOpen; see applyAuthzFailOpenOnClassifyError.
 	authzFailOpen bool
 
-	Config           *config.RouterConfig
-	CategoryMapping  *CategoryMapping
-	PIIMapping       *PIIMapping
-	JailbreakMapping *JailbreakMapping
+	Config            *config.RouterConfig
+	CategoryMapping   *CategoryMapping
+	PIIMapping        *PIIMapping
+	JailbreakMapping  *JailbreakMapping
+	ComplexityMapping *ComplexityMapping
 
 	// Category name mapping layer to support generic categories in config
 	// Maps MMLU-Pro category names -> generic category names (as defined in config.Categories)
@@ -138,6 +143,14 @@ func withStructureClassifier(structureClassifier *StructureClassifier) option {
 func withComplexityClassifier(complexityClassifier *ComplexityClassifier) option {
 	return func(c *Classifier) {
 		c.complexityClassifier = complexityClassifier
+	}
+}
+
+func withComplexityModel(mapping *ComplexityMapping, initializer ComplexityInitializer, inference ComplexityInference) option {
+	return func(c *Classifier) {
+		c.ComplexityMapping = mapping
+		c.complexityModelInitializer = initializer
+		c.complexityModelInference = inference
 	}
 }
 
