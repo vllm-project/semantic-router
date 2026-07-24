@@ -140,6 +140,9 @@ def test_parse_user_config_accepts_decision_learning_controls(
             "enabled": True,
             "strategy": "routing_sampling",
             "candidate_set": "decision",
+            "enable_llm_routing": True,
+            "llm_router_server_url": "http://127.0.0.1:9001",
+            "llm_router_query_template": "Decision: {{.decision_name}}",
         },
         "protection": {
             "enabled": True,

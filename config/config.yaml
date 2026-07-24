@@ -1457,6 +1457,10 @@ global:
         enabled: true
         candidate_set: decision
         strategy: routing_sampling
+        enable_llm_routing: false
+        llm_router_server_url: ""
+        llm_router_query_template: ""
+        llm_router_query_template_file: ""
       protection:
         enabled: true
         scope: conversation

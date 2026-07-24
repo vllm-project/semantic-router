@@ -439,8 +439,14 @@ func buildRLDrivenSelectionConfig(decisionCfg *config.RLDrivenSelectionConfig) *
 	if decisionCfg.EnableLLMRouting {
 		result.EnableLLMRouting = true
 	}
-	if decisionCfg.RouterR1ServerURL != "" {
-		result.RouterR1ServerURL = decisionCfg.RouterR1ServerURL
+	if decisionCfg.LLMRouterServerURL != "" {
+		result.LLMRouterServerURL = decisionCfg.LLMRouterServerURL
+	}
+	if decisionCfg.LLMRouterQueryTemplate != "" {
+		result.LLMRouterQueryTemplate = decisionCfg.LLMRouterQueryTemplate
+	}
+	if decisionCfg.LLMRouterQueryTemplateFile != "" {
+		result.LLMRouterQueryTemplateFile = decisionCfg.LLMRouterQueryTemplateFile
 	}
 	if decisionCfg.LLMRoutingFallback != "" {
 		result.LLMRoutingFallback = decisionCfg.LLMRoutingFallback

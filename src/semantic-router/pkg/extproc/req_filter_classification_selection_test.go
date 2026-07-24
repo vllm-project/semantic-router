@@ -204,7 +204,7 @@ func TestBuildSelectionContextUsesPinnedSessionIDAndToolLoopFacts(t *testing.T) 
 
 	selCtx := router.buildSelectionContext(
 		[]config.ModelRef{{Model: "model-a"}},
-		"agentic",
+		nil,
 		"query",
 		nil,
 		"",
@@ -223,6 +223,46 @@ func TestBuildSelectionContextUsesPinnedSessionIDAndToolLoopFacts(t *testing.T) 
 	}
 }
 
+func TestBuildSelectionContextIncludesLLMRouterSignals(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	reqCtx := &RequestContext{
+		RequestID:           "req-123",
+		VSRMatchedDomains:   []string{"math", "coding"},
+		VSRMatchedKeywords:  []string{"vector"},
+		VSRMatchedContext:   []string{"low_token_count"},
+		VSRMatchedStructure: []string{"list"},
+	}
+
+	selCtx := router.buildSelectionContext(
+		[]config.ModelRef{{Model: "model-a"}},
+		&config.Decision{Name: "route-a", Description: "Route math and coding queries"},
+		"question text",
+		nil,
+		"",
+		nil,
+		reqCtx,
+	)
+
+	if selCtx.DecisionDescription != "Route math and coding queries" {
+		t.Fatalf("expected decision description to be populated, got %q", selCtx.DecisionDescription)
+	}
+	if got := strings.Join(selCtx.MatchedDomains, ","); got != "math,coding" {
+		t.Fatalf("expected matched domains to be copied, got %q", got)
+	}
+	if got := strings.Join(selCtx.MatchedKeywords, ","); got != "vector" {
+		t.Fatalf("expected matched keywords to be copied, got %q", got)
+	}
+	if selCtx.RequestID != "req-123" {
+		t.Fatalf("expected request id req-123, got %q", selCtx.RequestID)
+	}
+	if !strings.Contains(strings.Join(selCtx.Labels, ","), "context:low_token_count") {
+		t.Fatalf("expected normalized labels to include context signal, got %#v", selCtx.Labels)
+	}
+	if !strings.Contains(strings.Join(selCtx.Tags, ","), "structure:list") {
+		t.Fatalf("expected normalized tags to include structure signal, got %#v", selCtx.Tags)
+	}
+}
+
 func TestBuildSelectionContextMarksUserAfterToolResultAsToolLoop(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{}}
 	reqCtx := &RequestContext{
@@ -238,7 +278,7 @@ func TestBuildSelectionContextMarksUserAfterToolResultAsToolLoop(t *testing.T) {
 
 	selCtx := router.buildSelectionContext(
 		[]config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
-		"agentic",
+		nil,
 		"continue after tool output",
 		nil,
 		"",
@@ -264,7 +304,7 @@ func TestBuildSelectionContextMarksPreviousResponseIDAsNonPortableContext(t *tes
 
 	selCtx := router.buildSelectionContext(
 		[]config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
-		"agentic",
+		nil,
 		"continue response",
 		nil,
 		"",

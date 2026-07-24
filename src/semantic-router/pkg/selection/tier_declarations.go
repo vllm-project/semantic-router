@@ -98,12 +98,12 @@ func (r *RLDrivenSelector) Tier() AlgorithmTier {
 // ExternalDependencies returns external dependencies for RL-driven selection
 func (r *RLDrivenSelector) ExternalDependencies() []Dependency {
 	deps := []Dependency{}
-	if r.config.EnableLLMRouting && r.config.RouterR1ServerURL != "" {
+	if r.config.EnableLLMRouting && r.config.LLMRouterServerURL != "" {
 		deps = append(deps, Dependency{
-			Name:        "Router-R1 Server",
+			Name:        "LLM Router Server",
 			Type:        DependencyExternalService,
-			Description: "LLM-as-Router for advanced routing decisions (arXiv:2506.09033)",
-			HealthURL:   r.config.RouterR1ServerURL + "/health",
+			Description: "LLM-as-router decision service for advanced routing decisions (arXiv:2506.09033)",
+			HealthURL:   r.config.LLMRouterServerURL + "/health",
 			Required:    false,
 		})
 	}
