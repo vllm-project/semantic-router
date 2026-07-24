@@ -2,18 +2,24 @@
 
 package candle_binding
 
-import (
-	"log"
-	"runtime"
-	"strings"
-	"sync"
-)
+// This file is the compile-only stub for the Candle backend. It is selected on
+// Windows or whenever CGO is disabled, i.e. whenever the native Candle library
+// cannot be linked. It deliberately does NOT emulate the native backend.
+//
+// Contract (see issue #2491): the stub fails closed. Every inference or
+// mutation API returns a typed ErrBackendUnavailable error (or the neutral
+// "unavailable" value for the few APIs without an error return) instead of a
+// plausible synthetic success. This guarantees that a build without the native
+// backend cannot be packaged as a working production router that returns fake
+// safety, classification, similarity, or adapter results.
 
-// Mock implementation variables
-var (
-	initOnce         sync.Once
-	modelInitialized bool
-)
+import "errors"
+
+// ErrBackendUnavailable is returned by every inference and mutation API in the
+// non-CGO build to signal that the native Candle backend is not linked. It is a
+// typed sentinel so callers can detect the unavailable-backend condition with
+// errors.Is.
+var ErrBackendUnavailable = errors.New("candle: native backend unavailable (built without cgo)")
 
 // TokenizeResult represents the result of tokenization
 type TokenizeResult struct {
@@ -140,631 +146,417 @@ type ModelsInfoOutput struct {
 	Models []ModelInfo // Array of model information
 }
 
+// MultiModalEmbeddingOutput represents the result of a multi-modal embedding.
+type MultiModalEmbeddingOutput struct {
+	Embedding        []float32 // The embedding vector (384-dim by default)
+	Modality         string    // "text", "image", or "audio"
+	ProcessingTimeMs float32   // Processing time in milliseconds
+}
+
 // InitModel initializes the BERT model
 func InitModel(modelID string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing BERT similarity model: %s", modelID)
-	modelInitialized = true
-	return nil
+	return ErrBackendUnavailable
 }
 
 // TokenizeText tokenizes the given text
 func TokenizeText(text string, maxLength int) (TokenizeResult, error) {
-	return TokenizeResult{
-		TokenIDs: []int32{1, 2, 3},
-		Tokens:   []string{"mock", "token", "s"},
-	}, nil
+	return TokenizeResult{}, ErrBackendUnavailable
 }
 
 func TokenizeTextDefault(text string) (TokenizeResult, error) {
-	return TokenizeText(text, 512)
+	return TokenizeResult{}, ErrBackendUnavailable
 }
 
 // GetEmbedding gets the embedding vector for a text
 func GetEmbedding(text string, maxLength int) ([]float32, error) {
-	// Return a dummy embedding of length 384 (standard for all-MiniLM-L6-v2)
-	emb := make([]float32, 384)
-	for i := range emb {
-		emb[i] = 0.1
-	}
-	return emb, nil
+	return nil, ErrBackendUnavailable
 }
 
 func GetEmbeddingDefault(text string) ([]float32, error) {
-	return GetEmbedding(text, 512)
+	return nil, ErrBackendUnavailable
 }
 
 // GetEmbeddingSmart intelligently selects the optimal embedding model
 func GetEmbeddingSmart(text string, qualityPriority, latencyPriority float32) ([]float32, error) {
-	return GetEmbedding(text, 512)
+	return nil, ErrBackendUnavailable
 }
 
 // InitEmbeddingModelsBatched initializes Qwen3 embedding model
 func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWaitMs uint64, useCPU bool) error {
-	log.Printf("[MOCK] Initializing Batched Embedding Models")
-	return nil
+	return ErrBackendUnavailable
 }
 
 // GetEmbeddingBatched generates an embedding using the continuous batching model
 func GetEmbeddingBatched(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
-	emb, _ := GetEmbedding(text, 512)
-	return &EmbeddingOutput{
-		Embedding:        emb,
-		ModelType:        "mock-qwen3",
-		SequenceLength:   10,
-		ProcessingTimeMs: 1.0,
-	}, nil
+	return nil, ErrBackendUnavailable
 }
 
 // InitEmbeddingModels initializes Qwen3 and/or Gemma embedding models
 func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, mmBertModelPath string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing Embedding Models")
-	return nil
+	return ErrBackendUnavailable
 }
 
 // GetEmbeddingWithDim generates an embedding with intelligent model selection
 func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, targetDim int) ([]float32, error) {
-	dim := targetDim
-	if dim == 0 {
-		dim = 768
-	}
-	emb := make([]float32, dim)
-	for i := range emb {
-		emb[i] = 0.1
-	}
-	return emb, nil
+	return nil, ErrBackendUnavailable
 }
 
 // GetEmbeddingWithMetadata generates an embedding with full metadata
 func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority float32, targetDim int) (*EmbeddingOutput, error) {
-	emb, _ := GetEmbeddingWithDim(text, qualityPriority, latencyPriority, targetDim)
-	return &EmbeddingOutput{
-		Embedding:        emb,
-		ModelType:        "mock-auto",
-		SequenceLength:   10,
-		ProcessingTimeMs: 1.0,
-	}, nil
+	return nil, ErrBackendUnavailable
 }
 
 // GetEmbeddingWithModelType generates an embedding with a manually specified model type
 func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
-	emb, _ := GetEmbeddingWithDim(text, 0, 0, targetDim)
-	return &EmbeddingOutput{
-		Embedding:        emb,
-		ModelType:        modelType,
-		SequenceLength:   10,
-		ProcessingTimeMs: 1.0,
-	}, nil
+	return nil, ErrBackendUnavailable
 }
 
 // InitMmBertEmbeddingModel initializes mmBERT embedding model
 func InitMmBertEmbeddingModel(modelPath string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing mmBERT Embedding Model: %s", modelPath)
-	_ = useCPU
-	return nil
+	return ErrBackendUnavailable
 }
 
 // InitMultiModalEmbeddingModel initializes multi-modal embedding model
 func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing Multi-Modal Embedding Model: %s", modelPath)
-	_ = useCPU
-	return nil
+	return ErrBackendUnavailable
 }
 
-// MultiModalEncodeText encodes text using multi-modal model (mock)
+// MultiModalEncodeText encodes text using multi-modal model
 func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	dim := 384
-	if targetDim > 0 {
-		dim = targetDim
-	}
-	return &MultiModalEmbeddingOutput{
-		Embedding:        make([]float32, dim),
-		Modality:         "text",
-		ProcessingTimeMs: 1.0,
-	}, nil
+	return nil, ErrBackendUnavailable
 }
 
-// MultiModalEncodeImage encodes image using multi-modal model (mock)
+// MultiModalEncodeImage encodes image using multi-modal model
 func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	dim := 384
-	if targetDim > 0 {
-		dim = targetDim
-	}
-	return &MultiModalEmbeddingOutput{
-		Embedding:        make([]float32, dim),
-		Modality:         "image",
-		ProcessingTimeMs: 1.0,
-	}, nil
+	return nil, ErrBackendUnavailable
 }
 
-// MultiModalEncodeAudio encodes audio using multi-modal model (mock)
+// MultiModalEncodeAudio encodes audio using multi-modal model
 func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	dim := 384
-	if targetDim > 0 {
-		dim = targetDim
-	}
-	return &MultiModalEmbeddingOutput{
-		Embedding:        make([]float32, dim),
-		Modality:         "audio",
-		ProcessingTimeMs: 1.0,
-	}, nil
+	return nil, ErrBackendUnavailable
 }
 
-// MultiModalEncodeImageFromBytes decodes image bytes and encodes to embedding (mock)
+// MultiModalEncodeImageFromBytes decodes image bytes and encodes to embedding
 func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	dim := 384
-	if targetDim > 0 {
-		dim = targetDim
-	}
-	return &MultiModalEmbeddingOutput{
-		Embedding:        make([]float32, dim),
-		Modality:         "image",
-		ProcessingTimeMs: 1.0,
-	}, nil
+	return nil, ErrBackendUnavailable
 }
 
-// MultiModalEncodeImageFromBase64 decodes a base64-encoded image and encodes to embedding (mock)
+// MultiModalEncodeImageFromBase64 decodes a base64-encoded image and encodes to embedding
 func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	dim := 384
-	if targetDim > 0 {
-		dim = targetDim
-	}
-	return &MultiModalEmbeddingOutput{
-		Embedding:        make([]float32, dim),
-		Modality:         "image",
-		ProcessingTimeMs: 1.0,
-	}, nil
+	return nil, ErrBackendUnavailable
 }
 
-// MultiModalEncodeImageFromURL downloads and encodes an image from URL (mock)
+// MultiModalEncodeImageFromURL downloads and encodes an image from URL
 func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	dim := 384
-	if targetDim > 0 {
-		dim = targetDim
-	}
-	return &MultiModalEmbeddingOutput{
-		Embedding:        make([]float32, dim),
-		Modality:         "image",
-		ProcessingTimeMs: 1.0,
-	}, nil
+	return nil, ErrBackendUnavailable
 }
 
-// GetEmbedding2DMatryoshka generates an embedding using mock 2D Matryoshka API
+// GetEmbedding2DMatryoshka generates an embedding using the 2D Matryoshka API
 func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
-	_ = text
-	_ = targetLayer
-	dim := targetDim
-	if dim <= 0 {
-		dim = 768
-	}
-	emb := make([]float32, dim)
-	for i := range emb {
-		emb[i] = 0.1
-	}
-	if modelType == "" {
-		modelType = "mock"
-	}
-	return &EmbeddingOutput{
-		Embedding:        emb,
-		ModelType:        modelType,
-		SequenceLength:   10,
-		ProcessingTimeMs: 1.0,
-	}, nil
+	return nil, ErrBackendUnavailable
 }
 
-// CalculateSimilarity calculates the similarity between two texts
+// CalculateSimilarity calculates the similarity between two texts. Without the
+// native backend it returns -1.0, an out-of-range sentinel that native code
+// uses to mark a failed similarity computation.
 func CalculateSimilarity(text1, text2 string, maxLength int) float32 {
-	return 0.85 // Dummy high similarity
+	return -1.0
 }
 
 func CalculateSimilarityDefault(text1, text2 string) float32 {
-	return CalculateSimilarity(text1, text2, 512)
+	return -1.0
 }
 
 // CalculateEmbeddingSimilarity calculates cosine similarity
 func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetDim int) (*SimilarityOutput, error) {
-	return &SimilarityOutput{
-		Similarity:       0.85,
-		ModelType:        "mock",
-		ProcessingTimeMs: 1.0,
-	}, nil
+	return nil, ErrBackendUnavailable
 }
 
 // CalculateSimilarityBatch finds top-k most similar candidates
 func CalculateSimilarityBatch(query string, candidates []string, topK int, modelType string, targetDim int) (*BatchSimilarityOutput, error) {
-	matches := make([]BatchSimilarityMatch, len(candidates))
-	for i := range candidates {
-		matches[i] = BatchSimilarityMatch{
-			Index:      i,
-			Similarity: 0.85,
-		}
-	}
-	return &BatchSimilarityOutput{
-		Matches:          matches,
-		ModelType:        "mock",
-		ProcessingTimeMs: 1.0,
-	}, nil
+	return nil, ErrBackendUnavailable
 }
 
 // GetEmbeddingModelsInfo retrieves information about all loaded embedding models
 func GetEmbeddingModelsInfo() (*ModelsInfoOutput, error) {
-	return &ModelsInfoOutput{
-		Models: []ModelInfo{
-			{ModelName: "mock-model", IsLoaded: true, MaxSequenceLength: 512, DefaultDimension: 384, ModelPath: "/mock/path"},
-		},
-	}, nil
+	return nil, ErrBackendUnavailable
 }
 
-// FindMostSimilar finds the most similar text
+// FindMostSimilar finds the most similar text. Without the native backend it
+// returns the native "no match" sentinel result rather than a fake hit.
 func FindMostSimilar(query string, candidates []string, maxLength int) SimResult {
-	if len(candidates) == 0 {
-		return SimResult{Index: -1, Score: -1.0}
-	}
-	return SimResult{Index: 0, Score: 0.9}
+	return SimResult{Index: -1, Score: -1.0}
 }
 
 func FindMostSimilarDefault(query string, candidates []string) SimResult {
-	return FindMostSimilar(query, candidates, 512)
+	return SimResult{Index: -1, Score: -1.0}
 }
 
-// SetMemoryCleanupHandler sets up a finalizer
-func SetMemoryCleanupHandler() {
-	runtime.GC()
-}
+// SetMemoryCleanupHandler sets up a finalizer. No-op without the native backend.
+func SetMemoryCleanupHandler() {}
 
-// IsModelInitialized returns whether the model has been successfully initialized
+// IsModelInitialized returns whether the model has been successfully
+// initialized. The stub is never initialized because no backend is linked.
 func IsModelInitialized() (rustState bool, goState bool) {
-	return true, true
+	return false, false
 }
 
 // InitClassifier initializes the BERT classifier
 func InitClassifier(modelPath string, numClasses int, useCPU bool) error {
-	log.Printf("[MOCK] Initializing Classifier: %s", modelPath)
-	return nil
+	return ErrBackendUnavailable
 }
 
 // InitPIIClassifier initializes the PII classifier
 func InitPIIClassifier(modelPath string, numClasses int, useCPU bool) error {
-	log.Printf("[MOCK] Initializing PII Classifier: %s", modelPath)
-	return nil
+	return ErrBackendUnavailable
 }
 
 // InitJailbreakClassifier initializes the jailbreak classifier
 func InitJailbreakClassifier(modelPath string, numClasses int, useCPU bool) error {
-	log.Printf("[MOCK] Initializing Jailbreak Classifier: %s", modelPath)
-	return nil
+	return ErrBackendUnavailable
 }
 
 // ClassifyText classifies the provided text
 func ClassifyText(text string) (ClassResult, error) {
-	return ClassResult{Class: 0, Confidence: 0.95}, nil
+	return ClassResult{}, ErrBackendUnavailable
 }
 
 // ClassifyTextWithProbabilities classifies with probabilities
 func ClassifyTextWithProbabilities(text string) (ClassResultWithProbs, error) {
-	return ClassResultWithProbs{
-		Class:         0,
-		Confidence:    0.95,
-		Probabilities: []float32{0.95, 0.05},
-		NumClasses:    2,
-	}, nil
+	return ClassResultWithProbs{}, ErrBackendUnavailable
 }
 
 // ClassifyPIIText classifies the provided text for PII
 func ClassifyPIIText(text string) (ClassResult, error) {
-	return ClassResult{Class: 0, Confidence: 0.99}, nil // Default to safe
+	return ClassResult{}, ErrBackendUnavailable
 }
 
 // ClassifyJailbreakText classifies the provided text for jailbreak
 func ClassifyJailbreakText(text string) (ClassResult, error) {
-	return ClassResult{Class: 0, Confidence: 0.99}, nil // Default to safe
+	return ClassResult{}, ErrBackendUnavailable
 }
 
 // InitModernBertClassifier initializes ModernBERT
 func InitModernBertClassifier(modelPath string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing ModernBERT Classifier")
-	return nil
+	return ErrBackendUnavailable
 }
 
 // InitModernBertPIIClassifier initializes ModernBERT PII
 func InitModernBertPIIClassifier(modelPath string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing ModernBERT PII Classifier")
-	return nil
+	return ErrBackendUnavailable
 }
 
 // InitModernBertJailbreakClassifier initializes ModernBERT Jailbreak
 func InitModernBertJailbreakClassifier(modelPath string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing ModernBERT Jailbreak Classifier")
-	return nil
+	return ErrBackendUnavailable
 }
 
 // InitModernBertPIITokenClassifier initializes ModernBERT PII Token
 func InitModernBertPIITokenClassifier(modelPath string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing ModernBERT PII Token Classifier")
-	return nil
+	return ErrBackendUnavailable
 }
 
 // ClassifyModernBertText classifies using ModernBERT
 func ClassifyModernBertText(text string) (ClassResult, error) {
-	return ClassResult{Class: 0, Confidence: 0.95}, nil
+	return ClassResult{}, ErrBackendUnavailable
 }
 
 // ClassifyModernBertTextWithProbabilities classifies using ModernBERT with probs
 func ClassifyModernBertTextWithProbabilities(text string) (ClassResultWithProbs, error) {
-	return ClassResultWithProbs{
-		Class:         0,
-		Confidence:    0.95,
-		Probabilities: []float32{0.95, 0.05},
-		NumClasses:    2,
-	}, nil
+	return ClassResultWithProbs{}, ErrBackendUnavailable
 }
 
 // ClassifyModernBertPIIText classifies PII using ModernBERT
 func ClassifyModernBertPIIText(text string) (ClassResult, error) {
-	return ClassResult{Class: 0, Confidence: 0.99}, nil
+	return ClassResult{}, ErrBackendUnavailable
 }
 
 // ClassifyModernBertJailbreakText classifies Jailbreak using ModernBERT
 func ClassifyModernBertJailbreakText(text string) (ClassResult, error) {
-	return ClassResult{Class: 0, Confidence: 0.99}, nil
+	return ClassResult{}, ErrBackendUnavailable
 }
 
 // InitDebertaJailbreakClassifier initializes DeBERTa
 func InitDebertaJailbreakClassifier(modelPath string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing DeBERTa Jailbreak Classifier")
-	return nil
+	return ErrBackendUnavailable
 }
 
 // ClassifyDebertaJailbreakText classifies using DeBERTa
 func ClassifyDebertaJailbreakText(text string) (ClassResult, error) {
-	return ClassResult{Class: 0, Confidence: 0.99}, nil
+	return ClassResult{}, ErrBackendUnavailable
 }
 
 // ClassifyModernBertPIITokens classifies tokens using ModernBERT
 func ClassifyModernBertPIITokens(text string, modelConfigPath string) (TokenClassificationResult, error) {
-	return TokenClassificationResult{Entities: []TokenEntity{}}, nil
+	return TokenClassificationResult{}, ErrBackendUnavailable
 }
 
 // InitBertTokenClassifier initializes BERT token classifier
 func InitBertTokenClassifier(modelPath string, numClasses int, useCPU bool) error {
-	log.Printf("[MOCK] Initializing BERT Token Classifier")
-	return nil
+	return ErrBackendUnavailable
 }
 
 // ClassifyBertPIITokens classifies tokens using BERT
 func ClassifyBertPIITokens(text string, id2labelJson string) (TokenClassificationResult, error) {
-	return TokenClassificationResult{Entities: []TokenEntity{}}, nil
+	return TokenClassificationResult{}, ErrBackendUnavailable
 }
 
 // ClassifyBertText classifies using BERT
 func ClassifyBertText(text string) (ClassResult, error) {
-	return ClassResult{Class: 0, Confidence: 0.95}, nil
+	return ClassResult{}, ErrBackendUnavailable
 }
 
-// InitCandleBertClassifier initializes Candle BERT
+// InitCandleBertClassifier initializes Candle BERT. Returns false because the
+// native backend is unavailable.
 func InitCandleBertClassifier(modelPath string, numClasses int, useCPU bool) bool {
-	return true
+	return false
 }
 
-// InitCandleBertTokenClassifier initializes Candle BERT Token
+// InitCandleBertTokenClassifier initializes Candle BERT Token. Returns false
+// because the native backend is unavailable.
 func InitCandleBertTokenClassifier(modelPath string, numClasses int, useCPU bool) bool {
-	return true
+	return false
 }
 
 // ClassifyCandleBertText classifies using Candle BERT
 func ClassifyCandleBertText(text string) (ClassResult, error) {
-	return ClassResult{Class: 0, Confidence: 0.95}, nil
+	return ClassResult{}, ErrBackendUnavailable
 }
 
 // ClassifyCandleBertTokens classifies tokens using Candle BERT
 func ClassifyCandleBertTokens(text string) (TokenClassificationResult, error) {
-	entities := []TokenEntity{}
-
-	// Helper to add entity if text found
-	addEntity := func(target, typeName string) {
-		idx := strings.Index(text, target)
-		if idx != -1 {
-			entities = append(entities, TokenEntity{
-				EntityType: typeName,
-				Start:      idx,
-				End:        idx + len(target),
-				Text:       target,
-				Confidence: 0.99,
-			})
-		}
-	}
-
-	addEntity("john.doe@example.com", "EMAIL_ADDRESS")
-	addEntity("john.smith@example.com", "EMAIL_ADDRESS")
-	addEntity("john@example.com", "EMAIL_ADDRESS")
-	addEntity("(555) 123-4567", "PHONE_NUMBER")
-	addEntity("123-45-6789", "US_SSN")
-	addEntity("123 Main Street", "STREET_ADDRESS")
-
-	// Fallback for partial matches if needed, or simple keyword checks if exact match fails
-	// but the tests use specific strings usually.
-
-	// If entities is empty but we see keywords, maybe add dummy?
-	// The test expects positions to match content. So we MUST match actual content.
-
-	return TokenClassificationResult{Entities: entities}, nil
+	return TokenClassificationResult{}, ErrBackendUnavailable
 }
 
 // ClassifyCandleBertTokensWithLabels classifies tokens using Candle BERT with labels
 func ClassifyCandleBertTokensWithLabels(text string, id2labelJSON string) (TokenClassificationResult, error) {
-	return TokenClassificationResult{Entities: []TokenEntity{}}, nil
+	return TokenClassificationResult{}, ErrBackendUnavailable
 }
 
 // InitLoRAUnifiedClassifier initializes LoRA Unified Classifier
 func InitLoRAUnifiedClassifier(intentModelPath, piiModelPath, securityModelPath, architecture string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing LoRA Unified Classifier")
-	return nil
+	return ErrBackendUnavailable
 }
 
 // ClassifyBatchWithLoRA performs batch classification using LoRA
 func ClassifyBatchWithLoRA(texts []string) (LoRABatchResult, error) {
-	return LoRABatchResult{
-		BatchSize:     len(texts),
-		AvgConfidence: 0.9,
-		IntentResults: make([]LoRAIntentResult, len(texts)),
-	}, nil
+	return LoRABatchResult{}, ErrBackendUnavailable
 }
 
 // InitQwen3MultiLoRAClassifier initializes Qwen3 Multi-LoRA
 func InitQwen3MultiLoRAClassifier(baseModelPath string) error {
-	return nil
+	return ErrBackendUnavailable
 }
 
 // LoadQwen3LoRAAdapter loads a LoRA adapter
 func LoadQwen3LoRAAdapter(adapterName, adapterPath string) error {
-	return nil
+	return ErrBackendUnavailable
 }
 
 // ClassifyWithQwen3Adapter classifies using Qwen3 adapter
 func ClassifyWithQwen3Adapter(text, adapterName string) (*Qwen3LoRAResult, error) {
-	return &Qwen3LoRAResult{
-		ClassID:       0,
-		Confidence:    0.95,
-		CategoryName:  "mock-category",
-		Probabilities: []float32{0.95, 0.05},
-		NumCategories: 2,
-	}, nil
+	return nil, ErrBackendUnavailable
 }
 
 // GetQwen3LoadedAdapters returns loaded adapters
 func GetQwen3LoadedAdapters() ([]string, error) {
-	return []string{"mock-adapter"}, nil
+	return nil, ErrBackendUnavailable
 }
 
 // ClassifyZeroShotQwen3 classifies zero-shot
 func ClassifyZeroShotQwen3(text string, categories []string) (*Qwen3LoRAResult, error) {
-	return &Qwen3LoRAResult{
-		ClassID:       0,
-		Confidence:    0.9,
-		CategoryName:  categories[0],
-		Probabilities: []float32{0.9, 0.1},
-		NumCategories: len(categories),
-	}, nil
+	return nil, ErrBackendUnavailable
 }
 
 // InitQwen3Guard initializes Qwen3Guard
 func InitQwen3Guard(modelPath string) error {
-	return nil
+	return ErrBackendUnavailable
 }
 
 // ClassifyPromptSafety classifies prompt safety
 func ClassifyPromptSafety(text string) (*SafetyClassificationResult, error) {
-	return &SafetyClassificationResult{
-		SafetyLabel: "Safe",
-		Categories:  []string{},
-		RawOutput:   "Safety: Safe",
-	}, nil
+	return nil, ErrBackendUnavailable
 }
 
 // ClassifyResponseSafety classifies response safety
 func ClassifyResponseSafety(text string) (*SafetyClassificationResult, error) {
-	return &SafetyClassificationResult{
-		SafetyLabel: "Safe",
-		Categories:  []string{},
-		RawOutput:   "Safety: Safe",
-	}, nil
+	return nil, ErrBackendUnavailable
 }
 
 // GetGuardRawOutput gets raw guard output
 func GetGuardRawOutput(text string, mode string) (string, error) {
-	return "Safety: Safe", nil
+	return "", ErrBackendUnavailable
 }
 
 // IsQwen3GuardInitialized checks initialization
 func IsQwen3GuardInitialized() bool {
-	return true
+	return false
 }
 
 // IsQwen3MultiLoRAInitialized checks initialization
 func IsQwen3MultiLoRAInitialized() bool {
-	return true
+	return false
 }
 
 // IsMmBert32KModel checks if a model is mmBERT-32K
 func IsMmBert32KModel(configPath string) bool {
-	_ = configPath
 	return false
 }
 
 // InitMmBert32KIntentClassifier initializes mmBERT-32K intent classifier
 func InitMmBert32KIntentClassifier(modelPath string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing mmBERT-32K Intent Classifier: %s", modelPath)
-	_ = useCPU
-	return nil
+	return ErrBackendUnavailable
 }
 
 // ClassifyMmBert32KIntent classifies text with mmBERT-32K intent classifier
 func ClassifyMmBert32KIntent(text string) (ClassResult, error) {
-	_ = text
-	return ClassResult{Class: 0, Confidence: 0.95}, nil
+	return ClassResult{}, ErrBackendUnavailable
 }
 
 // InitMmBert32KFactcheckClassifier initializes mmBERT-32K fact-check classifier
 func InitMmBert32KFactcheckClassifier(modelPath string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing mmBERT-32K Factcheck Classifier: %s", modelPath)
-	_ = useCPU
-	return nil
+	return ErrBackendUnavailable
 }
 
 // ClassifyMmBert32KFactcheck classifies text with mmBERT-32K fact-check classifier
 func ClassifyMmBert32KFactcheck(text string) (ClassResult, error) {
-	_ = text
-	return ClassResult{Class: 1, Confidence: 0.90}, nil
+	return ClassResult{}, ErrBackendUnavailable
 }
 
 // InitMmBert32KJailbreakClassifier initializes mmBERT-32K jailbreak classifier
 func InitMmBert32KJailbreakClassifier(modelPath string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing mmBERT-32K Jailbreak Classifier: %s", modelPath)
-	_ = useCPU
-	return nil
+	return ErrBackendUnavailable
 }
 
 // ClassifyMmBert32KJailbreak classifies text with mmBERT-32K jailbreak classifier
 func ClassifyMmBert32KJailbreak(text string) (ClassResult, error) {
-	_ = text
-	return ClassResult{Class: 0, Confidence: 0.95}, nil
+	return ClassResult{}, ErrBackendUnavailable
 }
 
 // ClassifyMmBert32KJailbreakWithProbs classifies text with mmBERT-32K jailbreak
 // classifier and returns the full probability distribution
 func ClassifyMmBert32KJailbreakWithProbs(text string) (ClassResultWithProbs, error) {
-	_ = text
-	return ClassResultWithProbs{
-		Class:         0,
-		Confidence:    0.95,
-		Probabilities: []float32{0.95, 0.05},
-		NumClasses:    2,
-	}, nil
+	return ClassResultWithProbs{}, ErrBackendUnavailable
 }
 
 // InitMmBert32KFeedbackClassifier initializes mmBERT-32K feedback classifier
 func InitMmBert32KFeedbackClassifier(modelPath string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing mmBERT-32K Feedback Classifier: %s", modelPath)
-	_ = useCPU
-	return nil
+	return ErrBackendUnavailable
 }
 
 // ClassifyMmBert32KFeedback classifies text with mmBERT-32K feedback classifier
 func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
-	_ = text
-	return ClassResult{Class: 0, Confidence: 0.92}, nil
+	return ClassResult{}, ErrBackendUnavailable
 }
 
 // InitMmBert32KPIIClassifier initializes mmBERT-32K PII classifier
 func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing mmBERT-32K PII Classifier: %s", modelPath)
-	_ = useCPU
-	return nil
+	return ErrBackendUnavailable
 }
 
 // ClassifyMmBert32KPII classifies text with mmBERT-32K PII classifier
 func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
-	_ = text
-	return []TokenEntity{}, nil
+	return nil, ErrBackendUnavailable
 }
 
 // NLI constants and types
@@ -779,8 +571,7 @@ const (
 
 // InitHallucinationModel initializes the hallucination model
 func InitHallucinationModel(modelPath string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing Hallucination Model")
-	return nil
+	return ErrBackendUnavailable
 }
 
 // FactCheckResult represents the result of fact checking
@@ -792,16 +583,12 @@ type FactCheckResult struct {
 
 // InitFactCheckClassifier initializes the fact check classifier
 func InitFactCheckClassifier(modelPath string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing Fact Check Classifier")
-	return nil
+	return ErrBackendUnavailable
 }
 
 // ClassifyFactCheckText classifies text for fact checking
 func ClassifyFactCheckText(text string) (FactCheckResult, error) {
-	return FactCheckResult{
-		Label:      NLIEntailment,
-		Confidence: 0.95,
-	}, nil
+	return FactCheckResult{}, ErrBackendUnavailable
 }
 
 // FeedbackResult represents the result of feedback detection
@@ -813,30 +600,22 @@ type FeedbackResult struct {
 
 // InitFeedbackDetector initializes the feedback detector
 func InitFeedbackDetector(modelPath string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing Feedback Detector")
-	return nil
+	return ErrBackendUnavailable
 }
 
 // ClassifyFeedbackText classifies feedback text
 func ClassifyFeedbackText(text string) (FeedbackResult, error) {
-	return FeedbackResult{
-		Label:      "positive",
-		Confidence: 0.95,
-	}, nil
+	return FeedbackResult{}, ErrBackendUnavailable
 }
-
-// InitHallucinationDetector (if different from Model) - check usage
-// The error was undefined: candle.InitHallucinationModel
 
 // DetectHallucinations detects hallucinations
 func DetectHallucinations(text, context, modelPath string, threshold float32) (HallucinationResult, error) {
-	return HallucinationResult{}, nil
+	return HallucinationResult{}, ErrBackendUnavailable
 }
 
 // InitNLIModel initializes NLI model
 func InitNLIModel(modelPath string, useCPU bool) error {
-	log.Printf("[MOCK] Initializing NLI Model")
-	return nil
+	return ErrBackendUnavailable
 }
 
 // NLIResult represents NLI classification result
@@ -851,15 +630,12 @@ type NLIResult struct {
 
 // ClassifyNLI classifies NLI
 func ClassifyNLI(premise, hypothesis string) (NLIResult, error) {
-	return NLIResult{
-		Label:      NLIEntailment,
-		Confidence: 0.95,
-	}, nil
+	return NLIResult{}, ErrBackendUnavailable
 }
 
 // DetectHallucinationsWithNLI detects hallucinations using NLI
 func DetectHallucinationsWithNLI(text, context, modelPath string, threshold float32) (HallucinationResult, error) {
-	return HallucinationResult{}, nil
+	return HallucinationResult{}, ErrBackendUnavailable
 }
 
 // HallucinationResult represents the result of hallucination detection
