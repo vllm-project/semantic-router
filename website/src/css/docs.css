@@ -48,8 +48,17 @@
 }
 
 .theme-doc-version-badge {
-  background: rgba(17, 17, 17, 0.08);
+  display: block;
+  width: fit-content;
+  margin: 0 0 1rem auto;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--site-border);
+  border-radius: 999px;
+  background: rgba(17, 17, 17, 0.055);
   color: var(--site-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .site-docs-shell .theme-doc-markdown,
