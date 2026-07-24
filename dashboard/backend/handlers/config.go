@@ -21,10 +21,13 @@ func ConfigHandler(configPath string) http.HandlerFunc {
 
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 
-		configData, err := readCanonicalConfigFile(configPath)
+		configData, source, err := readCanonicalConfigPreferProjection(configPath)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
 			return
+		}
+		if source == "projection" {
+			w.Header().Set("X-Config-Source", "projection")
 		}
 
 		if err := writeYAMLTaggedJSON(w, configData); err != nil {
@@ -46,10 +49,13 @@ func ConfigYAMLHandler(configPath string) http.HandlerFunc {
 		w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 
-		data, err := os.ReadFile(configPath)
+		data, source, err := readConfigYAMLPreferProjection(configPath)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
 			return
+		}
+		if source == "projection" {
+			w.Header().Set("X-Config-Source", "projection")
 		}
 
 		_, _ = w.Write(data)

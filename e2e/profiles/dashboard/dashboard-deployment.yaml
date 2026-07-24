@@ -75,6 +75,8 @@ spec:
               value: /tmp/vllm-sr-dashboard/auth.db
             - name: DASHBOARD_WORKFLOW_DB_PATH
               value: /tmp/vllm-sr-dashboard/workflow.sqlite
+            - name: DASHBOARD_CONFIG_PROJECTION_DB_PATH
+              value: /tmp/vllm-sr-dashboard/config-projection.sqlite
             - name: EVALUATION_DB_PATH
               value: /tmp/vllm-sr-dashboard/evaluations.db
             - name: DASHBOARD_JWT_SECRET
