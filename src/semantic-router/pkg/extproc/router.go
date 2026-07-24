@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -59,6 +60,11 @@ type OpenAIRouter struct {
 	// paths back through package-global API-server state.
 	RuntimeRegistry *routerruntime.Registry
 
+	// WorkflowStateService owns the shared workflow tool-state store so that
+	// pause/resume works across independent HTTP requests without leaking
+	// backend connections.
+	WorkflowStateService *looper.WorkflowStateService
+
 	routerLearningMu      sync.Mutex
 	routerLearningRuntime *routerLearningRuntime
 	lookupTableCancel     func()
@@ -72,6 +78,9 @@ func (r *OpenAIRouter) Close() error {
 	}
 	if r.lookupTableCancel != nil {
 		r.lookupTableCancel()
+	}
+	if r.WorkflowStateService != nil {
+		_ = r.WorkflowStateService.Close()
 	}
 	return nil
 }
