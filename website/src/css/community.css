@@ -1,0 +1,40 @@
+/* Community pages — dark surface inspired by vLLM Blog visual language.
+   Applies only when Root sets data-page-key="community". */
+
+html[data-page-key='community'],
+html[data-page-key='community'] body {
+  --site-bg: #0b0e14;
+  --site-bg-alt: #0f1218;
+  --site-surface: #12151c;
+  --site-surface-alt: #171b24;
+  --site-surface-raised: #1b2030;
+  --site-text: #f5f5f7;
+  --site-text-strong: #ffffff;
+  --site-muted: #8b8b93;
+  --site-muted-bright: #b6b6bd;
+  --site-border: rgba(255, 255, 255, 0.1);
+  --site-border-strong: rgba(255, 255, 255, 0.16);
+  --ifm-background-color: #0b0e14;
+  --ifm-background-surface-color: #12151c;
+  --ifm-font-color-base: #f5f5f7;
+  --ifm-color-content: #f5f5f7;
+  --ifm-color-content-secondary: #b6b6bd;
+  --ifm-heading-color: #ffffff;
+  --ifm-link-color: #75c5ff;
+  --ifm-link-hover-color: #30a2ff;
+}
+
+html[data-page-key='community'] .main-wrapper,
+html[data-page-key='community'] .footer {
+  background: #0b0e14;
+  color: #f5f5f7;
+}
+
+html[data-page-key='community'] .footer__title,
+html[data-page-key='community'] .footer__link-item {
+  color: #d4d4d8;
+}
+
+html[data-page-key='community'] .footer__link-item:hover {
+  color: #30a2ff;
+}
