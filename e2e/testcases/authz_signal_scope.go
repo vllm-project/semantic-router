@@ -47,55 +47,19 @@ func testAuthzSignalScope(
 	}
 	defer metricsSession.Close()
 
-	metricsBefore, err := fetchMetrics(ctx, metricsSession)
+	before, err := readAuthzSignalScopeMetric(ctx, metricsSession, "before request")
 	if err != nil {
 		return err
 	}
-	if !strings.Contains(metricsBefore, "# HELP "+authzSignalScopeMetric+" ") {
-		return fmt.Errorf("metrics body missing %s descriptor", authzSignalScopeMetric)
-	}
-	before, err := signalExtractionMetricValue(metricsBefore, authzSignalScopeType, authzSignalScopeName)
-	if err != nil {
-		return fmt.Errorf("read signal metric before request: %w", err)
-	}
 
-	chat := fixtures.NewChatCompletionsClient(traffic, 30*time.Second)
-	resp, err := chat.Create(ctx, fixtures.ChatCompletionsRequest{
-		Model: "MoM",
-		Messages: []fixtures.ChatMessage{
-			{Role: "user", Content: authzSignalScopePrompt},
-		},
-	}, nil)
-	if err != nil {
-		return fmt.Errorf("send unauthenticated marker request: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("marker request: expected 200, got %d: %s", resp.StatusCode, string(resp.Body))
-	}
-	if decision := resp.Headers.Get("x-vsr-selected-decision"); decision != "" {
-		return fmt.Errorf("marker request selected authz-protected decision %q", decision)
-	}
-
-	var responseBody struct {
-		Model string `json:"model"`
-	}
-	if err := resp.DecodeJSON(&responseBody); err != nil {
-		return fmt.Errorf("decode marker response: %w", err)
-	}
-	if responseBody.Model != authzSignalScopeModel {
-		return fmt.Errorf("marker request model: got %q, want %q", responseBody.Model, authzSignalScopeModel)
-	}
-
-	metricsAfter, err := fetchMetrics(ctx, metricsSession)
+	model, err := sendAuthzSignalScopeRequest(ctx, traffic)
 	if err != nil {
 		return err
 	}
-	if !strings.Contains(metricsAfter, "# HELP "+authzSignalScopeMetric+" ") {
-		return fmt.Errorf("metrics body missing %s descriptor after request", authzSignalScopeMetric)
-	}
-	after, err := signalExtractionMetricValue(metricsAfter, authzSignalScopeType, authzSignalScopeName)
+
+	after, err := readAuthzSignalScopeMetric(ctx, metricsSession, "after request")
 	if err != nil {
-		return fmt.Errorf("read signal metric after request: %w", err)
+		return err
 	}
 	if delta := after - before; delta != 0 {
 		return fmt.Errorf("authz-ineligible signal %q was evaluated: metric delta=%v", authzSignalScopeName, delta)
@@ -107,11 +71,61 @@ func testAuthzSignalScope(
 			"metric_before": before,
 			"metric_after":  after,
 			"metric_delta":  after - before,
-			"model":         responseBody.Model,
+			"model":         model,
 		})
 	}
 
 	return nil
+}
+
+func readAuthzSignalScopeMetric(
+	ctx context.Context,
+	metricsSession *fixtures.ServiceSession,
+	phase string,
+) (float64, error) {
+	metrics, err := fetchMetrics(ctx, metricsSession)
+	if err != nil {
+		return 0, err
+	}
+	if !strings.Contains(metrics, "# HELP "+authzSignalScopeMetric+" ") {
+		return 0, fmt.Errorf("metrics body missing %s descriptor %s", authzSignalScopeMetric, phase)
+	}
+
+	value, err := signalExtractionMetricValue(metrics, authzSignalScopeType, authzSignalScopeName)
+	if err != nil {
+		return 0, fmt.Errorf("read signal metric %s: %w", phase, err)
+	}
+	return value, nil
+}
+
+func sendAuthzSignalScopeRequest(ctx context.Context, traffic *fixtures.ServiceSession) (string, error) {
+	chat := fixtures.NewChatCompletionsClient(traffic, 30*time.Second)
+	resp, err := chat.Create(ctx, fixtures.ChatCompletionsRequest{
+		Model: "MoM",
+		Messages: []fixtures.ChatMessage{
+			{Role: "user", Content: authzSignalScopePrompt},
+		},
+	}, nil)
+	if err != nil {
+		return "", fmt.Errorf("send unauthenticated marker request: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("marker request: expected 200, got %d: %s", resp.StatusCode, string(resp.Body))
+	}
+	if decision := resp.Headers.Get("x-vsr-selected-decision"); decision != "" {
+		return "", fmt.Errorf("marker request selected authz-protected decision %q", decision)
+	}
+
+	var responseBody struct {
+		Model string `json:"model"`
+	}
+	if err := resp.DecodeJSON(&responseBody); err != nil {
+		return "", fmt.Errorf("decode marker response: %w", err)
+	}
+	if responseBody.Model != authzSignalScopeModel {
+		return "", fmt.Errorf("marker request model: got %q, want %q", responseBody.Model, authzSignalScopeModel)
+	}
+	return responseBody.Model, nil
 }
 
 func signalExtractionMetricValue(metrics, signalType, signalName string) (float64, error) {
