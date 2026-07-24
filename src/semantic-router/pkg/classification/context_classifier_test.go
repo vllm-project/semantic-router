@@ -50,6 +50,18 @@ func TestContextClassifier(t *testing.T) {
 		Expect(matched).To(BeEmpty())
 	})
 
+	t.Run("Classify inclusive boundary matches adjacent ranges", func(t *testing.T) {
+		boundaryRules := []config.ContextRule{
+			{Name: "low_token_count", MinTokens: "0", MaxTokens: "1K"},
+			{Name: "high_token_count", MinTokens: "1K", MaxTokens: "256K"},
+		}
+		classifier := NewContextClassifier(&mockTokenCounter{count: 1000}, boundaryRules)
+		matched, count, err := classifier.Classify("some text")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(count).To(Equal(1000))
+		Expect(matched).To(ConsistOf("low_token_count", "high_token_count"))
+	})
+
 	t.Run("Token counter error", func(t *testing.T) {
 		classifier := NewContextClassifier(&mockTokenCounter{err: fmt.Errorf("error")}, rules)
 		_, _, err := classifier.Classify("some text")
