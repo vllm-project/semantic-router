@@ -435,7 +435,7 @@ func (m *MilvusStore) AppendOutcome(ctx context.Context, id string, outcome Outc
 }
 
 // UpdateHallucinationStatus updates hallucination detection results for a record.
-func (m *MilvusStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error {
+func (m *MilvusStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan) error {
 	record, found, err := m.Get(ctx, id)
 	if err != nil {
 		return err
@@ -447,6 +447,7 @@ func (m *MilvusStore) UpdateHallucinationStatus(ctx context.Context, id string, 
 	record.HallucinationDetected = detected
 	record.HallucinationConfidence = confidence
 	record.HallucinationSpans = spans
+	record.HallucinationSpanDetails = spanDetails
 
 	return m.upsertRecord(ctx, record)
 }
