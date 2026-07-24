@@ -1179,6 +1179,17 @@ impl MultiModalEmbeddingModel {
         target_dim: Option<usize>,
     ) -> UnifiedResult<Tensor> {
         let target_dim = target_dim.unwrap_or(self.config.embedding_dim);
+        // Match the text 2DMSE contract: MRL only truncates down from the
+        // native dimension, so an above-native request cannot be satisfied and
+        // must be rejected rather than silently returning the native vector.
+        if target_dim > self.config.embedding_dim {
+            return Err(UnifiedError::Validation {
+                field: "target_dim".to_string(),
+                expected: format!("<= {}", self.config.embedding_dim),
+                actual: target_dim.to_string(),
+                context: None,
+            });
+        }
 
         let pooler_output = self
             .image_encoder
@@ -2516,6 +2527,26 @@ mod integration_tests {
             Some(999), // exceeds embedding_dim
         );
         assert!(result.is_err(), "dim=999 should be rejected");
+    }
+
+    #[test]
+    #[ignore = "requires model files"]
+    fn test_image_invalid_dim_rejected() {
+        let (model, _tokenizer) = load_model_and_tokenizer();
+        let img = make_test_image(model.device(), 0.5, 0.3, 0.7);
+
+        // Above-native request must be rejected, mirroring the text 2DMSE path,
+        // rather than silently returning the native-dimension vector.
+        let result = model.encode_image_with_dim(&img, Some(768));
+        assert!(
+            result.is_err(),
+            "image dim=768 (> native) should be rejected"
+        );
+
+        // Native and below-native requests still succeed.
+        let native = model.config().embedding_dim;
+        let ok = model.encode_image_with_dim(&img, Some(native));
+        assert!(ok.is_ok(), "image dim=native ({}) should succeed", native);
     }
 
     /// Shape-only smoke test for the new SigLIPHead attentional probe pooling.
