@@ -52,6 +52,24 @@ func textForSignalFunc(text, uncompressedText string, skipCompressionSignals map
 // skipCompressionSignals: signal types that must use uncompressedText instead of text
 // imageURL: image URL for multimodal signals ("" when the request carries no image)
 func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, convFacts ConversationFacts, imageURL string) *SignalResults {
+	return c.evaluateAllSignalsWithContextForDecisions(
+		text,
+		contextText,
+		currentUserText,
+		priorUserMessages,
+		nonUserMessages,
+		hasPriorAssistantReply,
+		forceEvaluateAll,
+		uncompressedText,
+		skipCompressionSignals,
+		convFacts,
+		imageURL,
+		c.Config.Decisions,
+		nil,
+	)
+}
+
+func (c *Classifier) evaluateAllSignalsWithContextForDecisions(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, convFacts ConversationFacts, imageURL string, decisions []config.Decision, results *SignalResults) *SignalResults {
 	defer c.enterSignalEvaluationLoadGate()()
 	// Determine which signals (type:name) should be evaluated
 	var usedSignals map[string]bool
@@ -59,16 +77,14 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		usedSignals = c.getAllSignalTypes()
 		logging.Debugf("[Signal Computation] Force evaluate all signals mode enabled")
 	} else {
-		usedSignals = c.getUsedSignals()
+		usedSignals = c.getUsedSignalsForDecisions(decisions)
 	}
 
 	textForSignal := textForSignalFunc(text, uncompressedText, skipCompressionSignals)
 	ready := c.signalReadiness()
 
-	results := &SignalResults{
-		Metrics:           &SignalMetricsCollection{},
-		SignalConfidences: make(map[string]float64),
-		SignalValues:      make(map[string]float64),
+	if results == nil {
+		results = newSignalResults()
 	}
 
 	var wg sync.WaitGroup
@@ -95,4 +111,12 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	results = c.applySignalOutputPolicies(results)
 	results = c.applyProjections(results)
 	return results
+}
+
+func newSignalResults() *SignalResults {
+	return &SignalResults{
+		Metrics:           &SignalMetricsCollection{},
+		SignalConfidences: make(map[string]float64),
+		SignalValues:      make(map[string]float64),
+	}
 }
