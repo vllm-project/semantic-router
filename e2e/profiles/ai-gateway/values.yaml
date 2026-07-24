@@ -637,6 +637,35 @@ config:
           - name: general-expert
             description: General-purpose adapter for diverse topics
       - name: general-expert
+  entrypoints:
+    - model_names: ["vllm-sr/e2e-recipe-probe"]
+      recipe: entrypoint-probe
+    - model_names: ["vllm-sr/e2e-default-alias"]
+      recipe: default
+  recipes:
+    - name: entrypoint-probe
+      description: Deterministic keyword-gated recipe used by the entrypoint-recipe-routing E2E (issue #2331).
+      routing:
+        signals:
+          keywords:
+            - name: entrypoint_probe_keywords
+              operator: OR
+              keywords:
+                - __ENTRYPOINT_RECIPE_PROBE__
+              case_sensitive: false
+        decisions:
+          - name: entrypoint_probe_decision
+            description: Route entrypoint-probe recipe traffic to the general-expert adapter.
+            priority: 100
+            rules:
+              operator: OR
+              conditions:
+                - type: keyword
+                  name: entrypoint_probe_keywords
+            modelRefs:
+              - model: base-model
+                lora_name: general-expert
+                use_reasoning: false
   global:
     router:
       strategy: priority

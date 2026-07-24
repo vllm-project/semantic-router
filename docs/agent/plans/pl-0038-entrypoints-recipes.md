@@ -15,8 +15,11 @@ of it.
   `recipes` adds named additional profiles. A recipe named `default` may only
   appear when the top-level `routing` block carries no profile of its own.
 - Internal representation: normalized `Recipes`/`Entrypoints` on `RouterConfig`;
-  the default recipe stays bridged into the existing flat routing fields so
-  current read sites keep working unchanged.
+  the default recipe's decisions stay bridged into the flat `Decisions` field so
+  current read sites keep working unchanged, while the flat
+  `Signals`/`Projections` fields hold the global registry (the union across
+  recipes, per the issue's "signal registry stays global" non-goal) so one
+  classifier evaluates any recipe's rules.
 - Request path: resolve model name → entrypoint → recipe before signal
   evaluation in `pkg/extproc`; decision evaluation reads the per-request recipe.
 - Validation: structural recipe/entrypoint checks first, then cross-surface
@@ -59,20 +62,23 @@ single-profile configs.
 - [ ] T3 cross-surface validation for entrypoint and recipe mappings
 - [x] T4 canonical export and config dump emit normalized entrypoints and
       recipes
-- [ ] T5 extproc request-entry entrypoint resolution before signal evaluation
-- [ ] T6 `/v1/models` lists entrypoint model names
-- [ ] T7 multi-recipe unit tests in config and extproc
-- [x] T8 config-contract docs, reference config, and tutorials
-- [ ] T9 E2E coverage for multi-recipe entrypoints
+- [x] T5 extproc request-entry entrypoint resolution before signal evaluation
+- [x] T6 `/v1/models` lists entrypoint model names
+- [x] T7 multi-recipe unit tests in config and extproc
+- [ ] T8 config-contract docs, reference config, and tutorials
+- [x] T9 E2E coverage for multi-recipe entrypoints
 - [ ] T10 DSL round-trip for recipes and entrypoints (follow-up PR)
 - [ ] T11 CLI and operator surfaces (follow-up PR)
 - [ ] T12 dashboard surfaces (follow-up PR)
 
 ## Next Action
 
-This branch carries the config contract only (T1, T2, T4, T8). The runtime
-tasks T5–T7 land in the follow-up runtime PR together with T9 E2E coverage.
-T3 stays pending the maintainer confirmation recorded in Open Decisions.
+The runtime PR (#2613, stacked on #2612) is complete: T5–T7 plus T9 E2E.
+T8 docs ride with the config-contract PR (#2612). T3 stays pending the
+maintainer confirmation recorded in Open Decisions. Deferred from T5: signal
+evaluation runs over the global registry filtered by all recipes' decisions;
+scoping the evaluated signal set to the per-request recipe is a performance
+follow-up, not a correctness gap.
 
 ## Operating Rules
 
@@ -80,8 +86,10 @@ T3 stays pending the maintainer confirmation recorded in Open Decisions.
   `recipes.go` and canonical normalization in `canonical_recipes.go`.
 - `processor_req_body.go` stays an orchestrator; entrypoint resolution lives in
   a dedicated `req_filter_entrypoint.go`.
-- The flat routing fields on `RouterConfig` must always equal the default
-  recipe; runtime code moves to recipe reads, never the reverse.
+- The flat `Decisions` field on `RouterConfig` must always equal the default
+  recipe; the flat `Signals`/`Projections` fields hold the global registry
+  (union of every recipe's profile). Runtime code moves to recipe reads, never
+  the reverse.
 - Every step passes `make agent-lint` and the affected package tests before the
   next step starts.
 

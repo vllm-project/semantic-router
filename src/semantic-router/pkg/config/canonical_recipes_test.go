@@ -280,6 +280,20 @@ recipes:
 		wantErr: "references unknown model",
 	},
 	{
+		name: "duplicate signal name across recipes",
+		extra: `
+recipes:
+  - name: privacy
+    routing:
+      signals:
+        keywords:
+          - name: urgent_keywords
+            operator: OR
+            keywords: ["classified"]
+`,
+		wantErr: "is defined by both",
+	},
+	{
 		name: "entrypoint references unknown recipe",
 		extra: `
 entrypoints:
