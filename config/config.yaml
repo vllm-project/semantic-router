@@ -2228,6 +2228,9 @@ global:
           use_cpu: true
           use_mmbert_32k: true
         detector:
+          backend: candle
+          endpoint: ""
+          include_explanation: false
           model_ref: hallucination_detector
           model_id: models/mom-halugate-detector
           threshold: 0.82

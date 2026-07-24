@@ -774,6 +774,7 @@ const (
 	NLIEntailment    NLILabel = 0
 	NLINeutral       NLILabel = 1
 	NLIContradiction NLILabel = 2
+	NLIUnknown       NLILabel = 3
 	NLIError         NLILabel = -1
 )
 

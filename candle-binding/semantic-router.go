@@ -2733,6 +2733,10 @@ const (
 	NLINeutral NLILabel = 1
 	// NLIContradiction means the premise contradicts the hypothesis
 	NLIContradiction NLILabel = 2
+	// NLIUnknown means no NLI judgment is available (e.g. a non-NLI backend such
+	// as the endpoint hallucination detector). It is distinct from NLIEntailment
+	// (0) so consumers reading the numeric label do not misread it as entailment.
+	NLIUnknown NLILabel = 3
 	// NLIError means an error occurred during classification
 	NLIError NLILabel = -1
 )
@@ -2746,6 +2750,8 @@ func (l NLILabel) String() string {
 		return "NEUTRAL"
 	case NLIContradiction:
 		return "CONTRADICTION"
+	case NLIUnknown:
+		return "UNKNOWN"
 	default:
 		return "ERROR"
 	}

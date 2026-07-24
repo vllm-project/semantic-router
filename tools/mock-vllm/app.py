@@ -20,6 +20,7 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     temperature: float | None = 0.2
     stream: bool | None = False
+    response_format: dict | None = None
 
 
 def estimate_tokens(text: str) -> int:
@@ -44,6 +45,36 @@ def build_chat_content(req: ChatRequest) -> str:
         },
         separators=(",", ":"),
         sort_keys=True,
+    )
+
+
+def is_hallucination_detection_request(req: ChatRequest) -> bool:
+    if not req.response_format or req.response_format.get("type") != "json_schema":
+        return False
+    schema = req.response_format.get("json_schema", {})
+    return schema.get("name") == "hallucination_detection"
+
+
+def extract_answer_under_review(req: ChatRequest) -> str:
+    for m in req.messages:
+        if m.role == "user" and "Answer to verify:\n" in m.content:
+            return m.content.split("Answer to verify:\n")[-1]
+    return ""
+
+
+def build_hallucination_detection_content(req: ChatRequest) -> str:
+    answer = extract_answer_under_review(req)
+    flagged_text = answer[:80] if answer else "mocked hallucination"
+    return json.dumps(
+        {
+            "hallucinated_spans": [
+                {
+                    "text": flagged_text,
+                    "category": "unsupported_addition",
+                    "subcategory": "claim",
+                }
+            ]
+        }
     )
 
 
@@ -143,7 +174,10 @@ async def models():
 @app.post("/v1/chat/completions")
 async def chat_completions(req: ChatRequest):
     created_ts = int(time.time())
-    content = build_chat_content(req)
+    if is_hallucination_detection_request(req):
+        content = build_hallucination_detection_content(req)
+    else:
+        content = build_chat_content(req)
     usage = build_chat_usage(req, content)
     response = build_chat_response(req, content, usage, created_ts)
     if not req.stream:

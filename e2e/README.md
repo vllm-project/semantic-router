@@ -42,6 +42,7 @@ Manual-only profiles:
 - **vectorstore-registry**: Vector Store Registry restart-recovery with Postgres metadata backend, validating that store and file metadata survive pod restarts
 - **dynamo**: NVIDIA Dynamo deployment, batching, and GPU-health coverage
 - **rag-hybrid-search**: Llama Stack-backed RAG vector-store and hybrid-search coverage
+- **hallucination**: Pluggable endpoint hallucination detection backend coverage, verifying fact-check gating and response warnings
 
 ### Coverage Ownership Matrix
 
@@ -66,6 +67,7 @@ Manual-only profiles:
 | `dashboard` | none | Dashboard HTTP API contract |
 | `dynamo` | none | GPU and batching behavior |
 | `rag-hybrid-search` | none | RAG vector-store and hybrid-search behavior |
+| `hallucination` | none | Pluggable endpoint hallucination detection backend coverage |
 
 ## Directory Structure
 
