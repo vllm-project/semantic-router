@@ -58,6 +58,18 @@ Decision matching stays separate from:
 - `decision.algorithm`, which chooses among multiple candidate models
 - `decision.plugins`, which post-processes a matched route
 
+### Rule operators
+
+A rule node's `operator` combines its `conditions`. The valid operators are:
+
+- `AND` — every condition must match. This is also the default when `operator` is omitted.
+- `OR` — at least one condition must match.
+- `NOT` — negates a single nested condition.
+
+Operators are case-insensitive (`and`, `or`, `not` all work). Any other value is rejected when the config is loaded.
+
+> **Note:** this set is intentionally distinct from keyword-signal operators (`routing.signals.keywords[].operator`, which also accepts `NOR`). A decision rule only accepts `AND`, `OR`, and `NOT`.
+
 Use the case-shape catalog below in the same order as the fragment tree:
 
 | Decision shape | Fragment example | Best for | Tutorial |
