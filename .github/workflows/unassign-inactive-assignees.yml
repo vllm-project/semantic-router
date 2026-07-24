@@ -1,0 +1,192 @@
+name: Unassign Inactive Assignees
+
+# Manages issue assignments based on activity:
+# - At 15 days: posts a reminder comment (if no PR activity)
+# - At 30 days: removes the assignment (if no PR activity, adds label)
+# PR activity is detected via linked PRs or issue_comment events.
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # daily at 02:00 UTC
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  unassign:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Check and manage inactive assignees
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const daysWarning = 15;
+            const daysUnassign = 30;
+            const now = new Date();
+            const millis = d => d * 24 * 60 * 60 * 1000;
+
+            // Get all open assigned issues, paginate
+            let page = 1;
+            let hasMore = true;
+
+            while (hasMore) {
+              const issues = await github.rest.issues.listForRepo({
+                owner,
+                repo,
+                state: 'open',
+                per_page: 100,
+                page
+              });
+
+              if (!issues.data || issues.data.length === 0) {
+                hasMore = false;
+                break;
+              }
+
+              for (const issue of issues.data) {
+                // Skip PRs and issues with no assignees
+                if (issue.pull_request || !issue.assignees || issue.assignees.length === 0) {
+                  continue;
+                }
+
+                const updated = new Date(issue.updated_at);
+                const age = now - updated;
+
+                // Check if there's been any PR activity (linked PRs)
+                let hasPRActivity = false;
+                try {
+                  const prs = await github.rest.pulls.list({
+                    owner,
+                    repo,
+                    state: 'all',
+                    per_page: 100
+                  });
+
+                  // Simple heuristic: check if any PR mentions this issue
+                  for (const pr of prs.data) {
+                    if (pr.body && pr.body.includes(`#${issue.number}`)) {
+                      const prUpdated = new Date(pr.updated_at);
+                      if (now - prUpdated < millis(daysWarning)) {
+                        hasPRActivity = true;
+                        break;
+                      }
+                    }
+                  }
+                } catch (e) {
+                  console.log(`Could not fetch PRs: ${e.message}`);
+                }
+
+                // Get existing comments
+                let comments = [];
+                try {
+                  const resp = await github.rest.issues.listComments({
+                    owner,
+                    repo,
+                    issue_number: issue.number,
+                    per_page: 100
+                  });
+                  comments = resp.data || [];
+                } catch (e) {
+                  console.log(`Could not fetch comments for #${issue.number}: ${e.message}`);
+                }
+
+                const hasWarningComment = comments.some(c =>
+                  c.user.login === 'github-actions[bot]' &&
+                  c.body && c.body.includes('Automated reminder: no activity for')
+                );
+
+                if (hasPRActivity) {
+                  // Reset: remove warning label if present
+                  try {
+                    await github.rest.issues.removeLabel({
+                      owner,
+                      repo,
+                      issue_number: issue.number,
+                      name: 'assignment-inactive-warning'
+                    });
+                  } catch (e) {
+                    // Label may not exist, ignore
+                  }
+                  continue;
+                }
+
+                if (age >= millis(daysUnassign)) {
+                  // Unassign all assignees
+                  const assigneeLogins = issue.assignees.map(a => a.login);
+                  if (assigneeLogins.length > 0) {
+                    try {
+                      await github.rest.issues.removeAssignees({
+                        owner,
+                        repo,
+                        issue_number: issue.number,
+                        assignees: assigneeLogins
+                      });
+                      console.log(`Unassigned #${issue.number}: ${assigneeLogins.join(', ')}`);
+
+                      // Post unassignment notice
+                      await github.rest.issues.createComment({
+                        owner,
+                        repo,
+                        issue_number: issue.number,
+                        body: `**Automated notice:** Assignment removed after ${daysUnassign} days of inactivity. ` +
+                              `If you are still working on this, please re-assign yourself or ` +
+                              `[open a draft PR](https://github.com/${owner}/${repo}/compare/main) and mention this issue.`
+                      });
+
+                      // Add label for tracking
+                      try {
+                        await github.rest.issues.addLabels({
+                          owner,
+                          repo,
+                          issue_number: issue.number,
+                          labels: ['assignment-inactive-unassigned']
+                        });
+                      } catch (e) {
+                        // Ignore label add failures
+                      }
+                    } catch (e) {
+                      console.log(`Failed to unassign #${issue.number}: ${e.message}`);
+                    }
+                  }
+                } else if (age >= millis(daysWarning) && !hasWarningComment) {
+                  // Post reminder comment
+                  try {
+                    await github.rest.issues.createComment({
+                      owner,
+                      repo,
+                      issue_number: issue.number,
+                      body: `⏰ **Automated reminder:** no activity for ${daysWarning} days. ` +
+                            `Please respond or [open a draft PR](https://github.com/${owner}/${repo}/compare/main) ` +
+                            `within ${daysUnassign - daysWarning} days or your assignment will be removed.`
+                    });
+                    console.log(`Reminded assignees for #${issue.number}`);
+
+                    // Add warning label
+                    try {
+                      await github.rest.issues.addLabels({
+                        owner,
+                        repo,
+                        issue_number: issue.number,
+                        labels: ['assignment-inactive-warning']
+                      });
+                    } catch (e) {
+                      // Ignore label add failures
+                    }
+                  } catch (e) {
+                    console.log(`Failed to comment on #${issue.number}: ${e.message}`);
+                  }
+                }
+              }
+
+              page += 1;
+              if (issues.data.length < 100) {
+                hasMore = false;
+              }
+            }
+
+            console.log('✅ Inactive assignee check completed');

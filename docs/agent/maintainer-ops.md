@@ -109,17 +109,21 @@ The scheduled workflow does not label, comment on, or close issues or pull
 requests. `proposed-actions.json` is informational only in CI; use the local
 `apply` command after maintainer review when mutations are intended.
 
-### Relationship to `stale.yml`
+### Relationship to `stale.yml` and `unassign-inactive-assignees.yml`
 
 - `.github/workflows/stale.yml` mutates GitHub directly: it marks inactive
   issues and pull requests as stale and closes them after the grace period.
+- `.github/workflows/unassign-inactive-assignees.yml` mutates GitHub directly:
+  it posts a reminder at 15 days of inactivity on assigned issues and unassigns
+  at 30 days if no linked PR activity is detected. Labels used:
+  `assignment-inactive-warning` and `assignment-inactive-unassigned`.
 - `.github/workflows/maintainer-board.yml` is visibility-only: it classifies
   the current queue using `tools/agent/maintainer-policy.yaml` and gives
   maintainers a daily brief without changing GitHub state.
 
 Use the maintainer board to decide what needs review, rebase, unblock, or
-close-candidate follow-up. Use `stale.yml` only for the automated stale/close
-lifecycle.
+close-candidate follow-up. Use `stale.yml` and `unassign-inactive-assignees.yml`
+for automated lifecycle management.
 
 Manual trigger example:
 
