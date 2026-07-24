@@ -16,10 +16,28 @@ from .disagg import (
     DisaggResult,
     DisaggSweepPoint,
 )
+from .forecast import evaluate_forecast_backtest
+from .forecast_models import (
+    ForecastActuationRecord,
+    ForecastBacktestError,
+    ForecastBacktestReport,
+    ForecastCapacityRecommendation,
+    ForecastMethodBacktest,
+    ForecastWindowBacktest,
+)
 from .grid_flex import (
     GridFlexPoint,
     grid_flex_analysis,
     print_grid_flex_table,
+)
+from .mixture import (
+    MixtureCaseResult,
+    MixtureOptimizationError,
+    MixtureOptimizationReport,
+    MixtureStressCase,
+    RobustMixtureRecommendation,
+    aggregate_mixture_cdf,
+    evaluate_mixture_scenario,
 )
 from .threshold import ThresholdResult, print_threshold_pareto, threshold_pareto
 from .tpw import (
@@ -47,6 +65,22 @@ __all__ = [
     "GridFlexPoint",
     "grid_flex_analysis",
     "print_grid_flex_table",
+    # Workload mixtures
+    "MixtureCaseResult",
+    "MixtureOptimizationError",
+    "MixtureOptimizationReport",
+    "MixtureStressCase",
+    "RobustMixtureRecommendation",
+    "aggregate_mixture_cdf",
+    "evaluate_mixture_scenario",
+    # Workload forecast backtests
+    "ForecastActuationRecord",
+    "ForecastBacktestError",
+    "ForecastBacktestReport",
+    "ForecastCapacityRecommendation",
+    "ForecastMethodBacktest",
+    "ForecastWindowBacktest",
+    "evaluate_forecast_backtest",
     # Tokens-per-watt
     "TpwPoint",
     "FleetTpwResult",

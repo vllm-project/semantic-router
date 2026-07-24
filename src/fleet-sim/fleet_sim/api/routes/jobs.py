@@ -22,6 +22,10 @@ async def create_job(body: JobRequest, background_tasks: BackgroundTasks):
     # Validate: check the right params are provided
     if body.type == JobType.optimize and not body.optimize:
         raise HTTPException(422, "optimize params required for type=optimize")
+    if body.type == JobType.mixture_optimize and not body.mixture_optimize:
+        raise HTTPException(
+            422, "mixture_optimize params required for type=mixture_optimize"
+        )
     if body.type == JobType.simulate and not body.simulate:
         raise HTTPException(422, "simulate params required for type=simulate")
     if body.type == JobType.whatif and not body.whatif:
@@ -38,6 +42,7 @@ async def create_job(body: JobRequest, background_tasks: BackgroundTasks):
         "error": None,
         "request": body.model_dump(),
         "result_optimize": None,
+        "result_mixture_optimize": None,
         "result_simulate": None,
         "result_whatif": None,
     }

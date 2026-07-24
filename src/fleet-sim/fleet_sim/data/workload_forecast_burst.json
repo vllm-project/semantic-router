@@ -1,0 +1,141 @@
+{
+  "schema_version": "fleet-sim.workload-archetype-forecast/v1alpha1",
+  "taxonomy_version": "fleet-sim.workload-archetype-taxonomy/v1alpha1",
+  "id": "burst-agent-heavy-aggregates",
+  "version": "2026-07-18",
+  "description": "Content-free aggregate windows with an agent-heavy holdout burst and recovery window.",
+  "source_mixture": "workload_mixture_nominal.json",
+  "generated_at_s": 180,
+  "max_staleness_s": 120,
+  "forecast_horizon_windows": 2,
+  "privacy": {
+    "content_free": true,
+    "min_requests_per_window": 100,
+    "allowed_dimensions": ["archetype_weights", "model_class", "region", "slo_class"],
+    "forbidden_dimensions": ["caller_id", "session_id", "domain", "raw_prompt", "request_id"]
+  },
+  "aggregate_windows": [
+    {
+      "start_s": 0,
+      "duration_s": 60,
+      "request_count": 1200,
+      "total_tokens": 2520000,
+      "p95_total_tokens": 6200,
+      "p99_ttft_ms": 430,
+      "model_class": "general-llm",
+      "slo_class": "interactive",
+      "region": "global",
+      "archetype_weights": {
+        "interactive-chat": 0.6,
+        "multiturn-chat": 0.25,
+        "agent-heavy": 0.15
+      },
+      "uncertainty": {
+        "arrival_rate_stddev": 1.0,
+        "weight_stddev": {
+          "interactive-chat": 0.02,
+          "multiturn-chat": 0.02,
+          "agent-heavy": 0.02
+        }
+      }
+    },
+    {
+      "start_s": 60,
+      "duration_s": 60,
+      "request_count": 1260,
+      "total_tokens": 2646000,
+      "p95_total_tokens": 6200,
+      "p99_ttft_ms": 435,
+      "model_class": "general-llm",
+      "slo_class": "interactive",
+      "region": "global",
+      "archetype_weights": {
+        "interactive-chat": 0.58,
+        "multiturn-chat": 0.27,
+        "agent-heavy": 0.15
+      },
+      "uncertainty": {
+        "arrival_rate_stddev": 1.1,
+        "weight_stddev": {
+          "interactive-chat": 0.02,
+          "multiturn-chat": 0.02,
+          "agent-heavy": 0.02
+        }
+      }
+    },
+    {
+      "start_s": 120,
+      "duration_s": 60,
+      "request_count": 1200,
+      "total_tokens": 2520000,
+      "p95_total_tokens": 6200,
+      "p99_ttft_ms": 432,
+      "model_class": "general-llm",
+      "slo_class": "interactive",
+      "region": "global",
+      "archetype_weights": {
+        "interactive-chat": 0.6,
+        "multiturn-chat": 0.25,
+        "agent-heavy": 0.15
+      },
+      "uncertainty": {
+        "arrival_rate_stddev": 1.0,
+        "weight_stddev": {
+          "interactive-chat": 0.02,
+          "multiturn-chat": 0.02,
+          "agent-heavy": 0.02
+        }
+      }
+    }
+  ],
+  "holdout_windows": [
+    {
+      "start_s": 180,
+      "duration_s": 60,
+      "request_count": 3000,
+      "total_tokens": 10500000,
+      "p95_total_tokens": 12800,
+      "p99_ttft_ms": 590,
+      "model_class": "general-llm",
+      "slo_class": "mixed",
+      "region": "global",
+      "archetype_weights": {
+        "interactive-chat": 0.35,
+        "multiturn-chat": 0.2,
+        "agent-heavy": 0.45
+      },
+      "uncertainty": {
+        "arrival_rate_stddev": 4.0,
+        "weight_stddev": {
+          "interactive-chat": 0.04,
+          "multiturn-chat": 0.03,
+          "agent-heavy": 0.04
+        }
+      }
+    },
+    {
+      "start_s": 240,
+      "duration_s": 60,
+      "request_count": 1200,
+      "total_tokens": 2520000,
+      "p95_total_tokens": 6200,
+      "p99_ttft_ms": 435,
+      "model_class": "general-llm",
+      "slo_class": "interactive",
+      "region": "global",
+      "archetype_weights": {
+        "interactive-chat": 0.6,
+        "multiturn-chat": 0.25,
+        "agent-heavy": 0.15
+      },
+      "uncertainty": {
+        "arrival_rate_stddev": 1.0,
+        "weight_stddev": {
+          "interactive-chat": 0.02,
+          "multiturn-chat": 0.02,
+          "agent-heavy": 0.02
+        }
+      }
+    }
+  ]
+}
