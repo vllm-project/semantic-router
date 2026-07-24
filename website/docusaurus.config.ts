@@ -232,10 +232,6 @@ const config: Config = {
           position: 'left',
           items: [
             {
-              label: 'Papers & Talks',
-              to: '/publications',
-            },
-            {
               label: 'White Paper',
               to: '/white-paper',
             },
@@ -244,8 +240,16 @@ const config: Config = {
               to: '/vision-paper',
             },
             {
+              label: 'Mixture-of-Models Paper',
+              to: '/mom-paper',
+            },
+            {
               label: 'Engineering Blog',
               to: '/blog',
+            },
+            {
+              label: 'Papers & Talks',
+              to: '/publications',
             },
           ],
         },
@@ -367,7 +371,10 @@ const config: Config = {
               label: 'Vision Paper',
               to: '/vision-paper',
             },
-
+            {
+              label: 'Mixture-of-Models Paper',
+              to: '/mom-paper',
+            },
             {
               label: 'License',
               href: 'https://github.com/vllm-project/semantic-router/blob/main/LICENSE',

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "mom.vllm.ai/provider-observation/v0alpha1",
+  "bindingId": "provider-reasoner",
+  "identityStrength": "observed-opaque",
+  "artifactUri": "provider://example/reasoner",
+  "observedAlias": "reasoner-2026-07",
+  "observedAt": "2026-07-15T00:00:00Z",
+  "endpointProtocol": "openai.chat.completions.v1",
+  "claimBoundary": "The provider exposes no content digest; the observation supports attribution and drift checks, not bitwise reproduction."
+}

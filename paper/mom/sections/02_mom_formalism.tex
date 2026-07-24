@@ -1,0 +1,278 @@
+\section{Mixture-of-Models as a Model Architecture}
+\label{sec:formalism}
+
+\subsection{One model beyond one checkpoint}
+
+In conventional deployments, a model name resolves to one checkpoint or managed
+endpoint. A Mixture-of-Models (MoM) instead exposes one model interface while
+computation crosses model, provider, process, and device boundaries. Its
+components may be open or closed, local or remote, and independently versioned
+and invoked; they are typically, but need not be, independently trained.
+Its model identity is defined not by shared weights but by a versioned
+executable specification that fixes logical references, admissible
+substitutions, composition, constraints, and the output contract.
+
+Each published model fixes a behavior variant $b$, its default objective, and
+an allowed domain $\mathcal{U}_b$ of request preferences. For an input $x$,
+conversation or session history $h$, request preference $u\in\mathcal{U}_b$,
+and observable environment state $e$, we define its logical specification as
+\begin{equation}
+  \mathcal{M}_b =
+  (\mathcal{V}, \mathcal{Q}, \mathcal{U}_b, S_{\phi}, P_{\omega}, \pi_{\psi},
+   \mathcal{A}, \mathcal{G}, \mathcal{K}, \Gamma).
+  \label{eq:mom-object}
+\end{equation}
+Here $\mathcal{V}=\{v_1,\ldots,v_n\}$ contains \emph{logical model references},
+not URLs; each declares an exact identity or capability requirement together
+with interfaces and deployment requirements. Optional $\mathcal{Q}$ contains
+declared typed auxiliary operators for retrieval, tool use, and other bounded
+effects; operators have the same explicit interface, policy, and provenance
+requirements as model calls, while persistent application state remains
+outside the model. $\mathcal{U}_b$ contains the typed request preferences and
+policy refinements admitted by behavior variant $b$; it cannot override a hard
+guard or transform one published variant into another.
+$S_{\phi}$ extracts typed signals such as domain, complexity, modality, risk,
+and confidence; $P_{\omega}$ projects them to calibrated scores and predicates;
+and $\pi_{\psi}$ chooses the next admissible action. $\mathcal{A}$ defines
+action and transition semantics, $\mathcal{G}$ contains typed preconditions and
+postconditions, $\mathcal{K}$ defines intermediate and final contracts, and
+$\Gamma$ imposes finite bounds on events, path length, fan-out, calls, rounds,
+tokens, and time. These components may be learned or authored; content-addressed
+prompts and policy assets parameterize the specification. Catalogs, topologies,
+prompts, thresholds, contracts, and bounds can be optimized even without
+gradients through a constituent model.
+
+A deployment binding later resolves a logical requirement to a local checkpoint
+or provider model. Thus the specification can be inspected and packaged without
+credentials, then rebound without editing its decision semantics
+(Section~\ref{sec:artifact}). We write
+$\mathcal{R}=(\mathcal{M}_b,\mathcal{B},L)$ for a \emph{deployed MoM}, where
+$\mathcal{B}$ is the environment binding and $L$ is the completed resolution
+lock, including the engine revision. Logical identity belongs to $\mathcal{M}_b$.
+The caller observes $\mathcal{R}$ as one virtual model: the engine revision
+recorded in $L$ executes $\mathcal{M}_b$ against the resolved pool, producing an
+attributed event DAG for each request. This distinction permits cross-engine
+portability without reducing the deployed model to either the engine or its
+endpoints.
+
+\subsection{Execution-trace semantics}
+
+Before event $j$, the runtime state is
+\begin{equation}
+  \xi_j=(x,h,u,e,z_j,m_j,b_j), \qquad
+  z_j=P_{\omega}(S_{\phi}(x,h,e,m_j),h,u,e,m_j),
+\end{equation}
+where $m_j$ is typed working memory and $b_j$ is the remaining resource budget.
+Recomputing $z_j$ allows later decisions to use validated outputs from earlier
+events without granting a planner unbounded control.
+The primitive actions are
+\begin{equation}
+\begin{split}
+  \textsc{Call}(v,r),\quad &\textsc{Op}(q,r),\quad
+  \textsc{Fork}(a_1,\ldots,a_k),\\
+  \textsc{Join}(f),\quad &\textsc{Check}(k),\quad
+  \textsc{Transform}(f),\quad
+  \textsc{Return}(s,y).
+\end{split}
+\label{eq:actions}
+\end{equation}
+A call invokes $v$ with a checked request; $\textsc{Op}$ invokes a declared,
+typed external operator $q$ such as retrieval or a tool; fork and join implement
+bounded parallel composition; check evaluates a guard; and transform is typed
+and deterministic.  Planners and judges are ordinary calls, not sources of
+unbounded control flow. Every terminal trace ends with a typed status
+$s\in\{\texttt{ok},\texttt{abstain},\texttt{reject},\texttt{error}\}$; for a
+non-answer status, $y=\bot$. Let $\bar y=(s,y)$ denote the complete terminal
+outcome.
+
+An execution trace is a finite, labeled event DAG
+\begin{equation}
+  \tau=(N,\prec,\sigma,\{(\xi_j,a_j,o_j)\}_{j\in N},\bar y),
+  \label{eq:trace}
+\end{equation}
+where $N$ is the event set, $\prec$ is the control-and-data happens-before
+relation, and $\sigma$ is a canonical topological order used only for logging
+and replay. A sequential trace has a total order; \textsc{Fork} creates
+incomparable child regions, and \textsc{Join} depends on their terminal events.
+Stable branch identifiers make $\sigma$ unique, so different interleavings do
+not create duplicate traces. The state $\xi_j$ is a deterministic function of
+the outcomes visible through predecessors of $j$; wall-clock observations and
+timeouts remain part of $e$ and $o_j$. Both $|N|$ and every path length are
+finite under $\Gamma$.
+
+The policy may be stochastic and condition on prior model outputs through
+$m_j$. Let $L$ identify the bound constituent revisions, let $C(\tau)\subseteq
+N$ contain the controller's choice events, and let $E(\tau)\subseteq N$ contain
+effectful model and operator calls. Graph-prescribed and administrative events
+have unit probability. For event $j$, the causal history
+$H_j=\{o_k:k\prec j\}$ contains only predecessor-visible outcomes; $\xi_j$ is
+measurable with respect to this history. In particular, a branch cannot observe
+an incomparable branch before their declared join.
+
+Parallel calls can share provider, load, and runtime randomness, so we do not
+assume that their outcomes are conditionally independent. Instead, let
+$K_L$ be the causal execution kernel over all effectful outcomes for the chosen
+action DAG, and let $r_{E(\tau)}$ collect the checked requests attached to its
+effectful actions. The joint probability of a valid trace and terminal outcome is
+\begin{equation}
+\begin{aligned}
+ p_{\mathcal{R}}(\bar y,\tau\mid x,h,u,e)
+ ={}& \mathbf{1}[\textsc{Return}(\tau)=\bar y]
+      \prod_{j\in C(\tau)}\pi_{\psi}(a_j\mid\xi_j)\\
+ &\cdot K_L\!\left(o_{E(\tau)}\mid r_{E(\tau)},a_{E(\tau)},
+                   \prec,x,h,u,e\right).
+\end{aligned}
+\label{eq:trace-factorization}
+\end{equation}
+The kernel is causal: an event distribution may depend on $H_j$ and shared
+runtime state, but not on incomparable or future outcomes. When effectful calls
+are conditionally independent given their causal histories, $K_L$ reduces to a
+product of per-call response kernels. The user-facing distribution of the
+deployed realization marginalizes admissible event DAGs,
+\begin{equation}
+ p_{\mathcal{R}}(\bar y\mid x,h,u,e)
+ = \sum_{\tau\in\mathcal{T}_{\mathrm{adm}}}
+   p_{\mathcal{R}}(\bar y,\tau\mid x,h,u,e).
+ \label{eq:mom-distribution}
+\end{equation}
+Closed-model token probabilities need not be accessible: training may use
+sampled outputs, scores, preferences, or outcomes.
+
+The trace view unifies common structures.  \textbf{Selection} calls one model;
+a \textbf{cascade} conditionally escalates through an ordered sequence;
+\textbf{fusion} forks a bounded panel and joins its responses;
+\textbf{multi-round collaboration} repeats calls over typed shared state; and a
+\textbf{workflow} instantiates a bounded static graph or validated planner
+output.  Routing is therefore one MoM topology, while a collection of APIs is
+not a MoM until its admissible traces, contracts, and identity are explicit.
+Fixed panels and workflows are degenerate policies that assign probability one
+to one graph; conditional computation does not require every trace to activate
+a strict subset of the catalog.
+
+\begin{figure}[H]
+  \centering
+  \resizebox{\linewidth}{!}{\input{figures/fig2_trace_topologies.tex}}
+  \caption{\textbf{One trace semantics, multiple execution topologies.}
+  Selection, conditional cascades, bounded parallel fusion, multi-round
+  collaboration, and validated workflows use the same primitive actions and
+  resource bounds.  Blue nodes are calls realized in the illustrated trace;
+  white nodes remain admissible but inactive.}
+  \label{fig:trace-topologies}
+\end{figure}
+
+\paragraph{Coverage of bounded graphs.}
+The action vocabulary is designed to represent finite, well-typed control-flow graphs
+whose effectful vertices call members of $\mathcal{V}\cup\mathcal{Q}$, whose
+branches and joins have declared semantics, and whose cycles have finite bounds.
+Model and operator vertices map to \textsc{Call} and \textsc{Op}; branches to
+\textsc{Check} and policy transitions; parallel regions to
+\textsc{Fork}/\textsc{Join}; deterministic vertices to \textsc{Transform}; and
+terminals to \textsc{Return}. Bounded cycles can be unrolled or represented by
+a counter in typed memory. For fixed binding, response kernels, and scheduler
+semantics, the translation preserves typed terminal outcomes and effectful
+calls up to deterministic administrative steps under these declared
+assumptions. This is a design property, not a claim that every graph can be
+learned efficiently. It lets
+selection, cascades, panels, multi-round protocols, and finite workflows share
+one runtime action vocabulary.
+
+\subsection{Preferences define objectives; policies must satisfy constraints}
+\label{sec:objectives}
+
+Let $R(\bar y,y^*)$ measure task utility, including the utility of explicit
+abstention, rejection, or error, and let
+$c(\tau,e)\in\mathbb{R}_{+}^{d}$ contain soft resource outcomes such as monetary
+cost, latency, generated tokens, energy use, and estimated emissions. A
+request preference $u$ compiles to weights $\lambda(u)$ and, where appropriate,
+targets or service-level objectives.  For a data distribution $\mathcal{D}$, a
+basic training objective is
+\begin{equation}
+ \max_{\Theta}
+ \;\mathbb{E}_{(x,h,u,e,y^*)\sim\mathcal{D},\,
+ \tau\sim p_{\mathcal{R}_{\Theta}}(\cdot\mid x,h,u,e)}
+ \left[R(\bar y,y^*)-\lambda(u)^{\top}c(\tau,e)\right],
+ \label{eq:soft-objective}
+\end{equation}
+where $\Theta=(\theta_{\mathrm{log}},\beta)$ denotes the logical and deployment
+coordinates introduced in Section~\ref{sec:optimization}.
+
+Privacy, residency, model allowlists, and capability rules that are known
+before a call are typed action preconditions
+$g_\ell^{\mathrm{pre}}(\xi_j,a)\in\{0,1,\star\}$, where $\star$ denotes
+unknown evidence. They define
+\begin{equation}
+ \mathcal{A}_{\mathrm{adm}}(\xi_j)
+ =\{a\in\mathcal{A}(\xi_j):
+ g_\ell^{\mathrm{pre}}(\xi_j,a)=1\;\forall \ell\},
+ \qquad
+ \pi_\psi(a\mid\xi_j)=0\ \text{if }a\notin\mathcal{A}_{\mathrm{adm}}(\xi_j).
+ \label{eq:admissible}
+\end{equation}
+Only a verified value of $1$ admits an action. The guards cover graph
+reachability, artifact policy, environment and binding policy, the selected
+behavior variant, and request preference. Either may remove actions from the
+environment-admissible set but cannot restore an action excluded by residency,
+authorization, or deployment policy.
+Postconditions capture properties---such as output validity or grounding---that
+can be evaluated only after an action returns. A trace may return \texttt{ok}
+only if all postconditions on its realized path hold; otherwise it must take a
+declared repair, fallback, abstention, or rejection edge. Thus
+$\mathcal{T}_{\mathrm{adm}}\subseteq\mathcal{T}_{\Gamma}$ contains traces whose
+actions satisfy Equation~\ref{eq:admissible} and whose failed postconditions
+follow declared transitions. If no action is admissible, execution fails closed
+with $\textsc{Return}(\texttt{reject},\bot)$. Statistical requirements such as
+tail latency should instead use population constraints such as
+$\Pr[g_k^{\mathrm{post}}=0]\leq\delta_k$; an unobserved outcome cannot be
+filtered before execution.
+These guarantees are relative to the declared evidence and checker semantics;
+they do not establish confidentiality, safety, or factuality unless those
+mechanisms are themselves sound.
+
+Published behavior variants such as \emph{cost-first}, \emph{accuracy-first},
+\emph{balanced}, \emph{security-first}, and \emph{grounding-first} fix both
+objective defaults and non-negotiable guards, preventing quality from
+compensating for a privacy or contract violation. Request preferences may tune
+declared tradeoffs only within the selected variant's domain.
+
+Two operating points make the distinction precise. With quality floor $q$,
+nonnegative resource weights $w_c$, and expected resource cap $\bar b$, the
+same MoM may be optimized as
+\begin{equation}
+\begin{aligned}
+ \text{cost-first:}\quad
+ &\min_{\Theta}\ \mathbb{E}[w_c^{\top}c(\tau,e)]
+ &&\text{s.t.}\quad \mathbb{E}[R(\bar y,y^*)]\ge q,\\
+ \text{accuracy-first:}\quad
+ &\max_{\Theta}\ \mathbb{E}[R(\bar y,y^*)]
+ &&\text{s.t.}\quad \mathbb{E}[c(\tau,e)]\preceq \bar b.
+\end{aligned}
+\label{eq:dual-profiles}
+\end{equation}
+The first uses conditional computation to avoid unnecessary work; the second
+uses an expected resource envelope to exploit complementary failure modes.
+Per-trace hard limits remain enforced by $\Gamma$. These are first-class
+behavior variants with separate versioned coordinates, not application-side
+graphs.
+
+\paragraph{Executor contract.}
+A conforming executor must make the preceding semantics operational. Given a
+well-typed specification, finite event, fan-out, path, and action-duration
+bounds, every budget exhaustion, timeout, or stuck state must follow a declared
+transition, and execution must eventually terminate within $\Gamma$ with a
+typed status. The controller's support must remain inside
+$\mathcal{A}_{\mathrm{adm}}(\xi_j)$, and every successful return must be guarded
+by its declared postconditions. These obligations yield three checkable runtime
+invariants: execution terminates within $\Gamma$ with a typed status; no action
+with a false declared precondition is issued; and \texttt{ok} is reachable only
+after required checks succeed. They are executor guarantees relative to the
+declared guards and evidence, not statistical claims about the correctness of
+those guards.
+
+\subsection{Architectural invariants}
+
+Equation~\ref{eq:mom-object} imposes five invariants: execution is
+conditionally selected and resource-bounded;
+composition is typed; recursion, iteration, and fan-out are bounded; logical
+semantics are separate from placement; and every response is attributable to a
+MoM version, binding, and trace. These invariants make a MoM optimizable like a
+model and operable like a distributed system.

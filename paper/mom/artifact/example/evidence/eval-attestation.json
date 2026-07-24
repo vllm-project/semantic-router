@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "mom.vllm.ai/eval-attestation/v0alpha1",
+  "subject": {
+    "modelId": "vllm-sr/mom-v1-ultra",
+    "modelVersion": "1.0.0",
+    "behaviorVariant": "accuracy-first",
+    "semanticDigest": "sha256:7896fd6d7c496c8afaf32907503d67f536fa12271a398020c342107fb3252c70",
+    "bundleDigest": "sha256:b9cde7d73f2591ab41b04a2652330ba540f0a47ac1726d3208f30a27eab61862",
+    "bindingDigest": "sha256:6b0c802858ff24889819da299b765e992487d6b69980d694eef6611ae6686265",
+    "lockDigest": "sha256:24f99ae82680efd39f1f6bff8d4bb6590307b624b6e720b6e6b7602d254ac579"
+  },
+  "suite": {
+    "protocolDigest": "sha256:2a1084f2e2f41c65de7da31c01b847b5525bcd3748eb529a551951645469d7a5",
+    "datasets": [
+      {
+        "taskId": "quality-fixture",
+        "datasetDigest": "sha256:f342aa836ee908626d71b94b35f3146163fff3bb250362de3fb73fc3be8c0e5d"
+      }
+    ],
+    "harnessDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "execution": {
+    "seed": 17,
+    "concurrency": 1,
+    "temperature": 0.0,
+    "sampling": "deterministic-structural-fixture"
+  },
+  "metrics": [
+    {
+      "taskId": "quality-fixture",
+      "name": "schema-conformance",
+      "value": 1.0,
+      "n": 1,
+      "confidenceInterval": [1.0, 1.0]
+    }
+  ],
+  "claimBoundary": "This attestation demonstrates identity linkage and schema shape only; it is not a quality, cost, latency, or portability result."
+}

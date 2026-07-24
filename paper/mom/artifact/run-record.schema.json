@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm.ai/schemas/mom/run-record-v0alpha1.json",
+  "title": "Mixture-of-Models realized run record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "subject",
+    "requestId",
+    "entrypoint",
+    "behaviorVariant",
+    "requestPreference",
+    "startedAt",
+    "endedAt",
+    "terminalStatus",
+    "events",
+    "usage"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "mom.vllm.ai/run-record/v0alpha1"},
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "semanticDigest",
+        "bundleDigest",
+        "bindingDigest",
+        "lockDigest"
+      ],
+      "properties": {
+        "semanticDigest": {"$ref": "#/$defs/digest"},
+        "bundleDigest": {"$ref": "#/$defs/digest"},
+        "bindingDigest": {"$ref": "#/$defs/digest"},
+        "lockDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "requestId": {"type": "string", "minLength": 1},
+    "entrypoint": {"type": "string", "minLength": 1},
+    "behaviorVariant": {"type": "string", "minLength": 1},
+    "requestPreference": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": "number"}
+    },
+    "startedAt": {"type": "string", "format": "date-time"},
+    "endedAt": {"type": "string", "format": "date-time"},
+    "terminalStatus": {"enum": ["ok", "abstain", "reject", "error"]},
+    "events": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "sequence",
+          "parentIds",
+          "operator",
+          "status",
+          "startedAt",
+          "durationMs",
+          "attempt"
+        ],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "sequence": {"type": "integer", "minimum": 0},
+          "parentIds": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "operator": {"type": "string", "minLength": 1},
+          "status": {"enum": ["started", "succeeded", "failed", "skipped"]},
+          "startedAt": {"type": "string", "format": "date-time"},
+          "durationMs": {"type": "number", "minimum": 0},
+          "attempt": {"type": "integer", "minimum": 1},
+          "retryOf": {"type": "string", "minLength": 1},
+          "logicalModel": {"type": "string", "minLength": 1},
+          "bindingId": {"type": "string", "minLength": 1},
+          "observedModelId": {"type": "string", "minLength": 1},
+          "constraintChecks": {"$ref": "#/$defs/checks"},
+          "contractChecks": {"$ref": "#/$defs/checks"},
+          "redactions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["policy", "action"],
+              "properties": {
+                "policy": {"type": "string", "minLength": 1},
+                "action": {"enum": ["drop", "mask", "hash", "encrypt", "reference"]}
+              }
+            }
+          }
+        }
+      }
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modelCalls", "inputTokens", "outputTokens"],
+      "properties": {
+        "modelCalls": {"type": "integer", "minimum": 0},
+        "inputTokens": {"type": "integer", "minimum": 0},
+        "outputTokens": {"type": "integer", "minimum": 0},
+        "estimatedCost": {"type": "number", "minimum": 0},
+        "accountingVersion": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "outcome"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "outcome": {"enum": ["pass", "fail", "unknown"]},
+          "evidenceDigest": {"$ref": "#/$defs/digest"}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,50 @@
+\begin{tikzpicture}[
+  x=1cm,y=1cm,font=\sffamily,>=Latex,
+  flow/.style={-{Latex[length=2.0mm]},draw=MoMGray,line width=0.72pt},
+  exchange/.style={<->,>=Latex,draw=MoMGray,line width=0.68pt},
+  boundary/.style={draw=MoMBorder,fill=MoMBlueLight!13,rounded corners=5pt,
+    line width=0.9pt},
+  box/.style={draw=MoMBorder,fill=white,rounded corners=2.8pt,
+    line width=0.64pt,minimum height=0.86cm,inner xsep=6pt,
+    inner ysep=3pt,align=center,text=MoMText},
+  dark/.style={box,draw=none,fill=MoMDark,text=white},
+  identity/.style={box,draw=none,fill=MoMBlueLight},
+  response/.style={box,draw=MoMDark,fill=MoMPurple,line width=0.76pt},
+  title/.style={font=\sffamily\bfseries\fontsize{9.5}{10.3}\selectfont,
+    text=MoMText},
+  meta/.style={font=\sffamily\fontsize{6.5}{7.2}\selectfont,text=MoMMuted}
+]
+
+\newcommand{\momfigmain}{\bfseries\fontsize{8.2}{9.0}\selectfont}
+\newcommand{\momfigsub}{\fontsize{6.7}{7.4}\selectfont\color{MoMMuted}}
+\newcommand{\momfiglightsub}{\fontsize{6.7}{7.4}\selectfont\color{white}}
+
+% One proposition: a standard model call crosses a single deployed MoM
+% boundary containing both the lifecycle engine and its bound constituents.
+\draw[boundary] (3.02,0.82) rectangle (12.78,4.10);
+\node[title] at (7.90,3.82) {Target deployed MoM boundary};
+\node[meta] at (7.90,3.48)
+  {versioned identity + behavior variant \;\textbullet\; binding + lock};
+
+\node[identity,minimum width=2.35cm,minimum height=0.96cm] (request) at (1.38,2.45)
+  {{\bfseries\fontsize{8.0}{8.8}\selectfont Standard call}\\[-1pt]
+   {\fontsize{6.3}{7.0}\selectfont\ttfamily model=mom-v1-ultra}};
+
+\node[dark,minimum width=4.35cm,minimum height=1.04cm] (engine) at (7.90,2.55)
+  {{\momfigmain vLLM Semantic Router}\\[-1pt]
+   {\momfiglightsub admit \;\textbullet\; decide \;\textbullet\; execute \;\textbullet\; validate}};
+
+\node[response,minimum width=1.75cm,minimum height=0.90cm] (answer) at (14.02,2.45)
+  {{\momfigmain One model}\\[-1pt]{\momfigsub response}};
+
+\draw[flow] (request) -- (engine);
+\draw[flow] (engine) -- (answer);
+
+\node[box,fill=MoMBlueLight,draw=MoMBorder,minimum width=4.10cm,
+  minimum height=0.80cm] (pool) at (7.90,1.42)
+  {{\momfigmain Bound constituents}\\[-1pt]
+   {\momfigsub local \;\textbullet\; private \;\textbullet\; cloud}};
+
+\draw[exchange] (engine.south) -- (pool.north);
+
+\end{tikzpicture}

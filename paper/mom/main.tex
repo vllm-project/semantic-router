@@ -1,0 +1,74 @@
+\documentclass{article}
+\usepackage{iclr2026_conference,times}
+
+\input{math_commands.tex}
+
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{flafter}
+\usepackage{float}
+\usepackage{placeins}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,calc,positioning}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{url}
+\Urlmuskip=0mu plus 8mu\relax
+
+\definecolor{MoMDark}{HTML}{455E70}
+\definecolor{MoMText}{HTML}{2F3E4D}
+\definecolor{MoMMuted}{HTML}{6B7B8C}
+\definecolor{MoMGray}{HTML}{98A6B5}
+\definecolor{MoMBorder}{HTML}{D7E0E7}
+\definecolor{MoMBlue}{HTML}{9ED0EA}
+\definecolor{MoMBlueLight}{HTML}{DCEBF5}
+\definecolor{MoMPurple}{HTML}{C7B7E6}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=MoMDark,
+  citecolor=MoMDark,
+  urlcolor=MoMDark,
+  pdftitle={Mixture-of-Models: Conditional Computation Across Model Boundaries},
+  pdfauthor={vLLM Semantic Router Project}
+}
+
+\newcommand{\mom}{\textsc{MoM}}
+\newcommand{\vsr}{\textsc{vLLM Semantic Router}}
+\newcommand{\softobj}{\mathcal{J}}
+\newcommand{\hardset}{\mathcal{F}}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\title{Mixture-of-Models:\\Conditional Computation Across\\Model Boundaries}
+
+\author{vLLM Semantic Router Project}
+
+\iclrfinalcopy
+
+\begin{document}
+\raggedbottom
+
+\maketitle
+\lhead{Preprint -- July 2026}
+
+\input{sections/00_abstract}
+\input{sections/01_introduction}
+\input{sections/02_mom_formalism}
+\input{sections/03_optimization_execution}
+\input{sections/04_artifact_lifecycle}
+\input{sections/05_reference_engine}
+\input{sections/06_evidence}
+\input{sections/07_related_limitations}
+\input{sections/08_conclusion}
+
+\bibliography{references}
+\bibliographystyle{iclr2026_conference}
+
+\appendix
+\input{sections/appendix_reproducibility}
+\input{appendix_artifact_spec}
+
+\end{document}

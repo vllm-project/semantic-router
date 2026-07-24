@@ -1,0 +1,131 @@
+\section{Experimental Protocol}
+\label{app:reproducibility}
+\begingroup
+\small
+
+This appendix records the protocol behind Section~\ref{sec:evidence} and the
+evidence needed to audit an end-to-end system result. The current versioned
+evaluation manifest covers GPQA-Diamond and LiveCodeBench; the HLE description
+corresponds to the prior released scorecard retained in
+Figure~\ref{fig:accuracy-scorecards}. The open reference implementation is available at
+\url{https://github.com/vllm-project/semantic-router}. The evaluated
+configurations were served through an OpenAI-compatible endpoint under the
+shared alias \texttt{vllm-sr/auto}; each benchmark configuration nevertheless
+has a distinct pool and topology and should be released under its own immutable
+coordinate and digests.
+
+\subsection{Constituent pools and trace budgets}
+
+\paragraph{GPQA-Diamond.}
+The benchmark is GPQA-Diamond~\citep{rein_2023_gpqa}.  The evaluated MoM
+uses Gemini 3.1 Pro Preview, GPT-5.5, and Claude Opus 4.8.  Each request launches
+one reasoning call to each constituent and then invokes Gemini for synthesis,
+for four nominal model calls.  The output contract admits exactly one answer in
+\{A,B,C,D\}.  The reported run contains 50 questions and is labeled
+\emph{formal-50} to distinguish it from the complete 198-question benchmark.
+
+\paragraph{LiveCodeBench.}
+The evaluated window uses LiveCodeBench~\citep{jain_2024_livecodebench} v6,
+January--April 2025, with 175 problems.  The pool again contains Gemini 3.1 Pro
+Preview, GPT-5.5, and Claude Opus 4.8. Request signals select one of two
+principal traces. The first uses three analysis calls followed by GPT-5.5
+synthesis, for four calls in total; the second uses five breadth calls followed
+by GPT-5.5 synthesis, for six calls in total. The contract requires one complete
+Python solution with the problem's function or standard-input interface
+preserved.  Sandboxed execution provides the task score.  Five missing
+generations are assigned zero credit, so the denominator remains 175.
+
+\paragraph{Humanity's Last Exam.}
+The released scorecard reports a text-only filter over the 2,500-item release
+of Humanity's Last Exam (HLE)~\citep{phan_2026_hle}, with 2,158 retained items.
+The closed realization contains Claude Opus 4.8 and Gemini 3.1
+Pro Preview. Depending on request risk, it obtains two, three, or four candidate
+responses and then invokes Gemini for synthesis, for three to five nominal
+calls; its scoring judge is also Gemini 3.1 Pro Preview. The hybrid realization
+contains two independent GLM-5.2 sampling roles, GPT-5.5, Claude Opus 4.8, and
+Gemini 3.1 Pro Preview. It obtains three or four candidate responses and then
+invokes Gemini for synthesis, for four or five nominal calls.
+The contract requires an explanation, exact answer, and calibrated confidence
+field. The hybrid scoring path uses GPT-5.5. In both realizations, the judge
+identity may also participate in the execution graph, so the reported numbers
+are end-to-end system scores; comparisons intended to isolate constituent
+quality should instead use a disjoint judge pool and report multi-judge
+agreement.
+
+For archival reproduction, each dataset must be pinned by repository revision,
+configuration, filter predicate, ordered item identifiers, and an identifier
+digest. In particular, \emph{LiveCodeBench v6} here denotes the 175-item
+January--April 2025 configuration rather than the cumulative
+\texttt{release\_v6}; the HLE count is produced by the text-only filter rather
+than a benchmark-defined split; and the GPQA formal-50 item list requires an
+explicit selection record. These public benchmarks predate the evaluated 2026
+constituents, so no result is interpreted as contamination-free
+generalization.
+
+All constituent calls in these three experiments use the same managed model
+gateway.  Thus the experiments test heterogeneous model identities and trace
+topologies, while cross-provider and cross-hardware portability remain separate
+evaluation dimensions.
+
+\subsection{Request, trace, and scoring records}
+
+A reproducible and independently auditable MoM evaluation requires more than
+final predictions. Each
+request record should contain:
+
+\begin{itemize}
+  \item dataset version, split, immutable example identifier, and input digest;
+  \item logical MoM identity, behavior variant, request preference, bundle digest, and deployment-lock
+  digest;
+  \item signals, projection values, matched decision, selected topology, and
+  hard-constraint outcomes;
+  \item every constituent model and service revision, prompt digest, sampling
+  parameters, retry index, stop reason, and terminal status;
+  \item raw response or policy-compliant encrypted/redacted equivalent, parsed
+  answer, contract-validation result, repair, fallback, and abstention events;
+  \item input, cached-input, reasoning, and output token counts when available;
+  \item per-call and end-to-end latency, timeouts, rate limits, and failures;
+  \item realized monetary and, where estimable, energy cost under the declared
+  accounting model;
+  and
+  \item scorer and judge versions, raw score, aggregation rule, and uncertainty.
+\end{itemize}
+
+Run-level metadata should additionally record engine and dependency versions,
+model inventory, start and end times, concurrency, seeds, counts of attempted,
+completed, and missing items, and checksums for every output shard. A run is complete
+only when the expected item identifiers and denominator match; the presence of
+an aggregate score file alone is insufficient.
+
+\subsection{Routing-aware fleet-planning protocol}
+
+The capacity example uses the empirical request-length distribution from
+LMSYS-Chat-1M, collected partly through Chatbot
+Arena~\citep{zheng_2023_lmsyschat,chiang_2024_chatbotarena}, at an arrival rate
+of 100 requests per second and a 500 ms time-to-first-token target. The modeled
+worker serves a 70B model with eight-way tensor parallelism on A100 GPUs. The
+homogeneous baseline assigns every request to a 65K-context pool.  The routed
+plan assigns short requests to a 4K-context pool and long requests to the 65K
+pool, then sweeps the threshold subject to the same latency target.  GPU cost is
+fixed at \$2.21 per hour.  Both reported plans are continuous analytical
+capacity estimates before rounding to whole eight-GPU workers; they are not
+deployable cluster counts or measurements from a production cluster.
+
+For deployment use, the planner should first be calibrated against observed
+prefill/decode throughput and tail latency, then validated on held-out traces.
+A complete study should repeat the sweep over arrival processes, context
+distributions, SLOs, accelerator types, model profiles, failures, and price
+assumptions, and should compare analytical predictions with discrete-event and
+live-cluster measurements.
+
+\subsection{Release contract}
+
+An independently checkable release should publish the canonical MoM bundle,
+deployment binding and lock, constituent inventory, prompts, contracts,
+benchmark manifests, per-item traces, and deterministic report generator.
+Credentials, authorization headers, and private request content must never be
+embedded; secret references and policy-preserving redaction retain the logical
+identity needed for verification.  All tables and figures should be regenerated
+from immutable request and run records, and their reported digests should match
+the released artifacts.
+\endgroup
