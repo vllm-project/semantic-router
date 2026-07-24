@@ -1,0 +1,11 @@
+routing:
+  signals:
+    keywords:
+      - name: pipeline_step_summarize
+        operator: OR
+        keywords: ["__pipeline_step:summarize__", "__step1__"]
+        case_sensitive: false
+      - name: pipeline_step_extract
+        operator: OR
+        keywords: ["__pipeline_step:extract__", "__step2__"]
+        case_sensitive: false
