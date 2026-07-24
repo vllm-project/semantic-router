@@ -25,6 +25,7 @@
 
 use crate::core::{ModelErrorType, UnifiedError};
 use crate::model_error;
+use crate::registry::get_registry;
 use anyhow::{Error as E, Result};
 use candle_core::{DType, Device, IndexOp, Module, Tensor};
 use candle_nn::{ops::softmax, Linear, VarBuilder};
@@ -577,11 +578,6 @@ impl ConfigurableModel for DebertaV3Classifier {
         })
     }
 }
-
-// Global instance using OnceLock pattern
-/// Global DeBERTa v3 classifier instance
-pub static DEBERTA_V3_CLASSIFIER: std::sync::OnceLock<std::sync::Arc<DebertaV3Classifier>> =
-    std::sync::OnceLock::new();
 
 #[cfg(test)]
 mod tests {

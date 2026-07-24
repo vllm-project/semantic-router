@@ -16,6 +16,7 @@
 
 use crate::core::{ModelErrorType, UnifiedError};
 use crate::model_error;
+use crate::registry::get_registry;
 use anyhow::{Error as E, Result};
 use candle_core::{DType, Device, IndexOp, Tensor, D};
 use candle_nn::{Linear, Module, VarBuilder};
@@ -445,17 +446,6 @@ impl std::fmt::Debug for TraditionalBertClassifier {
             .finish()
     }
 }
-
-// Global instances using OnceLock pattern for zero-cost reads after initialization
-/// Global Traditional BERT classifier instance
-pub static TRADITIONAL_BERT_CLASSIFIER: std::sync::OnceLock<
-    std::sync::Arc<TraditionalBertClassifier>,
-> = std::sync::OnceLock::new();
-
-/// Global Traditional BERT token classifier instance
-pub static TRADITIONAL_BERT_TOKEN_CLASSIFIER: std::sync::OnceLock<
-    std::sync::Arc<TraditionalBertTokenClassifier>,
-> = std::sync::OnceLock::new();
 
 /// Traditional BERT token classifier for token-level classification
 pub struct TraditionalBertTokenClassifier {
