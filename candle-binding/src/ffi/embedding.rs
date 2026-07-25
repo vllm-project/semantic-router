@@ -8,6 +8,7 @@ use crate::ffi::types::{
     BatchSimilarityResult, EmbeddingResult, EmbeddingSimilarityResult, SimilarityMatch,
 };
 use crate::model_architectures::ModelType;
+use crate::registry::get_registry;
 use std::ffi::{c_char, CStr};
 
 //Import embedding models and model factory
@@ -29,15 +30,8 @@ enum PaddingSide {
 }
 
 /// Global singleton for ModelFactory
-pub(crate) static GLOBAL_MODEL_FACTORY: OnceLock<ModelFactory> = OnceLock::new();
-
 use crate::model_architectures::embedding::MultiModalEmbeddingModel;
 use tokenizers::Tokenizer as MmTokenizer;
-
-/// Standalone multimodal model storage — allows initialization independent of the
-/// main ModelFactory (which uses OnceLock and can only be set once).
-static STANDALONE_MULTIMODAL: OnceLock<(MultiModalEmbeddingModel, MmTokenizer, String)> =
-    OnceLock::new();
 
 pub(crate) fn truncate_embedding_to_dimension(
     embedding: Vec<f32>,
@@ -79,10 +73,13 @@ pub(crate) fn truncate_embedding_to_dimension(
 /// Get a reference to the multimodal model + tokenizer, checking standalone first
 /// then falling back to the factory.
 fn get_multimodal_refs() -> Option<(&'static MultiModalEmbeddingModel, &'static MmTokenizer)> {
-    if let Some((model, tokenizer, _)) = STANDALONE_MULTIMODAL.get() {
+    if let Some((model, tokenizer, _)) =
+        get_registry()
+            .get::<(MultiModalEmbeddingModel, MmTokenizer, String)>("standalone_multimodal")
+    {
         return Some((model, tokenizer));
     }
-    if let Some(factory) = GLOBAL_MODEL_FACTORY.get() {
+    if let Some(factory) = get_registry().get::<ModelFactory>("global_model_factory") {
         if let (Some(model), Some(tokenizer)) = (
             factory.get_multimodal_model(),
             factory.get_multimodal_tokenizer(),
@@ -281,7 +278,7 @@ pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu
     };
 
     // Check if already initialized
-    if let Some(factory) = GLOBAL_MODEL_FACTORY.get() {
+    if let Some(factory) = get_registry().get::<ModelFactory>("global_model_factory") {
         if factory.get_mmbert_model().is_some() {
             eprintln!("WARNING: mmBERT model already initialized");
             return true;
@@ -296,7 +293,10 @@ pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu
     };
 
     // Create or get factory
-    let factory = if GLOBAL_MODEL_FACTORY.get().is_some() {
+    let factory = if get_registry()
+        .get::<ModelFactory>("global_model_factory")
+        .is_some()
+    {
         // Factory exists but mmbert not loaded - we can't modify OnceLock
         eprintln!("Error: ModelFactory already initialized without mmBERT. Initialize mmBERT first or use init_embedding_models_with_mmbert.");
         return false;
@@ -314,7 +314,7 @@ pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu
         factory
     };
 
-    match GLOBAL_MODEL_FACTORY.set(factory) {
+    match get_registry().register("global_model_factory", factory) {
         Ok(_) => true,
         Err(_) => {
             eprintln!("Error: Failed to set global model factory");
@@ -342,7 +342,10 @@ pub extern "C" fn init_embedding_models_with_mmbert(
 ) -> bool {
     use candle_core::Device;
 
-    if GLOBAL_MODEL_FACTORY.get().is_some() {
+    if get_registry()
+        .get::<ModelFactory>("global_model_factory")
+        .is_some()
+    {
         eprintln!("WARNING: ModelFactory already initialized");
         return true;
     }
@@ -416,7 +419,7 @@ pub extern "C" fn init_embedding_models_with_mmbert(
         println!("INFO: mmBERT embedding model registered with 2D Matryoshka support");
     }
 
-    match GLOBAL_MODEL_FACTORY.set(factory) {
+    match get_registry().register("global_model_factory", factory) {
         Ok(_) => true,
         Err(_) => true, // Already initialized
     }
@@ -442,7 +445,10 @@ pub extern "C" fn init_embedding_models(
     use candle_core::Device;
 
     // Check if already initialized (OnceLock can only be set once)
-    if GLOBAL_MODEL_FACTORY.get().is_some() {
+    if get_registry()
+        .get::<ModelFactory>("global_model_factory")
+        .is_some()
+    {
         eprintln!("WARNING: ModelFactory already initialized");
         return true; // Already initialized, return success
     }
@@ -518,7 +524,7 @@ pub extern "C" fn init_embedding_models(
     }
 
     // Try to initialize the global factory
-    match GLOBAL_MODEL_FACTORY.set(factory) {
+    match get_registry().register("global_model_factory", factory) {
         Ok(_) => true,
         Err(_) => {
             // Already initialized - idempotent behavior
@@ -952,7 +958,7 @@ pub extern "C" fn get_embedding_with_dim(
     };
 
     // Get model factory to check availability
-    let factory = GLOBAL_MODEL_FACTORY.get();
+    let factory = get_registry().get::<ModelFactory>("global_model_factory");
 
     // Convert ModelType to string for get_embedding_with_model_type
     // Check if selected model is available, fall back to mmbert if not
@@ -1139,7 +1145,7 @@ pub extern "C" fn get_embedding_2d_matryoshka(
     };
 
     // Get model factory
-    let factory = match GLOBAL_MODEL_FACTORY.get() {
+    let factory = match get_registry().get::<ModelFactory>("global_model_factory") {
         Some(f) => f,
         None => {
             eprintln!("Error: ModelFactory not initialized");
@@ -1296,7 +1302,7 @@ pub extern "C" fn calculate_embedding_similarity(
     };
 
     // Get model factory
-    let factory = match GLOBAL_MODEL_FACTORY.get() {
+    let factory = match get_registry().get::<ModelFactory>("global_model_factory") {
         Some(f) => f,
         None => {
             eprintln!("ERROR: ModelFactory not initialized");
@@ -1568,7 +1574,7 @@ pub extern "C" fn calculate_similarity_batch(
     }
 
     // Get global model factory
-    let factory = match GLOBAL_MODEL_FACTORY.get() {
+    let factory = match get_registry().get::<ModelFactory>("global_model_factory") {
         Some(f) => f,
         None => {
             eprintln!("ERROR: ModelFactory not initialized");
@@ -1777,7 +1783,7 @@ pub extern "C" fn get_embedding_models_info(
     }
 
     // Get global model factory
-    let factory = match GLOBAL_MODEL_FACTORY.get() {
+    let factory = match get_registry().get::<ModelFactory>("global_model_factory") {
         Some(f) => f,
         None => {
             eprintln!("ERROR: ModelFactory not initialized");
@@ -1918,7 +1924,6 @@ struct BatchedModelContext {
 }
 
 /// Global singleton for batched model
-static GLOBAL_BATCHED_MODEL: OnceLock<BatchedModelContext> = OnceLock::new();
 
 /// Initialize Qwen3 embedding model with continuous batching
 ///
@@ -1944,7 +1949,10 @@ pub extern "C" fn init_embedding_models_batched(
     use candle_core::Device;
 
     // Check if already initialized
-    if GLOBAL_BATCHED_MODEL.get().is_some() {
+    if get_registry()
+        .get::<BatchedModelContext>("global_batched_model")
+        .is_some()
+    {
         eprintln!("Warning: batched embedding model already initialized");
         return true;
     }
@@ -2019,7 +2027,10 @@ pub extern "C" fn init_embedding_models_batched(
     };
 
     // Store in global singleton (no outer Mutex needed - Arc handles concurrency)
-    if GLOBAL_BATCHED_MODEL.set(context).is_err() {
+    if get_registry()
+        .register("global_batched_model", context)
+        .is_err()
+    {
         eprintln!("ERROR: Failed to set global batched model");
         return false;
     }
@@ -2086,7 +2097,7 @@ pub extern "C" fn get_embedding_batched(
     }
 
     // Get batched model context (OnceLock - no lock needed!)
-    let batched_context = match GLOBAL_BATCHED_MODEL.get() {
+    let batched_context = match get_registry().get::<BatchedModelContext>("global_batched_model") {
         Some(ctx) => ctx,
         None => {
             eprintln!("Error: batched embedding model not initialized. Call init_embedding_models_batched first.");
@@ -2228,7 +2239,10 @@ pub extern "C" fn init_multimodal_embedding_model(
     };
 
     // If the main factory is NOT yet set, create a new one with the multimodal model.
-    if GLOBAL_MODEL_FACTORY.get().is_none() {
+    if get_registry()
+        .get::<ModelFactory>("global_model_factory")
+        .is_none()
+    {
         let mut factory = ModelFactory::new(device.clone());
         match factory.register_multimodal_embedding_model(&path) {
             Ok(_) => {
@@ -2239,7 +2253,7 @@ pub extern "C" fn init_multimodal_embedding_model(
                 return false;
             }
         }
-        return match GLOBAL_MODEL_FACTORY.set(factory) {
+        return match get_registry().register("global_model_factory", factory) {
             Ok(_) => true,
             Err(_) => {
                 eprintln!("Error: Failed to set global model factory");
@@ -2270,7 +2284,7 @@ pub extern "C" fn init_multimodal_embedding_model(
             return false;
         }
     };
-    match STANDALONE_MULTIMODAL.set((model, tokenizer, path)) {
+    match get_registry().register("standalone_multimodal", (model, tokenizer, path)) {
         Ok(_) => {
             println!("INFO: Multi-modal model registered in standalone storage");
             true
