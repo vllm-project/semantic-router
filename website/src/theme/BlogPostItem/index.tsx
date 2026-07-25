@@ -39,10 +39,7 @@ export default function BlogPostItem({
     tags,
     title,
   } = metadata
-  const authorNames = authors
-    .map(author => author.name)
-    .filter(Boolean)
-    .join(', ')
+  const namedAuthors = authors.filter(author => Boolean(author.name))
 
   return (
     <BlogPostItemContainer className={className}>
@@ -57,8 +54,31 @@ export default function BlogPostItem({
             <span>{`${Math.ceil(readingTime)} min read`}</span>
           )}
         </div>
-        {authorNames && (
-          <p className="site-blog-post__authors">{authorNames}</p>
+        {namedAuthors.length > 0 && (
+          <ul aria-label="Authors" className="site-blog-post__authors">
+            {namedAuthors.map((author, index) => (
+              <li className="site-blog-post__author" key={author.key ?? author.name ?? index}>
+                {author.imageURL && (
+                  <img
+                    alt=""
+                    className="site-blog-post__author-avatar"
+                    loading="lazy"
+                    src={author.imageURL}
+                  />
+                )}
+                <div className="site-blog-post__author-details">
+                  {author.url
+                    ? (
+                        <Link to={author.url}>{author.name}</Link>
+                      )
+                    : (
+                        <span>{author.name}</span>
+                      )}
+                  {author.title && <small>{author.title}</small>}
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
         {tags.length > 0 && (
           <ul aria-label="Tags" className="site-blog-post__tags">
