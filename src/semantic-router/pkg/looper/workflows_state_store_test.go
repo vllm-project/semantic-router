@@ -2,12 +2,17 @@ package looper
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/alicebob/miniredis/v2"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // ---- helpers ----------------------------------------------------------------
@@ -190,6 +195,38 @@ func TestMemoryStateStore_CardinalityCap(t *testing.T) {
 	}
 }
 
+// ---- Memory aggregate byte cap ----------------------------------------------
+
+func TestMemoryStateStore_AggregateByteCap(t *testing.T) {
+	s := newWorkflowMemoryToolStateStore(30 * time.Minute)
+	defer s.Close()
+	ctx := context.Background()
+
+	// Fill to just under capacity.
+	// We'll generate a payload that fits easily under the single-item payload limit (maxStatePayloadBytes).
+	chunkSize := maxStatePayloadBytes / 4
+	large := make([]byte, chunkSize)
+	for i := range large {
+		large[i] = 'y'
+	}
+
+	// Keep putting until we hit the capacity error.
+	var hitCap bool
+	for i := 0; i < 1000; i++ {
+		state := &workflowPendingToolState{ID: fmt.Sprintf("big-%d", i), CreatedAt: time.Now().UTC(), AssistantRaw: large}
+		if _, err := s.Put(ctx, state); err != nil {
+			if strings.Contains(err.Error(), "max 104857600") { // 100 MiB
+				hitCap = true
+				break
+			}
+			t.Fatalf("Put[%d] unexpected error: %v", i, err)
+		}
+	}
+	if !hitCap {
+		t.Fatal("Put should reject when at aggregate byte cap")
+	}
+}
+
 // ---- TTL expiry -------------------------------------------------------------
 
 func TestStateStore_TTLExpiry(t *testing.T) {
@@ -252,5 +289,91 @@ func TestStateStore_CloseIdempotent(t *testing.T) {
 				t.Fatalf("second Close: %v", err)
 			}
 		})
+	}
+}
+
+// ---- Redis Integration ------------------------------------------------------
+
+func setupRedisStore(t *testing.T) (*miniredis.Miniredis, *workflowRedisToolStateStore) {
+	t.Helper()
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis.Run: %v", err)
+	}
+
+	cfg := config.WorkflowStateRedisConfig{
+		Address:   mr.Addr(),
+		KeyPrefix: "test-redis:",
+	}
+	s := newWorkflowRedisToolStateStore(cfg, 100*time.Millisecond)
+	return mr, s
+}
+
+func TestWorkflowRedisToolStateStore_PauseResume(t *testing.T) {
+	mr, s := setupRedisStore(t)
+	defer mr.Close()
+	defer s.Close()
+
+	ctx := context.Background()
+	state := makeTestState("redis-test")
+	id, putErr := s.Put(ctx, state)
+	if putErr != nil {
+		t.Fatalf("Put: %v", putErr)
+	}
+
+	got, ok, takeErr := s.Take(ctx, id)
+	if takeErr != nil {
+		t.Fatalf("Take: %v", takeErr)
+	}
+	if !ok || got.ID != state.ID {
+		t.Fatalf("Take failed. ok=%v, got=%v", ok, got)
+	}
+}
+
+func TestWorkflowRedisToolStateStore_TTLExpiry(t *testing.T) {
+	mr, s := setupRedisStore(t)
+	defer mr.Close()
+	defer s.Close()
+
+	ctx := context.Background()
+	state2 := makeTestState("redis-ttl")
+	_, putErr := s.Put(ctx, state2)
+	if putErr != nil {
+		t.Fatalf("Put: %v", putErr)
+	}
+	mr.FastForward(200 * time.Millisecond) // fast-forward miniredis time
+	time.Sleep(10 * time.Millisecond)      // wait for local TTL logic just in case
+
+	_, ok, takeErr := s.Take(ctx, "redis-ttl")
+	if takeErr != nil {
+		t.Fatalf("Take: %v", takeErr)
+	}
+	if ok {
+		t.Fatal("Take returned expired state; TTL not enforced")
+	}
+}
+
+func TestWorkflowRedisToolStateStore_Clear(t *testing.T) {
+	mr, s := setupRedisStore(t)
+	defer mr.Close()
+	defer s.Close()
+
+	ctx := context.Background()
+	state3 := makeTestState("redis-clear1")
+	state4 := makeTestState("redis-clear2")
+	if _, putErr := s.Put(ctx, state3); putErr != nil {
+		t.Fatalf("Put: %v", putErr)
+	}
+	if _, putErr := s.Put(ctx, state4); putErr != nil {
+		t.Fatalf("Put: %v", putErr)
+	}
+
+	if clearErr := s.Clear(ctx); clearErr != nil {
+		t.Fatalf("Clear: %v", clearErr)
+	}
+
+	_, ok, _ := s.Take(ctx, "redis-clear1")
+	if ok {
+		t.Fatal("Clear failed to remove state")
 	}
 }

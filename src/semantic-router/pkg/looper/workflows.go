@@ -15,6 +15,7 @@ import (
 type WorkflowsLooper struct {
 	*BaseLooper
 	toolStates workflowToolStateStore
+	ownsStore  bool
 }
 
 func NewWorkflowsLooper(cfg *config.LooperConfig) *WorkflowsLooper {
@@ -23,6 +24,7 @@ func NewWorkflowsLooper(cfg *config.LooperConfig) *WorkflowsLooper {
 		toolStates: newWorkflowToolStateStoreFromConfig(
 			workflowFlowRuntimeConfig(cfg),
 		),
+		ownsStore: true,
 	}
 }
 
@@ -31,15 +33,28 @@ func NewWorkflowsLooper(cfg *config.LooperConfig) *WorkflowsLooper {
 // to creating a per-instance store (backward-compatible with tests).
 func newWorkflowsLooperWithService(cfg *config.LooperConfig, svc *WorkflowStateService) *WorkflowsLooper {
 	var store workflowToolStateStore
+	var ownsStore bool
 	if svc != nil {
-		store = svc.store
+		// Acquire not strictly needed here since loopers are created once during config parsing,
+		// but we use Store() to access the interface.
+		store = svc.Store()
 	} else {
 		store = newWorkflowToolStateStoreFromConfig(workflowFlowRuntimeConfig(cfg))
+		ownsStore = true
 	}
 	return &WorkflowsLooper{
 		BaseLooper: NewBaseLooper(cfg),
 		toolStates: store,
+		ownsStore:  ownsStore,
 	}
+}
+
+// Close releases resources if this looper owns the underlying store (e.g. in tests).
+func (l *WorkflowsLooper) Close() error {
+	if l != nil && l.ownsStore && l.toolStates != nil {
+		return l.toolStates.Close()
+	}
+	return nil
 }
 
 func workflowFlowRuntimeConfig(cfg *config.LooperConfig) config.FlowRuntimeConfig {

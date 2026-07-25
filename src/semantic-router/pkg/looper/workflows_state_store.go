@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -32,6 +33,10 @@ const (
 	// backend will hold. After cleanup, if the map is still at capacity
 	// we reject the Put to prevent unbounded growth.
 	maxMemoryStateEntries = 10_000
+
+	// maxAggregateStateBytes caps the total serialized bytes stored across all
+	// in-flight memory/file states to prevent OOMs even if entries are small.
+	maxAggregateStateBytes = 100 * 1024 * 1024 // 100 MiB
 
 	// workflowStateSweeperInterval is how often the background goroutine
 	// proactively purges expired entries. Keeps memory/file state bounded
@@ -117,25 +122,34 @@ func checkPayloadSize(data []byte) error {
 	return nil
 }
 
+type memoryStateEntry struct {
+	state *workflowPendingToolState
+	size  int64
+}
+
 type workflowMemoryToolStateStore struct {
-	mu        sync.Mutex
-	ttl       time.Duration
-	states    map[string]*workflowPendingToolState
-	done      chan struct{}
-	closeOnce sync.Once
+	mu           sync.Mutex
+	ttl          time.Duration
+	states       map[string]memoryStateEntry
+	currentBytes int64
+	done         chan struct{}
+	closeOnce    sync.Once
+	wg           sync.WaitGroup
 }
 
 func newWorkflowMemoryToolStateStore(ttl time.Duration) *workflowMemoryToolStateStore {
 	s := &workflowMemoryToolStateStore{
 		ttl:    ttl,
-		states: map[string]*workflowPendingToolState{},
+		states: map[string]memoryStateEntry{},
 		done:   make(chan struct{}),
 	}
+	s.wg.Add(1)
 	go s.sweepLoop()
 	return s
 }
 
 func (s *workflowMemoryToolStateStore) sweepLoop() {
+	defer s.wg.Done()
 	ticker := time.NewTicker(workflowStateSweeperInterval)
 	defer ticker.Stop()
 	for {
@@ -166,7 +180,18 @@ func (s *workflowMemoryToolStateStore) Put(_ context.Context, state *workflowPen
 	if len(s.states) >= maxMemoryStateEntries {
 		return "", fmt.Errorf("workflow memory state store at capacity (%d entries)", maxMemoryStateEntries)
 	}
-	s.states[state.ID] = state
+	var oldSize int64
+	if old, exists := s.states[state.ID]; exists {
+		oldSize = old.size
+	}
+	if s.currentBytes+int64(len(data))-oldSize > maxAggregateStateBytes {
+		return "", fmt.Errorf("workflow memory state store at capacity (%d bytes, max %d)", s.currentBytes+int64(len(data))-oldSize, maxAggregateStateBytes)
+	}
+	s.states[state.ID] = memoryStateEntry{
+		state: state,
+		size:  int64(len(data)),
+	}
+	s.currentBytes += int64(len(data)) - oldSize
 	return state.ID, nil
 }
 
@@ -174,45 +199,68 @@ func (s *workflowMemoryToolStateStore) Take(_ context.Context, id string) (*work
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cleanupLocked(time.Now().UTC())
-	state, ok := s.states[id]
+	entry, ok := s.states[id]
 	if ok {
+		s.currentBytes -= entry.size
 		delete(s.states, id)
 	}
-	return state, ok, nil
+	if !ok {
+		return nil, false, nil
+	}
+	return entry.state, true, nil
 }
 
 func (s *workflowMemoryToolStateStore) Clear(_ context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.states = map[string]*workflowPendingToolState{}
+	s.states = map[string]memoryStateEntry{}
+	s.currentBytes = 0
 	return nil
 }
 
 func (s *workflowMemoryToolStateStore) Close() error {
-	s.closeOnce.Do(func() { close(s.done) })
+	s.closeOnce.Do(func() {
+		close(s.done)
+		s.wg.Wait()
+	})
 	return nil
 }
 
 func (s *workflowMemoryToolStateStore) cleanupLocked(now time.Time) {
-	for id, state := range s.states {
-		if workflowToolStateExpired(state, s.ttl, now) {
+	for id, entry := range s.states {
+		if workflowToolStateExpired(entry.state, s.ttl, now) {
+			s.currentBytes -= entry.size
 			delete(s.states, id)
 		}
 	}
 }
 
 type workflowFileToolStateStore struct {
-	dir       string
-	ttl       time.Duration
-	done      chan struct{}
-	closeOnce sync.Once
+	dir          string
+	ttl          time.Duration
+	done         chan struct{}
+	closeOnce    sync.Once
+	currentBytes int64
 }
 
 func newWorkflowFileToolStateStore(dir string, ttl time.Duration) *workflowFileToolStateStore {
+	storeDir := workflowStateFileDir(dir)
+	var initialBytes int64
+	if entries, err := os.ReadDir(storeDir); err == nil {
+		for _, e := range entries {
+			name := e.Name()
+			if !e.IsDir() && (strings.HasSuffix(name, ".json") || strings.Contains(name, ".take-") || strings.Contains(name, ".tmp-")) {
+				if info, err := e.Info(); err == nil {
+					initialBytes += info.Size()
+				}
+			}
+		}
+	}
 	s := &workflowFileToolStateStore{
-		dir:  workflowStateFileDir(dir),
-		ttl:  ttl,
-		done: make(chan struct{}),
+		dir:          storeDir,
+		ttl:          ttl,
+		done:         make(chan struct{}),
+		currentBytes: initialBytes,
 	}
 	go s.sweepLoop()
 	return s
@@ -255,16 +303,34 @@ func (s *workflowFileToolStateStore) Put(_ context.Context, state *workflowPendi
 	if sizeErr := checkPayloadSize(data); sizeErr != nil {
 		return "", sizeErr
 	}
+	
 	path, err := s.pathForID(state.ID)
 	if err != nil {
 		return "", err
 	}
+	
+	var oldSize int64
+	if info, err := os.Stat(path); err == nil {
+		oldSize = info.Size()
+	}
+
+	newSize := int64(len(data))
+	diff := newSize - oldSize
+	
+	newCurrent := atomic.AddInt64(&s.currentBytes, diff)
+	if newCurrent > maxAggregateStateBytes {
+		atomic.AddInt64(&s.currentBytes, -diff) // Rollback
+		return "", fmt.Errorf("workflow file state store at capacity (%d bytes, max %d)", newCurrent, maxAggregateStateBytes)
+	}
+	
 	tmp := path + ".tmp-" + newWorkflowToolStateID()
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		atomic.AddInt64(&s.currentBytes, -(newSize - oldSize))
 		return "", fmt.Errorf("write workflow state: %w", err)
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)
+		atomic.AddInt64(&s.currentBytes, -(newSize - oldSize))
 		return "", fmt.Errorf("commit workflow state: %w", err)
 	}
 	return state.ID, nil
@@ -282,7 +348,12 @@ func (s *workflowFileToolStateStore) Take(_ context.Context, id string) (*workfl
 		}
 		return nil, false, fmt.Errorf("claim workflow state: %w", renameErr)
 	}
-	defer os.Remove(consumePath)
+	defer func() {
+		if info, err := os.Stat(consumePath); err == nil {
+			atomic.AddInt64(&s.currentBytes, -info.Size())
+		}
+		os.Remove(consumePath)
+	}()
 
 	data, err := os.ReadFile(consumePath)
 	if err != nil {
@@ -312,8 +383,13 @@ func (s *workflowFileToolStateStore) Clear(_ context.Context) error {
 		}
 		name := entry.Name()
 		if strings.HasSuffix(name, ".json") || strings.Contains(name, ".take-") || strings.Contains(name, ".tmp-") {
-			if err := os.Remove(filepath.Join(s.dir, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("remove workflow state %q: %w", name, err)
+			path := filepath.Join(s.dir, name)
+			if info, err := os.Stat(path); err == nil {
+				if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+					return fmt.Errorf("remove workflow state %q: %w", name, err)
+				} else if err == nil {
+					atomic.AddInt64(&s.currentBytes, -info.Size())
+				}
 			}
 		}
 	}
@@ -341,7 +417,9 @@ func (s *workflowFileToolStateStore) cleanupExpired(now time.Time) {
 		}
 		var state workflowPendingToolState
 		if err := json.Unmarshal(data, &state); err != nil || workflowToolStateExpired(&state, s.ttl, now) {
-			_ = os.Remove(path)
+			if err := os.Remove(path); err == nil {
+				atomic.AddInt64(&s.currentBytes, -int64(len(data)))
+			}
 		}
 	}
 }

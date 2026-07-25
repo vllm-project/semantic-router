@@ -14,7 +14,9 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -220,6 +222,12 @@ func (rs *RouterService) GetRouter() *OpenAIRouter {
 // Process delegates to the current router.
 func (rs *RouterService) Process(stream ext_proc.ExternalProcessor_ProcessServer) error {
 	r := rs.current.Load()
+	if r != nil && r.WorkflowStateService != nil {
+		if !r.WorkflowStateService.Acquire() {
+			return status.Error(codes.Unavailable, "router generation shutting down, refusing new requests")
+		}
+		defer r.WorkflowStateService.Release()
+	}
 	return r.Process(stream)
 }
 

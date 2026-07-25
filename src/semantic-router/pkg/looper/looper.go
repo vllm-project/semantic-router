@@ -21,6 +21,7 @@ package looper
 
 import (
 	"context"
+	"sync"
 
 	"github.com/openai/openai-go"
 
@@ -112,7 +113,39 @@ type Looper interface {
 // FactoryWithSelectionRegistry so that all workflow loopers share a single
 // store instance across requests. Safe for concurrent use.
 type WorkflowStateService struct {
-	store workflowToolStateStore
+	store  workflowToolStateStore
+	wg     sync.WaitGroup
+	mu     sync.RWMutex
+	closed bool
+}
+
+// Acquire tries to get a read lease on the service. Returns false if closed.
+func (s *WorkflowStateService) Acquire() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.closed {
+		return false
+	}
+	s.wg.Add(1)
+	return true
+}
+
+// Release releases a read lease on the service.
+func (s *WorkflowStateService) Release() {
+	if s != nil {
+		s.wg.Done()
+	}
+}
+
+// Store returns the underlying state store. Safe to use only while holding a lease.
+func (s *WorkflowStateService) Store() workflowToolStateStore {
+	if s == nil {
+		return nil
+	}
+	return s.store
 }
 
 // NewWorkflowStateService creates a shared workflow state store from the
@@ -129,10 +162,22 @@ func NewWorkflowStateService(cfg *config.LooperConfig) *WorkflowStateService {
 
 // Close releases resources held by the state service (e.g. Redis connections).
 func (s *WorkflowStateService) Close() error {
-	if s == nil || s.store == nil {
+	if s == nil {
 		return nil
 	}
-	return s.store.Close()
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil
+	}
+	s.closed = true
+	s.mu.Unlock()
+
+	s.wg.Wait() // Drain all in-flight read leases
+	if s.store != nil {
+		return s.store.Close()
+	}
+	return nil
 }
 
 // Factory creates a Looper instance based on the algorithm type

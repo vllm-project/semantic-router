@@ -197,7 +197,17 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		})
 	}
 
-	workflowStateService := looper.NewWorkflowStateService(&cfg.Looper)
+	var workflowsEnabled bool
+	for _, decision := range cfg.Decisions {
+		if decision.Algorithm != nil && decision.Algorithm.Type == "workflows" {
+			workflowsEnabled = true
+			break
+		}
+	}
+	var workflowStateService *looper.WorkflowStateService
+	if workflowsEnabled {
+		workflowStateService = looper.NewWorkflowStateService(&cfg.Looper)
+	}
 
 	return &routerComponents{
 		cfg:                  cfg,
