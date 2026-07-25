@@ -61,6 +61,11 @@ type Request struct {
 	// Fusion carries request-level plugins[].id=fusion overrides.
 	Fusion *config.FusionRequestConfig
 
+	// MatchedComplexity carries the request's matched complexity rules (e.g.
+	// "code_complexity:hard"), used by fusion adaptive escalation to decide
+	// whether a query is hard enough to warrant the full panel.
+	MatchedComplexity []string
+
 	// CachedPanel, when non-nil, is used verbatim as the fusion panel instead of
 	// calling the analysis models. It exists for paired multi-arm evaluation where
 	// every arm must synthesize from a byte-identical panel (see

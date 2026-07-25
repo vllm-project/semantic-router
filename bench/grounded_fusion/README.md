@@ -129,7 +129,7 @@ needs the candle lib + NLI model + an Ollama endpoint, not the router config dan
 ```bash
 # 0. Build the driver (needs the candle lib on the linker path).
 cd src/semantic-router && \
-  CGO_LDFLAGS="-L$PWD/../../candle-binding/target/release" go build -o ../../bin/fusioneval ./cmd/fusioneval
+  CGO_LDFLAGS="-L$PWD/../../candle-binding/target/release" go build -o ../../bin/fusioneval ./eval/fusioneval
 cd ../..
 
 # 1. Dump items + start the no-think Ollama proxy.
@@ -163,6 +163,19 @@ done
 has 4 rows (resume didn't regenerate); every `answers_*.jsonl` row shares the same
 `panel_sha256` per `id` (byte-identical panel across arms). The in-package Go tests
 (`fusion_cached_panel_test.go`) already assert B/C/D arm isolation without the stack.
+
+**Smoke result (N=4, not powered — machinery validation only).** A 4-item
+Medicine/Law smoke (panel `qwen3:8b,llama3.1:8b,gemma3:12b`, judge `qwen3:14b`,
+grader `qwen3:32b`) ran the full chain to `verdict.json`. The pipeline behaved
+correctly — panels byte-identical across arms, the pre-registered rule returned
+**`INCONCLUSIVE`** (it refuses to judge until fusion beats one model, which 4 items
+cannot establish). Directionally every signal pointed the same way as `FINDINGS.md`:
+per-arm mean normalized DRACO was solo (A) ≈ placebo (D) > plain fusion (B) ≈ weight
+(C); `C_vs_B` was non-significant and `C_vs_A`/`B_vs_A` straddled zero. **Do not read
+science into N=4** — this only confirms the harness produces a valid verdict. A
+statistically powered run needs ≥20–25 items/domain (overnight locally) and, ideally,
+a grader from a different model family than the judge (the local zoo has none, so
+`qwen3:32b` breaks model-identity but not family).
 
 **Context mode (next step, sequenced after the DRACO smoke passes):** the dataset
 seam is in place — `get_dataset("jsonl", ...)` reads gold passages into
@@ -204,7 +217,7 @@ DRACO ships no source docs, so context mode needs a context-grounded dataset.
 | `FINDINGS.md` | evaluation write-up: bugs fixed, results, next experiments |
 | **Cached-panel multi-arm** | (the paired evaluator that settles `weight` efficacy) |
 | `items.py` | dump DRACO items as JSONL for the `fusioneval` driver |
-| `../../src/semantic-router/cmd/fusioneval` | Go driver: cache panel once, run arms A–D from the identical panel via the real candle NLI |
+| `../../src/semantic-router/eval/fusioneval` | Go driver: cache panel once, run arms A–D from the identical panel via the real candle NLI |
 | `grade_only.py` | grade the driver's `answers_{arm}.jsonl` (reuses `evaluate.grade_sample`) |
 | `compare_multiarm.py` | N-arm paired comparison + pre-registered KEEP/KILL `verdict.json` |
 | `test_compare_multiarm.py` | unit tests for the verdict logic (no model needed) |

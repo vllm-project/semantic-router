@@ -20,7 +20,7 @@
 // Build/run (needs the candle lib + NLI model + a running Ollama):
 //
 //	cd src/semantic-router && \
-//	  CGO_LDFLAGS="-L$PWD/../../candle-binding/target/release" go build -o ../../bin/fusioneval ./cmd/fusioneval
+//	  CGO_LDFLAGS="-L$PWD/../../candle-binding/target/release" go build -o ../../bin/fusioneval ./eval/fusioneval
 //	LD_LIBRARY_PATH=$PWD/../../candle-binding/target/release ../../bin/fusioneval \
 //	  --items items.jsonl --nli-model models/mom-halugate-explainer \
 //	  --endpoint http://localhost:11435/v1/chat/completions \
@@ -67,6 +67,7 @@ type options struct {
 	temperature float64
 	maxTokens   int
 	maxItems    int
+	timeout     int
 }
 
 // item is one evaluation question. The Python side (datasets.py) owns DRACO
@@ -149,6 +150,7 @@ func parseFlags() options {
 	flag.Float64Var(&opt.temperature, "temperature", 0, "sampling temperature for all calls")
 	flag.IntVar(&opt.maxTokens, "max-tokens", 0, "max completion tokens (0 = backend default)")
 	flag.IntVar(&opt.maxItems, "max-items", 0, "cap items processed (0 = all); use for a smoke run")
+	flag.IntVar(&opt.timeout, "timeout", 300, "per-request HTTP timeout in seconds (raise for cold model loads)")
 	flag.Parse()
 
 	opt.arms = splitCSV(*arms)
@@ -182,7 +184,7 @@ func run(opt options) error {
 	}
 	looper.SetGroundingBackends(realNLI(), nil)
 
-	looperCfg := &config.LooperConfig{Endpoint: opt.endpoint}
+	looperCfg := &config.LooperConfig{Endpoint: opt.endpoint, TimeoutSeconds: opt.timeout}
 	client := looper.NewClient(looperCfg)
 	fusion := looper.NewFusionLooper(looperCfg)
 

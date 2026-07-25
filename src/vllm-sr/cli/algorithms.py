@@ -138,6 +138,26 @@ class FusionGroundingConfig(BaseModel):
     min_keep: int | None = Field(default=1, ge=0)
     nli_contradiction_penalty: float | None = Field(default=1.0, ge=0)
     on_error: Literal["skip", "fail"] | None = "skip"
+    # Panel-agreement early-exit: when every panel response scores at or above
+    # early_exit_min_consistency (panel mode only), skip the analysis judge call
+    # and synthesize directly. Saves one judge call; never fires with a dissenter.
+    early_exit_enabled: bool | None = False
+    early_exit_min_consistency: float | None = Field(default=0.0, ge=0, le=1)
+
+
+class FusionEscalationConfig(BaseModel):
+    """Adaptive escalation for a fusion decision.
+
+    The full panel runs only when the request matched one of
+    ``hard_complexity_rules`` (reusing the existing binary complexity signal).
+    Otherwise the query is answered with a single judge-model call. Bounds here
+    MUST match the Go validator in pkg/config/fusion_config.go.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool | None = False
+    hard_complexity_rules: list[str] | None = None
 
 
 class FusionAlgorithmConfig(BaseModel):
@@ -163,6 +183,7 @@ class FusionAlgorithmConfig(BaseModel):
     synthesis_template: str | None = None
     judge_prompt_version: str | None = "fusion-v1"
     grounding: FusionGroundingConfig | None = None
+    escalation: FusionEscalationConfig | None = None
 
 
 class WorkflowPlannerConfig(BaseModel):

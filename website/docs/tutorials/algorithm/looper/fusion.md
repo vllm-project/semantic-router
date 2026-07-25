@@ -243,6 +243,8 @@ algorithm:
       min_keep: 1                # filter policy only: keep at least this many
       nli_contradiction_penalty: 1.0
       on_error: skip             # skip (fall back to plain fusion) | fail
+      early_exit_enabled: false  # panel mode only: skip analysis when panel is unanimous
+      early_exit_min_consistency: 0.0  # every response must score >= this (0-1)
 ```
 
 When enabled, the Fusion response `trace.grounding` records the reference mode, the `policy`, and per-response `score`, `flagged_spans`, and whether each was `dropped` (only under the `filter` policy).
@@ -258,3 +260,51 @@ When enabled, the Fusion response `trace.grounding` records the reference mode, 
 | `min_keep` | int | `1` | `filter` policy only: keep at least this many top-scoring responses |
 | `nli_contradiction_penalty` | float | `1.0` | Weight of a peer contradiction in the `panel` reference |
 | `on_error` | string | `skip` | `skip` (fall back to plain Fusion) or `fail` |
+| `early_exit_enabled` | bool | `false` | Panel-agreement early-exit: skip the analysis judge call when the panel is unanimous |
+| `early_exit_min_consistency` | float | `0.0` | Every panel response must score ≥ this (0–1) for early-exit; `panel` reference only |
+
+### Panel-agreement early-exit
+
+Fusion normally runs two judge calls — a structured *analysis* pass and a *synthesis* pass. When the panel already agrees, the analysis pass adds little. With `early_exit_enabled: true`, Fusion skips the analysis call and synthesizes directly **only when every panel response scores at or above `early_exit_min_consistency`** under `panel`-mode cross-model NLI. Because it requires unanimity, a single dissenter keeps the full two-pass pipeline — early-exit never trades away a minority view; it only saves a judge call on consensus queries. It applies to `panel` reference only (the mode that measures cross-model agreement). Executions that take this path are counted by the `vsr_fusion_early_exit_total` metric.
+
+## Adaptive escalation
+
+Fusion is expensive (N panel calls + analysis + synthesis). Adaptive escalation makes a fusion decision pay that cost **only for hard queries**: the full panel runs only when the request matched one of `hard_complexity_rules` (the existing binary complexity signal — no new classifier); otherwise the query is treated as easy and answered with a single judge-model call.
+
+```yaml
+algorithm:
+  type: fusion
+  fusion:
+    model: qwen3-32b
+    analysis_models: [qwen3-8b, qwen3-32b]
+    escalation:
+      enabled: true
+      hard_complexity_rules: ["reasoning_complexity:hard"]
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `enabled` | bool | `false` | Enable adaptive escalation |
+| `hard_complexity_rules` | list | `[]` | Complexity rule labels (e.g. `reasoning_complexity:hard`) that mark a query as hard enough for the full panel; required when enabled |
+
+Easy queries that skip the panel are counted by `vsr_fusion_escalation_bypass_total`. This complements decision-level routing: you can also route only hard traffic to a fusion decision with a `complexity` rule, but escalation lets a single fusion decision serve both cheaply.
+
+### Observability
+
+The Fusion looper exports Prometheus metrics on the router `/metrics` endpoint:
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `vsr_fusion_requests_total` | counter | `decision`, `status` | Fusion executions by outcome (`success`/`error`) |
+| `vsr_fusion_request_duration_seconds` | histogram | `decision` | End-to-end fusion latency |
+| `vsr_fusion_stage_duration_seconds` | histogram | `stage` | Per-stage latency (`panel`/`grounding`/`analysis`/`synthesis`) |
+| `vsr_fusion_panel_models_total` | counter | `model`, `status` | Per panel-model outcome (`success`/`failed`) |
+| `vsr_fusion_grounding_score` | histogram | `reference_mode`, `policy` | Distribution of per-response groundedness scores |
+| `vsr_fusion_grounding_dropped_total` | counter | `policy` | Panel responses dropped by grounding |
+| `vsr_fusion_early_exit_total` | counter | `decision` | Executions that took the panel-agreement early-exit |
+| `vsr_fusion_escalation_bypass_total` | counter | `decision` | Executions that skipped the panel via adaptive escalation |
+| `vsr_fusion_request_tokens_total` | counter | `decision`, `type` | Tokens consumed per fusion request (`prompt`/`completion`) |
+
+### Streaming behavior (limitation)
+
+When a client requests `stream: true`, Fusion still emits a valid SSE (`text/event-stream`) response, but it is **not token-by-token streamed**: the full panel → analysis → synthesis pipeline completes first, then the finished answer is chunked into SSE events. Time-to-first-token therefore equals the full pipeline latency. This is not specific to Fusion — every looper returns a buffered body because the router replies to the request path with a single Envoy ExtProc `ImmediateResponse`, and Fusion synthesizes its own answer (there is no upstream stream to forward). Use [adaptive escalation](#adaptive-escalation) and [early-exit](#panel-agreement-early-exit) to reduce that latency on easy/consensus queries. True incremental streaming would require an architectural change to the looper↔ExtProc response contract and is tracked as future work.
