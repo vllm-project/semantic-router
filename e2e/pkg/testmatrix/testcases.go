@@ -29,6 +29,8 @@ var BaselineRouterContract = []string{
 	"anthropic-passthrough-openai-regression",
 	// Retention directive response-header contract (issue #2009)
 	"retention-directive",
+	// Entrypoint virtual names select routing recipes (issue #2331)
+	"entrypoint-recipe-routing",
 	// Session observability
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",

@@ -16,7 +16,7 @@ func (r *OpenAIRouter) semanticCacheEnabledForScope(decisionName string) bool {
 	if decisionName != "" {
 		return r.Config.IsCacheEnabledForDecision(decisionName)
 	}
-	if len(r.Config.Decisions) > 0 {
+	if r.Config.HasRoutingDecisions() {
 		return false
 	}
 	return r.Config.Enabled
