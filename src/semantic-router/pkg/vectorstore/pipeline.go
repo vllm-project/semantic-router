@@ -46,6 +46,18 @@ type IngestionJob struct {
 // backend or embedder is wedged.
 const defaultStopTimeout = 30 * time.Second
 
+// defaultBatchSize is the number of chunks embedded and inserted per batch when
+// PipelineConfig does not specify one. It bounds peak per-job memory to roughly
+// O(batchSize × embeddingDimension) instead of holding every chunk's text and
+// embedding for a file at once.
+const defaultBatchSize = 64
+
+// batchCleanupTimeout bounds the best-effort removal of already-inserted chunks
+// when a multi-batch ingestion fails partway through. It is detached from the
+// (possibly cancelled) job context so cleanup still runs during shutdown, but
+// is itself bounded so a wedged backend cannot block the worker indefinitely.
+const batchCleanupTimeout = 10 * time.Second
+
 // IngestionPipeline processes file attachment jobs asynchronously.
 // It reads files, extracts text, chunks, embeds, and stores the
 // resulting vectors in the backend.
@@ -56,6 +68,7 @@ type IngestionPipeline struct {
 	embedder     Embedder
 	jobQueue     chan IngestionJob
 	workers      int
+	batchSize    int
 	lifecycleMu  sync.Mutex
 	mu           sync.RWMutex
 	fileStatuses map[string]*VectorStoreFile // vsf_id -> status
@@ -73,6 +86,7 @@ type IngestionPipeline struct {
 type PipelineConfig struct {
 	Workers   int // number of concurrent workers (default 2)
 	QueueSize int // job queue buffer size (default 100)
+	BatchSize int // chunks embedded+inserted per batch (default 64)
 }
 
 // NewIngestionPipeline creates a new ingestion pipeline.
@@ -85,6 +99,10 @@ func NewIngestionPipeline(backend VectorStoreBackend, fileStore *FileStore, mana
 	if queueSize <= 0 {
 		queueSize = 100
 	}
+	batchSize := cfg.BatchSize
+	if batchSize <= 0 {
+		batchSize = defaultBatchSize
+	}
 
 	return &IngestionPipeline{
 		backend:      backend,
@@ -93,6 +111,7 @@ func NewIngestionPipeline(backend VectorStoreBackend, fileStore *FileStore, mana
 		embedder:     embedder,
 		jobQueue:     make(chan IngestionJob, queueSize),
 		workers:      workers,
+		batchSize:    batchSize,
 		fileStatuses: make(map[string]*VectorStoreFile),
 		stopCh:       make(chan struct{}),
 	}
@@ -385,20 +404,15 @@ func (p *IngestionPipeline) processJob(ctx context.Context, job IngestionJob) {
 		return
 	}
 
-	// Step 5: Embed each chunk.
-	embeddedChunks, ok := p.embedChunks(ctx, job, record.Filename, chunks)
-	if !ok {
-		return
-	}
-
-	if err := ctx.Err(); err != nil {
-		p.failJob(ctx, job, "cancelled", "ingestion cancelled before storage")
-		return
-	}
-
-	// Step 6: Insert into backend.
-	if err := p.backend.InsertChunks(ctx, job.VectorStoreID, embeddedChunks); err != nil {
-		p.failJob(ctx, job, "storage_error", fmt.Sprintf("failed to store chunks: %v", err))
+	// Steps 5 & 6: Embed and store chunks in bounded batches.
+	//
+	// Rather than embedding every chunk and then inserting them all at once —
+	// which holds the whole file's chunk text and embedding vectors in memory
+	// simultaneously — process chunks in fixed-size windows. This bounds peak
+	// per-job memory to roughly O(batchSize × embeddingDimension) regardless of
+	// file size. ctx is checked before each batch so a cancelled lifecycle
+	// aborts promptly between batches.
+	if !p.embedAndStoreBatches(ctx, job, record.Filename, chunks) {
 		return
 	}
 
@@ -408,6 +422,75 @@ func (p *IngestionPipeline) processJob(ctx context.Context, job IngestionJob) {
 		fc.InProgress--
 		fc.Completed++
 	})
+}
+
+// embedAndStoreBatches embeds and inserts chunks in fixed-size windows of
+// p.batchSize. It returns true when every chunk has been stored, and false when
+// a batch failed or the job was cancelled — in which case it has already marked
+// the job failed and, if any earlier batch had already been inserted, made a
+// best-effort attempt to remove the partial chunks so a failed file leaves no
+// searchable state (full transactional reconciliation is tracked separately in
+// #2474).
+func (p *IngestionPipeline) embedAndStoreBatches(ctx context.Context, job IngestionJob, filename string, chunks []TextChunk) bool {
+	inserted := false
+	for start := 0; start < len(chunks); start += p.batchSize {
+		end := start + p.batchSize
+		if end > len(chunks) {
+			end = len(chunks)
+		}
+
+		if err := ctx.Err(); err != nil {
+			p.failBatchJob(ctx, job, inserted, "cancelled",
+				fmt.Sprintf("ingestion cancelled before embedding batch at chunk %d", start))
+			return false
+		}
+
+		embeddedChunks, ok := p.embedChunks(ctx, job, filename, chunks[start:end])
+		if !ok {
+			// embedChunks already recorded the failure status; still clean up any
+			// chunks inserted by earlier batches so the failed file is not
+			// partially searchable.
+			p.cleanupPartialChunks(ctx, job, inserted)
+			return false
+		}
+
+		if err := ctx.Err(); err != nil {
+			p.failBatchJob(ctx, job, inserted, "cancelled",
+				fmt.Sprintf("ingestion cancelled before storing batch at chunk %d", start))
+			return false
+		}
+
+		if err := p.backend.InsertChunks(ctx, job.VectorStoreID, embeddedChunks); err != nil {
+			p.failBatchJob(ctx, job, inserted, "storage_error",
+				fmt.Sprintf("failed to store chunks: %v", err))
+			return false
+		}
+		inserted = true
+	}
+	return true
+}
+
+// failBatchJob marks a job failed and, when earlier batches were already
+// inserted, removes the partial chunks first so a failed file leaves no
+// searchable state.
+func (p *IngestionPipeline) failBatchJob(ctx context.Context, job IngestionJob, inserted bool, code, message string) {
+	p.cleanupPartialChunks(ctx, job, inserted)
+	p.failJob(ctx, job, code, message)
+}
+
+// cleanupPartialChunks best-effort removes chunks already inserted for a job
+// whose ingestion failed partway through. The delete is detached from the
+// job context (which may be cancelled during shutdown) but bounded by
+// batchCleanupTimeout so a wedged backend cannot block the worker. Failure to
+// clean up is logged implicitly by leaving the file marked failed; it is not
+// surfaced as a separate error because the job is already failing.
+func (p *IngestionPipeline) cleanupPartialChunks(ctx context.Context, job IngestionJob, inserted bool) {
+	if !inserted {
+		return
+	}
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), batchCleanupTimeout)
+	defer cancel()
+	_ = p.backend.DeleteByFileID(cleanupCtx, job.VectorStoreID, job.FileID)
 }
 
 // embedChunks embeds each chunk, checking ctx before each embedding call so a
