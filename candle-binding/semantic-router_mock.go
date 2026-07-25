@@ -218,6 +218,9 @@ func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
 
 // MultiModalEncodeText encodes text using multi-modal model
 func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
+	}
 	return nil, ErrBackendUnavailable
 }
 
@@ -238,11 +241,17 @@ func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiMod
 
 // MultiModalEncodeImageFromBase64 decodes a base64-encoded image and encodes to embedding
 func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := validateRequiredText("base64Str", base64Str); err != nil {
+		return nil, err
+	}
 	return nil, ErrBackendUnavailable
 }
 
 // MultiModalEncodeImageFromURL downloads and encodes an image from URL
 func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := validateRequiredText("url", url); err != nil {
+		return nil, err
+	}
 	return nil, ErrBackendUnavailable
 }
 
