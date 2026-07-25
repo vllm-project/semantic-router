@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,7 +30,7 @@ func NewStore(path string) (*Store, error) {
 			return nil, fmt.Errorf("create auth db directory: %w", err)
 		}
 	}
-	db, err := sql.Open("sqlite3", path)
+	db, err := sql.Open("sqlite3", authSQLiteDSN(path))
 	if err != nil {
 		return nil, fmt.Errorf("open auth db: %w", err)
 	}
@@ -53,6 +54,10 @@ func NewStore(path string) (*Store, error) {
 	if err := store.PruneInactiveSessions(context.Background(), time.Now()); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("prune auth sessions: %w", err)
+	}
+	if err := store.PruneCredentialLifecycleRequests(context.Background(), time.Now()); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("prune credential lifecycle requests: %w", err)
 	}
 
 	return store, nil
@@ -208,3 +213,27 @@ func (s *Store) UpdateLoginTime(ctx context.Context, userID string) error {
 }
 
 func nowUnix() int64 { return time.Now().Unix() }
+
+func authSQLiteDSN(path string) string {
+	options := []string{"_journal_mode=WAL"}
+	if !sqliteDSNHasOption(path, "_busy_timeout") {
+		options = append(options, "_busy_timeout=5000")
+	}
+	joined := strings.Join(options, "&")
+	if strings.Contains(path, "?") {
+		return path + "&" + joined
+	}
+	return path + "?" + joined
+}
+
+func sqliteDSNHasOption(dsn string, key string) bool {
+	queryStart := strings.Index(dsn, "?")
+	if queryStart < 0 {
+		return false
+	}
+	values, err := url.ParseQuery(dsn[queryStart+1:])
+	if err != nil {
+		return false
+	}
+	return values.Has(key)
+}

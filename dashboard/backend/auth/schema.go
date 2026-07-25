@@ -180,9 +180,24 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS credential_lifecycle_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  operation TEXT NOT NULL,
+  actor_user_id TEXT NOT NULL,
+  target_user_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  request_fingerprint TEXT NOT NULL,
+  audit_log_id INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  UNIQUE(operation, actor_user_id, idempotency_key),
+  FOREIGN KEY(audit_log_id) REFERENCES user_audit_logs(id) ON DELETE RESTRICT
+);
+
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at ON auth_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked_at ON auth_sessions(revoked_at);
+CREATE INDEX IF NOT EXISTS idx_credential_lifecycle_requests_created_at ON credential_lifecycle_requests(created_at);
+CREATE INDEX IF NOT EXISTS idx_credential_lifecycle_requests_target_user_id ON credential_lifecycle_requests(target_user_id);
 CREATE INDEX IF NOT EXISTS idx_users_status_created_at ON users(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 CREATE INDEX IF NOT EXISTS idx_user_audit_logs_created_at ON user_audit_logs(created_at DESC);

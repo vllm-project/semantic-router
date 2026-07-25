@@ -888,6 +888,7 @@ test.describe("Dashboard auth flow", () => {
     let createPayload: Record<string, unknown> | null = null;
     let patchPayload: Record<string, unknown> | null = null;
     let passwordPayload: Record<string, unknown> | null = null;
+    let passwordIdempotencyKey: string | null = null;
 
     await page.route(/\/api\/admin\/users(?:\?.*)?$/, async (route) => {
       if (route.request().method() === "POST") {
@@ -946,10 +947,12 @@ test.describe("Dashboard auth flow", () => {
         string,
         unknown
       >;
+      passwordIdempotencyKey =
+        route.request().headers()["idempotency-key"] ?? null;
       await route.fulfill({
         status: 200,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ok: true }),
+        body: JSON.stringify({ ok: true, replayed: false }),
       });
     });
 
@@ -995,6 +998,7 @@ test.describe("Dashboard auth flow", () => {
         userId: "user-admin-1",
         password: "rotated-password",
       });
+    await expect.poll(() => passwordIdempotencyKey).toMatch(/^dashboard-password-reset-/);
     await expect(
       page.getByText("User updated and password rotated."),
     ).toBeVisible();
