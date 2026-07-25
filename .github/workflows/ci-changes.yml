@@ -20,6 +20,8 @@ on:
         value: ${{ jobs.filter.outputs.docker }}
       make:
         value: ${{ jobs.filter.outputs.make }}
+      operator:
+        value: ${{ jobs.filter.outputs.operator }}
       agent_text:
         value: ${{ jobs.filter.outputs.agent_text }}
       agent_exec:
@@ -81,6 +83,7 @@ jobs:
       ci: ${{ steps.changes.outputs.ci }}
       docker: ${{ steps.changes.outputs.docker }}
       make: ${{ steps.changes.outputs.make }}
+      operator: ${{ steps.changes.outputs.operator }}
       agent_text: ${{ steps.changes.outputs.agent_text }}
       agent_exec: ${{ steps.changes.outputs.agent_exec }}
       # Per-profile e2e outputs
@@ -156,8 +159,14 @@ jobs:
             make:
               - 'Makefile'
               - 'tools/make/**'
+            # PR-level gate for operator-ci.yml jobs (its pull_request trigger
+            # has no paths filter). The operator consumes the config package,
+            # so config contract changes must re-run operator checks. Keep in
+            # sync with the push paths in operator-ci.yml.
             operator:
               - 'deploy/operator/**'
+              - 'src/semantic-router/pkg/config/**'
+              - '.github/workflows/operator-ci.yml'
             perf:
               - 'perf/**'
             bindings:

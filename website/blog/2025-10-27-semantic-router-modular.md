@@ -1,16 +1,15 @@
 ---
-slug: modular-lora
+slug: "semantic-router-modular"
 title: "From Monolithic to Modular: Scaling Semantic Routing with Extensible LoRA"
-description: How vLLM Semantic Router refactored its Rust classification stack with modular architecture, extensible LoRA, and concurrency to scale semantic routing.
-authors: [ivar, onezero, rootfs, Xunzhuo]
-tags: [LoRA, Candle, vllm, semantic-router]
-image: /img/vllm-sr-logo.social.png
+description: "How vLLM Semantic Router refactors its Rust classification layer with modular model support, Qwen3-Embedding, EmbeddingGemma, LoRA-based multi-task classification, and concurrent routing execution."
+authors:
+  - name: "Ivar Flakstad (Hugging Face), OneZero-Y, Huamin Chen (Red Hat), Xunzhuo Liu (Tencent)"
+    url: "https://github.com/vllm-project/semantic-router"
+tags: ["ecosystem"]
+image: "/img/blog/vllm/semantic-router/modular.png"
+source_url: "https://github.com/vllm-project/vllm-project.github.io/blob/main/_posts/2025-10-27-semantic-router-modular.md"
 ---
-
-
 Semantic routing systems face a scaling challenge. When each classification request requires running multiple fine-tuned models independently, the computational cost grows linearly with the number of models. This post examines how a recent refactoring of the vLLM Semantic Router's Rust-based classification layer addresses this problem through architectural modularity, Low-Rank Adaptation (LoRA), and concurrency optimization.
-
-> Sync from [vLLM Official Blog](https://blog.vllm.ai/2025/10/27/semantic-router-modular.html).
 
 ## Background: From BERT to a Modular System
 
@@ -24,11 +23,9 @@ These constraints motivated a broader refactoring that would enable the system t
 
 ## Architectural Restructuring
 
-![modular](/img/modular.png)
+![From Monolithic to Modular: Scaling Semantic Routing with Extensible LoRA: Modular](/img/blog/vllm/semantic-router/modular.png)
 
-<!-- truncate -->
-
-The refactoring introduces a layered architecture in the candle-binding crate. This structure separates concerns: core functionality remains independent of specific models, while new model architectures can be added without modifying existing code. The DualPathUnifiedClassifier implements routing logic that selects between traditional fine-tuned models and LoRA-adapted models based on the task requirements.
+The refactoring introduces a layered architecture in the candle-binding crate. This structure separates concerns: core functionality remains independent of specific models, while new model architectures can be added without modifying existing code. The `DualPathUnifiedClassifier` implements routing logic that selects between traditional fine-tuned models and LoRA-adapted models based on the task requirements.
 
 ## Long-Context Embedding Models
 
@@ -50,25 +47,25 @@ The architecture uses Multi-Query Attention (MQA) with 3 query heads and 1 key-v
 
 LoRA addresses a fundamental inefficiency in the previous system. When a classification system needs to determine intent, detect PII, and check for security issues, the naive approach runs three separate fine-tuned models:
 
-![full](/img/full-params.png)
+![From Monolithic to Modular: Scaling Semantic Routing with Extensible LoRA: Full Params](/img/blog/vllm/semantic-router/full-params.png)
 
 Each model processes the input through its entire network, including the expensive base transformer layers. This results in O(n) complexity where n is the number of classification tasks.
 
 LoRA changes this by sharing the base model computation:
 
-![lora](/img/lora.png)
+![From Monolithic to Modular: Scaling Semantic Routing with Extensible LoRA: Lora](/img/blog/vllm/semantic-router/lora.png)
 
 The base model runs once, producing intermediate representations. Each LoRA adapter then applies task-specific low-rank weight updates to specialize the output. Since LoRA adapters typically modify less than 1% of the model's parameters, this final step is much faster than running complete models.
 
 The implementation in parallel_engine.rs uses [Rayon](https://github.com/rayon-rs/rayon) for data parallelism, processing multiple LoRA adapters concurrently. For a request requiring three classifications, this changes the workload from three full forward passes to one full pass plus three lightweight adapter applications.
 
-## Concurrency Through OnceLock
+## Concurrency Through `OnceLock`
 
-The previous implementation used lazy_static for managing global classifier state, which introduced lock contention under concurrent load. The refactoring replaces this with [OnceLock](https://doc.rust-lang.org/std/sync/struct.OnceLock.html) from the Rust standard library.
+The previous implementation used `lazy_static` for managing global classifier state, which introduced lock contention under concurrent load. The refactoring replaces this with [`OnceLock`](https://doc.rust-lang.org/std/sync/struct.OnceLock.html) from the Rust standard library.
 
-OnceLock provides lock-free reads after initialization. After the first initialization, all subsequent accesses are simple pointer reads with no synchronization overhead. Tests in oncelock_concurrent_test.rs verify this with 10 concurrent threads performing 30 total classifications, confirming that throughput scales linearly with thread count.
+`OnceLock` provides lock-free reads after initialization. After the first initialization, all subsequent accesses are simple pointer reads with no synchronization overhead. Tests in `oncelock_concurrent_test.rs` verify this with 10 concurrent threads performing 30 total classifications, confirming that throughput scales linearly with thread count.
 
-This matters when the router processes multiple incoming requests. With lazy_static, concurrent requests would queue behind a mutex. With OnceLock, they execute in parallel without contention.
+This matters when the router processes multiple incoming requests. With `lazy_static`, concurrent requests would queue behind a mutex. With `OnceLock`, they execute in parallel without contention.
 
 ### Flash Attention for GPU Acceleration
 
@@ -123,14 +120,14 @@ The benefits of this architecture vary by workload:
 - Single vs multi-task classification: LoRA provides minimal benefit since there's no base model sharing. Traditional fine-tuned models may be faster. LoRA shows clear advantages when performing multiple classifications on the same input. Since the base model runs once and only LoRA adapters execute for each task, the overhead is substantially reduced compared to running separate full models. The actual speedup depends on the ratio of base model computation to adapter computation.
 - Long-context inputs: Qwen3-Embedding enables routing decisions on documents up to 32K tokens without truncation, extending beyond ModernBERT's 8K limit for very long documents. With Flash Attention 2 enabled on compatible GPUs, the performance advantage becomes more substantial as context length increases.
 - Multilingual routing: Models can now handle routing decisions for languages where ModernBERT has limited training data.
-- High concurrency: OnceLock eliminates lock contention, allowing throughput to scale with CPU cores for classification operations.
+- High concurrency: `OnceLock` eliminates lock contention, allowing throughput to scale with CPU cores for classification operations.
 - GPU acceleration: When Flash Attention 2 is enabled, attention operations run 3-4× faster, with the speedup becoming more pronounced at longer sequence lengths. This makes GPU deployment particularly advantageous for high-throughput scenarios.
 
 ## Future Directions
 
 The modular architecture enables several extensions:
 
-- Additional embedding models can be added by implementing the CoreModel trait
+- Additional embedding models can be added by implementing the `CoreModel` trait
 - Flash Attention 3 support when available in Candle
 - Quantization support (4-bit, 8-bit) for reduced memory footprint
 - Custom LoRA adapters for domain-specific routing
@@ -140,7 +137,7 @@ The system now has a foundation for incorporating new research advances without 
 
 ## Resources
 
-- Project Repository: https://github.com/vllm-project/semantic-router
-- Candle Framework: https://github.com/huggingface/candle
-- Qwen3-Embedding: https://huggingface.co/Qwen/Qwen3-Embedding-0.6B
-- EmbeddingGemma: https://huggingface.co/google/embeddinggemma-300m
+- [Project Repository](https://github.com/vllm-project/semantic-router)
+- [Candle Framework](https://github.com/huggingface/candle)
+- [Qwen3-Embedding](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B)
+- [EmbeddingGemma](https://huggingface.co/google/embeddinggemma-300m)
