@@ -35,8 +35,6 @@ func newWorkflowsLooperWithService(cfg *config.LooperConfig, svc *WorkflowStateS
 	var store workflowToolStateStore
 	var ownsStore bool
 	if svc != nil {
-		// Acquire not strictly needed here since loopers are created once during config parsing,
-		// but we use Store() to access the interface.
 		store = svc.Store()
 	} else {
 		store = newWorkflowToolStateStoreFromConfig(workflowFlowRuntimeConfig(cfg))

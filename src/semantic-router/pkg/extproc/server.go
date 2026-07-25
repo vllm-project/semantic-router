@@ -194,6 +194,9 @@ func (s *Server) Start() error {
 func (s *Server) Stop() {
 	if s.server != nil {
 		s.server.GracefulStop()
+		if r := s.service.GetRouter(); r != nil {
+			_ = r.Close()
+		}
 		logging.ComponentEvent("extproc", "server_stopped", map[string]interface{}{
 			"port": s.port,
 		})

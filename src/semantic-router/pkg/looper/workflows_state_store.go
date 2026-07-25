@@ -240,6 +240,7 @@ type workflowFileToolStateStore struct {
 	ttl          time.Duration
 	done         chan struct{}
 	closeOnce    sync.Once
+	wg           sync.WaitGroup
 	currentBytes int64
 }
 
@@ -262,11 +263,13 @@ func newWorkflowFileToolStateStore(dir string, ttl time.Duration) *workflowFileT
 		done:         make(chan struct{}),
 		currentBytes: initialBytes,
 	}
+	s.wg.Add(1)
 	go s.sweepLoop()
 	return s
 }
 
 func (s *workflowFileToolStateStore) sweepLoop() {
+	defer s.wg.Done()
 	ticker := time.NewTicker(workflowStateSweeperInterval)
 	defer ticker.Stop()
 	for {
@@ -303,12 +306,12 @@ func (s *workflowFileToolStateStore) Put(_ context.Context, state *workflowPendi
 	if sizeErr := checkPayloadSize(data); sizeErr != nil {
 		return "", sizeErr
 	}
-	
+
 	path, err := s.pathForID(state.ID)
 	if err != nil {
 		return "", err
 	}
-	
+
 	var oldSize int64
 	if info, err := os.Stat(path); err == nil {
 		oldSize = info.Size()
@@ -316,13 +319,13 @@ func (s *workflowFileToolStateStore) Put(_ context.Context, state *workflowPendi
 
 	newSize := int64(len(data))
 	diff := newSize - oldSize
-	
+
 	newCurrent := atomic.AddInt64(&s.currentBytes, diff)
 	if newCurrent > maxAggregateStateBytes {
 		atomic.AddInt64(&s.currentBytes, -diff) // Rollback
 		return "", fmt.Errorf("workflow file state store at capacity (%d bytes, max %d)", newCurrent, maxAggregateStateBytes)
 	}
-	
+
 	tmp := path + ".tmp-" + newWorkflowToolStateID()
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		atomic.AddInt64(&s.currentBytes, -(newSize - oldSize))
@@ -349,7 +352,7 @@ func (s *workflowFileToolStateStore) Take(_ context.Context, id string) (*workfl
 		return nil, false, fmt.Errorf("claim workflow state: %w", renameErr)
 	}
 	defer func() {
-		if info, err := os.Stat(consumePath); err == nil {
+		if info, statErr := os.Stat(consumePath); statErr == nil {
 			atomic.AddInt64(&s.currentBytes, -info.Size())
 		}
 		os.Remove(consumePath)
@@ -382,14 +385,15 @@ func (s *workflowFileToolStateStore) Clear(_ context.Context) error {
 			continue
 		}
 		name := entry.Name()
-		if strings.HasSuffix(name, ".json") || strings.Contains(name, ".take-") || strings.Contains(name, ".tmp-") {
-			path := filepath.Join(s.dir, name)
-			if info, err := os.Stat(path); err == nil {
-				if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-					return fmt.Errorf("remove workflow state %q: %w", name, err)
-				} else if err == nil {
-					atomic.AddInt64(&s.currentBytes, -info.Size())
-				}
+		if !strings.HasSuffix(name, ".json") && !strings.Contains(name, ".take-") && !strings.Contains(name, ".tmp-") {
+			continue
+		}
+		path := filepath.Join(s.dir, name)
+		if info, statErr := os.Stat(path); statErr == nil {
+			if rmErr := os.Remove(path); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+				return fmt.Errorf("remove workflow state %q: %w", name, rmErr)
+			} else if rmErr == nil {
+				atomic.AddInt64(&s.currentBytes, -info.Size())
 			}
 		}
 	}
@@ -397,7 +401,10 @@ func (s *workflowFileToolStateStore) Clear(_ context.Context) error {
 }
 
 func (s *workflowFileToolStateStore) Close() error {
-	s.closeOnce.Do(func() { close(s.done) })
+	s.closeOnce.Do(func() {
+		close(s.done)
+		s.wg.Wait()
+	})
 	return nil
 }
 

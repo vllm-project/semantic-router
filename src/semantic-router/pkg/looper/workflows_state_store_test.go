@@ -109,6 +109,56 @@ func TestStateStore_PauseResume(t *testing.T) {
 
 // ---- Concurrent Take (exactly-once) -----------------------------------------
 
+func TestStateStore_TakeMissing(t *testing.T) {
+	for _, backend := range backends(t) {
+		t.Run(backend.name, func(t *testing.T) {
+			s := backend.store()
+			defer s.Close()
+			ctx := context.Background()
+
+			got, ok, err := s.Take(ctx, "nonexistent-id")
+			if err != nil {
+				t.Fatalf("Take error: %v", err)
+			}
+			if ok || got != nil {
+				t.Fatal("Take returned state for nonexistent ID")
+			}
+		})
+	}
+}
+
+func TestStateStore_Clear(t *testing.T) {
+	for _, backend := range backends(t) {
+		t.Run(backend.name, func(t *testing.T) {
+			s := backend.store()
+			defer s.Close()
+			ctx := context.Background()
+
+			state1 := makeTestState("clear-1")
+			state2 := makeTestState("clear-2")
+
+			if _, err := s.Put(ctx, state1); err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+			if _, err := s.Put(ctx, state2); err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+
+			if err := s.Clear(ctx); err != nil {
+				t.Fatalf("Clear: %v", err)
+			}
+
+			_, ok1, _ := s.Take(ctx, state1.ID)
+			_, ok2, _ := s.Take(ctx, state2.ID)
+			if ok1 || ok2 {
+				t.Fatal("Clear failed to remove state")
+			}
+		})
+	}
+}
+
+// ---- Concurrent Take (exactly-once) -----------------------------------------
+
 func TestStateStore_ConcurrentTakeExactlyOnce(t *testing.T) {
 	for _, backend := range backends(t) {
 		t.Run(backend.name, func(t *testing.T) {
