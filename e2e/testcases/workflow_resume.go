@@ -59,7 +59,7 @@ func triggerWorkflowStateBeforeRestart(ctx context.Context, client *kubernetes.C
 	defer session.Close()
 
 	apiClient := fixtures.NewResponseAPIClient(session, 30*time.Second)
-	
+
 	// Issue a request with Store enabled to trigger workflow state tracking
 	storeTrue := true
 	apiResp, _, err := apiClient.Create(ctx, fixtures.ResponseAPIRequest{
