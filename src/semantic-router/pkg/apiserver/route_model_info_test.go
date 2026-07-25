@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native/candle"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
@@ -284,5 +286,28 @@ func TestNormalizeEmbeddingModelPathFallsBackToRegistryAlias(t *testing.T) {
 
 	if got := normalizeEmbeddingModelPath("", "gemma"); got != "models/mom-embedding-flash" {
 		t.Fatalf("expected alias to resolve to registry local path, got %q", got)
+	}
+}
+
+func TestEmbeddingModelInfo_NativeRegistryParity(t *testing.T) {
+	// Register the candle adapter explicitly to simulate runtime assembly
+	native.Registry.Register(candle.NewAdapter())
+	
+	apiServer := &ClassificationAPIServer{
+		config:             &config.RouterConfig{},
+		routerRuntimeState: &startupstatus.State{},
+	}
+
+	resp := apiServer.buildModelsInfoResponse()
+	
+	found := false
+	for _, m := range resp.Models {
+		if m.Type == "embedding" && m.Metadata["matryoshka_supported"] == "false" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected to discover native embedding models via registry parity, got none or missing metadata")
 	}
 }

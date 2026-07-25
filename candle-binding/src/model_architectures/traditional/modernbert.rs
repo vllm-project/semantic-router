@@ -9,6 +9,7 @@
 //!
 //! The variant is auto-detected from config.json or can be explicitly specified.
 
+use crate::registry::get_registry;
 /// Maximum input length (in tokens) used for classification inference.
 ///
 /// ModernBERT-32K and mmBERT-32K use global attention (full quadratic O(n²))
@@ -267,21 +268,8 @@ pub type MmBert32KClassifier = TraditionalModernBertClassifier;
 pub type MmBert32KTokenClassifier = TraditionalModernBertTokenClassifier;
 
 // Global static instances using OnceLock pattern for zero-cost reads after initialization
-pub static TRADITIONAL_MODERNBERT_CLASSIFIER: OnceLock<Arc<TraditionalModernBertClassifier>> =
-    OnceLock::new();
-pub static TRADITIONAL_MODERNBERT_PII_CLASSIFIER: OnceLock<Arc<TraditionalModernBertClassifier>> =
-    OnceLock::new();
-pub static TRADITIONAL_MODERNBERT_JAILBREAK_CLASSIFIER: OnceLock<
-    Arc<TraditionalModernBertClassifier>,
-> = OnceLock::new();
-pub static TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER: OnceLock<
-    Arc<TraditionalModernBertTokenClassifier>,
-> = OnceLock::new();
 // Fact-check classifier using halugate-sentinel model (ModernBERT-based sequence classifier)
 // Model outputs: 0=NO_FACT_CHECK_NEEDED, 1=FACT_CHECK_NEEDED
-pub static TRADITIONAL_MODERNBERT_FACT_CHECK_CLASSIFIER: OnceLock<
-    Arc<TraditionalModernBertClassifier>,
-> = OnceLock::new();
 
 // Real classifier implementations
 #[derive(Clone)]
