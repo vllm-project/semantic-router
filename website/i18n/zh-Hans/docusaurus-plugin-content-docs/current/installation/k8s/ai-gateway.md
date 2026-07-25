@@ -1,6 +1,15 @@
+---
+translation:
+  source_commit: "07457dfa"
+  source_file: "docs/installation/k8s/ai-gateway.md"
+  outdated: false
+---
+
 # 使用 Envoy AI Gateway 安装
 
 本指南提供了在 Kubernetes 上将 vLLM Semantic Router 与 Envoy AI Gateway 集成的分步说明，以实现高级流量管理和 AI 特定功能。
+
+对于大型请求体或 Semantic Router 返回的流式即时响应，另请参阅[流式 ExtProc 与即时响应](./streamed-extproc)。该指南介绍了如何将 ExtProc 过滤器的请求体模式从 `BUFFERED` 切换为 `STREAMED`，以及流式 Chat Completions 客户端如何接收 looper 或 `fast_response` 的即时响应。
 
 ## 架构概览
 
@@ -72,6 +81,7 @@
 | [DeepInfra](https://deepinfra.com/docs/inference)            |          `{"name":"OpenAI","version":"v1/openai"}`           | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
 | [DeepSeek](https://api-docs.deepseek.com/)                   |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
 | [Hunyuan](https://cloud.tencent.com/document/product/1729/111007) |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
+| [MiniMax](https://platform.minimaxi.com/document/introduction) |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
 | [Tencent LLM Knowledge Engine](https://www.tencentcloud.com/document/product/1255/70381?lang=en) |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
 | [Tetrate Agent Router Service (TARS)](https://router.tetrate.ai/) |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
 | [SambaNova](https://docs.sambanova.ai/sambastudio/latest/open-ai-api.html) |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
@@ -97,7 +107,7 @@ kind create cluster --name semantic-router-cluster
 kubectl wait --for=condition=Ready nodes --all --timeout=300s
 ```
 
-## 步骤 2：部署 vLLM Semantic Router 
+## 步骤 2：部署 vLLM Semantic Router
 
 使用 Helm 部署包含所有必需组件的 Semantic Router 服务：
 
@@ -224,7 +234,7 @@ kubectl logs -n envoy-ai-gateway-system deployment/ai-gateway-controller
 kubectl get deployment -n envoy-ai-gateway-system
 ```
 
-** Semantic Router 无响应：**
+**Semantic Router 无响应：**
 
 ```bash
 # 检查 Semantic Router  pod 状态
@@ -243,7 +253,7 @@ kubectl logs -n vllm-semantic-router-system deployment/semantic-router
 kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml
 kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml
 
-# 删除 Semantic Router 
+# 删除 Semantic Router
 helm uninstall semantic-router -n vllm-semantic-router-system
 
 # 删除 AI gateway

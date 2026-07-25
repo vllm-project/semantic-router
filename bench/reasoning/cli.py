@@ -10,6 +10,7 @@ import sys
 
 
 def _add_test_command(subparsers):
+    """Register the 'test' command - quick single dataset evaluation."""
     test_parser = subparsers.add_parser("test", help="Quick test on a single dataset")
     test_parser.add_argument(
         "--dataset",
@@ -45,6 +46,7 @@ def _add_test_command(subparsers):
 
 
 def _add_compare_command(subparsers):
+    """Register the 'compare' command - full router vs vLLM comparison."""
     compare_parser = subparsers.add_parser(
         "compare", help="Full router vs vLLM comparison"
     )
@@ -87,6 +89,7 @@ def _add_compare_command(subparsers):
 
 
 def _add_plot_command(subparsers):
+    """Register the 'plot' command - generate plots from existing results."""
     plot_parser = subparsers.add_parser(
         "plot", help="Generate plots from benchmark results"
     )
@@ -103,6 +106,7 @@ def _add_plot_command(subparsers):
 
 
 def _add_comprehensive_command(subparsers):
+    """Register the 'comprehensive' command - run full research benchmark."""
     comprehensive_parser = subparsers.add_parser(
         "comprehensive", help="Run comprehensive multi-dataset benchmark"
     )
@@ -128,7 +132,8 @@ def _add_comprehensive_command(subparsers):
     comprehensive_parser.add_argument("--vllm-model", default="openai/gpt-oss-20b")
 
 
-def _add_reasoning_command(subparsers):
+def _add_reasoning_eval_command(subparsers):
+    """Register the 'reasoning-eval' command (Issue #42)."""
     reasoning_parser = subparsers.add_parser(
         "reasoning-eval",
         help="Evaluate standard vs reasoning mode (Issue #42)",
@@ -178,7 +183,8 @@ def _add_reasoning_command(subparsers):
     )
 
 
-def _build_parser():
+def main():
+    """Main CLI entry point for semantic-router-bench."""
     parser = argparse.ArgumentParser(
         prog="semantic-router-bench",
         description="Comprehensive benchmark suite for semantic router vs direct vLLM evaluation",
@@ -200,23 +206,19 @@ Examples:
   # Generate plots from existing results
   semantic-router-bench plot --router-dir results/router_mmlu --vllm-dir results/vllm_mmlu
 
-For more detailed usage, see: https://vllm-sr.ai/docs/benchmarking
+For more detailed usage, see: https://vllm-semantic-router.com/docs/benchmarking
         """,
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
     _add_test_command(subparsers)
     _add_compare_command(subparsers)
     subparsers.add_parser("list-datasets", help="List available datasets")
     _add_plot_command(subparsers)
     _add_comprehensive_command(subparsers)
-    _add_reasoning_command(subparsers)
-    return parser
+    _add_reasoning_eval_command(subparsers)
 
-
-def main():
-    """Main CLI entry point for semantic-router-bench."""
-    parser = _build_parser()
     args = parser.parse_args()
 
     if not args.command:
@@ -245,6 +247,7 @@ def run_test(args):
     """Run quick test command."""
     print(f"🧪 Quick test: {args.dataset} dataset ({args.samples} samples)")
 
+    # Import and run the benchmark script
     cmd = [
         sys.executable,
         "-m",
@@ -302,7 +305,9 @@ def run_compare(args):
 def list_datasets():
     """List available datasets."""
     try:
-        from .dataset_factory import list_available_datasets  # noqa: PLC0415
+        from .dataset_factory import (  # noqa: PLC0415 - lazy: pulls in heavy HF datasets
+            list_available_datasets,
+        )
 
         # This function prints the datasets and returns None
         list_available_datasets()
@@ -392,12 +397,10 @@ def run_reasoning_eval(args):
         cmd.extend(["--model", args.model])
 
     if args.no_plots:
-        cmd.append("--generate-plots")
-        cmd.append("False")
+        cmd.append("--no-generate-plots")
 
     if args.no_report:
-        cmd.append("--generate-report")
-        cmd.append("False")
+        cmd.append("--no-generate-report")
 
     return subprocess.call(cmd)
 
