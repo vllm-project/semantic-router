@@ -65,6 +65,9 @@ func DefaultManagementAPIConfig() ManagementAPIConfig {
 // secret_view is admin-only (via ManagementPermWildcard). Viewer and operator
 // may call config.read routes such as GET /config/router, but secret fields are
 // redacted unless the principal has secret_view.
+//
+// Keep config/config.yaml global.services.management_api.auth.roles aligned with
+// these defaults; reference-config tests enforce that contract.
 func DefaultManagementAPIRoles() map[string][]string {
 	return map[string][]string{
 		"viewer": {
