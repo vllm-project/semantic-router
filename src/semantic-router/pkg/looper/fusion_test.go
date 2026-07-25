@@ -174,12 +174,52 @@ func TestMergeFusionRequestConfigCoversAdvancedOptions(t *testing.T) {
 	assert.Equal(t, config.FusionOnErrorFail, dst.GroundingOnError)
 }
 
+func TestResolveFusionExecutionConfigLayersAnalysisOverridesFieldWise(t *testing.T) {
+	looper := NewFusionLooper(&config.LooperConfig{Endpoint: "http://looper"})
+	req := newFusionTestRequest()
+	req.Algorithm = &config.AlgorithmConfig{
+		Type: "fusion",
+		Fusion: &config.FusionAlgorithmConfig{
+			Model:          "judge",
+			AnalysisModels: []string{"panel-a", "panel-b"},
+			AnalysisOverrides: []config.FusionModelOverride{
+				{Model: "panel-a", Temperature: float64Ptr(0.2), MaxCompletionTokens: 512},
+				{Model: "panel-b", Temperature: float64Ptr(0.8)},
+			},
+		},
+	}
+	req.Fusion = &config.FusionRequestConfig{
+		ID: "fusion",
+		AnalysisOverrides: []config.FusionModelOverride{
+			{Model: "panel-a", MaxCompletionTokens: 100},
+			{Model: "panel-b", Temperature: float64Ptr(0.1)},
+		},
+	}
+
+	cfg := looper.resolveFusionExecutionConfig(req)
+
+	require.Len(t, cfg.AnalysisOverrides, 2)
+	panelA := cfg.AnalysisOverrides["panel-a"]
+	require.NotNil(t, panelA.Temperature)
+	assert.Equal(t, 0.2, *panelA.Temperature)
+	assert.Equal(t, 100, panelA.MaxCompletionTokens)
+	panelB := cfg.AnalysisOverrides["panel-b"]
+	require.NotNil(t, panelB.Temperature)
+	assert.Equal(t, 0.1, *panelB.Temperature)
+	assert.Zero(t, panelB.MaxCompletionTokens)
+}
+
 func TestFusionLooperAppliesPerAnalysisOverrides(t *testing.T) {
 	type callParams struct {
 		temperature         *float64
 		maxCompletionTokens *int64
 	}
-	seen := map[string]callParams{}
+	// Panel models are called concurrently, so this handler runs on several
+	// httptest server goroutines at once.
+	var (
+		mu   sync.Mutex
+		seen = map[string]callParams{}
+	)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload struct {
 			Model               string   `json:"model"`
@@ -189,11 +229,16 @@ func TestFusionLooperAppliesPerAnalysisOverrides(t *testing.T) {
 				Content string `json:"content"`
 			} `json:"messages"`
 		}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&payload)) {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		mu.Lock()
 		seen[payload.Model] = callParams{
 			temperature:         payload.Temperature,
 			maxCompletionTokens: payload.MaxCompletionTokens,
 		}
+		mu.Unlock()
 		prompt := ""
 		if len(payload.Messages) > 0 {
 			prompt = payload.Messages[len(payload.Messages)-1].Content
@@ -222,6 +267,8 @@ func TestFusionLooperAppliesPerAnalysisOverrides(t *testing.T) {
 	_, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
 	require.NoError(t, err)
 
+	mu.Lock()
+	defer mu.Unlock()
 	require.NotNil(t, seen["panel-a"].temperature)
 	assert.Equal(t, 0.0, *seen["panel-a"].temperature)
 	require.NotNil(t, seen["panel-b"].temperature)

@@ -215,6 +215,9 @@ func normalizeModelNames(names []string) []string {
 	return result
 }
 
+// mergeFusionAnalysisOverrides layers per-model overrides field-wise, so a
+// request that sets only one sampling field keeps the decision-level value for
+// every other field of the same model.
 func mergeFusionAnalysisOverrides(dst *fusionExecutionConfig, overrides []config.FusionModelOverride) {
 	if len(overrides) == 0 {
 		return
@@ -227,8 +230,15 @@ func mergeFusionAnalysisOverrides(dst *fusionExecutionConfig, overrides []config
 		if name == "" {
 			continue
 		}
-		override.Model = name
-		dst.AnalysisOverrides[name] = override
+		merged := dst.AnalysisOverrides[name]
+		merged.Model = name
+		if override.Temperature != nil {
+			merged.Temperature = override.Temperature
+		}
+		if override.MaxCompletionTokens > 0 {
+			merged.MaxCompletionTokens = override.MaxCompletionTokens
+		}
+		dst.AnalysisOverrides[name] = merged
 	}
 }
 
