@@ -812,6 +812,13 @@ routing:
           analysis_models:
             - qwen3-8b
             - qwen3-32b
+          analysis_overrides:
+            - model: qwen3-8b
+              temperature: 0.2
+              max_completion_tokens: 384
+            - model: qwen3-32b
+              temperature: 0.15
+              max_completion_tokens: 512
           max_concurrent: 2
           max_completion_tokens: 512
           round_timeout_seconds: 90
