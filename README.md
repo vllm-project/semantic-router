@@ -41,6 +41,8 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash
 
 For platform notes, detailed setup options, and troubleshooting, see the **[Installation Guide](https://vllm-sr.ai/docs/installation/)**.
 
+To evaluate the router — component performance regressions, routing quality across reasoning datasets, or backend comparisons — see the **[Benchmarking Guide](https://vllm-sr.ai/docs/benchmarking/overview)**.
+
 <details>
 <summary>Online playground credentials</summary>
 
