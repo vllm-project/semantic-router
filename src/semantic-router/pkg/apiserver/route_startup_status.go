@@ -40,7 +40,7 @@ func (s *ClassificationAPIServer) loadStartupState() *startupstatus.State {
 		return s.startupStateLoader()
 	}
 
-	cfg := s.config
+	cfg := s.currentConfig()
 	if cfg != nil && cfg.StartupStatus.StoreBackend == "redis" && cfg.StartupStatus.Redis != nil {
 		client := redis.NewClient(&redis.Options{
 			Addr:     cfg.StartupStatus.Redis.Address,

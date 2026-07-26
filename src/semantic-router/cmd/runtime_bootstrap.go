@@ -24,45 +24,70 @@ import (
 )
 
 type runtimeOptions struct {
-	configPath   string
-	certPath     string
-	kubeconfig   string
-	namespace    string
-	port         int
-	apiPort      int
-	metricsPort  int
-	enableAPI    bool
-	secure       bool
-	downloadOnly bool
+	configPath             string
+	certPath               string
+	kubeconfig             string
+	namespace              string
+	port                   int
+	apiPort                int
+	apiBind                string
+	managementAuthMode     string
+	managementRemoteExpose *bool
+	metricsPort            int
+	enableAPI              bool
+	secure                 bool
+	downloadOnly           bool
 }
 
 func parseRuntimeOptions() runtimeOptions {
 	var (
-		configPath   = flag.String("config", "config/config.yaml", "Path to the configuration file")
-		port         = flag.Int("port", 50051, "Port to listen on for gRPC ExtProc")
-		apiPort      = flag.Int("api-port", 8080, "Port to listen on for the router apiserver")
-		metricsPort  = flag.Int("metrics-port", 9190, "Port for Prometheus metrics")
-		enableAPI    = flag.Bool("enable-api", true, "Enable the router apiserver")
-		secure       = flag.Bool("secure", false, "Enable secure gRPC server with TLS")
-		certPath     = flag.String("cert-path", "", "Path to TLS certificate directory (containing tls.crt and tls.key)")
-		kubeconfig   = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
-		namespace    = flag.String("namespace", "default", "Kubernetes namespace to watch for CRDs")
-		downloadOnly = flag.Bool("download-only", false, "Download required models and exit (useful for CI/testing)")
+		configPath             = flag.String("config", "config/config.yaml", "Path to the configuration file")
+		port                   = flag.Int("port", 50051, "Port to listen on for gRPC ExtProc")
+		apiPort                = flag.Int("api-port", 8080, "Port to listen on for the router apiserver")
+		apiBind                = flag.String("api-bind", "", "Bind address for the router apiserver (default from config: 127.0.0.1)")
+		managementAuthMode     = flag.String("management-auth-mode", "", "Management API auth mode: bearer or disabled")
+		managementRemoteExpose = flag.Bool("management-remote-exposure", false, "Allow remote exposure of the management API (requires bearer auth tokens in config)")
+		metricsPort            = flag.Int("metrics-port", 9190, "Port for Prometheus metrics")
+		enableAPI              = flag.Bool("enable-api", true, "Enable the router apiserver")
+		secure                 = flag.Bool("secure", false, "Enable secure gRPC server with TLS")
+		certPath               = flag.String("cert-path", "", "Path to TLS certificate directory (containing tls.crt and tls.key)")
+		kubeconfig             = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
+		namespace              = flag.String("namespace", "default", "Kubernetes namespace to watch for CRDs")
+		downloadOnly           = flag.Bool("download-only", false, "Download required models and exit (useful for CI/testing)")
 	)
 	flag.Parse()
 
 	return runtimeOptions{
-		configPath:   *configPath,
-		certPath:     *certPath,
-		kubeconfig:   *kubeconfig,
-		namespace:    *namespace,
-		port:         *port,
-		apiPort:      *apiPort,
-		metricsPort:  *metricsPort,
-		enableAPI:    *enableAPI,
-		secure:       *secure,
-		downloadOnly: *downloadOnly,
+		configPath:             *configPath,
+		certPath:               *certPath,
+		kubeconfig:             *kubeconfig,
+		namespace:              *namespace,
+		port:                   *port,
+		apiPort:                *apiPort,
+		apiBind:                *apiBind,
+		managementAuthMode:     *managementAuthMode,
+		managementRemoteExpose: boolFlagOverride(flag.CommandLine, "management-remote-exposure", *managementRemoteExpose),
+		metricsPort:            *metricsPort,
+		enableAPI:              *enableAPI,
+		secure:                 *secure,
+		downloadOnly:           *downloadOnly,
 	}
+}
+
+// boolFlagOverride returns a pointer to value only when the named flag was
+// explicitly supplied on the command line. Otherwise nil so config defaults
+// are preserved (e.g. management_api.remote_exposure: true).
+func boolFlagOverride(fs *flag.FlagSet, name string, value bool) *bool {
+	set := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			set = true
+		}
+	})
+	if !set {
+		return nil
+	}
+	return &value
 }
 
 func initializeRuntimeLogger() {
@@ -430,9 +455,19 @@ func startAPIServerIfEnabled(opts runtimeOptions, runtimeRegistry *routerruntime
 
 	go func() {
 		logging.ComponentEvent("router", "api_server_starting", map[string]interface{}{
-			"api_port": opts.apiPort,
+			"api_port":                   opts.apiPort,
+			"api_bind":                   opts.apiBind,
+			"management_auth_mode":       opts.managementAuthMode,
+			"management_remote_exposure": opts.managementRemoteExpose,
 		})
-		if err := apiserver.InitWithRuntime(opts.configPath, opts.apiPort, runtimeRegistry); err != nil {
+		if err := apiserver.InitWithOptions(apiserver.InitOptions{
+			ConfigPath:      opts.configPath,
+			Port:            opts.apiPort,
+			BindAddress:     opts.apiBind,
+			RemoteExposure:  opts.managementRemoteExpose,
+			AuthMode:        opts.managementAuthMode,
+			RuntimeRegistry: runtimeRegistry,
+		}); err != nil {
 			logging.ComponentErrorEvent("router", "api_server_failed", map[string]interface{}{
 				"api_port": opts.apiPort,
 				"error":    err.Error(),

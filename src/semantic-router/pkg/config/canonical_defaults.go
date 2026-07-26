@@ -59,6 +59,7 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 		StartupStatus: StartupStatusConfig{
 			StoreBackend: "file",
 		},
+		ManagementAPI: DefaultManagementAPIConfig(),
 		Observability: ObservabilityConfig{
 			Metrics: MetricsConfig{
 				Enabled: canonicalBoolPtr(true),

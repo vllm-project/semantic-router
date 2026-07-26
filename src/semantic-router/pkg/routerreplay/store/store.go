@@ -126,6 +126,19 @@ type RouteDiagnostics struct {
 	MemoryResultCount    int    `json:"memory_result_count,omitempty"`
 }
 
+// HallucinationSpan is a single unsupported span with its NLI explanation,
+// mirroring extproc.EnhancedHallucinationSpan for replay persistence.
+type HallucinationSpan struct {
+	Text                    string  `json:"text"`
+	Start                   int     `json:"start"`
+	End                     int     `json:"end"`
+	HallucinationConfidence float32 `json:"hallucination_confidence"`
+	NLILabel                string  `json:"nli_label"`
+	NLIConfidence           float32 `json:"nli_confidence"`
+	Severity                int     `json:"severity"`
+	Explanation             string  `json:"explanation"`
+}
+
 // Record represents a routing decision record with metadata and captured payloads.
 type Record struct {
 	ID                    string                 `json:"id"`
@@ -215,10 +228,11 @@ type Record struct {
 	ContextTokenCount int `json:"context_token_count,omitempty"`
 
 	// Hallucination Detection
-	HallucinationEnabled    bool     `json:"hallucination_enabled,omitempty"`
-	HallucinationDetected   bool     `json:"hallucination_detected,omitempty"`
-	HallucinationConfidence float32  `json:"hallucination_confidence,omitempty"`
-	HallucinationSpans      []string `json:"hallucination_spans,omitempty"`
+	HallucinationEnabled     bool                `json:"hallucination_enabled,omitempty"`
+	HallucinationDetected    bool                `json:"hallucination_detected,omitempty"`
+	HallucinationConfidence  float32             `json:"hallucination_confidence,omitempty"`
+	HallucinationSpans       []string            `json:"hallucination_spans,omitempty"`
+	HallucinationSpanDetails []HallucinationSpan `json:"hallucination_span_details,omitempty"`
 
 	// Usage & Cost
 	PromptTokens       *int     `json:"prompt_tokens,omitempty"`
@@ -263,7 +277,7 @@ type Reader interface {
 // Enricher updates derived signal analysis fields after the initial record write.
 type Enricher interface {
 	// UpdateHallucinationStatus updates hallucination detection results for an existing record.
-	UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error
+	UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan) error
 
 	// UpdateUsageCost updates token usage and pricing-derived cost fields for an existing record.
 	UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error
@@ -285,6 +299,13 @@ func cloneStringSlice(values []string) []string {
 		return nil
 	}
 	return append([]string(nil), values...)
+}
+
+func cloneHallucinationSpanDetails(values []HallucinationSpan) []HallucinationSpan {
+	if values == nil {
+		return nil
+	}
+	return append([]HallucinationSpan(nil), values...)
 }
 
 func cloneFloat64Map(values map[string]float64) map[string]float64 {
@@ -393,6 +414,7 @@ func cloneRecord(record Record) Record {
 	cloned.ToolTrace = cloneToolTrace(record.ToolTrace)
 	cloned.PIIEntities = cloneStringSlice(record.PIIEntities)
 	cloned.HallucinationSpans = cloneStringSlice(record.HallucinationSpans)
+	cloned.HallucinationSpanDetails = cloneHallucinationSpanDetails(record.HallucinationSpanDetails)
 	cloned.PromptTokens = cloneIntPtr(record.PromptTokens)
 	cloned.CachedPromptTokens = cloneIntPtr(record.CachedPromptTokens)
 	cloned.CacheWriteTokens = cloneIntPtr(record.CacheWriteTokens)

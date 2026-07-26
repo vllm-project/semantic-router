@@ -13,6 +13,86 @@ const releaseTags = {
   v03: 'v0.3.0',
 }
 const reviewStates = new Set(['APPROVED', 'CHANGES_REQUESTED', 'COMMENTED'])
+const GH_MAX_ATTEMPTS = Number(process.env.GH_API_MAX_ATTEMPTS || 6)
+const GH_RETRY_BASE_MS = Number(process.env.GH_API_RETRY_BASE_MS || 2000)
+const GH_PAGE_DELAY_MS = Number(process.env.GH_API_PAGE_DELAY_MS || 400)
+
+function sleepSync(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) {
+    return
+  }
+
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.trunc(ms))
+}
+
+function errorText(error) {
+  return [error?.message, error?.stderr, error?.stdout]
+    .filter(Boolean)
+    .map(value => String(value))
+    .join('\n')
+}
+
+function isRetryableGhError(error) {
+  return /(?:\b429\b|\b502\b|\b503\b|\b504\b|rate[- ]?limit|Bad Gateway|Gateway Time-out|secondary rate limit|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|HTTP 5\d\d)/i
+    .test(errorText(error))
+}
+
+function runGh(args, options = {}) {
+  const {
+    maxBuffer = 1024 * 1024 * 8,
+    attempts = GH_MAX_ATTEMPTS,
+  } = options
+
+  let lastError
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return execFileSync('gh', args, {
+        cwd: repoRoot,
+        encoding: 'utf8',
+        maxBuffer,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }).trim()
+    }
+    catch (error) {
+      lastError = error
+      if (attempt >= attempts || !isRetryableGhError(error)) {
+        throw error
+      }
+
+      const delay = GH_RETRY_BASE_MS * (2 ** (attempt - 1))
+      const summary = errorText(error).split('\n').find(Boolean) || 'unknown error'
+      console.warn(
+        `gh ${args.slice(0, 3).join(' ')} failed (attempt ${attempt}/${attempts}): ${summary}; retrying in ${delay}ms`,
+      )
+      sleepSync(delay)
+    }
+  }
+
+  throw lastError
+}
+
+function ensureGitHubAuth() {
+  if (!(process.env.GH_TOKEN || process.env.GITHUB_TOKEN)) {
+    console.warn('GH_TOKEN/GITHUB_TOKEN unset; unauthenticated GitHub API limits are very low')
+  }
+
+  try {
+    const output = runGh(['api', 'rate_limit'], { maxBuffer: 1024 * 1024, attempts: 3 })
+    const core = JSON.parse(output)?.resources?.core
+    if (!core) {
+      return
+    }
+
+    console.log(`GitHub API rate limit: ${core.remaining}/${core.limit} remaining`)
+    if (core.remaining < 50) {
+      console.warn('GitHub core rate limit is low; requests may still fail after retries')
+    }
+  }
+  catch (error) {
+    console.warn(`Unable to check GitHub rate limit: ${errorText(error).split('\n')[0]}`)
+  }
+}
 
 const pullRequestsQuery = `
 query($cursor: String) {
@@ -272,6 +352,7 @@ for (const identity of identityOverrides) {
 }
 
 try {
+  ensureGitHubAuth()
   const generatedAt = formatLocalDate(new Date())
   const allRows = readContributorRows(null)
   const releaseTimeline = readReleaseTimeline()
@@ -625,6 +706,9 @@ function fetchMergedPullRequests() {
     const connection = page.repository.pullRequests
     pullRequests.push(...connection.nodes)
     cursor = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : null
+    if (cursor) {
+      sleepSync(GH_PAGE_DELAY_MS)
+    }
   } while (cursor)
 
   return pullRequests
@@ -639,19 +723,49 @@ function graphqlRequest(query, variables) {
     }
   }
 
-  const output = execFileSync('gh', args, {
-    cwd: repoRoot,
-    encoding: 'utf8',
-    maxBuffer: 1024 * 1024 * 32,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  }).trim()
+  let lastError
 
-  const payload = JSON.parse(output)
-  if (payload.errors?.length) {
-    throw new Error(payload.errors.map(error => error.message).join('; '))
+  for (let attempt = 1; attempt <= GH_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const output = runGh(args, {
+        maxBuffer: 1024 * 1024 * 32,
+        attempts: 1,
+      })
+      const payload = JSON.parse(output)
+      if (payload.errors?.length) {
+        const message = payload.errors.map(error => error.message).join('; ')
+        const error = new Error(message)
+        if (attempt < GH_MAX_ATTEMPTS && isRetryableGhError(error)) {
+          const delay = GH_RETRY_BASE_MS * (2 ** (attempt - 1))
+          console.warn(
+            `GraphQL errors (attempt ${attempt}/${GH_MAX_ATTEMPTS}): ${message}; retrying in ${delay}ms`,
+          )
+          sleepSync(delay)
+          lastError = error
+          continue
+        }
+
+        throw error
+      }
+
+      return payload.data
+    }
+    catch (error) {
+      lastError = error
+      if (attempt >= GH_MAX_ATTEMPTS || !isRetryableGhError(error)) {
+        throw error
+      }
+
+      const delay = GH_RETRY_BASE_MS * (2 ** (attempt - 1))
+      const summary = errorText(error).split('\n').find(Boolean) || 'unknown error'
+      console.warn(
+        `GraphQL request failed (attempt ${attempt}/${GH_MAX_ATTEMPTS}): ${summary}; retrying in ${delay}ms`,
+      )
+      sleepSync(delay)
+    }
   }
 
-  return payload.data
+  throw lastError
 }
 
 function collectReviewStatsByContributorKey(pullRequests, range) {
@@ -756,12 +870,9 @@ function readReleaseTimeline() {
 
 function readGitHubReleaseMap() {
   try {
-    const output = execFileSync('gh', ['api', `repos/${githubRepo}/releases`], {
-      cwd: repoRoot,
-      encoding: 'utf8',
+    const output = runGh(['api', `repos/${githubRepo}/releases`], {
       maxBuffer: 1024 * 1024 * 4,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }).trim()
+    })
 
     const releases = uniqueReleasesByTag(JSON.parse(output)
       .filter(candidate => !candidate.draft)
@@ -830,17 +941,14 @@ function readCommitShasBetweenTags(baseTagName, targetTagName) {
   }
 
   try {
-    const output = execFileSync('gh', [
+    const output = runGh([
       'api',
       '--paginate',
       '--slurp',
       `repos/${githubRepo}/compare/${baseTagName}...${targetTagName}?per_page=100`,
     ], {
-      cwd: repoRoot,
-      encoding: 'utf8',
       maxBuffer: 1024 * 1024 * 64,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }).trim()
+    })
     const pages = JSON.parse(output)
     const shas = pages.flatMap(page => page.commits ?? []).map(commit => commit.sha).filter(Boolean)
 
@@ -886,17 +994,14 @@ function readCommitShasSinceTag(tagName) {
   }
 
   try {
-    const output = execFileSync('gh', [
+    const output = runGh([
       'api',
       '--paginate',
       '--slurp',
       `repos/${githubRepo}/compare/${tagName}...main?per_page=100`,
     ], {
-      cwd: repoRoot,
-      encoding: 'utf8',
       maxBuffer: 1024 * 1024 * 64,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }).trim()
+    })
     const pages = JSON.parse(output)
     const shas = pages.flatMap(page => page.commits ?? []).map(commit => commit.sha).filter(Boolean)
 
@@ -962,12 +1067,9 @@ function readCommitShasThroughTag(tagName) {
 function readGitHubCommitRows(startDate) {
   const since = startDate ? `&since=${startDate}T00:00:00Z` : ''
   const endpoint = `repos/${githubRepo}/commits?sha=main&per_page=100${since}`
-  const output = execFileSync('gh', ['api', '--paginate', '--slurp', endpoint], {
-    cwd: repoRoot,
-    encoding: 'utf8',
+  const output = runGh(['api', '--paginate', '--slurp', endpoint], {
     maxBuffer: 1024 * 1024 * 64,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  }).trim()
+  })
 
   if (!output) {
     return []
@@ -1116,17 +1218,14 @@ function readAssociatedPullAuthor(sha) {
   }
 
   try {
-    const output = execFileSync('gh', [
+    const output = runGh([
       'api',
       '-H',
       'Accept: application/vnd.github+json',
       `repos/${githubRepo}/commits/${sha}/pulls`,
     ], {
-      cwd: repoRoot,
-      encoding: 'utf8',
       maxBuffer: 1024 * 1024 * 2,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim()
+    })
     const pull = JSON.parse(output).find((candidate) => {
       const login = normalizeLogin(candidate?.user?.login)
 
@@ -1162,12 +1261,9 @@ function readGitHubUserProfile(login) {
   }
 
   try {
-    const output = execFileSync('gh', ['api', `users/${encodeURIComponent(String(login))}`], {
-      cwd: repoRoot,
-      encoding: 'utf8',
+    const output = runGh(['api', `users/${encodeURIComponent(String(login))}`], {
       maxBuffer: 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim()
+    })
     const user = JSON.parse(output)
     const profile = {
       login: user.login ?? login,

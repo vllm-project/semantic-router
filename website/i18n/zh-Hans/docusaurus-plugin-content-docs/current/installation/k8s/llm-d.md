@@ -2,7 +2,7 @@
 translation:
   source_commit: "eb18d86"
   source_file: "docs/installation/k8s/llm-d.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 sidebar_position: 2
 ---

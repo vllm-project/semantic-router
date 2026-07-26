@@ -86,6 +86,30 @@ Model semantics and deployment bindings are now separated explicitly:
 - `routing.decisions[].candidateIterations` is bounded to `decision.candidates` or explicit model lists and remains declarative metadata for the selection layer, not a second policy interpreter
 - `routing.decisions[].emits[]` is the structured side-effect contract produced by DSL `EMIT` blocks. The current supported kind is `retention`; `drop: true` is consumed by the response-side semantic-cache write gate, while `ttl_turns`, `keep_current_model`, and `prefer_prefix_retention` remain typed/auditable hints until their dedicated runtime consumers land.
 
+### Entrypoints and multi-recipe routing
+
+Issue [#2331](https://github.com/vllm-project/semantic-router/issues/2331) adds
+an optional additive layer above `routing`:
+
+```yaml
+entrypoints:
+  - model_names: ["vllm-sr/privacy"]
+    recipe: privacy-first
+
+recipes:
+  - name: privacy-first
+    routing:
+      signals: {}
+      projections: {}
+      decisions: []
+```
+
+- the top-level `routing` block is the `default` recipe; `recipes[]` adds named additional profiles
+- each `recipes[].routing` block keeps the recipe-level profile shape — `signals`, `projections`, `decisions` — and never owns `modelCards` or provider bindings
+- signal and projection names share one global registry across recipes, so one classifier evaluates any recipe's rules and cross-recipe name collisions fail validation
+- `entrypoints[]` maps request-facing virtual model names onto recipes; the names behave like auto-model aliases, are listed by `/v1/models`, and never reach a backend
+- a recipe named `default` is only valid when the top-level `routing` block carries no profile of its own, so single-profile configs keep working unchanged
+
 ## Global defaults
 
 Router-global defaults are now owned by the router itself, not by a second user-maintained defaults file.

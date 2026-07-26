@@ -2,7 +2,7 @@
 translation:
   source_commit: "baa07413"
   source_file: "docs/proposals/unified-config-contract-v0-3.md"
-  outdated: false
+  outdated: true
 ---
 
 # 统一配置契约 v0.3

@@ -23,6 +23,7 @@ const (
 
 type (
 	Signal                        = store.Signal
+	HallucinationSpan             = store.HallucinationSpan
 	LearningDiagnostics           = store.LearningDiagnostics
 	LearningAdaptationDiagnostics = store.LearningAdaptationDiagnostics
 	LearningCandidateScore        = store.LearningCandidateScore
@@ -234,9 +235,9 @@ func (r *Recorder) AppendOutcome(id string, outcome Outcome) error {
 }
 
 // UpdateHallucinationStatus updates hallucination detection results for a record.
-func (r *Recorder) UpdateHallucinationStatus(id string, detected bool, confidence float32, spans []string) error {
+func (r *Recorder) UpdateHallucinationStatus(id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan) error {
 	ctx := context.Background()
-	return r.storage.UpdateHallucinationStatus(ctx, id, detected, confidence, spans)
+	return r.storage.UpdateHallucinationStatus(ctx, id, detected, confidence, spans, spanDetails)
 }
 
 func (r *Recorder) UpdateUsageCost(id string, usage UsageCost) error {

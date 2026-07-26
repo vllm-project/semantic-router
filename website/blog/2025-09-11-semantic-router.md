@@ -1,17 +1,15 @@
 ---
-slug: welcome
+slug: "semantic-router"
 title: "vLLM Semantic Router: Next Phase in LLM inference"
-description: Why vLLM Semantic Router shifts LLM inference from single-model serving to signal-driven routing, token efficiency, and policy-aware model selection.
-authors: [rootfs, wangchen615, yuezhu1, Xunzhuo]
-tags: [welcome, announcement, vllm, semantic-router]
-image: /img/code.png
+description: "How vLLM Semantic Router routes requests by intent, covering semantic classification, smart reasoning-path selection, Rust and Candle execution, and Kubernetes Envoy integration for efficient inference."
+authors:
+  - name: "vLLM Semantic Router Team"
+    url: "https://github.com/vllm-project/semantic-router"
+tags: ["ecosystem"]
+image: "/img/blog/vllm/semantic-router/architecture.png"
+source_url: "https://github.com/vllm-project/vllm-project.github.io/blob/main/_posts/2025-09-11-semantic-router.md"
 ---
-
-![code](/img/code.png)
-
-Synced from official vLLM Blog: [vLLM Semantic Router: Next Phase in LLM inference](https://blog.vllm.ai/2025/09/11/semantic-router.html)
-
-<!-- truncate -->
+![vLLM Semantic Router: Next Phase in LLM inference: Request](/img/blog/vllm/semantic-router/request.png)
 
 ## Industry Status: Inference ≠ More Is Better
 
@@ -44,7 +42,7 @@ vLLM enables scalable LLM serving—but lacks semantic decision-making around re
 
 The Semantic Router fills this gap by classifying queries semantically and routing them appropriately, giving accurate results where needed and efficiency where reasoning is unnecessary.
 
-![architecture](/img/architecture.png)
+![vLLM Semantic Router: Next Phase in LLM inference: Architecture](/img/blog/vllm/semantic-router/architecture.png)
 
 ### Architecture Design
 
@@ -88,7 +86,7 @@ Our goal: provide inference acceleration for open-source LLMs through:
 - Efficient model switching  
 - Enterprise-friendly deployment (Kubernetes & Envoy)
 
-Find the project on [GitHub](https://github.com/vllm-project/semantic-router). The current focus is on a [Work Group](https://vllm-sr.ai/community/work-groups) and planned [v0.1 Roadmap](https://vllm-sr.ai/roadmap/v0.1).
+Find the project on [GitHub](https://github.com/vllm-project/semantic-router). The current focus is on a [Work Group](https://vllm-semantic-router.com/community/work-groups) and planned [v0.1 Roadmap](https://vllm-semantic-router.com/roadmap/v0.1).
 
 ## Integration & Future Work: Embeddings and Pluggability
 
