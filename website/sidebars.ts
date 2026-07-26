@@ -275,6 +275,13 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Benchmarking',
+      items: [
+        'benchmarking/overview',
+      ],
+    },
+    {
+      type: 'category',
       label: 'API Reference',
       items: [
         'api/router',
