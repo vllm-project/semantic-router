@@ -2,6 +2,7 @@ import React from 'react'
 import Layout from '@theme/Layout'
 import Translate from '@docusaurus/Translate'
 import Link from '@docusaurus/Link'
+import CommunityLayout from '@site/src/components/community/CommunityLayout'
 import styles from './work-groups.module.css'
 
 interface WorkGroup {
@@ -142,12 +143,11 @@ const WorkGroups: React.FC = () => {
       title="Work Groups"
       description="vLLM Semantic Router Community Working Groups"
     >
-      <div className={styles.container}>
-        <header className={styles.header}>
-          <h1><Translate id="workGroups.title">vLLM Semantic Router Work Groups</Translate></h1>
-        </header>
-
-        <main className={styles.main}>
+      <CommunityLayout
+        activeKey="work-groups"
+        title={<Translate id="workGroups.title">vLLM Semantic Router Work Groups</Translate>}
+      >
+        <div className={styles.main}>
           <section className={styles.intro}>
             <h2>
               <Translate id="workGroups.init.title">WG Initialization</Translate>
@@ -259,8 +259,8 @@ const WorkGroups: React.FC = () => {
               </li>
             </ul>
           </section>
-        </main>
-      </div>
+        </div>
+      </CommunityLayout>
     </Layout>
   )
 }
