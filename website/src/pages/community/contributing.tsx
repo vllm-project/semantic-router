@@ -2,6 +2,7 @@ import React from 'react'
 import Layout from '@theme/Layout'
 import Translate from '@docusaurus/Translate'
 import Link from '@docusaurus/Link'
+import CommunityLayout from '@site/src/components/community/CommunityLayout'
 import styles from './community-page.module.css'
 
 const Contributing: React.FC = () => {
@@ -10,15 +11,12 @@ const Contributing: React.FC = () => {
       title="Contributing Guide"
       description="How to contribute to vLLM Semantic Router"
     >
-      <div className={styles.container}>
-        <header className={styles.header}>
-          <h1><Translate id="contributing.title">Contributing to vLLM Semantic Router</Translate></h1>
-          <p className={styles.subtitle}>
-            <Translate id="contributing.subtitle">We welcome contributions from the community! Here's how you can help make vLLM Semantic Router better.</Translate>
-          </p>
-        </header>
-
-        <main className={styles.main}>
+      <CommunityLayout
+        activeKey="contributing"
+        title={<Translate id="contributing.title">Contributing to vLLM Semantic Router</Translate>}
+        description={<Translate id="contributing.subtitle">We welcome contributions from the community! Here's how you can help make vLLM Semantic Router better.</Translate>}
+      >
+        <div className={styles.main}>
           <section className={styles.section}>
             <h2>
               <Translate id="contributing.waysToContribute">Ways to Contribute</Translate>
@@ -364,8 +362,8 @@ pre-commit install && pre-commit run --all-files`}
               </ul>
             </div>
           </section>
-        </main>
-      </div>
+        </div>
+      </CommunityLayout>
     </Layout>
   )
 }
