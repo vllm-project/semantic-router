@@ -1,8 +1,8 @@
 ---
 translation:
-  source_commit: "45bfd49e"
+  source_commit: "49e7c766"
   source_file: "docs/tutorials/projection/scores.md"
-  outdated: true
+  outdated: false
 sidebar_position: 3
 ---
 
@@ -61,7 +61,21 @@ sidebar_position: 3
 
 当前支持的输入类型包括：
 
-`keyword`、`embedding`、`domain`、`fact_check`、`user_feedback`、`preference`、`language`、`context`、`structure`、`complexity`、`modality`、`authz`、`jailbreak`、`pii`
+- `keyword`
+- `embedding`
+- `domain`
+- `fact_check`
+- `user_feedback`
+- `reask`
+- `preference`
+- `language`
+- `context`
+- `structure`
+- `complexity`
+- `modality`
+- `authz`
+- `jailbreak`
+- `pii`
 
 分数是内部投影状态；决策不直接引用分数名；下一步由映射消费。
 
@@ -93,6 +107,29 @@ routing:
             weight: 0.22
 ```
 
+### 原始值源
+
+当信号族通过 `SignalValues` 暴露数值度量（计数、距离、token 总数）时，使用 `value_source: raw` 将这些值直接送入加权和，而不是将其简化为二值或置信度标量。
+
+```yaml
+routing:
+  projections:
+    scores:
+      - name: workload_pressure
+        method: weighted_sum
+        inputs:
+          - type: structure
+            name: many_questions
+            weight: 0.2
+            value_source: raw
+          - type: structure
+            name: nested_depth
+            weight: 0.4
+            value_source: raw
+```
+
+不同信号族的原始值可能采用不同量纲。请谨慎选择权重，或使用与预期数值范围相符的阈值区间。
+
 ## DSL
 
 ```dsl
@@ -114,10 +151,10 @@ PROJECTION score difficulty_score {
 |------|------|
 | `name` | 分数标识 |
 | `method` | 当前为 `weighted_sum` |
-| `inputs[].type` | 读取的信号族 |
-| `inputs[].name` | 已声明的信号名 |
+| `inputs[].type` | 读取的信号族；也可以是 `projection`，用于引用先前的分数或映射输出 |
+| `inputs[].name` | 已声明的信号名；当 `type: projection` 且 `value_source: score`（默认）时为分数名，当 `value_source: confidence` 时为映射输出名 |
 | `inputs[].weight` | 贡献系数；负权重降低分数 |
-| `inputs[].value_source` | `binary`、`confidence` 或 `raw` 行为 |
+| `inputs[].value_source` | `binary`、`confidence`、`raw` 或 `score`（用于投影输入）；投影输入使用 `confidence` 时读取映射输出的校准置信度 |
 | `inputs[].match` / `inputs[].miss` | 二值模式下的显式取值 |
 
 ## 配置
@@ -147,7 +184,73 @@ PROJECTION score difficulty_score {
 - 数值聚合优先用分数，让 `routing.decisions` 专注可读布尔组合。
 - 当匹配信号应主动降低档位时（如 `balance` 对明显简单请求），使用负权重。
 
+## 层级组合
+
+分数可以通过 `type: projection` 引用先前的投影分数或映射输出置信度。这样便可构建由一个分数叠加另一个分数的分层路由结构。
+
+### 分数引用分数
+
+使用 `value_source: score`（或省略 `value_source`）读取先前计算的分数值：
+
+```yaml
+routing:
+  projections:
+    scores:
+      - name: difficulty_score
+        method: weighted_sum
+        inputs:
+          - type: keyword
+            name: reasoning_request_markers
+            weight: 0.6
+            value_source: confidence
+
+      - name: verification_pressure
+        method: weighted_sum
+        inputs:
+          - type: projection
+            name: difficulty_score
+            value_source: score
+            weight: 0.8
+          - type: fact_check
+            name: needs_fact_check
+            weight: 0.4
+
+    mappings:
+      - name: verification_band
+        source: verification_pressure
+        method: threshold_bands
+        outputs:
+          - name: needs_deep_verify
+            gte: 0.7
+          - name: standard_verify
+            lt: 0.7
+```
+
+### 引用置信度
+
+使用 `value_source: confidence` 读取映射输出区间的校准置信度：
+
+```yaml
+- type: projection
+  name: needs_deep_verify
+  value_source: confidence
+  weight: 0.5
+```
+
+### 依赖顺序
+
+分数可以按任意顺序声明。运行时会按拓扑顺序计算，确保始终先解析依赖项，再计算依赖它们的分数。配置校验会拒绝循环依赖。
+
+### 投影输入配置字段
+
+| 字段 | 含义 |
+|------|------|
+| `type` | `projection` |
+| `name` | 已声明的分数名（用于 `value_source: score`）或映射输出名（用于 `value_source: confidence`） |
+| `value_source` | `score`（读取原始分数值）或 `confidence`（读取映射输出置信度） |
+| `weight` | 贡献系数 |
+
 ## 下一步
 
-- 阅读 [Mappings](./mappings)，将分数转为决策可用的命名档位。
-- 阅读 [Overview](./overview) 了解完整投影工作流及与信号、决策的关系。
+- 阅读[映射](./mappings)，将分数转为决策可用的命名档位。
+- 阅读[概览](./overview)，了解完整投影工作流及与信号、决策的关系。

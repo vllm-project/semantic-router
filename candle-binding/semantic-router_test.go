@@ -1,3 +1,9 @@
+//go:build !windows && cgo && (amd64 || arm64)
+
+// This suite exercises the native Candle backend's behavioral contract and only
+// runs under the CGO build. The non-CGO stub's fail-closed contract is verified
+// separately in semantic-router_mock_test.go.
+
 package candle_binding
 
 import (

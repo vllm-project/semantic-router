@@ -393,7 +393,7 @@ func (s *ClassificationAPIServer) writeErrorResponse(w http.ResponseWriter, stat
 	errorResponse := map[string]interface{}{
 		"error": map[string]interface{}{
 			"code":      errorCode,
-			"message":   message,
+			"message":   scrubSecretsInErrorMessage(message),
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
 		},
 	}
