@@ -1,0 +1,114 @@
+apiVersion: mom.vllm.ai/v0alpha1
+kind: MixtureOfModels
+metadata:
+  namespace: vllm-sr
+  name: mom-v1-ultra
+  version: 1.0.0
+  behaviorVariant: accuracy-first
+spec:
+  entrypoints:
+    - id: chat
+      interface: openai.chat
+      operation: chat.completions
+      requestMediaType: application/json
+      responseMediaType: application/json
+      streaming: false
+      graphEntry: choose-path
+      behaviorVariant: accuracy-first
+  models:
+    - id: local-generalist
+      identity:
+        uri: hf://example-org/generalist
+        revision: 0123456789abcdef0123456789abcdef01234567
+        strength: repository-revision
+      requires:
+        protocols: [openai.chat.completions.v1]
+        modalities: [text]
+        requiredFeatures: [general-generation]
+        preferredFeatures: [structured-output]
+        minInputContextTokens: 32768
+        minOutputTokens: 4096
+        dataPolicies: [private-ok]
+    - id: cloud-reasoner
+      identity:
+        uri: provider://example/reasoner
+        strength: observed-opaque
+      requires:
+        protocols: [openai.chat.completions.v1]
+        modalities: [text]
+        requiredFeatures: [reasoning]
+        preferredFeatures: [structured-output]
+        minInputContextTokens: 32768
+        minOutputTokens: 4096
+        dataPolicies: [public-only]
+  signals:
+    - name: complexity
+      type: score.float
+      range: [0.0, 1.0]
+    - name: data-class
+      type: enum
+      values: [public, private]
+  projections:
+    - name: reasoning-need
+      type: score.float
+      inputs: [complexity]
+  behaviorVariants:
+    - id: accuracy-first
+      requestPreferenceDomain:
+        default:
+          qualityBias: 1.0
+          costBias: 0.1
+          latencyBias: 0.1
+        parameters:
+          qualityBias: {type: number, minimum: 0.8, maximum: 1.0}
+          costBias: {type: number, minimum: 0.0, maximum: 0.25}
+          latencyBias: {type: number, minimum: 0.0, maximum: 0.25}
+      objectives:
+        - metric: quality
+          direction: maximize
+          weight: 1.0
+        - metric: cost-usd
+          direction: minimize
+          weight: 0.1
+        - metric: latency-ms
+          direction: minimize
+          weight: 0.1
+      hardConstraints:
+        - id: private-data-must-stay-private
+          type: candidate.filter/v1
+          when:
+            signal: data-class
+            equals: private
+          require:
+            candidateField: dataPolicies
+            contains: private-ok
+          onUnknown: reject
+  graph:
+    entry: choose-path
+    nodes:
+      choose-path:
+        op: select
+        policy: assets/controller-policy.json
+        prompt: assets/system-prompt.txt
+        candidates: [local-generalist, cloud-reasoner]
+        next: validate-answer
+      validate-answer:
+        op: contract-check
+        contract: contracts/answer.schema.json
+        onSuccess: return-answer
+        onFailure: abstain
+      return-answer:
+        op: return
+        valueFrom: validated-answer
+        status: ok
+      abstain:
+        op: return
+        reason: unable_to_answer_safely
+        status: abstain
+  bounds:
+    maxEvents: 8
+    maxFanout: 1
+    maxModelCalls: 2
+    maxRounds: 1
+    maxWallTimeMs: 30000
+    maxOutputTokens: 4096

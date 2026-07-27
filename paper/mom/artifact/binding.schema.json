@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm.ai/schemas/mom/binding-v0alpha1.json",
+  "title": "Mixture-of-Models environment binding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "subject",
+    "realizationProfile",
+    "controlEngine",
+    "modelBindings",
+    "policy"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "mom.vllm.ai/binding/v0alpha1"},
+    "kind": {"const": "MixtureOfModelsBinding"},
+    "subject": {"$ref": "#/$defs/subject"},
+    "realizationProfile": {"$ref": "#/$defs/name"},
+    "controlEngine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "resolver"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "resolver": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": {
+            "name": {"type": "string", "minLength": 1},
+            "version": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "modelBindings": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["candidates"],
+        "properties": {
+          "candidates": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"$ref": "#/$defs/candidate"}
+          }
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["failClosed", "allowOpaqueProviderRevisions"],
+      "properties": {
+        "failClosed": {"const": true},
+        "allowOpaqueProviderRevisions": {"type": "boolean"}
+      }
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._-]*$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "stringSet": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "modelId",
+        "modelVersion",
+        "behaviorVariant",
+        "semanticDigest",
+        "bundleDigest"
+      ],
+      "properties": {
+        "modelId": {"type": "string", "minLength": 1},
+        "modelVersion": {"type": "string", "minLength": 1},
+        "behaviorVariant": {"$ref": "#/$defs/name"},
+        "semanticDigest": {"$ref": "#/$defs/digest"},
+        "bundleDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "wireTransport",
+        "apiAdapter",
+        "modelRuntime",
+        "artifact",
+        "deployment",
+        "capabilities",
+        "capacity",
+        "pricing"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/name"},
+        "kind": {"enum": ["deployment", "managed-api"]},
+        "weight": {"type": "number", "exclusiveMinimum": 0},
+        "wireTransport": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["protocol", "endpoint"],
+          "properties": {
+            "protocol": {"enum": ["http", "https", "grpc", "in-process"]},
+            "endpoint": {"type": "string", "format": "uri"},
+            "auth": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["secretRef"],
+              "properties": {
+                "header": {"type": "string", "minLength": 1},
+                "prefix": {"type": "string"},
+                "secretRef": {"type": "string", "minLength": 1}
+              }
+            },
+            "headers": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name"],
+                "properties": {
+                  "name": {"type": "string", "minLength": 1},
+                  "value": {"type": "string"},
+                  "secretRef": {"type": "string", "minLength": 1}
+                },
+                "oneOf": [
+                  {"required": ["value"]},
+                  {"required": ["secretRef"]}
+                ]
+              }
+            }
+          }
+        },
+        "apiAdapter": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["family", "interface", "externalModelId"],
+          "properties": {
+            "family": {"type": "string", "minLength": 1},
+            "interface": {"type": "string", "minLength": 1},
+            "externalModelId": {"type": "string", "minLength": 1},
+            "apiVersion": {"type": "string", "minLength": 1},
+            "operationPath": {"type": "string", "minLength": 1}
+          }
+        },
+        "modelRuntime": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": {
+            "name": {"type": "string", "minLength": 1},
+            "version": {"type": "string", "minLength": 1},
+            "image": {"type": "string", "minLength": 1}
+          }
+        },
+        "artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["uri", "format", "identityStrength"],
+          "properties": {
+            "uri": {"type": "string", "minLength": 1},
+            "revision": {"type": "string", "minLength": 1},
+            "format": {"type": "string", "minLength": 1},
+            "identityStrength": {
+              "enum": [
+                "content-addressed",
+                "repository-revision",
+                "provider-version",
+                "observed-opaque"
+              ]
+            }
+          }
+        },
+        "accelerator": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["api", "vendor", "architecture"],
+          "properties": {
+            "api": {"type": "string", "minLength": 1},
+            "vendor": {"type": "string", "minLength": 1},
+            "architecture": {"type": "string", "minLength": 1}
+          }
+        },
+        "deployment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["driver", "ref"],
+          "properties": {
+            "driver": {"type": "string", "minLength": 1},
+            "ref": {"type": "string", "minLength": 1}
+          }
+        },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "protocols",
+            "modalities",
+            "features",
+            "maxInputContextTokens",
+            "maxOutputTokens",
+            "dataPolicies",
+            "evidence"
+          ],
+          "properties": {
+            "protocols": {"$ref": "#/$defs/stringSet"},
+            "modalities": {"$ref": "#/$defs/stringSet"},
+            "features": {"$ref": "#/$defs/stringSet"},
+            "maxInputContextTokens": {"type": "integer", "minimum": 1},
+            "maxOutputTokens": {"type": "integer", "minimum": 1},
+            "dataPolicies": {"$ref": "#/$defs/stringSet"},
+            "evidence": {"type": "string", "minLength": 1}
+          }
+        },
+        "capacity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {"enum": ["known", "unknown"]},
+            "maxConcurrentRequests": {"type": "integer", "minimum": 1},
+            "maxTokensPerSecond": {"type": "number", "exclusiveMinimum": 0},
+            "evidence": {"type": "string", "minLength": 1}
+          }
+        },
+        "pricing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {"enum": ["known", "unknown"]},
+            "currency": {"type": "string", "minLength": 1},
+            "inputPerMillionTokens": {"type": "number", "minimum": 0},
+            "outputPerMillionTokens": {"type": "number", "minimum": 0},
+            "cachedInputPerMillionTokens": {"type": "number", "minimum": 0},
+            "cacheWritePerMillionTokens": {"type": "number", "minimum": 0},
+            "basis": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    }
+  }
+}

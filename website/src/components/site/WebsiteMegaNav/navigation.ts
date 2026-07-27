@@ -100,6 +100,7 @@ export const WEBSITE_MEGA_NAV_GROUPS: WebsiteMegaNavGroup[] = [
       '/publications',
       '/white-paper',
       '/vision-paper',
+      '/mom-paper',
       '/blog',
     ],
     sections: [
@@ -108,12 +109,6 @@ export const WEBSITE_MEGA_NAV_GROUPS: WebsiteMegaNavGroup[] = [
         title: 'Published work',
         description: 'Read the project thesis and peer-facing results.',
         links: [
-          {
-            key: 'publications',
-            label: 'Papers & Talks',
-            description: 'Browse publications, talks, and technical artifacts.',
-            to: '/publications',
-          },
           {
             key: 'white-paper',
             label: 'White Paper',
@@ -126,18 +121,30 @@ export const WEBSITE_MEGA_NAV_GROUPS: WebsiteMegaNavGroup[] = [
             description: 'See the long-range direction for intelligent routing.',
             to: '/vision-paper',
           },
+          {
+            key: 'mom-paper',
+            label: 'Mixture-of-Models Paper',
+            description: 'Study conditional computation across model boundaries.',
+            to: '/mom-paper',
+          },
         ],
       },
       {
         key: 'updates',
         title: 'Project updates',
-        description: 'Follow engineering progress and field reports.',
+        description: 'Follow engineering progress, publications, and field reports.',
         links: [
           {
             key: 'blog',
             label: 'Engineering Blog',
             description: 'Read release notes, experiments, and field reports.',
             to: '/blog',
+          },
+          {
+            key: 'publications',
+            label: 'Papers & Talks',
+            description: 'Browse publications, talks, and technical artifacts.',
+            to: '/publications',
           },
         ],
       },

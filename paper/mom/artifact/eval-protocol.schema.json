@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm.ai/schemas/mom/eval-protocol-v0alpha1.json",
+  "title": "Mixture-of-Models evaluation protocol",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "behaviorVariant",
+    "tasks",
+    "execution",
+    "reporting"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "mom.vllm.ai/eval-protocol/v0alpha1"},
+    "id": {"$ref": "#/$defs/name"},
+    "behaviorVariant": {"$ref": "#/$defs/name"},
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "dataset", "metrics"],
+        "properties": {
+          "id": {"$ref": "#/$defs/name"},
+          "dataset": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["uri", "digest"],
+            "properties": {
+              "uri": {"type": "string", "minLength": 1},
+              "digest": {"$ref": "#/$defs/digest"}
+            }
+          },
+          "metrics": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seed", "concurrency", "temperature"],
+      "properties": {
+        "seed": {"type": "integer", "minimum": 0},
+        "concurrency": {"type": "integer", "minimum": 1},
+        "temperature": {"type": "number", "minimum": 0}
+      }
+    },
+    "reporting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["includeConfidenceIntervals", "includeTraceSummary"],
+      "properties": {
+        "includeConfidenceIntervals": {"type": "boolean"},
+        "includeTraceSummary": {"type": "boolean"}
+      }
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._-]*$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

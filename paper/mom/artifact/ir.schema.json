@@ -1,0 +1,343 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm.ai/schemas/mom/ir-v0alpha1.json",
+  "title": "Mixture-of-Models typed intermediate representation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "irVersion",
+    "model",
+    "entrypoints",
+    "logicalModels",
+    "signals",
+    "projections",
+    "behaviorVariants",
+    "artifacts",
+    "graph",
+    "operators",
+    "bounds"
+  ],
+  "properties": {
+    "irVersion": {"const": "mom.vllm.ai/ir/v0alpha1"},
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "behaviorVariant"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "behaviorVariant": {"$ref": "#/$defs/name"}
+      }
+    },
+    "entrypoints": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "interface",
+          "operation",
+          "requestMediaType",
+          "responseMediaType",
+          "streaming",
+          "graphEntry",
+          "behaviorVariant"
+        ],
+        "properties": {
+          "id": {"$ref": "#/$defs/name"},
+          "interface": {"type": "string", "minLength": 1},
+          "operation": {"type": "string", "minLength": 1},
+          "requestMediaType": {"type": "string", "minLength": 1},
+          "responseMediaType": {"type": "string", "minLength": 1},
+          "streaming": {"type": "boolean"},
+          "graphEntry": {"$ref": "#/$defs/name"},
+          "behaviorVariant": {"$ref": "#/$defs/name"}
+        }
+      }
+    },
+    "logicalModels": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/logicalModel"}
+    },
+    "signals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "type"],
+        "properties": {
+          "name": {"$ref": "#/$defs/name"},
+          "type": {"enum": ["score.float", "enum", "boolean"]},
+          "range": {
+            "type": "array",
+            "prefixItems": [{"type": "number"}, {"type": "number"}],
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "values": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string"}
+          }
+        }
+      }
+    },
+    "projections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "type", "inputs"],
+        "properties": {
+          "name": {"$ref": "#/$defs/name"},
+          "type": {"type": "string", "minLength": 1},
+          "inputs": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"$ref": "#/$defs/name"}
+          }
+        }
+      }
+    },
+    "behaviorVariants": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/behaviorVariant"}
+    },
+    "artifacts": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"$ref": "#/$defs/descriptor"}
+    },
+    "graph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entry"],
+      "properties": {"entry": {"$ref": "#/$defs/name"}}
+    },
+    "operators": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          {"$ref": "#/$defs/selectOperator"},
+          {"$ref": "#/$defs/contractOperator"},
+          {"$ref": "#/$defs/returnOperator"}
+        ]
+      }
+    },
+    "bounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxEvents",
+        "maxFanout",
+        "maxModelCalls",
+        "maxRounds",
+        "maxWallTimeMs",
+        "maxOutputTokens"
+      ],
+      "properties": {
+        "maxEvents": {"type": "integer", "minimum": 1},
+        "maxFanout": {"type": "integer", "minimum": 1},
+        "maxModelCalls": {"type": "integer", "minimum": 1},
+        "maxRounds": {"type": "integer", "minimum": 1},
+        "maxWallTimeMs": {"type": "integer", "minimum": 1},
+        "maxOutputTokens": {"type": "integer", "minimum": 1}
+      }
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._-]*$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "mediaType", "digest", "size"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "mediaType": {"type": "string", "minLength": 1},
+        "digest": {"$ref": "#/$defs/digest"},
+        "size": {"type": "integer", "minimum": 0}
+      }
+    },
+    "logicalModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "identity", "requirements"],
+      "properties": {
+        "id": {"$ref": "#/$defs/name"},
+        "identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["uri", "strength"],
+          "properties": {
+            "uri": {"type": "string", "minLength": 1},
+            "revision": {"type": "string", "minLength": 1},
+            "strength": {
+              "enum": [
+                "content-addressed",
+                "repository-revision",
+                "provider-version",
+                "observed-opaque"
+              ]
+            }
+          }
+        },
+        "requirements": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "protocols",
+            "modalities",
+            "requiredFeatures",
+            "preferredFeatures",
+            "minInputContextTokens",
+            "minOutputTokens",
+            "dataPolicies"
+          ],
+          "properties": {
+            "protocols": {"$ref": "#/$defs/stringSet"},
+            "modalities": {"$ref": "#/$defs/stringSet"},
+            "requiredFeatures": {"$ref": "#/$defs/stringSet"},
+            "preferredFeatures": {"$ref": "#/$defs/stringSet"},
+            "minInputContextTokens": {"type": "integer", "minimum": 1},
+            "minOutputTokens": {"type": "integer", "minimum": 1},
+            "dataPolicies": {"$ref": "#/$defs/stringSet"}
+          }
+        }
+      }
+    },
+    "stringSet": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "behaviorVariant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "requestPreferenceDomain",
+        "objectives",
+        "hardConstraints"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/name"},
+        "requestPreferenceDomain": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["default", "parameters"],
+          "properties": {
+            "default": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": {"type": "number"}
+            },
+            "parameters": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["type", "minimum", "maximum"],
+                "properties": {
+                  "type": {"const": "number"},
+                  "minimum": {"type": "number"},
+                  "maximum": {"type": "number"}
+                }
+              }
+            }
+          }
+        },
+        "objectives": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["metric", "direction", "weight"],
+            "properties": {
+              "metric": {"type": "string", "minLength": 1},
+              "direction": {"enum": ["maximize", "minimize"]},
+              "weight": {"type": "number", "minimum": 0}
+            }
+          }
+        },
+        "hardConstraints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "type", "onUnknown"],
+            "properties": {
+              "id": {"$ref": "#/$defs/name"},
+              "type": {"type": "string", "minLength": 1},
+              "when": {"type": "object"},
+              "require": {"type": "object"},
+              "onUnknown": {"const": "reject"}
+            }
+          }
+        }
+      }
+    },
+    "selectOperator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "op", "policyArtifact", "candidates", "next"],
+      "properties": {
+        "id": {"$ref": "#/$defs/name"},
+        "op": {"const": "select"},
+        "policyArtifact": {"$ref": "#/$defs/name"},
+        "promptArtifact": {"$ref": "#/$defs/name"},
+        "candidates": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/name"}
+        },
+        "next": {"$ref": "#/$defs/name"}
+      }
+    },
+    "contractOperator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "op",
+        "contractArtifact",
+        "onSuccess",
+        "onFailure"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/name"},
+        "op": {"const": "contract-check"},
+        "contractArtifact": {"$ref": "#/$defs/name"},
+        "onSuccess": {"$ref": "#/$defs/name"},
+        "onFailure": {"$ref": "#/$defs/name"}
+      }
+    },
+    "returnOperator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "op", "status"],
+      "properties": {
+        "id": {"$ref": "#/$defs/name"},
+        "op": {"const": "return"},
+        "status": {"enum": ["ok", "abstain", "reject", "error"]},
+        "valueFrom": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

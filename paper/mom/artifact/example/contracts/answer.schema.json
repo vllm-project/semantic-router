@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm.ai/schemas/mom/examples/answer-v0alpha1.json",
+  "title": "Research synthesis answer",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["answer", "grounded"],
+  "properties": {
+    "answer": {"type": "string", "minLength": 1},
+    "grounded": {"type": "boolean"},
+    "citations": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    }
+  }
+}

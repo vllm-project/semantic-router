@@ -1,0 +1,23 @@
+schemaVersion: mom.vllm.ai/realization-profile/v0alpha1
+id: hybrid-cuda-cloud
+scope: realization-template
+controlEngine:
+  names: [vllm-semantic-router]
+  requiredCapabilities: [binding.v0alpha1, trace.identity.v0alpha1]
+targets:
+  local-generalist:
+    modelRuntimes: [vllm]
+    deploymentDrivers: [existing-endpoint, kubernetes-vllm]
+    artifactFormats: [safetensors]
+    wireTransports: [http, https]
+    apiAdapters: [openai.chat.completions.v1]
+    accelerator:
+      apis: [cuda]
+      vendors: [nvidia]
+      architectures: [sm90]
+  cloud-reasoner:
+    modelRuntimes: [remote-api]
+    deploymentDrivers: [existing-endpoint]
+    artifactFormats: [opaque-provider]
+    wireTransports: [https]
+    apiAdapters: [openai.chat.completions.v1]

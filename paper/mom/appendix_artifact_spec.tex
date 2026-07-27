@@ -1,0 +1,108 @@
+\section{Proposed MoM Bundle Format}
+\label{app:artifact-profile}
+\begingroup
+\footnotesize
+
+This appendix instantiates the artifact contract in
+Section~\ref{sec:artifact}. The format is a versioned proposal; a
+machine-readable companion supplies schemas for the manifest, typed IR,
+realization profile, binding, lock, evaluation protocol, evaluation
+attestation, and run record, together with one verified example.
+
+\subsection{Bundle contents and evidence boundary}
+
+The manifest is an immutable index over the human model coordinate, behavior
+variant, semantic digest, typed entrypoints, canonical specification, semantic
+assets, contracts, evaluation protocols, and optional realization templates.
+Canonical IR remains the sole semantic authority. Authoring source and model
+cards are optional distribution objects rather than executable authorities.
+Evaluation results, signatures, SBOMs, and build provenance are separate
+digest-bound attestations: publishing new evidence does not change the model
+being evaluated.
+
+Every object descriptor contains a normalized relative path, media type,
+SHA-256 digest, and byte size. Absolute, backslash, empty, dot, repeated,
+traversal, and symlink paths are rejected before parsing. A production archive
+importer must additionally bound expanded size, file count, nesting, and
+compression ratio and reject hard links, devices, and other non-regular files.
+
+The example exposes one accuracy-first model and two realization profiles:
+ROCm plus cloud and CUDA plus cloud. Behavior variants belong to logical
+identity; realization profiles contain endpoint-free compatibility
+requirements and do not. A binding chooses one realization profile and supplies
+concrete candidates.
+
+\subsection{Four identities without circular hashes}
+
+Let $C$ be canonical JSON and $H$ be SHA-256. Let $I$ be the fully defaulted and
+typed IR, whose semantic assets are themselves content-addressed. Let $M$ be
+the manifest, whose object descriptors commit to the distributed byte closure.
+Let $N(B_s)$ be the normalized typed representation obtained from binding
+source $B_s$, and let $L$ be the completed normalized lock. The four identities
+are
+\begin{equation}
+ \begin{aligned}
+ d_{\mathrm{semantic}} &= H(C(I)),&
+ d_{\mathrm{bundle}}   &= H(C(M)),\\
+ d_{\mathrm{binding}}  &= H(C(N(B_s))),&
+ d_{\mathrm{lock}}     &= H(C(L)).
+ \end{aligned}
+ \label{eq:bundle-identities}
+\end{equation}
+No object stores its own digest. The manifest stores
+$d_{\mathrm{semantic}}$; the binding stores semantic and bundle subjects; the
+lock stores that subject and $d_{\mathrm{binding}}$; traces and attestations
+then store all four. Formatting a YAML binding therefore cannot create a new
+environment identity.
+
+\subsection{Target compatibility and locking}
+
+A logical constituent declares an identity and required or preferred
+capabilities, including protocol, modality, interface features, input and
+output limits, and data policy. A realization profile may additionally require
+a wire transport, API adapter, serving runtime, leaf-artifact format,
+accelerator API, vendor, architecture, or deployment driver. Environment policy may strengthen but
+never relax semantic constraints. Resolution is thus the intersection of
+logical admissibility, realization-profile requirements, and environment
+policy.
+
+The lock records the complete candidate inventory available to an execution,
+not the one candidate selected by a particular request. For open artifacts it
+may pin a content digest or repository revision together with tokenizer,
+runtime image, protocol adapter, and accelerator evidence. For a closed service
+it marks identity as observed-opaque, records an observation time and probe
+digest, and makes no bitwise-reproducibility claim. Floating dependencies are
+excluded from a production lock.
+
+\subsection{Distribution closures and evaluation}
+
+A thin export retains immutable external references; a materialized export
+vendors leaf artifacts whose licenses permit redistribution; and a targeted
+export additionally carries runtime objects for selected realization
+profiles. Materialization fails for a closed provider rather than treating an
+API alias as an offline model. A canonical directory and deterministic archive
+define local exchange; OCI descriptors, manifests, and referrers provide a
+natural registry transport and evidence attachment.
+
+An evaluation protocol is part of the bundle because it defines an assessment
+procedure. A result is an external attestation over semantic, bundle, binding,
+lock, protocol, dataset, and harness digests, plus sampling and concurrency
+settings. Serving and evaluation therefore consume the same resolved model
+identity, while later measurements remain independently publishable.
+
+\subsection{Conformance}
+
+The companion verifier checks all supplied schemas; stable canonical
+identities; traversal-safe paths, byte sizes, and digests; manifest/IR semantic
+closure; behavior variants and realization profiles; graph reachability,
+explicit contract branches, universal termination, and finite bounds; fail-closed hard
+constraints; constituent identity and capability satisfaction; complete lock
+inventory; pinned and observed-opaque evidence; secret non-inclusion; and run
+and evaluation attribution to all four identities.
+
+A complete cross-engine suite must additionally test deterministic compilation,
+source-to-IR semantic preservation, operator capability negotiation, archive
+hardening, license and extension trust, trace conformance, and portability
+across at least two disclosed bindings while fixing semantic and bundle
+digests.
+\endgroup

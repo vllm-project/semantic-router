@@ -1,0 +1,55 @@
+\begin{tikzpicture}[
+  x=1cm,y=1cm,font=\sffamily,>=Latex,
+  flow/.style={-{Latex[length=2.0mm]},draw=MoMGray,line width=0.70pt},
+  group/.style={draw=MoMBorder,fill=MoMBlueLight!10,rounded corners=4pt,
+    line width=0.65pt},
+  card/.style={draw=MoMBorder,fill=white,rounded corners=2.2pt,
+    line width=0.55pt,minimum height=0.52cm,inner xsep=5pt,align=center,
+    font=\sffamily\fontsize{6.8}{7.6}\selectfont,text=MoMText},
+  core/.style={draw=none,fill=MoMDark,text=white,rounded corners=3pt,
+    minimum height=1.15cm,inner xsep=8pt,align=center},
+  active/.style={card,draw=MoMDark,fill=MoMBlue,line width=0.72pt},
+  oracle/.style={card,draw=MoMDark,fill=MoMPurple,line width=0.68pt},
+  title/.style={font=\sffamily\bfseries\fontsize{7.5}{8.3}\selectfont,
+    text=MoMText},
+  muted/.style={font=\sffamily\fontsize{6.2}{7.0}\selectfont,text=MoMMuted}
+]
+
+% One left-to-right evaluation protocol. No curve is shown because this is a
+% measurement design, not an empirical result.
+\draw[group] (0.00,0.20) rectangle (3.45,3.15);
+\node[title] at (1.725,2.88) {Nested catalogs};
+\node[card,minimum width=2.55cm] at (1.725,2.25)
+  {Catalog 1\quad base models};
+\node[card,minimum width=2.55cm] at (1.725,1.58)
+  {Catalog 2\quad + specialist};
+\node[card,text width=2.25cm,minimum height=0.64cm] at (1.725,0.91)
+  {Catalog 3\\+ modality / provider};
+\node[muted] at (1.725,0.43)
+  {nested by inclusion};
+
+\node[core,minimum width=2.70cm] (budget) at (5.30,1.68)
+  {{\bfseries\fontsize{8.0}{8.8}\selectfont Same active budget}\\[-1pt]
+   {\fontsize{6.5}{7.2}\selectfont bounded calls \textbullet\ bounded tokens}\\[-1pt]
+   {\fontsize{6.2}{6.9}\selectfont cost or latency matched}};
+
+\draw[group] (7.20,0.20) rectangle (11.92,3.15);
+\node[title] at (9.56,2.88) {Compared policies};
+\node[card,minimum width=1.62cm] at (8.17,2.23) {strongest};
+\node[card,minimum width=1.62cm] at (9.94,2.23) {selection};
+\node[card,minimum width=1.62cm] at (11.02,1.55) {fixed panel};
+\node[active,minimum width=1.90cm] at (8.48,1.28) {adaptive MoM};
+\node[oracle,minimum width=1.62cm] at (10.45,0.72) {oracle};
+
+\draw[group] (12.68,0.20) rectangle (16.30,3.15);
+\node[title] at (14.49,2.88) {Report};
+\node[card,minimum width=2.72cm] at (14.49,2.18) {oracle headroom};
+\node[card,minimum width=2.72cm] at (14.49,1.50) {controller realization};
+\node[card,minimum width=2.72cm] at (14.49,0.82)
+  {error correlation / activation};
+
+\draw[flow] (3.45,1.68) -- (budget.west);
+\draw[flow] (budget.east) -- (7.20,1.68);
+\draw[flow] (11.92,1.68) -- (12.68,1.68);
+
+\end{tikzpicture}

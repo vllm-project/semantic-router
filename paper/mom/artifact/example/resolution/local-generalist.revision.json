@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "mom.vllm.ai/revision-evidence/v0alpha1",
+  "bindingId": "lab-rocm-generalist",
+  "identityStrength": "repository-revision",
+  "artifactUri": "hf://example-org/generalist",
+  "modelRevision": "0123456789abcdef0123456789abcdef01234567",
+  "runtimeImageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "tokenizerDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "accelerator": {
+    "api": "rocm",
+    "version": "6.4",
+    "vendor": "amd",
+    "architecture": "gfx942"
+  },
+  "claimBoundary": "Illustrative pinned revision evidence; no model weights are distributed with the profile."
+}

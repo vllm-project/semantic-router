@@ -1,0 +1,46 @@
+\begin{tikzpicture}[
+  x=1cm,y=1cm,font=\sffamily,>=Latex,
+  flow/.style={-{Latex[length=1.9mm]},draw=MoMGray,line width=0.68pt},
+  feedback/.style={-{Latex[length=1.8mm]},draw=MoMGray,dashed,line width=0.62pt},
+  panel/.style={draw=MoMBorder,fill=white,rounded corners=3pt,
+    line width=0.62pt,minimum width=3.45cm,minimum height=1.42cm,
+    inner xsep=5pt,inner ysep=4pt,align=center,text=MoMText},
+  logical/.style={panel,draw=MoMDark,fill=MoMBlueLight!32,line width=0.78pt},
+  physical/.style={panel,draw=MoMDark,fill=MoMBlue!72,line width=0.78pt},
+  outcome/.style={draw=MoMBorder,fill=MoMDark,text=white,rounded corners=2.6pt,
+    line width=0pt,minimum width=7.55cm,minimum height=0.82cm,
+    inner xsep=6pt,inner ysep=3pt,align=center},
+  meta/.style={font=\sffamily\fontsize{6.5}{7.2}\selectfont,text=MoMMuted}
+]
+
+\newcommand{\codesigntitle}{\bfseries\fontsize{8.2}{9.0}\selectfont}
+\newcommand{\codesignmeta}{\fontsize{6.5}{7.2}\selectfont\color{MoMMuted}}
+\newcommand{\codesignlightmeta}{\fontsize{6.5}{7.2}\selectfont\color{white}}
+
+\node[panel] (workload) at (2.15,2.56)
+  {{\codesigntitle Workload envelope}\\[-1pt]
+   {\codesignmeta requests \textbullet\ preferences \textbullet\ constraints}};
+
+\node[logical] (logical) at (7.98,2.56)
+  {{\codesigntitle Logical MoM}\\[-1pt]
+   {\codesignmeta signals \textbullet\ policy \textbullet\ typed traces}};
+
+\node[physical] (physical) at (13.81,2.56)
+  {{\codesigntitle Physical realization}\\[-1pt]
+   {\codesignmeta binding \textbullet\ model pool \textbullet\ fleet}};
+
+\draw[flow] (workload) -- node[meta,above] {shapes demand} (logical);
+\draw[flow] (logical) -- node[meta,above] {requests capacity} (physical);
+\draw[flow] (physical.south west) to[bend left=16]
+  node[meta,below] {constrains feasible traces} (logical.south east);
+
+\node[outcome] (outcome) at (7.98,0.68)
+  {{\codesigntitle Realized trace and outcomes}\\[-1pt]
+   {\codesignlightmeta quality \textbullet\ validity \textbullet\ latency
+   \textbullet\ cost \textbullet\ failures}};
+
+\draw[flow] (logical.south) -- (outcome.north);
+\draw[flow] (physical.south) |- (outcome.east);
+\draw[feedback] (outcome.west) -| node[meta,pos=0.33,below] {observe} (workload.south);
+
+\end{tikzpicture}

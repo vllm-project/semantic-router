@@ -1,0 +1,22 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+Mixture-of-Models moves conditional computation from parameters within one
+checkpoint to execution across independently versioned models. We define the
+served object as a preference-conditioned distribution over finite, typed
+traces, with hard admissibility, portable logical identity, and
+environment-specific binding. Selection, cascades, fusion, multi-round
+collaboration, and bounded workflows are model topologies rather than
+application glue. The resulting intelligence is system-level: it arises from
+co-designing the trace distribution with its physical realization, not from any
+constituent or control component in isolation.
+
+\vsr{} shows that an execution-facing subset of this abstraction can be
+declarative and executable without joint access to constituent weights. The
+portable bundle, lock, and conformance suite define its next implementation
+boundary. The central empirical question is whether added model diversity
+increases utility under matched active compute. If it does, model runtimes will
+need to execute and evolve composite models across providers, jurisdictions,
+devices, and fleets as reliably as they execute checkpoints across machines.
+The resulting mission is to make virtual composite models buildable,
+evaluable, portable, and servable with the same rigor as checkpoints.

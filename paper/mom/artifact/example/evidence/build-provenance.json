@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "mom.vllm.ai/build-provenance/v0alpha1",
+  "subject": {
+    "modelId": "vllm-sr/mom-v1-ultra",
+    "semanticDigest": "sha256:7896fd6d7c496c8afaf32907503d67f536fa12271a398020c342107fb3252c70",
+    "bundleDigest": "sha256:b9cde7d73f2591ab41b04a2652330ba540f0a47ac1726d3208f30a27eab61862"
+  },
+  "builder": {
+    "name": "paper-companion-verifier",
+    "version": "v0alpha1"
+  },
+  "claimBoundary": "Structural fixture provenance; it does not attest to a released build or benchmark."
+}

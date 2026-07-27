@@ -1,0 +1,171 @@
+{
+  "irVersion": "mom.vllm.ai/ir/v0alpha1",
+  "model": {
+    "id": "vllm-sr/mom-v1-ultra",
+    "version": "1.0.0",
+    "behaviorVariant": "accuracy-first"
+  },
+  "entrypoints": [
+    {
+      "id": "chat",
+      "interface": "openai.chat",
+      "operation": "chat.completions",
+      "requestMediaType": "application/json",
+      "responseMediaType": "application/json",
+      "streaming": false,
+      "graphEntry": "choose-path",
+      "behaviorVariant": "accuracy-first"
+    }
+  ],
+  "logicalModels": [
+    {
+      "id": "local-generalist",
+      "identity": {
+        "uri": "hf://example-org/generalist",
+        "revision": "0123456789abcdef0123456789abcdef01234567",
+        "strength": "repository-revision"
+      },
+      "requirements": {
+        "protocols": ["openai.chat.completions.v1"],
+        "modalities": ["text"],
+        "requiredFeatures": ["general-generation"],
+        "preferredFeatures": ["structured-output"],
+        "minInputContextTokens": 32768,
+        "minOutputTokens": 4096,
+        "dataPolicies": ["private-ok"]
+      }
+    },
+    {
+      "id": "cloud-reasoner",
+      "identity": {
+        "uri": "provider://example/reasoner",
+        "strength": "observed-opaque"
+      },
+      "requirements": {
+        "protocols": ["openai.chat.completions.v1"],
+        "modalities": ["text"],
+        "requiredFeatures": ["reasoning"],
+        "preferredFeatures": ["structured-output"],
+        "minInputContextTokens": 32768,
+        "minOutputTokens": 4096,
+        "dataPolicies": ["public-only"]
+      }
+    }
+  ],
+  "signals": [
+    {
+      "name": "complexity",
+      "type": "score.float",
+      "range": [0.0, 1.0]
+    },
+    {
+      "name": "data-class",
+      "type": "enum",
+      "values": ["public", "private"]
+    }
+  ],
+  "projections": [
+    {
+      "name": "reasoning-need",
+      "type": "score.float",
+      "inputs": ["complexity"]
+    }
+  ],
+  "behaviorVariants": [
+    {
+      "id": "accuracy-first",
+      "requestPreferenceDomain": {
+        "default": {
+          "qualityBias": 1.0,
+          "costBias": 0.1,
+          "latencyBias": 0.1
+        },
+        "parameters": {
+          "qualityBias": {"type": "number", "minimum": 0.8, "maximum": 1.0},
+          "costBias": {"type": "number", "minimum": 0.0, "maximum": 0.25},
+          "latencyBias": {"type": "number", "minimum": 0.0, "maximum": 0.25}
+        }
+      },
+      "objectives": [
+        {"metric": "quality", "direction": "maximize", "weight": 1.0},
+        {"metric": "cost-usd", "direction": "minimize", "weight": 0.1},
+        {"metric": "latency-ms", "direction": "minimize", "weight": 0.1}
+      ],
+      "hardConstraints": [
+        {
+          "id": "private-data-must-stay-private",
+          "type": "candidate.filter/v1",
+          "when": {
+            "signal": "data-class",
+            "equals": "private"
+          },
+          "require": {
+            "candidateField": "dataPolicies",
+            "contains": "private-ok"
+          },
+          "onUnknown": "reject"
+        }
+      ]
+    }
+  ],
+  "artifacts": {
+    "controller-policy": {
+      "path": "assets/controller-policy.json",
+      "mediaType": "application/vnd.vllm.mom.controller-policy+json",
+      "digest": "sha256:7c542cfd4130151c8f524a2885ec6e636394b055312e9ac8f93995218f2194d0",
+      "size": 500
+    },
+    "system-prompt": {
+      "path": "assets/system-prompt.txt",
+      "mediaType": "text/plain; charset=utf-8",
+      "digest": "sha256:174ee3d69a281fcfe2288e834f7d698d30a9b0b41bd247cd2ea8fdb87b524b8a",
+      "size": 182
+    },
+    "answer-contract": {
+      "path": "contracts/answer.schema.json",
+      "mediaType": "application/schema+json",
+      "digest": "sha256:d4a862642405ed0b1c58503e9f4cbd5608156b117e00df863fab6f9a0e651f86",
+      "size": 500
+    }
+  },
+  "graph": {
+    "entry": "choose-path"
+  },
+  "operators": [
+    {
+      "id": "choose-path",
+      "op": "select",
+      "policyArtifact": "controller-policy",
+      "promptArtifact": "system-prompt",
+      "candidates": ["local-generalist", "cloud-reasoner"],
+      "next": "validate-answer"
+    },
+    {
+      "id": "validate-answer",
+      "op": "contract-check",
+      "contractArtifact": "answer-contract",
+      "onSuccess": "return-answer",
+      "onFailure": "abstain"
+    },
+    {
+      "id": "return-answer",
+      "op": "return",
+      "valueFrom": "validated-answer",
+      "status": "ok"
+    },
+    {
+      "id": "abstain",
+      "op": "return",
+      "reason": "unable_to_answer_safely",
+      "status": "abstain"
+    }
+  ],
+  "bounds": {
+    "maxEvents": 8,
+    "maxFanout": 1,
+    "maxModelCalls": 2,
+    "maxRounds": 1,
+    "maxWallTimeMs": 30000,
+    "maxOutputTokens": 4096
+  }
+}

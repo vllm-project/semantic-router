@@ -1,0 +1,162 @@
+\section{Related Architectures}
+\label{sec:related}
+
+\paragraph{Conditional computation inside a model.}
+Adaptive mixtures and conditional-computation methods established the use of a
+learned gate to allocate examples to specialized computation
+\citep{jacobs_1991_mixture,bengio_2013_conditional}. Sparsely gated
+Mixture-of-Experts (MoE), GShard, and Switch Transformers scale that principle
+while activating only a subset of parameters for each input
+\citep{shazeer_2017_moe,lepikhin_2020_gshard,fedus_2021_switch}. Their experts
+typically share a checkpoint, training loop, tensor interface, and deployment
+boundary. MoM retains conditional computation but moves the boundary outward:
+a constituent can be an independently versioned local model, a private
+specialist, or a closed remote service. MoM does not require joint
+differentiability and often forgoes it; in return, it permits independent
+evolution, heterogeneous placement, and explicit policy and failure boundaries.
+
+\paragraph{Cascades and model routing.}
+Cost-aware cascades and learned routers choose among models under quality and
+resource objectives
+\citep{aggarwal_2023_automix,chen_2023_frugalgpt,ding_2024_hybrid,
+ong_2024_routellm}; RouterBench supplies a routing evaluation framework
+\citep{hu_2024_routerbench}. Model-GLUE instead studies model selection and
+parameter or output aggregation over a model zoo \citep{zhao_2024_modelglue}.
+These methods provide important controllers and protocols. A general MoM also
+admits parallel calls, verification, synthesis, and bounded workflows, and
+places contracts and deployment identity inside the model lifecycle.
+
+Closer whole-model precedents route among domain specialists, train asynchronous
+language-model mixtures, form domain-specific consensus, or orchestrate models
+and agents \citep{simonds_2024_modem,filippova_2025_smalltalk,
+wang_2025_telemom,guo_2025_moma,pecerskis_2026_nsed}. Brick and NSED
+independently use the Mixture-of-Models name; HyDRA and RouteBalance study
+closely related capability routing and serving-aware scheduling
+\citep{massa_2026_brick,garg_2026_hydra,da_2026_routebalance}. Fugu is a
+particularly close contemporary system: trained orchestrator models dynamically devise
+agentic scaffolds over a model team and expose the result through a model-like
+interface \citep{tang_2026_fugu}. Our focus is the open infrastructure boundary
+around such behavior---a finite execution algebra, portable identity,
+environment binding and lock, attributable traces, and one lifecycle across
+training, evaluation, and serving.
+
+\paragraph{Ensembles and inference-time collaboration.}
+Ensembling, response fusion, and Mixture-of-Agents exploit complementary outputs
+from several models \citep{jiang_2023_llmblender,wang_2024_moa,li_2025_selfmoa}.
+The cited methods evaluate a fixed composition topology. In our formulation,
+parallel deliberation is one topology in a larger trace space, and a controller
+may choose another under explicit resource and policy constraints. The trace
+also makes its additional inference compute visible.
+
+\paragraph{Compound AI systems and language-model programming.}
+Compound AI systems frame application intelligence as the interaction of
+models, retrieval, tools, and control logic \citep{kandogan_2024_compound}.
+Language-model programming systems likewise provide constraints, control flow,
+optimization, and efficient execution for multi-call programs
+\citep{beurerkellner_2022_lmql,khattab_2023_dspy,zheng_2023_sglang}.
+MoM narrows that broad systems view into a model-facing abstraction with a
+bounded graph, explicit optimization variables, and portable identity. An agent
+can invoke a MoM or request a bounded workflow, while the infrastructure layer
+retains authority over admissibility and accounting. Programming systems can be
+authoring frontends or execution backends; they do not by themselves define the
+deployment identity proposed here.
+
+\paragraph{Serving graphs, model packages, and runtimes.}
+KServe InferenceGraph offers declarative sequence, switch, ensemble, and splitter
+nodes behind one endpoint \citep{kserve_2026_inferencegraph}. Hugging Face model
+repositories offer revisioned model coordinates; MLflow packages signatures and
+loading flavors; and OCI manifests provide content-addressed distribution
+\citep{huggingface_2026_models,mlflow_2026_model_format,
+oci_2025_image_spec}. ONNX most clearly separates a typed model IR from
+capability-negotiated execution providers
+\citep{onnx_2026_ir,onnxruntime_2026_execution_providers}, while GGUF exemplifies
+a self-describing materialized edge artifact \citep{gguf_2026_spec}. None alone
+defines a composite model whose constituents may also be closed services. The
+proposed lifecycle retains native leaf formats while adding a
+preference-conditioned trace distribution, hard admissibility, separate
+logical and physical identities, and trace-linked evidence. Serving runtimes
+address complementary memory management, model multiplexing, scheduling and
+migration, and multi-tenant adapter serving; examples include vLLM, MuxServe,
+Llumnix, and Punica
+\citep{kwon_2023_vllm,duan_2024_muxserve,sun_2024_llumnix,chen_2023_punica}.
+A MoM artifact can bind to these systems without embedding mutable endpoints or
+credentials.
+
+\paragraph{Evolution of vLLM Semantic Router.}
+Prior project papers developed signal-driven routing, workload--router--pool
+optimization, a routing policy DSL, and agent orchestration
+\citep{liu_2026_semanticrouter,chen_2026_wrp,liu_2026_conflictfree,chen_2026_orchestration}.
+The earliest of these used ``MoM'' for mixture-of-modality deployments; here,
+modality is one dimension of the broader catalog of independently versioned
+models. Those mechanisms remain components of the reference engine. This paper
+changes the unit of analysis from a routing decision to a versioned logical
+model whose learned and authored state spans a pool, a control policy, an execution
+topology, and contracts, together with an explicit deployment binding.
+
+\section{Limitations and Research Agenda}
+\label{sec:limitations}
+
+The architecture covers finite, typed, resource-bounded graphs; it does not
+make unbounded agency safe or guarantee a feasible binding. Mutable closed
+services limit exact replay, the current system results do not establish the
+matched-budget scaling hypothesis, and cross-provider or CPU--GPU--NPU portability
+still requires controlled validation. Security, sovereignty, and grounding are
+only as reliable as their evidence, enforcement, and checkers. Within those
+boundaries, the research agenda rests on four claims with concrete validation
+criteria.
+
+\paragraph{Useful scale is complementarity at fixed active compute.}
+A larger pool matters only when it adds capability, failure, resource, or
+deployment diversity that a learned policy can exploit within the same call,
+token, cost, energy, or latency budget. Matched-budget studies must therefore
+report the strongest constituent,
+oracle headroom, controller realization, repeated runs, error correlations, and
+topology ablations as specified in Section~\ref{sec:required-experiments}.
+Parallel panels and additional rounds count as active compute, not hidden model
+capacity. The scaling curve of interest is attainable utility against catalog
+diversity and active work; merely spending more inference is not conditional
+scaling.
+
+\paragraph{Logical model identity must survive physical change.}
+If a MoM is to move between a robot, an edge site, a sovereign cluster, and a
+managed service, its semantics cannot be identified with any one endpoint or
+runtime. The bundle therefore implies a shared conformance suite:
+canonicalization, signatures, operator capability negotiation, compatibility
+tests, and independent engine implementations. A binder and resolver may
+rebind logical references across CPU, GPU, NPU, and provider environments, but
+every substitution must remain visible in the binding, lock, and evaluation. This is
+especially important for mutable services whose weights, safety layers, prices,
+limits, or aliases can change without exposing a checkpoint hash; a lock
+records the best available evidence, while canaries and explicit revalidation
+measure the remaining drift.
+
+\paragraph{Lifecycle optimization must coordinate logical and physical state.}
+Signals, control policies, pools, prompts, topologies, contracts, and placements
+are optimized from different evidence and evolve on different timescales. Improving one in
+isolation can destabilize another: a more aggressive gate changes fleet load,
+a new binding changes latency and fallback behavior, and a new judge can change
+the apparent reward. MoM lifecycle optimization therefore needs artifact- and
+binding-level promotion, chronological evaluation, invariants, and rollback
+\citep{chen_2026_wrp}. The research target is not convergence of one controller,
+but stable improvement of realized utility and constraint satisfaction under
+deployment drift.
+
+\paragraph{Sovereignty and governance are properties of the trace.}
+Sovereignty is not a binary choice between a local model and a public cloud.
+Real deployments combine devices, jurisdiction-bound data centers, regional
+providers, open weights, and selectively approved global services. Their
+requirements span data and model control, residency, encryption-key control,
+operations, supply chain, audit, and exit paths
+\citep{european_commission_2026_sovereignty}. A MoM compiler should translate
+such a profile into typed admissibility constraints over models, operators,
+data paths, and bindings; cloud fallback must never silently override them.
+The same principle applies to security, grounding, and preference governance.
+Signals can guide execution but do not prove confidentiality or factuality,
+and aggregate utility can hide systematically poor service for a group.
+Least-privilege operators, secret separation, explicit boundary crossings,
+per-group constraints, and worst-case evaluation make governance inspectable
+on the realized trace rather than aspirational at the endpoint.
+
+Progress on these four claims would turn model composition from a collection of
+recipes into a model ecosystem with measurable scaling behavior, portable
+identity, and a durable lifecycle.

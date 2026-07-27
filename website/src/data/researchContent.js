@@ -1,5 +1,21 @@
 export const researchPapers = [
   {
+    id: 'mixture-of-models-position-paper',
+    type: 'paper',
+    spotlight: true,
+    categoryLabel: 'POSITION PAPER',
+    title: 'Mixture-of-Models: Conditional Computation Across Model Boundaries',
+    authors: 'vLLM Semantic Router Project',
+    venue: 'Technical Report',
+    year: '2026',
+    abstract: 'We position Mixture-of-Models as a virtual composite model architecture that moves conditional computation across independently versioned model boundaries and requires one lifecycle for authoring, binding, serving, evaluation, and heterogeneous deployment.',
+    links: [
+      { type: 'paper', url: '/mom-paper', label: 'Paper' },
+    ],
+    featured: true,
+    sortOrder: 9,
+  },
+  {
     id: 'vsr-position-paper',
     type: 'paper',
     spotlight: true,

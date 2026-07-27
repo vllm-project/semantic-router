@@ -1,0 +1,104 @@
+\begin{tikzpicture}[
+  x=1cm,
+  y=1cm,
+  >=Latex,
+  artifact/.style={
+    draw=MoMDark,
+    fill=MoMDark,
+    text=white,
+    rounded corners=2pt,
+    minimum height=0.82cm,
+    text width=15.25cm,
+    align=center,
+    font=\sffamily\bfseries\small
+  },
+  panel/.style={
+    draw=MoMBorder,
+    fill=white,
+    rounded corners=3pt,
+    minimum width=3.55cm,
+    minimum height=3.25cm
+  },
+  paneltitle/.style={
+    draw=none,
+    fill=MoMBlueLight,
+    rounded corners=2pt,
+    minimum width=3.17cm,
+    minimum height=0.48cm,
+    align=center,
+    font=\sffamily\bfseries\scriptsize,
+    text=MoMText
+  },
+  component/.style={
+    draw=MoMBorder,
+    fill=white,
+    rounded corners=1.5pt,
+    minimum width=2.82cm,
+    minimum height=0.42cm,
+    align=center,
+    font=\sffamily\scriptsize,
+    text=MoMText
+  },
+  active/.style={
+    component,
+    draw=MoMDark,
+    fill=MoMBlue
+  },
+  note/.style={
+    align=center,
+    font=\sffamily\fontsize{6.1}{6.8}\selectfont,
+    text=MoMMuted
+  },
+  bind/.style={
+    -{Latex[length=2.2mm]},
+    draw=MoMGray,
+    line width=0.65pt
+  }
+]
+
+\node[artifact] (artifact) at (8.0,5.05)
+  {Versioned MoM artifact\\[-1pt]
+   \mdseries\scriptsize typed graph $\cdot$ behavior variant $\cdot$ request-preference domain
+   $\cdot$ contracts $\cdot$ bounds $\cdot$ content identity};
+
+\foreach \x in {2.0,6.0,10.0,14.0} {
+  \draw[bind] (\x,4.63) -- node[right=1pt,note] {bind + lock} (\x,4.12);
+}
+
+\node[panel] at (2.0,2.47) {};
+\node[paneltitle] at (2.0,3.72) {Robot / on-device};
+\node[component] at (2.0,3.02) {sensor + local context};
+\node[active] at (2.0,2.42) {compact multimodal model};
+\node[component] at (2.0,1.82) {NPU $\cdot$ CPU};
+\node[note] at (2.0,1.22) {offline / low latency / bounded};
+
+\node[panel] at (6.0,2.47) {};
+\node[paneltitle] at (6.0,3.72) {Edge site};
+\node[component] at (6.0,3.02) {site-private data};
+\node[active] at (6.0,2.42) {domain specialist};
+\node[component] at (6.0,1.82) {NPU $\cdot$ GPU};
+\node[note] at (6.0,1.22) {private / resilient / intermittent};
+
+\node[panel] at (10.0,2.47) {};
+\node[paneltitle,fill=MoMPurple!32] at (10.0,3.72) {Sovereign data center};
+\node[component] at (10.0,3.02) {private data + retrieval};
+\node[active,fill=MoMPurple!55] at (10.0,2.42) {open + domain models};
+\node[component] at (10.0,1.82) {GPU cluster};
+\node[note] at (10.0,1.22) {jurisdiction / audit / control};
+
+\node[panel] at (14.0,2.47) {};
+\node[paneltitle] at (14.0,3.72) {Public cloud};
+\node[component] at (14.0,3.02) {managed frontier models};
+\node[active] at (14.0,2.42) {elastic model services};
+\node[component] at (14.0,1.82) {API $\cdot$ cloud GPU};
+\node[note] at (14.0,1.22) {elastic / managed / frontier};
+
+\draw[draw=MoMBorder,line width=0.6pt] (0.22,0.76) -- (15.78,0.76);
+\node[note,anchor=west] at (0.22,0.50)
+  {tighter locality and physical control};
+\node[note,anchor=east] at (15.78,0.50)
+  {greater elasticity and managed capability};
+\node[font=\sffamily\bfseries\scriptsize,text=MoMDark] at (8.0,0.50)
+  {one model interface $\cdot$ explicit admissibility $\cdot$ attributable trace};
+
+\end{tikzpicture}

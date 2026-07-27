@@ -1,0 +1,133 @@
+\section{An Execution Substrate for Mixture-of-Models}
+\label{sec:reference-engine}
+
+\vsr{}\footnote{Open-source implementation:
+\url{https://github.com/vllm-project/semantic-router}.} provides an initial
+execution substrate for MoM. Current releases expose selection and bounded
+multi-model policies through standard model APIs, driven by typed request
+analysis and declared model references, with evaluation and replay hooks around
+the resulting decision. This demonstrates that heterogeneous model identities
+and multi-call topologies can execute behind one model invocation rather than
+inside an agent harness. The portable bundle, environment-owned binding and
+lock, topology-neutral interpreter, and canonical event DAG proposed in
+Section~\ref{sec:artifact} remain lifecycle extensions rather than shipped
+features.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.98\linewidth}{!}{\input{figures/fig4_reference_engine.tex}}
+  \caption{\textbf{The model-invocation boundary of a deployed MoM.} A caller
+  issues one standard model request and receives one response, while the engine
+  admits, composes, and observes bounded calls to bound constituents. Current
+  provider mappings resolve configured names to backend targets. Portable
+  identity and environment-specific resolution complete the proposed lifecycle
+  boundary.}
+  \label{fig:reference-engine}
+\end{figure}
+
+\subsection{Why the control point is below agents}
+
+An agent runtime owns application semantics: goals, task decomposition,
+interaction state, and the intent to invoke a model. A MoM engine owns a
+different contract: whether model-level computation is admissible, how it is
+resolved and scheduled, which finite budget it may consume, and how the result
+is attributed. The model-invocation boundary is the narrowest common seam at
+which this contract can cover direct inference, retrieval-augmented generation,
+agent loops, batch jobs, and embedded systems without depending on one agent
+framework.
+
+At this seam, a complete engine can enforce authorization and residency,
+resolve logical references against deployment evidence, reserve budgets, choose
+legal fallbacks, and account for every attempt. Current \vsr{} implements only
+part of that contract; the full admissibility and attribution boundary belongs
+to the proposed MoM format. When deployed as the exclusive model ingress,
+this placement prevents direct calls from bypassing policy and avoids
+reproducing governance logic in every agent harness.
+
+The boundary remains closed-world: one invocation must use only declared models
+and operators, consume finite resources, and return one terminal response.
+An agent may invoke a MoM or request a bounded workflow, but persistent goals,
+task queues, and application state remain outside the logical model. Agents are
+clients of the model infrastructure, not its portability or accounting
+boundary.
+
+Figure~\ref{fig:deployment-envelopes} shows why this placement matters. One
+logical MoM can retain its interface, graph, preferences, and constraints while
+different bindings realize it on a robot, at an edge site, in a sovereign data
+center, or through managed cloud services.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{\linewidth}{!}{\input{figures/fig5_deployment_envelopes.tex}}
+  \caption{\textbf{One logical MoM, multiple target deployment envelopes.}
+  Environment-owned bindings realize the same versioned specification using
+  on-device models, an edge specialist, a jurisdiction-bound private pool, or
+  managed cloud capabilities. Portability preserves logical and control
+  semantics, not identical outputs; every substitution and measured outcome
+  remains explicit behind one model interface.}
+  \label{fig:deployment-envelopes}
+\end{figure}
+
+\FloatBarrier
+\subsection{From routing engine to composite-model lifecycle}
+
+The implementation already separates routing-owned semantics from provider
+access details. Configured model references participate in decisions and
+bounded multi-call policies, while provider entries map those names to concrete
+backends. This is sufficient to execute declared composites, but not for
+the full MoM admissibility contract. The proposed binder adds an
+environment-owned, fail-closed check that every realized call satisfies
+deployment evidence and hard constraints before each call is issued. The
+change is a lifecycle boundary, not a claim that a larger
+configuration alone constitutes a model.
+
+The distinction is concrete for accelerators. Current platform selection
+governs the router's own execution image---CPU by default, or an AMD/ROCm or
+NVIDIA/CUDA variant---rather than provisioning constituent LLM endpoints. In
+the proposed lifecycle, accelerator choice is resolved per target: one trace
+may combine a ROCm-served local model, a CUDA specialist, a CPU verifier, and a
+managed provider. Wire transport, API adapter, runtime, leaf artifact,
+accelerator, and deployment driver are independent compatibility dimensions.
+Existing endpoints are the first binding driver; managed deployment follows
+behind the same resolver interface.
+
+The user-facing consequence is intentionally simple. Current releases can
+expose configured routed and multi-call policies through ordinary model slugs
+such as
+\texttt{vllm-sr/auto}, \texttt{vllm-sr/fusion},
+\texttt{vllm-sr/remom}, and \texttt{vllm-sr/flow}. The coordinates in
+Table~\ref{tab:profile-identities} illustrate the next step: a registry entry
+would pin the entire logical MoM and its behavior variant, just as a
+model version pins a conventional serving target.
+
+\begin{table}[H]
+\caption{Illustrative versioned MoM identities exposed through the standard
+model field.}
+\label{tab:profile-identities}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{L{0.43\linewidth}L{0.20\linewidth}L{0.27\linewidth}}
+\toprule
+Model coordinate & Behavior variant & Default objective or guard \\
+\midrule
+\texttt{vllm-sr/mom-v1-flash:1.0.0} & Speed-first & Minimize expected latency \\
+\texttt{vllm-sr/mom-v1-light:1.0.0} & Cost-first & Minimize expected cost above a quality floor \\
+\texttt{vllm-sr/mom-v1-ultra:1.0.0} & Accuracy-first & Maximize utility under a declared budget \\
+\texttt{vllm-sr/mom-v1-halu:1.0.0} & Grounding-first & Require evidence checks and fail-closed fallback \\
+\texttt{vllm-sr/mom-v1-secu:1.0.0} & Security-first & Require jailbreak and PII checks \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+To a client, these identities remain values of the standard \texttt{model}
+field and return one response. Internally, their policies may select, escalate,
+deliberate in parallel, or execute a validated bounded workflow. The project
+also supplies the lifecycle hooks needed to study this behavior as one object:
+control policies can be trained without gradients through constituents,
+complete paths can be evaluated through the serving interface, replay associates
+requests with decisions and outcomes, and an offline planner converts routed
+demand into capacity alternatives. These surfaces are currently connected
+operationally rather than by one content identity. The proposed bundle, lock,
+and event schema make that identity the unit of promotion, evaluation, replay,
+and cross-engine conformance.

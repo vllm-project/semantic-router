@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "mom.vllm.ai/controller-policy/v0alpha1",
+  "kind": "DeterministicThresholdPolicy",
+  "inputProjection": "reasoning-need",
+  "rules": [
+    {
+      "when": {"greaterThanOrEqual": 0.65},
+      "prefer": ["cloud-reasoner", "local-generalist"]
+    },
+    {
+      "when": {"lessThan": 0.65},
+      "prefer": ["local-generalist", "cloud-reasoner"]
+    }
+  ],
+  "selectionSemantics": "first-admissible",
+  "note": "Illustrative deterministic policy; it is not a trained checkpoint."
+}

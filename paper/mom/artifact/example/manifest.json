@@ -1,0 +1,90 @@
+{
+  "schemaVersion": "mom.vllm.ai/bundle/v0alpha1",
+  "mediaType": "application/vnd.vllm.mom.bundle.manifest.v1+json",
+  "model": {
+    "id": "vllm-sr/mom-v1-ultra",
+    "version": "1.0.0",
+    "behaviorVariant": "accuracy-first"
+  },
+  "semanticDigest": "sha256:7896fd6d7c496c8afaf32907503d67f536fa12271a398020c342107fb3252c70",
+  "entrypoints": [
+    {
+      "id": "chat",
+      "interface": "openai.chat",
+      "operation": "chat.completions",
+      "requestMediaType": "application/json",
+      "responseMediaType": "application/json",
+      "streaming": false,
+      "graphEntry": "choose-path",
+      "behaviorVariant": "accuracy-first"
+    }
+  ],
+  "specification": {
+    "path": "mom.ir.json",
+    "mediaType": "application/vnd.vllm.mom.ir.v1+json",
+    "digest": "sha256:30ee7c60a0688f8da8faab52b33ae0610559d5ccdea9ad3b74c73c88ba9d089c",
+    "size": 4679
+  },
+  "objects": [
+    {
+      "role": "authoring-source",
+      "path": "source/mom-v1-ultra.mom.yaml",
+      "mediaType": "application/yaml",
+      "digest": "sha256:d8d41029c9075381d9e91b53cdc21f6f9226f5d85de010562cd618537b93ce1a",
+      "size": 3231
+    },
+    {
+      "role": "semantic-asset",
+      "path": "assets/controller-policy.json",
+      "mediaType": "application/vnd.vllm.mom.controller-policy+json",
+      "digest": "sha256:7c542cfd4130151c8f524a2885ec6e636394b055312e9ac8f93995218f2194d0",
+      "size": 500
+    },
+    {
+      "role": "semantic-asset",
+      "path": "assets/system-prompt.txt",
+      "mediaType": "text/plain; charset=utf-8",
+      "digest": "sha256:174ee3d69a281fcfe2288e834f7d698d30a9b0b41bd247cd2ea8fdb87b524b8a",
+      "size": 182
+    },
+    {
+      "role": "contract",
+      "path": "contracts/answer.schema.json",
+      "mediaType": "application/schema+json",
+      "digest": "sha256:d4a862642405ed0b1c58503e9f4cbd5608156b117e00df863fab6f9a0e651f86",
+      "size": 500
+    },
+    {
+      "role": "eval-protocol",
+      "path": "eval/protocols/accuracy.yaml",
+      "mediaType": "application/vnd.vllm.mom.eval-protocol.v1+yaml",
+      "digest": "sha256:2a1084f2e2f41c65de7da31c01b847b5525bcd3748eb529a551951645469d7a5",
+      "size": 471
+    },
+    {
+      "role": "realization-profile",
+      "path": "targets/hybrid-rocm-cloud.yaml",
+      "mediaType": "application/vnd.vllm.mom.realization-profile.v1+yaml",
+      "digest": "sha256:e12cabdbe4d2af154152e14ca0ffffaf3184124d2e6f27a3e123198c667c9021",
+      "size": 744
+    },
+    {
+      "role": "realization-profile",
+      "path": "targets/hybrid-cuda-cloud.yaml",
+      "mediaType": "application/vnd.vllm.mom.realization-profile.v1+yaml",
+      "digest": "sha256:2ce1794ff7fe5d9fd907ebad9303b3171bfd29fd164170770d81d6d33019bd52",
+      "size": 745
+    }
+  ],
+  "compatibility": {
+    "opsets": [
+      {"name": "mom.core", "version": ">=0.1.0,<0.2.0"}
+    ],
+    "requiredCapabilities": [
+      "binding.v0alpha1",
+      "constraint.fail-closed",
+      "lock.inventory.v0alpha1",
+      "trace.identity.v0alpha1"
+    ]
+  }
+}

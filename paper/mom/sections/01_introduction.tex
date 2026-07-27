@@ -1,0 +1,78 @@
+\section{Introduction}
+\label{sec:introduction}
+
+The boundary of a useful model no longer coincides with one checkpoint. A
+deployment may keep latency-sensitive or private work on a robot or edge NPU,
+draw on specialists in a sovereign data center, and reach a frontier cloud
+service only when the task warrants it. Open and closed models, accelerator
+generations, network conditions, prices, and jurisdictions evolve on different
+schedules. To the caller, however, the system should still behave as one model:
+one interface, one set of constraints, and one attributable result.
+
+Heterogeneity is also an opportunity for conditional capacity. When constituent
+errors or resource profiles are complementary, a bounded controller can
+outperform a fixed choice under a declared objective. A cost-first variant
+avoids unnecessary work; an accuracy-first variant spends a declared budget on
+disagreement detection, verification, and synthesis. Security-first and
+grounding-first variants change which traces are admissible, not merely how
+they are ranked. Mixture-of-Experts (MoE) established conditional computation
+within a checkpoint by sparsely activating jointly trained experts
+\citep{shazeer_2017_moe}. We move the boundary outward. A \emph{Mixture-of-Models}
+(MoM) is a versioned composite model whose lifecycle engine realizes requests
+through preference-conditioned, resource-bounded traces over independently
+versioned constituents. Routing or selection is one possible topology, not the
+architecture itself. MoM is therefore a form of system-level intelligence:
+capability is not localized in any constituent, but emerges from a control
+policy that allocates heterogeneous model and system resources under workload,
+preference, and deployment state. This view extends the Workload--Router--Pool
+thesis that workload, control, and physical realization are coupled design
+variables rather than independent layers \citep{chen_2026_wrp}.
+
+Routers, cascades, ensembles, and agent pipelines already exploit parts of this
+space \citep{chen_2023_frugalgpt,ong_2024_routellm,wang_2024_moa,
+kandogan_2024_compound}. In these systems, the composite is typically treated
+and evaluated as a routing, ensemble, or application pipeline rather than
+versioned and evaluated as one model artifact. For sovereign AI deployments,
+this boundary is consequential:
+concrete cloud-sovereignty requirements can make a capable call inadmissible
+because of residency, audit, or provider control
+\citep{european_commission_2026_sovereignty}. We therefore place MoM at the
+model-invocation infrastructure layer, below agent harnesses. Agents retain
+application goals and tool intent; a complete lifecycle engine owns
+admissibility, finite composition, budgets, and attribution. \vsr{} supplies an
+initial execution substrate at this boundary. We use it to ground the
+architecture while proposing the portable identity, binding, and conformance
+layer needed to build, train, evaluate, exchange, and serve composite models as
+durable model objects.
+
+\begin{figure}[H]
+  \centering
+  \resizebox{\linewidth}{!}{\input{figures/fig1_moe_vs_mom.tex}}
+  \caption{\textbf{Conditional computation at two model boundaries.} In MoE,
+  a gate selects experts inside one jointly trained checkpoint. In MoM, an
+  engine selects and composes independently versioned models behind one model
+  interface; a deployment binding maps their logical identities onto a physical
+  fleet. Highlighted nodes show one realized trace.}
+  \label{fig:moe-vs-mom}
+\end{figure}
+
+Crossing the model boundary changes the optimization object. MoM does not
+require a shared parameter space. Instead, it learns or searches over
+admissible traces, then promotes changes to control state, pools, topology,
+contracts, or deployment as explicit revisions. Candidates are evaluated on
+realized utility and constraint outcomes. Uniform utilization is not an
+intrinsic goal because constituents differ in capability, price, capacity, and
+policy eligibility.
+
+This paper makes three contributions:
+\begin{itemize}
+  \item We formalize MoM as a preference-conditioned distribution over finite,
+  typed execution traces, separating hard admissibility from soft objectives
+  and defining capacity diagnostics and failure criteria.
+  \item We specify a composite-model format and lifecycle from logical
+  specification to portable bundle, realization profile, environment binding,
+  resolution lock, and attributable execution.
+  \item We ground the execution and systems claims with released multi-model
+  runs and a routing-aware capacity case study, and state the matched-budget
+  tests required to establish conditional scaling.
+\end{itemize}

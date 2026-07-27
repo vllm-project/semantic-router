@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm.ai/schemas/mom/realization-profile-v0alpha1.json",
+  "title": "Mixture-of-Models realization profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "scope", "controlEngine", "targets"],
+  "properties": {
+    "schemaVersion": {"const": "mom.vllm.ai/realization-profile/v0alpha1"},
+    "id": {"$ref": "#/$defs/name"},
+    "scope": {"const": "realization-template"},
+    "controlEngine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["names", "requiredCapabilities"],
+      "properties": {
+        "names": {"$ref": "#/$defs/stringSet"},
+        "requiredCapabilities": {"$ref": "#/$defs/stringSet"}
+      }
+    },
+    "targets": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"$ref": "#/$defs/target"}
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._-]*$"
+    },
+    "stringSet": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "modelRuntimes",
+        "deploymentDrivers",
+        "artifactFormats",
+        "wireTransports",
+        "apiAdapters"
+      ],
+      "properties": {
+        "modelRuntimes": {"$ref": "#/$defs/stringSet"},
+        "deploymentDrivers": {"$ref": "#/$defs/stringSet"},
+        "artifactFormats": {"$ref": "#/$defs/stringSet"},
+        "wireTransports": {"$ref": "#/$defs/stringSet"},
+        "apiAdapters": {"$ref": "#/$defs/stringSet"},
+        "accelerator": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["apis", "vendors"],
+          "properties": {
+            "apis": {"$ref": "#/$defs/stringSet"},
+            "vendors": {"$ref": "#/$defs/stringSet"},
+            "architectures": {"$ref": "#/$defs/stringSet"}
+          }
+        }
+      }
+    }
+  }
+}

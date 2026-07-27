@@ -1,0 +1,119 @@
+schemaVersion: mom.vllm.ai/binding/v0alpha1
+kind: MixtureOfModelsBinding
+subject:
+  modelId: vllm-sr/mom-v1-ultra
+  modelVersion: 1.0.0
+  behaviorVariant: accuracy-first
+  semanticDigest: sha256:7896fd6d7c496c8afaf32907503d67f536fa12271a398020c342107fb3252c70
+  bundleDigest: sha256:b9cde7d73f2591ab41b04a2652330ba540f0a47ac1726d3208f30a27eab61862
+realizationProfile: hybrid-rocm-cloud
+controlEngine:
+  name: vllm-semantic-router
+  resolver:
+    name: mom-target-resolver
+    version: 0.1.0
+modelBindings:
+  local-generalist:
+    candidates:
+      - id: lab-rocm-generalist
+        kind: deployment
+        weight: 1.0
+        wireTransport:
+          protocol: http
+          endpoint: http://rocm-generalist.example.invalid/v1
+          auth:
+            header: Authorization
+            prefix: "Bearer "
+            secretRef: secret://lab/rocm-generalist
+        apiAdapter:
+          family: openai-compatible
+          interface: openai.chat.completions.v1
+          externalModelId: example-org/generalist
+          operationPath: /chat/completions
+        modelRuntime:
+          name: vllm
+          version: ">=0.17.0,<0.18.0"
+          image: ghcr.io/example/vllm-rocm@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        artifact:
+          uri: hf://example-org/generalist
+          revision: 0123456789abcdef0123456789abcdef01234567
+          format: safetensors
+          identityStrength: repository-revision
+        accelerator:
+          api: rocm
+          vendor: amd
+          architecture: gfx942
+        deployment:
+          driver: existing-endpoint
+          ref: endpoint://lab/rocm-generalist
+        capabilities:
+          protocols: [openai.chat.completions.v1]
+          modalities: [text]
+          features: [general-generation, structured-output]
+          maxInputContextTokens: 32768
+          maxOutputTokens: 8192
+          dataPolicies: [private-ok]
+          evidence: operator-declared-fixture
+        capacity:
+          status: known
+          maxConcurrentRequests: 16
+          maxTokensPerSecond: 800
+          evidence: illustrative-capacity-fixture
+        pricing:
+          status: known
+          currency: USD
+          inputPerMillionTokens: 0.0
+          outputPerMillionTokens: 0.0
+          basis: illustrative-marginal-cost
+  cloud-reasoner:
+    candidates:
+      - id: provider-reasoner
+        kind: managed-api
+        weight: 1.0
+        wireTransport:
+          protocol: https
+          endpoint: https://provider.example.invalid/v1
+          auth:
+            header: Authorization
+            prefix: "Bearer "
+            secretRef: secret://providers/reasoner
+          headers:
+            - name: x-provider-version
+              value: "2026-07"
+        apiAdapter:
+          family: openai-compatible
+          interface: openai.chat.completions.v1
+          externalModelId: reasoner-2026-07
+          apiVersion: "2026-07"
+          operationPath: /chat/completions
+        modelRuntime:
+          name: remote-api
+          version: provider-managed
+        artifact:
+          uri: provider://example/reasoner
+          format: opaque-provider
+          identityStrength: observed-opaque
+        deployment:
+          driver: existing-endpoint
+          ref: endpoint://providers/reasoner
+        capabilities:
+          protocols: [openai.chat.completions.v1]
+          modalities: [text]
+          features: [reasoning, structured-output]
+          maxInputContextTokens: 131072
+          maxOutputTokens: 16384
+          dataPolicies: [public-only]
+          evidence: provider-declared-fixture
+        capacity:
+          status: unknown
+        pricing:
+          status: known
+          currency: USD
+          inputPerMillionTokens: 2.0
+          outputPerMillionTokens: 8.0
+          cachedInputPerMillionTokens: 0.5
+          cacheWritePerMillionTokens: 2.5
+          basis: illustrative-not-a-provider-quote
+policy:
+  failClosed: true
+  allowOpaqueProviderRevisions: true

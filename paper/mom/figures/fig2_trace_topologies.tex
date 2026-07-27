@@ -1,0 +1,66 @@
+\begin{tikzpicture}[
+  x=1cm,y=1cm,font=\sffamily,>=Latex,
+  edge/.style={-{Latex[length=1.6mm]},draw=MoMGray,line width=0.55pt},
+  call/.style={draw=MoMBorder,fill=white,rounded corners=1.5pt,line width=0.5pt,minimum width=0.62cm,minimum height=0.45cm,font=\tiny},
+  selected/.style={draw=MoMDark,fill=MoMBlue,rounded corners=1.5pt,line width=0.7pt,minimum width=0.62cm,minimum height=0.45cm,font=\tiny},
+  control/.style={draw=none,fill=MoMDark,text=white,rounded corners=1.5pt,minimum width=0.62cm,minimum height=0.45cm,font=\tiny},
+  panel/.style={draw=MoMBorder,rounded corners=3pt,line width=0.55pt},
+  title/.style={font=\sffamily\bfseries\fontsize{7.0}{8}\selectfont,text=MoMText},
+  note/.style={font=\sffamily\fontsize{5.8}{6.7}\selectfont,text=MoMMuted}
+]
+\foreach \x/\name in {0/Selection,3.28/Cascade,6.56/Fusion,9.84/Multi-round,13.12/Workflow}{
+  \draw[panel] (\x,0) rectangle ++(3.04,2.55);
+  \node[title] at (\x+1.52,2.27) {\name};
+}
+
+% Selection.
+\node[control] (s0) at (0.52,1.22) {$\pi$};
+\node[selected] (s1) at (1.56,1.62) {$v_1$};
+\node[call] (s2) at (1.56,0.82) {$v_2$};
+\node[call] (s3) at (2.52,1.22) {$y$};
+\draw[edge] (s0) -- (s1);
+\draw[draw=MoMBorder,line width=0.45pt] (s0) -- (s2);
+\draw[edge] (s1) -- (s3);
+\node[note] at (1.52,0.28) {one active call};
+
+% Cascade.
+\node[selected] (c1) at (3.72,1.22) {$v_1$};
+\node[control] (ck) at (4.58,1.22) {?};
+\node[selected] (c2) at (5.45,1.22) {$v_2$};
+\node[call] (cy) at (6.17,1.22) {$y$};
+\draw[edge] (c1) -- (ck);
+\draw[edge] (ck) -- (c2);
+\draw[edge] (c2) -- (cy);
+\node[note] at (4.80,0.28) {conditional escalation};
+
+% Fusion.
+\node[control] (f0) at (6.98,1.22) {fork};
+\node[selected] (f1) at (8.08,1.65) {$v_1$};
+\node[selected] (f2) at (8.08,0.80) {$v_2$};
+\node[control] (fj) at (9.16,1.22) {join};
+\draw[edge] (f0) -- (f1);
+\draw[edge] (f0) -- (f2);
+\draw[edge] (f1) -- (fj);
+\draw[edge] (f2) -- (fj);
+\node[note] at (8.08,0.28) {bounded parallel panel};
+
+% Multi-round.
+\node[selected] (r1) at (10.24,1.22) {$v_1$};
+\node[selected] (r2) at (11.30,1.22) {$v_2$};
+\node[control] (rb) at (12.36,1.22) {$\leq R$};
+\draw[edge] (r1) -- (r2);
+\draw[edge] (r2) -- (rb);
+\draw[edge] (rb.south) to[bend left=35] (r1.south);
+\node[note] at (11.36,0.28) {typed shared state};
+
+% Workflow.
+\node[control] (w0) at (13.50,1.55) {plan};
+\node[selected] (w1) at (14.54,1.82) {$v_1$};
+\node[selected] (w2) at (14.54,1.04) {$v_2$};
+\node[call] (w3) at (15.63,1.43) {tool};
+\draw[edge] (w0) -- (w1);
+\draw[edge] (w0) -- (w2);
+\draw[edge] (w1) -- (w3);
+\draw[edge] (w2) -- (w3);
+\node[note] at (14.64,0.28) {validated finite graph};
+\end{tikzpicture}

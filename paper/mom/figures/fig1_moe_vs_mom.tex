@@ -1,0 +1,78 @@
+\begin{tikzpicture}[
+  x=1cm,y=1cm,font=\sffamily,>=Latex,
+  flow/.style={-{Latex[length=2.0mm]},draw=MoMGray,line width=0.65pt},
+  bind/.style={-{Latex[length=1.7mm]},draw=MoMGray,densely dashed,line width=0.55pt},
+  boundary/.style={draw=MoMGray,fill=MoMBlueLight!9,densely dashed,
+    rounded corners=3pt,line width=0.6pt},
+  card/.style={draw=MoMBorder,fill=white,rounded corners=2pt,line width=0.55pt,
+    minimum height=0.68cm,inner xsep=5pt,align=center,
+    font=\sffamily\fontsize{7.2}{8.1}\selectfont},
+  soft/.style={card,draw=none,fill=MoMBlueLight},
+  core/.style={card,draw=none,fill=MoMDark,text=white,
+    minimum height=0.74cm,font=\sffamily\bfseries\fontsize{7.2}{8.1}\selectfont},
+  active/.style={card,draw=MoMDark,fill=MoMBlue,line width=0.75pt},
+  tiny/.style={font=\sffamily\fontsize{6.7}{7.5}\selectfont,text=MoMMuted},
+  grouptitle/.style={font=\sffamily\bfseries\fontsize{7.1}{8.0}\selectfont,
+    text=MoMText},
+  paneltitle/.style={font=\sffamily\bfseries\fontsize{8.4}{9.4}\selectfont,
+    text=MoMText}
+]
+
+% Symmetric panels compare the two loci of conditional computation.
+\draw[draw=MoMBorder,rounded corners=4pt,line width=0.65pt]
+  (0,0.15) rectangle (8.0,5.60);
+\draw[draw=MoMBorder,rounded corners=4pt,line width=0.65pt]
+  (8.30,0.15) rectangle (16.30,5.60);
+\node[paneltitle,anchor=west] at (0.32,5.28) {(a) Mixture-of-Experts};
+\node[paneltitle,anchor=west] at (8.62,5.28) {(b) Mixture-of-Models};
+
+% MoE: gate and experts share one training and checkpoint boundary.
+\draw[boundary] (1.45,1.28) rectangle (6.25,4.02);
+\node[grouptitle] at (3.85,4.43) {one jointly trained checkpoint};
+
+\node[soft,minimum width=1.12cm] (token) at (0.72,2.72) {token};
+\node[core,minimum width=1.22cm] (gate) at (2.25,2.72) {gate};
+\node[active,minimum width=1.78cm] (e1) at (4.55,3.38) {expert 1};
+\node[card,minimum width=1.78cm] (e2) at (4.55,2.72) {expert 2};
+\node[card,minimum width=1.78cm] (e3) at (4.55,2.06) {expert 3};
+\node[soft,minimum width=1.02cm] (state) at (7.15,2.72) {state};
+
+\draw[flow] (token) -- (gate);
+\draw[flow] (gate.east) -- ++(0.34,0) |- (e1.west);
+\draw[draw=MoMBorder,line width=0.45pt] (gate.east) -- ++(0.34,0) |- (e2.west);
+\draw[draw=MoMBorder,line width=0.45pt] (gate.east) -- ++(0.34,0) |- (e3.west);
+\draw[flow] (e1.east) -- ++(0.32,0) |- (state.west);
+\draw[draw=MoMBorder,line width=0.45pt] (e2.east) -- ++(0.32,0) |- (state.west);
+\draw[draw=MoMBorder,line width=0.45pt] (e3.east) -- ++(0.32,0) |- (state.west);
+\node[tiny] at (3.85,0.72) {token-level sparse activation};
+
+% MoM: engine and constituent models form the complete virtual model.
+\draw[boundary] (9.65,1.28) rectangle (15.02,4.02);
+\node[grouptitle] at (12.34,4.43) {one virtual composite model};
+
+\node[soft,minimum width=1.12cm] (request) at (8.98,3.30) {request};
+\node[card,minimum width=1.22cm] (profile) at (8.98,2.12)
+  {preferences\\[-1pt]constraints};
+\node[core,minimum width=1.34cm] (engine) at (10.55,2.72) {Engine};
+\node[active,minimum width=1.82cm] (m1) at (13.05,3.38) {local model};
+\node[card,minimum width=1.82cm] (m2) at (13.05,2.72) {private model};
+\node[active,minimum width=1.82cm] (m3) at (13.05,2.06) {cloud model};
+\node[soft,minimum width=1.08cm] (answer) at (15.74,2.72) {answer};
+
+\draw[flow] (request) -- (engine);
+\draw[flow] (profile) -- (engine);
+\draw[flow] (engine.east) -- ++(0.34,0) |- (m1.west);
+\draw[draw=MoMBorder,line width=0.45pt] (engine.east) -- ++(0.34,0) |- (m2.west);
+\draw[flow] (engine.east) -- ++(0.34,0) |- (m3.west);
+\draw[flow] (m1.east) -- ++(0.32,0) |- (answer.west);
+\draw[draw=MoMBorder,line width=0.45pt] (m2.east) -- ++(0.32,0) |- (answer.west);
+\draw[flow] (m3.east) -- ++(0.32,0) |- (answer.west);
+
+% Physical resources remain outside the logical composite-model boundary.
+% A single realization card keeps the logical-to-physical edge unambiguous.
+\node[card,minimum width=2.35cm,minimum height=0.58cm] (fleet) at (13.05,0.57)
+  {{\bfseries physical fleet}\\[-1pt]
+   {\fontsize{6.3}{7.0}\selectfont\color{MoMMuted} GPU / CPU / NPU}};
+\draw[bind] (13.05,1.28) -- node[tiny,anchor=west,xshift=2pt] {bind} (fleet.north);
+
+\end{tikzpicture}

@@ -1,0 +1,190 @@
+\section{Optimizing and Executing a Mixture-of-Models}
+\label{sec:optimization}
+
+MoM extends the optimization surface beyond constituent weights to the
+distribution of computation around independently versioned models. A lifecycle
+engine can optimize that distribution while preserving one MoM identity across
+training, evaluation, and serving. Accordingly, MoM optimization is a
+full-stack co-design problem. Changing the trace policy changes the demand
+presented to the serving fleet; changing placement, batching, or pool capacity
+changes the feasible trace distribution. Logical and physical coordinates must
+therefore be optimized jointly while remaining separately versioned for
+portability and attribution \citep{chen_2026_wrp}. Figure~\ref{fig:system-codesign}
+makes this coupling explicit.
+
+\begin{figure}[H]
+  \centering
+  \resizebox{\linewidth}{!}{\input{figures/fig3_system_codesign.tex}}
+  \caption{\textbf{MoM as system-level intelligence.} Workload, preferences,
+  and constraints shape the useful trace distribution; the logical MoM shapes
+  demand on constituent models; and bindings, placement, and fleet state bound
+  feasible execution. Realized quality, validity, latency, cost, capacity, and
+  failures feed back into both logical optimization and physical planning.}
+  \label{fig:system-codesign}
+\end{figure}
+
+\subsection{Training the trace distribution}
+
+Let $\mathcal{M}_{\theta_{\mathrm{log}}}$ denote a parameterized logical
+specification. We write the lifecycle optimization coordinates as
+\begin{equation}
+ \Theta=(\theta_{\mathrm{log}},\beta),\qquad
+ \theta_{\mathrm{log}}=(\phi,\omega,\psi,\rho,\eta),\qquad
+ \mathcal{B}=\mathcal{B}_{\beta},\quad
+ L=\operatorname{Resolve}(\mathcal{M}_{\theta_{\mathrm{log}}},
+                           \mathcal{B}_{\beta},e).
+ \label{eq:trainable-surface}
+\end{equation}
+$\phi$ parameterizes learned signals, $\omega$ their projections, and $\psi$
+the action controller. The discrete coordinate $\rho$ selects catalog members,
+topology, prompts, thresholds, contracts, and resource bounds already represented
+in $\mathcal{M}$; it does not introduce a second semantic authority. Optional
+$\eta$ denotes adapters or constituent weights that the optimizer may update.
+The deployment coordinate $\beta$ controls binding, placement, replication, and
+batching. Promoting $\theta_{\mathrm{log}}$ creates a new logical model version;
+changing $\beta$ creates a new binding, after which resolution produces a new
+lock.
+
+Different coordinates call for different optimizers. Signals and routes can be
+learned from supervision; rankings and escalation from preferences; thresholds
+from logged outcomes or bandit feedback; pools and topologies through discrete
+search; and prompts and budgets through black-box optimization. The resulting
+policy may be distilled into a small controller. Any adapter or
+constituent-model fine-tuning must be reported separately.
+
+This definition does not turn every configuration edit into training. A MoM
+training procedure must identify its experience source, optimization variables,
+held-out objective, constraints, and produced artifact or binding version.
+Constituent weights may remain frozen, be tuned independently, or be co-trained
+when access and interfaces permit. Online adaptation must additionally bound
+exploration and preserve policy invariants.
+
+For a training set, the engine minimizes task loss and soft resource outcomes
+subject to the hard admissibility conditions in Equation~\ref{eq:admissible}:
+\begin{equation}
+\begin{aligned}
+ \min_{\Theta}\quad &\frac{1}{N}\sum_{i=1}^{N}
+ \mathbb{E}_{\tau\sim p_{\mathcal{R}_{\Theta}}
+ (\cdot\mid x_i,h_i,u_i,e_i)}
+ \left[\ell(\bar y_i,y_i^*)+\lambda(u_i)^{\top}c(\tau,e_i)\right]\\
+ \text{s.t.}\quad &
+ \operatorname{supp}p_{\mathcal{R}_{\Theta}}
+ (\cdot\mid x_i,h_i,u_i,e_i)\subseteq\mathcal{T}_{\mathrm{adm}}
+ \quad\forall i.
+\end{aligned}
+ \label{eq:mom-training}
+\end{equation}
+Any allowed statistical violation rate must be stated explicitly and estimated
+on held-out data; a soft penalty does not enforce an exact privacy or residency
+rule.
+
+Training produces a candidate version or asset, which evaluation compares with
+the incumbent under a fixed protocol. Promotion is explicit, and serving never
+silently rewrites the active specification. Bounded online adaptation remains
+trace-visible and reversible.
+
+\subsection{Capacity is heterogeneous and budgeted}
+\label{sec:capacity}
+
+Parameter count is a poor capacity measure: it may be unknown, inactive models
+consume no generation compute, and similarly sized models can share errors.
+We distinguish \emph{catalog capacity} (capability coverage), \emph{decision
+capacity} (complementarity exploitable under a budget), and \emph{serving
+capacity} (throughput, memory, concurrency, and failure envelope).
+
+For pure selection and a per-example utility $q_i(x)$ for model $v_i$---with
+$h$, $u$, and $e$ suppressed for notation---two diagnostic ceilings are
+\begin{equation}
+ Q_{\mathrm{single}}=\max_i\mathbb{E}_{x}[q_i(x)],\qquad
+ Q_{\mathrm{oracle}}=\mathbb{E}_{x}\left[\max_i q_i(x)\right].
+ \label{eq:oracle}
+\end{equation}
+Their gap $\Delta_{\mathrm{comp}}=Q_{\mathrm{oracle}}-Q_{\mathrm{single}}$
+measures selection headroom. Let $Q_{\mathcal{M}}$ be the expected utility of a
+pure-selection MoM on the same population and under the same budget. For a
+positive gap, controller realization is
+\begin{equation}
+ \eta_{\mathrm{ctrl}}=
+ \frac{Q_{\mathcal{M}}-Q_{\mathrm{single}}}
+      {Q_{\mathrm{oracle}}-Q_{\mathrm{single}}}.
+ \label{eq:controller-realization}
+\end{equation}
+Fusion may exceed this oracle because it combines multiple responses; report
+that excess separately as composition gain. A large catalog provides little
+decision capacity when constituent errors are strongly correlated.
+
+Capacity scaling requires a predeclared matched active-work envelope over
+calls, tokens, cost, or latency, with all resource outcomes reported.
+Increasing catalog size under that envelope tests conditional capacity;
+increasing catalog and active work only tests a larger system.
+
+Let $\mathcal{F}(\mathcal{V},\bar b)$ be the feasible MoM policies over catalog
+$\mathcal{V}$ under fixed budget $\bar b$ and fixed constraints, and let
+\begin{equation}
+ U^*(\mathcal{V},\bar b)=
+ \sup_{\pi'\in\mathcal{F}(\mathcal{V},\bar b)}
+ \mathbb{E}[R-\lambda^{\top}c].
+ \label{eq:catalog-monotonicity}
+\end{equation}
+If $\mathcal{V}\subseteq\mathcal{V}'$ and every policy feasible over
+$\mathcal{V}$ remains feasible over $\mathcal{V}'$, then
+$U^*(\mathcal{V}',\bar b)\geq U^*(\mathcal{V},\bar b)$ because a policy over the larger
+catalog can assign zero probability to every added model. This monotonicity
+belongs to oracle capacity, not to a learned controller. Realized utility may
+fall as a catalog grows when controller regret, exploration, or coordination
+overhead increases faster than the new complementarity. Separating the benefit
+of added complementarity from the cost of controller regret is the central
+scaling question.
+
+Let the expected activation of logical model $i$ per request be
+\begin{equation}
+ \Lambda_i=\mathbb{E}_{\tau}\left[
+   \sum_{j\in N}\mathbf{1}[a_j=\textsc{Call}(v_i,\cdot)]\right].
+ \label{eq:model-load}
+\end{equation}
+At request rate $\nu$, $\nu\Lambda_i$ determines its mean call rate. Models differ
+in quality, price, limits, and capacity, so uniform $\Lambda_i$ is not a desirable
+default.  Balancing should target the highest feasible utility under capacity
+and tail-latency constraints, not equal traffic.
+
+\subsection{Collapse and failure modes}
+
+MoM couples statistical and systems failures. \textbf{Pool collapse} is harmful
+when concentrated traffic excludes a better feasible policy; route entropy
+alone cannot distinguish such collapse from correctly rejecting dominated
+models. Diagnose it against $Q_{\mathrm{single}}$, oracle headroom, and realized
+utility. \textbf{False complementarity} arises from leakage,
+judge bias, or small samples and requires held-out, per-item error correlation.
+\textbf{Policy dead zones} leave reachable signal states without valid traces;
+static coverage and fail-closed tests expose them.
+
+\textbf{Hidden escalation} underreports cost by omitting retries and fallbacks.
+\textbf{Handoff loss} discards context through truncation, poor prompt
+translation, or lossy summaries. \textbf{Contract collapse} masks invalid
+outputs through unreported repair. Evaluations should therefore trace every
+attempt and report first-pass validity, repairs, and terminal failures.
+
+Finally, \textbf{provider drift and capability aliasing} break assumed
+substitutability; locks, probes, and continuous evaluation detect and constrain
+their effects. \textbf{Placement skew} overloads a pool or violates locality.
+Model-generated plans introduce \textbf{unbounded control} unless the engine restricts them to declared
+references and enforces $\Gamma$.
+
+\subsection{Compile once, schedule under current state}
+
+Before serving, the proposed engine type-checks the graph, validates contracts
+and bounds, and resolves requirements. Per request it evaluates signals, filters
+inadmissible actions, applies the preference-conditioned policy, and schedules
+the topology.  Parallel latency follows the critical path.  Timeouts, partial
+joins, fallbacks, caching, batching, and retries are declared semantics.
+
+The engine emits, alongside each response, a trace linked to the MoM artifact
+and resolution lock for attribution, replay, accounting, optimization, and
+incident analysis. When policy permits, privacy-preserving redaction should
+retain the minimum structural metadata needed to reconstruct the decision.
+
+\paragraph{Reference-engine scope.}
+vLLM Semantic Router grounds this execution contract without assuming access
+to constituent weights or a jointly differentiable trainer.
+Section~\ref{sec:reference-engine} audits the implemented subset and the
+lifecycle boundary proposed here.

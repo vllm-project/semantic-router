@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm.ai/schemas/mom/bundle-manifest-v0alpha1.json",
+  "title": "Mixture-of-Models bundle manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "mediaType",
+    "model",
+    "semanticDigest",
+    "entrypoints",
+    "specification",
+    "objects",
+    "compatibility"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "mom.vllm.ai/bundle/v0alpha1"},
+    "mediaType": {
+      "const": "application/vnd.vllm.mom.bundle.manifest.v1+json"
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "behaviorVariant"],
+      "properties": {
+        "id": {"$ref": "#/$defs/modelId"},
+        "version": {"$ref": "#/$defs/semver"},
+        "behaviorVariant": {"$ref": "#/$defs/name"}
+      }
+    },
+    "semanticDigest": {"$ref": "#/$defs/digest"},
+    "entrypoints": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/entrypoint"}
+    },
+    "specification": {"$ref": "#/$defs/descriptor"},
+    "objects": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/roleDescriptor"}
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["opsets", "requiredCapabilities"],
+      "properties": {
+        "opsets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "version"],
+            "properties": {
+              "name": {"$ref": "#/$defs/name"},
+              "version": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "requiredCapabilities": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._-]*$"
+    },
+    "modelId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._/-]*[a-z0-9]$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*//)(?!.*\\\\)(?!\\.\\.?$)(?!\\.\\.?/)(?!.*(?:/\\.\\.?)(?:/|$))[A-Za-z0-9][A-Za-z0-9._/-]*$"
+    },
+    "descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "mediaType", "digest", "size"],
+      "properties": {
+        "path": {"$ref": "#/$defs/relativePath"},
+        "mediaType": {"type": "string", "minLength": 1},
+        "digest": {"$ref": "#/$defs/digest"},
+        "size": {"type": "integer", "minimum": 0}
+      }
+    },
+    "roleDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "path", "mediaType", "digest", "size"],
+      "properties": {
+        "role": {
+          "enum": [
+            "authoring-source",
+            "semantic-asset",
+            "contract",
+            "eval-protocol",
+            "realization-profile",
+            "constituent-artifact",
+            "runtime-artifact",
+            "tokenizer",
+            "adapter",
+            "plugin",
+            "documentation"
+          ]
+        },
+        "path": {"$ref": "#/$defs/relativePath"},
+        "mediaType": {"type": "string", "minLength": 1},
+        "digest": {"$ref": "#/$defs/digest"},
+        "size": {"type": "integer", "minimum": 0}
+      }
+    },
+    "entrypoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "interface",
+        "operation",
+        "requestMediaType",
+        "responseMediaType",
+        "streaming",
+        "graphEntry",
+        "behaviorVariant"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/name"},
+        "interface": {"type": "string", "minLength": 1},
+        "operation": {"type": "string", "minLength": 1},
+        "requestMediaType": {"type": "string", "minLength": 1},
+        "responseMediaType": {"type": "string", "minLength": 1},
+        "streaming": {"type": "boolean"},
+        "graphEntry": {"$ref": "#/$defs/name"},
+        "behaviorVariant": {"$ref": "#/$defs/name"}
+      }
+    }
+  }
+}
