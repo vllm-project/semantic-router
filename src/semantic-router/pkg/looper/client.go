@@ -127,6 +127,10 @@ type ModelResponse struct {
 	// call. It is zero when the backend omits usage (e.g. streaming responses
 	// without stream_options.include_usage).
 	Usage TokenUsage
+
+	// LatencyMs is the wall-clock duration in milliseconds of the upstream
+	// round-trip (request + read + parse) for this single call.
+	LatencyMs int64
 }
 
 // LogprobsConfig controls logprobs behavior for model calls
@@ -212,6 +216,7 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	}
 
 	// Execute request
+	start := time.Now()
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -224,10 +229,17 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	}
 
 	// Parse response based on streaming mode
+	var result *ModelResponse
 	if streaming {
-		return c.parseStreamingResponse(respBody, modelName)
+		result, err = c.parseStreamingResponse(respBody, modelName)
+	} else {
+		result, err = c.parseNonStreamingResponse(respBody, modelName)
 	}
-	return c.parseNonStreamingResponse(respBody, modelName)
+	if err != nil {
+		return nil, err
+	}
+	result.LatencyMs = time.Since(start).Milliseconds()
+	return result, nil
 }
 
 // parseNonStreamingResponse parses a non-streaming JSON response
