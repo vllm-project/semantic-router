@@ -5,6 +5,32 @@
 
 A comprehensive benchmark suite for evaluating **semantic router** performance against **direct vLLM** across multiple reasoning datasets. Perfect for researchers and developers working on LLM routing, evaluation, and performance optimization.
 
+## 🧭 Which benchmark do I want?
+
+This directory holds the **end-to-end** suites: they drive a running router, and
+usually an LLM backend, over real datasets to measure routing quality, safety,
+and session behavior.
+
+If instead you want to know whether a code change made the router slower or
+allocate more, you want the **component micro-benchmarks** in
+[`perf/`](../perf/README.md). Those are Go benchmarks over individual components,
+need no running router, and gate every PR.
+
+| Your question | Where to look |
+|---------------|---------------|
+| Did my change regress latency or allocations? | [`perf/`](../perf/README.md) |
+| Does routing preserve answer accuracy? | Reasoning datasets, below |
+| Does session-aware routing hold up under load or faults? | `agentic_routing_live_benchmark.py`, below |
+| How good is hallucination detection? | [`hallucination/`](hallucination/README.md) |
+| Does grounding-aware fusion help? | [`grounded_fusion/`](grounded_fusion/README.md) |
+| What are our publishable benchmark numbers? | [`router_flow/real_eval/`](router_flow/real_eval/README.md) |
+| How much faster is GPU or Flash Attention? | [`cpu-vs-gpu/`](cpu-vs-gpu/README.md) |
+| Did Router Learning routing quality regress? | [`profiles/router_learning/`](profiles/router_learning/README.md) |
+
+For a full map of every suite, including the store and inference-backend
+comparisons that live only as Make targets, see the
+[Benchmarking guide](https://vllm-sr.ai/docs/benchmarking/overview) in the docs.
+
 ## 🎯 Key Features
 
 - **6 Major Reasoning Datasets**: MMLU-Pro, ARC, GPQA, TruthfulQA, CommonsenseQA, HellaSwag
