@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react'
 import Layout from '@theme/Layout'
-import Link from '@docusaurus/Link'
 import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import { FaGithub } from 'react-icons/fa'
+import CommunityLayout from '@site/src/components/community/CommunityLayout'
 import {
   contributorRankData,
   contributorRankGeneratedAt,
@@ -127,23 +127,10 @@ const ContributorsPage: React.FC = () => {
         message: 'vLLM Semantic Router contributor leaderboard by recent and historical repository commit activity.',
       })}
     >
-      <main className={styles.container}>
-        <header className={styles.header}>
-          <div className={styles.titleBlock}>
-            <p className={styles.eyebrow}>
-              <Translate id="community.contributors.eyebrow">Community</Translate>
-            </p>
-            <div className={styles.titleRow}>
-              <h1>
-                <Translate id="community.contributors.h1">Contributor Leaderboard</Translate>
-              </h1>
-              <Link className={styles.contributeLink} to="/community/contributing">
-                <Translate id="community.contributors.startContributing">Start contributing</Translate>
-              </Link>
-            </div>
-          </div>
-        </header>
-
+      <CommunityLayout
+        activeKey="leaderboard"
+        title={<Translate id="community.contributors.h1">Contributor Leaderboard</Translate>}
+      >
         <section
           className={styles.metrics}
           aria-label={translate({ id: 'community.contributors.metrics.aria', message: 'Contributor rank summary' })}
@@ -262,7 +249,7 @@ const ContributorsPage: React.FC = () => {
             ))}
           </div>
         </section>
-      </main>
+      </CommunityLayout>
     </Layout>
   )
 }

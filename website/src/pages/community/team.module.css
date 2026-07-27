@@ -1,82 +1,3 @@
-.page {
-  min-height: 100vh;
-  background: var(--site-bg);
-}
-
-.container {
-  width: min(100% - 2.5rem, var(--site-grid-max));
-  margin: 0 auto;
-  padding: 3rem 0 5rem;
-}
-
-.hero {
-  display: grid;
-  gap: 1.25rem;
-  padding: 1rem 0 3rem;
-  border-bottom: 1px solid var(--site-border-strong);
-}
-
-.eyebrow,
-.sectionHeader > span {
-  color: #087ac5;
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.68rem;
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-}
-
-.heroGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(20rem, 0.6fr);
-  gap: 3rem;
-  align-items: end;
-}
-
-.hero h1 {
-  max-width: 50rem;
-  margin: 0;
-  color: var(--site-text);
-  font-size: clamp(3.8rem, 9vw, 7.5rem);
-  font-weight: 430;
-  line-height: 0.86;
-  letter-spacing: -0.055em;
-}
-
-.heroCopy {
-  display: grid;
-  gap: 1.35rem;
-}
-
-.heroCopy p {
-  margin: 0;
-  color: var(--site-muted-bright);
-  font-size: 0.95rem;
-  line-height: 1.7;
-}
-
-.heroLinks {
-  display: grid;
-  border-top: 1px solid var(--site-border);
-}
-
-.heroLinks a {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.72rem 0;
-  border-bottom: 1px solid var(--site-border);
-  color: var(--site-text);
-  font-size: 0.7rem;
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-}
-
-.heroLinks a:hover {
-  color: #087ac5;
-  text-decoration: none;
-}
-
 .roster {
   display: grid;
 }
@@ -98,7 +19,12 @@
 
 .sectionHeader > span {
   padding-top: 0.45rem;
-  color: var(--site-muted);
+  color: #087ac5;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.68rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
 }
 
 .sectionHeader > div {
@@ -156,15 +82,6 @@
 }
 
 @media (max-width: 1100px) {
-  .heroGrid {
-    grid-template-columns: 1fr;
-    gap: 2rem;
-  }
-
-  .heroCopy {
-    max-width: 34rem;
-  }
-
   .section {
     grid-template-columns: 1fr;
   }
@@ -179,19 +96,6 @@
 }
 
 @media (max-width: 700px) {
-  .container {
-    width: min(100% - 1.4rem, var(--site-grid-max));
-    padding-top: 1.5rem;
-  }
-
-  .hero {
-    padding-bottom: 2rem;
-  }
-
-  .hero h1 {
-    font-size: clamp(3.1rem, 18vw, 5rem);
-  }
-
   .section {
     gap: 1.25rem;
     padding: 2rem 0;
