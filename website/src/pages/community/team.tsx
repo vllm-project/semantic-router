@@ -30,7 +30,6 @@ export default function Team(): ReactNode {
             description="Project-wide owners who set engineering direction, approve releases, resolve technical escalations, and steward repository access."
             members={maintainerMembers}
             variant="featured"
-            columns="two"
           />
 
           <RosterSection
@@ -76,14 +75,12 @@ function RosterSection({
   description,
   members,
   variant = 'default',
-  columns = 'three',
 }: {
   index: string
   title: string
   description: ReactNode
   members: TeamMember[]
   variant?: 'default' | 'featured' | 'muted'
-  columns?: 'two' | 'three'
 }): ReactNode {
   return (
     <section className={styles.section} aria-labelledby={`roster-${index}`}>
@@ -97,9 +94,7 @@ function RosterSection({
           <p>{description}</p>
         </div>
       </header>
-      <div
-        className={columns === 'two' ? styles.gridTwo : styles.gridThree}
-      >
+      <div className={styles.gridTwo}>
         {members.map(member => (
           <CommunityMemberCard
             key={member.name}
