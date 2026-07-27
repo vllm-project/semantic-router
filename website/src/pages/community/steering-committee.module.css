@@ -1,7 +1,7 @@
 .mandate {
   display: grid;
-  gap: 0.85rem;
-  padding: 1.2rem 0;
+  gap: 0.65rem;
+  padding: 0.9rem 0;
   border-top: 1px solid var(--site-border-strong);
   border-bottom: 1px solid var(--site-border-strong);
 }
@@ -26,13 +26,13 @@
 
 .tracks {
   display: grid;
-  margin-top: 2.5rem;
+  margin-top: 1.75rem;
 }
 
 .track {
   display: grid;
   gap: 1.5rem;
-  padding: 3rem 0;
+  padding: 2rem 0;
   border-bottom: 1px solid var(--site-border-strong);
 }
 
@@ -129,7 +129,7 @@
 
 @media (max-width: 700px) {
   .track {
-    padding: 2rem 0;
+    padding: 1.5rem 0;
   }
 
   .members {

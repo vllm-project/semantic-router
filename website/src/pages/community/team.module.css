@@ -6,8 +6,12 @@
   display: grid;
   grid-template-columns: minmax(14rem, 0.26fr) minmax(0, 0.74fr);
   gap: 2rem;
-  padding: 3rem 0;
+  padding: 2rem 0;
   border-bottom: 1px solid var(--site-border);
+}
+
+.section:first-child {
+  padding-top: 0;
 }
 
 .sectionHeader {
@@ -86,7 +90,7 @@
 @media (max-width: 700px) {
   .section {
     gap: 1.25rem;
-    padding: 2rem 0;
+    padding: 1.5rem 0;
   }
 
   .gridTwo {

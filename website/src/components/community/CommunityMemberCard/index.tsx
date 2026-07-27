@@ -43,6 +43,24 @@ export default function CommunityMemberCard({
           >
             {getTeamMemberBadge(member, badgeContext)}
           </span>
+
+          <div className={styles.links}>
+            {member.github && member.github !== '#' && (
+              <MemberLink href={member.github} label="GitHub" icon={<FaGithub />} />
+            )}
+            {member.linkedin && (
+              <MemberLink href={member.linkedin} label="LinkedIn" icon={<FaLinkedin />} />
+            )}
+            {member.externalLinks?.map(link => (
+              <MemberLink
+                key={link.href}
+                href={link.href}
+                label={link.label}
+                icon={<FaExternalLinkAlt />}
+              />
+            ))}
+          </div>
+
           <span className={styles.role}>
             {member.role}
             {member.company && (
@@ -52,23 +70,6 @@ export default function CommunityMemberCard({
               </span>
             )}
           </span>
-        </div>
-
-        <div className={styles.links}>
-          {member.github && member.github !== '#' && (
-            <MemberLink href={member.github} label="GitHub" icon={<FaGithub />} />
-          )}
-          {member.linkedin && (
-            <MemberLink href={member.linkedin} label="LinkedIn" icon={<FaLinkedin />} />
-          )}
-          {member.externalLinks?.map(link => (
-            <MemberLink
-              key={link.href}
-              href={link.href}
-              label={link.label}
-              icon={<FaExternalLinkAlt />}
-            />
-          ))}
         </div>
       </div>
 
