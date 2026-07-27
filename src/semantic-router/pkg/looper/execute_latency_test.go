@@ -93,3 +93,26 @@ func TestExecuteWithLatency_PropagatesError(t *testing.T) {
 		t.Fatal("expected error from unreachable endpoint, got nil")
 	}
 }
+
+// nilResponseLooper is a Looper whose Execute returns (nil, nil), which the
+// interface's contract does not forbid even though no real implementation
+// does this today.
+type nilResponseLooper struct{}
+
+func (nilResponseLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
+	return nil, nil
+}
+
+// ExecuteWithLatency must not panic when Execute returns a nil Response
+// alongside a nil error.
+func TestExecuteWithLatency_NilResponseDoesNotPanic(t *testing.T) {
+	req := &Request{OriginalRequest: readLimitTestRequest()}
+
+	resp, err := ExecuteWithLatency(context.Background(), nilResponseLooper{}, req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp != nil {
+		t.Fatalf("expected nil response, got %+v", resp)
+	}
+}
