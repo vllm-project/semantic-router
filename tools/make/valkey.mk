@@ -297,8 +297,12 @@ benchmark-valkey: rust start-valkey ## Run Valkey cache performance benchmark
 		export VALKEY_HOST=localhost && \
 		export VALKEY_PORT=6380 && \
 		cd src/semantic-router/pkg/cache && \
+		out=../../../../benchmark_results/valkey/results.txt && \
 		CGO_ENABLED=1 go test -v -timeout 30m \
 		-run='^$' -bench=BenchmarkValkeyCache \
-		-benchtime=100x -benchmem . | tee ../../../../benchmark_results/valkey/results.txt
+		-benchtime=100x -benchmem . > "$$out" 2>&1; status=$$?; \
+		cat "$$out"; \
+		[ $$status -eq 0 ] || exit $$status; \
+		grep -q 'ns/op' "$$out" || { echo "ERROR: -bench=BenchmarkValkeyCache matched no benchmark (silent-pass guard tripped)"; exit 1; }
 	@echo ""
 	@echo "Benchmark complete! Results in: benchmark_results/valkey/results.txt"
