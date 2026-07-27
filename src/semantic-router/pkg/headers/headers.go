@@ -397,15 +397,18 @@ const (
 	// VSRLooperPromptTokens indicates the aggregate prompt token count
 	// across all model calls made during looper execution.
 	// Value: "512" (example)
+	//nolint:gosec
 	VSRLooperPromptTokens = "x-vsr-looper-prompt-tokens"
 
 	// VSRLooperCompletionTokens indicates the aggregate completion token
 	// count across all model calls made during looper execution.
 	// Value: "256" (example)
+	//nolint:gosec
 	VSRLooperCompletionTokens = "x-vsr-looper-completion-tokens"
 
 	// VSRLooperTotalTokens indicates the aggregate total token count across
 	// all model calls made during looper execution.
 	// Value: "768" (example)
+	//nolint:gosec
 	VSRLooperTotalTokens = "x-vsr-looper-total-tokens"
 )

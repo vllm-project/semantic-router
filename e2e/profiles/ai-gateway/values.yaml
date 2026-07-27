@@ -70,7 +70,7 @@ config:
               keep_current_model: true
               prefer_prefix_retention: true
       - name: looper_metrics_probe_decision
-        description: Deterministic keyword-gated looper route used by the looper-latency-token-headers E2E to assert x-vsr-looper-latency-ms and x-vsr-looper-*-tokens response headers (issue #2694).
+        description: "Deterministic keyword-gated looper route used by the looper-latency-token-headers E2E to assert x-vsr-looper-latency-ms and x-vsr-looper-*-tokens response headers (issue #2694)."
         priority: 610
         rules:
           operator: OR
