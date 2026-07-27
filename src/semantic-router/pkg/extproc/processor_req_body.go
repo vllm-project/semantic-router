@@ -137,6 +137,11 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 			"decision":   ctx.VSRSelectedDecision.Name,
 			"algorithm":  ctx.VSRSelectedDecision.Algorithm.Type,
 		})
+		// Track VSR decision information the same way handleAutoModelRouting's
+		// trackVSRDecision does for non-looper decisions, and the direct
+		// fusion/remom/workflows dispatchers already do for their algorithm
+		// types; otherwise x-vsr-selected-decision comes back empty.
+		ctx.VSRSelectedDecisionName = ctx.VSRSelectedDecision.Name
 		return r.handleLooperExecution(ctx.TraceContext, openAIRequest, ctx.VSRSelectedDecision, ctx)
 	case selectedModel != "":
 		return r.handleAutoModelRouting(openAIRequest, originalModel, decisionName, reasoningDecision, selectedModel, ctx, response)
