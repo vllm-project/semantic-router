@@ -388,4 +388,24 @@ const (
 	// VSRLooperAlgorithm indicates the algorithm used by the looper.
 	// Value: "confidence", "ratings", "cost-aware"
 	VSRLooperAlgorithm = "x-vsr-looper-algorithm"
+
+	// VSRLooperLatencyMs indicates the wall-clock latency, in milliseconds,
+	// of the full looper execution (all model calls plus algorithm overhead).
+	// Value: "842" (example)
+	VSRLooperLatencyMs = "x-vsr-looper-latency-ms"
+
+	// VSRLooperPromptTokens indicates the aggregate prompt token count
+	// across all model calls made during looper execution.
+	// Value: "512" (example)
+	VSRLooperPromptTokens = "x-vsr-looper-prompt-tokens"
+
+	// VSRLooperCompletionTokens indicates the aggregate completion token
+	// count across all model calls made during looper execution.
+	// Value: "256" (example)
+	VSRLooperCompletionTokens = "x-vsr-looper-completion-tokens"
+
+	// VSRLooperTotalTokens indicates the aggregate total token count across
+	// all model calls made during looper execution.
+	// Value: "768" (example)
+	VSRLooperTotalTokens = "x-vsr-looper-total-tokens"
 )

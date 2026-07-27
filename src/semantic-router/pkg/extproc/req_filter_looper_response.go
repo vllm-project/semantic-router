@@ -54,8 +54,9 @@ func buildLooperResponseHeaders(
 }
 
 // appendLooperTraceHeaders adds the looper execution trace (selected model,
-// models used, iteration count, algorithm). Demoted to the x-vsr-debug surface
-// (#2205); the trace stays recoverable from the replay record.
+// models used, iteration count, algorithm, aggregate latency and token
+// usage). Demoted to the x-vsr-debug surface (#2205); the trace stays
+// recoverable from the replay record.
 func appendLooperTraceHeaders(setHeaders *[]*core.HeaderValueOption, resp *looper.Response) {
 	if resp == nil {
 		return
@@ -65,6 +66,10 @@ func appendLooperTraceHeaders(setHeaders *[]*core.HeaderValueOption, resp *loope
 		newHeaderValueOption(headers.VSRLooperModelsUsed, strings.Join(resp.ModelsUsed, ",")),
 		newHeaderValueOption(headers.VSRLooperIterations, fmt.Sprintf("%d", resp.Iterations)),
 		newHeaderValueOption(headers.VSRLooperAlgorithm, resp.AlgorithmType),
+		newHeaderValueOption(headers.VSRLooperLatencyMs, fmt.Sprintf("%d", resp.LatencyMs)),
+		newHeaderValueOption(headers.VSRLooperPromptTokens, fmt.Sprintf("%d", resp.Usage.PromptTokens)),
+		newHeaderValueOption(headers.VSRLooperCompletionTokens, fmt.Sprintf("%d", resp.Usage.CompletionTokens)),
+		newHeaderValueOption(headers.VSRLooperTotalTokens, fmt.Sprintf("%d", resp.Usage.TotalTokens)),
 	)
 }
 
