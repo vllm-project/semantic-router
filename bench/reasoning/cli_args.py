@@ -105,15 +105,31 @@ def _add_output_args(parser: argparse.ArgumentParser) -> None:
         default="results/reasoning_mode_eval",
         help="Output directory for results",
     )
+    # Paired flags instead of argparse.BooleanOptionalAction, which requires
+    # Python >= 3.9 while this package supports >= 3.8.
     parser.add_argument(
         "--generate-plots",
+        dest="generate_plots",
         action="store_true",
         default=True,
-        help="Generate comparison plots",
+        help="Generate comparison plots (default)",
+    )
+    parser.add_argument(
+        "--no-generate-plots",
+        dest="generate_plots",
+        action="store_false",
+        help="Skip plot generation",
     )
     parser.add_argument(
         "--generate-report",
+        dest="generate_report",
         action="store_true",
         default=True,
-        help="Generate markdown report",
+        help="Generate markdown report (default)",
+    )
+    parser.add_argument(
+        "--no-generate-report",
+        dest="generate_report",
+        action="store_false",
+        help="Skip markdown report generation",
     )
