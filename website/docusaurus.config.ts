@@ -206,88 +206,28 @@ const config: Config = {
           dropdownActiveClassDisabled: true,
         },
         {
-          type: 'dropdown',
-          className: 'nav-primary',
-          position: 'left',
           label: 'Docs',
-          items: [
-            { label: 'Quick Start', to: '/docs/intro' },
-            { label: 'Installation', to: '/docs/installation/' },
-            {
-              label: 'Core Concepts',
-              to: '/docs/overview/semantic-router-overview',
-            },
-            { label: 'Tutorials', to: '/docs/tutorials/algorithm/overview' },
-            { label: 'API Reference', to: '/docs/api/router' },
-            {
-              label: 'Troubleshooting',
-              to: '/docs/troubleshooting/common-errors',
-            },
-          ],
+          to: '/docs/intro',
+          className: 'nav-primary',
+          position: 'left',
         },
         {
-          type: 'dropdown',
-          className: 'nav-primary',
           label: 'Research',
+          to: '/publications',
+          className: 'nav-primary',
           position: 'left',
-          items: [
-            {
-              label: 'Papers & Talks',
-              to: '/publications',
-            },
-            {
-              label: 'White Paper',
-              to: '/white-paper',
-            },
-            {
-              label: 'Vision Paper',
-              to: '/vision-paper',
-            },
-            {
-              label: 'Engineering Blog',
-              to: '/blog',
-            },
-          ],
         },
         {
-          type: 'dropdown',
+          label: 'Blog',
+          to: '/blog',
           className: 'nav-primary',
-          label: 'Community',
           position: 'left',
-          items: [
-            {
-              label: 'Project Team',
-              to: '/community/team',
-            },
-            {
-              label: 'Steering Committee',
-              to: '/community/steering-committee',
-            },
-            {
-              label: 'Roles & Governance',
-              to: '/community/governance',
-            },
-            {
-              label: 'Working Groups',
-              to: '/community/work-groups',
-            },
-            {
-              label: 'Contributing Guide',
-              to: '/community/contributing',
-            },
-            {
-              label: 'Contributor Leaderboard',
-              to: '/community/contributors',
-            },
-            {
-              label: 'GitHub Repository',
-              href: 'https://github.com/vllm-project/semantic-router',
-            },
-            {
-              label: 'Models',
-              href: 'https://huggingface.co/LLM-Semantic-Router',
-            },
-          ],
+        },
+        {
+          label: 'Community',
+          to: '/community/team',
+          className: 'nav-primary',
+          position: 'left',
         },
         {
           label: 'GitHub',
