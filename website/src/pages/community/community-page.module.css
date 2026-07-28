@@ -306,11 +306,6 @@
 }
 
 @media (max-width: 768px) {
-  .container {
-    width: min(100% - 1.4rem, var(--site-content-max));
-    padding-top: 1.5rem;
-  }
-
   .grid,
   .contributeGrid,
   .enforcementGrid {

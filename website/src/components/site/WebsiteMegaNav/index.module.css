@@ -5,13 +5,7 @@
   display: flex;
   align-items: center;
   height: 100%;
-}
-
-.triggers {
-  display: flex;
-  align-items: center;
   gap: 0.15rem;
-  height: 100%;
 }
 
 /* Wrapper div for groups with a dropdown (label + chevron) */
@@ -26,7 +20,6 @@
   border-radius: 0;
   background: transparent;
   color: #d4d4d8;
-  font: inherit;
   font-size: 0.73rem;
   font-weight: 550;
   line-height: 1;

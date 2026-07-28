@@ -160,6 +160,22 @@ const HEADER_INFO: Record<
     label: 'Algorithm',
     type: 'info',
   },
+  'x-vsr-looper-latency-ms': {
+    label: 'Looper Latency (ms)',
+    type: 'info',
+  },
+  'x-vsr-looper-prompt-tokens': {
+    label: 'Looper Prompt Tokens',
+    type: 'info',
+  },
+  'x-vsr-looper-completion-tokens': {
+    label: 'Looper Completion Tokens',
+    type: 'info',
+  },
+  'x-vsr-looper-total-tokens': {
+    label: 'Looper Total Tokens',
+    type: 'info',
+  },
   // Retention directive headers (issue #2009)
   'x-vsr-retention-drop': {
     label: 'Retention: Drop',

@@ -57,13 +57,13 @@
 }
 
 .filterButton {
-  min-height: 2.65rem;
-  padding: 0.65rem 1rem;
+  min-height: 2.35rem;
+  padding: 0.5rem 0.9rem;
   border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
   color: var(--site-muted-bright);
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   cursor: pointer;
@@ -91,12 +91,12 @@
   gap: 1.4rem;
 }
 
-.sectionHeader {
+.group {
   display: grid;
   gap: 0.85rem;
 }
 
-.sectionTitle {
+.groupTitle {
   margin: 0;
   font-size: clamp(1.6rem, 3.5vw, 2.35rem);
   line-height: 1.05;
@@ -123,7 +123,7 @@
   gap: 1.15rem;
 }
 
-.awardCard {
+.list {
   display: grid;
   gap: 1rem;
   min-height: 100%;
@@ -183,24 +183,22 @@
   background-image: none;
 }
 
-.awardFrame {
-  position: relative;
-  z-index: 1;
+.row {
   display: grid;
   grid-template-rows: auto auto 1fr auto auto;
   gap: 1.1rem;
   min-height: 100%;
 }
 
-.awardHeader {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  align-items: center;
+.rowYear {
+  color: var(--site-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.78rem;
 }
 
-.medalContainer {
+.rowType {
   display: inline-flex;
+  width: fit-content;
   align-items: center;
   gap: 0.5rem;
 }
@@ -266,7 +264,7 @@
   box-shadow: none;
 }
 
-.awardTitle {
+.rowTitle {
   margin: 0;
   font-size: 1.35rem;
   font-weight: 650;
@@ -278,62 +276,32 @@
 
 .spotlightCard .awardTitle {
   color: var(--site-text);
+  font-size: 0.94rem;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
-.awardDetails {
-  display: grid;
-  gap: 0.35rem;
-}
-
-.awardAuthors,
-.awardVenue {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-}
-
-.authorLabel,
-.venueLabel {
-  color: var(--site-muted);
-}
-
-.authorNames,
-.venueName,
-.awardDescription {
-  color: var(--site-muted-bright);
-}
-
-.awardDescription {
+.rowMeta {
   margin: 0;
+  overflow: hidden;
   color: var(--site-muted-bright);
   font-size: 0.95rem;
   line-height: 1.7;
 }
 
-.yearAndActions {
+.rowLinks {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  align-items: center;
-  margin-top: auto;
-  padding-top: 0.15rem;
+  gap: 0.4rem;
+  justify-self: end;
 }
 
-.awardYear {
-  min-width: 4rem;
-  color: var(--site-text);
-  font-size: 0.82rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.awardLink,
-.primaryLink,
-.secondaryLink {
+.rowLink {
   display: inline-flex;
   align-items: center;
-  min-height: 2.45rem;
-  padding: 0.6rem 0.95rem;
+  gap: 0.3rem;
+  min-height: 1.9rem;
+  padding: 0.35rem 0.7rem;
   border: 1px solid var(--site-border);
   border-radius: 999px;
   color: var(--site-text);
@@ -414,9 +382,8 @@
     padding: 1.25rem;
   }
 
-  .awardHeader {
-    flex-direction: column;
-    align-items: start;
+  .rowLinks {
+    justify-self: start;
   }
 
   .awardTitle {

@@ -1,22 +1,11 @@
-import type {
-  FocusEvent,
-  KeyboardEvent,
-  MouseEvent,
-  ReactNode,
-} from 'react'
+import type { ReactNode } from 'react'
 import Link from '@docusaurus/Link'
 import { useLocation } from '@docusaurus/router'
 import clsx from 'clsx'
 import React from 'react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  isWebsiteMegaNavGroupActive,
-  WEBSITE_MEGA_NAV_GROUPS,
-} from './navigation'
-import type {
-  WebsiteMegaNavGroup,
-  WebsiteMegaNavKey,
-  WebsiteMegaNavLink,
+  isWebsitePrimaryNavItemActive,
+  WEBSITE_PRIMARY_NAV_ITEMS,
 } from './navigation'
 import styles from './index.module.css'
 
