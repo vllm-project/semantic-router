@@ -24,10 +24,13 @@ import (
 //   - uncompressedText (string): original text before prompt compression
 //   - skipCompressionSignals (map[string]bool): signal types that must use uncompressedText
 //   - convFacts (ConversationFacts): optional conversation facts for conversation signals
+//   - authzCandidates ([]config.Decision): decisions this request can select;
+//     scopes authz enforcement to the request's routing profile instead of the
+//     union of every recipe's decisions
 func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, headers map[string]string, forceEvaluateAll bool, imageURL string, extra ...interface{}) (*SignalResults, error) {
 	opts := parseEvaluateSignalsExtra(extra)
 	results := c.EvaluateAllSignalsWithContext(text, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, forceEvaluateAll, opts.uncompressedText, opts.skipCompressionSignals, opts.convFacts, imageURL)
-	if err := c.appendAuthzFromHeaders(results, headers, forceEvaluateAll); err != nil {
+	if err := c.appendAuthzFromHeaders(results, headers, forceEvaluateAll, opts); err != nil {
 		return nil, err
 	}
 	return results, nil
@@ -38,6 +41,8 @@ type evaluateSignalsExtra struct {
 	uncompressedText       string
 	skipCompressionSignals map[string]bool
 	convFacts              ConversationFacts
+	authzCandidates        []config.Decision
+	authzScoped            bool
 }
 
 func parseEvaluateSignalsExtra(extra []interface{}) evaluateSignalsExtra {
@@ -56,13 +61,24 @@ func parseEvaluateSignalsExtra(extra []interface{}) evaluateSignalsExtra {
 			e.convFacts = cf
 		}
 	}
+	if len(extra) >= 4 {
+		if decisions, ok := extra[3].([]config.Decision); ok {
+			e.authzCandidates = decisions
+			e.authzScoped = true
+		}
+	}
 	return e
 }
 
-func (c *Classifier) appendAuthzFromHeaders(results *SignalResults, headers map[string]string, forceEvaluateAll bool) error {
-	usedSignals := c.getUsedSignals()
-	if forceEvaluateAll {
+func (c *Classifier) appendAuthzFromHeaders(results *SignalResults, headers map[string]string, forceEvaluateAll bool, opts evaluateSignalsExtra) error {
+	var usedSignals map[string]bool
+	switch {
+	case forceEvaluateAll:
 		usedSignals = c.getAllSignalTypes()
+	case opts.authzScoped:
+		usedSignals = c.getUsedSignalsForDecisions(opts.authzCandidates)
+	default:
+		usedSignals = c.getUsedSignals()
 	}
 	if !isSignalTypeUsed(usedSignals, config.SignalTypeAuthz) {
 		logging.Debugf("[Signal Computation] Authz signal not used in any decision, skipping evaluation")

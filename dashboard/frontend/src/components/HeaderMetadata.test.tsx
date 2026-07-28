@@ -48,3 +48,35 @@ describe('chat routing metadata', () => {
     expect(markup).toContain('confidence')
   })
 })
+
+describe('looper latency and token usage headers (#2694)', () => {
+  const looperMetricsHeaders = {
+    ...routingHeaders,
+    'x-vsr-looper-latency-ms': '842',
+    'x-vsr-looper-prompt-tokens': '512',
+    'x-vsr-looper-completion-tokens': '256',
+    'x-vsr-looper-total-tokens': '768',
+  }
+
+  it('renders looper latency and token usage in HeaderDisplay', () => {
+    const markup = renderToStaticMarkup(
+      createElement(HeaderDisplay, { headers: looperMetricsHeaders }),
+    )
+
+    expect(markup).toContain('842')
+    expect(markup).toContain('512')
+    expect(markup).toContain('256')
+    expect(markup).toContain('768')
+  })
+
+  it('renders looper latency and token usage in HeaderReveal', () => {
+    const markup = renderToStaticMarkup(
+      createElement(HeaderReveal, { headers: looperMetricsHeaders }),
+    )
+
+    expect(markup).toContain('842')
+    expect(markup).toContain('512')
+    expect(markup).toContain('256')
+    expect(markup).toContain('768')
+  })
+})
