@@ -129,7 +129,7 @@ func UnmarshalPluginConfig(config *StructuredPayload, target interface{}) error 
 	if config == nil {
 		return fmt.Errorf("plugin configuration is nil")
 	}
-	return config.DecodeInto(target)
+	return config.DecodeIntoStrict(target)
 }
 
 // GetSemanticCacheConfig returns the semantic-cache plugin configuration.

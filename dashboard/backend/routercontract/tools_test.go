@@ -8,7 +8,7 @@ import (
 
 func TestReadToolSelectionReturnsToolsDBPath(t *testing.T) {
 	configPath := writeRouterConfig(t, `
-version: "0.3"
+version: "v0.3"
 global:
   integrations:
     tools:

@@ -303,14 +303,10 @@ global:
     observability:
       tracing:
         enabled: true
-        sampling_ratio: 0.1
-        otlp_endpoint: ''
       metrics:
         enabled: true
-        port: 9190
     api:
       batch_classification:
-        enabled: true
         max_batch_size: 32
         max_concurrency: 4
   stores:

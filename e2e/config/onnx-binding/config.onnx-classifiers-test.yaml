@@ -131,7 +131,6 @@ global:
     modules:
       classifier:
         domain:
-          enabled: true
           use_mmbert_32k: true
           model_id: models/mmbert32k-intent-classifier-merged-onnx
           category_mapping_path: models/mmbert32k-intent-classifier-merged-onnx/category_mapping.json
@@ -139,7 +138,6 @@ global:
           threshold: 0.5
           model_ref: domain_classifier
         pii:
-          enabled: true
           use_mmbert_32k: true
           model_id: models/mmbert32k-pii-detector-merged-onnx
           pii_mapping_path: models/mmbert32k-pii-detector-merged-onnx/pii_mapping.json
@@ -202,6 +200,4 @@ global:
     tools:
       enabled: true
       tools_db_path: deploy/examples/runtime/tools/tools_db.json
-      model_type: mmbert
-      target_dim: 0
       similarity_threshold: 0.7

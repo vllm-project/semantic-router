@@ -6,12 +6,14 @@ from typing import Dict, Any
 from pydantic import ValidationError
 
 from cli.config_contract import (
+    validate_canonical_version,
     LEGACY_PROVIDER_DEFAULT_KEYS,
     LEGACY_PROVIDER_MODEL_SURFACE_KEYS,
     LEGACY_SIGNAL_KEY_TO_CANONICAL,
     iter_named_signal_entries,
 )
 from cli.models import RouterLearningConfig, UserConfig
+from cli.config_schema import reject_unknown_canonical_fields
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -464,6 +466,12 @@ def parse_user_config(config_path: str) -> UserConfig:
 
     if not data:
         raise ConfigParseError("Configuration file is empty")
+
+    try:
+        validate_canonical_version(data)
+        reject_unknown_canonical_fields(data)
+    except ValueError as exc:
+        raise ConfigParseError(str(exc)) from exc
 
     _reject_invalid_config_surfaces(data, config_path)
 

@@ -335,7 +335,7 @@ def test_parse_user_config_rejects_unknown_global_learning_fields(
     with pytest.raises(ConfigParseError) as exc:
         parse_user_config(str(config_path))
 
-    assert "Unsupported Router Learning config fields" in str(exc.value)
+    assert "unsupported config fields" in str(exc.value)
     assert expected_path in str(exc.value)
 
 
@@ -413,7 +413,7 @@ def test_parse_user_config_rejects_unknown_pricing_fields(tmp_path: Path) -> Non
         parse_user_config(str(config_path))
 
     assert "cached_input" in str(exc.value)
-    assert "Extra inputs are not permitted" in str(exc.value)
+    assert "unsupported config fields" in str(exc.value)
 
 
 def test_parse_user_config_rejects_removed_session_aware_algorithm(
@@ -431,8 +431,8 @@ def test_parse_user_config_rejects_removed_session_aware_algorithm(
     with pytest.raises(ConfigParseError) as exc:
         parse_user_config(str(config_path))
 
-    assert "Removed Router Learning config fields" in str(exc.value)
-    assert "global.router.learning.protection" in str(exc.value)
+    assert "unsupported config fields" in str(exc.value)
+    assert "routing.decisions[0].algorithm.session_aware" in str(exc.value)
 
 
 @pytest.mark.parametrize(

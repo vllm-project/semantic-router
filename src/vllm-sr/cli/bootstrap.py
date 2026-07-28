@@ -9,6 +9,7 @@ from typing import Any
 
 import yaml
 
+from cli.config_contract import CANONICAL_VERSION
 from cli.consts import DEFAULT_LISTENER_PORT
 
 SETUP_MODE_ENV = "VLLM_SR_SETUP_MODE"
@@ -43,7 +44,7 @@ def build_bootstrap_config(port: int = DEFAULT_SETUP_LISTENER_PORT) -> dict[str,
     """Build the minimal config needed for dashboard-first setup."""
 
     return {
-        "version": "v0.3",
+        "version": CANONICAL_VERSION,
         "listeners": [
             {
                 "name": f"http-{port}",

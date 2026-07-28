@@ -170,7 +170,7 @@ func TestMergeDeployPayloadIntoBaseWithNoGlobal(t *testing.T) {
 	t.Parallel()
 
 	baseYAML := `
-version: "0.3"
+version: "v0.3"
 routing:
   modelCards:
     - name: gpt-4
@@ -252,7 +252,7 @@ func TestMergeDeployPayloadIdempotentDoubleApply(t *testing.T) {
 	t.Parallel()
 
 	baseYAML := `
-version: "0.3"
+version: "v0.3"
 routing:
   modelCards:
     - name: gpt-4
@@ -339,7 +339,7 @@ func TestRateLimitRoundTripUserBasedMatch(t *testing.T) {
 	}
 
 	baseYAML := `
-version: "0.3"
+version: "v0.3"
 routing:
   modelCards:
     - name: gpt-4
@@ -399,7 +399,7 @@ func TestRateLimitRoundTripManyTiersPreservesOrder(t *testing.T) {
 	}
 
 	baseYAML := `
-version: "0.3"
+version: "v0.3"
 routing:
   modelCards:
     - name: gpt-4
@@ -438,7 +438,7 @@ func TestMergeFragmentGlobalNilFragmentIsNoOp(t *testing.T) {
 	t.Parallel()
 
 	base := routerconfig.CanonicalConfig{
-		Version: "0.3",
+		Version: "v0.3",
 		Global: &routerconfig.CanonicalGlobal{
 			Services: routerconfig.CanonicalServiceGlobal{
 				RateLimit: routerconfig.RateLimitConfig{
@@ -510,7 +510,7 @@ func TestMergeFragmentGlobalNilRateLimitIsNoOp(t *testing.T) {
 func TestMergeFragmentGlobalCreatesGlobalWhenBaseIsNil(t *testing.T) {
 	t.Parallel()
 
-	base := routerconfig.CanonicalConfig{Version: "0.3"}
+	base := routerconfig.CanonicalConfig{Version: "v0.3"}
 
 	rl := &routerconfig.RateLimitConfig{
 		Providers: []routerconfig.RateLimitProviderConfig{

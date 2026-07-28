@@ -8,6 +8,8 @@
  * routing-owned data for editing and legacy read-only fallback handling.
  */
 
+export const CANONICAL_CONFIG_VERSION = 'v0.3' as const
+
 // =============================================================================
 // PROVIDERS - Model and endpoint configuration
 // =============================================================================

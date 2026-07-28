@@ -103,7 +103,7 @@ func TestResolveToolsDBPathUsesRouterContractPath(t *testing.T) {
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(`
-version: "0.3"
+version: "v0.3"
 global:
   integrations:
     tools:

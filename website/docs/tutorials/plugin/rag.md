@@ -26,6 +26,11 @@ Some routes need external document retrieval before answering, while most do not
 
 Use this fragment under `routing.decisions[].plugins`:
 
+The `rag` discriminator selects and strictly validates the matching
+`backend_config` schema. Unknown plugin or backend fields are rejected. Only
+documented backend-owned leaves remain schemaless: MCP `tool_arguments` and
+OpenAI `filter`.
+
 **Milvus backend:**
 
 ```yaml

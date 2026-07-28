@@ -298,12 +298,18 @@ func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
 	if len(baseData) == 0 {
 		return fragmentBytes, nil
 	}
+	if _, parseErr := routerconfig.ParseYAMLBytes(baseData); parseErr != nil {
+		return nil, fmt.Errorf("failed to validate deploy base config: %w", parseErr)
+	}
 
 	baseConfig, err := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](baseData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse deploy base config: %w", err)
 	}
 
+	if validationErr := rejectUnknownYAMLFields[routingFragmentDocument](fragmentBytes, ""); validationErr != nil {
+		return nil, fmt.Errorf("failed to validate compiled routing fragment: %w", validationErr)
+	}
 	fragmentConfig, err := decodeYAMLTaggedBytes[routingFragmentDocument](fragmentBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse compiled routing fragment: %w", err)

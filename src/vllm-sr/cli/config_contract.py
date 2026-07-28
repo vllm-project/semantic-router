@@ -15,6 +15,8 @@ CANONICAL_TOP_LEVEL_KEYS = frozenset(
         "providers",
         "routing",
         "global",
+        "entrypoints",
+        "recipes",
         "setup",
     }
 )
@@ -106,6 +108,29 @@ LEGACY_ROUTING_KEYS = frozenset(
 _SIGNAL_FAMILY_BY_CONDITION_TYPE = {
     spec.condition_type: spec for spec in SIGNAL_FAMILY_SPECS
 }
+
+
+def validate_canonical_version(data: Any) -> None:
+    """Reject configs whose version is absent, malformed, or unsupported."""
+    if not isinstance(data, dict):
+        raise ValueError("config must be an object")
+    if "version" not in data:
+        raise ValueError(f"version: required; supported versions: {CANONICAL_VERSION}")
+    version = data["version"]
+    if not isinstance(version, str):
+        raise ValueError(
+            f"version: must be a string; supported versions: {CANONICAL_VERSION}"
+        )
+    if not version.strip():
+        raise ValueError(
+            f"version: must not be empty; supported versions: {CANONICAL_VERSION}"
+        )
+    if version.strip() != CANONICAL_VERSION:
+        raise ValueError(
+            f'version: unsupported config version "{version.strip()}"; '
+            f"supported versions: {CANONICAL_VERSION}; older configs must be "
+            "migrated explicitly with `vllm-sr config migrate`"
+        )
 
 
 def iter_named_signal_entries(signals: Any) -> Iterable[tuple[str, str]]:

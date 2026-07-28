@@ -10,6 +10,8 @@
 
 Inside canonical `config.yaml`:
 
+- `version` is required and must equal the supported steady-state version, currently `v0.3`; older layouts must pass through `vllm-sr config migrate`
+- canonical objects are closed: unknown fields fail with their full dotted/indexed path instead of being ignored; only documented extension leaves remain schemaless, and their owning plugin/backend validates the surrounding payload
 - `providers.defaults` holds provider-wide defaults such as `default_model` and reasoning families
 - `providers.models[]` holds concrete backend access details directly
 - `providers.models[].pricing` supports separate prompt, cached-input, cache-write, and completion rates; omitted `cache_write_per_1m` falls back to `prompt_per_1m`

@@ -2,7 +2,14 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel as PydanticBaseModel
+from pydantic import ConfigDict, Field
+
+
+class BaseModel(PydanticBaseModel):
+    """Strict base for typed algorithm configuration."""
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class ModelRef(BaseModel):
@@ -48,6 +55,11 @@ class ConfidenceAlgorithmConfig(BaseModel):
 
     # Behavior on model call failure: "skip" or "fail"
     on_error: str | None = "skip"
+    escalation_order: str | None = None
+    cost_quality_tradeoff: float | None = None
+    token_filter: str | None = None
+    verifier_server_url: str | None = None
+    verifier_timeout_seconds: int | None = Field(default=None, ge=0)
 
 
 class RatingsAlgorithmConfig(BaseModel):
@@ -140,6 +152,14 @@ class FusionGroundingConfig(BaseModel):
     on_error: Literal["skip", "fail"] | None = "skip"
 
 
+class FusionModelOverride(BaseModel):
+    """Per-analysis-model sampling overrides."""
+
+    model: str | None = None
+    temperature: float | None = Field(default=None, ge=0)
+    max_completion_tokens: int | None = Field(default=None, ge=1)
+
+
 class FusionAlgorithmConfig(BaseModel):
     """Configuration for Fusion multi-model deliberation.
 
@@ -151,6 +171,7 @@ class FusionAlgorithmConfig(BaseModel):
 
     model: str | None = None
     analysis_models: list[str] | None = None
+    analysis_overrides: list[FusionModelOverride] | None = None
     max_concurrent: int | None = Field(default=None, ge=1)
     max_completion_tokens: int | None = Field(default=None, ge=1)
     round_timeout_seconds: int | None = Field(default=None, ge=1)

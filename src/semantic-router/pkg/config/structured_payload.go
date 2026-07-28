@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"gopkg.in/yaml.v2"
 )
@@ -51,6 +52,40 @@ func (p *StructuredPayload) DecodeInto(target interface{}) error {
 		return fmt.Errorf("decode structured payload: %w", err)
 	}
 	return nil
+}
+
+// DecodeIntoStrict decodes a discriminator-owned payload and rejects fields
+// outside the owner's typed contract.
+func (p *StructuredPayload) DecodeIntoStrict(target interface{}) error {
+	if p == nil || p.IsEmpty() {
+		return fmt.Errorf("structured payload is empty")
+	}
+	if target == nil {
+		return fmt.Errorf("structured payload target is nil")
+	}
+
+	if err := yaml.UnmarshalStrict(p.Raw, target); err != nil {
+		return fmt.Errorf("decode structured payload: %w", err)
+	}
+	return nil
+}
+
+func decodeStructuredPayloadStrict[T any](payload *StructuredPayload, path string) (*T, error) {
+	if payload == nil || payload.IsEmpty() {
+		return nil, fmt.Errorf("%s: structured payload is empty", path)
+	}
+	raw, err := payload.AsStringMap()
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	target := new(T)
+	if err := rejectUnknownJSONFields(raw, reflect.TypeOf(*target), path); err != nil {
+		return nil, err
+	}
+	if err := payload.DecodeIntoStrict(target); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return target, nil
 }
 
 func (p *StructuredPayload) UnmarshalYAML(unmarshal func(interface{}) error) error {

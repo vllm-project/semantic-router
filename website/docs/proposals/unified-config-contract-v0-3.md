@@ -141,7 +141,15 @@ Remote onboarding import can fetch and apply a full canonical YAML file. That ke
 
 DSL import still accepts a full router config YAML, but it decompiles only the `routing` section into DSL. Static deployment and global runtime settings stay in YAML.
 
-The router parser itself now accepts only canonical v0.3 YAML for steady-state runtime config. Legacy mixed layouts must go through explicit migration first.
+The router parser itself now accepts only canonical v0.3 YAML for steady-state runtime config. It checks the required version before interpretation and rejects missing, malformed, older, and future versions. Legacy mixed layouts must go through explicit migration first.
+
+Canonical objects are closed at every maintained boundary. Unknown fields fail
+with stable dotted/indexed paths instead of being dropped during typed decoding.
+Schemaless objects exist only at named extension leaves, such as MCP
+`tool_arguments` and OpenAI retrieval `filter`; the plugin discriminator owns
+validation of the enclosing payload. A shared cross-language corpus keeps
+router, CLI, dashboard, DSL, dynamic CRD, and operator acceptance and normalized
+version output aligned.
 
 The remaining in-process CRD reconciliation path now also re-enters the same canonical parser through `global.router.config_source: kubernetes`, instead of maintaining a separate steady-state runtime layout.
 

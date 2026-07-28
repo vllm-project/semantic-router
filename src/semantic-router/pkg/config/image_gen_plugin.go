@@ -367,8 +367,8 @@ func decodeImageGenBackendConfig[T any](backend string, payload *StructuredPaylo
 	if payload == nil {
 		return nil, fmt.Errorf("backend_config is required for %s", expectedBackend)
 	}
-	result := new(T)
-	if err := payload.DecodeInto(result); err != nil {
+	result, err := decodeStructuredPayloadStrict[T](payload, "backend_config")
+	if err != nil {
 		return nil, fmt.Errorf("decode image_gen backend %s: %w", expectedBackend, err)
 	}
 	return result, nil
@@ -403,21 +403,33 @@ func (c *ModalityDetectionConfig) Validate() error {
 	}
 
 	method := c.GetMethod()
+	if err := validateModalityDetectionMethod(method); err != nil {
+		return err
+	}
+	if err := c.validateMethodConfiguration(method); err != nil {
+		return err
+	}
+	if err := c.validateConfidenceThreshold(method); err != nil {
+		return err
+	}
+	return c.validateLowerThresholdRatio(method)
+}
+
+func validateModalityDetectionMethod(method string) error {
 	if method == "" {
 		return fmt.Errorf("modality_detection.method is required (one of %q, %q, or %q)",
 			ModalityDetectionClassifier, ModalityDetectionKeyword, ModalityDetectionHybrid)
 	}
-
-	// Validate method value
 	switch method {
 	case ModalityDetectionClassifier, ModalityDetectionKeyword, ModalityDetectionHybrid:
-		// valid
+		return nil
 	default:
 		return fmt.Errorf("modality_detection.method must be one of %q, %q, or %q, got %q",
 			ModalityDetectionClassifier, ModalityDetectionKeyword, ModalityDetectionHybrid, method)
 	}
+}
 
-	// Method-specific validation
+func (c *ModalityDetectionConfig) validateMethodConfiguration(method string) error {
 	switch method {
 	case ModalityDetectionClassifier:
 		if c.Classifier == nil || c.Classifier.ModelPath == "" {
@@ -436,30 +448,26 @@ func (c *ModalityDetectionConfig) Validate() error {
 			return fmt.Errorf("modality_detection: method %q requires at least one of classifier.model_path or keywords to be configured", method)
 		}
 	}
+	return nil
+}
 
-	// Validate confidence threshold
-	if c.ConfidenceThreshold != 0 {
-		if c.ConfidenceThreshold < 0 || c.ConfidenceThreshold > 1 {
-			return fmt.Errorf("modality_detection.confidence_threshold must be between 0 and 1, got %.4f", c.ConfidenceThreshold)
-		}
+func (c *ModalityDetectionConfig) validateConfidenceThreshold(method string) error {
+	if c.ConfidenceThreshold != 0 && (c.ConfidenceThreshold < 0 || c.ConfidenceThreshold > 1) {
+		return fmt.Errorf("modality_detection.confidence_threshold must be between 0 and 1, got %.4f", c.ConfidenceThreshold)
 	}
-
-	// confidence_threshold is required when the classifier is involved
 	if (method == ModalityDetectionClassifier || method == ModalityDetectionHybrid) && c.ConfidenceThreshold == 0 {
 		return fmt.Errorf("modality_detection.confidence_threshold is required when method is %q (e.g. 0.6)", method)
 	}
+	return nil
+}
 
-	// lower_threshold_ratio validation
-	if c.LowerThresholdRatio != 0 {
-		if c.LowerThresholdRatio < 0 || c.LowerThresholdRatio > 1 {
-			return fmt.Errorf("modality_detection.lower_threshold_ratio must be between 0 and 1, got %.4f", c.LowerThresholdRatio)
-		}
+func (c *ModalityDetectionConfig) validateLowerThresholdRatio(method string) error {
+	if c.LowerThresholdRatio != 0 && (c.LowerThresholdRatio < 0 || c.LowerThresholdRatio > 1) {
+		return fmt.Errorf("modality_detection.lower_threshold_ratio must be between 0 and 1, got %.4f", c.LowerThresholdRatio)
 	}
-	// lower_threshold_ratio is required for hybrid (controls classifier-vs-keyword disagreement)
 	if method == ModalityDetectionHybrid && c.LowerThresholdRatio == 0 {
 		return fmt.Errorf("modality_detection.lower_threshold_ratio is required when method is %q (e.g. 0.7)", method)
 	}
-
 	return nil
 }
 

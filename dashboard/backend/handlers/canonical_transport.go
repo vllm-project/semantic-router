@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -28,7 +29,10 @@ type routingFragmentDocument struct {
 }
 
 type setupModeConfig struct {
-	Mode bool `yaml:"mode,omitempty"`
+	Mode      bool   `yaml:"mode,omitempty"`
+	State     string `yaml:"state,omitempty"`
+	CreatedBy string `yaml:"created_by,omitempty"`
+	CreatedAt string `yaml:"created_at,omitempty"`
 }
 
 type setupConfigFile struct {
@@ -54,6 +58,15 @@ func decodeYAMLTaggedBytes[T any](data []byte) (T, error) {
 		return value, err
 	}
 	return value, nil
+}
+
+func rejectUnknownYAMLFields[T any](data []byte, path string) error {
+	var raw interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	var target T
+	return routerconfig.RejectUnknownConfigValue(raw, reflect.TypeOf(target), path)
 }
 
 func marshalYAMLTaggedJSON(value any) ([]byte, error) {
@@ -91,6 +104,9 @@ func readCanonicalConfigFile(configPath string) (*routerconfig.CanonicalConfig, 
 	if err != nil {
 		return nil, err
 	}
+	if _, parseErr := routerconfig.ParseYAMLBytes(data); parseErr != nil {
+		return nil, fmt.Errorf("invalid canonical config: %w", parseErr)
+	}
 	cfg, err := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](data)
 	if err != nil {
 		return nil, err
@@ -103,11 +119,28 @@ func readSetupConfigFile(configPath string) (*setupConfigFile, error) {
 	if err != nil {
 		return nil, err
 	}
+	if validationErr := validateSetupConfigBytes(data); validationErr != nil {
+		return nil, validationErr
+	}
 	cfg, err := decodeYAMLTaggedBytes[setupConfigFile](data)
 	if err != nil {
 		return nil, err
 	}
 	return &cfg, nil
+}
+
+func validateSetupConfigBytes(data []byte) error {
+	if err := rejectUnknownYAMLFields[setupConfigFile](data, ""); err != nil {
+		return err
+	}
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if err := routerconfig.ValidateCanonicalVersion(raw); err != nil {
+		return err
+	}
+	return nil
 }
 
 func parseYAMLDocument(data []byte) (*yaml.Node, error) {

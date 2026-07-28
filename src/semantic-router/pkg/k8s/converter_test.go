@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/runtime"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apis/vllm.ai/v1alpha1"
@@ -276,6 +277,28 @@ func TestCRDConverterConvertsEventSignals(t *testing.T) {
 	assert.Equal(t, []string{"critical"}, eventRule.Severities)
 	assert.Equal(t, []string{"TXN_DECLINE"}, eventRule.ActionCodes)
 	assert.True(t, eventRule.Temporal)
+}
+
+func TestCRDConverterRejectsUnknownPluginConfigurationField(t *testing.T) {
+	t.Parallel()
+
+	decision := testDecision([]v1alpha1.ModelRef{{Model: "test-model"}})
+	decision.Plugins = []v1alpha1.DecisionPlugin{
+		{
+			Type: "system_prompt",
+			Configuration: &runtime.RawExtension{
+				Raw: []byte(`{"system_promt":"typo"}`),
+			},
+		},
+	}
+
+	_, err := NewCRDConverter().Convert(
+		testPoolWithModels(v1alpha1.ModelConfig{Name: "test-model"}),
+		testRouteWithKeywords(nil, decision),
+		&config.CanonicalConfig{},
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "configuration.system_promt")
 }
 
 // TestCRDValidationErrors tests that validation catches various error conditions

@@ -253,7 +253,6 @@ routing:
           - neural networks
           - AI algorithms
         aggregation_method: max
-        model: auto
       - name: data_science
         threshold: 0.7
         candidates:
@@ -262,7 +261,6 @@ routing:
           - predictive analytics
           - data visualization
         aggregation_method: mean
-        model: auto
       - name: programming
         threshold: 0.72
         candidates:
@@ -272,7 +270,6 @@ routing:
           - code snippet
           - programming task
         aggregation_method: max
-        model: auto
     domains:
       - name: urgent_request
         description: Urgent and time-sensitive requests

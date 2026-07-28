@@ -46,6 +46,14 @@ func TestGenerateConfigYAMLIncludesLoRACatalogFromVLLMEndpoints(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: vllmv1alpha1.SemanticRouterSpec{
+			Config: vllmv1alpha1.ConfigSpec{
+				ReasoningFamilies: map[string]vllmv1alpha1.ReasoningFamily{
+					"qwen3": {
+						Type:      "chat_template_kwargs",
+						Parameter: "enable_thinking",
+					},
+				},
+			},
 			VLLMEndpoints: []vllmv1alpha1.VLLMEndpointSpec{
 				{
 					Name:            "qwen3-primary",

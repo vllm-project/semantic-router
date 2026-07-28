@@ -7,7 +7,7 @@ import pytest
 import yaml
 from cli.config_migration import migrate_config_data
 from cli.models import ToolSelectionPluginConfig
-from cli.parser import parse_user_config
+from cli.parser import ConfigParseError, parse_user_config
 from cli.validator import validate_user_config
 from pydantic import ValidationError as PydanticValidationError
 
@@ -219,11 +219,9 @@ providers:
         temp_path = _write_config(config_yaml)
 
         try:
-            config = parse_user_config(temp_path)
-            errors = validate_user_config(config)
-            assert len(errors) > 0
-            error_messages = [str(e) for e in errors]
-            assert any("tool_selection" in msg.lower() for msg in error_messages)
+            with pytest.raises(ConfigParseError) as exc:
+                parse_user_config(temp_path)
+            assert "routing -> decisions -> 0 -> plugins -> 0 -> mode" in str(exc.value)
         finally:
             os.unlink(temp_path)
 

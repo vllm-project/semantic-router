@@ -408,6 +408,9 @@ func buildSetupCandidateConfig(configPath string, bodyReader io.Reader) (*setupC
 	if len(req.Config) == 0 {
 		return nil, fmt.Errorf("config is required")
 	}
+	if validationErr := rejectUnknownYAMLFields[routerconfig.CanonicalConfig](req.Config, ""); validationErr != nil {
+		return nil, fmt.Errorf("invalid config payload: %w", validationErr)
+	}
 
 	requestConfig, err := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](req.Config)
 	if err != nil {
@@ -452,6 +455,9 @@ func normalizeRemoteConfigURL(rawValue string) (string, error) {
 }
 
 func parseSetupCanonicalConfig(raw []byte) (*setupConfigFile, error) {
+	if err := validateSetupConfigBytes(raw); err != nil {
+		return nil, fmt.Errorf("failed to validate remote config: %w", err)
+	}
 	parsed, err := decodeYAMLTaggedBytes[setupConfigFile](raw)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse remote config: %w", err)

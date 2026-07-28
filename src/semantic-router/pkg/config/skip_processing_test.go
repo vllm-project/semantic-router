@@ -96,7 +96,7 @@ func TestCanonicalGlobalModelSelectionFalseOverridesRoundTrip(t *testing.T) {
 		t.Fatal("expected canonical global export")
 	}
 
-	doc := CanonicalConfig{Global: exported}
+	doc := CanonicalConfig{Version: CanonicalVersion, Global: exported}
 	encoded, err := yaml.Marshal(doc)
 	if err != nil {
 		t.Fatalf("failed to marshal canonical config: %v", err)

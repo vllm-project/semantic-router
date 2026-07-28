@@ -116,8 +116,8 @@ func decodeRAGBackendConfig[T any](cfg *RAGPluginConfig, expectedBackend string)
 	if cfg.BackendConfig == nil {
 		return nil, fmt.Errorf("BackendConfig is required for backend %q", expectedBackend)
 	}
-	result := new(T)
-	if err := cfg.BackendConfig.DecodeInto(result); err != nil {
+	result, err := decodeStructuredPayloadStrict[T](cfg.BackendConfig, "backend_config")
+	if err != nil {
 		return nil, err
 	}
 	return result, nil

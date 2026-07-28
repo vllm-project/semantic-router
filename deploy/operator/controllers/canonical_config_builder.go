@@ -9,7 +9,7 @@ import (
 
 func (r *SemanticRouterReconciler) buildCanonicalConfig(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) (*routerconfig.CanonicalConfig, error) {
 	canonical := &routerconfig.CanonicalConfig{
-		Version: "v0.3",
+		Version: routerconfig.CanonicalVersion,
 		Listeners: []routerconfig.Listener{
 			{
 				Name:    "grpc-50051",
@@ -51,6 +51,9 @@ func (r *SemanticRouterReconciler) buildCanonicalConfig(ctx context.Context, sr 
 		return nil, err
 	}
 	if err := r.applyOperatorConfigSpec(canonical, sr.Spec.Config); err != nil {
+		return nil, err
+	}
+	if err := routerconfig.ValidateCanonicalConfig(canonical); err != nil {
 		return nil, err
 	}
 

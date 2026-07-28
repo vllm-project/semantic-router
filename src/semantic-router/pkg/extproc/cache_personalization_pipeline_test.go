@@ -463,7 +463,7 @@ func TestFullPipeline_CacheBypassThenRAGResolution(t *testing.T) {
 			{Type: "rag", Configuration: config.MustStructuredPayload(map[string]interface{}{
 				"enabled":        true,
 				"backend":        "external_api",
-				"api_endpoint":   ragServer.URL,
+				"backend_config": map[string]interface{}{"api_endpoint": ragServer.URL},
 				"injection_mode": "system_prompt",
 			})},
 		},

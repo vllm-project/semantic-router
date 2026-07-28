@@ -96,6 +96,24 @@ def test_migrate_config_data_splits_legacy_provider_models():
     assert migrated["global"]["stores"]["memory"]["enabled"] is True
 
 
+def test_migrate_config_data_preserves_canonical_entrypoints_and_recipes():
+    source = {
+        "version": "v0.3",
+        "entrypoints": [{"model_names": ["auto"], "recipe": "balanced"}],
+        "recipes": [
+            {
+                "name": "balanced",
+                "routing": {"signals": {}, "projections": {}, "decisions": []},
+            }
+        ],
+    }
+
+    migrated = migrate_config_data(source)
+
+    assert migrated["entrypoints"] == source["entrypoints"]
+    assert migrated["recipes"] == source["recipes"]
+
+
 def test_cli_config_migrate_writes_canonical_yaml(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(

@@ -1,0 +1,140 @@
+{
+  "supported_version": "v0.3",
+  "steady_state": [
+    {
+      "name": "valid_minimal",
+      "input": "version: v0.3\nrouting: {}\n",
+      "valid": true,
+      "normalized_version": "v0.3"
+    },
+    {
+      "name": "valid_named_extension",
+      "input": "version: v0.3\nrouting:\n  decisions:\n    - name: docs\n      description: docs lookup\n      priority: 1\n      rules:\n        operator: AND\n        conditions: []\n      modelRefs: []\n      plugins:\n        - type: rag\n          configuration:\n            enabled: true\n            backend: mcp\n            backend_config:\n              server_name: docs\n              tool_name: search\n              tool_arguments:\n                custom_filter:\n                  nested: true\n",
+      "valid": true,
+      "normalized_version": "v0.3"
+    },
+    {
+      "name": "missing_version",
+      "input": "routing: {}\n",
+      "valid": false,
+      "error": "version: required"
+    },
+    {
+      "name": "empty_version",
+      "input": "version: \"\"\nrouting: {}\n",
+      "valid": false,
+      "error": "version: must not be empty"
+    },
+    {
+      "name": "malformed_version",
+      "input": "version: 3\nrouting: {}\n",
+      "valid": false,
+      "error": "version: must be a string"
+    },
+    {
+      "name": "old_without_migration",
+      "input": "version: v0.1\nrouting: {}\n",
+      "valid": false,
+      "error": "v0.1"
+    },
+    {
+      "name": "future_version",
+      "input": "version: v99.0\nrouting: {}\n",
+      "valid": false,
+      "error": "v99.0"
+    },
+    {
+      "name": "unknown_top_level",
+      "input": "version: v0.3\nrounting: {}\n",
+      "valid": false,
+      "error": "rounting"
+    },
+    {
+      "name": "unknown_nested_field",
+      "input": "version: v0.3\nrouting:\n  modelCards:\n    - name: demo\n      descriptino: silently-dropped-before\n",
+      "valid": false,
+      "error": "routing.modelCards[0].descriptino"
+    },
+    {
+      "name": "unknown_owned_extension_field",
+      "input": "version: v0.3\nrouting:\n  decisions:\n    - name: docs\n      description: docs lookup\n      priority: 1\n      rules:\n        operator: AND\n        conditions: []\n      modelRefs: []\n      plugins:\n        - type: rag\n          configuration:\n            enabled: true\n            backend: mcp\n            backend_config:\n              server_nam: docs\n              tool_name: search\n",
+      "valid": false,
+      "error": "server_nam"
+    }
+  ],
+  "migrations": [
+    {
+      "name": "v0.1_preserves_recipe_state",
+      "input": {
+        "version": "v0.1",
+        "entrypoints": [
+          {
+            "model_names": ["chat"],
+            "recipe": "blue"
+          }
+        ],
+        "recipes": [
+          {
+            "name": "blue",
+            "routing": {}
+          }
+        ]
+      },
+      "normalized": {
+        "version": "v0.3",
+        "listeners": [],
+        "providers": {},
+        "routing": {
+          "signals": {}
+        },
+        "global": {
+          "model_catalog": {}
+        },
+        "entrypoints": [
+          {
+            "model_names": ["chat"],
+            "recipe": "blue"
+          }
+        ],
+        "recipes": [
+          {
+            "name": "blue",
+            "routing": {}
+          }
+        ]
+      }
+    },
+    {
+      "name": "v0.1_moves_flat_keyword_rules",
+      "input": {
+        "version": "v0.1",
+        "keyword_rules": [
+          {
+            "name": "hello",
+            "operator": "OR",
+            "keywords": ["hello"]
+          }
+        ]
+      },
+      "normalized": {
+        "version": "v0.3",
+        "listeners": [],
+        "providers": {},
+        "routing": {
+          "signals": {
+            "keywords": [
+              {
+                "name": "hello",
+                "operator": "OR",
+                "keywords": ["hello"]
+              }
+            ]
+          }
+        },
+        "global": {
+          "model_catalog": {}
+        }
+      }
+    }
+  ]
+}

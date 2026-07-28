@@ -43,10 +43,8 @@ global:
         mmbert_model_path: onnx-binding/mmbert-32k-yarn-onnx
     modules:
       classifier:
-        domain:
-          enabled: false
-        pii:
-          enabled: false
+        domain: {}
+        pii: {}
       hallucination_mitigation:
         enabled: false
       prompt_guard:
@@ -77,6 +75,4 @@ global:
     tools:
       enabled: true
       tools_db_path: deploy/examples/runtime/tools/tools_db.json
-      model_type: mmbert
-      target_dim: 0
       similarity_threshold: 0.7

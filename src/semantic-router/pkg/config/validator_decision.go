@@ -165,25 +165,52 @@ func validateDecisionCandidateIterationOutputs(iter CandidateIterationConfig, co
 
 func validateDecisionPluginContracts(cfg *RouterConfig) error {
 	for _, decision := range cfg.AllRoutingDecisions() {
-		if toolsCfg := decision.GetToolsConfig(); toolsCfg != nil {
-			if err := toolsCfg.Validate(); err != nil {
-				return fmt.Errorf("decision '%s': %w", decision.Name, err)
-			}
-		}
-		if tsCfg := decision.GetToolSelectionConfig(); tsCfg != nil {
-			if err := tsCfg.Validate(); err != nil {
-				return fmt.Errorf("decision '%s': %w", decision.Name, err)
-			}
-		}
-
-		if imageGenCfg := decision.GetImageGenConfig(); imageGenCfg != nil {
-			if err := imageGenCfg.Validate(); err != nil {
-				return fmt.Errorf("decision '%s': %w", decision.Name, err)
-			}
-		}
-
-		if err := validateDecisionRAGAndMemoryPlugins(cfg, &decision); err != nil {
+		if err := validateSingleDecisionPluginContracts(cfg, &decision); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func validateSingleDecisionPluginContracts(cfg *RouterConfig, decision *Decision) error {
+	if err := validateDecisionPluginPayloads(decision); err != nil {
+		return err
+	}
+	if err := validateDecisionTypedPlugins(decision); err != nil {
+		return err
+	}
+	return validateDecisionRAGAndMemoryPlugins(cfg, decision)
+}
+
+func validateDecisionPluginPayloads(decision *Decision) error {
+	for pluginIndex := range decision.Plugins {
+		plugin := &decision.Plugins[pluginIndex]
+		path := fmt.Sprintf(
+			"routing.decisions[%s].plugins[%d].configuration",
+			decision.Name,
+			pluginIndex,
+		)
+		if err := validateDecisionPluginConfiguration(plugin.Type, plugin.Configuration, path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateDecisionTypedPlugins(decision *Decision) error {
+	if toolsCfg := decision.GetToolsConfig(); toolsCfg != nil {
+		if err := toolsCfg.Validate(); err != nil {
+			return fmt.Errorf("decision '%s': %w", decision.Name, err)
+		}
+	}
+	if tsCfg := decision.GetToolSelectionConfig(); tsCfg != nil {
+		if err := tsCfg.Validate(); err != nil {
+			return fmt.Errorf("decision '%s': %w", decision.Name, err)
+		}
+	}
+	if imageGenCfg := decision.GetImageGenConfig(); imageGenCfg != nil {
+		if err := imageGenCfg.Validate(); err != nil {
+			return fmt.Errorf("decision '%s': %w", decision.Name, err)
 		}
 	}
 	return nil

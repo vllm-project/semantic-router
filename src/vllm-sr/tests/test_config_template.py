@@ -10,6 +10,7 @@ CLI_ROOT = Path(__file__).resolve().parents[1]
 if str(CLI_ROOT) not in sys.path:
     sys.path.insert(0, str(CLI_ROOT))
 
+from cli.config_contract import CANONICAL_VERSION
 from cli.parser import parse_user_config
 from cli.validator import validate_user_config
 
@@ -21,7 +22,7 @@ class TestConfigTemplate(unittest.TestCase):
         with open(TEMPLATE_PATH, "r") as f:
             data = yaml.safe_load(f)
 
-        self.assertEqual(data["version"], "v0.3")
+        self.assertEqual(data["version"], CANONICAL_VERSION)
         self.assertEqual(len(data["listeners"]), 1)
         self.assertEqual(
             data["providers"]["defaults"]["default_model"],

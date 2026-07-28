@@ -84,6 +84,9 @@ func parseYAMLBytesWithBaseDir(data []byte, baseDir string) (*RouterConfig, erro
 	if err != nil {
 		return nil, err
 	}
+	if versionErr := ValidateCanonicalVersion(raw); versionErr != nil {
+		return nil, versionErr
+	}
 	if rejectErr := rejectDeprecatedUserConfigFields(raw); rejectErr != nil {
 		return nil, rejectErr
 	}
@@ -108,9 +111,6 @@ func parseYAMLBytesWithBaseDir(data []byte, baseDir string) (*RouterConfig, erro
 	if marshalErr != nil {
 		return nil, fmt.Errorf("failed to marshal config after environment expansion: %w", marshalErr)
 	}
-
-	// Warn about unknown YAML fields (typos) before parsing into typed structs.
-	WarnUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
 
 	cfg, err := parseRouterConfigPayload(expandedData, raw)
 	if err != nil {
@@ -445,6 +445,9 @@ func parseRouterConfigPayload(data []byte, raw map[string]interface{}) (*RouterC
 }
 
 func parseCanonicalConfigPayload(data []byte, raw map[string]interface{}) (*RouterConfig, error) {
+	if unknownErr := RejectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{})); unknownErr != nil {
+		return nil, unknownErr
+	}
 	canonical := &CanonicalConfig{}
 	if unmarshalErr := yaml.Unmarshal(data, canonical); unmarshalErr != nil {
 		logging.ComponentDebugEvent("config", "config_canonical_parse_failed", map[string]interface{}{

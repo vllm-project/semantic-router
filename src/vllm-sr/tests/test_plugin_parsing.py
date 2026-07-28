@@ -14,7 +14,7 @@ from cli.models import (
     ToolSelectionPluginConfig,
 )
 from cli.config_migration import migrate_config_data
-from cli.parser import parse_user_config
+from cli.parser import ConfigParseError, parse_user_config
 from cli.validator import validate_user_config
 
 
@@ -73,10 +73,7 @@ class TestPluginTypeValidation:
             PluginType.TOOL_SELECTION.value,
         ]
 
-        for plugin_type in valid_types:
-            plugin = PluginConfig(type=plugin_type, configuration={"enabled": True})
-            # plugin.type is now a PluginType enum, compare to enum value
-            assert plugin.type.value == plugin_type
+        assert {plugin_type.value for plugin_type in PluginType} == set(valid_types)
 
     def test_invalid_plugin_type(self):
         """Test that invalid plugin types are rejected."""
@@ -291,12 +288,8 @@ providers:
         temp_path = _write_config(config_yaml)
 
         try:
-            config = parse_user_config(temp_path)
-            errors = validate_user_config(config)
-            assert len(errors) > 0
-            # Check that error mentions router_replay
-            error_messages = [str(e) for e in errors]
-            assert any("router_replay" in msg.lower() for msg in error_messages)
+            with pytest.raises(ConfigParseError, match="max_records"):
+                parse_user_config(temp_path)
         finally:
             os.unlink(temp_path)
 
@@ -345,12 +338,8 @@ providers:
         temp_path = _write_config(config_yaml)
 
         try:
-            config = parse_user_config(temp_path)
-            errors = validate_user_config(config)
-            assert len(errors) > 0
-            # Check that error mentions semantic-cache
-            error_messages = [str(e) for e in errors]
-            assert any("semantic-cache" in msg.lower() for msg in error_messages)
+            with pytest.raises(ConfigParseError, match="similarity_threshold"):
+                parse_user_config(temp_path)
         finally:
             os.unlink(temp_path)
 
@@ -389,18 +378,8 @@ providers:
         temp_path = _write_config(config_yaml)
 
         try:
-            config = parse_user_config(temp_path)
-            errors = validate_user_config(config)
-            # SemanticCachePluginConfig requires 'enabled' field, so validation should fail
-            assert isinstance(errors, list)
-            assert (
-                len(errors) > 0
-            ), "Expected validation errors for missing required field"
-            # Check that the error mentions the missing field
-            error_messages = [str(e) for e in errors]
-            assert any(
-                "enabled" in msg.lower() for msg in error_messages
-            ), f"Expected error about missing 'enabled' field, got: {error_messages}"
+            with pytest.raises(ConfigParseError, match="enabled"):
+                parse_user_config(temp_path)
         finally:
             os.unlink(temp_path)
 
@@ -614,11 +593,8 @@ providers:
         temp_path = _write_config(config_yaml)
 
         try:
-            config = parse_user_config(temp_path)
-            errors = validate_user_config(config)
-            assert len(errors) > 0
-            error_messages = [str(e) for e in errors]
-            assert any("rag" in msg.lower() for msg in error_messages)
+            with pytest.raises(ConfigParseError, match="similarity_threshold"):
+                parse_user_config(temp_path)
         finally:
             os.unlink(temp_path)
 

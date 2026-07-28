@@ -4,6 +4,7 @@ import type {
   ModelConfigEntry,
   RoutingModelCard,
 } from './configPageSupport'
+import { CANONICAL_CONFIG_VERSION } from '../types/config'
 
 type CanonicalSignalSections = NonNullable<NonNullable<ConfigData['routing']>['signals']>
 
@@ -497,7 +498,7 @@ export const canonicalizeConfigForManagerSave = (updatedConfig: ConfigData): Con
   stripLegacyRootFields(next)
 
   if (!next.version) {
-    next.version = 'v0.3'
+    next.version = CANONICAL_CONFIG_VERSION
   }
   return next
 }

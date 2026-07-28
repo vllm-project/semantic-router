@@ -11,6 +11,7 @@ from typing import Any
 import yaml
 from pydantic import ValidationError as PydanticValidationError
 
+from cli.config_contract import CANONICAL_VERSION
 from cli.config_migration import migrate_config_data
 from cli.consts import DEFAULT_LISTENER_PORT
 from cli.models import UserConfig
@@ -275,7 +276,7 @@ def build_minimal_target_config() -> dict[str, Any]:
     """Build the minimal canonical config used when the target does not exist."""
 
     return {
-        "version": "v0.3",
+        "version": CANONICAL_VERSION,
         "listeners": [default_listener()],
         "providers": {
             "defaults": {},
@@ -652,7 +653,7 @@ def validate_provider_model(provider_key: str, model: Any) -> str:
 def normalize_target_shape(target: dict[str, Any]) -> None:
     """Normalize a loaded target into the canonical blocks required by import."""
 
-    target["version"] = "v0.3"
+    target["version"] = CANONICAL_VERSION
     target.pop("setup", None)
 
     listeners = ensure_list(target, "listeners")

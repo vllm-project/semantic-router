@@ -1,0 +1,4819 @@
+{
+  "supportedVersions": [
+    "v0.3"
+  ],
+  "root": {
+    "type": "",
+    "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalConfig"
+  },
+  "definitions": {
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.APIConfig": {
+      "type": "object",
+      "fields": {
+        "batch_classification": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.BatchClassificationConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.AdvancedToolFilteringConfig": {
+      "type": "object",
+      "fields": {
+        "allow_tools": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "block_tools": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "candidate_pool_size": {
+          "type": "scalar"
+        },
+        "category_confidence_threshold": {
+          "type": "scalar"
+        },
+        "enabled": {
+          "type": "scalar"
+        },
+        "hybrid_history": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.HybridHistoryToolRetrievalConfig"
+        },
+        "min_combined_score": {
+          "type": "scalar"
+        },
+        "min_lexical_overlap": {
+          "type": "scalar"
+        },
+        "retrieval_strategy": {
+          "type": "scalar"
+        },
+        "use_category_filter": {
+          "type": "scalar"
+        },
+        "weights": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ToolFilteringWeights"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.AlgorithmConfig": {
+      "type": "object",
+      "fields": {
+        "automix": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.AutoMixSelectionConfig"
+        },
+        "confidence": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ConfidenceAlgorithmConfig"
+        },
+        "fusion": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.FusionAlgorithmConfig"
+        },
+        "hybrid": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.HybridSelectionConfig"
+        },
+        "latency_aware": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.LatencyAwareAlgorithmConfig"
+        },
+        "multi_factor": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MultiFactorSelectionConfig"
+        },
+        "on_error": {
+          "type": "scalar"
+        },
+        "ratings": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RatingsAlgorithmConfig"
+        },
+        "remom": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ReMoMAlgorithmConfig"
+        },
+        "router_dc": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterDCSelectionConfig"
+        },
+        "type": {
+          "type": "scalar"
+        },
+        "workflows": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.WorkflowsAlgorithmConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.AuthzConfig": {
+      "type": "object",
+      "fields": {
+        "fail_open": {
+          "type": "scalar"
+        },
+        "identity": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.IdentityConfig"
+        },
+        "providers": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.AuthzProviderConfig"
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.AuthzProviderConfig": {
+      "type": "object",
+      "fields": {
+        "headers": {
+          "type": "map",
+          "values": {
+            "type": "scalar"
+          }
+        },
+        "type": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.AutoMixSelectionConfig": {
+      "type": "object",
+      "fields": {
+        "cost_aware_routing": {
+          "type": "scalar"
+        },
+        "cost_quality_tradeoff": {
+          "type": "scalar"
+        },
+        "discount_factor": {
+          "type": "scalar"
+        },
+        "max_escalations": {
+          "type": "scalar"
+        },
+        "use_logprob_verification": {
+          "type": "scalar"
+        },
+        "verification_threshold": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.BatchClassificationConfig": {
+      "type": "object",
+      "fields": {
+        "concurrency_threshold": {
+          "type": "scalar"
+        },
+        "max_batch_size": {
+          "type": "scalar"
+        },
+        "max_concurrency": {
+          "type": "scalar"
+        },
+        "metrics": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.BatchClassificationMetricsConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.BatchClassificationMetricsConfig": {
+      "type": "object",
+      "fields": {
+        "batch_size_ranges": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.BatchSizeRangeConfig"
+          }
+        },
+        "detailed_goroutine_tracking": {
+          "type": "scalar"
+        },
+        "duration_buckets": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "enabled": {
+          "type": "scalar"
+        },
+        "high_resolution_timing": {
+          "type": "scalar"
+        },
+        "sample_rate": {
+          "type": "scalar"
+        },
+        "size_buckets": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.BatchSizeRangeConfig": {
+      "type": "object",
+      "fields": {
+        "label": {
+          "type": "scalar"
+        },
+        "max": {
+          "type": "scalar"
+        },
+        "min": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CandidateIterationConfig": {
+      "type": "object",
+      "fields": {
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ModelRef"
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CandidateIterationOutputConfig"
+          }
+        },
+        "source": {
+          "type": "scalar"
+        },
+        "variable": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CandidateIterationOutputConfig": {
+      "type": "object",
+      "fields": {
+        "type": {
+          "type": "scalar"
+        },
+        "value": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalBackendRef": {
+      "type": "object",
+      "fields": {
+        "api_key": {
+          "type": "scalar"
+        },
+        "api_key_env": {
+          "type": "scalar"
+        },
+        "api_version": {
+          "type": "scalar"
+        },
+        "auth_header": {
+          "type": "scalar"
+        },
+        "auth_prefix": {
+          "type": "scalar"
+        },
+        "base_url": {
+          "type": "scalar"
+        },
+        "chat_path": {
+          "type": "scalar"
+        },
+        "endpoint": {
+          "type": "scalar"
+        },
+        "extra_headers": {
+          "type": "map",
+          "values": {
+            "type": "scalar"
+          }
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "protocol": {
+          "type": "scalar"
+        },
+        "provider": {
+          "type": "scalar"
+        },
+        "type": {
+          "type": "scalar"
+        },
+        "weight": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalCategoryModule": {
+      "type": "object",
+      "fields": {
+        "category_mapping_path": {
+          "type": "scalar"
+        },
+        "fallback_category": {
+          "type": "scalar"
+        },
+        "model_id": {
+          "type": "scalar"
+        },
+        "model_ref": {
+          "type": "scalar"
+        },
+        "threshold": {
+          "type": "scalar"
+        },
+        "use_cpu": {
+          "type": "scalar"
+        },
+        "use_mmbert_32k": {
+          "type": "scalar"
+        },
+        "use_modernbert": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalClassifierModule": {
+      "type": "object",
+      "fields": {
+        "domain": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalCategoryModule"
+        },
+        "mcp": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MCPCategoryModel"
+        },
+        "pii": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalPIIModule"
+        },
+        "preference": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.PreferenceModelConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalConfig": {
+      "type": "object",
+      "fields": {
+        "entrypoints": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalEntrypoint"
+          }
+        },
+        "global": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalGlobal"
+        },
+        "listeners": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.Listener"
+          }
+        },
+        "providers": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalProviders"
+        },
+        "recipes": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalRecipe"
+          }
+        },
+        "routing": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalRouting"
+        },
+        "version": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalEmbeddingModels": {
+      "type": "object",
+      "fields": {
+        "semantic": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.EmbeddingModels"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalEntrypoint": {
+      "type": "object",
+      "fields": {
+        "model_names": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "recipe": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalExplainerModule": {
+      "type": "object",
+      "fields": {
+        "model_id": {
+          "type": "scalar"
+        },
+        "model_ref": {
+          "type": "scalar"
+        },
+        "threshold": {
+          "type": "scalar"
+        },
+        "use_cpu": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalFactCheckModule": {
+      "type": "object",
+      "fields": {
+        "model_id": {
+          "type": "scalar"
+        },
+        "model_ref": {
+          "type": "scalar"
+        },
+        "threshold": {
+          "type": "scalar"
+        },
+        "use_cpu": {
+          "type": "scalar"
+        },
+        "use_mmbert_32k": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalFeedbackDetectorModule": {
+      "type": "object",
+      "fields": {
+        "enabled": {
+          "type": "scalar"
+        },
+        "feedback_mapping_path": {
+          "type": "scalar"
+        },
+        "model_id": {
+          "type": "scalar"
+        },
+        "model_ref": {
+          "type": "scalar"
+        },
+        "threshold": {
+          "type": "scalar"
+        },
+        "use_cpu": {
+          "type": "scalar"
+        },
+        "use_mmbert_32k": {
+          "type": "scalar"
+        },
+        "use_modernbert": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalGlobal": {
+      "type": "object",
+      "fields": {
+        "integrations": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalIntegrationGlobal"
+        },
+        "model_catalog": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalModelCatalog"
+        },
+        "router": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalRouterGlobal"
+        },
+        "services": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalServiceGlobal"
+        },
+        "stores": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalStoreGlobal"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalHallucinationDetector": {
+      "type": "object",
+      "fields": {
+        "context_window_size": {
+          "type": "scalar"
+        },
+        "enable_nli_filtering": {
+          "type": "scalar"
+        },
+        "min_span_confidence": {
+          "type": "scalar"
+        },
+        "min_span_length": {
+          "type": "scalar"
+        },
+        "model_id": {
+          "type": "scalar"
+        },
+        "model_ref": {
+          "type": "scalar"
+        },
+        "nli_entailment_threshold": {
+          "type": "scalar"
+        },
+        "threshold": {
+          "type": "scalar"
+        },
+        "use_cpu": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalHallucinationModule": {
+      "type": "object",
+      "fields": {
+        "detector": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalHallucinationDetector"
+        },
+        "enabled": {
+          "type": "scalar"
+        },
+        "explainer": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalExplainerModule"
+        },
+        "fact_check": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalFactCheckModule"
+        },
+        "on_hallucination_detected": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalIntegrationGlobal": {
+      "type": "object",
+      "fields": {
+        "looper": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.LooperConfig"
+        },
+        "tools": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ToolsConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalModelCatalog": {
+      "type": "object",
+      "fields": {
+        "embeddings": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalEmbeddingModels"
+        },
+        "external": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ExternalModelConfig"
+          }
+        },
+        "kbs": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.KnowledgeBaseConfig"
+          }
+        },
+        "modules": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalModelModules"
+        },
+        "system": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalSystemModels"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalModelModules": {
+      "type": "object",
+      "fields": {
+        "classifier": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalClassifierModule"
+        },
+        "complexity": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ComplexityModelConfig"
+        },
+        "feedback_detector": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalFeedbackDetectorModule"
+        },
+        "hallucination_mitigation": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalHallucinationModule"
+        },
+        "modality_detector": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ModalityDetectorConfig"
+        },
+        "prompt_compression": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.PromptCompressionConfig"
+        },
+        "prompt_guard": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalPromptGuardModule"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalPIIModule": {
+      "type": "object",
+      "fields": {
+        "model_id": {
+          "type": "scalar"
+        },
+        "model_ref": {
+          "type": "scalar"
+        },
+        "pii_mapping_path": {
+          "type": "scalar"
+        },
+        "threshold": {
+          "type": "scalar"
+        },
+        "use_cpu": {
+          "type": "scalar"
+        },
+        "use_mmbert_32k": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalProjections": {
+      "type": "object",
+      "fields": {
+        "mappings": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ProjectionMapping"
+          }
+        },
+        "partitions": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ProjectionPartition"
+          }
+        },
+        "scores": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ProjectionScore"
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalPromptGuardModule": {
+      "type": "object",
+      "fields": {
+        "enabled": {
+          "type": "scalar"
+        },
+        "jailbreak_mapping_path": {
+          "type": "scalar"
+        },
+        "model_id": {
+          "type": "scalar"
+        },
+        "model_ref": {
+          "type": "scalar"
+        },
+        "threshold": {
+          "type": "scalar"
+        },
+        "use_cpu": {
+          "type": "scalar"
+        },
+        "use_mmbert_32k": {
+          "type": "scalar"
+        },
+        "use_modernbert": {
+          "type": "scalar"
+        },
+        "use_vllm": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalProviderDefaults": {
+      "type": "object",
+      "fields": {
+        "default_model": {
+          "type": "scalar"
+        },
+        "default_reasoning_effort": {
+          "type": "scalar"
+        },
+        "reasoning_families": {
+          "type": "map",
+          "values": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ReasoningFamilyConfig"
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalProviderModel": {
+      "type": "object",
+      "fields": {
+        "api_format": {
+          "type": "scalar"
+        },
+        "backend_refs": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalBackendRef"
+          }
+        },
+        "external_model_ids": {
+          "type": "map",
+          "values": {
+            "type": "scalar"
+          }
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "pricing": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ModelPricing"
+        },
+        "provider_model_id": {
+          "type": "scalar"
+        },
+        "reasoning_family": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalProviders": {
+      "type": "object",
+      "fields": {
+        "defaults": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalProviderDefaults"
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalProviderModel"
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalRecipe": {
+      "type": "object",
+      "fields": {
+        "description": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "routing": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalRouting"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalRouterGlobal": {
+      "type": "object",
+      "fields": {
+        "auto_model_name": {
+          "type": "scalar"
+        },
+        "auto_model_names": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "clear_route_cache": {
+          "type": "scalar"
+        },
+        "config_source": {
+          "type": "scalar"
+        },
+        "include_config_models_in_list": {
+          "type": "scalar"
+        },
+        "learning": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterLearningConfig"
+        },
+        "model_selection": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ModelSelectionConfig"
+        },
+        "skip_processing": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.SkipProcessingConfig"
+        },
+        "strategy": {
+          "type": "scalar"
+        },
+        "streamed_body": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalStreamedBody"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalRouting": {
+      "type": "object",
+      "fields": {
+        "decisions": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.Decision"
+          }
+        },
+        "modelCards": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RoutingModel"
+          }
+        },
+        "projections": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalProjections"
+        },
+        "signals": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalSignals"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalServiceGlobal": {
+      "type": "object",
+      "fields": {
+        "api": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.APIConfig"
+        },
+        "authz": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.AuthzConfig"
+        },
+        "management_api": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ManagementAPIConfig"
+        },
+        "observability": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ObservabilityConfig"
+        },
+        "ratelimit": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RateLimitConfig"
+        },
+        "response_api": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ResponseAPIConfig"
+        },
+        "router_replay": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterReplayConfig"
+        },
+        "startup_status": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.StartupStatusConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalSignals": {
+      "type": "object",
+      "fields": {
+        "complexity": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ComplexityRule"
+          }
+        },
+        "context": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ContextRule"
+          }
+        },
+        "conversation": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ConversationRule"
+          }
+        },
+        "domains": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.Category"
+          }
+        },
+        "embeddings": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.EmbeddingRule"
+          }
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.EventRule"
+          }
+        },
+        "fact_check": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.FactCheckRule"
+          }
+        },
+        "jailbreak": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.JailbreakRule"
+          }
+        },
+        "kb": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.KBSignalRule"
+          }
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.KeywordRule"
+          }
+        },
+        "language": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.LanguageRule"
+          }
+        },
+        "modality": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ModalityRule"
+          }
+        },
+        "pii": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.PIIRule"
+          }
+        },
+        "preferences": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.PreferenceRule"
+          }
+        },
+        "reasks": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ReaskRule"
+          }
+        },
+        "role_bindings": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RoleBinding"
+          }
+        },
+        "structure": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.StructureRule"
+          }
+        },
+        "user_feedbacks": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.UserFeedbackRule"
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalStoreGlobal": {
+      "type": "object",
+      "fields": {
+        "memory": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MemoryConfig"
+        },
+        "semantic_cache": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.SemanticCache"
+        },
+        "vector_store": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.VectorStoreConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalStreamedBody": {
+      "type": "object",
+      "fields": {
+        "enabled": {
+          "type": "scalar"
+        },
+        "max_bytes": {
+          "type": "scalar"
+        },
+        "timeout_sec": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CanonicalSystemModels": {
+      "type": "object",
+      "fields": {
+        "domain_classifier": {
+          "type": "scalar"
+        },
+        "fact_check_classifier": {
+          "type": "scalar"
+        },
+        "feedback_detector": {
+          "type": "scalar"
+        },
+        "hallucination_detector": {
+          "type": "scalar"
+        },
+        "hallucination_explainer": {
+          "type": "scalar"
+        },
+        "pii_classifier": {
+          "type": "scalar"
+        },
+        "prompt_guard": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.Category": {
+      "type": "object",
+      "fields": {
+        "description": {
+          "type": "scalar"
+        },
+        "mmlu_categories": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "model_scores": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ModelScore"
+          }
+        },
+        "name": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ClassifierVLLMEndpoint": {
+      "type": "object",
+      "fields": {
+        "address": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "port": {
+          "type": "scalar"
+        },
+        "prompt_template": {
+          "type": "scalar"
+        },
+        "protocol": {
+          "type": "scalar"
+        },
+        "use_chat_template": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ComplexityCandidates": {
+      "type": "object",
+      "fields": {
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "image_candidates": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ComplexityModelConfig": {
+      "type": "object",
+      "fields": {
+        "prototype_scoring": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.PrototypeScoringConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ComplexityRule": {
+      "type": "object",
+      "fields": {
+        "composer": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RuleNode"
+        },
+        "description": {
+          "type": "scalar"
+        },
+        "easy": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ComplexityCandidates"
+        },
+        "hard": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ComplexityCandidates"
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "threshold": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ConfidenceAlgorithmConfig": {
+      "type": "object",
+      "fields": {
+        "confidence_method": {
+          "type": "scalar"
+        },
+        "cost_quality_tradeoff": {
+          "type": "scalar"
+        },
+        "escalation_order": {
+          "type": "scalar"
+        },
+        "hybrid_weights": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.HybridWeightsConfig"
+        },
+        "on_error": {
+          "type": "scalar"
+        },
+        "threshold": {
+          "type": "scalar"
+        },
+        "token_filter": {
+          "type": "scalar"
+        },
+        "verifier_server_url": {
+          "type": "scalar"
+        },
+        "verifier_timeout_seconds": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ContextRule": {
+      "type": "object",
+      "fields": {
+        "description": {
+          "type": "scalar"
+        },
+        "max_tokens": {
+          "type": "scalar"
+        },
+        "min_tokens": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ConversationFeature": {
+      "type": "object",
+      "fields": {
+        "source": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ConversationSource"
+        },
+        "type": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ConversationRule": {
+      "type": "object",
+      "fields": {
+        "description": {
+          "type": "scalar"
+        },
+        "feature": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ConversationFeature"
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "predicate": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.NumericPredicate"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ConversationSource": {
+      "type": "object",
+      "fields": {
+        "role": {
+          "type": "scalar"
+        },
+        "type": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.Decision": {
+      "type": "object",
+      "fields": {
+        "adaptations": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.DecisionAdaptationsConfig"
+        },
+        "algorithm": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.AlgorithmConfig"
+        },
+        "candidateIterations": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.CandidateIterationConfig"
+          }
+        },
+        "description": {
+          "type": "scalar"
+        },
+        "emits": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.EmitDirective"
+          }
+        },
+        "modelRefs": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ModelRef"
+          }
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "output_contract": {
+          "type": "scalar"
+        },
+        "output_contract_spec": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.OutputContractSpec"
+        },
+        "plugins": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.DecisionPlugin"
+          }
+        },
+        "priority": {
+          "type": "scalar"
+        },
+        "rules": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RuleNode"
+        },
+        "tier": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.DecisionAdaptationsConfig": {
+      "type": "object",
+      "fields": {
+        "adaptation": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.DecisionLearningAdaptationConfig"
+        },
+        "mode": {
+          "type": "scalar"
+        },
+        "protection": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.DecisionLearningProtectionConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.DecisionLearningAdaptationConfig": {
+      "type": "object",
+      "fields": {
+        "candidate_set": {
+          "type": "scalar"
+        },
+        "mode": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.DecisionLearningProtectionConfig": {
+      "type": "object",
+      "fields": {
+        "mode": {
+          "type": "scalar"
+        },
+        "stability_weight": {
+          "type": "scalar"
+        },
+        "switch_margin": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.DecisionPlugin": {
+      "type": "object",
+      "fields": {
+        "configuration": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.StructuredPayload"
+        },
+        "type": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.EmbeddingEndpointConfig": {
+      "type": "object",
+      "fields": {
+        "api_key_env": {
+          "type": "scalar"
+        },
+        "base_url": {
+          "type": "scalar"
+        },
+        "dimensions": {
+          "type": "scalar"
+        },
+        "max_retries": {
+          "type": "scalar"
+        },
+        "model": {
+          "type": "scalar"
+        },
+        "timeout_seconds": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.EmbeddingModels": {
+      "type": "object",
+      "fields": {
+        "bert_model_path": {
+          "type": "scalar"
+        },
+        "embedding_config": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.HNSWConfig"
+        },
+        "endpoint": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.EmbeddingEndpointConfig"
+        },
+        "gemma_model_path": {
+          "type": "scalar"
+        },
+        "mmbert_model_path": {
+          "type": "scalar"
+        },
+        "multimodal_model_path": {
+          "type": "scalar"
+        },
+        "qwen3_model_path": {
+          "type": "scalar"
+        },
+        "use_cpu": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.EmbeddingRule": {
+      "type": "object",
+      "fields": {
+        "aggregation_method": {
+          "type": "scalar"
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "query_modality": {
+          "type": "scalar"
+        },
+        "threshold": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.EmitDirective": {
+      "type": "object",
+      "fields": {
+        "kind": {
+          "type": "scalar"
+        },
+        "retention": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RetentionDirective"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.EventRule": {
+      "type": "object",
+      "fields": {
+        "action_codes": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "description": {
+          "type": "scalar"
+        },
+        "event_types": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "severities": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "temporal": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ExternalModelConfig": {
+      "type": "object",
+      "fields": {
+        "access_key": {
+          "type": "scalar"
+        },
+        "llm_endpoint": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ClassifierVLLMEndpoint"
+        },
+        "llm_model_name": {
+          "type": "scalar"
+        },
+        "llm_provider": {
+          "type": "scalar"
+        },
+        "llm_timeout_seconds": {
+          "type": "scalar"
+        },
+        "max_tokens": {
+          "type": "scalar"
+        },
+        "model_role": {
+          "type": "scalar"
+        },
+        "parser_type": {
+          "type": "scalar"
+        },
+        "temperature": {
+          "type": "scalar"
+        },
+        "threshold": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.FactCheckRule": {
+      "type": "object",
+      "fields": {
+        "description": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.FlowRuntimeConfig": {
+      "type": "object",
+      "fields": {
+        "model_names": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "state": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.WorkflowStateRuntimeConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.FusionAlgorithmConfig": {
+      "type": "object",
+      "fields": {
+        "analysis_models": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "analysis_overrides": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.FusionModelOverride"
+          }
+        },
+        "analysis_template": {
+          "type": "scalar"
+        },
+        "grounding": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.FusionGroundingConfig"
+        },
+        "include_analysis": {
+          "type": "scalar"
+        },
+        "include_intermediate_responses": {
+          "type": "scalar"
+        },
+        "judge_prompt_version": {
+          "type": "scalar"
+        },
+        "max_completion_tokens": {
+          "type": "scalar"
+        },
+        "max_concurrent": {
+          "type": "scalar"
+        },
+        "min_successful_responses": {
+          "type": "scalar"
+        },
+        "model": {
+          "type": "scalar"
+        },
+        "on_error": {
+          "type": "scalar"
+        },
+        "round_timeout_seconds": {
+          "type": "scalar"
+        },
+        "synthesis_template": {
+          "type": "scalar"
+        },
+        "temperature": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.FusionGroundingConfig": {
+      "type": "object",
+      "fields": {
+        "enabled": {
+          "type": "scalar"
+        },
+        "min_keep": {
+          "type": "scalar"
+        },
+        "min_score": {
+          "type": "scalar"
+        },
+        "nli_contradiction_penalty": {
+          "type": "scalar"
+        },
+        "on_error": {
+          "type": "scalar"
+        },
+        "policy": {
+          "type": "scalar"
+        },
+        "reference": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.FusionModelOverride": {
+      "type": "object",
+      "fields": {
+        "max_completion_tokens": {
+          "type": "scalar"
+        },
+        "model": {
+          "type": "scalar"
+        },
+        "temperature": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.FusionRuntimeConfig": {
+      "type": "object",
+      "fields": {
+        "model_names": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.HNSWConfig": {
+      "type": "object",
+      "fields": {
+        "backend": {
+          "type": "scalar"
+        },
+        "enable_soft_matching": {
+          "type": "scalar"
+        },
+        "min_score_threshold": {
+          "type": "scalar"
+        },
+        "model_type": {
+          "type": "scalar"
+        },
+        "preload_embeddings": {
+          "type": "scalar"
+        },
+        "prototype_scoring": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.PrototypeScoringConfig"
+        },
+        "target_dimension": {
+          "type": "scalar"
+        },
+        "target_layer": {
+          "type": "scalar"
+        },
+        "top_k": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.HybridHistoryToolRetrievalConfig": {
+      "type": "object",
+      "fields": {
+        "history_confidence_threshold": {
+          "type": "scalar"
+        },
+        "history_horizon": {
+          "type": "scalar"
+        },
+        "min_history_steps": {
+          "type": "scalar"
+        },
+        "repetition_penalty_strength": {
+          "type": "scalar"
+        },
+        "weight_decision_prior": {
+          "type": "scalar"
+        },
+        "weight_history_transition": {
+          "type": "scalar"
+        },
+        "weight_semantic": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.HybridSelectionConfig": {
+      "type": "object",
+      "fields": {
+        "automix_weight": {
+          "type": "scalar"
+        },
+        "cost_weight": {
+          "type": "scalar"
+        },
+        "experience_weight": {
+          "type": "scalar"
+        },
+        "normalize_scores": {
+          "type": "scalar"
+        },
+        "quality_gap_threshold": {
+          "type": "scalar"
+        },
+        "router_dc_weight": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.HybridWeightsConfig": {
+      "type": "object",
+      "fields": {
+        "logprob_weight": {
+          "type": "scalar"
+        },
+        "margin_weight": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.IdentityConfig": {
+      "type": "object",
+      "fields": {
+        "user_groups_header": {
+          "type": "scalar"
+        },
+        "user_id_header": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.JailbreakRule": {
+      "type": "object",
+      "fields": {
+        "benign_patterns": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "description": {
+          "type": "scalar"
+        },
+        "include_history": {
+          "type": "scalar"
+        },
+        "jailbreak_patterns": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "method": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "threshold": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.KBSignalRule": {
+      "type": "object",
+      "fields": {
+        "kb": {
+          "type": "scalar"
+        },
+        "match": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "target": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.KBSignalTarget"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.KBSignalTarget": {
+      "type": "object",
+      "fields": {
+        "kind": {
+          "type": "scalar"
+        },
+        "value": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.KeywordRule": {
+      "type": "object",
+      "fields": {
+        "bm25_threshold": {
+          "type": "scalar"
+        },
+        "case_sensitive": {
+          "type": "scalar"
+        },
+        "fuzzy_match": {
+          "type": "scalar"
+        },
+        "fuzzy_threshold": {
+          "type": "scalar"
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "method": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "ngram_arity": {
+          "type": "scalar"
+        },
+        "ngram_threshold": {
+          "type": "scalar"
+        },
+        "operator": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.KnowledgeBaseConfig": {
+      "type": "object",
+      "fields": {
+        "groups": {
+          "type": "map",
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "scalar"
+            }
+          }
+        },
+        "label_thresholds": {
+          "type": "map",
+          "values": {
+            "type": "scalar"
+          }
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.KnowledgeBaseMetricConfig"
+          }
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "prototype_scoring": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.PrototypeScoringConfig"
+        },
+        "source": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.KnowledgeBaseSource"
+        },
+        "threshold": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.KnowledgeBaseMetricConfig": {
+      "type": "object",
+      "fields": {
+        "name": {
+          "type": "scalar"
+        },
+        "negative_group": {
+          "type": "scalar"
+        },
+        "positive_group": {
+          "type": "scalar"
+        },
+        "type": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.KnowledgeBaseSource": {
+      "type": "object",
+      "fields": {
+        "manifest": {
+          "type": "scalar"
+        },
+        "path": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.LanguageRule": {
+      "type": "object",
+      "fields": {
+        "description": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "threshold": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.LatencyAwareAlgorithmConfig": {
+      "type": "object",
+      "fields": {
+        "description": {
+          "type": "scalar"
+        },
+        "tpot_percentile": {
+          "type": "scalar"
+        },
+        "ttft_percentile": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.Listener": {
+      "type": "object",
+      "fields": {
+        "address": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "port": {
+          "type": "scalar"
+        },
+        "timeout": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.LlamaStackVectorStoreConfig": {
+      "type": "object",
+      "fields": {
+        "auth_token": {
+          "type": "scalar"
+        },
+        "embedding_model": {
+          "type": "scalar"
+        },
+        "endpoint": {
+          "type": "scalar"
+        },
+        "request_timeout_seconds": {
+          "type": "scalar"
+        },
+        "search_type": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.LoRAAdapter": {
+      "type": "object",
+      "fields": {
+        "description": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.LooperConfig": {
+      "type": "object",
+      "fields": {
+        "endpoint": {
+          "type": "scalar"
+        },
+        "flow": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.FlowRuntimeConfig"
+        },
+        "fusion": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.FusionRuntimeConfig"
+        },
+        "grpc_max_msg_size_mb": {
+          "type": "scalar"
+        },
+        "headers": {
+          "type": "map",
+          "values": {
+            "type": "scalar"
+          }
+        },
+        "max_response_bytes_mb": {
+          "type": "scalar"
+        },
+        "remom": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ReMoMRuntimeConfig"
+        },
+        "retry_count": {
+          "type": "scalar"
+        },
+        "timeout_seconds": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MCPCategoryModel": {
+      "type": "object",
+      "fields": {
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "command": {
+          "type": "scalar"
+        },
+        "enabled": {
+          "type": "scalar"
+        },
+        "env": {
+          "type": "map",
+          "values": {
+            "type": "scalar"
+          }
+        },
+        "threshold": {
+          "type": "scalar"
+        },
+        "timeout_seconds": {
+          "type": "scalar"
+        },
+        "tool_name": {
+          "type": "scalar"
+        },
+        "transport_type": {
+          "type": "scalar"
+        },
+        "url": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MLKMeansConfig": {
+      "type": "object",
+      "fields": {
+        "efficiency_weight": {
+          "type": "scalar"
+        },
+        "num_clusters": {
+          "type": "scalar"
+        },
+        "pretrained_path": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MLKNNConfig": {
+      "type": "object",
+      "fields": {
+        "k": {
+          "type": "scalar"
+        },
+        "pretrained_path": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MLMLPConfig": {
+      "type": "object",
+      "fields": {
+        "device": {
+          "type": "scalar"
+        },
+        "pretrained_path": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MLSVMConfig": {
+      "type": "object",
+      "fields": {
+        "gamma": {
+          "type": "scalar"
+        },
+        "kernel": {
+          "type": "scalar"
+        },
+        "pretrained_path": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MLSelectionConfig": {
+      "type": "object",
+      "fields": {
+        "embedding_dim": {
+          "type": "scalar"
+        },
+        "kmeans": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MLKMeansConfig"
+        },
+        "knn": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MLKNNConfig"
+        },
+        "mlp": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MLMLPConfig"
+        },
+        "models_path": {
+          "type": "scalar"
+        },
+        "svm": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MLSVMConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ManagementAPIAuthConfig": {
+      "type": "object",
+      "fields": {
+        "mode": {
+          "type": "scalar"
+        },
+        "roles": {
+          "type": "map",
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "scalar"
+            }
+          }
+        },
+        "tokens": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ManagementAPITokenRef"
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ManagementAPIConfig": {
+      "type": "object",
+      "fields": {
+        "auth": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ManagementAPIAuthConfig"
+        },
+        "bind_address": {
+          "type": "scalar"
+        },
+        "port": {
+          "type": "scalar"
+        },
+        "remote_exposure": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ManagementAPITokenRef": {
+      "type": "object",
+      "fields": {
+        "env": {
+          "type": "scalar"
+        },
+        "role": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MemoryConfig": {
+      "type": "object",
+      "fields": {
+        "adaptive_threshold": {
+          "type": "scalar"
+        },
+        "auto_store": {
+          "type": "scalar"
+        },
+        "backend": {
+          "type": "scalar"
+        },
+        "default_retrieval_limit": {
+          "type": "scalar"
+        },
+        "default_similarity_threshold": {
+          "type": "scalar"
+        },
+        "disabled_models": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "disabled_routes": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "embedding_model": {
+          "type": "scalar"
+        },
+        "enabled": {
+          "type": "scalar"
+        },
+        "extraction_batch_size": {
+          "type": "scalar"
+        },
+        "hybrid_mode": {
+          "type": "scalar"
+        },
+        "hybrid_search": {
+          "type": "scalar"
+        },
+        "milvus": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MemoryMilvusConfig"
+        },
+        "qdrant": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MemoryQdrantConfig"
+        },
+        "quality_scoring": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MemoryQualityScoringConfig"
+        },
+        "redis_cache": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MemoryRedisCacheConfig"
+        },
+        "reflection": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MemoryReflectionConfig"
+        },
+        "valkey": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MemoryValkeyConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MemoryMilvusConfig": {
+      "type": "object",
+      "fields": {
+        "address": {
+          "type": "scalar"
+        },
+        "collection": {
+          "type": "scalar"
+        },
+        "dimension": {
+          "type": "scalar"
+        },
+        "num_partitions": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MemoryQdrantConfig": {
+      "type": "object",
+      "fields": {
+        "api_key": {
+          "type": "scalar"
+        },
+        "collection": {
+          "type": "scalar"
+        },
+        "connect_timeout": {
+          "type": "scalar"
+        },
+        "dimension": {
+          "type": "scalar"
+        },
+        "host": {
+          "type": "scalar"
+        },
+        "port": {
+          "type": "scalar"
+        },
+        "use_tls": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MemoryQualityScoringConfig": {
+      "type": "object",
+      "fields": {
+        "initial_strength_days": {
+          "type": "scalar"
+        },
+        "max_memories_per_user": {
+          "type": "scalar"
+        },
+        "prune_threshold": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MemoryRedisCacheConfig": {
+      "type": "object",
+      "fields": {
+        "address": {
+          "type": "scalar"
+        },
+        "db": {
+          "type": "scalar"
+        },
+        "enabled": {
+          "type": "scalar"
+        },
+        "key_prefix": {
+          "type": "scalar"
+        },
+        "password": {
+          "type": "scalar"
+        },
+        "ttl_seconds": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MemoryReflectionConfig": {
+      "type": "object",
+      "fields": {
+        "algorithm": {
+          "type": "scalar"
+        },
+        "block_patterns": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "dedup_threshold": {
+          "type": "scalar"
+        },
+        "enabled": {
+          "type": "scalar"
+        },
+        "max_inject_tokens": {
+          "type": "scalar"
+        },
+        "recency_decay_days": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MemoryValkeyConfig": {
+      "type": "object",
+      "fields": {
+        "collection_prefix": {
+          "type": "scalar"
+        },
+        "database": {
+          "type": "scalar"
+        },
+        "dimension": {
+          "type": "scalar"
+        },
+        "host": {
+          "type": "scalar"
+        },
+        "index_ef_construction": {
+          "type": "scalar"
+        },
+        "index_m": {
+          "type": "scalar"
+        },
+        "index_name": {
+          "type": "scalar"
+        },
+        "metric_type": {
+          "type": "scalar"
+        },
+        "password": {
+          "type": "scalar"
+        },
+        "port": {
+          "type": "scalar"
+        },
+        "timeout": {
+          "type": "scalar"
+        },
+        "tls_ca_path": {
+          "type": "scalar"
+        },
+        "tls_enabled": {
+          "type": "scalar"
+        },
+        "tls_insecure_skip_verify": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MetricsConfig": {
+      "type": "object",
+      "fields": {
+        "enabled": {
+          "type": "scalar"
+        },
+        "windowed_metrics": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.WindowedMetricsConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MilvusConfig": {
+      "type": "object",
+      "fields": {
+        "collection": {
+          "type": "object",
+          "fields": {
+            "description": {
+              "type": "scalar"
+            },
+            "index": {
+              "type": "object",
+              "fields": {
+                "params": {
+                  "type": "object",
+                  "fields": {
+                    "M": {
+                      "type": "scalar"
+                    },
+                    "efConstruction": {
+                      "type": "scalar"
+                    }
+                  }
+                },
+                "type": {
+                  "type": "scalar"
+                }
+              }
+            },
+            "name": {
+              "type": "scalar"
+            },
+            "vector_field": {
+              "type": "object",
+              "fields": {
+                "dimension": {
+                  "type": "scalar"
+                },
+                "metric_type": {
+                  "type": "scalar"
+                },
+                "name": {
+                  "type": "scalar"
+                }
+              }
+            }
+          }
+        },
+        "connection": {
+          "type": "object",
+          "fields": {
+            "auth": {
+              "type": "object",
+              "fields": {
+                "enabled": {
+                  "type": "scalar"
+                },
+                "password": {
+                  "type": "scalar"
+                },
+                "username": {
+                  "type": "scalar"
+                }
+              }
+            },
+            "database": {
+              "type": "scalar"
+            },
+            "host": {
+              "type": "scalar"
+            },
+            "port": {
+              "type": "scalar"
+            },
+            "timeout": {
+              "type": "scalar"
+            },
+            "tls": {
+              "type": "object",
+              "fields": {
+                "ca_file": {
+                  "type": "scalar"
+                },
+                "cert_file": {
+                  "type": "scalar"
+                },
+                "enabled": {
+                  "type": "scalar"
+                },
+                "key_file": {
+                  "type": "scalar"
+                }
+              }
+            }
+          }
+        },
+        "data_management": {
+          "type": "object",
+          "fields": {
+            "compaction": {
+              "type": "object",
+              "fields": {
+                "enabled": {
+                  "type": "scalar"
+                },
+                "interval": {
+                  "type": "scalar"
+                }
+              }
+            },
+            "ttl": {
+              "type": "object",
+              "fields": {
+                "cleanup_interval": {
+                  "type": "scalar"
+                },
+                "enabled": {
+                  "type": "scalar"
+                },
+                "timestamp_field": {
+                  "type": "scalar"
+                }
+              }
+            }
+          }
+        },
+        "development": {
+          "type": "object",
+          "fields": {
+            "auto_create_collection": {
+              "type": "scalar"
+            },
+            "drop_collection_on_startup": {
+              "type": "scalar"
+            },
+            "verbose_errors": {
+              "type": "scalar"
+            }
+          }
+        },
+        "logging": {
+          "type": "object",
+          "fields": {
+            "enable_metrics": {
+              "type": "scalar"
+            },
+            "enable_query_log": {
+              "type": "scalar"
+            },
+            "level": {
+              "type": "scalar"
+            }
+          }
+        },
+        "performance": {
+          "type": "object",
+          "fields": {
+            "batch": {
+              "type": "object",
+              "fields": {
+                "insert_batch_size": {
+                  "type": "scalar"
+                },
+                "timeout": {
+                  "type": "scalar"
+                }
+              }
+            },
+            "connection_pool": {
+              "type": "object",
+              "fields": {
+                "acquire_timeout": {
+                  "type": "scalar"
+                },
+                "max_connections": {
+                  "type": "scalar"
+                },
+                "max_idle_connections": {
+                  "type": "scalar"
+                }
+              }
+            }
+          }
+        },
+        "search": {
+          "type": "object",
+          "fields": {
+            "consistency_level": {
+              "type": "scalar"
+            },
+            "params": {
+              "type": "object",
+              "fields": {
+                "ef": {
+                  "type": "scalar"
+                }
+              }
+            },
+            "topk": {
+              "type": "scalar"
+            }
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ModalityClassifierConfig": {
+      "type": "object",
+      "fields": {
+        "model_path": {
+          "type": "scalar"
+        },
+        "use_cpu": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ModalityDetectorConfig": {
+      "type": "object",
+      "fields": {
+        "both_keywords": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "classifier": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ModalityClassifierConfig"
+        },
+        "confidence_threshold": {
+          "type": "scalar"
+        },
+        "enabled": {
+          "type": "scalar"
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "lower_threshold_ratio": {
+          "type": "scalar"
+        },
+        "method": {
+          "type": "scalar"
+        },
+        "prompt_prefixes": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ModalityRule": {
+      "type": "object",
+      "fields": {
+        "description": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ModelPricing": {
+      "type": "object",
+      "fields": {
+        "cache_write_per_1m": {
+          "type": "scalar"
+        },
+        "cached_input_per_1m": {
+          "type": "scalar"
+        },
+        "completion_per_1m": {
+          "type": "scalar"
+        },
+        "currency": {
+          "type": "scalar"
+        },
+        "prompt_per_1m": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ModelRef": {
+      "type": "object",
+      "fields": {
+        "lora_name": {
+          "type": "scalar"
+        },
+        "model": {
+          "type": "scalar"
+        },
+        "reasoning_description": {
+          "type": "scalar"
+        },
+        "reasoning_effort": {
+          "type": "scalar"
+        },
+        "use_reasoning": {
+          "type": "scalar"
+        },
+        "weight": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ModelScore": {
+      "type": "object",
+      "fields": {
+        "model": {
+          "type": "scalar"
+        },
+        "score": {
+          "type": "scalar"
+        },
+        "use_reasoning": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ModelSelectionConfig": {
+      "type": "object",
+      "fields": {
+        "automix": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.AutoMixSelectionConfig"
+        },
+        "enabled": {
+          "type": "scalar"
+        },
+        "hybrid": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.HybridSelectionConfig"
+        },
+        "method": {
+          "type": "scalar"
+        },
+        "ml": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MLSelectionConfig"
+        },
+        "momentum": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MomentumSelectionConfig"
+        },
+        "router_dc": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterDCSelectionConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MomentumSelectionConfig": {
+      "type": "object",
+      "fields": {
+        "attack": {
+          "type": "scalar"
+        },
+        "enabled": {
+          "type": "scalar"
+        },
+        "release": {
+          "type": "scalar"
+        },
+        "threshold": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MultiFactorSLOConfig": {
+      "type": "object",
+      "fields": {
+        "max_cost_per_1m": {
+          "type": "scalar"
+        },
+        "max_inflight": {
+          "type": "scalar"
+        },
+        "max_tpot_ms": {
+          "type": "scalar"
+        },
+        "max_ttft_ms": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MultiFactorSelectionConfig": {
+      "type": "object",
+      "fields": {
+        "latency_percentile": {
+          "type": "scalar"
+        },
+        "on_no_candidates": {
+          "type": "scalar"
+        },
+        "slo": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MultiFactorSLOConfig"
+        },
+        "weights": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MultiFactorWeightsConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MultiFactorWeightsConfig": {
+      "type": "object",
+      "fields": {
+        "cost": {
+          "type": "scalar"
+        },
+        "latency": {
+          "type": "scalar"
+        },
+        "load": {
+          "type": "scalar"
+        },
+        "quality": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.NumericPredicate": {
+      "type": "object",
+      "fields": {
+        "gt": {
+          "type": "scalar"
+        },
+        "gte": {
+          "type": "scalar"
+        },
+        "lt": {
+          "type": "scalar"
+        },
+        "lte": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ObservabilityConfig": {
+      "type": "object",
+      "fields": {
+        "metrics": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MetricsConfig"
+        },
+        "tracing": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.TracingConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.OutputContractChoiceSetSpec": {
+      "type": "object",
+      "fields": {
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.OutputContractExtractSpec": {
+      "type": "object",
+      "fields": {
+        "mode": {
+          "type": "scalar"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.OutputContractJSONSchemaSpec": {
+      "type": "object",
+      "fields": {
+        "schema_ref": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.OutputContractNormalizeSpec": {
+      "type": "object",
+      "fields": {
+        "defaults": {
+          "type": "map",
+          "values": {
+            "type": "scalar"
+          }
+        },
+        "field_order": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.OutputContractPostprocess": {
+      "type": "object",
+      "fields": {
+        "type": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.OutputContractReferenceSpec": {
+      "type": "object",
+      "fields": {
+        "id_format": {
+          "type": "scalar"
+        },
+        "source": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.OutputContractRenderSpec": {
+      "type": "object",
+      "fields": {
+        "mode": {
+          "type": "scalar"
+        },
+        "template": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.OutputContractSpec": {
+      "type": "object",
+      "fields": {
+        "choice_set": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.OutputContractChoiceSetSpec"
+        },
+        "extract": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.OutputContractExtractSpec"
+        },
+        "json_schema": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.OutputContractJSONSchemaSpec"
+        },
+        "normalize": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.OutputContractNormalizeSpec"
+        },
+        "on_violation": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.OutputContractViolationPolicy"
+        },
+        "postprocess": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.OutputContractPostprocess"
+          }
+        },
+        "reference": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.OutputContractReferenceSpec"
+        },
+        "render": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.OutputContractRenderSpec"
+        },
+        "type": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.OutputContractViolationPolicy": {
+      "type": "object",
+      "fields": {
+        "fallback": {
+          "type": "scalar"
+        },
+        "repair": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.PIIRule": {
+      "type": "object",
+      "fields": {
+        "description": {
+          "type": "scalar"
+        },
+        "include_history": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "pii_types_allowed": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "threshold": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.PreferenceModelConfig": {
+      "type": "object",
+      "fields": {
+        "embedding_model": {
+          "type": "scalar"
+        },
+        "prototype_scoring": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.PrototypeScoringConfig"
+        },
+        "use_contrastive": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.PreferenceRule": {
+      "type": "object",
+      "fields": {
+        "description": {
+          "type": "scalar"
+        },
+        "examples": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "threshold": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ProjectionMapping": {
+      "type": "object",
+      "fields": {
+        "calibration": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ProjectionMappingCalibration"
+        },
+        "method": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ProjectionMappingOutput"
+          }
+        },
+        "source": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ProjectionMappingCalibration": {
+      "type": "object",
+      "fields": {
+        "method": {
+          "type": "scalar"
+        },
+        "slope": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ProjectionMappingOutput": {
+      "type": "object",
+      "fields": {
+        "gt": {
+          "type": "scalar"
+        },
+        "gte": {
+          "type": "scalar"
+        },
+        "lt": {
+          "type": "scalar"
+        },
+        "lte": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ProjectionPartition": {
+      "type": "object",
+      "fields": {
+        "default": {
+          "type": "scalar"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "semantics": {
+          "type": "scalar"
+        },
+        "temperature": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ProjectionScore": {
+      "type": "object",
+      "fields": {
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ProjectionScoreInput"
+          }
+        },
+        "method": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ProjectionScoreInput": {
+      "type": "object",
+      "fields": {
+        "kb": {
+          "type": "scalar"
+        },
+        "match": {
+          "type": "scalar"
+        },
+        "metric": {
+          "type": "scalar"
+        },
+        "miss": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "type": {
+          "type": "scalar"
+        },
+        "value_source": {
+          "type": "scalar"
+        },
+        "weight": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.PromptCompressionConfig": {
+      "type": "object",
+      "fields": {
+        "enabled": {
+          "type": "scalar"
+        },
+        "max_tokens": {
+          "type": "scalar"
+        },
+        "min_length": {
+          "type": "scalar"
+        },
+        "novelty_weight": {
+          "type": "scalar"
+        },
+        "position_depth": {
+          "type": "scalar"
+        },
+        "position_weight": {
+          "type": "scalar"
+        },
+        "preserve_first_n": {
+          "type": "scalar"
+        },
+        "preserve_last_n": {
+          "type": "scalar"
+        },
+        "profile": {
+          "type": "scalar"
+        },
+        "skip_signals": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "textrank_weight": {
+          "type": "scalar"
+        },
+        "tfidf_weight": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.PrototypeScoringConfig": {
+      "type": "object",
+      "fields": {
+        "best_weight": {
+          "type": "scalar"
+        },
+        "cluster_similarity_threshold": {
+          "type": "scalar"
+        },
+        "enabled": {
+          "type": "scalar"
+        },
+        "margin_threshold": {
+          "type": "scalar"
+        },
+        "max_prototypes": {
+          "type": "scalar"
+        },
+        "top_m": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.QdrantConfig": {
+      "type": "object",
+      "fields": {
+        "api_key": {
+          "type": "scalar"
+        },
+        "collection_name": {
+          "type": "scalar"
+        },
+        "connect_timeout": {
+          "type": "scalar"
+        },
+        "host": {
+          "type": "scalar"
+        },
+        "port": {
+          "type": "scalar"
+        },
+        "use_tls": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.QdrantVectorStoreConfig": {
+      "type": "object",
+      "fields": {
+        "api_key": {
+          "type": "scalar"
+        },
+        "collection_prefix": {
+          "type": "scalar"
+        },
+        "connect_timeout": {
+          "type": "scalar"
+        },
+        "host": {
+          "type": "scalar"
+        },
+        "port": {
+          "type": "scalar"
+        },
+        "use_tls": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RateLimitConfig": {
+      "type": "object",
+      "fields": {
+        "fail_open": {
+          "type": "scalar"
+        },
+        "providers": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RateLimitProviderConfig"
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RateLimitMatch": {
+      "type": "object",
+      "fields": {
+        "group": {
+          "type": "scalar"
+        },
+        "model": {
+          "type": "scalar"
+        },
+        "user": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RateLimitProviderConfig": {
+      "type": "object",
+      "fields": {
+        "address": {
+          "type": "scalar"
+        },
+        "domain": {
+          "type": "scalar"
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RateLimitRule"
+          }
+        },
+        "type": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RateLimitRule": {
+      "type": "object",
+      "fields": {
+        "match": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RateLimitMatch"
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "requests_per_unit": {
+          "type": "scalar"
+        },
+        "tokens_per_unit": {
+          "type": "scalar"
+        },
+        "unit": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RatingsAlgorithmConfig": {
+      "type": "object",
+      "fields": {
+        "max_concurrent": {
+          "type": "scalar"
+        },
+        "on_error": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ReMoMAlgorithmConfig": {
+      "type": "object",
+      "fields": {
+        "breadth_schedule": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "compaction_strategy": {
+          "type": "scalar"
+        },
+        "compaction_tokens": {
+          "type": "scalar"
+        },
+        "include_intermediate_responses": {
+          "type": "scalar"
+        },
+        "include_reasoning": {
+          "type": "scalar"
+        },
+        "max_concurrent": {
+          "type": "scalar"
+        },
+        "max_responses_per_round": {
+          "type": "scalar"
+        },
+        "min_successful_responses": {
+          "type": "scalar"
+        },
+        "model_distribution": {
+          "type": "scalar"
+        },
+        "on_error": {
+          "type": "scalar"
+        },
+        "round_timeout_seconds": {
+          "type": "scalar"
+        },
+        "shuffle_seed": {
+          "type": "scalar"
+        },
+        "synthesis_model": {
+          "type": "scalar"
+        },
+        "synthesis_template": {
+          "type": "scalar"
+        },
+        "temperature": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ReMoMRuntimeConfig": {
+      "type": "object",
+      "fields": {
+        "model_names": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ReaskRule": {
+      "type": "object",
+      "fields": {
+        "description": {
+          "type": "scalar"
+        },
+        "lookback_turns": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "threshold": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ReasoningFamilyConfig": {
+      "type": "object",
+      "fields": {
+        "parameter": {
+          "type": "scalar"
+        },
+        "type": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RedisConfig": {
+      "type": "object",
+      "fields": {
+        "connection": {
+          "type": "object",
+          "fields": {
+            "database": {
+              "type": "scalar"
+            },
+            "host": {
+              "type": "scalar"
+            },
+            "password": {
+              "type": "scalar"
+            },
+            "port": {
+              "type": "scalar"
+            },
+            "timeout": {
+              "type": "scalar"
+            },
+            "tls": {
+              "type": "object",
+              "fields": {
+                "ca_file": {
+                  "type": "scalar"
+                },
+                "cert_file": {
+                  "type": "scalar"
+                },
+                "enabled": {
+                  "type": "scalar"
+                },
+                "key_file": {
+                  "type": "scalar"
+                }
+              }
+            }
+          }
+        },
+        "development": {
+          "type": "object",
+          "fields": {
+            "auto_create_index": {
+              "type": "scalar"
+            },
+            "drop_index_on_startup": {
+              "type": "scalar"
+            },
+            "verbose_errors": {
+              "type": "scalar"
+            }
+          }
+        },
+        "index": {
+          "type": "object",
+          "fields": {
+            "index_type": {
+              "type": "scalar"
+            },
+            "name": {
+              "type": "scalar"
+            },
+            "params": {
+              "type": "object",
+              "fields": {
+                "M": {
+                  "type": "scalar"
+                },
+                "efConstruction": {
+                  "type": "scalar"
+                }
+              }
+            },
+            "prefix": {
+              "type": "scalar"
+            },
+            "vector_field": {
+              "type": "object",
+              "fields": {
+                "dimension": {
+                  "type": "scalar"
+                },
+                "metric_type": {
+                  "type": "scalar"
+                },
+                "name": {
+                  "type": "scalar"
+                }
+              }
+            }
+          }
+        },
+        "logging": {
+          "type": "object",
+          "fields": {
+            "enable_metrics": {
+              "type": "scalar"
+            },
+            "enable_query_log": {
+              "type": "scalar"
+            },
+            "level": {
+              "type": "scalar"
+            }
+          }
+        },
+        "search": {
+          "type": "object",
+          "fields": {
+            "topk": {
+              "type": "scalar"
+            }
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ResponseAPIConfig": {
+      "type": "object",
+      "fields": {
+        "enabled": {
+          "type": "scalar"
+        },
+        "max_responses": {
+          "type": "scalar"
+        },
+        "redis": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ResponseAPIRedisConfig"
+        },
+        "store_backend": {
+          "type": "scalar"
+        },
+        "ttl_seconds": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ResponseAPIRedisConfig": {
+      "type": "object",
+      "fields": {
+        "address": {
+          "type": "scalar"
+        },
+        "cluster_addresses": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "cluster_mode": {
+          "type": "scalar"
+        },
+        "config_path": {
+          "type": "scalar"
+        },
+        "db": {
+          "type": "scalar"
+        },
+        "dial_timeout": {
+          "type": "scalar"
+        },
+        "key_prefix": {
+          "type": "scalar"
+        },
+        "max_retries": {
+          "type": "scalar"
+        },
+        "min_idle_conns": {
+          "type": "scalar"
+        },
+        "password": {
+          "type": "scalar"
+        },
+        "pool_size": {
+          "type": "scalar"
+        },
+        "read_timeout": {
+          "type": "scalar"
+        },
+        "tls_ca_path": {
+          "type": "scalar"
+        },
+        "tls_cert_path": {
+          "type": "scalar"
+        },
+        "tls_enabled": {
+          "type": "scalar"
+        },
+        "tls_key_path": {
+          "type": "scalar"
+        },
+        "write_timeout": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RetentionDirective": {
+      "type": "object",
+      "fields": {
+        "drop": {
+          "type": "scalar"
+        },
+        "keep_current_model": {
+          "type": "scalar"
+        },
+        "prefer_prefix_retention": {
+          "type": "scalar"
+        },
+        "ttl_turns": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RoleBinding": {
+      "type": "object",
+      "fields": {
+        "description": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "role": {
+          "type": "scalar"
+        },
+        "subjects": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.Subject"
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterDCSelectionConfig": {
+      "type": "object",
+      "fields": {
+        "dimension_size": {
+          "type": "scalar"
+        },
+        "min_similarity": {
+          "type": "scalar"
+        },
+        "require_descriptions": {
+          "type": "scalar"
+        },
+        "temperature": {
+          "type": "scalar"
+        },
+        "use_capabilities": {
+          "type": "scalar"
+        },
+        "use_model_contrastive": {
+          "type": "scalar"
+        },
+        "use_query_contrastive": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterLearningAdaptationConfig": {
+      "type": "object",
+      "fields": {
+        "candidate_set": {
+          "type": "scalar"
+        },
+        "enabled": {
+          "type": "scalar"
+        },
+        "strategy": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterLearningConfig": {
+      "type": "object",
+      "fields": {
+        "adaptation": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterLearningAdaptationConfig"
+        },
+        "enabled": {
+          "type": "scalar"
+        },
+        "protection": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterLearningProtectionConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterLearningIdentityConfig": {
+      "type": "object",
+      "fields": {
+        "headers": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterLearningIdentityHeadersConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterLearningIdentityHeadersConfig": {
+      "type": "object",
+      "fields": {
+        "conversation": {
+          "type": "scalar"
+        },
+        "session": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterLearningProtectionConfig": {
+      "type": "object",
+      "fields": {
+        "enabled": {
+          "type": "scalar"
+        },
+        "identity": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterLearningIdentityConfig"
+        },
+        "scope": {
+          "type": "scalar"
+        },
+        "tuning": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterLearningProtectionTuning"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterLearningProtectionTuning": {
+      "type": "object",
+      "fields": {
+        "idle_timeout_seconds": {
+          "type": "scalar"
+        },
+        "min_turns_before_switch": {
+          "type": "scalar"
+        },
+        "stability_weight": {
+          "type": "scalar"
+        },
+        "switch_margin": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterReplayConfig": {
+      "type": "object",
+      "fields": {
+        "async_writes": {
+          "type": "scalar"
+        },
+        "enabled": {
+          "type": "scalar"
+        },
+        "milvus": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterReplayMilvusConfig"
+        },
+        "postgres": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterReplayPostgresConfig"
+        },
+        "qdrant": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterReplayQdrantConfig"
+        },
+        "redis": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterReplayRedisConfig"
+        },
+        "store_backend": {
+          "type": "scalar"
+        },
+        "ttl_seconds": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterReplayMilvusConfig": {
+      "type": "object",
+      "fields": {
+        "address": {
+          "type": "scalar"
+        },
+        "collection_name": {
+          "type": "scalar"
+        },
+        "consistency_level": {
+          "type": "scalar"
+        },
+        "password": {
+          "type": "scalar"
+        },
+        "shard_num": {
+          "type": "scalar"
+        },
+        "username": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterReplayPostgresConfig": {
+      "type": "object",
+      "fields": {
+        "conn_max_lifetime": {
+          "type": "scalar"
+        },
+        "database": {
+          "type": "scalar"
+        },
+        "host": {
+          "type": "scalar"
+        },
+        "max_idle_conns": {
+          "type": "scalar"
+        },
+        "max_open_conns": {
+          "type": "scalar"
+        },
+        "password": {
+          "type": "scalar"
+        },
+        "port": {
+          "type": "scalar"
+        },
+        "ssl_mode": {
+          "type": "scalar"
+        },
+        "table_name": {
+          "type": "scalar"
+        },
+        "user": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterReplayQdrantConfig": {
+      "type": "object",
+      "fields": {
+        "api_key": {
+          "type": "scalar"
+        },
+        "collection_name": {
+          "type": "scalar"
+        },
+        "host": {
+          "type": "scalar"
+        },
+        "port": {
+          "type": "scalar"
+        },
+        "use_tls": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RouterReplayRedisConfig": {
+      "type": "object",
+      "fields": {
+        "address": {
+          "type": "scalar"
+        },
+        "db": {
+          "type": "scalar"
+        },
+        "key_prefix": {
+          "type": "scalar"
+        },
+        "max_retries": {
+          "type": "scalar"
+        },
+        "password": {
+          "type": "scalar"
+        },
+        "pool_size": {
+          "type": "scalar"
+        },
+        "tls_skip_verify": {
+          "type": "scalar"
+        },
+        "use_tls": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RoutingModel": {
+      "type": "object",
+      "fields": {
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "context_window_size": {
+          "type": "scalar"
+        },
+        "description": {
+          "type": "scalar"
+        },
+        "loras": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.LoRAAdapter"
+          }
+        },
+        "modality": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "param_size": {
+          "type": "scalar"
+        },
+        "quality_score": {
+          "type": "scalar"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RuleNode": {
+      "type": "object",
+      "fields": {
+        "conditions": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RuleNode"
+          }
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "operator": {
+          "type": "scalar"
+        },
+        "type": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.SemanticCache": {
+      "type": "object",
+      "fields": {
+        "backend_type": {
+          "type": "scalar"
+        },
+        "embedding_model": {
+          "type": "scalar"
+        },
+        "enabled": {
+          "type": "scalar"
+        },
+        "eviction_policy": {
+          "type": "scalar"
+        },
+        "max_entries": {
+          "type": "scalar"
+        },
+        "milvus": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MilvusConfig"
+        },
+        "qdrant": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.QdrantConfig"
+        },
+        "redis": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.RedisConfig"
+        },
+        "similarity_threshold": {
+          "type": "scalar"
+        },
+        "ttl_seconds": {
+          "type": "scalar"
+        },
+        "valkey": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ValkeyConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.SkipProcessingConfig": {
+      "type": "object",
+      "fields": {
+        "enabled": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.StartupStatusConfig": {
+      "type": "object",
+      "fields": {
+        "redis": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.StartupStatusRedisConfig"
+        },
+        "store_backend": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.StartupStatusRedisConfig": {
+      "type": "object",
+      "fields": {
+        "address": {
+          "type": "scalar"
+        },
+        "db": {
+          "type": "scalar"
+        },
+        "password": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.StructureFeature": {
+      "type": "object",
+      "fields": {
+        "source": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.StructureSource"
+        },
+        "type": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.StructureRule": {
+      "type": "object",
+      "fields": {
+        "description": {
+          "type": "scalar"
+        },
+        "feature": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.StructureFeature"
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "predicate": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.NumericPredicate"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.StructureSource": {
+      "type": "object",
+      "fields": {
+        "case_sensitive": {
+          "type": "scalar"
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "pattern": {
+          "type": "scalar"
+        },
+        "sequences": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "scalar"
+            }
+          }
+        },
+        "type": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.StructuredPayload": {
+      "type": "object",
+      "opaque": true
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.Subject": {
+      "type": "object",
+      "fields": {
+        "kind": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ToolFilteringWeights": {
+      "type": "object",
+      "fields": {
+        "category": {
+          "type": "scalar"
+        },
+        "embed": {
+          "type": "scalar"
+        },
+        "lexical": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "tag": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ToolsConfig": {
+      "type": "object",
+      "fields": {
+        "advanced_filtering": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.AdvancedToolFilteringConfig"
+        },
+        "enabled": {
+          "type": "scalar"
+        },
+        "fallback_to_empty": {
+          "type": "scalar"
+        },
+        "similarity_threshold": {
+          "type": "scalar"
+        },
+        "tools_db_path": {
+          "type": "scalar"
+        },
+        "top_k": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.TracingConfig": {
+      "type": "object",
+      "fields": {
+        "enabled": {
+          "type": "scalar"
+        },
+        "exporter": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.TracingExporterConfig"
+        },
+        "provider": {
+          "type": "scalar"
+        },
+        "resource": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.TracingResourceConfig"
+        },
+        "sampling": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.TracingSamplingConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.TracingExporterConfig": {
+      "type": "object",
+      "fields": {
+        "endpoint": {
+          "type": "scalar"
+        },
+        "insecure": {
+          "type": "scalar"
+        },
+        "type": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.TracingResourceConfig": {
+      "type": "object",
+      "fields": {
+        "deployment_environment": {
+          "type": "scalar"
+        },
+        "service_name": {
+          "type": "scalar"
+        },
+        "service_version": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.TracingSamplingConfig": {
+      "type": "object",
+      "fields": {
+        "rate": {
+          "type": "scalar"
+        },
+        "type": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.UserFeedbackRule": {
+      "type": "object",
+      "fields": {
+        "description": {
+          "type": "scalar"
+        },
+        "name": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ValkeyConfig": {
+      "type": "object",
+      "fields": {
+        "connection": {
+          "type": "object",
+          "fields": {
+            "database": {
+              "type": "scalar"
+            },
+            "host": {
+              "type": "scalar"
+            },
+            "password": {
+              "type": "scalar"
+            },
+            "port": {
+              "type": "scalar"
+            },
+            "timeout": {
+              "type": "scalar"
+            },
+            "tls": {
+              "type": "object",
+              "fields": {
+                "ca_file": {
+                  "type": "scalar"
+                },
+                "cert_file": {
+                  "type": "scalar"
+                },
+                "enabled": {
+                  "type": "scalar"
+                },
+                "key_file": {
+                  "type": "scalar"
+                }
+              }
+            }
+          }
+        },
+        "development": {
+          "type": "object",
+          "fields": {
+            "auto_create_index": {
+              "type": "scalar"
+            },
+            "drop_index_on_startup": {
+              "type": "scalar"
+            },
+            "verbose_errors": {
+              "type": "scalar"
+            }
+          }
+        },
+        "index": {
+          "type": "object",
+          "fields": {
+            "index_type": {
+              "type": "scalar"
+            },
+            "name": {
+              "type": "scalar"
+            },
+            "params": {
+              "type": "object",
+              "fields": {
+                "M": {
+                  "type": "scalar"
+                },
+                "efConstruction": {
+                  "type": "scalar"
+                }
+              }
+            },
+            "prefix": {
+              "type": "scalar"
+            },
+            "vector_field": {
+              "type": "object",
+              "fields": {
+                "dimension": {
+                  "type": "scalar"
+                },
+                "metric_type": {
+                  "type": "scalar"
+                },
+                "name": {
+                  "type": "scalar"
+                }
+              }
+            }
+          }
+        },
+        "logging": {
+          "type": "object",
+          "fields": {
+            "enable_metrics": {
+              "type": "scalar"
+            },
+            "enable_query_log": {
+              "type": "scalar"
+            },
+            "level": {
+              "type": "scalar"
+            }
+          }
+        },
+        "search": {
+          "type": "object",
+          "fields": {
+            "topk": {
+              "type": "scalar"
+            }
+          }
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ValkeyVectorStoreConfig": {
+      "type": "object",
+      "fields": {
+        "collection_prefix": {
+          "type": "scalar"
+        },
+        "connect_timeout": {
+          "type": "scalar"
+        },
+        "database": {
+          "type": "scalar"
+        },
+        "host": {
+          "type": "scalar"
+        },
+        "index_ef_construction": {
+          "type": "scalar"
+        },
+        "index_m": {
+          "type": "scalar"
+        },
+        "metric_type": {
+          "type": "scalar"
+        },
+        "password": {
+          "type": "scalar"
+        },
+        "port": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.VectorStoreConfig": {
+      "type": "object",
+      "fields": {
+        "backend_type": {
+          "type": "scalar"
+        },
+        "embedding_dimension": {
+          "type": "scalar"
+        },
+        "embedding_model": {
+          "type": "scalar"
+        },
+        "enabled": {
+          "type": "scalar"
+        },
+        "file_storage_dir": {
+          "type": "scalar"
+        },
+        "ingestion_drain_timeout_seconds": {
+          "type": "scalar"
+        },
+        "ingestion_workers": {
+          "type": "scalar"
+        },
+        "llama_stack": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.LlamaStackVectorStoreConfig"
+        },
+        "max_file_size_mb": {
+          "type": "scalar"
+        },
+        "memory": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.VectorStoreMemoryConfig"
+        },
+        "metadata_postgres": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.VectorStoreMetadataPostgresConfig"
+        },
+        "metadata_store": {
+          "type": "scalar"
+        },
+        "milvus": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.MilvusConfig"
+        },
+        "qdrant": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.QdrantVectorStoreConfig"
+        },
+        "supported_formats": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "valkey": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.ValkeyVectorStoreConfig"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.VectorStoreMemoryConfig": {
+      "type": "object",
+      "fields": {
+        "max_entries_per_store": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.VectorStoreMetadataPostgresConfig": {
+      "type": "object",
+      "fields": {
+        "conn_max_lifetime": {
+          "type": "scalar"
+        },
+        "database": {
+          "type": "scalar"
+        },
+        "host": {
+          "type": "scalar"
+        },
+        "max_idle_conns": {
+          "type": "scalar"
+        },
+        "max_open_conns": {
+          "type": "scalar"
+        },
+        "password": {
+          "type": "scalar"
+        },
+        "port": {
+          "type": "scalar"
+        },
+        "ssl_mode": {
+          "type": "scalar"
+        },
+        "table_name": {
+          "type": "scalar"
+        },
+        "user": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.WindowedMetricsConfig": {
+      "type": "object",
+      "fields": {
+        "enabled": {
+          "type": "scalar"
+        },
+        "max_models": {
+          "type": "scalar"
+        },
+        "model_metrics": {
+          "type": "scalar"
+        },
+        "queue_depth_estimation": {
+          "type": "scalar"
+        },
+        "time_windows": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "update_interval": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.WorkflowFinalConfig": {
+      "type": "object",
+      "fields": {
+        "model": {
+          "type": "scalar"
+        },
+        "prompt": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.WorkflowPlannerConfig": {
+      "type": "object",
+      "fields": {
+        "max_completion_tokens": {
+          "type": "scalar"
+        },
+        "model": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.WorkflowRoleConfig": {
+      "type": "object",
+      "fields": {
+        "access_list": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "scalar"
+          }
+        },
+        "name": {
+          "type": "scalar"
+        },
+        "prompt": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.WorkflowStateFileConfig": {
+      "type": "object",
+      "fields": {
+        "directory": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.WorkflowStateRedisConfig": {
+      "type": "object",
+      "fields": {
+        "address": {
+          "type": "scalar"
+        },
+        "db": {
+          "type": "scalar"
+        },
+        "key_prefix": {
+          "type": "scalar"
+        },
+        "max_retries": {
+          "type": "scalar"
+        },
+        "password": {
+          "type": "scalar"
+        },
+        "pool_size": {
+          "type": "scalar"
+        },
+        "tls_skip_verify": {
+          "type": "scalar"
+        },
+        "use_tls": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.WorkflowStateRuntimeConfig": {
+      "type": "object",
+      "fields": {
+        "file": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.WorkflowStateFileConfig"
+        },
+        "redis": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.WorkflowStateRedisConfig"
+        },
+        "store_backend": {
+          "type": "scalar"
+        },
+        "ttl_seconds": {
+          "type": "scalar"
+        }
+      }
+    },
+    "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.WorkflowsAlgorithmConfig": {
+      "type": "object",
+      "fields": {
+        "final": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.WorkflowFinalConfig"
+        },
+        "include_intermediate_responses": {
+          "type": "scalar"
+        },
+        "max_completion_tokens": {
+          "type": "scalar"
+        },
+        "max_parallel": {
+          "type": "scalar"
+        },
+        "max_steps": {
+          "type": "scalar"
+        },
+        "min_successful_responses": {
+          "type": "scalar"
+        },
+        "mode": {
+          "type": "scalar"
+        },
+        "on_error": {
+          "type": "scalar"
+        },
+        "planner": {
+          "type": "",
+          "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.WorkflowPlannerConfig"
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "",
+            "ref": "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.WorkflowRoleConfig"
+          }
+        },
+        "round_timeout_seconds": {
+          "type": "scalar"
+        },
+        "temperature": {
+          "type": "scalar"
+        },
+        "template": {
+          "type": "scalar"
+        }
+      }
+    }
+  }
+}

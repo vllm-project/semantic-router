@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	"reflect"
 
 	"gopkg.in/yaml.v3"
 
@@ -202,6 +203,13 @@ func convertToTypedConfig[T any](r *SemanticRouterReconciler, value interface{})
 	var result T
 
 	normalized := r.convertToConfigMap(value)
+	if err := routerconfig.RejectUnknownConfigValue(
+		normalized,
+		reflect.TypeOf(result),
+		"",
+	); err != nil {
+		return result, err
+	}
 	data, err := yaml.Marshal(normalized)
 	if err != nil {
 		return result, err

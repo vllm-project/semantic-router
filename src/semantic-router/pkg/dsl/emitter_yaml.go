@@ -630,7 +630,7 @@ func EmitHelm(cfg *config.RouterConfig) ([]byte, error) {
 
 	values := map[string]interface{}{
 		"config": helmValuesConfig{
-			Version: "v0.3",
+			Version: config.CanonicalVersion,
 			Routing: config.CanonicalRoutingFromRouterConfig(cfg),
 		},
 	}
@@ -647,6 +647,10 @@ func EmitHelm(cfg *config.RouterConfig) ([]byte, error) {
 // document (containing version, listeners, providers), replaces the routing
 // section with the compiled one, and emits a complete canonical config YAML.
 func MergeRoutingIntoBase(cfg *config.RouterConfig, baseYAML []byte) ([]byte, error) {
+	if _, err := config.ParseYAMLBytes(baseYAML); err != nil {
+		return nil, fmt.Errorf("failed to validate base canonical config: %w", err)
+	}
+
 	var base map[string]interface{}
 	if err := yaml.Unmarshal(baseYAML, &base); err != nil {
 		return nil, fmt.Errorf("failed to parse base YAML: %w", err)
@@ -657,8 +661,8 @@ func MergeRoutingIntoBase(cfg *config.RouterConfig, baseYAML []byte) ([]byte, er
 		return nil, fmt.Errorf("failed to marshal routing: %w", err)
 	}
 	var routing interface{}
-	if err := yaml.Unmarshal(routingBytes, &routing); err != nil {
-		return nil, fmt.Errorf("failed to re-parse routing: %w", err)
+	if unmarshalErr := yaml.Unmarshal(routingBytes, &routing); unmarshalErr != nil {
+		return nil, fmt.Errorf("failed to re-parse routing: %w", unmarshalErr)
 	}
 
 	base["routing"] = routing
@@ -684,7 +688,14 @@ func MergeRoutingIntoBase(cfg *config.RouterConfig, baseYAML []byte) ([]byte, er
 		addKeyValue(mapNode, key, base[key])
 	}
 	doc.Content = append(doc.Content, mapNode)
-	return marshalYAMLIndent2(doc)
+	merged, err := marshalYAMLIndent2(doc)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := config.ParseYAMLBytes(merged); err != nil {
+		return nil, fmt.Errorf("DSL emitted invalid canonical config: %w", err)
+	}
+	return merged, nil
 }
 
 // marshalYAMLIndent2 encodes a yaml.Node with 2-space indentation to match

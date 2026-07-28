@@ -9,11 +9,11 @@ import (
 // from the internal runtime config.
 func CanonicalConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
 	if cfg == nil {
-		return CanonicalConfig{Version: "v0.3"}
+		return CanonicalConfig{Version: CanonicalVersion}
 	}
 
 	return CanonicalConfig{
-		Version:   "v0.3",
+		Version:   CanonicalVersion,
 		Listeners: append([]Listener(nil), cfg.Listeners...),
 		Providers: CanonicalProviders{
 			Defaults: CanonicalProviderDefaults{

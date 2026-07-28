@@ -9,20 +9,7 @@ from cli.config_contract import (
 )
 from cli.models import (
     UserConfig,
-    PluginType,
-    SemanticCachePluginConfig,
-    FastResponsePluginConfig,
-    RequestParamsPluginConfig,
-    ResponseJailbreakPluginConfig,
-    ToolsPluginConfig,
-    ToolSelectionPluginConfig,
-    SystemPromptPluginConfig,
-    HeaderMutationPluginConfig,
-    HallucinationPluginConfig,
-    RouterReplayPluginConfig,
-    MemoryPluginConfig,
-    RAGPluginConfig,
-    ImageGenPluginConfig,
+    plugin_configuration_models,
 )
 from pydantic import ValidationError as PydanticValidationError
 from cli.utils import get_logger
@@ -505,22 +492,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
     """
     errors = []
 
-    # Map plugin types to their configuration models
-    config_models = {
-        PluginType.SEMANTIC_CACHE.value: SemanticCachePluginConfig,
-        PluginType.FAST_RESPONSE.value: FastResponsePluginConfig,
-        PluginType.REQUEST_PARAMS.value: RequestParamsPluginConfig,
-        PluginType.RESPONSE_JAILBREAK.value: ResponseJailbreakPluginConfig,
-        PluginType.SYSTEM_PROMPT.value: SystemPromptPluginConfig,
-        PluginType.HEADER_MUTATION.value: HeaderMutationPluginConfig,
-        PluginType.HALLUCINATION.value: HallucinationPluginConfig,
-        PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
-        PluginType.MEMORY.value: MemoryPluginConfig,
-        PluginType.RAG.value: RAGPluginConfig,
-        PluginType.IMAGE_GEN.value: ImageGenPluginConfig,
-        PluginType.TOOLS.value: ToolsPluginConfig,
-        PluginType.TOOL_SELECTION.value: ToolSelectionPluginConfig,
-    }
+    config_models = plugin_configuration_models()
 
     for decision in config.decisions:
         if not decision.plugins:

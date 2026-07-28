@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -153,6 +154,31 @@ func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 	}
 
 	assertCanonicalV03RoutingConfig(t, canonical)
+}
+
+func TestBuildCanonicalConfigRejectsUnknownRoutingOverrideField(t *testing.T) {
+	t.Parallel()
+
+	r := &SemanticRouterReconciler{}
+	sr := &vllmv1alpha1.SemanticRouter{
+		Spec: vllmv1alpha1.SemanticRouterSpec{
+			Config: vllmv1alpha1.ConfigSpec{
+				Routing: rawCanonicalRoutingJSON(t, `{
+					"modelCards": [
+						{"name": "demo", "descriptino": "typo"}
+					]
+				}`),
+			},
+		},
+	}
+
+	_, err := r.buildCanonicalConfig(context.Background(), sr)
+	if err == nil {
+		t.Fatal("expected unknown routing override field to be rejected")
+	}
+	if !strings.Contains(err.Error(), "routing.modelCards[0].descriptino") {
+		t.Fatalf("expected stable field path, got %v", err)
+	}
 }
 
 func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {

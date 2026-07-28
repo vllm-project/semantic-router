@@ -17,8 +17,6 @@ limitations under the License.
 package k8s
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 
 	yamlv3 "gopkg.in/yaml.v3"
@@ -51,7 +49,7 @@ func (c *CRDConverter) Convert(
 	if err != nil {
 		return nil, err
 	}
-	canonical.Version = "v0.3"
+	canonical.Version = config.CanonicalVersion
 
 	canonical.Providers.Defaults.DefaultModel = pool.Spec.DefaultModel
 	canonical.Routing.ModelCards = convertRoutingModelCards(pool.Spec.Models)
@@ -66,6 +64,9 @@ func (c *CRDConverter) Convert(
 	}
 
 	canonical.Providers.Models = mergeProviderMetadata(canonical.Providers.Models, convertProviderMetadata(pool.Spec.Models))
+	if err := config.ValidateCanonicalConfig(canonical); err != nil {
+		return nil, fmt.Errorf("generated canonical config is invalid: %w", err)
+	}
 	return canonical, nil
 }
 
@@ -355,7 +356,7 @@ func mergeCanonicalProviderMetadata(
 
 func cloneCanonicalConfig(base *config.CanonicalConfig) (*config.CanonicalConfig, error) {
 	if base == nil {
-		return &config.CanonicalConfig{Version: "v0.3"}, nil
+		return &config.CanonicalConfig{Version: config.CanonicalVersion}, nil
 	}
 
 	data, err := yamlv3.Marshal(base)
@@ -374,32 +375,27 @@ func validatePluginConfiguration(pluginType string, rawConfig []byte) error {
 	if len(rawConfig) == 0 {
 		return nil // Empty configuration is allowed
 	}
-	validator, ok := pluginConfigurationValidators[pluginType]
-	if !ok {
-		// Unknown plugin types are passed through without schema validation.
-		// This allows extensibility — only well-known types are validated.
+	payload := &config.StructuredPayload{Raw: append([]byte(nil), rawConfig...)}
+	if err := config.ValidateDecisionPluginConfiguration(pluginType, payload); err != nil {
+		return err
+	}
+	switch config.NormalizeDecisionPluginType(pluginType) {
+	case config.DecisionPluginSystemPrompt:
+		return validateSystemPromptPluginConfig(payload)
+	case config.DecisionPluginHeaderMutation:
+		return validateHeaderMutationPluginConfig(payload)
+	case config.DecisionPluginRouterReplay:
+		return validateRouterReplayPluginConfig(payload)
+	case config.DecisionPluginToolSelection:
+		return validateToolSelectionPluginConfigRaw(payload)
+	default:
 		return nil
 	}
-	return validator(rawConfig)
 }
 
-var pluginConfigurationValidators = map[string]func([]byte) error{
-	"semantic-cache":  validateSemanticCachePluginConfig,
-	"system_prompt":   validateSystemPromptPluginConfig,
-	"header_mutation": validateHeaderMutationPluginConfig,
-	"router_replay":   validateRouterReplayPluginConfig,
-	"tool_selection":  validateToolSelectionPluginConfigRaw,
-}
-
-func decodePluginConfiguration(rawConfig []byte, target any) error {
-	decoder := json.NewDecoder(bytes.NewReader(rawConfig))
-	decoder.DisallowUnknownFields()
-	return decoder.Decode(target)
-}
-
-func validateToolSelectionPluginConfigRaw(rawConfig []byte) error {
+func validateToolSelectionPluginConfigRaw(payload *config.StructuredPayload) error {
 	var cfg config.ToolSelectionPluginConfig
-	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
+	if err := config.UnmarshalPluginConfig(payload, &cfg); err != nil {
 		return fmt.Errorf("failed to unmarshal tool_selection config: %w", err)
 	}
 	if err := cfg.Validate(); err != nil {
@@ -408,17 +404,9 @@ func validateToolSelectionPluginConfigRaw(rawConfig []byte) error {
 	return nil
 }
 
-func validateSemanticCachePluginConfig(rawConfig []byte) error {
-	var cfg config.SemanticCachePluginConfig
-	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
-		return fmt.Errorf("failed to unmarshal semantic-cache config: %w", err)
-	}
-	return nil
-}
-
-func validateSystemPromptPluginConfig(rawConfig []byte) error {
+func validateSystemPromptPluginConfig(payload *config.StructuredPayload) error {
 	var cfg config.SystemPromptPluginConfig
-	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
+	if err := config.UnmarshalPluginConfig(payload, &cfg); err != nil {
 		return fmt.Errorf("failed to unmarshal system_prompt config: %w", err)
 	}
 	if cfg.Mode != "" && cfg.Mode != "replace" && cfg.Mode != "insert" {
@@ -427,9 +415,9 @@ func validateSystemPromptPluginConfig(rawConfig []byte) error {
 	return nil
 }
 
-func validateHeaderMutationPluginConfig(rawConfig []byte) error {
+func validateHeaderMutationPluginConfig(payload *config.StructuredPayload) error {
 	var cfg config.HeaderMutationPluginConfig
-	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
+	if err := config.UnmarshalPluginConfig(payload, &cfg); err != nil {
 		return fmt.Errorf("failed to unmarshal header_mutation config: %w", err)
 	}
 	if len(cfg.Add) == 0 && len(cfg.Update) == 0 && len(cfg.Delete) == 0 {
@@ -450,9 +438,9 @@ func validateHeaderMutationEntries(operation string, headers []config.HeaderPair
 	return nil
 }
 
-func validateRouterReplayPluginConfig(rawConfig []byte) error {
+func validateRouterReplayPluginConfig(payload *config.StructuredPayload) error {
 	var cfg config.RouterReplayPluginConfig
-	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
+	if err := config.UnmarshalPluginConfig(payload, &cfg); err != nil {
 		return fmt.Errorf("failed to unmarshal router_replay config: %w", err)
 	}
 	if cfg.MaxRecords < 0 {

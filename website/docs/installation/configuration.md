@@ -27,6 +27,18 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
 - `recipes`: optional named routing profiles beside the default `routing` profile.
 - `global`: sparse runtime overrides. If you omit a field here, the router's built-in default is used.
 
+The steady-state loader requires an explicit supported `version` before it
+interprets any other field. Missing, non-string, empty, older, and future
+versions are rejected. Older layouts are accepted only by the explicit
+`vllm-sr config migrate` workflow.
+
+Canonical objects are closed across the router, CLI, dashboard, DSL, and
+Kubernetes producers. A misspelled or unsupported field is rejected with a
+stable dotted path such as `routing.modelCards[0].descriptino`. Schemaless
+content is limited to documented extension leaves; for example, the RAG MCP
+backend owns `tool_arguments`, while the rest of the plugin and backend payload
+remains strictly validated.
+
 ## Ownership by section
 
 - `routing` is the DSL-owned surface.

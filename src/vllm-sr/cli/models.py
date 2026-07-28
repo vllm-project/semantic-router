@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import (
-    BaseModel,
+    BaseModel as PydanticBaseModel,
     ConfigDict,
     Field,
     StrictBool,
@@ -13,6 +13,13 @@ from pydantic import (
 )
 
 from .algorithms import AlgorithmConfig, ModelRef
+from .config_contract import CANONICAL_VERSION
+
+
+class BaseModel(PydanticBaseModel):
+    """Strict base for every typed canonical configuration surface."""
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class Listener(BaseModel):
@@ -37,6 +44,12 @@ class KeywordSignal(BaseModel):
     operator: str
     keywords: List[str]
     case_sensitive: bool = False
+    method: Optional[str] = None
+    fuzzy_match: bool = False
+    fuzzy_threshold: int = 0
+    bm25_threshold: float = 0
+    ngram_threshold: float = 0
+    ngram_arity: int = 0
 
 
 class EmbeddingSignal(BaseModel):
@@ -130,12 +143,21 @@ class Projections(BaseModel):
     mappings: Optional[List[ProjectionMapping]] = []
 
 
+class DomainModelScore(BaseModel):
+    """Per-domain model preference metadata."""
+
+    model: str
+    score: float
+    use_reasoning: Optional[bool] = None
+
+
 class Domain(BaseModel):
     """Domain category configuration."""
 
     name: str
-    description: str
+    description: Optional[str] = None
     mmlu_categories: Optional[List[str]] = None
+    model_scores: List[DomainModelScore] = Field(default_factory=list)
 
 
 class FactCheck(BaseModel):
@@ -165,7 +187,8 @@ class Language(BaseModel):
     """Language detection signal configuration."""
 
     name: str
-    description: str
+    description: Optional[str] = None
+    threshold: Optional[float] = None
 
 
 class ContextRule(BaseModel):
@@ -283,7 +306,7 @@ class PrototypeScoringConfig(BaseModel):
 class EmbeddingClassifierConfig(BaseModel):
     """Embedding classifier tuning, including prototype-aware label scoring controls."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     backend: Optional[str] = None
     model_type: Optional[str] = None
@@ -561,6 +584,24 @@ class ToolsPluginConfig(BaseModel):
     semantic_selection: Optional[bool] = None
     allow_tools: Optional[List[str]] = None
     block_tools: Optional[List[str]] = None
+    strategy: Optional[str] = None
+    dynamic_retrieval: Optional["DynamicRetrievalConfig"] = None
+
+
+class DynamicRetrievalWeights(BaseModel):
+    semantic: float = 0
+    history: float = 0
+    decision_prior: float = 0
+    repetition_penalty: float = 0
+
+
+class DynamicRetrievalConfig(BaseModel):
+    enabled: bool
+    strategy: Optional[Literal["semantic_only", "hybrid_history"]] = None
+    history_window: int = 0
+    weights: Optional[DynamicRetrievalWeights] = None
+    min_history_confidence: float = 0
+    fallback_on_low_confidence: bool = False
 
 
 class ToolFilteringWeights(BaseModel):
@@ -687,6 +728,17 @@ class RouterReplayPluginConfig(BaseModel):
         gt=0,
         description="Max bytes to capture per body (must be > 0, default: 4096)",
     )
+    max_tool_trace_bytes: int = Field(default=0, ge=0)
+    max_tool_trace_steps: int = Field(default=0, ge=0)
+
+
+class MemoryReflectionConfig(BaseModel):
+    enabled: Optional[bool] = None
+    algorithm: Optional[str] = None
+    max_inject_tokens: int = 0
+    recency_decay_days: int = 0
+    dedup_threshold: float = 0
+    block_patterns: Optional[List[str]] = None
 
 
 class MemoryPluginConfig(BaseModel):
@@ -708,6 +760,64 @@ class MemoryPluginConfig(BaseModel):
         default=None,
         description="Auto-extract memories from conversation (default: use request config)",
     )
+    hybrid_search: bool = False
+    hybrid_mode: Optional[str] = None
+    reflection: Optional[MemoryReflectionConfig] = None
+
+
+class MilvusRAGConfig(BaseModel):
+    collection: str
+    reuse_cache_connection: bool = False
+    content_field: Optional[str] = None
+    metadata_field: Optional[str] = None
+    filter_expression: Optional[str] = None
+
+
+class QdrantRAGConfig(BaseModel):
+    collection: str
+    reuse_cache_connection: bool = False
+    content_field: Optional[str] = None
+
+
+class ExternalAPIRAGConfig(BaseModel):
+    endpoint: str
+    api_key: Optional[str] = None
+    auth_header: Optional[str] = None
+    request_format: str
+    request_template: Optional[str] = None
+    timeout_seconds: Optional[int] = None
+    headers: Optional[Dict[str, str]] = None
+
+
+class MCPRAGConfig(BaseModel):
+    server_name: str
+    tool_name: str
+    tool_arguments: Optional[Dict[str, Any]] = None
+    timeout_seconds: Optional[int] = None
+
+
+class OpenAIRAGConfig(BaseModel):
+    vector_store_id: str
+    base_url: Optional[str] = None
+    api_key: str
+    max_num_results: Optional[int] = None
+    file_ids: Optional[List[str]] = None
+    filter: Optional[Dict[str, Any]] = None
+    timeout_seconds: Optional[int] = None
+    workflow_mode: Optional[str] = None
+
+
+class VectorStoreRAGConfig(BaseModel):
+    vector_store_id: str
+    file_ids: Optional[List[str]] = None
+
+
+class HybridRAGConfig(BaseModel):
+    primary: str
+    fallback: Optional[str] = None
+    primary_config: Optional[Dict[str, Any]] = None
+    fallback_config: Optional[Dict[str, Any]] = None
+    strategy: Optional[str] = None
 
 
 class RAGPluginConfig(BaseModel):
@@ -801,16 +911,25 @@ class RAGPluginConfig(BaseModel):
         description="Minimum confidence for triggering retrieval",
     )
 
+    @model_validator(mode="after")
+    def validate_backend_configuration(self):
+        _validate_rag_backend_configuration(
+            self.backend, self.backend_config, "backend_config"
+        )
+        return self
+
 
 class PluginConfig(BaseModel):
-    """Plugin configuration with type validation.
-
-    Configuration schema validation is performed in the validator module
-    to ensure proper plugin-specific validation.
-    """
+    """Plugin configuration validated by its type discriminator owner."""
 
     type: PluginType
     configuration: Dict[str, Any]
+
+    @model_validator(mode="after")
+    def validate_owned_configuration(self):
+        config_model = plugin_configuration_models()[self.type.value]
+        config_model.model_validate(self.configuration)
+        return self
 
     def model_dump(self, **kwargs):
         """Override model_dump to serialize PluginType enum as string value."""
@@ -826,17 +945,108 @@ class PluginConfig(BaseModel):
         return data
 
 
+class ModalityClassifierConfig(BaseModel):
+    model_path: Optional[str] = None
+    use_cpu: bool = False
+
+
+class ModalityDetectionConfig(BaseModel):
+    method: Optional[Literal["classifier", "keyword", "hybrid"]] = None
+    classifier: Optional[ModalityClassifierConfig] = None
+    keywords: Optional[List[str]] = None
+    both_keywords: Optional[List[str]] = None
+    confidence_threshold: float = 0
+    lower_threshold_ratio: float = 0
+
+
+class VLLMOmniImageGenConfig(BaseModel):
+    base_url: str
+    model: Optional[str] = None
+    num_inference_steps: int = 0
+    cfg_scale: float = 0
+    seed: Optional[int] = None
+
+
+class OpenAIImageGenConfig(BaseModel):
+    api_key: str
+    base_url: Optional[str] = None
+    model: Optional[str] = None
+    quality: Optional[str] = None
+    style: Optional[str] = None
+
+
 class ImageGenPluginConfig(BaseModel):
     """Configuration for image_gen plugin."""
 
     enabled: bool
     backend: str
     backend_config: Optional[Dict[str, Any]] = None
-    modality_detection: Optional[Dict[str, Any]] = None
+    modality_detection: Optional[ModalityDetectionConfig] = None
     default_width: Optional[int] = Field(default=None, ge=1)
     default_height: Optional[int] = Field(default=None, ge=1)
     max_inference_steps: Optional[int] = Field(default=None, ge=1)
     timeout_seconds: Optional[int] = Field(default=None, ge=1)
+
+    @model_validator(mode="after")
+    def validate_backend_configuration(self):
+        if self.backend_config is None:
+            return self
+        config_model = {
+            "vllm_omni": VLLMOmniImageGenConfig,
+            "openai": OpenAIImageGenConfig,
+        }.get(self.backend)
+        if config_model is None:
+            raise ValueError(f"unsupported image_gen backend {self.backend!r}")
+        config_model.model_validate(self.backend_config)
+        return self
+
+
+def _validate_rag_backend_configuration(
+    backend: str, configuration: Optional[Dict[str, Any]], path: str
+) -> None:
+    if configuration is None:
+        return
+    config_model = {
+        "milvus": MilvusRAGConfig,
+        "qdrant": QdrantRAGConfig,
+        "external_api": ExternalAPIRAGConfig,
+        "mcp": MCPRAGConfig,
+        "openai": OpenAIRAGConfig,
+        "vectorstore": VectorStoreRAGConfig,
+        "hybrid": HybridRAGConfig,
+    }.get(backend)
+    if config_model is None:
+        raise ValueError(f"{path}: unsupported RAG backend {backend!r}")
+    validated = config_model.model_validate(configuration)
+    if not isinstance(validated, HybridRAGConfig):
+        return
+    _validate_rag_backend_configuration(
+        validated.primary, validated.primary_config, f"{path}.primary_config"
+    )
+    if validated.fallback or validated.fallback_config is not None:
+        _validate_rag_backend_configuration(
+            validated.fallback or "",
+            validated.fallback_config,
+            f"{path}.fallback_config",
+        )
+
+
+def plugin_configuration_models() -> Dict[str, type[BaseModel]]:
+    return {
+        PluginType.SEMANTIC_CACHE.value: SemanticCachePluginConfig,
+        PluginType.FAST_RESPONSE.value: FastResponsePluginConfig,
+        PluginType.REQUEST_PARAMS.value: RequestParamsPluginConfig,
+        PluginType.RESPONSE_JAILBREAK.value: ResponseJailbreakPluginConfig,
+        PluginType.SYSTEM_PROMPT.value: SystemPromptPluginConfig,
+        PluginType.HEADER_MUTATION.value: HeaderMutationPluginConfig,
+        PluginType.HALLUCINATION.value: HallucinationPluginConfig,
+        PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
+        PluginType.MEMORY.value: MemoryPluginConfig,
+        PluginType.RAG.value: RAGPluginConfig,
+        PluginType.IMAGE_GEN.value: ImageGenPluginConfig,
+        PluginType.TOOLS.value: ToolsPluginConfig,
+        PluginType.TOOL_SELECTION.value: ToolSelectionPluginConfig,
+    }
 
 
 class DecisionLearningAdaptationConfig(BaseModel):
@@ -1014,6 +1224,38 @@ class OutputContractSpec(BaseModel):
     postprocess: Optional[List[OutputContractPostprocess]] = None
 
 
+class RetentionDirective(BaseModel):
+    """Declarative cache/model retention controls emitted by the DSL."""
+
+    drop: Optional[bool] = None
+    ttl_turns: Optional[int] = None
+    keep_current_model: Optional[bool] = None
+    prefer_prefix_retention: Optional[bool] = None
+
+
+class EmitDirective(BaseModel):
+    """Typed declarative side effect attached to a decision."""
+
+    kind: Literal["retention"]
+    retention: Optional[RetentionDirective] = None
+
+
+class CandidateIterationOutput(BaseModel):
+    """How a bounded candidate iteration feeds routing output."""
+
+    type: str
+    value: Optional[str] = None
+
+
+class CandidateIteration(BaseModel):
+    """Bounded DSL candidate iteration metadata."""
+
+    variable: str
+    source: str
+    models: List[ModelRef] = Field(default_factory=list)
+    outputs: List[CandidateIterationOutput] = Field(default_factory=list)
+
+
 class Decision(BaseModel):
     """Routing decision configuration."""
 
@@ -1022,6 +1264,7 @@ class Decision(BaseModel):
     name: str
     description: str
     priority: int
+    tier: int = 0
     rules: Rules
     output_contract: Optional[str] = None
     output_contract_spec: Optional[OutputContractSpec] = None
@@ -1029,6 +1272,8 @@ class Decision(BaseModel):
     algorithm: Optional[AlgorithmConfig] = None  # Multi-model orchestration algorithm
     adaptations: Optional[DecisionAdaptationsConfig] = None
     plugins: Optional[List[PluginConfig]] = []
+    candidateIterations: List[CandidateIteration] = Field(default_factory=list)
+    emits: List[EmitDirective] = Field(default_factory=list)
 
 
 class ModelPricing(BaseModel):
@@ -1154,8 +1399,7 @@ class Routing(BaseModel):
 class EmbeddingModelsConfig(BaseModel):
     """Embedding models configuration for memory and semantic features."""
 
-    # Preserve advanced nested fields when users pass through custom config blocks.
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     qwen3_model_path: Optional[str] = Field(
         None, description="Path to Qwen3-Embedding model"
@@ -1185,17 +1429,43 @@ class EmbeddingModelsConfig(BaseModel):
     use_cpu: bool = Field(True, description="Use CPU for inference")
 
 
+class CanonicalEntrypoint(BaseModel):
+    """Selects a named recipe for one or more request model names."""
+
+    model_names: List[str]
+    recipe: str
+
+
+class CanonicalRecipe(BaseModel):
+    """Named routing profile sharing the top-level model catalog."""
+
+    name: str
+    description: Optional[str] = None
+    routing: Routing
+
+
+class SetupConfig(BaseModel):
+    """CLI/dashboard bootstrap marker removed before router startup."""
+
+    mode: bool
+    state: Optional[str] = None
+    created_by: Optional[str] = None
+    created_at: Optional[str] = None
+
+
 class UserConfig(BaseModel):
     """Canonical v0.3 user configuration."""
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
-    version: str
+    version: Literal[CANONICAL_VERSION]
     listeners: List[Listener] = Field(default_factory=list)
     providers: Providers = Field(default_factory=Providers)
     routing: Routing = Field(default_factory=Routing)
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
-    setup: Optional[Dict[str, Any]] = None
+    entrypoints: List[CanonicalEntrypoint] = Field(default_factory=list)
+    recipes: List[CanonicalRecipe] = Field(default_factory=list)
+    setup: Optional[SetupConfig] = None
 
     @property
     def signals(self) -> Signals:
@@ -1209,3 +1479,4 @@ class UserConfig(BaseModel):
 # Resolve forward references for recursive condition trees.
 Condition.model_rebuild()
 Model.model_rebuild()
+ToolsPluginConfig.model_rebuild()

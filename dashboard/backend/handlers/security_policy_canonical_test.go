@@ -150,15 +150,15 @@ func TestMergeDeployPayloadWithRateLimit(t *testing.T) {
 	t.Parallel()
 
 	baseYAML := `
-version: "0.3"
+version: "v0.3"
 routing:
   modelCards:
     - name: gpt-4
   signals:
     keywords:
       - name: test_kw
-        patterns: ["hello"]
-        weight: 1.0
+        operator: OR
+        keywords: ["hello"]
   decisions:
     - name: existing-decision
       priority: 1
@@ -170,7 +170,8 @@ routing:
 global:
   services:
     observability:
-      enabled: true
+      metrics:
+        enabled: true
     ratelimit:
       providers:
         - type: local-limiter
@@ -250,14 +251,15 @@ func TestMergeDeployPayloadPreservesOtherGlobalFields(t *testing.T) {
 	t.Parallel()
 
 	baseYAML := `
-version: "0.3"
+version: "v0.3"
 routing:
   modelCards:
     - name: gpt-4
 global:
   services:
     observability:
-      enabled: true
+      metrics:
+        enabled: true
     ratelimit:
       providers:
         - type: local-limiter
@@ -315,7 +317,7 @@ func TestMergeDeployPayloadNoRateLimitPreservesExisting(t *testing.T) {
 	t.Parallel()
 
 	baseYAML := `
-version: "0.3"
+version: "v0.3"
 routing:
   modelCards:
     - name: gpt-4
@@ -396,7 +398,7 @@ func TestRateLimitRoundTripFragmentToRouterConfig(t *testing.T) {
 	}
 
 	baseYAML := `
-version: "0.3"
+version: "v0.3"
 routing:
   modelCards:
     - name: gpt-4

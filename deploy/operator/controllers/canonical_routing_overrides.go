@@ -3,6 +3,7 @@ package controllers
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"gopkg.in/yaml.v3"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -19,32 +20,11 @@ type canonicalRoutingOverrideFields struct {
 
 func canonicalRoutingFromKubernetesJSON(raw *apiextensionsv1.JSON) (routerconfig.CanonicalRouting, canonicalRoutingOverrideFields, error) {
 	var routing routerconfig.CanonicalRouting
-	var fields canonicalRoutingOverrideFields
-
-	if raw == nil || len(raw.Raw) == 0 {
-		return routing, fields, nil
+	object, err := decodeCanonicalRoutingObject(raw)
+	if err != nil || object == nil {
+		return routing, canonicalRoutingOverrideFields{}, err
 	}
-
-	var object map[string]interface{}
-	if err := json.Unmarshal(raw.Raw, &object); err != nil {
-		return routing, fields, err
-	}
-	if object == nil {
-		return routing, fields, nil
-	}
-
-	for key := range object {
-		switch key {
-		case "modelCards":
-			fields.modelCards = true
-		case "signals":
-			fields.signals = true
-		case "projections":
-			fields.projections = true
-		case "decisions":
-			fields.decisions = true
-		}
-	}
+	fields := canonicalRoutingFields(object)
 
 	data, err := yaml.Marshal(object)
 	if err != nil {
@@ -55,6 +35,42 @@ func canonicalRoutingFromKubernetesJSON(raw *apiextensionsv1.JSON) (routerconfig
 	}
 
 	return routing, fields, nil
+}
+
+func decodeCanonicalRoutingObject(raw *apiextensionsv1.JSON) (map[string]interface{}, error) {
+	if raw == nil || len(raw.Raw) == 0 {
+		return nil, nil
+	}
+
+	var object map[string]interface{}
+	if err := json.Unmarshal(raw.Raw, &object); err != nil {
+		return nil, err
+	}
+	if object == nil {
+		return nil, nil
+	}
+	if err := routerconfig.RejectUnknownConfigValue(
+		object,
+		reflect.TypeOf(routerconfig.CanonicalRouting{}),
+		"config.routing",
+	); err != nil {
+		return nil, err
+	}
+	return object, nil
+}
+
+func canonicalRoutingFields(object map[string]interface{}) canonicalRoutingOverrideFields {
+	return canonicalRoutingOverrideFields{
+		modelCards:  hasCanonicalRoutingField(object, "modelCards"),
+		signals:     hasCanonicalRoutingField(object, "signals"),
+		projections: hasCanonicalRoutingField(object, "projections"),
+		decisions:   hasCanonicalRoutingField(object, "decisions"),
+	}
+}
+
+func hasCanonicalRoutingField(object map[string]interface{}, field string) bool {
+	_, ok := object[field]
+	return ok
 }
 
 func applyCanonicalRoutingOverrides(
