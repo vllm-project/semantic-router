@@ -129,3 +129,36 @@ func TestAutoModelNoSelectionNoDefaultReturns400(t *testing.T) {
 	require.NotNil(t, resp.GetImmediateResponse(), "no selection and no default should produce an immediate error response")
 	assert.Equal(t, 400, int(resp.GetImmediateResponse().GetStatus().GetCode()))
 }
+
+// The auto-routing branch that dispatches to the looper (algorithm.type
+// confidence/ratings matched by normal decision evaluation, as opposed to a
+// client requesting the "fusion"/"remom"/"workflows" pseudo-model directly)
+// must set ctx.VSRSelectedDecisionName before calling handleLooperExecution,
+// the same way handleAutoModelRouting's trackVSRDecision call does for
+// non-looper decisions and handleDirectFusionExecution/handleDirectReMoMExecution/
+// handleDirectFlowExecution already do for their algorithm types. Without it,
+// x-vsr-selected-decision comes back empty for any looper decision reached via
+// normal auto-matching (caught by the #2694 e2e test, which is the first e2e
+// coverage to exercise a confidence-algorithm decision through this path).
+func TestLooperAutoRoutingSetsSelectedDecisionName(t *testing.T) {
+	router, cfg := newModelResolutionTestRouter(t)
+	cfg.Looper.Endpoint = "http://127.0.0.1:0/v1/chat/completions" // unreachable; only ctx state before dispatch is under test
+	ctx := newModelResolutionTestContext()
+	decision := &config.Decision{
+		Name: "looper_test_decision",
+		Algorithm: &config.AlgorithmConfig{
+			Type:       "confidence",
+			Confidence: &config.ConfidenceAlgorithmConfig{ConfidenceMethod: "hybrid", Threshold: 0.5},
+		},
+		ModelRefs: []config.ModelRef{
+			{Model: "known-model"},
+			{Model: "known-model"},
+		},
+	}
+	ctx.VSRSelectedDecision = decision
+	req := &openai.ChatCompletionNewParams{Model: "MoM"}
+
+	_, err := router.handleModelRouting(req, "MoM", decision.Name, entropy.ReasoningDecision{}, "known-model", ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "looper_test_decision", ctx.VSRSelectedDecisionName)
+}
