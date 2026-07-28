@@ -115,6 +115,12 @@ query($cursor: String) {
 
 const identityOverrides = [
   {
+    key: 'wilsonwu',
+    name: 'Wilson Wu',
+    login: 'wilsonwu',
+    emails: ['iwilsonwu@gmail.com'],
+  },
+  {
     key: 'xunzhuo-liu',
     name: 'Xunzhuo Liu',
     login: 'Xunzhuo',
