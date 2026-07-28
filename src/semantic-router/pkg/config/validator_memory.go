@@ -27,8 +27,9 @@ func validateMemoryContracts(cfg *RouterConfig) error {
 		return err
 	}
 
-	for i := range cfg.Decisions {
-		decision := &cfg.Decisions[i]
+	decisions := cfg.AllRoutingDecisions()
+	for i := range decisions {
+		decision := &decisions[i]
 		pluginCfg := decision.GetMemoryConfig()
 		if pluginCfg == nil || pluginCfg.SimilarityThreshold == nil {
 			continue

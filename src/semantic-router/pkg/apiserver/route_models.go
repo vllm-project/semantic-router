@@ -18,6 +18,7 @@ func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, _ *h
 
 	builder := newOpenAIModelListBuilder(now)
 	builder.appendAutoAliases(cfg)
+	builder.appendEntrypointAliases(cfg)
 	builder.appendLooperAliases(cfg)
 	builder.appendBackendModels(cfg)
 
@@ -49,6 +50,18 @@ func (b *openAIModelListBuilder) appendAutoAliases(cfg *config.RouterConfig) {
 	}
 	for _, model := range autoModelNames {
 		b.append(model, "vllm-semantic-router", "Intelligent Router for Mixture-of-Models")
+	}
+}
+
+func (b *openAIModelListBuilder) appendEntrypointAliases(cfg *config.RouterConfig) {
+	if cfg == nil {
+		return
+	}
+	for _, entrypoint := range cfg.Entrypoints {
+		description := cfg.EntrypointRecipeDescription(entrypoint.Recipe)
+		for _, model := range entrypoint.ModelNames {
+			b.append(model, "vllm-semantic-router", description)
+		}
 	}
 }
 
