@@ -185,7 +185,7 @@ func (h *StreamedBodyHandler) handleInit(eos bool) (*ext_proc.ProcessingResponse
 		h.ctx.RequestModel = h.model
 	}
 
-	h.isAuto = h.router.Config != nil && h.router.Config.IsAutoModelName(h.model)
+	h.isAuto = h.router.requestModelActsAsAuto(h.model)
 
 	if h.isAuto {
 		h.state = stateAccumulate
