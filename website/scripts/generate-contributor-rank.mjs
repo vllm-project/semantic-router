@@ -379,14 +379,7 @@ try {
     targetRelease: releaseTimeline.v03,
   }
   const rangeDefinitions = buildReleaseRangeDefinitions(releaseTimeline, generatedAt)
-  let pullRequests = []
-
-  try {
-    pullRequests = fetchMergedPullRequests()
-  }
-  catch (error) {
-    console.warn(`Skipping PR review stats: ${error.message}`)
-  }
+  const pullRequests = fetchMergedPullRequests()
 
   const newContributorsSinceRelease = buildNewContributorsSinceRelease(releaseWindow, allRows, pullRequests)
   const snapshots = Object.fromEntries(
