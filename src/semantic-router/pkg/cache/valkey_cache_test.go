@@ -114,32 +114,6 @@ func TestValkeyMetricTypeNormalization(t *testing.T) {
 	}
 }
 
-func TestDistanceToSimilarity(t *testing.T) {
-	tests := []struct {
-		name     string
-		metric   string
-		distance float64
-		expected float32
-	}{
-		{"COSINE zero distance", "COSINE", 0.0, 1.0},
-		{"COSINE max distance", "COSINE", 2.0, 0.0},
-		{"IP passthrough", "IP", 0.75, 0.75},
-		{"L2 zero distance", "L2", 0.0, 1.0},
-		// Lowercase inputs hit the default branch (1 - distance).
-		// After normalization these should never occur, but verify
-		// the fallback is sane.
-		{"lowercase cosine falls to default", "cosine", 0.0, 1.0},
-		{"lowercase ip falls to default", "ip", 0.75, 0.25},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := distanceToSimilarity(tt.metric, tt.distance)
-			assert.InDelta(t, tt.expected, result, 0.001)
-		})
-	}
-}
-
 func TestEscapeTagValue(t *testing.T) {
 	tests := []struct {
 		name     string

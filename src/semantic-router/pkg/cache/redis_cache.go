@@ -19,6 +19,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	valkeyutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/valkey"
 )
 
 // RedisCache provides a scalable semantic cache implementation using Redis with vector search
@@ -69,6 +70,12 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 	} else {
 		redisConfig = options.Config
 	}
+	// Normalize the metric type to uppercase, matching the Valkey cache, the
+	// Valkey vector store and the agentic memory store. initializeIndex matches
+	// on the uppercase spellings, so without this a config using e.g. "l2"
+	// would build a COSINE index while similarity scores were read back with
+	// the L2 formula.
+	redisConfig.Index.VectorField.MetricType = strings.ToUpper(redisConfig.Index.VectorField.MetricType)
 	logging.Debugf("RedisCache: config loaded - host=%s:%d, index=%s, dimension=%d",
 		redisConfig.Connection.Host, redisConfig.Connection.Port, redisConfig.Index.Name,
 		semanticCacheEmbeddingDimension(redisConfig.Index.VectorField.Dimension, options.EmbeddingModel))
@@ -593,21 +600,6 @@ func (c *RedisCache) FindSimilar(model string, query string) ([]byte, bool, erro
 	return c.FindSimilarWithThreshold(model, query, c.similarityThreshold)
 }
 
-// distanceToSimilarity converts a Redis vector distance to a similarity score [0, 1]
-// based on the configured metric type.
-func (c *RedisCache) distanceToSimilarity(distance float64) float32 {
-	switch c.config.Index.VectorField.MetricType {
-	case "COSINE":
-		return 1.0 - float32(distance)/2.0
-	case "IP":
-		return float32(distance)
-	case "L2":
-		return 1.0 / (1.0 + float32(distance))
-	default:
-		return 1.0 - float32(distance)
-	}
-}
-
 // recordCacheMiss records a cache miss with the given status and logs the event.
 func (c *RedisCache) recordCacheMiss(status string, elapsed time.Duration) {
 	atomic.AddInt64(&c.missCount, 1)
@@ -629,7 +621,7 @@ func (c *RedisCache) extractSearchResult(bestDoc redis.Document) (float32, []byt
 		return 0, nil, false
 	}
 
-	similarity := c.distanceToSimilarity(distance)
+	similarity := float32(valkeyutil.DistanceToSimilarity(c.config.Index.VectorField.MetricType, distance))
 
 	responseBodyStr := fmt.Sprint(bestDoc.Fields["response_body"])
 	if responseBodyStr == "" {

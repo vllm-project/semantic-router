@@ -174,20 +174,6 @@ func escapeTagValue(s string) string {
 	return b.String()
 }
 
-// distanceToSimilarity converts a vector distance to a similarity score based on the metric type.
-func distanceToSimilarity(metricType string, distance float64) float32 {
-	switch metricType {
-	case "COSINE":
-		return 1.0 - float32(distance)/2.0
-	case "IP":
-		return float32(distance)
-	case "L2":
-		return 1.0 / (1.0 + float32(distance))
-	default:
-		return 1.0 - float32(distance)
-	}
-}
-
 // extractResponseBody returns the response bytes from a search match, or nil if missing/empty.
 func extractResponseBody(match *searchMatch) []byte {
 	if match.responseBody == nil {

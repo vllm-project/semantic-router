@@ -544,7 +544,7 @@ func (c *ValkeyCache) FindSimilarWithThreshold(model string, query string, thres
 		return nil, false, nil
 	}
 
-	similarity := distanceToSimilarity(c.config.Index.VectorField.MetricType, match.distance)
+	similarity := float32(valkeyutil.DistanceToSimilarity(c.config.Index.VectorField.MetricType, match.distance))
 	c.StoreSimilarity(similarity)
 
 	if similarity < threshold {
