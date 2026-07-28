@@ -6,13 +6,22 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// getUsedSignals analyzes all decisions and returns which signals (type:name) are actually used.
-// This allows us to skip evaluation of unused signals for performance optimization.
+// getUsedSignals analyzes the decisions of every routing recipe and returns
+// which signals (type:name) are actually used. This allows us to skip
+// evaluation of unused signals for performance optimization.
 // Returns a map with keys in format "type:name" (e.g., "keyword:math_keywords").
 func (c *Classifier) getUsedSignals() map[string]bool {
+	return c.getUsedSignalsForDecisions(c.Config.AllRoutingDecisions())
+}
+
+// getUsedSignalsForDecisions is the request-scoped variant of getUsedSignals:
+// it analyzes only the given candidate decisions, so signal gates that carry
+// enforcement semantics (authz) fire only for the routing profile the request
+// actually evaluates, not for every profile in the config.
+func (c *Classifier) getUsedSignalsForDecisions(decisions []config.Decision) map[string]bool {
 	usedSignals := make(map[string]bool)
 
-	for _, decision := range c.Config.Decisions {
+	for _, decision := range decisions {
 		c.analyzeRuleCombination(decision.Rules, usedSignals)
 	}
 	c.expandProjectionDependencies(usedSignals)

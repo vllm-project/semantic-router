@@ -564,7 +564,12 @@ func maybePopulateFromReplay(
 	if !ltCfg.PopulateFromReplay || reader == nil {
 		return
 	}
-	go populateFromReplay(storage, reader)
+	// Same #1843 exposure as the periodic populator below: this one-shot
+	// call also parses replay-store entries, and it runs on every router
+	// build, including config reloads of a live router.
+	goSafely("lookup_table_populator_initial", func() {
+		populateFromReplay(storage, reader)
+	})
 
 	if ltCfg.PopulateInterval == "" {
 		return

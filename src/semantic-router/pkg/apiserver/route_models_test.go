@@ -33,6 +33,18 @@ func TestOpenAIModelsEndpoint(t *testing.T) {
 			expectedModelResultLength: 5,
 		},
 		{
+			name:   "entrypoint model names are exposed",
+			config: openAIModelsEntrypointTestConfig(),
+			expectedModels: []string{
+				"vllm-sr/auto",
+				"auto",
+				"MoM",
+				"vllm-sr/privacy",
+				"vllm-sr/default-alias",
+			},
+			expectedModelResultLength: 5,
+		},
+		{
 			name:   "direct looper models are exposed when decisions are configured",
 			config: openAIModelsLooperTestConfig(),
 			expectedModels: []string{
@@ -101,6 +113,19 @@ func openAIModelsTestConfig(includeConfiguredModels bool) *config.RouterConfig {
 		},
 		RouterOptions: config.RouterOptions{
 			IncludeConfigModelsInList: includeConfiguredModels,
+		},
+	}
+}
+
+func openAIModelsEntrypointTestConfig() *config.RouterConfig {
+	return &config.RouterConfig{
+		Recipes: []config.RoutingRecipe{
+			{Name: config.DefaultRecipeName},
+			{Name: "privacy", Description: "privacy profile"},
+		},
+		Entrypoints: []config.EntrypointMapping{
+			{ModelNames: []string{"vllm-sr/privacy"}, Recipe: "privacy"},
+			{ModelNames: []string{"vllm-sr/default-alias"}, Recipe: config.DefaultRecipeName},
 		},
 	}
 }

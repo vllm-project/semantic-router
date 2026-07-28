@@ -31,6 +31,7 @@ func (r *OpenAIRouter) handleModelsRequest(_ string) (*ext_proc.ProcessingRespon
 
 	builder := newExtProcOpenAIModelListBuilder(now)
 	builder.appendAutoAliases(r.Config)
+	builder.appendEntrypointAliases(r.Config)
 	builder.appendLooperAliases(r.Config)
 	builder.appendBackendModels(r.Config)
 
@@ -62,6 +63,18 @@ func (b *extProcOpenAIModelListBuilder) appendAutoAliases(cfg *config.RouterConf
 	}
 	for _, model := range autoModelNames {
 		b.append(model, "Intelligent Router for Mixture-of-Models")
+	}
+}
+
+func (b *extProcOpenAIModelListBuilder) appendEntrypointAliases(cfg *config.RouterConfig) {
+	if cfg == nil {
+		return
+	}
+	for _, entrypoint := range cfg.Entrypoints {
+		description := cfg.EntrypointRecipeDescription(entrypoint.Recipe)
+		for _, model := range entrypoint.ModelNames {
+			b.append(model, description)
+		}
 	}
 }
 
