@@ -299,7 +299,7 @@ benchmark-valkey: rust start-valkey ## Run Valkey cache performance benchmark
 		cd src/semantic-router/pkg/cache && \
 		out=../../../../benchmark_results/valkey/results.txt && \
 		CGO_ENABLED=1 go test -v -timeout 30m \
-		-run='^$' -bench=BenchmarkValkeyCache \
+		-run='^$$' -bench=BenchmarkValkeyCache \
 		-benchtime=100x -benchmem . > "$$out" 2>&1; status=$$?; \
 		cat "$$out"; \
 		[ $$status -eq 0 ] || exit $$status; \
