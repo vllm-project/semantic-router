@@ -1,54 +1,19 @@
-.container {
-  width: min(100% - 2.5rem, var(--site-content-max));
-  margin: 0 auto;
-  padding: 2.4rem 0 5rem;
-  color: #f5f5f7;
-}
-
-.header {
-  display: grid;
-  gap: 1.1rem;
-  margin-bottom: 2.4rem;
-  padding: 0.75rem 0 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.header h1 {
-  margin: 0;
-  color: #fff;
-  font-size: clamp(2.4rem, 6vw, 3.8rem);
-  line-height: 1;
-  font-weight: 650;
-  letter-spacing: -0.04em;
-}
-
-.subtitle {
-  max-width: 42rem;
-  margin: 0;
-  font-size: 1.05rem;
-  line-height: 1.7;
-  color: #a1a1aa;
-}
-
 .main {
   display: grid;
-  gap: 2.5rem;
+  gap: 2rem;
   min-width: 0;
 }
 
 .section {
   display: grid;
-  gap: 1.25rem;
+  gap: 1rem;
   min-width: 0;
 }
 
 .section h2 {
   margin: 0;
-  color: #fff;
-  font-size: clamp(1.5rem, 3vw, 2.1rem);
-  font-weight: 650;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
+  font-size: clamp(1.7rem, 4vw, 2.6rem);
+  line-height: 1;
 }
 
 .card,
@@ -56,76 +21,17 @@
 .promotion,
 .getInvolved,
 .contact {
+  padding: 1.35rem;
+  border: 1px solid var(--site-border);
+  background: var(--site-surface);
   min-width: 0;
-  padding: 1.55rem 1.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 1.15rem;
-  background: rgba(255, 255, 255, 0.03);
-  transition:
-    border-color 180ms ease,
-    background 180ms ease,
-    transform 180ms ease,
-    box-shadow 180ms ease;
-}
-
-.card:hover,
-.intro:hover,
-.promotion:hover,
-.getInvolved:hover {
-  border-color: rgba(48, 162, 255, 0.35);
-  background: rgba(48, 162, 255, 0.08);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
-  transform: translateY(-2px);
-}
-
-.card h3,
-.intro h3,
-.promotion h3,
-.getInvolved h3 {
-  margin: 0 0 0.7rem;
-  color: #fff;
-  font-size: 1.15rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
 }
 
 .card p,
 .section p,
 .contact li,
-.stepsList li,
-.intro p,
-.promotion p,
-.getInvolved p {
-  color: #b6b6bd;
+.stepsList li {
   line-height: 1.7;
-}
-
-.card a,
-.section a,
-.contact a,
-.intro a,
-.getInvolved a {
-  color: #75c5ff;
-  text-decoration: underline;
-  text-underline-offset: 0.16em;
-}
-
-.card a:hover,
-.section a:hover,
-.contact a:hover {
-  color: #30a2ff;
-}
-
-.card ul,
-.stepsList {
-  margin: 0.85rem 0 0;
-  padding-left: 1.15rem;
-  color: #a1a1aa;
-}
-
-.card li + li,
-.stepsList li + li {
-  margin-top: 0.35rem;
 }
 
 .grid,
@@ -146,23 +52,20 @@
 }
 
 .enforcementItem {
-  padding: 1.15rem 1.2rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.03);
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .enforcementItem h4 {
   margin-top: 0;
-  color: #fff;
 }
 
 .steps {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 0.85rem;
+  gap: 1rem;
   min-width: 0;
-  padding: 0.35rem 0;
 }
 
 .steps > * {
@@ -172,11 +75,9 @@
 .step {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 1rem;
-  padding: 1.1rem 1.15rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.025);
+  gap: 0.9rem;
+  padding: 1rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .step > :last-child,
@@ -186,22 +87,20 @@
   min-width: 0;
 }
 
-.step h4 {
-  margin: 0 0 0.35rem;
-  color: #fff;
+.step:first-child {
+  border-top: 0;
+  padding-top: 0;
 }
 
 .stepNumber {
   display: grid;
   place-items: center;
-  width: 2.15rem;
-  height: 2.15rem;
-  border: 1px solid rgba(48, 162, 255, 0.35);
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--site-border-strong);
   border-radius: 999px;
-  background: rgba(48, 162, 255, 0.12);
-  color: #75c5ff;
+  color: var(--site-text);
   font-size: 0.78rem;
-  font-weight: 700;
 }
 
 .stepNumberTips {
@@ -212,17 +111,16 @@
 .codeBlock {
   overflow: hidden;
   max-width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 1rem;
-  background: #0a0c10;
+  border: 1px solid var(--site-border);
+  background: #0c0c0c;
 }
 
 .codeHeader {
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--site-border);
 }
 
 .windowControls {
@@ -238,7 +136,7 @@
 }
 
 .title {
-  color: #a1a1aa;
+  color: var(--site-muted-bright);
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -255,7 +153,7 @@
   margin: 0;
   max-width: 100%;
   overflow-x: auto;
-  color: #f5f5f7;
+  color: var(--site-text);
   font-size: 0.85rem;
   line-height: 1.65;
 }
@@ -271,12 +169,10 @@
   align-items: center;
   min-height: 2.35rem;
   padding: 0.5rem 0.85rem;
-  border: 1px solid rgba(48, 162, 255, 0.28);
+  border: 1px solid var(--site-border);
   border-radius: 999px;
-  background: rgba(48, 162, 255, 0.1);
-  color: #75c5ff;
+  color: var(--site-text);
   font-size: 0.74rem;
-  font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -291,18 +187,8 @@
   padding: 0.12rem 0.32rem;
   border-radius: 0.35rem;
   background: rgba(255, 255, 255, 0.08);
-  color: #e4e4e7;
   overflow-wrap: anywhere;
   word-break: break-word;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .card:hover,
-  .intro:hover,
-  .promotion:hover,
-  .getInvolved:hover {
-    transform: none;
-  }
 }
 
 @media (max-width: 768px) {
@@ -317,6 +203,6 @@
   .promotion,
   .getInvolved,
   .contact {
-    padding: 1.2rem;
+    padding: 1.1rem;
   }
 }

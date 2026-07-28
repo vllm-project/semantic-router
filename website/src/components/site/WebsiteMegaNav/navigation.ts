@@ -1,6 +1,4 @@
-export type WebsiteMegaNavKey = 'docs' | 'research' | 'community' | 'blog'
-
-export interface WebsiteMegaNavLink {
+export interface WebsitePrimaryNavItem {
   key: string
   label: string
   to: string
@@ -17,54 +15,20 @@ export const WEBSITE_PRIMARY_NAV_ITEMS: WebsitePrimaryNavItem[] = [
   {
     key: 'research',
     label: 'Research',
-    description: 'Published research papers and talks from the project.',
-    landingTo: '/publications',
-    activePrefixes: [
-      '/publications',
-      '/white-paper',
-      '/vision-paper',
-    ],
-    sections: [
-      {
-        key: 'published',
-        title: 'Published work',
-        description: 'Read the project thesis and peer-facing results.',
-        links: [
-          {
-            key: 'publications',
-            label: 'Papers & Talks',
-            description: 'Browse publications, talks, and technical artifacts.',
-            to: '/publications',
-          },
-          {
-            key: 'white-paper',
-            label: 'White Paper',
-            description: 'Study the system design and engineering rationale.',
-            to: '/white-paper',
-          },
-          {
-            key: 'vision-paper',
-            label: 'Vision Paper',
-            description: 'See the long-range direction for intelligent routing.',
-            to: '/vision-paper',
-          },
-        ],
-      },
-    ],
+    to: '/publications',
+    activePrefixes: ['/publications', '/white-paper', '/vision-paper'],
+  },
+  {
+    key: 'blog',
+    label: 'Blog',
+    to: '/blog',
+    activePrefixes: ['/blog'],
   },
   {
     key: 'community',
     label: 'Community',
     to: '/community/team',
     activePrefixes: ['/community'],
-  },
-  {
-    key: 'blog',
-    label: 'Blog',
-    description: 'Engineering blog posts, release notes, and field reports.',
-    landingTo: '/blog',
-    activePrefixes: ['/blog'],
-    sections: [],
   },
 ]
 

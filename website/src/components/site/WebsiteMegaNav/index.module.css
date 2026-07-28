@@ -1,21 +1,15 @@
-/* ── Root & Triggers ─────────────────────────────── */
-
 .root {
-  position: relative;
   display: flex;
   align-items: center;
   height: 100%;
   gap: 0.15rem;
 }
 
-/* Wrapper div for groups with a dropdown (label + chevron) */
-.trigger {
-  position: relative;
+.link {
   display: inline-flex;
   align-items: center;
-  gap: 0;
   min-height: 2.3rem;
-  padding: 0;
+  padding: 0.58rem 0.78rem;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -31,259 +25,18 @@
     box-shadow 180ms ease;
 }
 
-.trigger:hover,
-.triggerActive,
-.triggerOpen {
+.link:hover,
+.link:focus-visible,
+.linkActive {
   background: rgba(255, 255, 255, 0.06);
   color: #fff;
-  box-shadow: inset 0 -2px var(--site-accent, #30a2ff);
-}
-
-/* Simple link trigger for groups with no dropdown (e.g. Blog) */
-.triggerPlain {
-  padding: 0.58rem 0.78rem;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.triggerPlain:hover,
-.triggerPlain:focus-visible {
+  box-shadow: inset 0 -2px var(--site-accent);
   text-decoration: none;
 }
 
-.triggerPlain:focus-visible {
-  outline: 2px solid var(--site-accent, #30a2ff);
-  outline-offset: -2px;
-}
-
-/* Label link inside split trigger */
-.triggerLabel {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2.3rem;
-  padding: 0.58rem 0.25rem 0.58rem 0.78rem;
-  color: inherit;
-  font: inherit;
-  font-size: inherit;
-  font-weight: inherit;
-  line-height: inherit;
-  text-transform: inherit;
-  letter-spacing: inherit;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.triggerLabel:hover,
-.triggerLabel:focus-visible {
-  color: #fff;
-  text-decoration: none;
-}
-
-.triggerLabel:focus-visible {
-  outline: 2px solid var(--site-accent, #30a2ff);
-  outline-offset: -2px;
-}
-
-/* Chevron button */
-.triggerChevron {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2.3rem;
-  padding: 0.58rem 0.78rem 0.58rem 0.35rem;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-.triggerChevron:hover {
-  color: #fff;
-}
-
-.triggerChevron:focus-visible {
-  outline: 2px solid var(--site-accent, #30a2ff);
-  outline-offset: -2px;
-}
-
-.triggerCaret {
-  display: inline-block;
-  width: 0;
-  height: 0;
-  border-right: 3.5px solid transparent;
-  border-bottom: 0;
-  border-left: 3.5px solid transparent;
-  border-top: 4px solid currentColor;
-  transition: transform 180ms ease;
-}
-
-.triggerChevronOpen .triggerCaret {
-  transform: rotate(180deg);
-}
-
-/* ── Dropdown Panel (scaled up ~12%) ─────────────── */
-
-.dropdown {
-  position: absolute;
-  z-index: 499;
-  top: 100%;
-  left: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  width: min(calc(100vw - 2rem), 50rem);
-  max-height: calc(100vh - var(--site-header-height, 4.9rem) - 1.5rem);
-  overflow: auto;
-  padding: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 1rem;
-  background: #111318;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 20px 56px rgba(0, 0, 0, 0.5);
-  animation: dropdown-in 160ms ease-out both;
-}
-
-/* ── Sections ────────────────────────────────────── */
-
-.section {
-  padding: 0.65rem 0;
-}
-
-.section + .section {
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.sectionLabel {
-  padding: 0.35rem 0.75rem 0.65rem;
-  color: #71717a;
-  font-family: var(--ifm-font-family-monospace, monospace);
-  font-size: 0.66rem;
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-}
-
-.sectionGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.3rem;
-}
-
-/* ── Navigation Cards ────────────────────────────── */
-
-.navCard {
-  display: flex;
-  gap: 0.9rem;
-  align-items: flex-start;
-  padding: 0.85rem 0.95rem;
-  border-radius: 0.7rem;
-  color: #e4e4e7;
-  text-decoration: none;
-  transition:
-    background 150ms ease,
-    color 150ms ease;
-}
-
-.navCard:hover,
-.navCard:focus-visible {
-  background: rgba(48, 162, 255, 0.08);
-  color: #fff;
-  text-decoration: none;
-}
-
-.navCard:focus-visible {
-  outline: 2px solid var(--site-accent, #30a2ff);
-  outline-offset: -2px;
-}
-
-/* ── Card Icon ───────────────────────────────────── */
-
-.cardIcon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 2.4rem;
-  height: 2.4rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 0.55rem;
-  background: rgba(255, 255, 255, 0.04);
-  color: #a1a1aa;
-}
-
-.cardIcon svg {
-  width: 1.2rem;
-  height: 1.2rem;
-}
-
-.navCard:hover .cardIcon {
-  border-color: rgba(48, 162, 255, 0.3);
-  background: rgba(48, 162, 255, 0.1);
-  color: var(--site-accent, #30a2ff);
-}
-
-/* ── Card Body ───────────────────────────────────── */
-
-.cardBody {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  min-width: 0;
-  padding-top: 0.15rem;
-}
-
-.cardBody strong {
-  color: #f4f4f5;
-  font-size: 0.88rem;
-  font-weight: 600;
-  line-height: 1.25;
-}
-
-.cardBody span {
-  color: #71717a;
-  font-size: 0.78rem;
-  line-height: 1.45;
-}
-
-.navCard:hover .cardBody strong {
-  color: #fff;
-}
-
-.navCard:hover .cardBody span {
-  color: #a1a1aa;
-}
-
-/* ── Animation ───────────────────────────────────── */
-
-@keyframes dropdown-in {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* ── Responsive ──────────────────────────────────── */
-
-@media (max-width: 1240px) {
-  .dropdown {
-    width: min(calc(100vw - 1.5rem), 40rem);
-    padding: 0.7rem;
-  }
-
-  .sectionGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .navCard {
-    padding: 0.7rem;
-  }
+.link:focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 2px;
 }
 
 @media (max-width: 1099px) {
@@ -293,19 +46,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dropdown {
-    animation: none;
-  }
-
-  .trigger,
-  .triggerLabel,
-  .triggerPlain,
-  .triggerChevron,
-  .navCard {
-    transition: none;
-  }
-
-  .triggerCaret {
+  .link {
     transition: none;
   }
 }
