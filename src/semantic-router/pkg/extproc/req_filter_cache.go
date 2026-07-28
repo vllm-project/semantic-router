@@ -120,8 +120,8 @@ func (r *OpenAIRouter) performCacheLookup(
 		threshold = r.Config.GetCacheSimilarityThresholdForDecision(categoryName)
 	}
 
-	logging.Infof("handleCaching: Performing cache lookup - model=%s, query='%s', threshold=%.2f",
-		requestModel, ctx.RequestQuery, threshold)
+	logging.Infof("handleCaching: Performing cache lookup - model=%s, query=%s, threshold=%.2f",
+		requestModel, logging.ContentDescriptor(ctx.RequestQuery), threshold)
 
 	spanCtx, span := tracing.StartPluginSpan(ctx.TraceContext, "semantic-cache", categoryName)
 
