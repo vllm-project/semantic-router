@@ -84,6 +84,16 @@ func (c *Classifier) InitializeRuntime() error {
 	return nil
 }
 
+// Close releases classifier-owned runtime resources acquired during
+// InitializeRuntime, such as an MCP category classifier's connection. It is
+// safe to call on a Classifier that was never initialized.
+func (c *Classifier) Close() error {
+	if c == nil || c.mcpCategoryInitializer == nil {
+		return nil
+	}
+	return c.mcpCategoryInitializer.Close()
+}
+
 func (c *Classifier) runtimeTasks() []modelruntime.Task {
 	tasks := make([]modelruntime.Task, 0, 9)
 	appendTask := func(name string, bestEffort bool, enabled bool, init func() error) {

@@ -21,7 +21,7 @@ func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.
 	if len(cfg.Recipes) == 0 {
 		registry := createModelSelectorRegistry(cfg, lt, embed)
 		registries[config.DefaultRecipeName] = registry
-		selection.GlobalRegistry = registry
+		selection.SetGlobalRegistry(registry)
 		return registries, registry, lt, cancel
 	}
 
@@ -31,7 +31,7 @@ func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.
 		registries[recipe.Name] = createModelSelectorRegistry(scopedConfig, lt, embed)
 	}
 	defaultRegistry := registries[config.DefaultRecipeName]
-	selection.GlobalRegistry = defaultRegistry
+	selection.SetGlobalRegistry(defaultRegistry)
 	return registries, defaultRegistry, lt, cancel
 }
 

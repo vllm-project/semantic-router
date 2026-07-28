@@ -303,6 +303,21 @@ func (db *ToolsDatabase) embedText(text string) ([]float32, error) {
 	return output.Embedding, nil
 }
 
+// Close best-effort closes the database's embedding provider, if it holds
+// closeable resources (e.g. a remote embedding backend's HTTP/gRPC client).
+// embedding.Provider itself has no Close method since most providers (e.g.
+// the in-process candle backend) hold no closeable resources.
+func (db *ToolsDatabase) Close() error {
+	if db == nil {
+		return nil
+	}
+	closer, ok := db.provider.(interface{ Close() error })
+	if !ok {
+		return nil
+	}
+	return closer.Close()
+}
+
 // GetAllTools returns all tools in the database
 func (db *ToolsDatabase) GetAllTools() []openai.ChatCompletionToolParam {
 	if !db.enabled {

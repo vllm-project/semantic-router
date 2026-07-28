@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -64,6 +65,76 @@ func TestLoadClassifierMappingsRequiresUsedCoreSignalMappings(t *testing.T) {
 			require.Contains(t, err.Error(), tt.wantErrPart)
 		})
 	}
+}
+
+// TestBuildRouterComponentsLeaksEarlierResourcesOnLaterFailure documents that
+// buildRouterComponents has no rollback stack: when the semantic cache is
+// built successfully and a later step fails, the cache is discarded with no
+// reachable handle to close it, leaking its background TTL-cleanup
+// goroutine.
+func TestBuildRouterComponentsLeaksEarlierResourcesOnLaterFailure(t *testing.T) {
+	cfg := &config.RouterConfig{
+		SemanticCache: config.SemanticCache{
+			Enabled:    true,
+			TTLSeconds: 60, // > 0 required to start InMemoryCache's background cleanup goroutine
+		},
+		InlineModels: config.InlineModels{
+			PromptGuard: config.PromptGuardConfig{
+				// UseVLLM with no external "guardrail" model configured fails
+				// classification.BuildClassifier fast and deterministically,
+				// inside createRouterClassifier — the step after the
+				// semantic cache has already been built.
+				UseVLLM: true,
+			},
+		},
+	}
+
+	settleGoroutines(t)
+	baseline := runtime.NumGoroutine()
+
+	components, err := buildRouterComponents(cfg)
+	require.Error(t, err)
+	require.Nil(t, components)
+
+	require.LessOrEqualf(t, runtime.NumGoroutine(), baseline,
+		"buildRouterComponents leaked a goroutine when a later construction step failed after the semantic cache was already built")
+}
+
+// TestBuildRouterComponentsRepeatedReloadsAreGoroutineStable simulates a
+// reload loop — repeated buildRouterComponents + Close cycles — and asserts
+// the live goroutine count stays flat rather than growing with each cycle.
+// This is the issue's own stability validation ask; run under -race it also
+// catches lifecycle data races across repeated builds/closes.
+func TestBuildRouterComponentsRepeatedReloadsAreGoroutineStable(t *testing.T) {
+	cfg := &config.RouterConfig{
+		SemanticCache: config.SemanticCache{
+			Enabled:    true,
+			TTLSeconds: 60,
+		},
+	}
+
+	settleGoroutines(t)
+	baseline := runtime.NumGoroutine()
+
+	const iterations = 30
+	for i := 0; i < iterations; i++ {
+		components, err := buildRouterComponents(cfg)
+		require.NoError(t, err)
+		router := components.buildRouter()
+		require.NoError(t, router.Close())
+	}
+
+	settleGoroutines(t)
+	require.LessOrEqualf(t, runtime.NumGoroutine(), baseline,
+		"buildRouterComponents+Close leaked goroutines across %d repeated reload cycles", iterations)
+}
+
+func settleGoroutines(t *testing.T) {
+	t.Helper()
+	for i := 0; i < 5; i++ {
+		runtime.Gosched()
+	}
+	runtime.GC()
 }
 
 func newCoreSignalMappingGateConfig(t *testing.T) *config.RouterConfig {

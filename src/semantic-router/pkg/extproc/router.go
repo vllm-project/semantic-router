@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"errors"
 	"sync"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -70,8 +71,13 @@ type OpenAIRouter struct {
 	lookupTableCancel     func()
 }
 
-// Close releases background resources held by the router (e.g. lookup table
-// auto-save and periodic re-population goroutines).
+// Close releases every resource this router owns: the lookup table
+// auto-save/re-population goroutines, plus every closeable field
+// (cache, tools database, classifier, replay recorder(s), model selector,
+// memory store, rate limiter). It closes each field directly — rather than
+// going through a construction-time generation — so Close() behaves
+// correctly regardless of whether the router was assembled via
+// buildRouterComponents or constructed directly (e.g. in tests).
 func (r *OpenAIRouter) Close() error {
 	if r == nil {
 		return nil
@@ -79,7 +85,68 @@ func (r *OpenAIRouter) Close() error {
 	if r.lookupTableCancel != nil {
 		r.lookupTableCancel()
 	}
-	return nil
+
+	var errs []error
+	closeIfNotNil := func(closer func() error) {
+		if closer == nil {
+			return
+		}
+		if err := closer(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	if r.Cache != nil {
+		closeIfNotNil(r.Cache.Close)
+	}
+	closeIfNotNil(r.ToolsDatabase.Close)
+	closeIfNotNil(r.Classifier.Close)
+	closeReplayRecorders(&errs, r.ReplayRecorder, r.ReplayRecorders, r.ReplayStoreShared)
+	closeIfNotNil(r.ModelSelector.Close)
+	if r.MemoryStore != nil {
+		closeIfNotNil(r.MemoryStore.Close)
+	}
+	closeIfNotNil(r.RateLimiter.Close)
+
+	return errors.Join(errs...)
+}
+
+// closeReplayRecorders closes the replay recorder(s) a router owns,
+// mirroring the shared-vs-isolated storage distinction already used for
+// read paths in router_replay_api.go (see collectRouterReplayRecords): a
+// shared backend has every recorder in replayRecorders wrapping the same
+// store.Storage, so only replayRecorder is closed to avoid closing that
+// store more than once. An isolated backend gives each decision its own
+// store, so every recorder in the map is closed individually; if the map is
+// empty (e.g. a router assembled directly with only ReplayRecorder set,
+// as in tests), replayRecorder is closed as a fallback.
+func closeReplayRecorders(
+	errs *[]error,
+	replayRecorder *routerreplay.Recorder,
+	replayRecorders map[string]*routerreplay.Recorder,
+	replayStoreShared bool,
+) {
+	if replayStoreShared {
+		if replayRecorder != nil {
+			if err := replayRecorder.Close(); err != nil {
+				*errs = append(*errs, err)
+			}
+		}
+		return
+	}
+	if len(replayRecorders) == 0 {
+		if replayRecorder != nil {
+			if err := replayRecorder.Close(); err != nil {
+				*errs = append(*errs, err)
+			}
+		}
+		return
+	}
+	for _, recorder := range replayRecorders {
+		if err := recorder.Close(); err != nil {
+			*errs = append(*errs, err)
+		}
+	}
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls.

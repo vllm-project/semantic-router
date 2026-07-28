@@ -242,3 +242,33 @@ func TestInitializeRuntimeInitializesCoreSignalClassifiersWhenUsed(t *testing.T)
 		t.Fatalf("expected used signal initializers to run once, got category=%d pii=%d jailbreak=%d", categoryInitializer.calls, piiInitializer.calls, jailbreakInitializer.calls)
 	}
 }
+
+// closer matches io.Closer without importing "io" for a single method.
+type closer interface {
+	Close() error
+}
+
+func TestClassifierCloseClosesMCPCategoryClient(t *testing.T) {
+	mcpClassifier, mockClient, _ := newTestMCPCategoryClassifier()
+	mcpClassifier.client = mockClient
+	mockClient.connected = true // simulate a prior successful Init()/Connect()
+
+	classifier, err := newClassifierWithOptions(
+		&config.RouterConfig{},
+		withMCPCategory(mcpClassifier, mcpClassifier),
+	)
+	if err != nil {
+		t.Fatalf("newClassifierWithOptions() error = %v", err)
+	}
+
+	closeable, ok := interface{}(classifier).(closer)
+	if !ok {
+		t.Fatal("Classifier does not implement Close() error; the MCP category client leaks on every router reload")
+	}
+	if err := closeable.Close(); err != nil {
+		t.Fatalf("Classifier.Close() error = %v", err)
+	}
+	if mockClient.connected {
+		t.Fatal("Classifier.Close() did not close the MCP category classifier's client")
+	}
+}
