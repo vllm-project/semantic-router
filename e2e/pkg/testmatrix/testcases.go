@@ -29,6 +29,8 @@ var BaselineRouterContract = []string{
 	"anthropic-passthrough-openai-regression",
 	// Retention directive response-header contract (issue #2009)
 	"retention-directive",
+	// Looper aggregate latency/token-usage response-header contract (issue #2694)
+	"looper-latency-token-headers",
 	// Session observability
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",
