@@ -35,6 +35,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `routing.signals`
   - `routing.projections` for partitions plus derived routing outputs
   - `routing.decisions`
+  - `routing.decisions[].modelRefs[].quality_score` is an optional decision-specific quality override for candidate selection; omission falls back to the model-card quality score, while an explicit `0` remains zero
 - `entrypoints` and `recipes` own multi-profile routing.
   - `entrypoints[].model_names` are request-facing virtual model names; they behave like auto-model aliases, never reach a backend, and are listed by `/v1/models`
   - `entrypoints[].recipe` selects which recipe evaluates matching requests
@@ -179,6 +180,7 @@ routing:
             name: support_escalated
       modelRefs:
         - model: qwen3-8b
+          quality_score: 0.92
           use_reasoning: true
           lora_name: math-adapter
       emits:

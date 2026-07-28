@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -45,6 +46,9 @@ func validateDecisionModelRefs(cfg *RouterConfig, decision Decision) error {
 		}
 		if modelRef.UseReasoning == nil {
 			return fmt.Errorf("decision '%s', model '%s': missing required field 'use_reasoning'", decision.Name, modelRef.Model)
+		}
+		if modelRef.QualityScore != nil && (math.IsNaN(*modelRef.QualityScore) || *modelRef.QualityScore < 0 || *modelRef.QualityScore > 1) {
+			return fmt.Errorf("decision '%s', modelRefs[%d].quality_score must be between 0 and 1", decision.Name, i)
 		}
 		if modelRef.LoRAName == "" {
 			continue

@@ -16,6 +16,7 @@ class ModelRef(BaseModel):
     )
     lora_name: str | None = None  # LoRA adapter name (if using LoRA)
     weight: float | None = None
+    quality_score: float | None = Field(default=None, ge=0, le=1)
 
 
 class HybridWeightsConfig(BaseModel):

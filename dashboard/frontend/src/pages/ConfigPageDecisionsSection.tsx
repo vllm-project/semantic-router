@@ -114,6 +114,7 @@ export default function ConfigPageDecisionsSection({
       ref.reasoning_effort ? `Effort: ${ref.reasoning_effort}` : null,
       ref.lora_name ? `LoRA: ${ref.lora_name}` : null,
       typeof ref.weight === 'number' ? `Weight: ${ref.weight}` : null,
+      typeof ref.quality_score === 'number' ? `Quality: ${ref.quality_score}` : null,
     ].filter((value): value is string => Boolean(value))
 
     const details = [
@@ -355,6 +356,7 @@ export default function ConfigPageDecisionsSection({
               reasoning_effort: ref.reasoning_effort || '',
               lora_name: ref.lora_name || '',
               weight: typeof ref.weight === 'number' ? ref.weight : undefined,
+              quality_score: typeof ref.quality_score === 'number' ? ref.quality_score : undefined,
             })),
             plugins: (decision.plugins || []).map((plugin) => ({
               type: plugin.type,
@@ -471,7 +473,8 @@ export default function ConfigPageDecisionsSection({
           | 'reasoning_description'
           | 'reasoning_effort'
           | 'lora_name'
-          | 'weight',
+          | 'weight'
+          | 'quality_score',
         val: string | boolean | number | undefined,
       ) => {
         const next = rows.map((item, idx) => (idx === index ? { ...item, [key]: val } : item))
@@ -589,6 +592,27 @@ export default function ConfigPageDecisionsSection({
                     placeholder="Optional weight"
                     step="0.1"
                     min="0"
+                    className={decisionStyles.editorInput}
+                  />
+                </label>
+                <label className={decisionStyles.editorControlLabel}>
+                  <span className={decisionStyles.editorControlLabelText}>
+                    Decision quality score
+                  </span>
+                  <input
+                    type="number"
+                    value={typeof ref?.quality_score === 'number' ? ref.quality_score : ''}
+                    onChange={(e) =>
+                      updateItem(
+                        idx,
+                        'quality_score',
+                        e.target.value === '' ? undefined : Number(e.target.value),
+                      )
+                    }
+                    placeholder="Optional 0–1 override"
+                    step="0.01"
+                    min="0"
+                    max="1"
                     className={decisionStyles.editorInput}
                   />
                 </label>
@@ -731,6 +755,15 @@ export default function ConfigPageDecisionsSection({
         }
         if (typeof modelRefValue?.weight === 'number' && Number.isFinite(modelRefValue.weight)) {
           modelRef.weight = modelRefValue.weight
+        }
+        if (
+          typeof modelRefValue?.quality_score === 'number' &&
+          Number.isFinite(modelRefValue.quality_score)
+        ) {
+          if (modelRefValue.quality_score < 0 || modelRefValue.quality_score > 1) {
+            throw new Error(`Model reference #${idx + 1} quality score must be between 0 and 1.`)
+          }
+          modelRef.quality_score = modelRefValue.quality_score
         }
         return modelRef
       })

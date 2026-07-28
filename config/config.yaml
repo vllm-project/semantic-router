@@ -571,6 +571,7 @@ routing:
             - model: qwen3-8b
               lora_name: business-adapter
               weight: 1.0
+              quality_score: 0.83
               use_reasoning: false
               reasoning_description: Candidate iteration reference model for DSL authoring coverage.
               reasoning_effort: low
@@ -1135,7 +1136,9 @@ routing:
             name: other
       modelRefs:
         - model: qwen3-8b
+          quality_score: 0.72
         - model: qwen3-32b
+          quality_score: 0.94
       algorithm:
         type: multi_factor
         multi_factor:

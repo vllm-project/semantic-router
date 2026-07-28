@@ -85,7 +85,7 @@ algorithm:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `weights.quality` | float | `0.25` | Weight for `quality_score` configured per model |
+| `weights.quality` | float | `0.25` | Weight for quality: `modelRefs[].quality_score` when present, otherwise the model-card `quality_score` |
 | `weights.latency` | float | `0.25` | Weight for percentile latency (lower-is-better, inverted) |
 | `weights.cost` | float | `0.25` | Weight for prompt pricing (lower-is-better, inverted) |
 | `weights.load` | float | `0.25` | Weight for in-flight request count (lower-is-better, inverted) |
@@ -98,7 +98,7 @@ algorithm:
 
 ## Known Limitations
 
-- Quality scoring depends on `quality_score` being configured per model. Models without it contribute zero to the quality signal.
+- Quality first uses the matched decision's optional `modelRefs[].quality_score`, then falls back to the model-card `quality_score`. An explicit decision value of `0` is preserved; models with neither value contribute zero to the quality signal.
 - Min-max normalization is **per-request across the candidate set**, so absolute scale of any signal does not matter — but if all candidates have the same value on a dimension, that dimension contributes 0.5 (neutral).
 - Load uses an in-process tracker (`pkg/inflight`), so in multi-replica deployments each replica sees only its own load, not cluster-wide. Acceptable for the typical sidecar deployment; an external state store could be wired later for true cluster-wide load awareness.
 - The in-flight tracker self-heals via TTL eviction (default 10 minutes) to recover from missed `End` calls, but cannot detect actively-running long requests beyond that window — they will appear "free" to the selector. Tune via `pkg/inflight.SetMaxAge` if your workloads routinely exceed 10 minutes per request.

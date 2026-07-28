@@ -3,6 +3,8 @@ package config
 import (
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 // buildDecisionRefConfig wraps a decisions block in an otherwise-valid v0.3
@@ -88,6 +90,66 @@ func TestDecisionModelRefKnownModelAccepted(t *testing.T) {
 `)
 	if _, err := ParseYAMLBytes(cfg); err != nil {
 		t.Fatalf("known modelRef model should be accepted, got: %v", err)
+	}
+}
+
+func TestDecisionModelRefQualityScoreRoundTripsExplicitZero(t *testing.T) {
+	cfg, err := ParseYAMLBytes(buildDecisionRefConfig(`    - name: d1
+      priority: 1
+      rules: {operator: AND, conditions: []}
+      modelRefs:
+        - model: m1
+          quality_score: 0
+          use_reasoning: false
+`))
+	if err != nil {
+		t.Fatalf("parse decision quality score: %v", err)
+	}
+	quality := cfg.Decisions[0].ModelRefs[0].QualityScore
+	if quality == nil || *quality != 0 {
+		t.Fatalf("expected explicit zero quality score, got %#v", quality)
+	}
+
+	exported, err := yaml.Marshal(CanonicalConfigFromRouterConfig(cfg))
+	if err != nil {
+		t.Fatalf("marshal canonical config: %v", err)
+	}
+	if !strings.Contains(string(exported), "quality_score: 0") {
+		t.Fatalf("exported canonical config dropped explicit zero quality score:\n%s", exported)
+	}
+}
+
+func TestDecisionModelRefQualityScoreRejectsOutOfRange(t *testing.T) {
+	_, err := ParseYAMLBytes(buildDecisionRefConfig(`    - name: d1
+      priority: 1
+      rules: {operator: AND, conditions: []}
+      modelRefs:
+        - model: m1
+          quality_score: 1.1
+          use_reasoning: false
+`))
+	if err == nil {
+		t.Fatal("expected out-of-range decision quality score to be rejected")
+	}
+	if !strings.Contains(err.Error(), "quality_score") {
+		t.Fatalf("error should name quality_score, got: %v", err)
+	}
+}
+
+func TestDecisionModelRefQualityScoreRejectsNaN(t *testing.T) {
+	_, err := ParseYAMLBytes(buildDecisionRefConfig(`    - name: d1
+      priority: 1
+      rules: {operator: AND, conditions: []}
+      modelRefs:
+        - model: m1
+          quality_score: .nan
+          use_reasoning: false
+`))
+	if err == nil {
+		t.Fatal("expected NaN decision quality score to be rejected")
+	}
+	if !strings.Contains(err.Error(), "quality_score") {
+		t.Fatalf("error should name quality_score, got: %v", err)
 	}
 }
 
