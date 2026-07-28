@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { findUnresolvedIdentities } from './lib/identity-audit.mjs'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(scriptDir, '..', '..')
@@ -323,6 +324,18 @@ const identityOverrides = [
     name: 'Kaveesh Khattar',
     emails: ['kaveeshkhattar@gmail.com'],
   },
+  {
+    key: 'theohsiung',
+    name: 'Theo Hsiung',
+    login: 'theohsiung',
+    emails: ['theobear870924@gmail.com'],
+  },
+  {
+    key: 'wilsonwu',
+    name: 'Wilson Wu',
+    login: 'wilsonwu',
+    emails: ['iwilsonwu@gmail.com'],
+  },
 ]
 
 const overrideByEmail = new Map()
@@ -445,6 +458,16 @@ function buildReleaseRangeDefinitions(releaseTimeline, generatedAt) {
 function buildSnapshot(range, generatedAt, allRows, pullRequests) {
   const rows = readRowsForRange(range, allRows)
   const byContributor = collectContributorStats(rows)
+
+  if (range.id === 'all') {
+    for (const entry of findUnresolvedIdentities([...byContributor.values()])) {
+      console.warn(
+        `Unresolved GitHub identity: "${entry.name}" (${entry.key}, ${entry.commits} commits) — `
+        + 'consider adding an identityOverrides entry',
+      )
+    }
+  }
+
   const newContributorKeys = readNewContributorKeysForRange(range, allRows, byContributor)
   const totalCommits = [...byContributor.values()].reduce((sum, entry) => sum + entry.commits, 0)
   const reviewStats = collectReviewStatsByContributorKey(pullRequests, range)
@@ -1238,11 +1261,16 @@ function readAssociatedPullAuthor(sha) {
         }
       : null
 
+    if (!author) {
+      console.warn(`No associated PR author found for commit ${sha}`)
+    }
+
     pullAuthorBySha.set(sha, author)
 
     return author
   }
-  catch {
+  catch (error) {
+    console.warn(`PR lookup for commit ${sha} failed: ${errorText(error).split('\n')[0]}`)
     pullAuthorBySha.set(sha, null)
 
     return null
