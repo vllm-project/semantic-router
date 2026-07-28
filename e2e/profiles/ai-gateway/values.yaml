@@ -69,6 +69,28 @@ config:
               ttl_turns: 0
               keep_current_model: true
               prefer_prefix_retention: true
+      - name: looper_metrics_probe_decision
+        description: "Deterministic keyword-gated looper route used by the looper-latency-token-headers E2E to assert x-vsr-looper-latency-ms and x-vsr-looper-*-tokens response headers (issue #2694)."
+        priority: 610
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_metrics_probe_keywords
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+          - model: base-model
+            lora_name: math-expert
+            use_reasoning: false
+        algorithm:
+          type: confidence
+          confidence:
+            confidence_method: hybrid
+            threshold: 0.72
+            on_error: skip
+            escalation_order: small_to_large
       - name: tool_selection_add_weather_decision
         description: Contract route for tool_selection add mode (weather-aligned retrieval)
         priority: 500
@@ -582,6 +604,11 @@ config:
           keywords:
             - __RETENTION_PROBE__
           case_sensitive: false
+        - name: looper_metrics_probe_keywords
+          operator: OR
+          keywords:
+            - __MULTI_MODEL_PROBE__
+          case_sensitive: false
       domains:
         - name: business
           description: Business, corporate strategy, management, finance, marketing
@@ -740,6 +767,13 @@ config:
         similarity_threshold: 0.2
         tools_db_path: config/tools_db.json
         fallback_to_empty: true
+      # The canonical default (localhost:8899) assumes a router-owned listener
+      # that this profile's config.listeners: [] does not configure. Point the
+      # looper's per-call HTTP client directly at the same base-model backend
+      # the router itself routes to, reusing its existing LoRA adapters
+      # (issue #2694 e2e coverage) instead of standing up new infra.
+      looper:
+        endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1/chat/completions
 toolsDb:
   - tool:
       type: function

@@ -166,6 +166,22 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Algorithm',
     description: 'The multi-model algorithm used (confidence, ratings, remom, fusion, workflows)',
   },
+  'x-vsr-looper-latency-ms': {
+    label: 'Latency (ms)',
+    description: 'Wall-clock latency of the full looper execution, in milliseconds',
+  },
+  'x-vsr-looper-prompt-tokens': {
+    label: 'Prompt Tokens',
+    description: 'Aggregate prompt token count across all model calls',
+  },
+  'x-vsr-looper-completion-tokens': {
+    label: 'Completion Tokens',
+    description: 'Aggregate completion token count across all model calls',
+  },
+  'x-vsr-looper-total-tokens': {
+    label: 'Total Tokens',
+    description: 'Aggregate total token count across all model calls',
+  },
   // Retention directive headers (issue #2009)
   'x-vsr-retention-drop': {
     label: 'Retention: Drop',
