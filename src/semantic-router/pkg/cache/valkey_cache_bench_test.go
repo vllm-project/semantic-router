@@ -78,37 +78,7 @@ func BenchmarkValkeyCache(b *testing.B) {
 		b.Run(fmt.Sprintf("CacheSize_%d", size), func(b *testing.B) {
 			cache := setupValkeyCacheBench(b)
 			defer func() { _ = cache.Close() }()
-
-			for i := 0; i < size; i++ {
-				q := fmt.Sprintf("benchmark query number %d about topic %d", i, i%97)
-				if err := cache.AddEntry(
-					fmt.Sprintf("req-%d", i), model, q,
-					[]byte(q), []byte(fmt.Sprintf("response-%d", i)), 300,
-				); err != nil {
-					b.Fatalf("populate AddEntry failed at %d: %v", i, err)
-				}
-			}
-
-			b.ResetTimer()
-			b.ReportAllocs()
-
-			var hits int
-			for i := 0; i < b.N; i++ {
-				var q string
-				if i%10 < 7 {
-					q = fmt.Sprintf("benchmark query number %d about topic %d", i%size, (i%size)%97)
-				} else {
-					q = fmt.Sprintf("entirely novel unseen request %d", i)
-				}
-				_, found, err := cache.FindSimilar(model, q)
-				if err != nil {
-					b.Fatalf("FindSimilar failed: %v", err)
-				}
-				if found {
-					hits++
-				}
-			}
-			b.ReportMetric(float64(hits)/float64(b.N)*100, "hit_rate_%")
+			runCacheFindSimilarBench(b, cache, model, size)
 		})
 	}
 }
