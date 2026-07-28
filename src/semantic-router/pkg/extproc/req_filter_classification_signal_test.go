@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,6 +10,76 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
+
+func TestEvaluateSignalsForDecisionReturnsAuthzScopedCandidates(t *testing.T) {
+	decisions := []config.Decision{
+		{
+			Name: "route-a",
+			Rules: config.RuleNode{Operator: "AND", Conditions: []config.RuleNode{
+				{Type: config.SignalTypeAuthz, Name: "route-a"},
+			}},
+		},
+		{
+			Name: "route-b",
+			Rules: config.RuleNode{Operator: "AND", Conditions: []config.RuleNode{
+				{Type: config.SignalTypeAuthz, Name: "route-b"},
+				{Type: config.SignalTypeContext, Name: "short"},
+			}},
+		},
+	}
+	bindings := []config.RoleBinding{
+		{Name: "route-a-users", Role: "route-a", Subjects: []config.Subject{{Kind: "User", Name: "alice"}}},
+		{Name: "route-b-users", Role: "route-b", Subjects: []config.Subject{{Kind: "User", Name: "bob"}}},
+	}
+	cfg := &config.RouterConfig{IntelligentRouting: config.IntelligentRouting{
+		Signals: config.Signals{
+			RoleBindings: bindings,
+			ContextRules: []config.ContextRule{{Name: "short", MinTokens: "0", MaxTokens: "10"}},
+		},
+		Decisions: decisions,
+	}}
+	classifier, err := classification.BuildClassifier(cfg, nil, nil, nil)
+	require.NoError(t, err)
+	router := &OpenAIRouter{Config: cfg, Classifier: classifier}
+	ctx := &RequestContext{
+		Headers:      map[string]string{"x-authz-user-id": "alice"},
+		TraceContext: context.Background(),
+	}
+
+	signals, candidates, err := router.evaluateSignalsForDecision(
+		"general",
+		signalEvaluationInput{
+			evaluationText:  "hello",
+			compressedText:  "hello",
+			allMessagesText: "hello",
+			currentUserText: "hello",
+		},
+		nil,
+		ctx,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"route-a"}, signals.MatchedAuthzRules)
+	require.Len(t, candidates, 1)
+	assert.Equal(t, "route-a", candidates[0].Name)
+}
+
+func TestRunDecisionEngineUsesDefaultForEmptyScopedAutoCandidates(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{
+		RouterOptions: config.RouterOptions{AutoModelNames: []string{"general"}},
+		BackendModels: config.BackendModels{DefaultModel: "fallback-model"},
+	}}
+	ctx := &RequestContext{TraceContext: context.Background()}
+
+	result, defaultModel := router.runDecisionEngine(
+		"general",
+		ctx,
+		&classification.SignalResults{},
+		[]config.Decision{},
+	)
+
+	assert.Nil(t, result)
+	assert.Equal(t, "fallback-model", defaultModel)
+}
 
 func TestPrepareSignalEvaluationInput_CombinesMessagesWithoutCompression(t *testing.T) {
 	router := &OpenAIRouter{

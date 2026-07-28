@@ -25,12 +25,58 @@ import (
 //   - skipCompressionSignals (map[string]bool): signal types that must use uncompressedText
 //   - convFacts (ConversationFacts): optional conversation facts for conversation signals
 func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, headers map[string]string, forceEvaluateAll bool, imageURL string, extra ...interface{}) (*SignalResults, error) {
+	results, _, err := c.EvaluateAllSignalsWithHeadersForDecisions(
+		text,
+		contextText,
+		currentUserText,
+		priorUserMessages,
+		nonUserMessages,
+		hasPriorAssistantReply,
+		headers,
+		forceEvaluateAll,
+		imageURL,
+		c.Config.Decisions,
+		extra...,
+	)
+	return results, err
+}
+
+// EvaluateAllSignalsWithHeadersForDecisions evaluates authz first, removes
+// candidates that are already impossible, and evaluates non-authz signals only
+// for the remaining decisions. The returned candidates must also be used for
+// final decision evaluation to keep computation and result scopes aligned.
+func (c *Classifier) EvaluateAllSignalsWithHeadersForDecisions(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, headers map[string]string, forceEvaluateAll bool, imageURL string, decisions []config.Decision, extra ...interface{}) (*SignalResults, []config.Decision, error) {
 	opts := parseEvaluateSignalsExtra(extra)
-	results := c.EvaluateAllSignalsWithContext(text, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, forceEvaluateAll, opts.uncompressedText, opts.skipCompressionSignals, opts.convFacts, imageURL)
-	if err := c.appendAuthzFromHeaders(results, headers, forceEvaluateAll); err != nil {
-		return nil, err
+	results := newSignalResults()
+	usedSignals := c.getUsedSignalsForDecisions(decisions)
+	if forceEvaluateAll {
+		usedSignals = c.getAllSignalTypes()
 	}
-	return results, nil
+	if err := c.evaluateAuthzFromHeaders(results, headers, usedSignals); err != nil {
+		return nil, nil, err
+	}
+
+	candidates := decisions
+	if !forceEvaluateAll {
+		candidates = filterDecisionsByAuthz(decisions, results.MatchedAuthzRules)
+		logging.Debugf("[Signal Computation] Authz scoped decision candidates from %d to %d", len(decisions), len(candidates))
+	}
+	results = c.evaluateAllSignalsWithContextForDecisions(
+		text,
+		contextText,
+		currentUserText,
+		priorUserMessages,
+		nonUserMessages,
+		hasPriorAssistantReply,
+		forceEvaluateAll,
+		opts.uncompressedText,
+		opts.skipCompressionSignals,
+		opts.convFacts,
+		imageURL,
+		candidates,
+		results,
+	)
+	return results, candidates, nil
 }
 
 // evaluateSignalsExtra mirrors optional trailing args after imageURL for EvaluateAllSignalsWithHeaders.
@@ -59,11 +105,7 @@ func parseEvaluateSignalsExtra(extra []interface{}) evaluateSignalsExtra {
 	return e
 }
 
-func (c *Classifier) appendAuthzFromHeaders(results *SignalResults, headers map[string]string, forceEvaluateAll bool) error {
-	usedSignals := c.getUsedSignals()
-	if forceEvaluateAll {
-		usedSignals = c.getAllSignalTypes()
-	}
+func (c *Classifier) evaluateAuthzFromHeaders(results *SignalResults, headers map[string]string, usedSignals map[string]bool) error {
 	if !isSignalTypeUsed(usedSignals, config.SignalTypeAuthz) {
 		logging.Debugf("[Signal Computation] Authz signal not used in any decision, skipping evaluation")
 		return nil
