@@ -51,24 +51,50 @@ export default function CommunityLayout({
         </header>
 
         <div className={styles.body}>
-          <nav className={styles.sidebar} aria-label="Community sections">
-            {COMMUNITY_NAV_ITEMS.map((item) => {
-              const isActive = item.key === activeKey || normalizedPathname === item.to
+          <div className={styles.sidebar}>
+            <nav className={styles.sidebarNav} aria-label="Community sections">
+              {COMMUNITY_NAV_ITEMS.map((item) => {
+                const isActive = item.key === activeKey || normalizedPathname === item.to
 
-              return (
-                <Link
-                  key={item.key}
-                  className={clsx(styles.navLink, {
-                    [styles.navLinkActive]: isActive,
-                  })}
-                  to={item.to}
-                  aria-current={isActive ? 'page' : undefined}
-                >
-                  {item.label}
-                </Link>
-              )
-            })}
-          </nav>
+                return (
+                  <Link
+                    key={item.key}
+                    className={clsx(styles.navLink, {
+                      [styles.navLinkActive]: isActive,
+                    })}
+                    to={item.to}
+                    aria-current={isActive ? 'page' : undefined}
+                  >
+                    {item.label}
+                  </Link>
+                )
+              })}
+            </nav>
+
+            <div className={styles.sidebarCard}>
+              <span className={styles.sidebarCardLabel}>
+                <Translate id="community.layout.sidebarCard.label">Get Involved</Translate>
+              </span>
+              <a
+                className={styles.sidebarCardLink}
+                href="https://github.com/vllm-project/semantic-router"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Translate id="community.layout.sidebarCard.repo">GitHub Repository</Translate>
+                <span aria-hidden="true">↗</span>
+              </a>
+              <a
+                className={styles.sidebarCardLink}
+                href="https://github.com/vllm-project/semantic-router/discussions"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Translate id="community.layout.sidebarCard.discussions">Discussions</Translate>
+                <span aria-hidden="true">↗</span>
+              </a>
+            </div>
+          </div>
 
           <article className={styles.article}>{children}</article>
         </div>

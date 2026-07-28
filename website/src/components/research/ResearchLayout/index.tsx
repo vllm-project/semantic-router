@@ -47,24 +47,50 @@ export default function ResearchLayout({
         </header>
 
         <div className={styles.body}>
-          <nav className={styles.sidebar} aria-label="Research sections">
-            {RESEARCH_NAV_ITEMS.map((item) => {
-              const isActive = item.key === activeKey || normalizedPathname === item.to
+          <div className={styles.sidebar}>
+            <nav className={styles.sidebarNav} aria-label="Research sections">
+              {RESEARCH_NAV_ITEMS.map((item) => {
+                const isActive = item.key === activeKey || normalizedPathname === item.to
 
-              return (
-                <Link
-                  key={item.key}
-                  className={clsx(styles.navLink, {
-                    [styles.navLinkActive]: isActive,
-                  })}
-                  to={item.to}
-                  aria-current={isActive ? 'page' : undefined}
-                >
-                  {item.label}
-                </Link>
-              )
-            })}
-          </nav>
+                return (
+                  <Link
+                    key={item.key}
+                    className={clsx(styles.navLink, {
+                      [styles.navLinkActive]: isActive,
+                    })}
+                    to={item.to}
+                    aria-current={isActive ? 'page' : undefined}
+                  >
+                    {item.label}
+                  </Link>
+                )
+              })}
+            </nav>
+
+            <div className={styles.sidebarCard}>
+              <span className={styles.sidebarCardLabel}>
+                <Translate id="research.layout.sidebarCard.label">Resources</Translate>
+              </span>
+              <a
+                className={styles.sidebarCardLink}
+                href="https://github.com/vllm-project/semantic-router"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Translate id="research.layout.sidebarCard.repo">GitHub Repository</Translate>
+                <span aria-hidden="true">↗</span>
+              </a>
+              <a
+                className={styles.sidebarCardLink}
+                href="https://huggingface.co/LLM-Semantic-Router"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Translate id="research.layout.sidebarCard.models">Models on Hugging Face</Translate>
+                <span aria-hidden="true">↗</span>
+              </a>
+            </div>
+          </div>
 
           <article className={styles.article}>{children}</article>
         </div>
