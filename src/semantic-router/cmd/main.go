@@ -38,11 +38,10 @@ func main() {
 	initializeWindowedMetricsIfEnabled(cfg)
 
 	shutdownHooks := make([]func(), 0)
-	registerSignalHandler(&shutdownHooks)
 	startMetricsServerIfEnabled(cfg, opts.metricsPort)
 
 	embeddingRuntime := initializeRuntimeDependencies(cfg, startupWriter, &shutdownHooks, runtimeRegistry)
-	server := newExtProcServerOrFatal(opts, startupWriter, runtimeRegistry)
+	server := newExtProcServerOrFatal(opts, startupWriter, runtimeRegistry, shutdownHooks)
 
 	warmupRouterRuntime(server, embeddingRuntime)
 	markRouterReady(startupWriter, startupEmbeddingProviderStatus(embeddingRuntime))
