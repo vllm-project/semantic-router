@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { findUnresolvedIdentities } from './lib/identity-audit.mjs'
+import { mergeEmailKeyedContributors } from './lib/identity-merge.mjs'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(scriptDir, '..', '..')
@@ -636,15 +637,29 @@ function collectContributorStats(rows) {
       commits: 0,
       firstCommitDate: row.date,
       latestCommitDate: row.date,
+      emails: new Set(),
+      names: new Set(),
     }
 
     current.commits += 1
     current.firstCommitDate = minDate(current.firstCommitDate, row.date)
     current.latestCommitDate = maxDate(current.latestCommitDate, row.date)
+
+    const normalizedEmail = normalizeEmail(row.email)
+    const normalizedName = normalizeName(row.name)
+
+    if (normalizedEmail) {
+      current.emails.add(normalizedEmail)
+    }
+
+    if (normalizedName) {
+      current.names.add(normalizedName)
+    }
+
     byContributor.set(identity.key, current)
   }
 
-  return byContributor
+  return mergeEmailKeyedContributors(byContributor)
 }
 
 function rankContributorEntries(byContributor, totalCommits, newContributorKeys, reviewStats = new Map()) {
