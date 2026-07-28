@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -250,23 +248,6 @@ func initializeWindowedMetricsIfEnabled(cfg *config.RouterConfig) {
 	})
 }
 
-func registerSignalHandler(shutdownHooks *[]func()) {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		sig := <-sigChan
-		logging.ComponentEvent("router", "shutdown_signal_received", map[string]interface{}{
-			"signal": sig.String(),
-		})
-		for _, hook := range *shutdownHooks {
-			hook()
-		}
-		shutdownTracing()
-		os.Exit(0)
-	}()
-}
-
 func startMetricsServerIfEnabled(cfg *config.RouterConfig, metricsPort int) {
 	metricsEnabled := true
 	if cfg.Observability.Metrics.Enabled != nil {
@@ -427,10 +408,19 @@ func newExtProcServerOrFatal(
 	opts runtimeOptions,
 	writer startupstatus.StatusWriter,
 	runtimeRegistry *routerruntime.Registry,
+	shutdownHooks []func(),
 ) *extproc.Server {
 	server, err := extproc.NewServer(opts.configPath, opts.port, opts.secure, opts.certPath, runtimeRegistry)
 	if err != nil {
 		failStartup(writer, "Failed to create ExtProc server: %v", err)
+	}
+
+	// Server owns the process's sole SIGINT/SIGTERM handler (see Start), so
+	// every shutdown concern — including cleanup accumulated before the
+	// server existed, like vector store shutdown — runs through it instead
+	// of racing Start's graceful drain via a second signal.Notify.
+	for _, hook := range shutdownHooks {
+		server.RegisterShutdownHook(hook)
 	}
 
 	return server

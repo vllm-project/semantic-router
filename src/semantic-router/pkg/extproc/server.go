@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc"
@@ -74,6 +75,24 @@ type Server struct {
 	secure     bool
 	certPath   string
 	runtime    *routerruntime.Registry
+
+	// shutdownHooks run, in registration order, after the gRPC server has
+	// gracefully stopped. Server is the sole SIGINT/SIGTERM owner (see
+	// Start), so this is the single coordinated place process-wide cleanup
+	// (e.g. vector store shutdown) runs — instead of racing it against
+	// Start's graceful drain via a second, independent signal.Notify.
+	shutdownHooks []func()
+}
+
+// RegisterShutdownHook registers a hook to run during Stop, after the gRPC
+// server has finished its graceful drain. Hooks run in registration order.
+// Call before Start(); registration is not synchronized against a
+// concurrently running Stop().
+func (s *Server) RegisterShutdownHook(hook func()) {
+	if hook == nil {
+		return
+	}
+	s.shutdownHooks = append(s.shutdownHooks, hook)
 }
 
 // NewServer creates a new ExtProc gRPC server
@@ -201,7 +220,10 @@ func (s *Server) Start() error {
 	return nil
 }
 
-// Stop stops the gRPC server
+// Stop gracefully stops the gRPC server, draining in-flight requests, then
+// runs every registered shutdown hook. Hooks run only after the drain
+// completes, so process-wide cleanup (e.g. releasing the vector store) never
+// races an in-flight request against resources it still needs.
 func (s *Server) Stop() {
 	if s.server != nil {
 		s.server.GracefulStop()
@@ -209,31 +231,86 @@ func (s *Server) Stop() {
 			"port": s.port,
 		})
 	}
+	if s.service != nil {
+		if err := s.service.Shutdown(defaultRouterDrainTimeout); err != nil {
+			logging.ComponentWarnEvent("extproc", "router_shutdown_close_failed", map[string]interface{}{
+				"error": err.Error(),
+			})
+		}
+	}
+	for _, hook := range s.shutdownHooks {
+		hook()
+	}
 }
+
+// defaultRouterDrainTimeout bounds how long Retire waits for a retired
+// router's in-flight requests to finish before closing its resources
+// anyway, so a reload is never blocked indefinitely by a stuck request.
+const defaultRouterDrainTimeout = 30 * time.Second
 
 // RouterService is a delegating gRPC service that forwards to the current router implementation.
 type RouterService struct {
-	current atomic.Pointer[OpenAIRouter]
+	current atomic.Pointer[routerLease]
 }
 
 func NewRouterService(r *OpenAIRouter) *RouterService {
 	rs := &RouterService{}
-	rs.current.Store(r)
+	rs.current.Store(newRouterLease(r))
 	return rs
 }
 
-// Swap replaces the current router implementation.
-func (rs *RouterService) Swap(r *OpenAIRouter) { rs.current.Store(r) }
+// Swap replaces the current router implementation and returns the lease it
+// replaced, so the caller can Retire that lease once its in-flight requests
+// have drained.
+func (rs *RouterService) Swap(r *OpenAIRouter) *routerLease {
+	return rs.current.Swap(newRouterLease(r))
+}
+
+// Retire stops admitting new calls through lease, waits up to drainTimeout
+// for its in-flight calls to finish, then closes its router's owned
+// resources. Pass the lease returned by Swap. A nil lease (e.g. no router
+// was previously set) is a no-op.
+func (rs *RouterService) Retire(lease *routerLease, drainTimeout time.Duration) error {
+	if lease == nil {
+		return nil
+	}
+	lease.retire(drainTimeout)
+	return lease.router.Close()
+}
+
+// Shutdown retires the currently active router: stops admitting new calls,
+// waits up to drainTimeout for its in-flight calls to finish, then closes
+// its owned resources. Used for final process shutdown, where — unlike a
+// reload — there is no replacement router to Swap in first.
+func (rs *RouterService) Shutdown(drainTimeout time.Duration) error {
+	return rs.Retire(rs.current.Load(), drainTimeout)
+}
 
 // GetRouter returns the current router implementation.
 func (rs *RouterService) GetRouter() *OpenAIRouter {
-	return rs.current.Load()
+	lease := rs.current.Load()
+	if lease == nil {
+		return nil
+	}
+	return lease.router
 }
 
-// Process delegates to the current router.
+// Process delegates to the current router, holding a lease on it for the
+// duration of the call so a concurrent reload can't close its resources out
+// from under an in-flight request. If a reload retires the loaded lease
+// between load and acquire, it retries against the new current lease.
 func (rs *RouterService) Process(stream ext_proc.ExternalProcessor_ProcessServer) error {
-	r := rs.current.Load()
-	return r.Process(stream)
+	for {
+		lease := rs.current.Load()
+		if lease == nil {
+			return nil
+		}
+		if !lease.acquire() {
+			continue
+		}
+		defer lease.release()
+		return lease.router.Process(stream)
+	}
 }
 
 func (s *Server) reloadRouterFromFile(configPath string) error {
@@ -278,10 +355,11 @@ func (s *Server) reloadRouterFromConfig(
 		replaceReloadConfig(candidateCfg)
 	}
 	logLoadedRouterConfig(configPath, candidateCfg)
-	oldRouter := s.service.GetRouter()
-	s.service.Swap(newRouter)
-	if oldRouter != nil {
-		_ = oldRouter.Close()
+	oldLease := s.service.Swap(newRouter)
+	if err := s.service.Retire(oldLease, defaultRouterDrainTimeout); err != nil {
+		logging.ComponentWarnEvent("extproc", "router_retire_close_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
 	}
 	publishRouterState(candidateCfg, newRouter, s.runtime)
 	return nil
