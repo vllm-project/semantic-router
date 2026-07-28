@@ -66,11 +66,22 @@ func appendLooperTraceHeaders(setHeaders *[]*core.HeaderValueOption, resp *loope
 		newHeaderValueOption(headers.VSRLooperModelsUsed, strings.Join(resp.ModelsUsed, ",")),
 		newHeaderValueOption(headers.VSRLooperIterations, fmt.Sprintf("%d", resp.Iterations)),
 		newHeaderValueOption(headers.VSRLooperAlgorithm, resp.AlgorithmType),
-		newHeaderValueOption(headers.VSRLooperLatencyMs, fmt.Sprintf("%d", resp.LatencyMs)),
-		newHeaderValueOption(headers.VSRLooperPromptTokens, fmt.Sprintf("%d", resp.Usage.PromptTokens)),
-		newHeaderValueOption(headers.VSRLooperCompletionTokens, fmt.Sprintf("%d", resp.Usage.CompletionTokens)),
-		newHeaderValueOption(headers.VSRLooperTotalTokens, fmt.Sprintf("%d", resp.Usage.TotalTokens)),
 	)
+	// A zero value here means "not measured" (e.g. a caller that bypasses
+	// looper.ExecuteWithLatency or an algorithm that doesn't aggregate usage)
+	// rather than a genuine zero-cost execution, so omit rather than emit a
+	// misleading "0".
+	appendPositiveIntHeader(setHeaders, headers.VSRLooperLatencyMs, resp.LatencyMs)
+	appendPositiveIntHeader(setHeaders, headers.VSRLooperPromptTokens, resp.Usage.PromptTokens)
+	appendPositiveIntHeader(setHeaders, headers.VSRLooperCompletionTokens, resp.Usage.CompletionTokens)
+	appendPositiveIntHeader(setHeaders, headers.VSRLooperTotalTokens, resp.Usage.TotalTokens)
+}
+
+func appendPositiveIntHeader(setHeaders *[]*core.HeaderValueOption, key string, value int64) {
+	if value <= 0 {
+		return
+	}
+	*setHeaders = append(*setHeaders, newHeaderValueOption(key, fmt.Sprintf("%d", value)))
 }
 
 func appendLooperSignalHeaders(

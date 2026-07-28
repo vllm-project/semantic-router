@@ -72,3 +72,33 @@ func TestCreateLooperResponseDefaultSurfaceExcludesLatencyAndUsageHeaders(t *tes
 	assert.NotContains(t, headerMap, headers.VSRLooperCompletionTokens)
 	assert.NotContains(t, headerMap, headers.VSRLooperTotalTokens)
 }
+
+// A zero LatencyMs or Usage field means "not measured" (e.g. a caller that
+// bypasses looper.ExecuteWithLatency, such as cmd/fusioneval) rather than a
+// genuine zero-cost execution. Omitting the header keeps "present" meaning
+// "actually measured" instead of a bypassed measurement being indistinguishable
+// from a real zero.
+func TestCreateLooperResponseOmitsUnmeasuredZeroValueHeaders(t *testing.T) {
+	resp := &looper.Response{
+		Body:          []byte(`{"ok":true}`),
+		ContentType:   "application/json",
+		Model:         "model-b",
+		ModelsUsed:    []string{"model-a", "model-b"},
+		Iterations:    2,
+		AlgorithmType: "elo",
+		// LatencyMs and Usage left at their zero values.
+	}
+	reqCtx := &RequestContext{
+		Headers: map[string]string{headers.VSRDebug: "true"},
+	}
+
+	response := (&OpenAIRouter{}).createLooperResponse(resp, reqCtx)
+	headerMap := headerValuesByName(response.GetImmediateResponse().Headers.SetHeaders)
+
+	assert.NotContains(t, headerMap, headers.VSRLooperLatencyMs)
+	assert.NotContains(t, headerMap, headers.VSRLooperPromptTokens)
+	assert.NotContains(t, headerMap, headers.VSRLooperCompletionTokens)
+	assert.NotContains(t, headerMap, headers.VSRLooperTotalTokens)
+	// Unrelated trace headers must still be present.
+	assert.Equal(t, "model-b", headerMap[headers.VSRLooperModel])
+}
