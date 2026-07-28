@@ -1,17 +1,26 @@
-.container {
-  width: min(100% - 2.5rem, var(--site-grid-max));
-  margin: 0 auto;
-  padding: 3rem 0 5rem;
+.main {
+  display: grid;
 }
 
-.hero {
+.section {
   display: grid;
-  gap: 1.2rem;
-  padding: 1rem 0 3rem;
+  grid-template-columns: minmax(14rem, 0.26fr) minmax(0, 0.74fr);
+  gap: 2.5rem;
+  padding: 2rem 0;
   border-bottom: 1px solid var(--site-border-strong);
 }
 
-.eyebrow,
+.section:first-child {
+  padding-top: 0;
+}
+
+.sectionHeader {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.7rem;
+  align-content: start;
+}
+
 .sectionHeader > span,
 .roleCard > span,
 .emeritusLead span,
@@ -22,74 +31,6 @@
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.15em;
-}
-
-.heroGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(20rem, 0.65fr);
-  gap: 3rem;
-  align-items: end;
-}
-
-.hero h1 {
-  max-width: 60rem;
-  margin: 0;
-  color: var(--site-text);
-  font-size: clamp(3.7rem, 8.5vw, 7rem);
-  font-weight: 430;
-  line-height: 0.88;
-  letter-spacing: -0.055em;
-}
-
-.heroGrid > div {
-  display: grid;
-  gap: 1.15rem;
-}
-
-.heroGrid p {
-  margin: 0;
-  color: var(--site-muted-bright);
-  font-size: 0.95rem;
-  line-height: 1.7;
-}
-
-.heroGrid a,
-.inlineLink {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.7rem 0;
-  border-top: 1px solid var(--site-border);
-  border-bottom: 1px solid var(--site-border);
-  color: var(--site-text);
-  font-size: 0.68rem;
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.heroGrid a:hover,
-.inlineLink:hover {
-  color: #087ac5;
-  text-decoration: none;
-}
-
-.main {
-  display: grid;
-}
-
-.section {
-  display: grid;
-  grid-template-columns: minmax(14rem, 0.26fr) minmax(0, 0.74fr);
-  gap: 2.5rem;
-  padding: 3rem 0;
-  border-bottom: 1px solid var(--site-border-strong);
-}
-
-.sectionHeader {
-  display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr);
-  gap: 0.7rem;
-  align-content: start;
 }
 
 .sectionHeader > span {
@@ -278,7 +219,22 @@
 }
 
 .inlineLink {
+  display: flex;
+  justify-content: space-between;
   max-width: 24rem;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--site-border);
+  border-bottom: 1px solid var(--site-border);
+  color: var(--site-text);
+  font-size: 0.68rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.inlineLink:hover {
+  color: #087ac5;
+  text-decoration: none;
 }
 
 .emeritusLead {
@@ -314,13 +270,8 @@
 }
 
 @media (max-width: 1050px) {
-  .heroGrid,
   .section {
     grid-template-columns: 1fr;
-  }
-
-  .heroGrid > div {
-    max-width: 36rem;
   }
 
   .sectionHeader {
@@ -329,18 +280,9 @@
 }
 
 @media (max-width: 760px) {
-  .container {
-    width: min(100% - 1.4rem, var(--site-grid-max));
-    padding-top: 1.5rem;
-  }
-
-  .hero h1 {
-    font-size: clamp(3rem, 17vw, 5rem);
-  }
-
   .section {
     gap: 1.25rem;
-    padding: 2rem 0;
+    padding: 1.5rem 0;
   }
 
   .principles,
