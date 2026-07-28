@@ -182,19 +182,25 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		"descriptions": categoryDescriptions,
 	})
 
+	gen := routerruntime.NewGeneration()
+
 	semanticCache, err := createSemanticCache(cfg)
 	if err != nil {
 		return nil, err
 	}
+	gen.Defer(semanticCache.Close)
 
 	toolsDatabase, err := createToolsDatabase(cfg)
 	if err != nil {
-		return nil, err
+		return nil, rollbackGeneration(gen, err)
 	}
+	gen.Defer(toolsDatabase.Close)
+
 	recipeClassifiers, classifier, classificationSvc, err := createRouterClassifier(cfg, mappings)
 	if err != nil {
-		return nil, err
+		return nil, rollbackGeneration(gen, err)
 	}
+	gen.Defer(classifier.Close)
 
 	responseAPIFilter := createResponseAPIFilter(cfg)
 	replayRecorders, replayRecorder, replayStoreShared := createReplayRuntime(cfg)
@@ -239,6 +245,18 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		rateLimiter:          rateLimiter,
 		lookupTableCancel:    lookupTableCancel,
 	}, nil
+}
+
+// rollbackGeneration closes every resource gen has accumulated so far and
+// returns cause unchanged, so a failed construction step never leaks the
+// resources built by the steps before it.
+func rollbackGeneration(gen *routerruntime.Generation, cause error) error {
+	if err := gen.Close(); err != nil {
+		logging.ComponentWarnEvent("extproc", "router_build_rollback_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+	return cause
 }
 
 func (components *routerComponents) buildRouter() *OpenAIRouter {

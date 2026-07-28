@@ -224,15 +224,15 @@ func TestFactoryWithSelectionRegistryUsesRuntimeRLDrivenSelector(t *testing.T) {
 	cfg := &config.LooperConfig{
 		Endpoint: "http://localhost:8000",
 	}
-	originalRegistry := selection.GlobalRegistry
+	originalRegistry := selection.GetGlobalRegistry()
 	defer func() {
-		selection.GlobalRegistry = originalRegistry
+		selection.SetGlobalRegistry(originalRegistry)
 	}()
 
 	globalSelector := selection.NewRLDrivenSelector(selection.DefaultRLDrivenConfig())
 	globalRegistry := selection.NewRegistry()
 	globalRegistry.Register(selection.MethodRLDriven, globalSelector)
-	selection.GlobalRegistry = globalRegistry
+	selection.SetGlobalRegistry(globalRegistry)
 
 	runtimeSelector := selection.NewRLDrivenSelector(selection.DefaultRLDrivenConfig())
 	runtimeRegistry := selection.NewRegistry()
@@ -255,15 +255,15 @@ func TestNewRLDrivenLooperPreservesGlobalRegistryCompatibility(t *testing.T) {
 	cfg := &config.LooperConfig{
 		Endpoint: "http://localhost:8000",
 	}
-	originalRegistry := selection.GlobalRegistry
+	originalRegistry := selection.GetGlobalRegistry()
 	defer func() {
-		selection.GlobalRegistry = originalRegistry
+		selection.SetGlobalRegistry(originalRegistry)
 	}()
 
 	globalSelector := selection.NewRLDrivenSelector(selection.DefaultRLDrivenConfig())
 	globalRegistry := selection.NewRegistry()
 	globalRegistry.Register(selection.MethodRLDriven, globalSelector)
-	selection.GlobalRegistry = globalRegistry
+	selection.SetGlobalRegistry(globalRegistry)
 
 	got := NewRLDrivenLooper(cfg)
 	if got.selector != globalSelector {

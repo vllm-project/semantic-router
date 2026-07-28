@@ -19,6 +19,7 @@ package selection
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -355,6 +356,47 @@ func TestRegistry(t *testing.T) {
 	if ok {
 		t.Error("expected RouterDC to not be registered")
 	}
+}
+
+// TestRegistry_ConcurrentReassignmentRaces asserts that reassigning the
+// global registry wholesale (as every router build/reload does, via
+// SetGlobalRegistry) is safe to run concurrently with
+// Select()/GetSelector() readers. Run with `go test -race`.
+func TestRegistry_ConcurrentReassignmentRaces(t *testing.T) {
+	originalRegistry := GetGlobalRegistry()
+	defer func() { SetGlobalRegistry(originalRegistry) }()
+
+	const iterations = 2000
+
+	selCtx := &SelectionContext{
+		CandidateModels: createCandidateModels("m1"),
+		QualityWeight:   0.5,
+		CostWeight:      0.5,
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			registry := NewRegistry()
+			registry.Register(MethodStatic, stubSelector{
+				result: &SelectionResult{SelectedModel: "m1", Method: MethodStatic, Tier: TierSupported},
+			})
+			SetGlobalRegistry(registry)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			_ = GetSelector(MethodStatic)
+			_, _ = Select(context.Background(), MethodStatic, selCtx)
+		}
+	}()
+
+	wg.Wait()
 }
 
 func TestFactory_Create(t *testing.T) {

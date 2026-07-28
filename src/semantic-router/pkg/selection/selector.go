@@ -27,7 +27,9 @@ package selection
 
 import (
 	"context"
+	"errors"
 	"sync"
+	"sync/atomic"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -355,8 +357,56 @@ func (r *Registry) Get(method SelectionMethod) (Selector, bool) {
 	return s, ok
 }
 
-// GlobalRegistry is the default registry for selection methods
-var GlobalRegistry = NewRegistry()
+// Close best-effort closes every registered selector that implements
+// io.Closer. The Selector interface itself intentionally has no Close
+// method — most selectors are stateless — so this type-asserts per
+// selector instead of widening the interface for the few that hold
+// closeable resources. Errors from individual selectors are joined rather
+// than short-circuiting, so one selector's close failure never skips the
+// rest.
+func (r *Registry) Close() error {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var errs []error
+	for _, selector := range r.selectors {
+		closer, ok := selector.(interface{ Close() error })
+		if !ok {
+			continue
+		}
+		if err := closer.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// globalRegistry holds the process-wide default registry for selection
+// methods behind an atomic pointer so a router build/reload replacing it
+// wholesale (SetGlobalRegistry) can never race with a concurrent
+// GetGlobalRegistry/Select/GetSelector reader — unlike a bare package
+// variable, which golang's memory model gives no safety guarantee for under
+// unsynchronized concurrent read/write.
+var globalRegistry atomic.Pointer[Registry]
+
+func init() {
+	globalRegistry.Store(NewRegistry())
+}
+
+// GetGlobalRegistry returns the process-wide default selection registry.
+func GetGlobalRegistry() *Registry {
+	return globalRegistry.Load()
+}
+
+// SetGlobalRegistry atomically replaces the process-wide default selection
+// registry, e.g. when a router build or config reload constructs a fresh
+// one.
+func SetGlobalRegistry(registry *Registry) {
+	globalRegistry.Store(registry)
+}
 
 // Select uses the specified method to select a model
 func Select(ctx context.Context, method SelectionMethod, selCtx *SelectionContext) (*SelectionResult, error) {
@@ -364,10 +414,11 @@ func Select(ctx context.Context, method SelectionMethod, selCtx *SelectionContex
 		return nil, err
 	}
 
-	selector, ok := GlobalRegistry.Get(method)
+	registry := GetGlobalRegistry()
+	selector, ok := registry.Get(method)
 	if !ok {
 		// Default to static selection when the requested method is not registered.
-		selector, _ = GlobalRegistry.Get(MethodStatic)
+		selector, _ = registry.Get(MethodStatic)
 	}
 	if selector == nil {
 		// Last-resort default: return the first configured candidate.

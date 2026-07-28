@@ -14,12 +14,17 @@ import (
 func (c *InMemoryCache) Close() error {
 	// Use sync.Once to ensure cleanup happens only once
 	c.closeOnce.Do(func() {
-		// Stop background cleanup goroutine
+		// Stop background cleanup goroutine and wait for it to actually exit,
+		// so a caller that observes Close() returning can rely on the
+		// goroutine no longer being live (e.g. for leak-free reload/rollback).
 		if c.stopCleanup != nil {
 			close(c.stopCleanup)
 		}
 		if c.cleanupTicker != nil {
 			c.cleanupTicker.Stop()
+		}
+		if c.cleanupDone != nil {
+			<-c.cleanupDone
 		}
 
 		c.mu.Lock()
@@ -37,6 +42,7 @@ func (c *InMemoryCache) Close() error {
 
 // backgroundCleanup runs periodic cleanup of expired entries
 func (c *InMemoryCache) backgroundCleanup() {
+	defer close(c.cleanupDone)
 	for {
 		select {
 		case <-c.cleanupTicker.C:

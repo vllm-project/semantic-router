@@ -44,7 +44,7 @@ type RLDrivenLooper struct {
 
 // NewRLDrivenLooper creates a new RLDrivenLooper instance
 func NewRLDrivenLooper(cfg *config.LooperConfig) *RLDrivenLooper {
-	return NewRLDrivenLooperWithSelectionRegistry(cfg, selection.GlobalRegistry)
+	return NewRLDrivenLooperWithSelectionRegistry(cfg, selection.GetGlobalRegistry())
 }
 
 // NewRLDrivenLooperWithSelectionRegistry creates a new RLDrivenLooper instance
