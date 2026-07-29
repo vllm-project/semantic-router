@@ -84,10 +84,10 @@ func parsePendingSearchResult(results interface{}, requestID string, prefix stri
 		logging.Warnf("UpdateWithResponse: docID '%s' doesn't have expected prefix '%s'", entry.docID, prefix)
 	}
 
-	logging.Debugf("UpdateWithResponse: extracted docID='%s', model='%s', query='%s'", entry.docID, entry.model, entry.query)
+	logging.Debugf("UpdateWithResponse: extracted docID='%s', model='%s', query=%s", entry.docID, entry.model, logging.ContentDescriptor(entry.query))
 
 	if entry.model == "" || entry.query == "" {
-		logging.Warnf("UpdateWithResponse: missing required fields (model='%s', query='%s')", entry.model, entry.query)
+		logging.Warnf("UpdateWithResponse: missing required fields (model='%s', query=%s)", entry.model, logging.ContentDescriptor(entry.query))
 		return nil, fmt.Errorf("missing required fields in pending entry")
 	}
 
