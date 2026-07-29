@@ -50,7 +50,7 @@ func isMemoryEnabled(cfg *config.RouterConfig) bool {
 		return true
 	}
 
-	for _, decision := range cfg.DefaultDecisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		if decision.HasPlugin("memory") {
 			logging.Infof("Memory auto-enabled: decision '%s' uses memory plugin", decision.Name)
 			return true

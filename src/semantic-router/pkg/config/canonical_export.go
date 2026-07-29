@@ -93,7 +93,9 @@ func routingModelsFromRouterConfig(cfg *RouterConfig) []RoutingModel {
 	for name := range cfg.ModelConfig {
 		modelNames[name] = true
 	}
-	for _, decision := range cfg.DefaultDecisions {
+	// The model catalog is shared across recipes, so every profile's model
+	// references must survive the round trip, not just the default one's.
+	for _, decision := range cfg.AllRoutingDecisions() {
 		for _, ref := range decision.ModelRefs {
 			if ref.Model != "" {
 				modelNames[ref.Model] = true

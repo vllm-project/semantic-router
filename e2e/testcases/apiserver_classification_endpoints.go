@@ -22,13 +22,40 @@ func init() {
 	})
 }
 
+type routerConfigRouting struct {
+	Decisions []struct {
+		Name string `json:"name"`
+	} `json:"decisions"`
+	Signals map[string]interface{} `json:"signals"`
+}
+
 type routerConfigDocument struct {
-	Routing struct {
-		Decisions []struct {
-			Name string `json:"name"`
-		} `json:"decisions"`
-		Signals map[string]interface{} `json:"signals"`
-	} `json:"routing"`
+	Routing routerConfigRouting `json:"routing"`
+	Recipes []struct {
+		Name    string              `json:"name"`
+		Routing routerConfigRouting `json:"routing"`
+	} `json:"recipes"`
+}
+
+// totalDecisions counts the decisions of every routing profile, mirroring
+// RouterConfig.AllRoutingDecisions(): `/metrics/classification` reports the
+// router-wide decision count, so a named recipe's decisions belong in the
+// expectation too. An explicit `default` recipe *is* the top-level profile
+// rather than an extra one, so it replaces routing.decisions instead of
+// adding to it.
+func (d *routerConfigDocument) totalDecisions() int {
+	total := 0
+	explicitDefault := false
+	for _, recipe := range d.Recipes {
+		if recipe.Name == "default" {
+			explicitDefault = true
+		}
+		total += len(recipe.Routing.Decisions)
+	}
+	if !explicitDefault {
+		total += len(d.Routing.Decisions)
+	}
+	return total
 }
 
 type classificationMetricsDocument struct {
@@ -64,8 +91,8 @@ func testAPIServerClassificationEndpoints(
 	if err != nil {
 		return err
 	}
-	if metricsDoc.DecisionCount != len(configDoc.Routing.Decisions) {
-		return fmt.Errorf("expected /metrics/classification decision_count=%d, got %d", len(configDoc.Routing.Decisions), metricsDoc.DecisionCount)
+	if expectedDecisions := configDoc.totalDecisions(); metricsDoc.DecisionCount != expectedDecisions {
+		return fmt.Errorf("expected /metrics/classification decision_count=%d, got %d", expectedDecisions, metricsDoc.DecisionCount)
 	}
 
 	combinedKeys, err := fetchCombinedClassificationKeys(
@@ -110,7 +137,7 @@ func fetchRouterConfigDocument(
 	if err := json.Unmarshal(resp.Body, &doc); err != nil {
 		return nil, nil, fmt.Errorf("decode /config/router response: %w", err)
 	}
-	if len(doc.Routing.Decisions) == 0 {
+	if doc.totalDecisions() == 0 {
 		return nil, nil, fmt.Errorf("expected /config/router to include routing decisions")
 	}
 	return resp.Body, &doc, nil

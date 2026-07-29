@@ -270,14 +270,12 @@ func (r *OpenAIRouter) getReasoningEffort(categoryName string, modelName string)
 		return "medium"
 	}
 
-	for _, decision := range r.Config.DefaultDecisions {
-		if decision.Name != categoryName {
-			continue
-		}
-		if effort := r.reasoningEffortForDecision(decision, modelName); effort != "" {
+	// By-name lookup across every recipe, without materializing a merged
+	// decision slice: this runs several times per request.
+	if decision := r.Config.GetDecisionByName(categoryName); decision != nil {
+		if effort := r.reasoningEffortForDecision(*decision, modelName); effort != "" {
 			return effort
 		}
-		break
 	}
 
 	// Fall back to global default if configured

@@ -213,7 +213,7 @@ func (l *configFileReloadLoop) logReloadSuccess() {
 		"file": l.cfgFile,
 	}
 	if newRouter != nil && newRouter.Config != nil {
-		event["decision_count"] = len(newRouter.Config.DefaultDecisions)
+		event["decision_count"] = len(newRouter.Config.AllRoutingDecisions())
 	}
 	logging.ComponentEvent("extproc", "config_reloaded", event)
 }
@@ -250,6 +250,6 @@ func (s *Server) handleKubernetesConfigUpdate(newCfg *config.RouterConfig) {
 
 	logging.ComponentEvent("extproc", "config_reloaded", map[string]interface{}{
 		"source":         "kubernetes",
-		"decision_count": len(newCfg.DefaultDecisions),
+		"decision_count": len(newCfg.AllRoutingDecisions()),
 	})
 }

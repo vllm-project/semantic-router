@@ -366,13 +366,13 @@ func (c *RouterConfig) GetAllModels() []string {
 
 // GetModelReasoningForDecision returns whether a specific model supports reasoning in a given decision
 func (c *RouterConfig) GetModelReasoningForDecision(decisionName string, modelName string) bool {
-	for _, decision := range c.DefaultDecisions {
-		if decision.Name == decisionName {
-			for _, modelRef := range decision.ModelRefs {
-				if modelRef.Model == modelName {
-					return modelRef.UseReasoning != nil && *modelRef.UseReasoning
-				}
-			}
+	decision := c.GetDecisionByName(decisionName)
+	if decision == nil {
+		return false
+	}
+	for _, modelRef := range decision.ModelRefs {
+		if modelRef.Model == modelName {
+			return modelRef.UseReasoning != nil && *modelRef.UseReasoning
 		}
 	}
 	return false // Default to false if decision or model not found
@@ -380,22 +380,19 @@ func (c *RouterConfig) GetModelReasoningForDecision(decisionName string, modelNa
 
 // GetBestModelForDecision returns the best model for a given decision (first model in ModelRefs)
 func (c *RouterConfig) GetBestModelForDecision(decisionName string) (string, bool) {
-	for _, decision := range c.DefaultDecisions {
-		if decision.Name == decisionName {
-			if len(decision.ModelRefs) > 0 {
-				useReasoning := decision.ModelRefs[0].UseReasoning != nil && *decision.ModelRefs[0].UseReasoning
-				return decision.ModelRefs[0].Model, useReasoning
-			}
-		}
+	decision := c.GetDecisionByName(decisionName)
+	if decision == nil || len(decision.ModelRefs) == 0 {
+		return "", false // Return empty string and false if decision not found or has no models
 	}
-	return "", false // Return empty string and false if decision not found or has no models
+	useReasoning := decision.ModelRefs[0].UseReasoning != nil && *decision.ModelRefs[0].UseReasoning
+	return decision.ModelRefs[0].Model, useReasoning
 }
 
 // ValidateEndpoints validates that all configured models have at least one endpoint
 func (c *RouterConfig) ValidateEndpoints() error {
 	// Get all models from decisions
 	allCategoryModels := make(map[string]bool)
-	for _, decision := range c.DefaultDecisions {
+	for _, decision := range c.AllRoutingDecisions() {
 		for _, modelRef := range decision.ModelRefs {
 			allCategoryModels[modelRef.Model] = true
 		}
@@ -450,23 +447,40 @@ func (c *RouterConfig) GetCategoryByName(name string) *Category {
 	return nil
 }
 
-// GetDecisionByName returns a decision by name
+// GetDecisionByName returns a decision by name, searching every routing recipe.
 func (c *RouterConfig) GetDecisionByName(name string) *Decision {
+	return c.findDecisionBy(func(candidate string) bool { return candidate == name })
+}
+
+// GetDecisionByNameFold is the case-insensitive counterpart of
+// GetDecisionByName, for the classifier paths that match decision names
+// loosely.
+func (c *RouterConfig) GetDecisionByNameFold(name string) *Decision {
+	return c.findDecisionBy(func(candidate string) bool { return strings.EqualFold(candidate, name) })
+}
+
+// findDecisionBy walks the default profile and then every named recipe without
+// materializing a merged slice, so the request-path lookups stay allocation
+// free. The returned pointer always addresses the config itself, never a
+// temporary copy. Decision names are globally unique across recipes (validated
+// at load), so the first match is the only match.
+func (c *RouterConfig) findDecisionBy(match func(string) bool) *Decision {
+	if c == nil {
+		return nil
+	}
 	for i := range c.DefaultDecisions {
-		if c.DefaultDecisions[i].Name == name {
+		if match(c.DefaultDecisions[i].Name) {
 			return &c.DefaultDecisions[i]
 		}
 	}
 	// Non-default recipe decisions live only on their recipe; the default
-	// recipe mirrors the DefaultDecisions field scanned above. Decision names
-	// are globally unique across recipes (validated at load), so the first
-	// match is the only match.
+	// recipe mirrors the DefaultDecisions field scanned above.
 	for i := range c.Recipes {
 		if c.Recipes[i].Name == DefaultRecipeName {
 			continue
 		}
 		for j := range c.Recipes[i].Decisions {
-			if c.Recipes[i].Decisions[j].Name == name {
+			if match(c.Recipes[i].Decisions[j].Name) {
 				return &c.Recipes[i].Decisions[j]
 			}
 		}

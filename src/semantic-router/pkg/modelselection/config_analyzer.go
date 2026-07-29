@@ -78,7 +78,7 @@ func AnalyzeConfig(cfg *config.RouterConfig) *ConfigAnalysisResult {
 	uniqueModels := make(map[string]bool)
 
 	// Analyze decisions
-	for _, decision := range cfg.DefaultDecisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		result.TotalDecisions++
 
 		// Extract model names from ModelRefs

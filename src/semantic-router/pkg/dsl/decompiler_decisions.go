@@ -166,6 +166,9 @@ func decompileComposerObj(node *config.RuleCombination) string {
 	return fmt.Sprintf("{ operator: %q, conditions: [%s] }", node.Operator, strings.Join(parts, ", "))
 }
 
+// decompileDecisions walks the default recipe only: the DSL has no surface for
+// named recipes yet (pl-0038 T10 tracks the round trip), so a config carrying
+// recipes cannot be decompiled without loss.
 func (d *decompiler) decompileDecisions() {
 	for _, dec := range d.cfg.DefaultDecisions {
 		d.decompileDecision(dec)

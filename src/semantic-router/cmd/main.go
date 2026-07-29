@@ -138,7 +138,7 @@ func applyKubernetesConfigUpdate(newConfig *config.RouterConfig) error {
 	replaceKubernetesRuntimeConfig(newConfig)
 	logging.ComponentEvent("router", "kubernetes_config_applied", map[string]interface{}{
 		"config_source":  newConfig.ConfigSource,
-		"decision_count": len(newConfig.DefaultDecisions),
+		"decision_count": len(newConfig.AllRoutingDecisions()),
 	})
 	return nil
 }
@@ -178,8 +178,9 @@ func startKubernetesController(staticConfig *config.RouterConfig, kubeconfig, na
 // startup state — making it trivial for agents and log aggregators to determine
 // what the router is serving and on which ports.
 func logStartupSummary(cfg *config.RouterConfig, opts runtimeOptions, embeddingModelsReady bool) {
-	decisionNames := make([]string, 0, len(cfg.DefaultDecisions))
-	for _, d := range cfg.DefaultDecisions {
+	decisions := cfg.AllRoutingDecisions()
+	decisionNames := make([]string, 0, len(decisions))
+	for _, d := range decisions {
 		decisionNames = append(decisionNames, d.Name)
 	}
 

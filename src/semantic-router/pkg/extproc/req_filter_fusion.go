@@ -64,6 +64,11 @@ func (r *OpenAIRouter) decisionCandidatesForRequestModel(modelName string) []con
 	if r == nil || r.Config == nil {
 		return nil
 	}
+	// Algorithm virtual slugs are a default-profile surface: they select
+	// decisions without going through the entrypoint table, so they must not
+	// reach into a named recipe. A recipe's algorithm decisions stay
+	// reachable through that recipe's own entrypoint, where
+	// decisionCandidatesForRequest scopes candidates to the recipe.
 	candidates := make([]config.Decision, 0)
 	if r.Config.IsReMoMModelName(modelName) {
 		for _, decision := range r.Config.DefaultDecisions {
@@ -97,8 +102,12 @@ func (r *OpenAIRouter) defaultLooperDecisionByAlgorithm(algorithmType string) *c
 		return nil
 	}
 	var selected *config.Decision
-	for i := range r.Config.DefaultDecisions {
-		decision := &r.Config.DefaultDecisions[i]
+	// Default-profile only, for the same reason as
+	// decisionCandidatesForRequestModel: this is the fallback for a request
+	// that arrived on a global algorithm slug, not through an entrypoint.
+	decisions := r.Config.DefaultDecisions
+	for i := range decisions {
+		decision := &decisions[i]
 		if decision.Algorithm == nil || decision.Algorithm.Type != algorithmType {
 			continue
 		}

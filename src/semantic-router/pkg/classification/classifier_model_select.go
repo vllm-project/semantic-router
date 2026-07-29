@@ -2,7 +2,6 @@ package classification
 
 import (
 	"slices"
-	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -29,12 +28,9 @@ func (c *Classifier) SelectBestModelForCategory(categoryName string) string {
 
 // findDecision finds the decision configuration by name (case-insensitive)
 func (c *Classifier) findDecision(decisionName string) *config.Decision {
-	for i, decision := range c.Config.DefaultDecisions {
-		if strings.EqualFold(decision.Name, decisionName) {
-			return &c.Config.DefaultDecisions[i]
-		}
-	}
-	return nil
+	// Searches every recipe: the selected decision can come from any routing
+	// profile, not just the default one.
+	return c.Config.GetDecisionByNameFold(decisionName)
 }
 
 // GetDecisionByName returns the decision configuration by name (case-insensitive)
@@ -120,17 +116,16 @@ func (c *Classifier) SelectBestModelFromList(candidateModels []string, categoryN
 func (c *Classifier) GetModelsForCategory(categoryName string) []string {
 	var models []string
 
-	for _, decision := range c.Config.DefaultDecisions {
-		if strings.EqualFold(decision.Name, categoryName) {
-			for _, modelRef := range decision.ModelRefs {
-				// Use LoRA name if specified, otherwise use the base model name
-				if modelRef.LoRAName != "" {
-					models = append(models, modelRef.LoRAName)
-				} else {
-					models = append(models, modelRef.Model)
-				}
-			}
-			break
+	decision := c.Config.GetDecisionByNameFold(categoryName)
+	if decision == nil {
+		return models
+	}
+	for _, modelRef := range decision.ModelRefs {
+		// Use LoRA name if specified, otherwise use the base model name
+		if modelRef.LoRAName != "" {
+			models = append(models, modelRef.LoRAName)
+		} else {
+			models = append(models, modelRef.Model)
 		}
 	}
 

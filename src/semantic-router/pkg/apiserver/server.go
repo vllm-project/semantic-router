@@ -290,7 +290,7 @@ func shouldInitMemoryStore(cfg *config.RouterConfig) bool {
 	if cfg.Memory.Enabled {
 		return true
 	}
-	for _, decision := range cfg.DefaultDecisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		if decision.HasPlugin("memory") {
 			return true
 		}

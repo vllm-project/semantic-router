@@ -465,7 +465,9 @@ func memoryConfigured(cfg *config.RouterConfig) bool {
 	if cfg.Memory.Enabled {
 		return true
 	}
-	for _, decision := range cfg.DefaultDecisions {
+	// Every recipe's decisions count: a memory plugin declared by a
+	// non-default recipe still needs the memory runtime wired up.
+	for _, decision := range cfg.AllRoutingDecisions() {
 		if decision.HasPlugin("memory") {
 			return true
 		}
