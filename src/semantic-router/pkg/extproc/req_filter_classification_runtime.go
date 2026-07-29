@@ -31,9 +31,19 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	signalInput signalEvaluationInput,
 	nonUserMessages []string,
 	ctx *RequestContext,
+	candidates []config.Decision,
 ) (*classification.SignalResults, error) {
 	signalStart := time.Now()
 	signalCtx, signalSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanSignalEvaluation)
+
+	// Authz enforcement is scoped to the decisions this request can actually
+	// select; the signal registry stays global for evaluation. Without the
+	// scope, one recipe with an authz condition would reject every request
+	// from profiles that never asked for identity enforcement.
+	authzScope := candidates
+	if authzScope == nil {
+		authzScope = r.Config.Decisions
+	}
 
 	signals, authzErr := r.Classifier.EvaluateAllSignalsWithHeaders(
 		signalInput.compressedText,
@@ -48,6 +58,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 		signalInput.evaluationText,
 		signalInput.skipCompressionSignals,
 		signalInput.conversationFacts,
+		authzScope,
 	)
 	if authzErr != nil {
 		signalSpan.End()
@@ -142,7 +153,7 @@ func (r *OpenAIRouter) runDecisionEngine(
 		if len(candidates) == 0 {
 			tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
 			ctx.TraceContext = decisionCtx
-			return nil, ""
+			return nil, r.defaultModelForUnmatchedDecision(originalModel)
 		}
 		result, err = r.Classifier.EvaluateDecisionWithEngineForDecisions(signals, candidates)
 	} else {
@@ -170,7 +181,7 @@ func (r *OpenAIRouter) runDecisionEngine(
 }
 
 func (r *OpenAIRouter) defaultModelForUnmatchedDecision(originalModel string) string {
-	if r.Config.IsAutoModelName(originalModel) {
+	if r.requestModelActsAsAuto(originalModel) {
 		return r.Config.DefaultModel
 	}
 	return ""
@@ -196,7 +207,7 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 		"matched_rules": result.MatchedRules,
 	})
 
-	if !r.Config.IsAutoModelName(originalModel) {
+	if !r.requestModelActsAsAuto(originalModel) {
 		logging.ComponentDebugEvent("extproc", "explicit_model_preserved", map[string]interface{}{
 			"request_id":     ctx.RequestID,
 			"original_model": originalModel,

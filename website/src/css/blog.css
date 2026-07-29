@@ -517,9 +517,50 @@ html[data-route-kind='blog'] body,
 }
 
 .site-blog-post__authors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.1rem 2.2rem;
   margin: 1.45rem 0 0;
+  padding: 0;
   color: #101827;
   font-size: 1.02rem;
+  list-style: none;
+}
+
+.site-blog-post__author {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.site-blog-post__author-avatar {
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.site-blog-post__author-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  line-height: 1.3;
+}
+
+.site-blog-post__author-details a,
+.site-blog-post__author-details span {
+  color: #101827;
+  font-weight: 620;
+  text-decoration: none;
+}
+
+.site-blog-post__author-details a:hover {
+  color: #238fdc;
+}
+
+.site-blog-post__author-details small {
+  color: #657b98;
+  font-size: 0.86rem;
 }
 
 .site-blog-post__tags {
@@ -811,6 +852,7 @@ html[data-route-kind='blog'] body,
 [data-theme='dark'] .site-blog-pagination__status,
 [data-theme='dark'] .site-blog-post__breadcrumb,
 [data-theme='dark'] .site-blog-post__meta,
+[data-theme='dark'] .site-blog-post__author-details small,
 [data-theme='dark'] .site-blog-post__tags a,
 [data-theme='dark'] .site-blog-layout__toc .table-of-contents__link {
   color: var(--site-muted-bright);
@@ -820,6 +862,8 @@ html[data-route-kind='blog'] body,
 [data-theme='dark'] .site-blog-recent a,
 [data-theme='dark'] .site-blog-post__header h1,
 [data-theme='dark'] .site-blog-post__authors,
+[data-theme='dark'] .site-blog-post__author-details a,
+[data-theme='dark'] .site-blog-post__author-details span,
 [data-theme='dark'] .site-blog-post__content,
 [data-theme='dark'] .site-blog-post__content p,
 [data-theme='dark'] .site-blog-post__content li {

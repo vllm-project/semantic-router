@@ -5,10 +5,26 @@ package apiserver
 import (
 	"context"
 	"net/http"
+	"regexp"
 	"strings"
 )
 
 const redactedConfigValue = "[REDACTED]"
+
+// sensitiveAssignmentPattern matches YAML/JSON-style secret assignments that
+// sometimes appear inside parse/validation error strings.
+var sensitiveAssignmentPattern = regexp.MustCompile(
+	`(?i)((?:["']?(?:api[_-]?key|access[_-]?key|password|auth[_-]?password|client[_-]?secret|private[_-]?key|secret)["']?)\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,}\]]+)`,
+)
+
+// scrubSecretsInErrorMessage removes plaintext credential assignments from
+// management API error messages so parse/deploy failures cannot leak secrets.
+func scrubSecretsInErrorMessage(message string) string {
+	if message == "" {
+		return message
+	}
+	return sensitiveAssignmentPattern.ReplaceAllString(message, "${1}"+redactedConfigValue)
+}
 
 // canViewSecrets reports whether the request principal may see plaintext
 // secrets in config dumps. Requires secret_view (admin via "*" by default).

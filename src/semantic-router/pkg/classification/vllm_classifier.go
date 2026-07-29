@@ -89,7 +89,7 @@ func (v *VLLMJailbreakInference) Classify(text string) (candle_binding.ClassResu
 
 	// Parse model output - flexible to support multiple formats
 	output := resp.Choices[0].Message.Content
-	logging.Debugf("vLLM jailbreak detection response: %s", output)
+	logging.Debugf("vLLM jailbreak detection response: %s", logging.ContentDescriptor(output))
 	isJailbreak, confidence, categories := v.parseSafetyOutput(output)
 	logging.Debugf("Parsed result: isJailbreak=%v, confidence=%.3f, categories=%v",
 		isJailbreak, confidence, categories)
