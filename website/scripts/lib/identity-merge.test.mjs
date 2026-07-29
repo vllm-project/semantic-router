@@ -44,9 +44,11 @@ test('merges the theohsiung email-keyed split from issue #2699 into the github-k
   assert.equal(entry.latestCommitDate, '2026-01-20T08:00:00+08:00')
 })
 
-test('merges an email-keyed entry that shares a commit author name with a github-keyed entry', () => {
-  // The Wilson Wu split from issue #2699: iwilsonwu@gmail.com commits kept the
-  // same author name as the commits that did resolve to a GitHub login.
+test('keeps entries separate when only a shared display name links them', () => {
+  // Author names are user-controlled and collide (two authors committing as
+  // "root"), so a shared display name alone is deliberately NOT merge
+  // evidence; only name-equals-login is. The original #2699 splits have
+  // self-healed upstream.
   const byContributor = entriesToMap([
     {
       key: 'github:wilsonwu',
@@ -71,15 +73,14 @@ test('merges an email-keyed entry that shares a commit author name with a github
 
   const merged = mergeEmailKeyedContributors(byContributor)
 
-  assert.equal(merged.size, 1)
-
-  const entry = merged.get('github:wilsonwu')
-
-  assert.equal(entry.commits, 15)
-  assert.equal(entry.latestCommitDate, '2026-02-01T00:00:00Z')
+  assert.equal(merged.size, 2)
+  assert.equal(merged.get('github:wilsonwu').commits, 12)
+  assert.equal(merged.get('email:iwilsonwu@gmail.com').commits, 3)
 })
 
-test('merges when the github-keyed entry saw the same author email on other commits', () => {
+test('keeps entries separate when only shared author-email evidence links them', () => {
+  // Email-evidence matching was dropped along with name matching: the
+  // name-equals-login path is the only merge signal.
   const byContributor = entriesToMap([
     {
       key: 'github:someone',
@@ -104,8 +105,9 @@ test('merges when the github-keyed entry saw the same author email on other comm
 
   const merged = mergeEmailKeyedContributors(byContributor)
 
-  assert.equal(merged.size, 1)
-  assert.equal(merged.get('github:someone').commits, 9)
+  assert.equal(merged.size, 2)
+  assert.equal(merged.get('github:someone').commits, 7)
+  assert.equal(merged.get('email:personal@example.com').commits, 2)
 })
 
 test('keeps an email-keyed entry with no linking evidence as its own entry', () => {

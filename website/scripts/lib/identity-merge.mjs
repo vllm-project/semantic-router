@@ -69,12 +69,15 @@ function lookupEvidence(index, evidence) {
 
 /**
  * Merges leftover `email:*`-keyed contributor entries into a matching
- * `github:*`-keyed entry when the commit author evidence the script already
- * collected (author emails, author names) links them to the same human.
+ * `github:*`-keyed entry when the entry's commit author name equals the
+ * GitHub login of exactly one non-bot `github:*` entry.
  *
  * This covers commits whose GitHub login resolution failed at generation time
- * (e.g. the author email was not yet linked to the GitHub account), which
- * otherwise splits one contributor into two ranked leaderboard entries.
+ * (e.g. a deleted account whose commits resolve to `ghost`), which otherwise
+ * splits one contributor into two ranked leaderboard entries. Broader
+ * email/name-evidence matching was deliberately dropped: git author names are
+ * user-controlled and collide (two authors committing as `root`), so only the
+ * name-equals-login signal is used.
  *
  * @param {Map<string, object>} byContributor entries keyed by identity key,
  *   each carrying `emails`/`names` evidence sets plus commit stats.
@@ -93,17 +96,12 @@ export function mergeEmailKeyedContributors(byContributor) {
     })
   }
 
-  const targetByEmail = new Map()
-  const targetByName = new Map()
   const targetByLogin = new Map()
 
   for (const entry of merged.values()) {
     if (!entry.key?.startsWith('github:') || entry.isBot) {
       continue
     }
-
-    indexEvidence(targetByEmail, entry.emails, entry)
-    indexEvidence(targetByName, entry.names, entry)
 
     const login = normalizeValue(entry.login)
 
@@ -117,9 +115,7 @@ export function mergeEmailKeyedContributors(byContributor) {
       continue
     }
 
-    const target = lookupEvidence(targetByEmail, entry.emails)
-      ?? lookupEvidence(targetByName, entry.names)
-      ?? lookupEvidence(targetByLogin, entry.names)
+    const target = lookupEvidence(targetByLogin, entry.names)
 
     if (!target) {
       continue
