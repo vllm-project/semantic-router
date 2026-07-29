@@ -131,12 +131,8 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		logging.Debugf("InMemoryCache.FindSimilarWithThreshold: cache disabled")
 		return nil, false, nil
 	}
-	queryPreview := query
-	if len(query) > 50 {
-		queryPreview = query[:50] + "..."
-	}
-	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
-		model, queryPreview, len(query), threshold)
+	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: searching for model='%s', query=%s, threshold=%.4f",
+		model, logging.ContentDescriptor(query), threshold)
 
 	queryEmbedding, err := c.generateEmbedding(query)
 	if err != nil {
