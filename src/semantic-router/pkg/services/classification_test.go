@@ -264,7 +264,7 @@ func TestBuildEvalResponse_ProjectionSignalsIncludedInUsedMatchedAndUnmatched(t 
 					},
 				},
 			},
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name: "reasoning_route",
 					Rules: config.RuleCombination{
@@ -288,7 +288,7 @@ func TestBuildEvalResponse_ProjectionSignalsIncludedInUsedMatchedAndUnmatched(t 
 		SignalConfidences:      map[string]float64{"projection:balance_reasoning": 0.94},
 	}
 	decisionResult := &decision.DecisionResult{
-		Decision: &routerConfig.Decisions[0],
+		Decision: &routerConfig.DefaultDecisions[0],
 	}
 
 	response := service.buildEvalResponse("reason carefully", signals, decisionResult)
@@ -350,7 +350,7 @@ func TestGetRecommendedModel_WithConfig(t *testing.T) {
 			DefaultModel: "default-llm-model",
 		},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name: "math",
 					ModelRefs: []config.ModelRef{
@@ -475,7 +475,7 @@ func TestGetRecommendedModel_NoDecisionFound(t *testing.T) {
 			DefaultModel: "default-llm-model",
 		},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name: "math",
 					ModelRefs: []config.ModelRef{
@@ -507,7 +507,7 @@ func TestGetRecommendedModel_EmptyModelRefs(t *testing.T) {
 			DefaultModel: "default-llm-model",
 		},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name:      "math",
 					ModelRefs: []config.ModelRef{}, // Empty ModelRefs

@@ -58,7 +58,7 @@ func TestValidateDomainContractsAllowsAliasWithSupportedMMLUCategories(t *testin
 			Signals: Signals{
 				Categories: []Category{testDomainCategory("compact", "computer science")},
 			},
-			Decisions: []Decision{{
+			DefaultDecisions: []Decision{{
 				Name: "compact_route",
 				Rules: RuleNode{
 					Type: SignalTypeDomain,
@@ -117,7 +117,7 @@ func TestValidateDomainContractsRejectsUndeclaredDecisionDomain(t *testing.T) {
 			Signals: Signals{
 				Categories: []Category{testDomainCategory("math")},
 			},
-			Decisions: []Decision{{
+			DefaultDecisions: []Decision{{
 				Name: "science_route",
 				Rules: RuleNode{
 					Type: SignalTypeDomain,

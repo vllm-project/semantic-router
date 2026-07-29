@@ -11,7 +11,7 @@ func TestInitializeReplayRecordersUsesGlobalReplayDefault(t *testing.T) {
 	cfg := &config.RouterConfig{
 		RouterReplay: config.RouterReplayConfig{Enabled: true, StoreBackend: "memory"},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{Name: "inherits-global", ModelRefs: []config.ModelRef{{Model: "m"}}},
 				{
 					Name:      "opt-out",
@@ -39,7 +39,7 @@ func TestApplyDecisionResultToContextUsesEffectiveRouterReplayConfig(t *testing.
 	cfg := &config.RouterConfig{
 		RouterReplay: config.RouterReplayConfig{Enabled: true, StoreBackend: "memory"},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{Name: "inherits-global", ModelRefs: []config.ModelRef{{Model: "m"}}},
 			},
 		},
@@ -48,7 +48,7 @@ func TestApplyDecisionResultToContextUsesEffectiveRouterReplayConfig(t *testing.
 	ctx := &RequestContext{}
 
 	router.applyDecisionResultToContext(&decision.DecisionResult{
-		Decision: &cfg.Decisions[0],
+		Decision: &cfg.DefaultDecisions[0],
 	}, ctx)
 
 	if ctx.RouterReplayPluginConfig == nil {

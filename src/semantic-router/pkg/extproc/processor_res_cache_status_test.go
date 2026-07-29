@@ -51,7 +51,7 @@ func statusCacheRouter() (*mockStreamingCache, *OpenAIRouter) {
 		Config: &config.RouterConfig{
 			SemanticCache: config.SemanticCache{Enabled: true},
 			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
+				DefaultDecisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
 			},
 		},
 	}

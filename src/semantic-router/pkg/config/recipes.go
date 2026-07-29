@@ -102,12 +102,12 @@ func (c *RouterConfig) AllRoutingDecisions() []Decision {
 		return nil
 	}
 	if len(c.Recipes) == 0 {
-		return c.Decisions
+		return c.DefaultDecisions
 	}
 	if len(c.Recipes) == 1 {
 		return c.Recipes[0].Decisions
 	}
-	all := make([]Decision, 0, 2*len(c.Decisions))
+	all := make([]Decision, 0, 2*len(c.DefaultDecisions))
 	for i := range c.Recipes {
 		all = append(all, c.Recipes[i].Decisions...)
 	}
@@ -122,7 +122,7 @@ func (c *RouterConfig) HasRoutingDecisions() bool {
 	if c == nil {
 		return false
 	}
-	if len(c.Decisions) > 0 {
+	if len(c.DefaultDecisions) > 0 {
 		return true
 	}
 	for i := range c.Recipes {

@@ -32,12 +32,12 @@ func TestCompileEmitRetentionDirectives(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	assertDecisionCount(t, cfg.Decisions, 2)
+	assertDecisionCount(t, cfg.DefaultDecisions, 2)
 
-	assertConfigRetentionDrop(t, cfg.Decisions[0].Emits[0].Retention, true, "decision[0]")
-	assertConfigRetentionTTLTurns(t, cfg.Decisions[1].Emits[0].Retention, 3, "decision[1]")
-	assertConfigRetentionKeepCurrentModel(t, cfg.Decisions[1].Emits[0].Retention, true, "decision[1]")
-	assertConfigRetentionPreferPrefix(t, cfg.Decisions[1].Emits[0].Retention, true, "decision[1]")
+	assertConfigRetentionDrop(t, cfg.DefaultDecisions[0].Emits[0].Retention, true, "decision[0]")
+	assertConfigRetentionTTLTurns(t, cfg.DefaultDecisions[1].Emits[0].Retention, 3, "decision[1]")
+	assertConfigRetentionKeepCurrentModel(t, cfg.DefaultDecisions[1].Emits[0].Retention, true, "decision[1]")
+	assertConfigRetentionPreferPrefix(t, cfg.DefaultDecisions[1].Emits[0].Retention, true, "decision[1]")
 }
 
 func assertDecisionCount(t *testing.T, decisions []config.Decision, want int) {
@@ -120,13 +120,13 @@ func TestDecompileEmitRetentionRoundTrip(t *testing.T) {
 	if len(errs2) > 0 {
 		t.Fatalf("second compile errors: %v\n--- source ---\n%s", errs2, out)
 	}
-	if len(cfg2.Decisions) != 2 {
+	if len(cfg2.DefaultDecisions) != 2 {
 		t.Fatalf("round-trip decision count mismatch")
 	}
-	if cfg2.Decisions[0].Emits[0].Retention.Drop == nil || !*cfg2.Decisions[0].Emits[0].Retention.Drop {
+	if cfg2.DefaultDecisions[0].Emits[0].Retention.Drop == nil || !*cfg2.DefaultDecisions[0].Emits[0].Retention.Drop {
 		t.Fatalf("round-trip lost drop=true")
 	}
-	if cfg2.Decisions[1].Emits[0].Retention.TTLTurns == nil || *cfg2.Decisions[1].Emits[0].Retention.TTLTurns != 3 {
+	if cfg2.DefaultDecisions[1].Emits[0].Retention.TTLTurns == nil || *cfg2.DefaultDecisions[1].Emits[0].Retention.TTLTurns != 3 {
 		t.Fatalf("round-trip lost ttl_turns=3")
 	}
 }
@@ -226,10 +226,10 @@ func assertDSLRetentionPreferPrefix(t *testing.T, r *RetentionDirective, want bo
 
 func assertDecisionTreeConfigRetention(t *testing.T, cfg *config.RouterConfig) {
 	t.Helper()
-	assertDecisionCount(t, cfg.Decisions, 3)
-	assertConfigRetentionDrop(t, cfg.Decisions[0].Emits[0].Retention, true, "compiled IF branch")
-	assertConfigRetentionTTLTurns(t, cfg.Decisions[1].Emits[0].Retention, 2, "compiled ELSE IF branch")
-	assertConfigRetentionPreferPrefix(t, cfg.Decisions[2].Emits[0].Retention, true, "compiled ELSE branch")
+	assertDecisionCount(t, cfg.DefaultDecisions, 3)
+	assertConfigRetentionDrop(t, cfg.DefaultDecisions[0].Emits[0].Retention, true, "compiled IF branch")
+	assertConfigRetentionTTLTurns(t, cfg.DefaultDecisions[1].Emits[0].Retention, 2, "compiled ELSE IF branch")
+	assertConfigRetentionPreferPrefix(t, cfg.DefaultDecisions[2].Emits[0].Retention, true, "compiled ELSE branch")
 }
 
 func assertDecisionTreeRetentionRoundTrip(t *testing.T, cfg *config.RouterConfig) {
@@ -242,7 +242,7 @@ func assertDecisionTreeRetentionRoundTrip(t *testing.T, cfg *config.RouterConfig
 	if len(errs) > 0 {
 		t.Fatalf("round-trip compile errors: %v\n--- source ---\n%s", errs, out)
 	}
-	assertDecisionCount(t, cfg2.Decisions, 3)
+	assertDecisionCount(t, cfg2.DefaultDecisions, 3)
 }
 
 func TestEmitRoutingYAMLIncludesRetention(t *testing.T) {

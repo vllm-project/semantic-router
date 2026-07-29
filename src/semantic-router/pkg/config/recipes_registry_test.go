@@ -82,7 +82,7 @@ func TestAllRoutingDecisionsFallsBackToFlatDecisions(t *testing.T) {
 	// test configs) carry no recipes; the flat decisions are the only profile.
 	cfg := &RouterConfig{
 		IntelligentRouting: IntelligentRouting{
-			Decisions: []Decision{{Name: "flat_route"}},
+			DefaultDecisions: []Decision{{Name: "flat_route"}},
 		},
 	}
 

@@ -19,7 +19,7 @@ func TestBuildModelSelectionConfigUsesDecisionScopedLearningState(t *testing.T) 
 func learningStateRouterConfig() *config.RouterConfig {
 	return &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				rlDrivenLearningDecision(),
 				gmtRouterLearningDecision(),
 			},
@@ -154,7 +154,7 @@ func TestBuildHybridSelectionConfigMergesDecisionOverrides(t *testing.T) {
 func TestBuildModelSelectionConfigUsesDecisionScopedMultiFactorConfig(t *testing.T) {
 	got := buildModelSelectionConfig(&config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name: "weighted-latency-router",
 					Algorithm: &config.AlgorithmConfig{

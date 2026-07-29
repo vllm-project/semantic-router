@@ -122,7 +122,7 @@ func parseYAMLBytesWithBaseDir(data []byte, baseDir string) (*RouterConfig, erro
 	}
 
 	logging.ComponentDebugEvent("config", "config_parse_complete", map[string]interface{}{
-		"decision_count": len(cfg.Decisions),
+		"decision_count": len(cfg.DefaultDecisions),
 		"base_dir":       baseDir,
 	})
 	return cfg, nil
@@ -513,12 +513,12 @@ func finalizeParsedConfig(cfg *RouterConfig) error {
 }
 
 func logParsedDecisions(cfg *RouterConfig) {
-	decisionNames := make([]string, 0, len(cfg.Decisions))
-	for _, d := range cfg.Decisions {
+	decisionNames := make([]string, 0, len(cfg.DefaultDecisions))
+	for _, d := range cfg.DefaultDecisions {
 		decisionNames = append(decisionNames, d.Name)
 	}
 	logging.ComponentDebugEvent("config", "config_decisions_parsed", map[string]interface{}{
-		"decision_count": len(cfg.Decisions),
+		"decision_count": len(cfg.DefaultDecisions),
 		"decision_names": decisionNames,
 	})
 }
@@ -658,12 +658,12 @@ func nestedStringMap(raw interface{}) map[string]interface{} {
 
 // Replace replaces the globally cached config. It is safe for concurrent readers.
 func Replace(newCfg *RouterConfig) {
-	decisionNames := make([]string, 0, len(newCfg.Decisions))
-	for _, d := range newCfg.Decisions {
+	decisionNames := make([]string, 0, len(newCfg.DefaultDecisions))
+	for _, d := range newCfg.DefaultDecisions {
 		decisionNames = append(decisionNames, d.Name)
 	}
 	logging.ComponentDebugEvent("config", "config_replace_started", map[string]interface{}{
-		"decision_count": len(newCfg.Decisions),
+		"decision_count": len(newCfg.DefaultDecisions),
 		"decision_names": decisionNames,
 	})
 
@@ -689,13 +689,13 @@ func Replace(newCfg *RouterConfig) {
 		case ch <- newCfg:
 			logging.ComponentDebugEvent("config", "config_update_notified", map[string]interface{}{
 				"subscriber_id":  id,
-				"decision_count": len(newCfg.Decisions),
+				"decision_count": len(newCfg.DefaultDecisions),
 			})
 		default:
 			logging.ComponentWarnEvent("config", "config_update_notification_skipped", map[string]interface{}{
 				"subscriber_id":  id,
 				"reason":         "channel_full",
-				"decision_count": len(newCfg.Decisions),
+				"decision_count": len(newCfg.DefaultDecisions),
 			})
 		}
 	}

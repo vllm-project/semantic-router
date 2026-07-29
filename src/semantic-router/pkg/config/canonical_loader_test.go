@@ -828,7 +828,7 @@ routing:
 	if loras[0].Name != "sql-expert" || loras[0].Description != "SQL-specialized adapter" {
 		t.Fatalf("unexpected first LoRA adapter: %#v", loras[0])
 	}
-	if cfg.Decisions[0].ModelRefs[0].LoRAName != "sql-expert" {
-		t.Fatalf("expected lora_name to survive parse, got %q", cfg.Decisions[0].ModelRefs[0].LoRAName)
+	if cfg.DefaultDecisions[0].ModelRefs[0].LoRAName != "sql-expert" {
+		t.Fatalf("expected lora_name to survive parse, got %q", cfg.DefaultDecisions[0].ModelRefs[0].LoRAName)
 	}
 }

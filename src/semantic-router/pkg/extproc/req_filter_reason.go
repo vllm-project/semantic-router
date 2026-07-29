@@ -270,7 +270,7 @@ func (r *OpenAIRouter) getReasoningEffort(categoryName string, modelName string)
 		return "medium"
 	}
 
-	for _, decision := range r.Config.Decisions {
+	for _, decision := range r.Config.DefaultDecisions {
 		if decision.Name != categoryName {
 			continue
 		}

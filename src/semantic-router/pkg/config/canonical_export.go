@@ -53,7 +53,7 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 		ModelCards:  routingModelsFromRouterConfig(cfg),
 		Signals:     canonicalSignalsFromSignals(cfg.RoutingProfileSignals()),
 		Projections: canonicalProjectionsFromProjections(cfg.RoutingProfileProjections()),
-		Decisions:   copyDecisions(cfg.Decisions),
+		Decisions:   copyDecisions(cfg.DefaultDecisions),
 	}
 }
 
@@ -93,7 +93,7 @@ func routingModelsFromRouterConfig(cfg *RouterConfig) []RoutingModel {
 	for name := range cfg.ModelConfig {
 		modelNames[name] = true
 	}
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.DefaultDecisions {
 		for _, ref := range decision.ModelRefs {
 			if ref.Model != "" {
 				modelNames[ref.Model] = true

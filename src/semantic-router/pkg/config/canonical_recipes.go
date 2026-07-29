@@ -46,14 +46,14 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 	if explicitDefault := findRecipe(recipes, DefaultRecipeName); explicitDefault != nil {
 		// Recipes-only layout: bridge the explicit default recipe into the
 		// flat decisions so existing single-profile read sites keep working.
-		cfg.Decisions = explicitDefault.Decisions
+		cfg.DefaultDecisions = explicitDefault.Decisions
 	} else {
 		// The top-level routing profile is the default recipe.
 		recipes = append([]RoutingRecipe{{
 			Name:        DefaultRecipeName,
 			Signals:     cfg.Signals,
 			Projections: cfg.Projections,
-			Decisions:   cfg.Decisions,
+			Decisions:   cfg.DefaultDecisions,
 		}}, recipes...)
 	}
 	cfg.Recipes = recipes

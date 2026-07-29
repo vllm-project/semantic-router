@@ -113,7 +113,7 @@ func mustCompile(t *testing.T, input string) *config.RouterConfig {
 // the runtime uses to read decision plugin configs.
 func mustExtractRAGPluginConfig(t *testing.T, cfg *config.RouterConfig) config.RAGPluginConfig {
 	t.Helper()
-	for _, dec := range cfg.Decisions {
+	for _, dec := range cfg.DefaultDecisions {
 		for _, p := range dec.Plugins {
 			if p.Type != config.DecisionPluginRAG {
 				continue

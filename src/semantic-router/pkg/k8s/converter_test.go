@@ -94,7 +94,7 @@ func TestConverterWithTestData(t *testing.T) {
 			require.NoError(t, err, "Failed runtime parse validation")
 			assert.Equal(t, config.ConfigSourceKubernetes, validateConfig.ConfigSource, "ConfigSource should remain kubernetes")
 			assert.Equal(t, pool.Spec.DefaultModel, validateConfig.DefaultModel, "default model mismatch")
-			assert.Len(t, validateConfig.Decisions, len(route.Spec.Decisions), "Decisions count mismatch")
+			assert.Len(t, validateConfig.DefaultDecisions, len(route.Spec.Decisions), "Decisions count mismatch")
 			assert.Len(t, validateConfig.ModelConfig, len(pool.Spec.Models), "Model catalog count mismatch")
 		})
 	}

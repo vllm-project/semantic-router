@@ -182,7 +182,7 @@ func TestHandleClassifierInfoUsesResolvedRuntimeConfig(t *testing.T) {
 func TestHandleClassifierInfoNormalizesYAMLStylePluginConfig(t *testing.T) {
 	liveCfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name: "health_decision",
 					Plugins: []config.DecisionPlugin{
@@ -220,6 +220,9 @@ func TestHandleClassifierInfoNormalizesYAMLStylePluginConfig(t *testing.T) {
 
 	resp := decodeJSONObject(t, rr.Body.Bytes())
 	cfgPayload := requireJSONObject(t, resp, "config")
+	// The response key stays `Decisions` across the Go field rename: it is a
+	// published wire contract that e2e/testcases/apiserver_runtime_config_endpoints.go
+	// decodes.
 	decisions := requireJSONArray(t, cfgPayload, "Decisions", 1)
 	decision := requireJSONObjectValue(t, decisions[0], "decision")
 	plugins := requireJSONArray(t, decision, "Plugins", 1)

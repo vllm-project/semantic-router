@@ -18,7 +18,7 @@ func validateDomainContracts(cfg *RouterConfig) error {
 		return err
 	}
 
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.DefaultDecisions {
 		if err := validateDecisionDomainReferences(decision.Name, &decision.Rules, declared); err != nil {
 			return err
 		}

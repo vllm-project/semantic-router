@@ -141,10 +141,10 @@ func assertDeployedDecisionName(t *testing.T, configPath string, want string) {
 	if err != nil {
 		t.Fatalf("parse config %s: %v", configPath, err)
 	}
-	if len(cfg.Decisions) == 0 {
+	if len(cfg.DefaultDecisions) == 0 {
 		t.Fatalf("expected at least one decision in %s", configPath)
 	}
-	if got := cfg.Decisions[0].Name; got != want {
+	if got := cfg.DefaultDecisions[0].Name; got != want {
 		t.Fatalf("decision name in %s = %q, want %q", configPath, got, want)
 	}
 }

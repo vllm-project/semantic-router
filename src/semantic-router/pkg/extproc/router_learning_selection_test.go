@@ -572,7 +572,7 @@ func TestRouterLearningCandidateSetsAreDeterministicAndEligible(t *testing.T) {
 			},
 		},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name:      "simple",
 					Tier:      2,
@@ -618,7 +618,7 @@ func TestRouterLearningAdaptationUsesDecisionCandidateSetOverride(t *testing.T) 
 			},
 		},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name:      "simple",
 					Tier:      2,
@@ -637,7 +637,7 @@ func TestRouterLearningAdaptationUsesDecisionCandidateSetOverride(t *testing.T) 
 			},
 		},
 	}}
-	ctx := &RequestContext{VSRSelectedDecision: &router.Config.Decisions[0]}
+	ctx := &RequestContext{VSRSelectedDecision: &router.Config.DefaultDecisions[0]}
 	selCtx := &selection.SelectionContext{
 		DecisionName:    "simple",
 		CandidateModels: []config.ModelRef{{Model: "cheap"}},

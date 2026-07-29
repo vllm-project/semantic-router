@@ -108,9 +108,9 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 
 func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
 	cfg.Listeners = append([]Listener(nil), canonical.Listeners...)
-	cfg.Decisions = copyDecisions(canonical.Routing.Decisions)
-	ensureModelRefDefaults(cfg.Decisions)
-	cfg.Signals = normalizeSignals(canonical.Routing.Signals, cfg.Decisions)
+	cfg.DefaultDecisions = copyDecisions(canonical.Routing.Decisions)
+	ensureModelRefDefaults(cfg.DefaultDecisions)
+	cfg.Signals = normalizeSignals(canonical.Routing.Signals, cfg.DefaultDecisions)
 	cfg.Projections = normalizeProjections(canonical.Routing.Projections)
 	cfg.ModelConfig = make(map[string]ModelParams)
 

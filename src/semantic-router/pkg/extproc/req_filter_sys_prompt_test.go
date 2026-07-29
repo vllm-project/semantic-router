@@ -12,7 +12,7 @@ import (
 func TestAddSystemPromptUsesRouterConfigBeforeGlobal(t *testing.T) {
 	restoreGlobalConfig := replaceExtProcGlobalConfigForTest(&config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				decisionWithSystemPrompt("support", "global prompt"),
 			},
 		},
@@ -22,7 +22,7 @@ func TestAddSystemPromptUsesRouterConfigBeforeGlobal(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
 			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{
+				DefaultDecisions: []config.Decision{
 					decisionWithSystemPrompt("support", "router prompt"),
 				},
 			},
@@ -44,7 +44,7 @@ func TestAddSystemPromptUsesRouterConfigBeforeGlobal(t *testing.T) {
 func TestAddSystemPromptDoesNotUseGlobalWhenRouterConfigMissesDecision(t *testing.T) {
 	restoreGlobalConfig := replaceExtProcGlobalConfigForTest(&config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				decisionWithSystemPrompt("support", "global prompt"),
 			},
 		},

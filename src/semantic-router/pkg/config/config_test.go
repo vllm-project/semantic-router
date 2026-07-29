@@ -270,10 +270,10 @@ tools:
 				Expect(cfg.Categories[0].Name).To(Equal("general"))
 
 				// Verify decisions
-				Expect(cfg.Decisions).To(HaveLen(1))
-				Expect(cfg.Decisions[0].Name).To(Equal("general"))
-				Expect(cfg.Decisions[0].ModelRefs).To(HaveLen(1))
-				Expect(cfg.Decisions[0].ModelRefs[0].Model).To(Equal("model-a"))
+				Expect(cfg.DefaultDecisions).To(HaveLen(1))
+				Expect(cfg.DefaultDecisions[0].Name).To(Equal("general"))
+				Expect(cfg.DefaultDecisions[0].ModelRefs).To(HaveLen(1))
+				Expect(cfg.DefaultDecisions[0].ModelRefs[0].Model).To(Equal("model-a"))
 
 				// Verify default model
 				Expect(cfg.DefaultModel).To(Equal("model-b"))
@@ -2354,7 +2354,7 @@ default_model: "test-model"
 						Enabled: true, // Global enabled, but should not affect decisions without plugin
 					},
 					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
+						DefaultDecisions: []Decision{decision},
 					},
 				}
 
@@ -2381,7 +2381,7 @@ default_model: "test-model"
 						Enabled: true,
 					},
 					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
+						DefaultDecisions: []Decision{decision},
 					},
 				}
 
@@ -2407,7 +2407,7 @@ default_model: "test-model"
 						Enabled: false, // Global disabled, but decision enables it
 					},
 					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
+						DefaultDecisions: []Decision{decision},
 					},
 				}
 
@@ -2447,7 +2447,7 @@ default_model: "test-model"
 						SimilarityThreshold: &globalThreshold,
 					},
 					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
+						DefaultDecisions: []Decision{decision},
 					},
 				}
 
@@ -2477,7 +2477,7 @@ default_model: "test-model"
 						TTLSeconds: 3600, // Global TTL
 					},
 					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
+						DefaultDecisions: []Decision{decision},
 					},
 				}
 

@@ -10,7 +10,7 @@ import (
 func makeSignalBasedPIIConfig(decisionName, piiSignalName string, piiTypesAllowed []string) *config.RouterConfig {
 	return &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name: decisionName,
 					Rules: config.RuleCombination{
@@ -53,7 +53,7 @@ func TestIsPIIEnabled(t *testing.T) {
 			setupConfig: func() *config.RouterConfig {
 				return &config.RouterConfig{
 					IntelligentRouting: config.IntelligentRouting{
-						Decisions: []config.Decision{},
+						DefaultDecisions: []config.Decision{},
 					},
 				}
 			},
@@ -74,7 +74,7 @@ func TestIsPIIEnabled(t *testing.T) {
 				// Decision exists but has no PII signal reference in rules
 				return &config.RouterConfig{
 					IntelligentRouting: config.IntelligentRouting{
-						Decisions: []config.Decision{
+						DefaultDecisions: []config.Decision{
 							{
 								Name: "general",
 								Rules: config.RuleCombination{
@@ -119,7 +119,7 @@ func TestCheckPolicy(t *testing.T) {
 				// No PII signal reference → PII disabled
 				return &config.RouterConfig{
 					IntelligentRouting: config.IntelligentRouting{
-						Decisions: []config.Decision{
+						DefaultDecisions: []config.Decision{
 							{
 								Name: "general",
 								Rules: config.RuleCombination{
@@ -357,7 +357,7 @@ func TestExtractAllContent(t *testing.T) {
 func TestNewPolicyChecker(t *testing.T) {
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name: "test-decision",
 				},
@@ -375,15 +375,15 @@ func TestNewPolicyChecker(t *testing.T) {
 		t.Error("PolicyChecker.Config is nil")
 	}
 
-	if len(checker.Config.Decisions) != 1 {
-		t.Errorf("Expected 1 decision, got %d", len(checker.Config.Decisions))
+	if len(checker.Config.DefaultDecisions) != 1 {
+		t.Errorf("Expected 1 decision, got %d", len(checker.Config.DefaultDecisions))
 	}
 }
 
 func TestCheckPolicy_NilDecision(t *testing.T) {
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{},
+			DefaultDecisions: []config.Decision{},
 		},
 	}
 

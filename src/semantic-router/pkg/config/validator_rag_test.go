@@ -9,7 +9,7 @@ var _ = Describe("validateDecisionRAGAndMemoryPlugins", func() {
 	It("rejects invalid RAG plugin config on a decision", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
-				Decisions: []Decision{
+				DefaultDecisions: []Decision{
 					{
 						Name: "bad-rag",
 						ModelRefs: []ModelRef{{
@@ -38,7 +38,7 @@ var _ = Describe("validateDecisionRAGAndMemoryPlugins", func() {
 	It("accepts valid RAG plugin config on a decision", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
-				Decisions: []Decision{
+				DefaultDecisions: []Decision{
 					{
 						Name: "good-rag",
 						ModelRefs: []ModelRef{{

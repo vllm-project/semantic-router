@@ -48,14 +48,14 @@ func TestValidateSemanticCachePerDecisionThreshold(t *testing.T) {
 
 	// Valid per-decision threshold passes.
 	okCfg := &RouterConfig{}
-	okCfg.Decisions = []Decision{mkDecision("route_ok", 0.7)}
+	okCfg.DefaultDecisions = []Decision{mkDecision("route_ok", 0.7)}
 	if err := validateSemanticCacheContracts(okCfg); err != nil {
 		t.Fatalf("valid per-decision threshold rejected: %v", err)
 	}
 
 	// Out-of-range per-decision threshold is rejected and names the decision.
 	badCfg := &RouterConfig{}
-	badCfg.Decisions = []Decision{mkDecision("route_bad", 2.0)}
+	badCfg.DefaultDecisions = []Decision{mkDecision("route_bad", 2.0)}
 	err := validateSemanticCacheContracts(badCfg)
 	if err == nil {
 		t.Fatal("out-of-range per-decision threshold must be rejected")

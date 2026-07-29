@@ -3182,7 +3182,7 @@ func TestHandleModelsRequest(t *testing.T) {
 			Endpoint: "http://looper",
 		},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{
+			DefaultDecisions: []config.Decision{{
 				Name:      "fusion-route",
 				ModelRefs: []config.ModelRef{{Model: "panel-a"}},
 				Algorithm: &config.AlgorithmConfig{Type: "fusion"},
@@ -3198,7 +3198,7 @@ func TestHandleModelsRequest(t *testing.T) {
 			},
 		},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{
+			DefaultDecisions: []config.Decision{{
 				Name:      "fusion-route",
 				ModelRefs: []config.ModelRef{{Model: "panel-a"}},
 				Algorithm: &config.AlgorithmConfig{Type: "fusion"},
@@ -3211,7 +3211,7 @@ func TestHandleModelsRequest(t *testing.T) {
 			Endpoint: "http://looper",
 		},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{
+			DefaultDecisions: []config.Decision{{
 				Name:      "remom-route",
 				ModelRefs: []config.ModelRef{{Model: "worker-a"}},
 				Algorithm: &config.AlgorithmConfig{
@@ -3227,7 +3227,7 @@ func TestHandleModelsRequest(t *testing.T) {
 			Endpoint: "http://looper",
 		},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{
+			DefaultDecisions: []config.Decision{{
 				Name:      "flow-route",
 				ModelRefs: []config.ModelRef{{Model: "worker-a"}},
 				Algorithm: &config.AlgorithmConfig{Type: "workflows"},

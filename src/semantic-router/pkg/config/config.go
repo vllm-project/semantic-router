@@ -206,13 +206,28 @@ type InlineModels struct {
 }
 
 // IntelligentRouting captures user-facing signal and decision configuration.
+//
+// Signals and Projections are the GLOBAL registries: the union of every
+// recipe's rules, so the single classifier built at startup can evaluate any
+// recipe's decisions (issue #2331 keeps the signal registry global).
+// DefaultDecisions, by contrast, holds ONLY the default recipe's decisions.
+// Code that reasons about routing as a whole — plugin enablement, contract
+// validation, decision lookup by name, metrics — must read
+// RouterConfig.AllRoutingDecisions() or GetDecisionByName() instead, or it
+// silently ignores every non-default recipe.
 type IntelligentRouting struct {
-	Signals         `yaml:",inline"`
-	Projections     Projections          `yaml:"projections,omitempty"`
-	Decisions       []Decision           `yaml:"decisions,omitempty"`
-	Strategy        string               `yaml:"strategy,omitempty"`
-	ModelSelection  ModelSelectionConfig `yaml:"model_selection,omitempty"`
-	ReasoningConfig `yaml:",inline"`
+	Signals     `yaml:",inline"`
+	Projections Projections `yaml:"projections,omitempty"`
+	// DefaultDecisions mirrors the default recipe's decisions. The yaml tag
+	// stays `decisions` so the flat DSL emitters and the legacy
+	// modelselection analyzer keep round-tripping unchanged. The json tag
+	// pins the `/info/classifier` response key, which apiserver derives from
+	// the Go field name when no tag is present — the rename must not move a
+	// published wire key.
+	DefaultDecisions []Decision           `yaml:"decisions,omitempty" json:"Decisions"`
+	Strategy         string               `yaml:"strategy,omitempty"`
+	ModelSelection   ModelSelectionConfig `yaml:"model_selection,omitempty"`
+	ReasoningConfig  `yaml:",inline"`
 }
 
 // BackendModels captures configured backend endpoints and model metadata.

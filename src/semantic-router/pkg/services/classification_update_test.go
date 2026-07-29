@@ -10,12 +10,12 @@ import (
 func TestClassificationServiceRefreshRuntimeConfigRefreshesClassifierConfig(t *testing.T) {
 	oldConfig := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{Name: "old_route"}},
+			DefaultDecisions: []config.Decision{{Name: "old_route"}},
 		},
 	}
 	newConfig := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{Name: "new_route"}},
+			DefaultDecisions: []config.Decision{{Name: "new_route"}},
 		},
 	}
 
@@ -40,17 +40,17 @@ func TestClassificationServiceRefreshRuntimeConfigRefreshesClassifierConfig(t *t
 func TestClassificationServiceRefreshRuntimeConfigDoesNotReplaceGlobalConfig(t *testing.T) {
 	globalConfig := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{Name: "global_route"}},
+			DefaultDecisions: []config.Decision{{Name: "global_route"}},
 		},
 	}
 	oldConfig := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{Name: "old_route"}},
+			DefaultDecisions: []config.Decision{{Name: "old_route"}},
 		},
 	}
 	newConfig := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{Name: "new_route"}},
+			DefaultDecisions: []config.Decision{{Name: "new_route"}},
 		},
 	}
 

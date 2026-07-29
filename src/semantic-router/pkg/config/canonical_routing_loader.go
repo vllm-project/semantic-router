@@ -28,9 +28,9 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 	}
 
 	cfg := DefaultGlobalConfig()
-	cfg.Decisions = copyDecisions(doc.Routing.Decisions)
-	ensureModelRefDefaults(cfg.Decisions)
-	cfg.Signals = normalizeSignals(doc.Routing.Signals, cfg.Decisions)
+	cfg.DefaultDecisions = copyDecisions(doc.Routing.Decisions)
+	ensureModelRefDefaults(cfg.DefaultDecisions)
+	cfg.Signals = normalizeSignals(doc.Routing.Signals, cfg.DefaultDecisions)
 	cfg.Projections = normalizeProjections(doc.Routing.Projections)
 	cfg.ModelConfig = make(map[string]ModelParams)
 

@@ -133,7 +133,7 @@ func TestHandleClassificationMetricsReportsCounts(t *testing.T) {
 						}},
 					}},
 				},
-				Decisions: []config.Decision{{
+				DefaultDecisions: []config.Decision{{
 					Name:      "math_route",
 					ModelRefs: []config.ModelRef{{Model: "qwen-math"}},
 					Rules:     config.RuleCombination{Operator: "AND"},

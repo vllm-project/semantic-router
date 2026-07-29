@@ -16,7 +16,7 @@ func (s *ClassificationService) getRecommendedModel(category string, _ float64) 
 	if s.config == nil {
 		return ""
 	}
-	if model := recommendedModelFromDecisions(s.config.Decisions, category); model != "" {
+	if model := recommendedModelFromDecisions(s.config.DefaultDecisions, category); model != "" {
 		return model
 	}
 	return s.config.DefaultModel

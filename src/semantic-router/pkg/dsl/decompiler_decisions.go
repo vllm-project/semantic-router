@@ -167,7 +167,7 @@ func decompileComposerObj(node *config.RuleCombination) string {
 }
 
 func (d *decompiler) decompileDecisions() {
-	for _, dec := range d.cfg.Decisions {
+	for _, dec := range d.cfg.DefaultDecisions {
 		d.decompileDecision(dec)
 	}
 }

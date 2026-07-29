@@ -15,7 +15,7 @@ func validateRouterLearningConfig(cfg *RouterConfig) error {
 	if err := validateRouterLearningProtectionConfig(cfg.RouterLearning.Protection); err != nil {
 		return err
 	}
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.DefaultDecisions {
 		if err := validateDecisionAdaptationsConfig(decision.Name, decision.Adaptations); err != nil {
 			return err
 		}

@@ -20,7 +20,7 @@ func TestEvaluateDecisionWithEngineForDecisionsRestrictsCandidates(t *testing.T)
 		Config: &config.RouterConfig{
 			IntelligentRouting: config.IntelligentRouting{
 				Strategy: "priority",
-				Decisions: []config.Decision{
+				DefaultDecisions: []config.Decision{
 					{
 						Name:     "static-business",
 						Priority: 100,

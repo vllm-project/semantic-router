@@ -81,7 +81,7 @@ func (c *RouterConfig) HasReMoMDecision() bool {
 	if c == nil {
 		return false
 	}
-	for _, decision := range c.Decisions {
+	for _, decision := range c.DefaultDecisions {
 		if decision.Algorithm != nil && decision.Algorithm.Type == "remom" {
 			return true
 		}

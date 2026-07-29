@@ -63,7 +63,7 @@ func taxonomyConfigFixture(t *testing.T) *config.RouterConfig {
 					},
 				},
 			},
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name:     "local_privacy_policy",
 					Priority: 250,

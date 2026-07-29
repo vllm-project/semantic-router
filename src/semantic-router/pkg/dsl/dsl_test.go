@@ -389,10 +389,10 @@ ROUTE math_route {
 	}
 
 	// Check decision
-	if len(cfg.Decisions) != 1 {
-		t.Fatalf("expected 1 decision, got %d", len(cfg.Decisions))
+	if len(cfg.DefaultDecisions) != 1 {
+		t.Fatalf("expected 1 decision, got %d", len(cfg.DefaultDecisions))
 	}
-	d := cfg.Decisions[0]
+	d := cfg.DefaultDecisions[0]
 	if d.Name != "math_route" {
 		t.Errorf("expected decision name 'math_route', got %q", d.Name)
 	}
@@ -452,13 +452,13 @@ SIGNAL domain test { description: "test" }`
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	if len(cfg.Decisions) != 1 {
-		t.Fatalf("expected 1 decision, got %d", len(cfg.Decisions))
+	if len(cfg.DefaultDecisions) != 1 {
+		t.Fatalf("expected 1 decision, got %d", len(cfg.DefaultDecisions))
 	}
-	if len(cfg.Decisions[0].Plugins) != 1 {
-		t.Fatalf("expected 1 plugin, got %d", len(cfg.Decisions[0].Plugins))
+	if len(cfg.DefaultDecisions[0].Plugins) != 1 {
+		t.Fatalf("expected 1 plugin, got %d", len(cfg.DefaultDecisions[0].Plugins))
 	}
-	p := cfg.Decisions[0].Plugins[0]
+	p := cfg.DefaultDecisions[0].Plugins[0]
 	if p.Type != "hallucination" {
 		t.Errorf("expected plugin type hallucination, got %s", p.Type)
 	}
@@ -485,7 +485,7 @@ ROUTE test {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	p := cfg.Decisions[0].Plugins[0]
+	p := cfg.DefaultDecisions[0].Plugins[0]
 	if p.Type != "semantic-cache" { // normalized
 		t.Errorf("expected plugin type semantic-cache, got %s", p.Type)
 	}
@@ -507,7 +507,7 @@ ROUTE test {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	rules := cfg.Decisions[0].Rules
+	rules := cfg.DefaultDecisions[0].Rules
 	if rules.Operator != "AND" {
 		t.Fatalf("expected top-level AND, got %s", rules.Operator)
 	}
@@ -536,7 +536,7 @@ ROUTE test {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	algo := cfg.Decisions[0].Algorithm
+	algo := cfg.DefaultDecisions[0].Algorithm
 	if algo == nil {
 		t.Fatal("expected algorithm")
 	}
@@ -579,7 +579,7 @@ ROUTE test {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	algo := cfg.Decisions[0].Algorithm
+	algo := cfg.DefaultDecisions[0].Algorithm
 	if algo.ReMoM == nil {
 		t.Fatal("expected remom config")
 	}
@@ -832,8 +832,8 @@ func TestCompileFullExample(t *testing.T) {
 	}
 
 	// Decisions
-	if len(cfg.Decisions) != 4 {
-		t.Errorf("expected 4 decisions, got %d", len(cfg.Decisions))
+	if len(cfg.DefaultDecisions) != 4 {
+		t.Errorf("expected 4 decisions, got %d", len(cfg.DefaultDecisions))
 	}
 	if len(cfg.ModelConfig) != 2 {
 		t.Fatalf("expected 2 routing model entries, got %d", len(cfg.ModelConfig))
@@ -847,7 +847,7 @@ func TestCompileFullExample(t *testing.T) {
 		name  string
 		rules interface{}
 	}
-	for _, d := range cfg.Decisions {
+	for _, d := range cfg.DefaultDecisions {
 		if d.Name == "urgent_ai_route" {
 			if d.Rules.Operator != "AND" {
 				t.Errorf("expected AND operator for urgent route rules, got %s", d.Rules.Operator)
@@ -995,8 +995,8 @@ ROUTE urgent_ai_route {
 	}
 
 	// -- Decisions
-	if len(roundTripped.Decisions) != 2 {
-		t.Fatalf("round-trip: expected 2 decisions, got %d", len(roundTripped.Decisions))
+	if len(roundTripped.DefaultDecisions) != 2 {
+		t.Fatalf("round-trip: expected 2 decisions, got %d", len(roundTripped.DefaultDecisions))
 	}
 	if len(roundTripped.ModelConfig) != 2 {
 		t.Fatalf("round-trip: expected 2 routing model entries, got %d", len(roundTripped.ModelConfig))
@@ -1007,12 +1007,12 @@ ROUTE urgent_ai_route {
 
 	// Find math_route decision
 	var mathDec, urgentDec *config.Decision
-	for i := range roundTripped.Decisions {
-		switch roundTripped.Decisions[i].Name {
+	for i := range roundTripped.DefaultDecisions {
+		switch roundTripped.DefaultDecisions[i].Name {
 		case "math_route":
-			mathDec = &roundTripped.Decisions[i]
+			mathDec = &roundTripped.DefaultDecisions[i]
 		case "urgent_ai_route":
-			urgentDec = &roundTripped.Decisions[i]
+			urgentDec = &roundTripped.DefaultDecisions[i]
 		}
 	}
 
@@ -1110,10 +1110,10 @@ ROUTE math_route {
 		t.Fatalf("compile errors: %v", errs)
 	}
 
-	if len(cfg.Decisions) != 1 {
-		t.Fatalf("expected 1 decision, got %d", len(cfg.Decisions))
+	if len(cfg.DefaultDecisions) != 1 {
+		t.Fatalf("expected 1 decision, got %d", len(cfg.DefaultDecisions))
 	}
-	rules := cfg.Decisions[0].Rules
+	rules := cfg.DefaultDecisions[0].Rules
 
 	// Single WHEN domain("math") should be wrapped in AND for Python CLI compatibility
 	if rules.Operator != "AND" || len(rules.Conditions) != 1 {
@@ -1135,7 +1135,7 @@ ROUTE math_route {
 		t.Fatalf("yaml.Unmarshal failed: %v\nYAML:\n%s", err, string(yamlBytes))
 	}
 
-	rtRules := rt.Decisions[0].Rules
+	rtRules := rt.DefaultDecisions[0].Rules
 	if rtRules.Operator != "AND" || len(rtRules.Conditions) != 1 {
 		t.Fatalf("after round-trip: expected AND with 1 condition, got operator=%q with %d conditions",
 			rtRules.Operator, len(rtRules.Conditions))
@@ -1163,7 +1163,7 @@ ROUTE test_route {
 		t.Fatalf("compile errors: %v", errs)
 	}
 
-	rules := cfg.Decisions[0].Rules
+	rules := cfg.DefaultDecisions[0].Rules
 	if rules.IsLeaf() {
 		t.Fatal("AND expression should produce a composite node, got leaf")
 	}
@@ -1599,7 +1599,7 @@ ROUTE test {
 			if len(errs) > 0 {
 				t.Fatalf("compile errors: %v", errs)
 			}
-			algo := cfg.Decisions[0].Algorithm
+			algo := cfg.DefaultDecisions[0].Algorithm
 			if algo == nil {
 				t.Fatal("expected algorithm")
 			}
@@ -1613,7 +1613,7 @@ ROUTE test {
 
 func TestDecompileCurrentAlgorithmSurfaceRoundTrips(t *testing.T) {
 	cfg := &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{
+		IntelligentRouting: config.IntelligentRouting{DefaultDecisions: []config.Decision{
 			{
 				Name: "multi-factor-route",
 				ModelRefs: []config.ModelRef{
@@ -1664,8 +1664,8 @@ func TestDecompileCurrentAlgorithmSurfaceRoundTrips(t *testing.T) {
 	}
 
 	byName := map[string]*config.AlgorithmConfig{}
-	for i := range roundTripped.Decisions {
-		decision := &roundTripped.Decisions[i]
+	for i := range roundTripped.DefaultDecisions {
+		decision := &roundTripped.DefaultDecisions[i]
 		byName[decision.Name] = decision.Algorithm
 	}
 
@@ -1750,10 +1750,10 @@ ROUTE test {
 			if len(errs) > 0 {
 				t.Fatalf("compile errors: %v", errs)
 			}
-			if len(cfg.Decisions[0].Plugins) != 1 {
-				t.Fatalf("expected 1 plugin, got %d", len(cfg.Decisions[0].Plugins))
+			if len(cfg.DefaultDecisions[0].Plugins) != 1 {
+				t.Fatalf("expected 1 plugin, got %d", len(cfg.DefaultDecisions[0].Plugins))
 			}
-			p := cfg.Decisions[0].Plugins[0]
+			p := cfg.DefaultDecisions[0].Plugins[0]
 			if p.Type != tc.verifyType {
 				t.Errorf("plugin type = %q, want %q", p.Type, tc.verifyType)
 			}
@@ -1878,7 +1878,7 @@ ROUTE test {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	rules := cfg.Decisions[0].Rules
+	rules := cfg.DefaultDecisions[0].Rules
 	if rules.Operator != "OR" {
 		t.Errorf("expected OR operator, got %q", rules.Operator)
 	}
@@ -1899,7 +1899,7 @@ ROUTE test {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	rules := cfg.Decisions[0].Rules
+	rules := cfg.DefaultDecisions[0].Rules
 	if rules.Operator != "NOT" {
 		t.Errorf("expected NOT operator, got %q", rules.Operator)
 	}
@@ -1923,7 +1923,7 @@ ROUTE test {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	rules := cfg.Decisions[0].Rules
+	rules := cfg.DefaultDecisions[0].Rules
 	if rules.Operator != "AND" {
 		t.Errorf("expected top-level AND, got %q", rules.Operator)
 	}
@@ -2159,8 +2159,8 @@ func TestCompileASTDirect(t *testing.T) {
 	if len(cfg.Categories) != 1 || cfg.Categories[0].Name != "math" {
 		t.Errorf("categories = %v", cfg.Categories)
 	}
-	if len(cfg.Decisions) != 1 || cfg.Decisions[0].Priority != 42 {
-		t.Errorf("decisions = %v", cfg.Decisions)
+	if len(cfg.DefaultDecisions) != 1 || cfg.DefaultDecisions[0].Priority != 42 {
+		t.Errorf("decisions = %v", cfg.DefaultDecisions)
 	}
 }
 
@@ -2235,7 +2235,7 @@ ROUTE test {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	c := cfg.Decisions[0].Algorithm.Confidence
+	c := cfg.DefaultDecisions[0].Algorithm.Confidence
 	if c.ConfidenceMethod != "logprob" {
 		t.Errorf("method = %q", c.ConfidenceMethod)
 	}
@@ -2280,7 +2280,7 @@ ROUTE test {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	r := cfg.Decisions[0].Algorithm.ReMoM
+	r := cfg.DefaultDecisions[0].Algorithm.ReMoM
 	if len(r.BreadthSchedule) != 3 || r.BreadthSchedule[2] != 2 {
 		t.Errorf("breadth_schedule = %v", r.BreadthSchedule)
 	}
@@ -2385,8 +2385,8 @@ func TestDoubleRoundTrip(t *testing.T) {
 	if len(rt1.Categories) != len(rt2.Categories) {
 		t.Errorf("categories count: %d vs %d", len(rt1.Categories), len(rt2.Categories))
 	}
-	if len(rt1.Decisions) != len(rt2.Decisions) {
-		t.Errorf("decisions count: %d vs %d", len(rt1.Decisions), len(rt2.Decisions))
+	if len(rt1.DefaultDecisions) != len(rt2.DefaultDecisions) {
+		t.Errorf("decisions count: %d vs %d", len(rt1.DefaultDecisions), len(rt2.DefaultDecisions))
 	}
 	if len(rt1.VLLMEndpoints) != len(rt2.VLLMEndpoints) {
 		t.Errorf("endpoints count: %d vs %d", len(rt1.VLLMEndpoints), len(rt2.VLLMEndpoints))
@@ -2421,8 +2421,8 @@ func TestLargeScaleInput(t *testing.T) {
 	if len(cfg.Categories) != numSignals {
 		t.Errorf("expected %d categories, got %d", numSignals, len(cfg.Categories))
 	}
-	if len(cfg.Decisions) != numRoutes {
-		t.Errorf("expected %d decisions, got %d", numRoutes, len(cfg.Decisions))
+	if len(cfg.DefaultDecisions) != numRoutes {
+		t.Errorf("expected %d decisions, got %d", numRoutes, len(cfg.DefaultDecisions))
 	}
 
 	// Verify YAML emission works
@@ -2533,19 +2533,19 @@ ROUTE route_c { PRIORITY 50 WHEN domain("bio") MODEL "m:1b" (reasoning = false) 
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	if len(cfg.Decisions) != 3 {
-		t.Fatalf("expected 3 decisions, got %d", len(cfg.Decisions))
+	if len(cfg.DefaultDecisions) != 3 {
+		t.Fatalf("expected 3 decisions, got %d", len(cfg.DefaultDecisions))
 	}
 
 	// Verify order is preserved
-	if cfg.Decisions[0].Name != "route_a" {
-		t.Errorf("first decision = %q, want route_a", cfg.Decisions[0].Name)
+	if cfg.DefaultDecisions[0].Name != "route_a" {
+		t.Errorf("first decision = %q, want route_a", cfg.DefaultDecisions[0].Name)
 	}
-	if cfg.Decisions[1].Name != "route_b" {
-		t.Errorf("second decision = %q, want route_b", cfg.Decisions[1].Name)
+	if cfg.DefaultDecisions[1].Name != "route_b" {
+		t.Errorf("second decision = %q, want route_b", cfg.DefaultDecisions[1].Name)
 	}
 	// Both should have priority 100
-	if cfg.Decisions[0].Priority != 100 || cfg.Decisions[1].Priority != 100 {
+	if cfg.DefaultDecisions[0].Priority != 100 || cfg.DefaultDecisions[1].Priority != 100 {
 		t.Error("route_a and route_b should both have priority 100")
 	}
 }
@@ -2560,7 +2560,7 @@ func TestWhitespaceAndCommentVariants(t *testing.T) {
 	if len(errs1) > 0 {
 		t.Fatalf("compact compile errors: %v", errs1)
 	}
-	if len(cfg1.Categories) != 1 || len(cfg1.Decisions) != 1 {
+	if len(cfg1.Categories) != 1 || len(cfg1.DefaultDecisions) != 1 {
 		t.Error("compact input failed to parse correctly")
 	}
 
@@ -2583,7 +2583,7 @@ ROUTE r {
 	if len(errs2) > 0 {
 		t.Fatalf("commented compile errors: %v", errs2)
 	}
-	if len(cfg2.Categories) != 1 || len(cfg2.Decisions) != 1 {
+	if len(cfg2.Categories) != 1 || len(cfg2.DefaultDecisions) != 1 {
 		t.Error("commented input failed to parse correctly")
 	}
 }
@@ -2621,13 +2621,13 @@ ROUTE route_b {
 	}
 
 	// route_a: uses template as-is
-	pA := cfg.Decisions[0].Plugins[0]
+	pA := cfg.DefaultDecisions[0].Plugins[0]
 	if pA.Type != "semantic-cache" {
 		t.Errorf("route_a plugin type = %q, want semantic-cache", pA.Type)
 	}
 
 	// route_b: uses template with override
-	pB := cfg.Decisions[1].Plugins[0]
+	pB := cfg.DefaultDecisions[1].Plugins[0]
 	if pB.Type != "semantic-cache" {
 		t.Errorf("route_b plugin type = %q, want semantic-cache", pB.Type)
 	}
@@ -2661,8 +2661,8 @@ func TestFullExampleYAMLRoundTrip(t *testing.T) {
 	if len(rt.KeywordRules) != 1 {
 		t.Errorf("keyword_rules = %d", len(rt.KeywordRules))
 	}
-	if len(rt.Decisions) != 4 {
-		t.Errorf("decisions = %d, want 4", len(rt.Decisions))
+	if len(rt.DefaultDecisions) != 4 {
+		t.Errorf("decisions = %d, want 4", len(rt.DefaultDecisions))
 	}
 	if len(rt.ModelConfig) != 2 {
 		t.Errorf("model_config = %d, want 2", len(rt.ModelConfig))
@@ -2672,7 +2672,7 @@ func TestFullExampleYAMLRoundTrip(t *testing.T) {
 	}
 
 	// Check urgent_ai_route specifically
-	for _, d := range rt.Decisions {
+	for _, d := range rt.DefaultDecisions {
 		if d.Name == "urgent_ai_route" {
 			if d.Priority != 200 {
 				t.Errorf("urgent priority = %d", d.Priority)
@@ -2820,8 +2820,8 @@ ROUTE my_route (description = "This is a detailed description") {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	if cfg.Decisions[0].Description != "This is a detailed description" {
-		t.Errorf("description = %q", cfg.Decisions[0].Description)
+	if cfg.DefaultDecisions[0].Description != "This is a detailed description" {
+		t.Errorf("description = %q", cfg.DefaultDecisions[0].Description)
 	}
 
 	// Verify survives YAML round-trip
@@ -2833,8 +2833,8 @@ ROUTE my_route (description = "This is a detailed description") {
 	if err := yaml.Unmarshal(yamlBytes, &rt); err != nil {
 		t.Fatalf("unmarshal error: %v", err)
 	}
-	if rt.Decisions[0].Description != "This is a detailed description" {
-		t.Errorf("round-trip description = %q", rt.Decisions[0].Description)
+	if rt.DefaultDecisions[0].Description != "This is a detailed description" {
+		t.Errorf("round-trip description = %q", rt.DefaultDecisions[0].Description)
 	}
 }
 
@@ -2853,8 +2853,8 @@ ROUTE test {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	if cfg.Decisions[0].ModelRefs[0].LoRAName != "math-lora-v2" {
-		t.Errorf("lora_name = %q", cfg.Decisions[0].ModelRefs[0].LoRAName)
+	if cfg.DefaultDecisions[0].ModelRefs[0].LoRAName != "math-lora-v2" {
+		t.Errorf("lora_name = %q", cfg.DefaultDecisions[0].ModelRefs[0].LoRAName)
 	}
 
 	yamlBytes, err := EmitYAMLFromConfig(cfg)
@@ -2865,8 +2865,8 @@ ROUTE test {
 	if err := yaml.Unmarshal(yamlBytes, &rt); err != nil {
 		t.Fatalf("unmarshal error: %v", err)
 	}
-	if rt.Decisions[0].ModelRefs[0].LoRAName != "math-lora-v2" {
-		t.Errorf("round-trip lora_name = %q", rt.Decisions[0].ModelRefs[0].LoRAName)
+	if rt.DefaultDecisions[0].ModelRefs[0].LoRAName != "math-lora-v2" {
+		t.Errorf("round-trip lora_name = %q", rt.DefaultDecisions[0].ModelRefs[0].LoRAName)
 	}
 }
 
@@ -2913,7 +2913,7 @@ ROUTE test {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	algo := cfg.Decisions[0].Algorithm
+	algo := cfg.DefaultDecisions[0].Algorithm
 	// For confidence/ratings/remom, on_error goes into the sub-config, not the top level
 	if algo.OnError != "" {
 		t.Errorf("algo top-level on_error = %q, want empty", algo.OnError)
@@ -3240,20 +3240,20 @@ func TestDecompileRoundTrip(t *testing.T) {
 	if len(cfg1.Categories) != len(cfg2.Categories) {
 		t.Errorf("categories: %d vs %d", len(cfg1.Categories), len(cfg2.Categories))
 	}
-	if len(cfg1.Decisions) != len(cfg2.Decisions) {
-		t.Errorf("decisions: %d vs %d", len(cfg1.Decisions), len(cfg2.Decisions))
+	if len(cfg1.DefaultDecisions) != len(cfg2.DefaultDecisions) {
+		t.Errorf("decisions: %d vs %d", len(cfg1.DefaultDecisions), len(cfg2.DefaultDecisions))
 	}
 
 	// Compare each decision
-	for i := range cfg1.Decisions {
-		if i >= len(cfg2.Decisions) {
+	for i := range cfg1.DefaultDecisions {
+		if i >= len(cfg2.DefaultDecisions) {
 			break
 		}
-		if cfg1.Decisions[i].Name != cfg2.Decisions[i].Name {
-			t.Errorf("decision[%d].name: %q vs %q", i, cfg1.Decisions[i].Name, cfg2.Decisions[i].Name)
+		if cfg1.DefaultDecisions[i].Name != cfg2.DefaultDecisions[i].Name {
+			t.Errorf("decision[%d].name: %q vs %q", i, cfg1.DefaultDecisions[i].Name, cfg2.DefaultDecisions[i].Name)
 		}
-		if cfg1.Decisions[i].Priority != cfg2.Decisions[i].Priority {
-			t.Errorf("decision[%d].priority: %d vs %d", i, cfg1.Decisions[i].Priority, cfg2.Decisions[i].Priority)
+		if cfg1.DefaultDecisions[i].Priority != cfg2.DefaultDecisions[i].Priority {
+			t.Errorf("decision[%d].priority: %d vs %d", i, cfg1.DefaultDecisions[i].Priority, cfg2.DefaultDecisions[i].Priority)
 		}
 	}
 }
@@ -3877,8 +3877,8 @@ func TestCLICompileAndDecompile(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("recompile errors: %v\nDSL:\n%s", errs, string(dslData))
 	}
-	if len(cfg.Decisions) == 0 {
-		t.Fatalf("round-trip decisions = %d", len(cfg.Decisions))
+	if len(cfg.DefaultDecisions) == 0 {
+		t.Fatalf("round-trip decisions = %d", len(cfg.DefaultDecisions))
 	}
 	if len(cfg.ModelConfig) == 0 {
 		t.Fatal("round-trip model catalog should not be empty")
@@ -5090,7 +5090,7 @@ ROUTE reasoning_route {
 	if got := cfg.Projections.Mappings[0].Outputs[0].Name; got != "balance_medium" {
 		t.Fatalf("first projection output = %q, want balance_medium", got)
 	}
-	if got := cfg.Decisions[0].Rules.Conditions[0].Type; got != "projection" {
+	if got := cfg.DefaultDecisions[0].Rules.Conditions[0].Type; got != "projection" {
 		t.Fatalf("compiled route leaf type = %q, want projection", got)
 	}
 }
@@ -5478,11 +5478,11 @@ ROUTE math_route {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	if cfg.Decisions[0].Tier != 1 {
-		t.Errorf("decision[0].Tier = %d, want 1", cfg.Decisions[0].Tier)
+	if cfg.DefaultDecisions[0].Tier != 1 {
+		t.Errorf("decision[0].Tier = %d, want 1", cfg.DefaultDecisions[0].Tier)
 	}
-	if cfg.Decisions[1].Tier != 2 {
-		t.Errorf("decision[1].Tier = %d, want 2", cfg.Decisions[1].Tier)
+	if cfg.DefaultDecisions[1].Tier != 2 {
+		t.Errorf("decision[1].Tier = %d, want 2", cfg.DefaultDecisions[1].Tier)
 	}
 }
 
@@ -5555,14 +5555,14 @@ DECISION_TREE routing_policy {
 	if len(compileErrs) > 0 {
 		t.Fatalf("compile errors: %v", compileErrs)
 	}
-	if len(cfg.Decisions) != 3 {
-		t.Fatalf("expected 3 compiled decisions, got %d", len(cfg.Decisions))
+	if len(cfg.DefaultDecisions) != 3 {
+		t.Fatalf("expected 3 compiled decisions, got %d", len(cfg.DefaultDecisions))
 	}
-	if cfg.Decisions[1].Rules.Operator != "AND" || len(cfg.Decisions[1].Rules.Conditions) != 2 {
-		t.Fatalf("expected second branch to include original condition plus prior-branch negation, got %+v", cfg.Decisions[1].Rules)
+	if cfg.DefaultDecisions[1].Rules.Operator != "AND" || len(cfg.DefaultDecisions[1].Rules.Conditions) != 2 {
+		t.Fatalf("expected second branch to include original condition plus prior-branch negation, got %+v", cfg.DefaultDecisions[1].Rules)
 	}
-	if cfg.Decisions[2].Rules.Operator != "AND" || len(cfg.Decisions[2].Rules.Conditions) != 2 {
-		t.Fatalf("expected ELSE branch to include two negated prior branches, got %+v", cfg.Decisions[2].Rules)
+	if cfg.DefaultDecisions[2].Rules.Operator != "AND" || len(cfg.DefaultDecisions[2].Rules.Conditions) != 2 {
+		t.Fatalf("expected ELSE branch to include two negated prior branches, got %+v", cfg.DefaultDecisions[2].Rules)
 	}
 }
 
@@ -5683,11 +5683,11 @@ DECISION_TREE routing_policy {
 	if len(errs) > 0 {
 		t.Fatalf("round-trip compile errors: %v\n--- source ---\n%s", errs, dslText)
 	}
-	if got, want := len(roundTripped.Decisions), len(cfg.Decisions); got != want {
+	if got, want := len(roundTripped.DefaultDecisions), len(cfg.DefaultDecisions); got != want {
 		t.Fatalf("round-trip decisions = %d, want %d", got, want)
 	}
-	for i := range cfg.Decisions {
-		if got, want := roundTripped.Decisions[i].Name, cfg.Decisions[i].Name; got != want {
+	for i := range cfg.DefaultDecisions {
+		if got, want := roundTripped.DefaultDecisions[i].Name, cfg.DefaultDecisions[i].Name; got != want {
 			t.Fatalf("round-trip decision[%d].Name = %q, want %q", i, got, want)
 		}
 	}
@@ -5902,11 +5902,11 @@ func assertConflictFreeCompile(t *testing.T, cfg *config.RouterConfig) {
 	if len(cfg.Projections.Partitions) != 1 {
 		t.Errorf("expected 1 projection partition in config, got %d", len(cfg.Projections.Partitions))
 	}
-	if cfg.Decisions[0].Tier != 1 {
-		t.Errorf("safety route tier = %d, want 1", cfg.Decisions[0].Tier)
+	if cfg.DefaultDecisions[0].Tier != 1 {
+		t.Errorf("safety route tier = %d, want 1", cfg.DefaultDecisions[0].Tier)
 	}
-	if cfg.Decisions[1].Tier != 2 {
-		t.Errorf("math route tier = %d, want 2", cfg.Decisions[1].Tier)
+	if cfg.DefaultDecisions[1].Tier != 2 {
+		t.Errorf("math route tier = %d, want 2", cfg.DefaultDecisions[1].Tier)
 	}
 }
 
@@ -5996,10 +5996,10 @@ func TestCompileExplicitCandidateIterationFeedsModelRefs(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	if len(cfg.Decisions) != 1 {
-		t.Fatalf("decisions = %d, want 1", len(cfg.Decisions))
+	if len(cfg.DefaultDecisions) != 1 {
+		t.Fatalf("decisions = %d, want 1", len(cfg.DefaultDecisions))
 	}
-	decision := cfg.Decisions[0]
+	decision := cfg.DefaultDecisions[0]
 	if len(decision.ModelRefs) != 2 {
 		t.Fatalf("model refs = %d, want 2", len(decision.ModelRefs))
 	}
@@ -6040,8 +6040,8 @@ func TestCandidateIterationRoundTrip(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("recompile errors: %v\nDSL:\n%s", errs, dslText)
 	}
-	if len(recompiled.Decisions) != 1 || len(recompiled.Decisions[0].CandidateIterations) != 1 {
-		t.Fatalf("recompiled candidate iteration missing: %+v", recompiled.Decisions)
+	if len(recompiled.DefaultDecisions) != 1 || len(recompiled.DefaultDecisions[0].CandidateIterations) != 1 {
+		t.Fatalf("recompiled candidate iteration missing: %+v", recompiled.DefaultDecisions)
 	}
 }
 
@@ -6085,11 +6085,11 @@ DECISION_TREE session_switch {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	if len(cfg.Decisions) != 2 {
-		t.Fatalf("decisions = %d, want 2", len(cfg.Decisions))
+	if len(cfg.DefaultDecisions) != 2 {
+		t.Fatalf("decisions = %d, want 2", len(cfg.DefaultDecisions))
 	}
 	// Branch 01 has the iteration; branch 02 (ELSE) does not.
-	ifBranch := cfg.Decisions[0]
+	ifBranch := cfg.DefaultDecisions[0]
 	if len(ifBranch.CandidateIterations) != 1 {
 		t.Fatalf("if-branch candidate iterations = %d, want 1", len(ifBranch.CandidateIterations))
 	}
@@ -6097,7 +6097,7 @@ DECISION_TREE session_switch {
 	if iter.Variable != "candidate" || iter.Source != "decision.candidates" {
 		t.Fatalf("iteration variable=%q source=%q, want candidate decision.candidates", iter.Variable, iter.Source)
 	}
-	elseBranch := cfg.Decisions[1]
+	elseBranch := cfg.DefaultDecisions[1]
 	if len(elseBranch.CandidateIterations) != 0 {
 		t.Fatalf("else-branch candidate iterations = %d, want 0", len(elseBranch.CandidateIterations))
 	}
@@ -6174,13 +6174,13 @@ func TestExplicitModelListRoundTripOmitsModelDirective(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("recompile errors: %v\nDSL:\n%s", errs, dslText)
 	}
-	if len(recompiled.Decisions) != 1 {
-		t.Fatalf("recompiled decisions = %d, want 1", len(recompiled.Decisions))
+	if len(recompiled.DefaultDecisions) != 1 {
+		t.Fatalf("recompiled decisions = %d, want 1", len(recompiled.DefaultDecisions))
 	}
-	if len(recompiled.Decisions[0].CandidateIterations) != 1 {
-		t.Fatalf("recompiled candidate iterations = %d, want 1", len(recompiled.Decisions[0].CandidateIterations))
+	if len(recompiled.DefaultDecisions[0].CandidateIterations) != 1 {
+		t.Fatalf("recompiled candidate iterations = %d, want 1", len(recompiled.DefaultDecisions[0].CandidateIterations))
 	}
-	if len(recompiled.Decisions[0].ModelRefs) != 2 {
-		t.Fatalf("recompiled model refs = %d, want 2", len(recompiled.Decisions[0].ModelRefs))
+	if len(recompiled.DefaultDecisions[0].ModelRefs) != 2 {
+		t.Fatalf("recompiled model refs = %d, want 2", len(recompiled.DefaultDecisions[0].ModelRefs))
 	}
 }

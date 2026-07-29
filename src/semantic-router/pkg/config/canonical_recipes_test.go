@@ -170,8 +170,8 @@ providers:
 		t.Fatalf("unexpected parse error: %v", err)
 	}
 
-	if len(cfg.Decisions) != 1 || cfg.Decisions[0].Name != "recipe_default_route" {
-		t.Fatalf("expected the explicit default recipe to bridge into the flat routing fields, got %+v", cfg.Decisions)
+	if len(cfg.DefaultDecisions) != 1 || cfg.DefaultDecisions[0].Name != "recipe_default_route" {
+		t.Fatalf("expected the explicit default recipe to bridge into the flat routing fields, got %+v", cfg.DefaultDecisions)
 	}
 	if len(cfg.Recipes) != 1 || cfg.Recipes[0].Name != DefaultRecipeName {
 		t.Fatalf("expected a single default recipe, got %+v", cfg.Recipes)

@@ -61,7 +61,7 @@ func TestMaintainedMMLURecipeDSLRoundTrip(t *testing.T) {
 	if len(cfg.KBRules) == 0 {
 		t.Error("expected at least one kb rule from mmlu recipe")
 	}
-	if len(cfg.Decisions) == 0 {
+	if len(cfg.DefaultDecisions) == 0 {
 		t.Error("expected at least one decision from mmlu recipe")
 	}
 
@@ -78,8 +78,8 @@ func TestMaintainedMMLURecipeDSLRoundTrip(t *testing.T) {
 	if len(cfg2.KBRules) != len(cfg.KBRules) {
 		t.Errorf("round-trip kb rules: %d -> %d", len(cfg.KBRules), len(cfg2.KBRules))
 	}
-	if len(cfg2.Decisions) != len(cfg.Decisions) {
-		t.Errorf("round-trip decisions: %d -> %d", len(cfg.Decisions), len(cfg2.Decisions))
+	if len(cfg2.DefaultDecisions) != len(cfg.DefaultDecisions) {
+		t.Errorf("round-trip decisions: %d -> %d", len(cfg.DefaultDecisions), len(cfg2.DefaultDecisions))
 	}
 }
 

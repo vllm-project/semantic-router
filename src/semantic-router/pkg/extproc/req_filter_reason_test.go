@@ -380,8 +380,8 @@ func newReasoningRouter(
 	return &OpenAIRouter{
 		Config: &config.RouterConfig{
 			IntelligentRouting: config.IntelligentRouting{
-				ReasoningConfig: reasoningConfig,
-				Decisions:       decisions,
+				ReasoningConfig:  reasoningConfig,
+				DefaultDecisions: decisions,
 			},
 			BackendModels: config.BackendModels{ModelConfig: modelConfig},
 		},

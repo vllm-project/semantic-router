@@ -32,7 +32,7 @@ func TestShouldInitMemoryStore(t *testing.T) {
 			cfg: &config.RouterConfig{
 				Memory: config.MemoryConfig{Enabled: false},
 				IntelligentRouting: config.IntelligentRouting{
-					Decisions: []config.Decision{memoryPluginDecision("with-memory-plugin", "memory")},
+					DefaultDecisions: []config.Decision{memoryPluginDecision("with-memory-plugin", "memory")},
 				},
 			},
 			want: true,
@@ -42,7 +42,7 @@ func TestShouldInitMemoryStore(t *testing.T) {
 			cfg: &config.RouterConfig{
 				Memory: config.MemoryConfig{Enabled: false},
 				IntelligentRouting: config.IntelligentRouting{
-					Decisions: []config.Decision{memoryPluginDecision("no-memory-plugin", "pii")},
+					DefaultDecisions: []config.Decision{memoryPluginDecision("no-memory-plugin", "pii")},
 				},
 			},
 			want: false,

@@ -63,7 +63,7 @@ global:
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
 	assertLearningConfig(t, cfg)
-	assertDecisionAdaptations(t, cfg.Decisions[0].Adaptations, cfg.RouterLearning.Adaptation.EffectiveCandidateSet())
+	assertDecisionAdaptations(t, cfg.DefaultDecisions[0].Adaptations, cfg.RouterLearning.Adaptation.EffectiveCandidateSet())
 }
 
 func assertLearningConfig(t *testing.T, cfg *RouterConfig) {
@@ -246,7 +246,7 @@ global:
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
-	adaptations := cfg.Decisions[0].Adaptations
+	adaptations := cfg.DefaultDecisions[0].Adaptations
 	if adaptations.AdaptationMode() != DecisionAdaptationModeBypass ||
 		adaptations.ProtectionMode() != DecisionAdaptationModeBypass {
 		t.Fatalf("expected global decision bypass, got %#v", adaptations)

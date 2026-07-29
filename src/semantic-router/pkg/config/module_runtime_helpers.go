@@ -40,7 +40,7 @@ func (c *RouterConfig) IsHallucinationModelEnabled() bool {
 	if c.HallucinationMitigation.Enabled {
 		return true
 	}
-	for _, decision := range c.Decisions {
+	for _, decision := range c.DefaultDecisions {
 		halConfig := decision.GetHallucinationConfig()
 		if halConfig != nil && halConfig.Enabled {
 			return true

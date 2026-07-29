@@ -31,7 +31,7 @@ ROUTE fusion_reasoning {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	fusion := cfg.Decisions[0].Algorithm.Fusion
+	fusion := cfg.DefaultDecisions[0].Algorithm.Fusion
 	assertFusionAlgorithmConfig(t, fusion)
 }
 
@@ -41,7 +41,7 @@ func TestDecompileFusionAlgorithmRoundTrip(t *testing.T) {
 	temperature := 0.2
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name:     "fusion-reasoning",
 					Priority: 10,
@@ -91,7 +91,7 @@ func TestDecompileFusionAlgorithmRoundTrip(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("round-trip compile errors: %v\n%s", errs, dslText)
 	}
-	assertFusionAlgorithmConfig(t, roundTripped.Decisions[0].Algorithm.Fusion)
+	assertFusionAlgorithmConfig(t, roundTripped.DefaultDecisions[0].Algorithm.Fusion)
 }
 
 func assertFusionAlgorithmConfig(t *testing.T, fusion *config.FusionAlgorithmConfig) {

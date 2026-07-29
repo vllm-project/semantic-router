@@ -209,7 +209,7 @@ func (d *decompiler) appendModelsToProgram(prog *Program) {
 }
 
 func (d *decompiler) appendRoutesToProgram(prog *Program) {
-	for _, dec := range d.cfg.Decisions {
+	for _, dec := range d.cfg.DefaultDecisions {
 		prog.Routes = append(prog.Routes, d.decisionToRoute(&dec))
 	}
 }

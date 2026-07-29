@@ -34,10 +34,10 @@ ROUTE flow_code {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	if len(cfg.Decisions) != 1 {
-		t.Fatalf("decisions = %d", len(cfg.Decisions))
+	if len(cfg.DefaultDecisions) != 1 {
+		t.Fatalf("decisions = %d", len(cfg.DefaultDecisions))
 	}
-	workflows := cfg.Decisions[0].Algorithm.Workflows
+	workflows := cfg.DefaultDecisions[0].Algorithm.Workflows
 	assertWorkflowsDynamicConfig(t, workflows)
 }
 
@@ -56,7 +56,7 @@ ROUTE flow_code {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	workflows := cfg.Decisions[0].Algorithm.Workflows
+	workflows := cfg.DefaultDecisions[0].Algorithm.Workflows
 	if workflows == nil || workflows.Planner.Model != "qwen-coordinator" {
 		t.Fatalf("workflows planner = %#v", workflows)
 	}
@@ -84,7 +84,7 @@ ROUTE flow_static {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	workflows := cfg.Decisions[0].Algorithm.Workflows
+	workflows := cfg.DefaultDecisions[0].Algorithm.Workflows
 	if workflows == nil || len(workflows.Roles) != 3 {
 		t.Fatalf("workflows roles = %#v", workflows)
 	}
@@ -101,7 +101,7 @@ func TestDecompileWorkflowsDynamicAlgorithmRoundTrip(t *testing.T) {
 	temperature := 0.2
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name:     "flow-code",
 					Priority: 10,
@@ -153,13 +153,13 @@ func TestDecompileWorkflowsDynamicAlgorithmRoundTrip(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("round-trip compile errors: %v\n%s", errs, dslText)
 	}
-	assertWorkflowsDynamicConfig(t, roundTripped.Decisions[0].Algorithm.Workflows)
+	assertWorkflowsDynamicConfig(t, roundTripped.DefaultDecisions[0].Algorithm.Workflows)
 }
 
 func TestDecompileWorkflowsStaticRolesAlgorithmRoundTrip(t *testing.T) {
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name:     "flow-static",
 					Priority: 10,
@@ -205,7 +205,7 @@ func TestDecompileWorkflowsStaticRolesAlgorithmRoundTrip(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("round-trip compile errors: %v\n%s", errs, dslText)
 	}
-	roles := roundTripped.Decisions[0].Algorithm.Workflows.Roles
+	roles := roundTripped.DefaultDecisions[0].Algorithm.Workflows.Roles
 	if len(roles) != 3 || roles[2].Name != "verifier" {
 		t.Fatalf("round-trip roles = %#v", roles)
 	}

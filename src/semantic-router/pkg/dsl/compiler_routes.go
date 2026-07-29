@@ -4,7 +4,7 @@ import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 
 func (c *Compiler) compileRoutes() {
 	for _, r := range c.prog.Routes {
-		c.config.Decisions = append(c.config.Decisions, c.compileRoute(r))
+		c.config.DefaultDecisions = append(c.config.DefaultDecisions, c.compileRoute(r))
 	}
 }
 

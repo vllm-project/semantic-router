@@ -16,7 +16,7 @@ func TestValidateDecisionEmitContracts(t *testing.T) {
 	}{
 		{
 			name: "valid retention directive",
-			cfg: &RouterConfig{IntelligentRouting: IntelligentRouting{Decisions: []Decision{{
+			cfg: &RouterConfig{IntelligentRouting: IntelligentRouting{DefaultDecisions: []Decision{{
 				Name: "r",
 				Emits: []EmitDirective{{
 					Kind: emitDirectiveKindRetention,
@@ -31,7 +31,7 @@ func TestValidateDecisionEmitContracts(t *testing.T) {
 		},
 		{
 			name: "unsupported kind",
-			cfg: &RouterConfig{IntelligentRouting: IntelligentRouting{Decisions: []Decision{{
+			cfg: &RouterConfig{IntelligentRouting: IntelligentRouting{DefaultDecisions: []Decision{{
 				Name:  "r",
 				Emits: []EmitDirective{{Kind: "bogus"}},
 			}}}},
@@ -39,7 +39,7 @@ func TestValidateDecisionEmitContracts(t *testing.T) {
 		},
 		{
 			name: "duplicate retention",
-			cfg: &RouterConfig{IntelligentRouting: IntelligentRouting{Decisions: []Decision{{
+			cfg: &RouterConfig{IntelligentRouting: IntelligentRouting{DefaultDecisions: []Decision{{
 				Name: "r",
 				Emits: []EmitDirective{
 					{Kind: emitDirectiveKindRetention, Retention: &RetentionDirective{Drop: retentionTestBool(false)}},
@@ -50,7 +50,7 @@ func TestValidateDecisionEmitContracts(t *testing.T) {
 		},
 		{
 			name: "missing retention payload",
-			cfg: &RouterConfig{IntelligentRouting: IntelligentRouting{Decisions: []Decision{{
+			cfg: &RouterConfig{IntelligentRouting: IntelligentRouting{DefaultDecisions: []Decision{{
 				Name:  "r",
 				Emits: []EmitDirective{{Kind: emitDirectiveKindRetention}},
 			}}}},
@@ -58,7 +58,7 @@ func TestValidateDecisionEmitContracts(t *testing.T) {
 		},
 		{
 			name: "negative ttl",
-			cfg: &RouterConfig{IntelligentRouting: IntelligentRouting{Decisions: []Decision{{
+			cfg: &RouterConfig{IntelligentRouting: IntelligentRouting{DefaultDecisions: []Decision{{
 				Name: "r",
 				Emits: []EmitDirective{{
 					Kind:      emitDirectiveKindRetention,
@@ -69,7 +69,7 @@ func TestValidateDecisionEmitContracts(t *testing.T) {
 		},
 		{
 			name: "drop ttl conflict",
-			cfg: &RouterConfig{IntelligentRouting: IntelligentRouting{Decisions: []Decision{{
+			cfg: &RouterConfig{IntelligentRouting: IntelligentRouting{DefaultDecisions: []Decision{{
 				Name: "r",
 				Emits: []EmitDirective{{
 					Kind: emitDirectiveKindRetention,

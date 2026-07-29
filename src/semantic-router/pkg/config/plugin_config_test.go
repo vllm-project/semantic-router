@@ -9,7 +9,7 @@ var _ = Describe("IsRAGEnabledForDecision", func() {
 	It("returns false for decision without RAG plugin", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
-				Decisions: []Decision{
+				DefaultDecisions: []Decision{
 					{Name: "no-rag", ModelRefs: []ModelRef{{Model: "m"}}},
 				},
 			},
@@ -20,7 +20,7 @@ var _ = Describe("IsRAGEnabledForDecision", func() {
 	It("returns false when RAG plugin is explicitly disabled", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
-				Decisions: []Decision{
+				DefaultDecisions: []Decision{
 					{
 						Name:      "rag-disabled",
 						ModelRefs: []ModelRef{{Model: "m"}},
@@ -40,7 +40,7 @@ var _ = Describe("IsRAGEnabledForDecision", func() {
 	It("returns true when RAG plugin is enabled", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
-				Decisions: []Decision{
+				DefaultDecisions: []Decision{
 					{
 						Name:      "rag-on",
 						ModelRefs: []ModelRef{{Model: "m"}},
@@ -68,7 +68,7 @@ var _ = Describe("IsMemoryEnabledForDecision", func() {
 		cfg := &RouterConfig{
 			Memory: MemoryConfig{Enabled: false},
 			IntelligentRouting: IntelligentRouting{
-				Decisions: []Decision{
+				DefaultDecisions: []Decision{
 					{Name: "test", ModelRefs: []ModelRef{{Model: "m"}}},
 				},
 			},
@@ -80,7 +80,7 @@ var _ = Describe("IsMemoryEnabledForDecision", func() {
 		cfg := &RouterConfig{
 			Memory: MemoryConfig{Enabled: true},
 			IntelligentRouting: IntelligentRouting{
-				Decisions: []Decision{
+				DefaultDecisions: []Decision{
 					{Name: "test", ModelRefs: []ModelRef{{Model: "m"}}},
 				},
 			},
@@ -109,7 +109,7 @@ var _ = Describe("HasPersonalizationPlugins", func() {
 		cfg := &RouterConfig{
 			Memory: MemoryConfig{Enabled: false},
 			IntelligentRouting: IntelligentRouting{
-				Decisions: []Decision{
+				DefaultDecisions: []Decision{
 					{Name: "plain", ModelRefs: []ModelRef{{Model: "m"}}},
 				},
 			},
@@ -126,7 +126,7 @@ var _ = Describe("HasPersonalizationPlugins", func() {
 		cfg := &RouterConfig{
 			Memory: MemoryConfig{Enabled: true},
 			IntelligentRouting: IntelligentRouting{
-				Decisions: []Decision{
+				DefaultDecisions: []Decision{
 					{Name: "mem-global", ModelRefs: []ModelRef{{Model: "m"}}},
 				},
 			},
@@ -138,7 +138,7 @@ var _ = Describe("HasPersonalizationPlugins", func() {
 		cfg := &RouterConfig{
 			Memory: MemoryConfig{Enabled: true},
 			IntelligentRouting: IntelligentRouting{
-				Decisions: []Decision{
+				DefaultDecisions: []Decision{
 					{
 						Name:      "both",
 						ModelRefs: []ModelRef{{Model: "m"}},
@@ -165,7 +165,7 @@ func ragDecisionConfig(name string) *RouterConfig {
 	return &RouterConfig{
 		Memory: MemoryConfig{Enabled: false},
 		IntelligentRouting: IntelligentRouting{
-			Decisions: []Decision{
+			DefaultDecisions: []Decision{
 				{
 					Name:      name,
 					ModelRefs: []ModelRef{{Model: "m"}},
@@ -189,7 +189,7 @@ func memoryDecisionConfig(globalEnabled, perDecisionEnabled bool) *RouterConfig 
 	return &RouterConfig{
 		Memory: MemoryConfig{Enabled: globalEnabled},
 		IntelligentRouting: IntelligentRouting{
-			Decisions: []Decision{
+			DefaultDecisions: []Decision{
 				{
 					Name:      name,
 					ModelRefs: []ModelRef{{Model: "m"}},
@@ -233,13 +233,13 @@ func registerRouterReplayPluginOverrideSpecs() {
 		})
 		Expect(cfg.EffectiveRouterReplayConfigForDecision("opt-in")).To(BeNil())
 
-		cfg.Decisions[0].Plugins[0].Configuration = MustStructuredPayload(map[string]interface{}{
+		cfg.DefaultDecisions[0].Plugins[0].Configuration = MustStructuredPayload(map[string]interface{}{
 			"enabled":               false,
 			"capture_response_body": false,
 		})
 		Expect(cfg.EffectiveRouterReplayConfigForDecision("opt-in")).To(BeNil())
 
-		cfg.Decisions[0].Plugins[0].Configuration = MustStructuredPayload(map[string]interface{}{
+		cfg.DefaultDecisions[0].Plugins[0].Configuration = MustStructuredPayload(map[string]interface{}{
 			"enabled":               true,
 			"capture_response_body": false,
 		})
@@ -289,7 +289,7 @@ func routerReplayDecisionConfig(globalEnabled bool, name string, pluginConfig ma
 	return &RouterConfig{
 		RouterReplay: RouterReplayConfig{Enabled: globalEnabled},
 		IntelligentRouting: IntelligentRouting{
-			Decisions: []Decision{decision},
+			DefaultDecisions: []Decision{decision},
 		},
 	}
 }

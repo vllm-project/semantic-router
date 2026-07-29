@@ -13,7 +13,7 @@ func TestHandleCaching_SkipsGlobalCacheWhenDecisionsConfiguredButNoDecisionMatch
 	cfg := &config.RouterConfig{
 		SemanticCache: config.SemanticCache{Enabled: true},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name:      "default-route",
 					ModelRefs: []config.ModelRef{{Model: "test"}},

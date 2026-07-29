@@ -29,9 +29,9 @@ func (c *Classifier) SelectBestModelForCategory(categoryName string) string {
 
 // findDecision finds the decision configuration by name (case-insensitive)
 func (c *Classifier) findDecision(decisionName string) *config.Decision {
-	for i, decision := range c.Config.Decisions {
+	for i, decision := range c.Config.DefaultDecisions {
 		if strings.EqualFold(decision.Name, decisionName) {
-			return &c.Config.Decisions[i]
+			return &c.Config.DefaultDecisions[i]
 		}
 	}
 	return nil
@@ -120,7 +120,7 @@ func (c *Classifier) SelectBestModelFromList(candidateModels []string, categoryN
 func (c *Classifier) GetModelsForCategory(categoryName string) []string {
 	var models []string
 
-	for _, decision := range c.Config.Decisions {
+	for _, decision := range c.Config.DefaultDecisions {
 		if strings.EqualFold(decision.Name, categoryName) {
 			for _, modelRef := range decision.ModelRefs {
 				// Use LoRA name if specified, otherwise use the base model name

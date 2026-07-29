@@ -12,7 +12,7 @@ func signalSkipClassifier(decisions ...config.Decision) *classification.Classifi
 	return &classification.Classifier{
 		Config: &config.RouterConfig{
 			IntelligentRouting: config.IntelligentRouting{
-				Decisions: decisions,
+				DefaultDecisions: decisions,
 			},
 		},
 	}

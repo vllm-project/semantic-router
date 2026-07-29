@@ -21,7 +21,7 @@ func validateProjectionContracts(cfg *RouterConfig) error {
 	if err != nil {
 		return err
 	}
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.DefaultDecisions {
 		if err := validateDecisionProjectionReferences(decision.Name, &decision.Rules, outputNames); err != nil {
 			return err
 		}

@@ -39,7 +39,7 @@ func domainTestConfig() *config.RouterConfig {
 			},
 		},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name: "test_domain_decision",
 					Rules: config.RuleCombination{

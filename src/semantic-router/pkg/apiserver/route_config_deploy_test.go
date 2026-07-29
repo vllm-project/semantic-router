@@ -222,7 +222,7 @@ func minimalDeployTestConfig(decisionName string) *config.RouterConfig {
 					CategoryMetadata: config.CategoryMetadata{Name: "math"},
 				}},
 			},
-			Decisions: []config.Decision{{
+			DefaultDecisions: []config.Decision{{
 				Name:     decisionName,
 				Priority: 100,
 				Tier:     1,

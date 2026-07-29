@@ -105,8 +105,8 @@ func assertDynamicConfigRuntimeConfig(t *testing.T, runtimeCfg *config.RouterCon
 	if runtimeCfg.DefaultModel != "general-expert" {
 		t.Fatalf("expected dynamic-config default model to remain LoRA alias, got %q", runtimeCfg.DefaultModel)
 	}
-	if len(runtimeCfg.Decisions) != len(route.Spec.Decisions) {
-		t.Fatalf("expected %d decisions after dynamic-config conversion, got %d", len(route.Spec.Decisions), len(runtimeCfg.Decisions))
+	if len(runtimeCfg.DefaultDecisions) != len(route.Spec.Decisions) {
+		t.Fatalf("expected %d decisions after dynamic-config conversion, got %d", len(route.Spec.Decisions), len(runtimeCfg.DefaultDecisions))
 	}
 
 	endpoints := runtimeCfg.GetEndpointsForModel("general-expert")

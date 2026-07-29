@@ -52,7 +52,7 @@ func TestLoadClassifierMappingsRequiresUsedCoreSignalMappings(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := newCoreSignalMappingGateConfig(t)
-			cfg.Decisions = []config.Decision{{
+			cfg.DefaultDecisions = []config.Decision{{
 				Name: "guarded-route",
 				Rules: config.RuleNode{Operator: "OR", Conditions: []config.RuleNode{
 					tt.rule,
@@ -88,7 +88,7 @@ func newCoreSignalMappingGateConfig(t *testing.T) *config.RouterConfig {
 			},
 		},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{
+			DefaultDecisions: []config.Decision{{
 				Name:  "default-route",
 				Rules: config.RuleNode{Operator: "AND", Conditions: []config.RuleNode{}},
 			}},

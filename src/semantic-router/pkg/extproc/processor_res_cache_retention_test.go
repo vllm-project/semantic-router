@@ -205,7 +205,7 @@ func TestUpdateResponseCacheSkipsRetentionDrop(t *testing.T) {
 		Config: &config.RouterConfig{
 			SemanticCache: config.SemanticCache{Enabled: true},
 			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
+				DefaultDecisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
 			},
 		},
 	}
@@ -228,7 +228,7 @@ func TestUpdateResponseCacheWritesWhenRetentionDropFalse(t *testing.T) {
 		Config: &config.RouterConfig{
 			SemanticCache: config.SemanticCache{Enabled: true},
 			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
+				DefaultDecisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
 			},
 		},
 	}
@@ -251,7 +251,7 @@ func TestCacheStreamingResponseSkipsRetentionDrop(t *testing.T) {
 		Config: &config.RouterConfig{
 			SemanticCache: config.SemanticCache{Enabled: true},
 			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
+				DefaultDecisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
 			},
 		},
 	}
@@ -273,7 +273,7 @@ func TestCacheStreamingResponseChecksScopeBeforeRetentionDrop(t *testing.T) {
 		Config: &config.RouterConfig{
 			SemanticCache: config.SemanticCache{Enabled: true},
 			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{retentionCacheDecision("no-cache-decision", false)},
+				DefaultDecisions: []config.Decision{retentionCacheDecision("no-cache-decision", false)},
 			},
 		},
 	}
@@ -341,7 +341,7 @@ func TestUpdateResponseCacheAppliesRetentionTTL(t *testing.T) {
 		Config: &config.RouterConfig{
 			SemanticCache: config.SemanticCache{Enabled: true},
 			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
+				DefaultDecisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
 			},
 		},
 	}
@@ -367,7 +367,7 @@ func TestCacheStreamingResponseAppliesRetentionTTL(t *testing.T) {
 		Config: &config.RouterConfig{
 			SemanticCache: config.SemanticCache{Enabled: true},
 			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
+				DefaultDecisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
 			},
 		},
 	}

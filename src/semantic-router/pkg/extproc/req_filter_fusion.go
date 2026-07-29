@@ -66,7 +66,7 @@ func (r *OpenAIRouter) decisionCandidatesForRequestModel(modelName string) []con
 	}
 	candidates := make([]config.Decision, 0)
 	if r.Config.IsReMoMModelName(modelName) {
-		for _, decision := range r.Config.Decisions {
+		for _, decision := range r.Config.DefaultDecisions {
 			if isReMoMDecision(&decision) {
 				candidates = append(candidates, decision)
 			}
@@ -74,7 +74,7 @@ func (r *OpenAIRouter) decisionCandidatesForRequestModel(modelName string) []con
 		return candidates
 	}
 	if r.Config.IsFusionModelName(modelName) {
-		for _, decision := range r.Config.Decisions {
+		for _, decision := range r.Config.DefaultDecisions {
 			if isFusionDecision(&decision) {
 				candidates = append(candidates, decision)
 			}
@@ -82,7 +82,7 @@ func (r *OpenAIRouter) decisionCandidatesForRequestModel(modelName string) []con
 		return candidates
 	}
 	if r.Config.IsFlowModelName(modelName) {
-		for _, decision := range r.Config.Decisions {
+		for _, decision := range r.Config.DefaultDecisions {
 			if isFlowDecision(&decision) {
 				candidates = append(candidates, decision)
 			}
@@ -97,8 +97,8 @@ func (r *OpenAIRouter) defaultLooperDecisionByAlgorithm(algorithmType string) *c
 		return nil
 	}
 	var selected *config.Decision
-	for i := range r.Config.Decisions {
-		decision := &r.Config.Decisions[i]
+	for i := range r.Config.DefaultDecisions {
+		decision := &r.Config.DefaultDecisions[i]
 		if decision.Algorithm == nil || decision.Algorithm.Type != algorithmType {
 			continue
 		}

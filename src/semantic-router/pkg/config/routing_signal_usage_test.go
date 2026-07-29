@@ -101,7 +101,7 @@ func TestNeedsCoreMappingsForRouting(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg.Decisions = tt.decisions
+			cfg.DefaultDecisions = tt.decisions
 			if got := cfg.NeedsCategoryMappingForRouting(); got != tt.wantCategory {
 				t.Fatalf("NeedsCategoryMappingForRouting() = %v, want %v", got, tt.wantCategory)
 			}

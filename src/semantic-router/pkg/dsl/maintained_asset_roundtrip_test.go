@@ -60,13 +60,13 @@ func TestMaintainedBalanceRecipeUsesProjectionPartitionsAndTieredDecisions(t *te
 	assertMaintainedBalanceDomainPartition(t, cfg.Projections.Partitions)
 	assertMaintainedBalanceIntentPartition(t, cfg.Projections.Partitions)
 	assertMaintainedBalanceProjectionBands(t, cfg.Projections)
-	assertMaintainedBalanceDecisionTiers(t, cfg.Decisions)
-	assertMaintainedBalanceRoute(t, cfg.Decisions, "formal_math_proof")
-	assertMaintainedBalanceRoute(t, cfg.Decisions, "complex_specialist")
-	assertMaintainedBalanceRoute(t, cfg.Decisions, "reasoning_deep")
-	assertMaintainedBalanceRoute(t, cfg.Decisions, "verified_health")
-	assertMaintainedBalanceRoute(t, cfg.Decisions, "fast_qa")
-	assertMaintainedBalanceRoute(t, cfg.Decisions, "casual_chat")
+	assertMaintainedBalanceDecisionTiers(t, cfg.DefaultDecisions)
+	assertMaintainedBalanceRoute(t, cfg.DefaultDecisions, "formal_math_proof")
+	assertMaintainedBalanceRoute(t, cfg.DefaultDecisions, "complex_specialist")
+	assertMaintainedBalanceRoute(t, cfg.DefaultDecisions, "reasoning_deep")
+	assertMaintainedBalanceRoute(t, cfg.DefaultDecisions, "verified_health")
+	assertMaintainedBalanceRoute(t, cfg.DefaultDecisions, "fast_qa")
+	assertMaintainedBalanceRoute(t, cfg.DefaultDecisions, "casual_chat")
 }
 
 func TestMaintainedBalanceRoutingAssetsStayInSync(t *testing.T) {
@@ -89,7 +89,7 @@ func TestMaintainedBalanceBaseRoutesExplicitlyExcludeVerifiedOverlay(t *testing.
 		"medium_explainer",
 		"simple_general",
 	} {
-		decision := mustFindMaintainedBalanceDecision(t, cfg.Decisions, routeName)
+		decision := mustFindMaintainedBalanceDecision(t, cfg.DefaultDecisions, routeName)
 		if !ruleTreeContainsNegatedSignal(&decision.Rules, config.SignalTypeProjection, "verification_required") {
 			t.Fatalf("expected %s to negate projection(%q) so verified overlays stay explicit siblings", routeName, "verification_required")
 		}

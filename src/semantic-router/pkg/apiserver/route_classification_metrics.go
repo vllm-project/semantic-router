@@ -34,7 +34,7 @@ func (s *ClassificationAPIServer) handleClassificationMetrics(w http.ResponseWri
 		return
 	}
 
-	response.DecisionCount = len(cfg.Decisions)
+	response.DecisionCount = len(cfg.DefaultDecisions)
 	response.ProjectionPartitionCount = len(cfg.Projections.Partitions)
 	response.ProjectionScoreCount = len(cfg.Projections.Scores)
 	response.ProjectionMappingCount = len(cfg.Projections.Mappings)

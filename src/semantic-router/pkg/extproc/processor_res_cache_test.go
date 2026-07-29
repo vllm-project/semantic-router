@@ -90,7 +90,7 @@ func TestUpdateResponseCache_SkipsWhenDecisionCacheDisabled(t *testing.T) {
 	cfg := &config.RouterConfig{
 		SemanticCache: config.SemanticCache{Enabled: true},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name:      "no-cache-decision",
 					ModelRefs: []config.ModelRef{{Model: "test"}},
@@ -113,7 +113,7 @@ func TestUpdateResponseCache_SkipsWhenDecisionCacheExplicitlyDisabled(t *testing
 	cfg := &config.RouterConfig{
 		SemanticCache: config.SemanticCache{Enabled: true},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name:      "disabled-cache-decision",
 					ModelRefs: []config.ModelRef{{Model: "test"}},
@@ -142,7 +142,7 @@ func TestUpdateResponseCache_StoresWhenDecisionCacheEnabled(t *testing.T) {
 	cfg := &config.RouterConfig{
 		SemanticCache: config.SemanticCache{Enabled: true},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name:      "cache-decision",
 					ModelRefs: []config.ModelRef{{Model: "test"}},
@@ -186,7 +186,7 @@ func TestUpdateResponseCache_SkipsWhenNoDecisionSelectedButDecisionsConfigured(t
 	cfg := &config.RouterConfig{
 		SemanticCache: config.SemanticCache{Enabled: true},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name:      "default-route",
 					ModelRefs: []config.ModelRef{{Model: "test"}},
@@ -276,7 +276,7 @@ func TestCacheReconstructedStreamingResponse_SkipsWhenDecisionCacheDisabled(t *t
 	cfg := &config.RouterConfig{
 		SemanticCache: config.SemanticCache{Enabled: true},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name:      "no-cache-decision",
 					ModelRefs: []config.ModelRef{{Model: "test"}},
@@ -303,7 +303,7 @@ func TestCacheReconstructedStreamingResponse_SkipsWhenDecisionCacheExplicitlyDis
 	cfg := &config.RouterConfig{
 		SemanticCache: config.SemanticCache{Enabled: true},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name:      "disabled-cache-decision",
 					ModelRefs: []config.ModelRef{{Model: "test"}},
@@ -336,7 +336,7 @@ func TestCacheReconstructedStreamingResponse_StoresWhenDecisionCacheEnabled(t *t
 	cfg := &config.RouterConfig{
 		SemanticCache: config.SemanticCache{Enabled: true},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name:      "cache-decision",
 					ModelRefs: []config.ModelRef{{Model: "test"}},

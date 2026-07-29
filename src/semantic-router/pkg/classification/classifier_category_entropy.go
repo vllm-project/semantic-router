@@ -67,7 +67,7 @@ func (c *Classifier) makeReasoningDecisionForKeywordCategory(category string) en
 	normalizedCategory := strings.ToLower(strings.TrimSpace(category))
 	useReasoning := false
 
-	for _, decision := range c.Config.Decisions {
+	for _, decision := range c.Config.DefaultDecisions {
 		if strings.ToLower(decision.Name) == normalizedCategory {
 			// Check if the decision has reasoning enabled in its best model
 			if len(decision.ModelRefs) > 0 && decision.ModelRefs[0].UseReasoning != nil {
@@ -119,7 +119,7 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 	// Build decision reasoning map from configuration
 	// Use the best model's reasoning capability for each decision
 	categoryReasoningMap := make(map[string]bool)
-	for _, decision := range c.Config.Decisions {
+	for _, decision := range c.Config.DefaultDecisions {
 		useReasoning := false
 		if len(decision.ModelRefs) > 0 && decision.ModelRefs[0].UseReasoning != nil {
 			// Use the first (best) model's reasoning capability

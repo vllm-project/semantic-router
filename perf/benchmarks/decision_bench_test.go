@@ -43,7 +43,7 @@ func initDecisionEngine(b *testing.B) {
 			cfg.KeywordRules,
 			cfg.EmbeddingRules,
 			cfg.Categories,
-			cfg.Decisions,
+			cfg.DefaultDecisions,
 			"priority", // Use priority strategy
 		)
 	})

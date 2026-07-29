@@ -37,7 +37,7 @@ func (d *decompiler) extractPluginTemplates() {
 	}
 	seen := make(map[pluginKey]*pluginTemplate)
 
-	for _, dec := range d.cfg.Decisions {
+	for _, dec := range d.cfg.DefaultDecisions {
 		for _, p := range dec.Plugins {
 			key := pluginKey{pluginType: p.Type}
 			// Use a simple fingerprint: type

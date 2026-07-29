@@ -134,9 +134,9 @@ func buildOpenAIRouterFromConfig(cfg *config.RouterConfig) (*OpenAIRouter, error
 func logLoadedRouterConfig(configPath string, cfg *config.RouterConfig) {
 	logging.ComponentDebugEvent("extproc", "router_config_loaded", map[string]interface{}{
 		"config_path":    configPath,
-		"decision_count": len(cfg.Decisions),
+		"decision_count": len(cfg.DefaultDecisions),
 	})
-	for i, decision := range cfg.Decisions {
+	for i, decision := range cfg.DefaultDecisions {
 		logging.ComponentDebugEvent("extproc", "router_config_decision_loaded", map[string]interface{}{
 			"config_path": configPath,
 			"index":       i,

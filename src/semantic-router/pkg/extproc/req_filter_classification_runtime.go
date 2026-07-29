@@ -42,7 +42,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	// from profiles that never asked for identity enforcement.
 	authzScope := candidates
 	if authzScope == nil {
-		authzScope = r.Config.Decisions
+		authzScope = r.Config.DefaultDecisions
 	}
 
 	signals, authzErr := r.Classifier.EvaluateAllSignalsWithHeaders(

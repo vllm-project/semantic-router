@@ -57,8 +57,8 @@ func TestRecipesOnlyConfigKeepsDecisionsReachable(t *testing.T) {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
 
-	if len(cfg.Decisions) != 0 {
-		t.Fatalf("expected no flat decisions in a recipes-only config, got %d", len(cfg.Decisions))
+	if len(cfg.DefaultDecisions) != 0 {
+		t.Fatalf("expected no flat decisions in a recipes-only config, got %d", len(cfg.DefaultDecisions))
 	}
 	if !cfg.HasRoutingDecisions() {
 		t.Fatal("HasRoutingDecisions must see decisions living in non-default recipes")

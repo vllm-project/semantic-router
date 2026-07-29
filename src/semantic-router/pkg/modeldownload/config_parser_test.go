@@ -140,7 +140,7 @@ func TestIsModelDirectory(t *testing.T) {
 func TestExtractModelPathsSkipsRootLevelModelFiles(t *testing.T) {
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name: "default-route",
 					Algorithm: &config.AlgorithmConfig{
@@ -204,7 +204,7 @@ func TestBuildModelSpecsIncludesConfigDerivedRequiredFiles(t *testing.T) {
 			},
 		},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{
+			DefaultDecisions: []config.Decision{{
 				Name:  "domain-route",
 				Rules: config.RuleNode{Type: config.SignalTypeDomain, Name: "billing"},
 			}},
@@ -315,7 +315,7 @@ func TestBuildModelSpecsSkipsUnusedCoreClassifierModels(t *testing.T) {
 			},
 		},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{
+			DefaultDecisions: []config.Decision{{
 				Name:  "default-route",
 				Rules: config.RuleNode{Operator: "AND", Conditions: []config.RuleNode{}},
 			}},
@@ -356,7 +356,7 @@ func TestBuildModelSpecsIncludesUsedCoreClassifierModels(t *testing.T) {
 			},
 		},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{
+			DefaultDecisions: []config.Decision{{
 				Name: "guarded-route",
 				Rules: config.RuleNode{Operator: "OR", Conditions: []config.RuleNode{
 					{Type: config.SignalTypeDomain, Name: "billing"},
@@ -409,7 +409,7 @@ func TestBuildModelSpecsIncludesCoreClassifierUsedViaProjection(t *testing.T) {
 					}},
 				}},
 			},
-			Decisions: []config.Decision{{
+			DefaultDecisions: []config.Decision{{
 				Name:  "guarded-route",
 				Rules: config.RuleNode{Type: config.SignalTypeProjection, Name: "high_risk"},
 			}},

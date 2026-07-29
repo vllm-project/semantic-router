@@ -140,7 +140,7 @@ func (c *Classifier) mcpCategoryNames(probabilities []float32) []string {
 
 func (c *Classifier) makeMCPReasoningDecision(probabilities []float32, categoryNames []string) (entropy.ReasoningDecision, float64) {
 	categoryReasoningMap := make(map[string]bool)
-	for _, decision := range c.Config.Decisions {
+	for _, decision := range c.Config.DefaultDecisions {
 		useReasoning := false
 		if len(decision.ModelRefs) > 0 && decision.ModelRefs[0].UseReasoning != nil {
 			useReasoning = *decision.ModelRefs[0].UseReasoning

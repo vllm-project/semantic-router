@@ -78,7 +78,7 @@ func TestCacheBypassWhenRAGEnabled(t *testing.T) {
 
 	cfg := &config.RouterConfig{}
 	cfg.Enabled = true
-	cfg.Decisions = []config.Decision{decision}
+	cfg.DefaultDecisions = []config.Decision{decision}
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 	ctx := &RequestContext{
@@ -108,7 +108,7 @@ func TestCacheBypassWhenMemoryEnabledGlobally(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.Enabled = true
 	cfg.Memory.Enabled = true
-	cfg.Decisions = []config.Decision{decision}
+	cfg.DefaultDecisions = []config.Decision{decision}
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 	ctx := &RequestContext{
@@ -147,7 +147,7 @@ func TestCacheBypassWithBothRAGAndMemory(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.Enabled = true
 	cfg.Memory.Enabled = true
-	cfg.Decisions = []config.Decision{decision}
+	cfg.DefaultDecisions = []config.Decision{decision}
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 	ctx := &RequestContext{
@@ -181,7 +181,7 @@ func TestCacheBypassWithPerDecisionMemoryOverride(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.Enabled = true
 	cfg.Memory.Enabled = false
-	cfg.Decisions = []config.Decision{decision}
+	cfg.DefaultDecisions = []config.Decision{decision}
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 	ctx := &RequestContext{
@@ -217,7 +217,7 @@ func TestCacheWorksNormallyWithoutPersonalization(t *testing.T) {
 
 	cfg := &config.RouterConfig{}
 	cfg.Enabled = true
-	cfg.Decisions = []config.Decision{decision}
+	cfg.DefaultDecisions = []config.Decision{decision}
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 	ctx := &RequestContext{
@@ -257,7 +257,7 @@ func TestNoCacheBypassWhenMemoryExplicitlyDisabledPerDecision(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.Enabled = true
 	cfg.Memory.Enabled = true
-	cfg.Decisions = []config.Decision{decision}
+	cfg.DefaultDecisions = []config.Decision{decision}
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 	ctx := &RequestContext{
@@ -346,7 +346,7 @@ func TestDecisionWillPersonalize_PerDecisionMemoryDisabledOverridesGlobal(t *tes
 
 func TestRAGPluginResolution_NoBackend(t *testing.T) {
 	cfg := &config.RouterConfig{}
-	cfg.Decisions = []config.Decision{
+	cfg.DefaultDecisions = []config.Decision{
 		{
 			Name:      "bad-rag",
 			ModelRefs: []config.ModelRef{{Model: "m"}},
@@ -359,7 +359,7 @@ func TestRAGPluginResolution_NoBackend(t *testing.T) {
 	}
 
 	router := &OpenAIRouter{Config: cfg}
-	decision := cfg.Decisions[0]
+	decision := cfg.DefaultDecisions[0]
 	ctx := &RequestContext{VSRSelectedDecision: &decision}
 
 	ragConfig, shouldExec := router.resolveRAGPluginConfig(ctx, "bad-rag")
@@ -369,7 +369,7 @@ func TestRAGPluginResolution_NoBackend(t *testing.T) {
 
 func TestRAGPluginResolution_ValidBackend(t *testing.T) {
 	cfg := &config.RouterConfig{}
-	cfg.Decisions = []config.Decision{
+	cfg.DefaultDecisions = []config.Decision{
 		{
 			Name:      "good-rag",
 			ModelRefs: []config.ModelRef{{Model: "m"}},
@@ -383,7 +383,7 @@ func TestRAGPluginResolution_ValidBackend(t *testing.T) {
 	}
 
 	router := &OpenAIRouter{Config: cfg}
-	decision := cfg.Decisions[0]
+	decision := cfg.DefaultDecisions[0]
 	ctx := &RequestContext{VSRSelectedDecision: &decision}
 
 	ragConfig, shouldExec := router.resolveRAGPluginConfig(ctx, "good-rag")
@@ -405,7 +405,7 @@ func TestRAGPluginResolution_NilDecision(t *testing.T) {
 func TestRAGPluginResolution_ConfidenceThreshold(t *testing.T) {
 	threshold := float64(0.8)
 	cfg := &config.RouterConfig{}
-	cfg.Decisions = []config.Decision{
+	cfg.DefaultDecisions = []config.Decision{
 		{
 			Name:      "threshold-rag",
 			ModelRefs: []config.ModelRef{{Model: "m"}},
@@ -420,7 +420,7 @@ func TestRAGPluginResolution_ConfidenceThreshold(t *testing.T) {
 	}
 
 	router := &OpenAIRouter{Config: cfg}
-	decision := cfg.Decisions[0]
+	decision := cfg.DefaultDecisions[0]
 
 	t.Run("below threshold", func(t *testing.T) {
 		ctx := &RequestContext{
@@ -471,7 +471,7 @@ func TestFullPipeline_CacheBypassThenRAGResolution(t *testing.T) {
 
 	cfg := &config.RouterConfig{}
 	cfg.Enabled = true
-	cfg.Decisions = []config.Decision{decision}
+	cfg.DefaultDecisions = []config.Decision{decision}
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 

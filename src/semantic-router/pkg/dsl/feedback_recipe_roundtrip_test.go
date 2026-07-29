@@ -40,7 +40,7 @@ func TestMaintainedFeedbackRecipeDSLRoundTrip(t *testing.T) {
 	if len(cfg.ReaskRules) == 0 {
 		t.Error("expected at least one reask rule from feedback recipe")
 	}
-	if len(cfg.Decisions) == 0 {
+	if len(cfg.DefaultDecisions) == 0 {
 		t.Error("expected at least one decision from feedback recipe")
 	}
 
@@ -57,8 +57,8 @@ func TestMaintainedFeedbackRecipeDSLRoundTrip(t *testing.T) {
 	if len(cfg2.ReaskRules) != len(cfg.ReaskRules) {
 		t.Errorf("round-trip reask rules: %d -> %d", len(cfg.ReaskRules), len(cfg2.ReaskRules))
 	}
-	if len(cfg2.Decisions) != len(cfg.Decisions) {
-		t.Errorf("round-trip decisions: %d -> %d", len(cfg.Decisions), len(cfg2.Decisions))
+	if len(cfg2.DefaultDecisions) != len(cfg.DefaultDecisions) {
+		t.Errorf("round-trip decisions: %d -> %d", len(cfg.DefaultDecisions), len(cfg2.DefaultDecisions))
 	}
 }
 

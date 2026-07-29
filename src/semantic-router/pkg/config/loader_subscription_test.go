@@ -23,7 +23,7 @@ func TestSubscribeConfigUpdatesFanout(t *testing.T) {
 
 	cfg := &RouterConfig{
 		IntelligentRouting: IntelligentRouting{
-			Decisions: []Decision{{Name: "support"}},
+			DefaultDecisions: []Decision{{Name: "support"}},
 		},
 	}
 

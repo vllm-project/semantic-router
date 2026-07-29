@@ -134,7 +134,7 @@ func openAIModelsLooperTestConfig() *config.RouterConfig {
 	return &config.RouterConfig{
 		Looper: config.LooperConfig{Endpoint: "http://looper"},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+			DefaultDecisions: []config.Decision{
 				{
 					Name:      "remom-route",
 					ModelRefs: []config.ModelRef{{Model: "worker-a"}},

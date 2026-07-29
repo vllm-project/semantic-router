@@ -101,14 +101,14 @@ func assertCompiledKBProjection(t *testing.T, cfg *config.RouterConfig) {
 
 func assertCompiledKBDecision(t *testing.T, cfg *config.RouterConfig) {
 	t.Helper()
-	if len(cfg.Decisions) != 1 {
-		t.Fatalf("expected 1 decision, got %d", len(cfg.Decisions))
+	if len(cfg.DefaultDecisions) != 1 {
+		t.Fatalf("expected 1 decision, got %d", len(cfg.DefaultDecisions))
 	}
-	cond := cfg.Decisions[0].Rules.Conditions[0]
+	cond := cfg.DefaultDecisions[0].Rules.Conditions[0]
 	if cond.Type != "kb" || cond.Name != "privacy_policy" {
 		t.Errorf("WHEN condition = %+v", cond)
 	}
-	toolsCfg := cfg.Decisions[0].GetToolsConfig()
+	toolsCfg := cfg.DefaultDecisions[0].GetToolsConfig()
 	if toolsCfg == nil {
 		t.Fatal("expected tools plugin on compiled decision")
 	}
@@ -193,8 +193,8 @@ func TestTaxonomyDSLRoundTrip(t *testing.T) {
 	if len(cfg2.Projections.Scores) != 1 {
 		t.Fatalf("round-trip projection scores = %d", len(cfg2.Projections.Scores))
 	}
-	if len(cfg2.Decisions) != 1 {
-		t.Fatalf("round-trip decisions = %d", len(cfg2.Decisions))
+	if len(cfg2.DefaultDecisions) != 1 {
+		t.Fatalf("round-trip decisions = %d", len(cfg2.DefaultDecisions))
 	}
 }
 
@@ -230,12 +230,12 @@ ROUTE local_standard {
 		t.Fatalf("Compile errors: %v", errs)
 	}
 
-	if len(cfg.Decisions) != 4 {
-		t.Fatalf("expected 4 decisions, got %d", len(cfg.Decisions))
+	if len(cfg.DefaultDecisions) != 4 {
+		t.Fatalf("expected 4 decisions, got %d", len(cfg.DefaultDecisions))
 	}
 	assertToolsMode := func(index int, want string) {
 		t.Helper()
-		cfg := cfg.Decisions[index].GetToolsConfig()
+		cfg := cfg.DefaultDecisions[index].GetToolsConfig()
 		if cfg == nil {
 			t.Fatalf("decision[%d] missing tools plugin", index)
 		}
@@ -275,11 +275,11 @@ ROUTE adaptive_tools {
 	if len(errs) > 0 {
 		t.Fatalf("Compile errors: %v", errs)
 	}
-	if len(cfg.Decisions) != 1 {
-		t.Fatalf("expected 1 decision, got %d", len(cfg.Decisions))
+	if len(cfg.DefaultDecisions) != 1 {
+		t.Fatalf("expected 1 decision, got %d", len(cfg.DefaultDecisions))
 	}
 
-	toolsCfg := cfg.Decisions[0].GetToolsConfig()
+	toolsCfg := cfg.DefaultDecisions[0].GetToolsConfig()
 	if toolsCfg == nil {
 		t.Fatal("expected tools plugin")
 	}

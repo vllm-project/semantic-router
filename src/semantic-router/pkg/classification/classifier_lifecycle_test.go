@@ -171,7 +171,7 @@ func TestInitializeRuntimeSkipsUnusedCoreSignalClassifiers(t *testing.T) {
 				},
 			},
 			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{{
+				DefaultDecisions: []config.Decision{{
 					Name:  "default",
 					Rules: config.RuleNode{Operator: "AND", Conditions: []config.RuleNode{}},
 				}},
@@ -217,7 +217,7 @@ func TestInitializeRuntimeInitializesCoreSignalClassifiersWhenUsed(t *testing.T)
 				},
 			},
 			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{{
+				DefaultDecisions: []config.Decision{{
 					Name: "guarded-route",
 					Rules: config.RuleNode{Operator: "OR", Conditions: []config.RuleNode{
 						{Type: config.SignalTypeDomain, Name: "billing"},

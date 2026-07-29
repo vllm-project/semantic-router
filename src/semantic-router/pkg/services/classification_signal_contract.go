@@ -40,7 +40,7 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 
 	var decisionResult *decision.DecisionResult
 	var traces []decision.DecisionTrace
-	if s.config != nil && len(s.config.Decisions) > 0 {
+	if s.config != nil && len(s.config.DefaultDecisions) > 0 {
 		decisionResult, traces = s.evaluateIntentDecision(signals, wantTrace)
 	}
 

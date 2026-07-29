@@ -145,11 +145,11 @@ func (c *RouterConfig) GetCategoryDescriptions() []string {
 
 // GetModelForDecisionIndex returns the best LLM model name for the decision at the given index
 func (c *RouterConfig) GetModelForDecisionIndex(index int) string {
-	if index < 0 || index >= len(c.Decisions) {
+	if index < 0 || index >= len(c.DefaultDecisions) {
 		return c.DefaultModel
 	}
 
-	decision := c.Decisions[index]
+	decision := c.DefaultDecisions[index]
 	if len(decision.ModelRefs) > 0 {
 		return decision.ModelRefs[0].Model
 	}
@@ -366,7 +366,7 @@ func (c *RouterConfig) GetAllModels() []string {
 
 // GetModelReasoningForDecision returns whether a specific model supports reasoning in a given decision
 func (c *RouterConfig) GetModelReasoningForDecision(decisionName string, modelName string) bool {
-	for _, decision := range c.Decisions {
+	for _, decision := range c.DefaultDecisions {
 		if decision.Name == decisionName {
 			for _, modelRef := range decision.ModelRefs {
 				if modelRef.Model == modelName {
@@ -380,7 +380,7 @@ func (c *RouterConfig) GetModelReasoningForDecision(decisionName string, modelNa
 
 // GetBestModelForDecision returns the best model for a given decision (first model in ModelRefs)
 func (c *RouterConfig) GetBestModelForDecision(decisionName string) (string, bool) {
-	for _, decision := range c.Decisions {
+	for _, decision := range c.DefaultDecisions {
 		if decision.Name == decisionName {
 			if len(decision.ModelRefs) > 0 {
 				useReasoning := decision.ModelRefs[0].UseReasoning != nil && *decision.ModelRefs[0].UseReasoning
@@ -395,7 +395,7 @@ func (c *RouterConfig) GetBestModelForDecision(decisionName string) (string, boo
 func (c *RouterConfig) ValidateEndpoints() error {
 	// Get all models from decisions
 	allCategoryModels := make(map[string]bool)
-	for _, decision := range c.Decisions {
+	for _, decision := range c.DefaultDecisions {
 		for _, modelRef := range decision.ModelRefs {
 			allCategoryModels[modelRef.Model] = true
 		}
@@ -452,13 +452,13 @@ func (c *RouterConfig) GetCategoryByName(name string) *Category {
 
 // GetDecisionByName returns a decision by name
 func (c *RouterConfig) GetDecisionByName(name string) *Decision {
-	for i := range c.Decisions {
-		if c.Decisions[i].Name == name {
-			return &c.Decisions[i]
+	for i := range c.DefaultDecisions {
+		if c.DefaultDecisions[i].Name == name {
+			return &c.DefaultDecisions[i]
 		}
 	}
 	// Non-default recipe decisions live only on their recipe; the default
-	// recipe mirrors the flat Decisions field scanned above. Decision names
+	// recipe mirrors the DefaultDecisions field scanned above. Decision names
 	// are globally unique across recipes (validated at load), so the first
 	// match is the only match.
 	for i := range c.Recipes {

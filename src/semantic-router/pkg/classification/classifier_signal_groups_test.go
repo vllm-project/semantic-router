@@ -96,7 +96,7 @@ func TestSignalGroupDefaultFallbackMatchesDomainRouteWhenNoGroupMemberFires(t *t
 						Default:     "other",
 					}},
 				},
-				Decisions: []config.Decision{
+				DefaultDecisions: []config.Decision{
 					{
 						Name:     "other-route",
 						Priority: 100,
@@ -148,7 +148,7 @@ func TestSignalGroupDefaultFallbackMatchesEmbeddingRouteWhenNoGroupMemberFires(t
 						Default:     "cooking",
 					}},
 				},
-				Decisions: []config.Decision{
+				DefaultDecisions: []config.Decision{
 					{
 						Name:     "cooking-route",
 						Priority: 100,
@@ -270,7 +270,7 @@ func TestAnalyzeSoftmaxSignalGroupCentroidsWarnsOnSimilarMembers(t *testing.T) {
 
 func buildGroupedDomainClassifier(mock *MockCategoryInference) *Classifier {
 	cfg := domainTestConfig()
-	cfg.Decisions = []config.Decision{
+	cfg.DefaultDecisions = []config.Decision{
 		{
 			Name:     "health-route",
 			Priority: 200,
@@ -336,7 +336,7 @@ func buildGroupedEmbeddingClassifier(t *testing.T) *Classifier {
 						Default:     "cooking",
 					}},
 				},
-				Decisions: []config.Decision{
+				DefaultDecisions: []config.Decision{
 					{
 						Name:     "programming-route",
 						Priority: 200,

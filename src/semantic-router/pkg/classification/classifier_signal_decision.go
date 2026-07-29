@@ -28,7 +28,7 @@ func (c *Classifier) EvaluateDecisionWithEngineAndTrace(signals *SignalResults) 
 }
 
 func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool, candidates []config.Decision) (*decision.DecisionResult, []decision.DecisionTrace, error) {
-	decisions := c.Config.Decisions
+	decisions := c.Config.DefaultDecisions
 	if candidates != nil {
 		decisions = candidates
 	}

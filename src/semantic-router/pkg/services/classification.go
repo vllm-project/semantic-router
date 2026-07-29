@@ -154,7 +154,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	// Evaluate decision with engine (if decisions are configured)
 	// Pass pre-computed signals to avoid re-evaluation
 	var decisionResult *decision.DecisionResult
-	if s.config != nil && len(s.config.Decisions) > 0 {
+	if s.config != nil && len(s.config.DefaultDecisions) > 0 {
 		decisionResult, err = s.classifier.EvaluateDecisionWithEngine(signals)
 		if err != nil {
 			// Log error but continue with classification

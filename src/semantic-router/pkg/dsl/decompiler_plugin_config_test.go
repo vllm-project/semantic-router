@@ -51,8 +51,8 @@ routing:
 		`max_body_bytes: 4096`,
 	})
 	compiled := mustCompileRoutingPluginConfigTest(t, dslText)
-	assertSemanticCachePluginRoundTrip(t, compiled.Decisions[0])
-	assertRouterReplayPluginRoundTrip(t, compiled.Decisions[0])
+	assertSemanticCachePluginRoundTrip(t, compiled.DefaultDecisions[0])
+	assertRouterReplayPluginRoundTrip(t, compiled.DefaultDecisions[0])
 }
 
 func TestDecompileRoutingRoundTripsToolsDynamicRetrievalPluginConfig(t *testing.T) {
@@ -108,7 +108,7 @@ routing:
 	})
 
 	compiled := mustCompileRoutingPluginConfigTest(t, dslText)
-	assertToolsPluginDynamicRetrievalRoundTrip(t, compiled.Decisions[0])
+	assertToolsPluginDynamicRetrievalRoundTrip(t, compiled.DefaultDecisions[0])
 }
 
 func mustParseRoutingPluginConfigTest(t *testing.T, configYAML string) *config.RouterConfig {
@@ -148,8 +148,8 @@ func mustCompileRoutingPluginConfigTest(t *testing.T, dslText string) *config.Ro
 	if len(errs) > 0 {
 		t.Fatalf("Compile errors: %v", errs)
 	}
-	if len(compiled.Decisions) != 1 {
-		t.Fatalf("compiled decisions = %d", len(compiled.Decisions))
+	if len(compiled.DefaultDecisions) != 1 {
+		t.Fatalf("compiled decisions = %d", len(compiled.DefaultDecisions))
 	}
 	return compiled
 }

@@ -249,7 +249,7 @@ func TestResolveDirectFusionDecisionFallsBackToConfiguredDecisionByPriority(t *t
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
 			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{
+				DefaultDecisions: []config.Decision{
 					{
 						Name:     "low-priority-fusion",
 						Priority: 10,
@@ -284,7 +284,7 @@ func TestDecisionCandidatesForFusionModelOnlyIncludesFusionDecisions(t *testing.
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
 			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{
+				DefaultDecisions: []config.Decision{
 					{
 						Name:      "static-route",
 						Algorithm: &config.AlgorithmConfig{Type: "static"},
@@ -317,7 +317,7 @@ func TestDecisionCandidatesForReMoMModelOnlyIncludesReMoMDecisions(t *testing.T)
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
 			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{
+				DefaultDecisions: []config.Decision{
 					{
 						Name:      "static-route",
 						Algorithm: &config.AlgorithmConfig{Type: "static"},
@@ -348,7 +348,7 @@ func TestDecisionCandidatesForFlowModelOnlyIncludesWorkflowDecisions(t *testing.
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
 			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{
+				DefaultDecisions: []config.Decision{
 					{
 						Name:      "static-route",
 						Algorithm: &config.AlgorithmConfig{Type: "static"},
@@ -394,7 +394,7 @@ func TestResolveDirectReMoMDecisionFallsBackToHighestPriorityReMoMDecision(t *te
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
 			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{
+				DefaultDecisions: []config.Decision{
 					{
 						Name:     "low-priority-remom",
 						Priority: 10,
@@ -450,7 +450,7 @@ func TestResolveDirectFlowDecisionFallsBackToConfiguredDecisionByPriority(t *tes
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
 			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{
+				DefaultDecisions: []config.Decision{
 					{
 						Name:     "low-priority-flow",
 						Priority: 10,
@@ -740,7 +740,7 @@ func TestHandleLooperInternalRequestWithPluginsResolvesProviderModelAlias(t *tes
 		Cache: &spyCache{},
 		Config: &config.RouterConfig{
 			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{
+				DefaultDecisions: []config.Decision{
 					{
 						Name:      "fusion_alias",
 						ModelRefs: []config.ModelRef{{Model: "panel-a"}},
