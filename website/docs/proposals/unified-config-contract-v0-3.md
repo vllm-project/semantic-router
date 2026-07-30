@@ -93,6 +93,10 @@ resolves a terminal `Unknown` with root-level
 `rules.on_unknown: no_match|match|fail_request`; omission preserves the existing
 per-family compatibility behavior.
 
+Route-local `decision_diagnostics` is an independent, opt-in observability surface
+for bounded request-local ExtProc metadata; it does not persist bodies or require
+a replay store.
+
 ## Entrypoints and multi-recipe routing
 
 `entrypoints[]` map request model names to either top-level routing or one named

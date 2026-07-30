@@ -419,6 +419,9 @@ func validateOneDecisionPluginContracts(
 			return err
 		}
 	}
+	if err := validateDecisionDiagnosticsPlugin(decision); err != nil {
+		return fmt.Errorf("decision '%s': %w", decision.Name, err)
+	}
 	if toolsCfg := decision.GetToolsConfig(); toolsCfg != nil {
 		if err := toolsCfg.Validate(); err != nil {
 			return fmt.Errorf("decision '%s': %w", decision.Name, err)

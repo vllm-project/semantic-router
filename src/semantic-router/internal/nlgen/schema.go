@@ -117,7 +117,7 @@ Inside a ROUTE block:
 
 ### Plugin Types (inline)
   system_prompt, semantic_cache, hallucination, memory, rag, tools,
-  fast_response, request_params, router_replay, header_mutation
+  fast_response, request_params, decision_diagnostics, router_replay, header_mutation
 
 ## Boolean Expressions (WHEN clauses)
 

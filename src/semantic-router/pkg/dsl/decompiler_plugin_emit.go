@@ -10,19 +10,42 @@ import (
 type typedPluginConfigEmitter func(*strings.Builder, *config.DecisionPlugin)
 
 var typedPluginConfigEmitters = map[string]typedPluginConfigEmitter{
-	"system_prompt":       emitSystemPromptPluginConfig,
-	"response_cache":      emitResponseCachePluginConfig,
-	"context_compression": emitStructuredPluginConfig,
-	"router_replay":       emitRouterReplayPluginConfig,
-	"memory":              emitMemoryPluginConfig,
-	"hallucination":       emitHallucinationPluginConfig,
-	"fast_response":       emitFastResponsePluginConfig,
-	"request_params":      emitRequestParamsPluginConfig,
-	"tool_selection":      emitToolSelectionPluginConfig,
-	"tools":               emitToolsPluginConfig,
-	"rag":                 emitRAGPluginConfig,
-	"header_mutation":     emitHeaderMutationPluginConfig,
-	"response_jailbreak":  emitResponseJailbreakPluginConfig,
+	"decision_diagnostics": emitDecisionDiagnosticsPluginConfig,
+	"system_prompt":        emitSystemPromptPluginConfig,
+	"response_cache":       emitResponseCachePluginConfig,
+	"context_compression":  emitStructuredPluginConfig,
+	"router_replay":        emitRouterReplayPluginConfig,
+	"memory":               emitMemoryPluginConfig,
+	"hallucination":        emitHallucinationPluginConfig,
+	"fast_response":        emitFastResponsePluginConfig,
+	"request_params":       emitRequestParamsPluginConfig,
+	"tool_selection":       emitToolSelectionPluginConfig,
+	"tools":                emitToolsPluginConfig,
+	"rag":                  emitRAGPluginConfig,
+	"header_mutation":      emitHeaderMutationPluginConfig,
+	"response_jailbreak":   emitResponseJailbreakPluginConfig,
+}
+
+func emitDecisionDiagnosticsPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
+	cfg, ok := decodePluginConfig[config.DecisionDiagnosticsPluginConfig](p)
+	if !ok {
+		return
+	}
+	if cfg.Enabled {
+		fmt.Fprintf(sb, "    enabled: true\n")
+	}
+	if cfg.MaxSignals != 0 {
+		fmt.Fprintf(sb, "    max_signals: %d\n", cfg.MaxSignals)
+	}
+	if cfg.MaxProjections != 0 {
+		fmt.Fprintf(sb, "    max_projections: %d\n", cfg.MaxProjections)
+	}
+	if cfg.MaxTextRunes != 0 {
+		fmt.Fprintf(sb, "    max_text_runes: %d\n", cfg.MaxTextRunes)
+	}
+	if cfg.MaxPayloadBytes != 0 {
+		fmt.Fprintf(sb, "    max_payload_bytes: %d\n", cfg.MaxPayloadBytes)
+	}
 }
 
 func decompilePluginConfig(p *config.DecisionPlugin) string {

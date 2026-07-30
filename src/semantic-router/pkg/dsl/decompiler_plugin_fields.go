@@ -9,19 +9,44 @@ import (
 type pluginFieldsDecoder func(*config.DecisionPlugin) map[string]Value
 
 var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
-	"system_prompt":       pluginFieldsSystemPrompt,
-	"response_cache":      pluginFieldsResponseCache,
-	"context_compression": pluginFieldsStructuredConfiguration,
-	"router_replay":       pluginFieldsRouterReplay,
-	"memory":              pluginFieldsMemory,
-	"hallucination":       pluginFieldsHallucination,
-	"fast_response":       pluginFieldsFastResponse,
-	"request_params":      pluginFieldsRequestParams,
-	"tool_selection":      pluginFieldsToolSelection,
-	"tools":               pluginFieldsTools,
-	"rag":                 pluginFieldsRAG,
-	"header_mutation":     pluginFieldsHeaderMutation,
-	"response_jailbreak":  pluginFieldsResponseJailbreak,
+	"decision_diagnostics": pluginFieldsDecisionDiagnostics,
+	"system_prompt":        pluginFieldsSystemPrompt,
+	"response_cache":       pluginFieldsResponseCache,
+	"context_compression":  pluginFieldsStructuredConfiguration,
+	"router_replay":        pluginFieldsRouterReplay,
+	"memory":               pluginFieldsMemory,
+	"hallucination":        pluginFieldsHallucination,
+	"fast_response":        pluginFieldsFastResponse,
+	"request_params":       pluginFieldsRequestParams,
+	"tool_selection":       pluginFieldsToolSelection,
+	"tools":                pluginFieldsTools,
+	"rag":                  pluginFieldsRAG,
+	"header_mutation":      pluginFieldsHeaderMutation,
+	"response_jailbreak":   pluginFieldsResponseJailbreak,
+}
+
+func pluginFieldsDecisionDiagnostics(p *config.DecisionPlugin) map[string]Value {
+	fields := make(map[string]Value)
+	cfg, ok := decodePluginConfig[config.DecisionDiagnosticsPluginConfig](p)
+	if !ok {
+		return fields
+	}
+	if cfg.Enabled {
+		fields["enabled"] = BoolValue{V: true}
+	}
+	if cfg.MaxSignals != 0 {
+		fields["max_signals"] = IntValue{V: cfg.MaxSignals}
+	}
+	if cfg.MaxProjections != 0 {
+		fields["max_projections"] = IntValue{V: cfg.MaxProjections}
+	}
+	if cfg.MaxTextRunes != 0 {
+		fields["max_text_runes"] = IntValue{V: cfg.MaxTextRunes}
+	}
+	if cfg.MaxPayloadBytes != 0 {
+		fields["max_payload_bytes"] = IntValue{V: cfg.MaxPayloadBytes}
+	}
+	return fields
 }
 
 func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {

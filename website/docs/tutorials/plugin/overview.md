@@ -61,6 +61,7 @@ routing:
 | `response_cache` | Reuse compatible prior responses | `global.stores.response_cache` | [Response Cache](./response-cache) |
 | `memory` | Retrieve and optionally store conversational memory | `global.stores.memory` | [Memory](./memory) |
 | `rag` | Retrieve documents before generation | Configured RAG/vector backend | [RAG](./rag) |
+| `decision_diagnostics` | Emit bounded, content-free routing metadata for following filters | None | [Decision Diagnostics](./decision-diagnostics) |
 | `router_replay` | Override replay capture for one route | `global.services.router_replay` | [Router Replay](./router-replay) |
 | `hallucination` | Inspect factual support in a response | Hallucination/NLI modules as configured | [Hallucination](./hallucination) |
 | `response_jailbreak` | Screen a generated response for jailbreak content | Prompt-guard runtime | [Response Jailbreak](./response-jailbreak) |

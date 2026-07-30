@@ -62,6 +62,9 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 	"router_replay": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileRouterReplayPluginConfig(fields), true
 	},
+	"decision_diagnostics": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
+		return c.compileDecisionDiagnosticsPluginConfig(fields), true
+	},
 	"fast_response": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileFastResponsePluginConfig(fields), true
 	},
@@ -216,6 +219,26 @@ func (c *Compiler) compileRouterReplayPluginConfig(fields map[string]Value) conf
 	}
 	if v, ok := getIntField(fields, "max_tool_trace_steps"); ok {
 		cfg.MaxToolTraceSteps = v
+	}
+	return cfg
+}
+
+func (c *Compiler) compileDecisionDiagnosticsPluginConfig(fields map[string]Value) config.DecisionDiagnosticsPluginConfig {
+	cfg := config.DecisionDiagnosticsPluginConfig{}
+	if v, ok := getBoolField(fields, "enabled"); ok {
+		cfg.Enabled = v
+	}
+	if v, ok := getIntField(fields, "max_signals"); ok {
+		cfg.MaxSignals = v
+	}
+	if v, ok := getIntField(fields, "max_projections"); ok {
+		cfg.MaxProjections = v
+	}
+	if v, ok := getIntField(fields, "max_text_runes"); ok {
+		cfg.MaxTextRunes = v
+	}
+	if v, ok := getIntField(fields, "max_payload_bytes"); ok {
+		cfg.MaxPayloadBytes = v
 	}
 	return cfg
 }
