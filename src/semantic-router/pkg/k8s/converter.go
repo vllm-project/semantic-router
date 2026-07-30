@@ -384,11 +384,20 @@ func validatePluginConfiguration(pluginType string, rawConfig []byte) error {
 }
 
 var pluginConfigurationValidators = map[string]func([]byte) error{
-	"semantic-cache":  validateSemanticCachePluginConfig,
-	"system_prompt":   validateSystemPromptPluginConfig,
-	"header_mutation": validateHeaderMutationPluginConfig,
-	"router_replay":   validateRouterReplayPluginConfig,
-	"tool_selection":  validateToolSelectionPluginConfigRaw,
+	"semantic-cache":       validateSemanticCachePluginConfig,
+	"system_prompt":        validateSystemPromptPluginConfig,
+	"header_mutation":      validateHeaderMutationPluginConfig,
+	"decision_diagnostics": validateDecisionDiagnosticsPluginConfig,
+	"router_replay":        validateRouterReplayPluginConfig,
+	"tool_selection":       validateToolSelectionPluginConfigRaw,
+}
+
+func validateDecisionDiagnosticsPluginConfig(rawConfig []byte) error {
+	var cfg config.DecisionDiagnosticsPluginConfig
+	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
+		return fmt.Errorf("failed to unmarshal decision_diagnostics config: %w", err)
+	}
+	return cfg.Validate()
 }
 
 func decodePluginConfiguration(rawConfig []byte, target any) error {

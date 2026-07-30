@@ -3,18 +3,19 @@ package config
 import "sort"
 
 const (
-	DecisionPluginSemanticCache     = "semantic-cache"
-	DecisionPluginSystemPrompt      = "system_prompt"
-	DecisionPluginHeaderMutation    = "header_mutation"
-	DecisionPluginHallucination     = "hallucination"
-	DecisionPluginResponseJailbreak = "response_jailbreak"
-	DecisionPluginRouterReplay      = "router_replay"
-	DecisionPluginMemory            = "memory"
-	DecisionPluginRAG               = "rag"
-	DecisionPluginImageGen          = "image_gen"
-	DecisionPluginFastResponse      = "fast_response"
-	DecisionPluginRequestParams     = "request_params"
-	DecisionPluginToolSelection     = "tool_selection"
+	DecisionPluginSemanticCache       = "semantic-cache"
+	DecisionPluginSystemPrompt        = "system_prompt"
+	DecisionPluginHeaderMutation      = "header_mutation"
+	DecisionPluginHallucination       = "hallucination"
+	DecisionPluginResponseJailbreak   = "response_jailbreak"
+	DecisionPluginRouterReplay        = "router_replay"
+	DecisionPluginDecisionDiagnostics = "decision_diagnostics"
+	DecisionPluginMemory              = "memory"
+	DecisionPluginRAG                 = "rag"
+	DecisionPluginImageGen            = "image_gen"
+	DecisionPluginFastResponse        = "fast_response"
+	DecisionPluginRequestParams       = "request_params"
+	DecisionPluginToolSelection       = "tool_selection"
 )
 
 var supportedSignalTypes = []string{
@@ -47,6 +48,7 @@ var supportedDecisionPluginTypes = []string{
 	DecisionPluginRAG,
 	DecisionPluginRequestParams,
 	DecisionPluginResponseJailbreak,
+	DecisionPluginDecisionDiagnostics,
 	DecisionPluginRouterReplay,
 	DecisionPluginSemanticCache,
 	DecisionPluginSystemPrompt,

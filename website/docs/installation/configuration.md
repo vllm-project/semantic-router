@@ -251,6 +251,7 @@ The repository now separates the exhaustive canonical reference config from reus
 - `config/decision/`: reusable `routing.decisions` rule-shape fragments
 - `config/algorithm/`: reusable `decision.algorithm` snippets
 - `config/plugin/`: reusable route-plugin snippets
+- `decision_diagnostics` is an opt-in route plugin that emits bounded, content-free ExtProc dynamic metadata for following filters; it does not enable or depend on Router Replay
 
 `config/decision/` is organized by boolean case shape: `single/`, `and/`, `or/`, `not/`, and `composite/`.
 `config/algorithm/` is organized by routing policy family: `looper/` and `selection/`; looper fragments include `confidence`, `ratings`, `remom`, and `fusion`.

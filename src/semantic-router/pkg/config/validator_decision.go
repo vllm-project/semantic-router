@@ -165,6 +165,9 @@ func validateDecisionCandidateIterationOutputs(iter CandidateIterationConfig, co
 
 func validateDecisionPluginContracts(cfg *RouterConfig) error {
 	for _, decision := range cfg.AllRoutingDecisions() {
+		if err := validateDecisionDiagnosticsPlugin(&decision); err != nil {
+			return fmt.Errorf("decision '%s': %w", decision.Name, err)
+		}
 		if toolsCfg := decision.GetToolsConfig(); toolsCfg != nil {
 			if err := toolsCfg.Validate(); err != nil {
 				return fmt.Errorf("decision '%s': %w", decision.Name, err)

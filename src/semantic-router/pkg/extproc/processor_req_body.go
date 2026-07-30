@@ -88,7 +88,7 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		return nil, err
 	}
 
-	return r.handleModelRouting(
+	return r.handleModelRoutingWithDecisionDiagnostics(
 		openAIRequest,
 		originalModel,
 		decisionState.decisionName,
@@ -96,6 +96,29 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		decisionState.selectedModel,
 		ctx,
 	)
+}
+
+func (r *OpenAIRouter) handleModelRoutingWithDecisionDiagnostics(
+	openAIRequest *openai.ChatCompletionNewParams,
+	originalModel string,
+	decisionName string,
+	reasoningDecision entropy.ReasoningDecision,
+	selectedModel string,
+	ctx *RequestContext,
+) (*ext_proc.ProcessingResponse, error) {
+	response, err := r.handleModelRouting(
+		openAIRequest,
+		originalModel,
+		decisionName,
+		reasoningDecision,
+		selectedModel,
+		ctx,
+	)
+	if err != nil {
+		return response, err
+	}
+	attachDecisionDiagnostics(response, ctx)
+	return response, nil
 }
 
 // handleModelRouting handles model selection and routing logic
