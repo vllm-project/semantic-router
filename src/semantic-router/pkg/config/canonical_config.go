@@ -432,7 +432,11 @@ func canonicalEndpointName(modelName string, backendRef CanonicalBackendRef, ind
 			suffix = fmt.Sprintf("backend-%d", index+1)
 		}
 	}
-	return modelName + "_" + suffix
+	prefix := modelName + "_"
+	if modelName != "" && strings.HasPrefix(suffix, prefix) {
+		return suffix
+	}
+	return prefix + suffix
 }
 
 func splitEndpointAddress(raw string, protocol string) (string, int, error) {
