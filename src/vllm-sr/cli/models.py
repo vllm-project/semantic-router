@@ -812,9 +812,21 @@ class RAGPluginConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_external_api_request_format(self):
-        """Validate the router-owned request format without rewriting backend data."""
+        """Validate the router-owned request format without rewriting backend data.
+
+        Mirrors the Go-side ``validateHybridRAGChildBackend`` so that hybrid
+        primary/fallback backends typed as ``external_api`` are validated
+        through the same contract as a top-level ``external_api`` backend.
+        """
         if self.backend == "external_api":
             ExternalAPIRAGBackendConfig.model_validate(self.backend_config or {})
+        elif self.backend == "hybrid":
+            cfg = self.backend_config or {}
+            for role in ("primary", "fallback"):
+                child_backend = cfg.get(role, "")
+                if child_backend == "external_api":
+                    child_cfg = cfg.get(f"{role}_config") or {}
+                    ExternalAPIRAGBackendConfig.model_validate(child_cfg)
         return self
 
 
