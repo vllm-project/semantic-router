@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"sort"
@@ -311,7 +312,7 @@ func (db *ToolsDatabase) Close() error {
 	if db == nil {
 		return nil
 	}
-	closer, ok := db.provider.(interface{ Close() error })
+	closer, ok := db.provider.(io.Closer)
 	if !ok {
 		return nil
 	}

@@ -22,6 +22,7 @@ func (reloadMemoryStore) Store(_ context.Context, _ *memory.Memory) error { retu
 func (reloadMemoryStore) Retrieve(_ context.Context, _ memory.RetrieveOptions) ([]*memory.RetrieveResult, error) {
 	return nil, nil
 }
+
 func (reloadMemoryStore) Get(_ context.Context, _ string) (*memory.Memory, error)    { return nil, nil }
 func (reloadMemoryStore) Update(_ context.Context, _ string, _ *memory.Memory) error { return nil }
 func (reloadMemoryStore) List(_ context.Context, _ memory.ListOptions) (*memory.ListResult, error) {
@@ -146,6 +147,73 @@ func TestReloadDrainsInFlightRequestBeforeClosingOldRouterCache(t *testing.T) {
 	}
 	if !fakeCache.closed.Load() {
 		t.Fatal("Retire() did not close the old router's cache after the in-flight request finished")
+	}
+}
+
+// TestReloadPublishesRuntimeStateBeforeDrainingOldRouter asserts a reload
+// updates the control plane as soon as the new router starts serving,
+// instead of after the old router has drained. Swap makes the new router
+// live immediately, so publishing behind Retire — which blocks for up to
+// defaultRouterDrainTimeout — would leave the runtime registry describing
+// the old router while the data plane already runs the new one.
+func TestReloadPublishesRuntimeStateBeforeDrainingOldRouter(t *testing.T) {
+	restoreReloadSeams := stubReloadSeams(t)
+	defer restoreReloadSeams()
+
+	newRouter := &OpenAIRouter{MemoryStore: reloadMemoryStore{}}
+	ensureReloadConfigModels = func(*config.RouterConfig) error { return nil }
+	prepareReloadRuntime = func(*config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
+		return modelruntime.EmbeddingRuntimeState{}, nil
+	}
+	buildReloadRouter = func(*config.RouterConfig) (*OpenAIRouter, error) { return newRouter, nil }
+	warmupReloadRouter = func(*OpenAIRouter, modelruntime.EmbeddingRuntimeState) error { return nil }
+
+	registry := routerruntime.NewRegistry(&config.RouterConfig{})
+	server := &Server{
+		service: NewRouterService(&OpenAIRouter{}),
+		runtime: registry,
+	}
+
+	// Hold a lease on the old router so the reload's Retire has to block on
+	// the drain, making the publish-vs-drain ordering observable.
+	oldLease := server.service.current.Load()
+	if !oldLease.acquire() {
+		t.Fatal("acquire() = false, want true before any reload")
+	}
+
+	reloadDone := make(chan error, 1)
+	go func() {
+		reloadDone <- server.reloadRouterFromConfig("file", "config.yaml", &config.RouterConfig{})
+	}()
+
+	deadline := time.After(5 * time.Second)
+	for registry.MemoryStore() == nil {
+		select {
+		case err := <-reloadDone:
+			t.Fatalf("reload returned before publishing runtime state (error = %v)", err)
+		case <-deadline:
+			t.Fatal("reload never published runtime state; it is blocked draining the old router first")
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+
+	// The publish landed while the reload was still draining — which is the
+	// whole point, so confirm it really is still blocked.
+	select {
+	case err := <-reloadDone:
+		t.Fatalf("reload finished without draining the held lease (error = %v)", err)
+	default:
+	}
+
+	oldLease.release()
+	select {
+	case err := <-reloadDone:
+		if err != nil {
+			t.Fatalf("reloadRouterFromConfig() error = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("reload did not finish after the in-flight lease released")
 	}
 }
 

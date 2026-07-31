@@ -9,13 +9,17 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -76,22 +80,28 @@ type Server struct {
 	certPath   string
 	runtime    *routerruntime.Registry
 
+	// mu guards the shutdown state below, which Start writes and Stop reads
+	// — possibly from different goroutines.
+	mu sync.Mutex
 	// shutdownHooks run, in registration order, after the gRPC server has
 	// gracefully stopped. Server is the sole SIGINT/SIGTERM owner (see
 	// Start), so this is the single coordinated place process-wide cleanup
 	// (e.g. vector store shutdown) runs — instead of racing it against
 	// Start's graceful drain via a second, independent signal.Notify.
 	shutdownHooks []func()
+	// watcherCancel stops the config-reload watcher Start launched. Stop
+	// calls it before draining so a reload cannot land mid-shutdown.
+	watcherCancel context.CancelFunc
 }
 
 // RegisterShutdownHook registers a hook to run during Stop, after the gRPC
 // server has finished its graceful drain. Hooks run in registration order.
-// Call before Start(); registration is not synchronized against a
-// concurrently running Stop().
 func (s *Server) RegisterShutdownHook(hook func()) {
 	if hook == nil {
 		return
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.shutdownHooks = append(s.shutdownHooks, hook)
 }
 
@@ -194,6 +204,9 @@ func (s *Server) Start() error {
 	// Start config file watcher in background
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	s.mu.Lock()
+	s.watcherCancel = cancel
+	s.mu.Unlock()
 	go s.watchConfigAndReload(ctx)
 
 	// Wait for interrupt signal to gracefully shut down the server
@@ -225,8 +238,15 @@ func (s *Server) Start() error {
 // completes, so process-wide cleanup (e.g. releasing the vector store) never
 // races an in-flight request against resources it still needs.
 func (s *Server) Stop() {
+	// Stop config reloads first. The watcher outlives Stop otherwise (Start
+	// only cancels it once Start itself returns), and a reload landing
+	// mid-shutdown would Swap a fresh router into an already-retired
+	// service — leaking that router and republishing runtime state for a
+	// process that is going away.
+	s.stopConfigWatcher()
+
 	if s.server != nil {
-		s.server.GracefulStop()
+		s.gracefulStopWithin(defaultRouterDrainTimeout)
 		logging.ComponentEvent("extproc", "server_stopped", map[string]interface{}{
 			"port": s.port,
 		})
@@ -238,15 +258,62 @@ func (s *Server) Stop() {
 			})
 		}
 	}
-	for _, hook := range s.shutdownHooks {
+	for _, hook := range s.snapshotShutdownHooks() {
 		hook()
 	}
 }
 
-// defaultRouterDrainTimeout bounds how long Retire waits for a retired
-// router's in-flight requests to finish before closing its resources
-// anyway, so a reload is never blocked indefinitely by a stuck request.
+func (s *Server) stopConfigWatcher() {
+	s.mu.Lock()
+	cancel := s.watcherCancel
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+func (s *Server) snapshotShutdownHooks() []func() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.shutdownHooks)
+}
+
+// gracefulStopWithin drains the gRPC server's in-flight streams, falling
+// back to a hard Stop once timeout elapses. GracefulStop on its own is
+// unbounded: ExtProc serves bidirectional streams, so a single stream that
+// never ends would block shutdown until the orchestrator SIGKILLs the
+// process — losing the shutdown hooks and router teardown that run after it.
+func (s *Server) gracefulStopWithin(timeout time.Duration) {
+	stopped := make(chan struct{})
+	go func() {
+		s.server.GracefulStop()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+	case <-time.After(timeout):
+		logging.ComponentWarnEvent("extproc", "server_graceful_stop_timed_out", map[string]interface{}{
+			"port":            s.port,
+			"timeout_seconds": timeout.Seconds(),
+		})
+		s.server.Stop()
+		<-stopped
+	}
+}
+
+// defaultRouterDrainTimeout bounds how long shutdown waits for in-flight
+// requests — both the gRPC graceful drain and a retired router's lease —
+// before proceeding anyway, so neither a reload nor process shutdown is
+// blocked indefinitely by a stuck request.
 const defaultRouterDrainTimeout = 30 * time.Second
+
+// maxLeaseAcquireAttempts bounds how many times Process re-reads the
+// current lease when it finds one already retiring. Each retry means a
+// reload swapped in a replacement mid-call; a handful of consecutive
+// reloads is conceivable, an unbounded number is not, and bounding the loop
+// guarantees Process can never spin.
+const maxLeaseAcquireAttempts = 8
 
 // RouterService is a delegating gRPC service that forwards to the current router implementation.
 type RouterService struct {
@@ -297,20 +364,38 @@ func (rs *RouterService) GetRouter() *OpenAIRouter {
 
 // Process delegates to the current router, holding a lease on it for the
 // duration of the call so a concurrent reload can't close its resources out
-// from under an in-flight request. If a reload retires the loaded lease
-// between load and acquire, it retries against the new current lease.
+// from under an in-flight request.
 func (rs *RouterService) Process(stream ext_proc.ExternalProcessor_ProcessServer) error {
-	for {
+	lease, err := rs.acquireCurrentLease()
+	if err != nil {
+		return err
+	}
+	defer lease.release()
+	return lease.router.Process(stream)
+}
+
+// acquireCurrentLease returns the current lease with one in-flight call
+// admitted against it. If a reload retires the loaded lease between load and
+// acquire, it retries against the replacement.
+//
+// Retrying only makes sense while the service still has a live router to
+// retry against. Shutdown retires the current lease without replacing it, so
+// once acquire fails against the lease that is still installed, it will keep
+// failing: reject the call instead of retrying forever.
+func (rs *RouterService) acquireCurrentLease() (*routerLease, error) {
+	for attempt := 0; attempt < maxLeaseAcquireAttempts; attempt++ {
 		lease := rs.current.Load()
 		if lease == nil {
-			return nil
+			return nil, status.Error(codes.Unavailable, "router is not initialized")
 		}
-		if !lease.acquire() {
-			continue
+		if lease.acquire() {
+			return lease, nil
 		}
-		defer lease.release()
-		return lease.router.Process(stream)
+		if rs.current.Load() == lease {
+			return nil, status.Error(codes.Unavailable, "router is shutting down")
+		}
 	}
+	return nil, status.Error(codes.Unavailable, "router is reloading, please retry")
 }
 
 func (s *Server) reloadRouterFromFile(configPath string) error {
@@ -356,12 +441,17 @@ func (s *Server) reloadRouterFromConfig(
 	}
 	logLoadedRouterConfig(configPath, candidateCfg)
 	oldLease := s.service.Swap(newRouter)
+	// Publish before draining. The new router serves traffic the instant
+	// Swap returns, so holding the runtime-registry update behind a drain
+	// that can take up to defaultRouterDrainTimeout would leave the control
+	// plane describing the old router while the data plane already runs the
+	// new one.
+	publishRouterState(candidateCfg, newRouter, s.runtime)
 	if err := s.service.Retire(oldLease, defaultRouterDrainTimeout); err != nil {
 		logging.ComponentWarnEvent("extproc", "router_retire_close_failed", map[string]interface{}{
 			"error": err.Error(),
 		})
 	}
-	publishRouterState(candidateCfg, newRouter, s.runtime)
 	return nil
 }
 

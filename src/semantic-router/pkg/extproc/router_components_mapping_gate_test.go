@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -67,12 +68,12 @@ func TestLoadClassifierMappingsRequiresUsedCoreSignalMappings(t *testing.T) {
 	}
 }
 
-// TestBuildRouterComponentsLeaksEarlierResourcesOnLaterFailure documents that
-// buildRouterComponents has no rollback stack: when the semantic cache is
-// built successfully and a later step fails, the cache is discarded with no
-// reachable handle to close it, leaking its background TTL-cleanup
-// goroutine.
-func TestBuildRouterComponentsLeaksEarlierResourcesOnLaterFailure(t *testing.T) {
+// TestBuildRouterComponentsClosesEarlierResourcesOnLaterFailure asserts
+// buildRouterComponents rolls back through its generation when a
+// construction step fails: the semantic cache built by an earlier step is
+// closed rather than discarded with no reachable handle, so its background
+// TTL-cleanup goroutine does not outlive the failed build.
+func TestBuildRouterComponentsClosesEarlierResourcesOnLaterFailure(t *testing.T) {
 	cfg := &config.RouterConfig{
 		SemanticCache: config.SemanticCache{
 			Enabled:    true,
@@ -89,14 +90,13 @@ func TestBuildRouterComponentsLeaksEarlierResourcesOnLaterFailure(t *testing.T) 
 		},
 	}
 
-	settleGoroutines(t)
-	baseline := runtime.NumGoroutine()
+	baseline := stableGoroutineCount(t)
 
 	components, err := buildRouterComponents(cfg)
 	require.Error(t, err)
 	require.Nil(t, components)
 
-	require.LessOrEqualf(t, runtime.NumGoroutine(), baseline,
+	requireGoroutinesSettleTo(t, baseline,
 		"buildRouterComponents leaked a goroutine when a later construction step failed after the semantic cache was already built")
 }
 
@@ -113,8 +113,7 @@ func TestBuildRouterComponentsRepeatedReloadsAreGoroutineStable(t *testing.T) {
 		},
 	}
 
-	settleGoroutines(t)
-	baseline := runtime.NumGoroutine()
+	baseline := stableGoroutineCount(t)
 
 	const iterations = 30
 	for i := 0; i < iterations; i++ {
@@ -124,17 +123,42 @@ func TestBuildRouterComponentsRepeatedReloadsAreGoroutineStable(t *testing.T) {
 		require.NoError(t, router.Close())
 	}
 
-	settleGoroutines(t)
-	require.LessOrEqualf(t, runtime.NumGoroutine(), baseline,
+	requireGoroutinesSettleTo(t, baseline,
 		"buildRouterComponents+Close leaked goroutines across %d repeated reload cycles", iterations)
 }
 
-func settleGoroutines(t *testing.T) {
+// stableGoroutineCount returns a goroutine count that has stopped moving, so
+// goroutines left winding down by an earlier test are not mistaken for this
+// test's baseline. runtime.Gosched is not a barrier — goroutine exit is
+// asynchronous — so poll for quiescence rather than guessing a yield count.
+func stableGoroutineCount(t *testing.T) int {
 	t.Helper()
-	for i := 0; i < 5; i++ {
-		runtime.Gosched()
-	}
-	runtime.GC()
+	var last int
+	consecutive := 0
+	require.Eventually(t, func() bool {
+		runtime.GC()
+		current := runtime.NumGoroutine()
+		if current == last {
+			consecutive++
+		} else {
+			consecutive = 0
+			last = current
+		}
+		return consecutive >= 3
+	}, 10*time.Second, 10*time.Millisecond, "goroutine count never settled")
+	return last
+}
+
+// requireGoroutinesSettleTo asserts the live goroutine count returns to
+// baseline. The resources under test exit deterministically (Close waits for
+// them), but unrelated goroutines may still be winding down, so poll instead
+// of asserting once.
+func requireGoroutinesSettleTo(t *testing.T, baseline int, msg string, args ...interface{}) {
+	t.Helper()
+	require.Eventuallyf(t, func() bool {
+		runtime.GC()
+		return runtime.NumGoroutine() <= baseline
+	}, 10*time.Second, 10*time.Millisecond, msg, args...)
 }
 
 func newCoreSignalMappingGateConfig(t *testing.T) *config.RouterConfig {

@@ -3,6 +3,7 @@ package ratelimit
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -145,7 +146,7 @@ func (r *RateLimitResolver) Close() error {
 	}
 	var errs []error
 	for _, p := range r.providers {
-		closer, ok := p.(interface{ Close() error })
+		closer, ok := p.(io.Closer)
 		if !ok {
 			continue
 		}

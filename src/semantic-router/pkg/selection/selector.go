@@ -28,6 +28,7 @@ package selection
 import (
 	"context"
 	"errors"
+	"io"
 	"sync"
 	"sync/atomic"
 
@@ -368,15 +369,21 @@ func (r *Registry) Close() error {
 	if r == nil {
 		return nil
 	}
+
+	// Snapshot under the lock and close outside it: a selector's Close is
+	// arbitrary code, and calling it while holding a non-reentrant RWMutex
+	// would deadlock if it ever reached back into the registry.
 	r.mu.RLock()
-	defer r.mu.RUnlock()
+	closers := make([]io.Closer, 0, len(r.selectors))
+	for _, selector := range r.selectors {
+		if closer, ok := selector.(io.Closer); ok {
+			closers = append(closers, closer)
+		}
+	}
+	r.mu.RUnlock()
 
 	var errs []error
-	for _, selector := range r.selectors {
-		closer, ok := selector.(interface{ Close() error })
-		if !ok {
-			continue
-		}
+	for _, closer := range closers {
 		if err := closer.Close(); err != nil {
 			errs = append(errs, err)
 		}
