@@ -27,7 +27,8 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 	var selectedModel string
 
 	// Check if there's content to evaluate
-	if len(history.nonUserMessages) == 0 && history.currentUserMessage == "" {
+	if len(history.nonUserMessages) == 0 && history.currentUserMessage == "" &&
+		!hasEnvelopeRoutingFacts(history) {
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
@@ -53,7 +54,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 
 	signalInput := r.prepareSignalEvaluationInput(history)
 	ctx.VSRConversationFacts = signalInput.conversationFacts
-	if signalInput.evaluationText == "" {
+	if signalInput.evaluationText == "" && !hasEnvelopeRoutingFacts(history) {
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
@@ -133,6 +134,7 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 		return defaultCandidateModelRef, string(method)
 	}
 	recordSelCtx, result, selectedModelRef, learningApplied := r.applyRouterLearning(selCtx, result, selectedModelRef, ctx)
+	ctx.VSRSelectionReasoning = boundedSelectionReasoning(result.Reasoning)
 	logSelectionResult(method, result, selectedModelRef, learningApplied)
 	selection.RecordSelection(string(method), selectionDecisionStateKey(selCtx), selectedModelRef.Model, result.Tier, result.Score)
 	recordAgenticSessionDecision(recordSelCtx, result, selectedModelRef, ctx)
@@ -155,6 +157,7 @@ func (r *OpenAIRouter) selectSingleCandidateModel(
 		AllScores:     map[string]float64{defaultCandidateModelRef.Model: 1.0},
 	}
 	recordSelCtx, result, selectedModelRef, learningApplied := r.applyRouterLearning(selCtx, result, defaultCandidateModelRef, ctx)
+	ctx.VSRSelectionReasoning = boundedSelectionReasoning(result.Reasoning)
 	logSelectionResult(selection.MethodStatic, result, selectedModelRef, learningApplied)
 	recordAgenticSessionDecision(recordSelCtx, result, selectedModelRef, ctx)
 	return selectedModelRef, "single"
@@ -166,6 +169,10 @@ func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMetho
 	}
 	if method == selection.MethodMultiFactor && algorithm != nil {
 		return r.newDecisionMultiFactorSelector(algorithm.MultiFactor)
+	}
+	if method == selection.MethodPrompt && algorithm != nil &&
+		algorithm.Prompt != nil {
+		return r.newDecisionPromptSelector(*algorithm.Prompt)
 	}
 	registry := r.modelSelectorForRequest(ctx)
 	if registry == nil {
@@ -195,7 +202,6 @@ func (r *OpenAIRouter) newDecisionMultiFactorSelector(decisionCfg *config.MultiF
 	}
 	return selector
 }
-
 func (r *OpenAIRouter) newDecisionHybridSelector(decisionCfg *config.HybridSelectionConfig, ctx *RequestContext) selection.Selector {
 	var cfg *selection.HybridConfig
 	if r != nil && r.Config != nil {

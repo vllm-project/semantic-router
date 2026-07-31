@@ -52,14 +52,20 @@ func NewStructureClassifier(
 	}, nil
 }
 
-func (c *StructureClassifier) Classify(text string) ([]StructureMatch, error) {
-	if strings.TrimSpace(text) == "" {
+func (c *StructureClassifier) Classify(text string, uncompressedText ...string) ([]StructureMatch, error) {
+	if strings.TrimSpace(text) == "" &&
+		(len(uncompressedText) == 0 || strings.TrimSpace(uncompressedText[0]) == "") {
 		return nil, nil
 	}
 
 	matches := make([]StructureMatch, 0, len(c.rules))
 	for _, rule := range c.rules {
-		value, matched := c.evaluateRule(rule, text)
+		ruleText := text
+		if strings.EqualFold(strings.TrimSpace(rule.Feature.Source.Type), "text_bytes") &&
+			len(uncompressedText) > 0 {
+			ruleText = uncompressedText[0]
+		}
+		value, matched := c.evaluateRule(rule, ruleText)
 		if !matched {
 			continue
 		}
@@ -122,6 +128,8 @@ func structureSourceCount(rule structureRuntimeRule, text string) int {
 			return 1
 		}
 		return 0
+	case "text_bytes":
+		return len(text)
 	default:
 		return 0
 	}

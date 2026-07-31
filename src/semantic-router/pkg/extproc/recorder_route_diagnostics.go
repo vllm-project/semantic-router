@@ -28,6 +28,7 @@ func buildReplayRouteDiagnostics(
 		DecisionTier:         decisionTier,
 		DecisionPriority:     decisionPriority,
 		SelectionMethod:      ctx.VSRSelectionMethod,
+		SelectionReasoning:   ctx.VSRSelectionReasoning,
 		OriginalModel:        originalModel,
 		ProposalModel:        finalModel,
 		SelectedModel:        finalModel,
@@ -38,6 +39,10 @@ func buildReplayRouteDiagnostics(
 		MemoryFallbackReason: ctx.MemoryFallbackReason,
 		MemoryFailOpen:       ctx.MemoryFailOpen,
 		MemoryResultCount:    ctx.MemoryResultCount,
+		SignalErrors:         cloneReplayStringMap(ctx.VSRSignalErrors),
+	}
+	if ctx.VSRSelectedDecision != nil {
+		diagnostics.Annotations = ctx.VSRSelectedDecision.Annotations
 	}
 
 	if policy, ok := protectionLearningPolicyForContext(ctx); ok {

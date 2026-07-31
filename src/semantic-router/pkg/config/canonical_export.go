@@ -78,6 +78,8 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		KB:            append([]KBSignalRule(nil), signals.KBRules...),
 		Conversation:  append([]ConversationRule(nil), signals.ConversationRules...),
 		EventRules:    append([]EventRule(nil), signals.EventRules...),
+		Metadata:      append([]MetadataRule(nil), signals.MetadataRules...),
+		Classifiers:   append([]ClassifierSignalRule(nil), signals.ClassifierRules...),
 	}
 }
 

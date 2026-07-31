@@ -16,6 +16,7 @@ var (
 		"regex":       {},
 		"keyword_set": {},
 		"sequence":    {},
+		"text_bytes":  {},
 	}
 )
 
@@ -50,7 +51,7 @@ func ValidateStructureRuleContract(rule StructureRule) error {
 	sourceType := strings.ToLower(strings.TrimSpace(rule.Feature.Source.Type))
 	if _, ok := supportedStructureSourceTypes[sourceType]; !ok {
 		return fmt.Errorf(
-			"routing.signals.structure[%q]: unsupported feature.source.type %q (supported: regex, keyword_set, sequence)",
+			"routing.signals.structure[%q]: unsupported feature.source.type %q (supported: regex, keyword_set, sequence, text_bytes)",
 			rule.Name,
 			rule.Feature.Source.Type,
 		)
@@ -104,6 +105,12 @@ func validateStructureFeatureSourceCompatibility(ruleName string, featureType st
 	if featureType == "sequence" && sourceType != "sequence" {
 		return fmt.Errorf(
 			"routing.signals.structure[%q]: feature.type=sequence requires feature.source.type=sequence",
+			ruleName,
+		)
+	}
+	if sourceType == "text_bytes" && featureType != "count" {
+		return fmt.Errorf(
+			"routing.signals.structure[%q]: feature.source.type=text_bytes requires feature.type=count",
 			ruleName,
 		)
 	}

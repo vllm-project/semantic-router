@@ -1,0 +1,19 @@
+routing:
+  decisions:
+    - name: prompt-selected-route
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
+        - model: qwen3-32b
+          use_reasoning: true
+      algorithm:
+        type: prompt
+        prompt:
+          model: qwen3-8b
+          instructions: >-
+            Choose qwen3-8b for ordinary requests and qwen3-32b for hard
+            reasoning, coding, or multi-step analysis.
+          timeout_seconds: 5

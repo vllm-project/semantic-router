@@ -26,6 +26,8 @@ var matchedSignalResolvers = map[string]func(*MatchedSignals) *[]string{
 	config.SignalTypeKB:           func(target *MatchedSignals) *[]string { return &target.KB },
 	config.SignalTypeConversation: func(target *MatchedSignals) *[]string { return &target.Conversation },
 	config.SignalTypeEvent:        func(target *MatchedSignals) *[]string { return &target.Event },
+	config.SignalTypeMetadata:     func(target *MatchedSignals) *[]string { return &target.Metadata },
+	config.SignalTypeClassifier:   func(target *MatchedSignals) *[]string { return &target.Classifier },
 	config.SignalTypeProjection:   func(target *MatchedSignals) *[]string { return &target.Projection },
 }
 
@@ -53,6 +55,8 @@ func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals 
 		KB:           signals.MatchedKBRules,
 		Conversation: signals.MatchedConversationRules,
 		Event:        signals.MatchedEventRules,
+		Metadata:     signals.MatchedMetadataRules,
+		Classifier:   signals.MatchedClassifierRules,
 		Projection:   signals.MatchedProjectionRules,
 	}
 }
@@ -118,8 +122,30 @@ func (s *ClassificationService) getUnmatchedSignals(signals *classification.Sign
 	collectUnmatchedRuleNames(&unmatched.Jailbreak, cfg.JailbreakRules, signals.MatchedJailbreakRules, func(rule config.JailbreakRule) string { return rule.Name })
 	collectUnmatchedRuleNames(&unmatched.PII, cfg.PIIRules, signals.MatchedPIIRules, func(rule config.PIIRule) string { return rule.Name })
 	collectUnmatchedProjectionOutputs(&unmatched.Projection, cfg.Projections.Mappings, signals.MatchedProjectionRules)
+	collectUnmatchedRuleNames(&unmatched.Metadata, cfg.MetadataRules, signals.MatchedMetadataRules, func(rule config.MetadataRule) string { return rule.Name })
+	collectUnmatchedClassifierRules(&unmatched.Classifier, cfg.ClassifierRules, signals.MatchedClassifierRules)
 
 	return unmatched
+}
+
+func collectUnmatchedClassifierRules(
+	target *[]string,
+	rules []config.ClassifierSignalRule,
+	matched []string,
+) {
+	for _, rule := range rules {
+		prefix := rule.Name + ":"
+		matchedRule := false
+		for _, value := range matched {
+			if strings.HasPrefix(value, prefix) {
+				matchedRule = true
+				break
+			}
+		}
+		if !matchedRule {
+			*target = append(*target, rule.Name)
+		}
+	}
 }
 
 func appendSignalToMatchedSignals(target *MatchedSignals, signalType string, signalName string) {

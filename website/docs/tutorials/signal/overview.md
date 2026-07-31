@@ -91,6 +91,7 @@ These signals route from explicit rules, request form, or lightweight detectors 
 | `event`       | `config/signal/event/`     | route from structured event metadata, severity, action codes, and urgency    | [Event](./heuristic/event)         |
 | `keyword`     | `config/signal/keyword/`   | route from lexical or BM25-style matches                                     | [Keyword](./heuristic/keyword)     |
 | `language`    | `config/signal/language/`  | route by detected request language                                           | [Language](./heuristic/language)   |
+| `metadata`    | `config/signal/metadata/`  | route from untrusted caller-provided application hints                       | [Metadata](./heuristic/metadata)   |
 | `structure`   | `config/signal/structure/` | route from request shape such as question counts or ordered workflow markers | [Structure](./heuristic/structure) |
 
 ### Learned Signals
@@ -99,6 +100,7 @@ These signals use embeddings or classifier models and typically rely on `global.
 
 | Signal family | Fragment directory | Purpose | Doc |
 |---------------|--------------------|---------|-----|
+| `classifier` | `config/signal/classifier/` | expose reusable label scores from generic native or LLM classifiers | [Classifier](./learned/classifier) |
 | `complexity` | `config/signal/complexity/` | detect hard vs easy reasoning traffic | [Complexity](./learned/complexity) |
 | `domain` | `config/signal/domain/` | classify the request topic family | [Domain](./learned/domain) |
 | `embedding` | `config/signal/embedding/` | match by semantic similarity | [Embedding](./learned/embedding) |

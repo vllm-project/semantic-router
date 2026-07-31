@@ -374,6 +374,7 @@ func preInitializeMetrics() {
 		"latency_aware",
 		"multi_factor",
 		"session_aware",
+		"prompt",
 	}
 
 	// Initialize selection metrics for all methods

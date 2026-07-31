@@ -25,6 +25,7 @@ var selectionMethodByAlgorithmType = map[string]selection.SelectionMethod{
 	"svm":           selection.MethodSVM,
 	"multi_factor":  selection.MethodMultiFactor,
 	"mlp":           selection.MethodMLP,
+	"prompt":        selection.MethodPrompt,
 }
 
 func (r *OpenAIRouter) evaluateSignalsForDecision(
@@ -54,6 +55,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 		UncompressedText:       signalInput.evaluationText,
 		SkipCompressionSignals: signalInput.skipCompressionSignals,
 		ConversationFacts:      signalInput.conversationFacts,
+		RequestFacts:           signalInput.requestFacts,
 	})
 	if authzErr != nil {
 		signalSpan.End()
@@ -126,6 +128,8 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 		"kb":             signals.MatchedKBRules,
 		"conversation":   signals.MatchedConversationRules,
 		"event":          signals.MatchedEventRules,
+		"metadata":       signals.MatchedMetadataRules,
+		"classifier":     signals.MatchedClassifierRules,
 		"projection":     signals.MatchedProjectionRules,
 		"context_tokens": signals.TokenCount,
 	})

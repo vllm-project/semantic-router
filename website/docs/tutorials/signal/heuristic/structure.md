@@ -123,7 +123,7 @@ routing:
 Current supported contract:
 
 - `feature.type`: `exists`, `count`, `density`, `sequence`
-- `feature.source.type`: `regex`, `keyword_set`, `sequence`
+- `feature.source.type`: `regex`, `keyword_set`, `sequence`, `text_bytes`
 - `predicate`: `gt`, `gte`, `lt`, `lte`
 
 Notes:
@@ -132,6 +132,7 @@ Notes:
 - `density` automatically normalizes by multilingual text units. CJK characters count individually, contiguous runs of non-CJK letters/digits count as one unit, and punctuation is ignored.
 - `sequence` requires `feature.source.type=sequence`.
 - `keyword_set` uses script-aware matching so continuous CJK text and mixed-script prompts still register expected hits.
+- `text_bytes` returns the UTF-8 byte length of the uncompressed current user turn and requires `feature.type: count`.
 - `regex` is a real regular-expression source in this family.
 
 Example signal meanings:

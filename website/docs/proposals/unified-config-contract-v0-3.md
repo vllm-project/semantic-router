@@ -70,6 +70,11 @@ DSL owns only routing semantics:
 - optional `entrypoints` through `ENTRYPOINT` blocks
 - optional isolated `recipes[].routing` profiles through `RECIPE` blocks
 
+The signal surface includes deterministic metadata hints and reusable generic
+classifier labels. Decision leaves may apply bounded numeric predicates to
+signal values, and prompt-driven model choice remains a route-local algorithm
+over the decision's declared `modelRefs`.
+
 It no longer owns endpoints, API keys, listeners, or router-global runtime settings.
 
 ### Deployment binding split

@@ -8,9 +8,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-func (c *Classifier) evaluateStructureSignal(results *SignalResults, mu *sync.Mutex, text string) {
+func (c *Classifier) evaluateStructureSignal(results *SignalResults, mu *sync.Mutex, text string, uncompressedText ...string) {
 	start := time.Now()
-	matchedRules, err := c.structureClassifier.Classify(text)
+	matchedRules, err := c.structureClassifier.Classify(text, uncompressedText...)
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 

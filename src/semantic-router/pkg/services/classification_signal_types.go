@@ -46,6 +46,8 @@ type MatchedSignals struct {
 	KB           []string `json:"kb,omitempty"`
 	Conversation []string `json:"conversation,omitempty"`
 	Event        []string `json:"event,omitempty"`
+	Metadata     []string `json:"metadata,omitempty"`
+	Classifier   []string `json:"classifier,omitempty"`
 	Projection   []string `json:"projection,omitempty"`
 }
 

@@ -16,6 +16,8 @@ from pydantic import (
 from .algorithms import AlgorithmConfig, ModelRef
 
 RoutingStrategy = Literal["priority", "confidence"]
+LOCAL_CLASSIFIER_LABEL_COUNT = 2
+PROMPT_MIN_CANDIDATES = 2
 
 
 class Listener(BaseModel):
@@ -412,6 +414,75 @@ class Reask(BaseModel):
     lookback_turns: Optional[int] = None
 
 
+class MetadataPredicate(BaseModel):
+    """Comparator for untrusted request metadata."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    equals: Optional[str] = None
+    in_: Optional[List[str]] = Field(default=None, alias="in")
+    exists: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def validate_comparator(self):
+        configured = sum(
+            (
+                self.equals is not None,
+                bool(self.in_),
+                self.exists is not None,
+            )
+        )
+        if configured != 1:
+            raise ValueError("exactly one of equals, in, or exists is required")
+        return self
+
+
+class MetadataRule(BaseModel):
+    """Matches caller-provided request metadata without granting authorization."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: Optional[str] = None
+    key: str
+    predicate: MetadataPredicate
+
+
+class ClassifierSignal(BaseModel):
+    """Generic label-score classifier signal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: Optional[str] = None
+    type: Literal["local", "llm"]
+    model: Optional[str] = None
+    model_path: Optional[str] = None
+    labels: List[str]
+    instructions: Optional[str] = None
+    use_cpu: bool = False
+
+    @model_validator(mode="after")
+    def validate_classifier(self):
+        if not self.labels or any(not label.strip() for label in self.labels):
+            raise ValueError("labels cannot be empty")
+        if len(set(self.labels)) != len(self.labels):
+            raise ValueError("labels cannot contain duplicates")
+        if self.type == "local" and not self.model_path:
+            raise ValueError("local classifiers require model_path")
+        if self.type == "local" and len(self.labels) != LOCAL_CLASSIFIER_LABEL_COUNT:
+            raise ValueError("local classifiers require exactly two labels")
+        if self.type == "local" and (self.model or self.instructions):
+            raise ValueError("local classifiers do not accept model or instructions")
+        if self.type == "llm" and not self.model:
+            raise ValueError("llm classifiers require model")
+        if self.type == "llm" and not self.instructions:
+            raise ValueError("llm classifiers require instructions")
+        if self.type == "llm" and (self.model_path or self.use_cpu):
+            raise ValueError("llm classifiers do not accept model_path or use_cpu")
+        return self
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -433,6 +504,8 @@ class Signals(BaseModel):
     kb: Optional[List[KBSignal]] = []
     conversation: Optional[List[ConversationRule]] = []
     events: Optional[List[EventRule]] = []
+    metadata: Optional[List[MetadataRule]] = []
+    classifiers: Optional[List[ClassifierSignal]] = []
 
 
 class Condition(BaseModel):
@@ -440,12 +513,23 @@ class Condition(BaseModel):
 
     type: Optional[str] = None
     name: Optional[str] = None
+    label: Optional[str] = None
+    predicate: Optional[NumericPredicate] = None
+    on_error: Optional[Literal["no_match", "match"]] = None
     operator: Optional[str] = None
     conditions: Optional[List["Condition"]] = None
 
     @model_validator(mode="after")
     def validate_node_shape(self):
-        has_leaf_fields = self.type is not None or self.name is not None
+        has_leaf_fields = any(
+            (
+                self.type is not None,
+                self.name is not None,
+                self.label is not None,
+                self.predicate is not None,
+                self.on_error is not None,
+            )
+        )
         has_operator = self.operator is not None
 
         if has_leaf_fields and has_operator:
@@ -470,6 +554,8 @@ class Condition(BaseModel):
             raise ValueError("leaf condition node requires both type and name")
         if self.conditions:
             raise ValueError("leaf condition node cannot define child conditions")
+        if self.label is not None and self.type != "classifier":
+            raise ValueError("label is only valid for classifier conditions")
         return self
 
 
@@ -1053,6 +1139,17 @@ class Decision(BaseModel):
     algorithm: Optional[AlgorithmConfig] = None  # Multi-model orchestration algorithm
     adaptations: Optional[DecisionAdaptationsConfig] = None
     plugins: Optional[List[PluginConfig]] = []
+    annotations: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="after")
+    def validate_prompt_candidates(self):
+        if (
+            self.algorithm
+            and self.algorithm.type == "prompt"
+            and len(self.modelRefs) < PROMPT_MIN_CANDIDATES
+        ):
+            raise ValueError("algorithm.type=prompt requires at least two modelRefs")
+        return self
 
 
 class ModelPricing(BaseModel):

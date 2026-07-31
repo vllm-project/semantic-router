@@ -456,8 +456,8 @@ var (
 	initOnce                              sync.Once
 	initErr                               error
 	modelInitialized                      bool
-	classifierInitOnce                    sync.Once
-	classifierInitErr                     error
+	classifierInitMu                      sync.Mutex
+	classifierInitialized                 bool
 	piiClassifierInitOnce                 sync.Once
 	piiClassifierInitErr                  error
 	jailbreakClassifierInitOnce           sync.Once
@@ -1926,30 +1926,27 @@ func IsModelInitialized() (rustState bool, goState bool) {
 
 // InitClassifier initializes the BERT classifier with the specified model path and number of classes
 func InitClassifier(modelPath string, numClasses int, useCPU bool) error {
-	var err error
-	classifierInitOnce.Do(func() {
-		if modelPath == "" {
-			// Default to BERT base model if path is empty
-			modelPath = "bert-base-uncased"
-		}
+	classifierInitMu.Lock()
+	defer classifierInitMu.Unlock()
+	if classifierInitialized {
+		return nil
+	}
+	if modelPath == "" {
+		modelPath = "bert-base-uncased"
+	}
+	if numClasses < 2 {
+		return fmt.Errorf("number of classes must be at least 2, got %d", numClasses)
+	}
 
-		if numClasses < 2 {
-			err = fmt.Errorf("number of classes must be at least 2, got %d", numClasses)
-			return
-		}
+	log.Printf("Initializing classifier model: %s", modelPath)
+	cModelID := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cModelID))
 
-		log.Printf("Initializing classifier model: %s", modelPath)
-
-		// Initialize classifier directly using CGO
-		cModelID := C.CString(modelPath)
-		defer C.free(unsafe.Pointer(cModelID))
-
-		success := C.init_classifier(cModelID, C.int(numClasses), C.bool(useCPU))
-		if !bool(success) {
-			err = fmt.Errorf("failed to initialize classifier model")
-		}
-	})
-	return err
+	if !bool(C.init_classifier(cModelID, C.int(numClasses), C.bool(useCPU))) {
+		return fmt.Errorf("failed to initialize classifier model")
+	}
+	classifierInitialized = true
+	return nil
 }
 
 // InitPIIClassifier initializes the BERT PII classifier with the specified model path and number of classes

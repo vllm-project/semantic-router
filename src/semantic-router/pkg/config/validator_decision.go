@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -8,6 +9,12 @@ import (
 )
 
 func validateDecisionContracts(cfg *RouterConfig) error {
+	if err := validateMetadataContracts(cfg); err != nil {
+		return err
+	}
+	if err := validateClassifierSignalContracts(cfg); err != nil {
+		return err
+	}
 	if err := validateDecisionModelContracts(cfg); err != nil {
 		return err
 	}
@@ -19,10 +26,19 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 
 func validateDecisionModelContracts(cfg *RouterConfig) error {
 	for _, decision := range cfg.AllRoutingDecisions() {
+		if err := validateDecisionRuleNode(cfg, decision.Name, &decision.Rules); err != nil {
+			return err
+		}
+		if err := validateDecisionAnnotations(decision); err != nil {
+			return err
+		}
 		if err := validateDecisionModelRefs(cfg, decision); err != nil {
 			return err
 		}
 		if err := validateDecisionAlgorithmConfig(decision.Name, decision.ModelRefs, decision.Algorithm); err != nil {
+			return err
+		}
+		if err := validateDecisionPromptModel(cfg, decision); err != nil {
 			return err
 		}
 		if err := validateDecisionWorkflowModelRefs(decision); err != nil {
@@ -34,6 +50,163 @@ func validateDecisionModelContracts(cfg *RouterConfig) error {
 		if err := validateDecisionOutputContractSpec(decision); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *RuleNode) error {
+	if node == nil {
+		return nil
+	}
+	if node.IsLeaf() {
+		return validateDecisionLeafNode(cfg, decisionName, node)
+	}
+	for i := range node.Conditions {
+		if err := validateDecisionRuleNode(cfg, decisionName, &node.Conditions[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateDecisionLeafNode(
+	cfg *RouterConfig,
+	decisionName string,
+	node *RuleNode,
+) error {
+	if node.Label != "" && !strings.EqualFold(node.Type, SignalTypeClassifier) {
+		return fmt.Errorf("decision '%s': label is only supported on classifier conditions", decisionName)
+	}
+	if strings.EqualFold(node.Type, SignalTypeClassifier) {
+		if err := validateClassifierDecisionLeaf(cfg, decisionName, node); err != nil {
+			return err
+		}
+	}
+	if node.OnError != "" && node.OnError != "no_match" && node.OnError != "match" {
+		return fmt.Errorf(
+			"decision '%s': condition %s(%q) on_error must be no_match or match",
+			decisionName,
+			node.Type,
+			node.Name,
+		)
+	}
+	return validateDecisionLeafPredicate(decisionName, node)
+}
+
+func validateClassifierDecisionLeaf(
+	cfg *RouterConfig,
+	decisionName string,
+	node *RuleNode,
+) error {
+	rule := classifierSignalRuleByName(cfg.ClassifierRules, node.Name)
+	if rule == nil {
+		return fmt.Errorf(
+			"decision '%s': classifier condition references unknown signal %q",
+			decisionName,
+			node.Name,
+		)
+	}
+	if node.Label == "" || !stringSliceContains(rule.Labels, node.Label) {
+		return fmt.Errorf(
+			"decision '%s': classifier condition %q requires a declared label",
+			decisionName,
+			node.Name,
+		)
+	}
+	if node.Predicate == nil {
+		return fmt.Errorf(
+			"decision '%s': classifier condition %q requires a score predicate",
+			decisionName,
+			node.Name,
+		)
+	}
+	if rule.Type == "local" {
+		return validateLocalClassifierDecisionPredicate(decisionName, node)
+	}
+	return nil
+}
+
+func validateLocalClassifierDecisionPredicate(
+	decisionName string,
+	node *RuleNode,
+) error {
+	predicate := node.Predicate
+	if predicate.GTE == nil || *predicate.GTE < 0.5 ||
+		predicate.GT != nil || predicate.LT != nil || predicate.LTE != nil {
+		return fmt.Errorf(
+			"decision '%s': local classifier condition %q supports only predicate.gte >= 0.5",
+			decisionName,
+			node.Name,
+		)
+	}
+	return nil
+}
+
+func validateDecisionLeafPredicate(decisionName string, node *RuleNode) error {
+	if node.Predicate == nil {
+		return nil
+	}
+	if structurePredicateComparatorCount(node.Predicate) == 0 {
+		return fmt.Errorf(
+			"decision '%s': condition %s(%q) predicate must set at least one comparator",
+			decisionName,
+			node.Type,
+			node.Name,
+		)
+	}
+	if node.Predicate.GT != nil && node.Predicate.GTE != nil {
+		return fmt.Errorf(
+			"decision '%s': condition %s(%q) predicate cannot set both gt and gte",
+			decisionName,
+			node.Type,
+			node.Name,
+		)
+	}
+	if node.Predicate.LT != nil && node.Predicate.LTE != nil {
+		return fmt.Errorf(
+			"decision '%s': condition %s(%q) predicate cannot set both lt and lte",
+			decisionName,
+			node.Type,
+			node.Name,
+		)
+	}
+	return nil
+}
+
+func classifierSignalRuleByName(
+	rules []ClassifierSignalRule,
+	name string,
+) *ClassifierSignalRule {
+	for i := range rules {
+		if rules[i].Name == name {
+			return &rules[i]
+		}
+	}
+	return nil
+}
+
+func stringSliceContains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func validateDecisionAnnotations(decision Decision) error {
+	if len(decision.Annotations) == 0 {
+		return nil
+	}
+	if len(decision.Annotations) > 32 {
+		return fmt.Errorf("decision '%s': annotations cannot contain more than 32 keys", decision.Name)
+	}
+	encoded, err := json.Marshal(decision.Annotations)
+	if err != nil {
+		return fmt.Errorf("decision '%s': annotations must be JSON-compatible: %w", decision.Name, err)
+	}
+	if len(encoded) > 4096 {
+		return fmt.Errorf("decision '%s': annotations cannot exceed 4096 encoded bytes", decision.Name)
 	}
 	return nil
 }
@@ -336,6 +509,7 @@ func configuredAlgorithmBlocks(algorithm *AlgorithmConfig) []string {
 	addBlock("gmtrouter", algorithm.GMTRouter != nil)
 	addBlock("latency_aware", algorithm.LatencyAware != nil)
 	addBlock("multi_factor", algorithm.MultiFactor != nil)
+	addBlock("prompt", algorithm.Prompt != nil)
 	addBlock("session_aware", algorithm.SessionAware != nil)
 	return configuredBlocks
 }
@@ -352,6 +526,7 @@ func expectedAlgorithmBlock(normalizedType string) (string, bool) {
 		"hybrid":        "hybrid",
 		"latency_aware": "latency_aware",
 		"multi_factor":  "multi_factor",
+		"prompt":        "prompt",
 	}
 	expectedBlock, ok := expectedBlockByType[normalizedType]
 	return expectedBlock, ok
@@ -381,6 +556,62 @@ func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRe
 		if err := ValidateWorkflowsAlgorithmConfig(algorithm.Workflows); err != nil {
 			return fmt.Errorf("decision '%s', algorithm.workflows: %w", decisionName, err)
 		}
+	case "prompt":
+		return validatePromptAlgorithmConfig(decisionName, modelRefs, algorithm)
+	}
+	return nil
+}
+
+func validatePromptAlgorithmConfig(
+	decisionName string,
+	modelRefs []ModelRef,
+	algorithm *AlgorithmConfig,
+) error {
+	if algorithm.Prompt == nil {
+		return fmt.Errorf("decision '%s': algorithm.type=prompt requires algorithm.prompt configuration", decisionName)
+	}
+	if len(modelRefs) < 2 {
+		return fmt.Errorf("decision '%s': algorithm.type=prompt requires at least two modelRefs", decisionName)
+	}
+	if strings.TrimSpace(algorithm.Prompt.Model) == "" {
+		return fmt.Errorf("decision '%s', algorithm.prompt: model is required", decisionName)
+	}
+	if strings.TrimSpace(algorithm.Prompt.Instructions) == "" {
+		return fmt.Errorf("decision '%s', algorithm.prompt: instructions are required", decisionName)
+	}
+	if algorithm.Prompt.TimeoutSeconds < 0 {
+		return fmt.Errorf("decision '%s', algorithm.prompt: timeout_seconds cannot be negative", decisionName)
+	}
+	if algorithm.OnError != "" && algorithm.OnError != "fallback" {
+		return fmt.Errorf("decision '%s': algorithm.type=prompt on_error must be fallback", decisionName)
+	}
+	return nil
+}
+
+func validateDecisionPromptModel(cfg *RouterConfig, decision Decision) error {
+	if decision.Algorithm == nil || decision.Algorithm.Prompt == nil {
+		return nil
+	}
+	if !cfg.Looper.IsEnabled() {
+		return fmt.Errorf(
+			"decision '%s': algorithm.type=prompt requires global.integrations.looper.endpoint",
+			decision.Name,
+		)
+	}
+	model := strings.TrimSpace(decision.Algorithm.Prompt.Model)
+	if _, ok := cfg.ModelConfig[model]; !ok {
+		return fmt.Errorf(
+			"decision '%s', algorithm.prompt.model %q is not declared in routing.modelCards",
+			decision.Name,
+			model,
+		)
+	}
+	if cfg.IsAutoModelName(model) || cfg.IsEntrypointModelName(model) {
+		return fmt.Errorf(
+			"decision '%s', algorithm.prompt.model %q must be a concrete provider model",
+			decision.Name,
+			model,
+		)
 	}
 	return nil
 }

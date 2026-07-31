@@ -303,6 +303,8 @@ func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 		KB:           ctx.VSRMatchedKB,
 		Conversation: ctx.VSRMatchedConversation,
 		Event:        ctx.VSRMatchedEvent,
+		Metadata:     ctx.VSRMatchedMetadata,
+		Classifier:   ctx.VSRMatchedClassifier,
 	}
 }
 

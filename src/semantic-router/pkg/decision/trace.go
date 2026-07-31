@@ -14,6 +14,7 @@ type TraceNode struct {
 	NodeType   string       `json:"node_type"`             // "leaf", "AND", "OR", "NOT"
 	SignalType string       `json:"signal_type,omitempty"` // populated for leaf nodes
 	SignalName string       `json:"signal_name,omitempty"` // populated for leaf nodes
+	Label      string       `json:"label,omitempty"`       // optional classifier label
 	Matched    bool         `json:"matched"`
 	Confidence float64      `json:"confidence"`
 	Children   []*TraceNode `json:"children,omitempty"`
@@ -86,11 +87,12 @@ func (e *DecisionEngine) evalNodeWithTrace(
 	signals *SignalMatches,
 ) (matched bool, confidence float64, matchedRules []string, trace *TraceNode) {
 	if node.IsLeaf() {
-		m, c, r := e.evalLeaf(node.Type, node.Name, signals)
+		m, c, r := e.evalLeaf(node, signals)
 		return m, c, r, &TraceNode{
 			NodeType:   "leaf",
 			SignalType: node.Type,
 			SignalName: node.Name,
+			Label:      node.Label,
 			Matched:    m,
 			Confidence: c,
 		}

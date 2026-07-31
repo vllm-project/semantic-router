@@ -30,6 +30,8 @@ type Signal struct {
 	KB           []string `json:"kb,omitempty"`
 	Conversation []string `json:"conversation,omitempty"`
 	Event        []string `json:"event,omitempty"`
+	Metadata     []string `json:"metadata,omitempty"`
+	Classifier   []string `json:"classifier,omitempty"`
 }
 
 // UsageCost captures token usage and pricing-derived cost details for a record.
@@ -104,26 +106,29 @@ type ToolTraceStep struct {
 // and memory outcome in a stable replay-facing shape. Detailed per-candidate
 // learning diagnostics live in the typed Learning block.
 type RouteDiagnostics struct {
-	Decision             string `json:"decision,omitempty"`
-	DecisionTier         int    `json:"decision_tier,omitempty"`
-	DecisionPriority     int    `json:"decision_priority,omitempty"`
-	SelectionMethod      string `json:"selection_method,omitempty"`
-	OriginalModel        string `json:"original_model,omitempty"`
-	ProposalModel        string `json:"proposal_model,omitempty"`
-	PreviousModel        string `json:"previous_model,omitempty"`
-	SelectedModel        string `json:"selected_model,omitempty"`
-	SessionPolicyApplied bool   `json:"session_policy_applied,omitempty"`
-	SessionAction        string `json:"session_action,omitempty"`
-	SessionPhase         string `json:"session_phase,omitempty"`
-	SessionReason        string `json:"session_reason,omitempty"`
-	HardLockReason       string `json:"hard_lock_reason,omitempty"`
-	DecisionReason       string `json:"decision_reason,omitempty"`
-	MemoryBackend        string `json:"memory_backend,omitempty"`
-	MemoryStatus         string `json:"memory_status,omitempty"`
-	MemoryReason         string `json:"memory_reason,omitempty"`
-	MemoryFallbackReason string `json:"memory_fallback_reason,omitempty"`
-	MemoryFailOpen       bool   `json:"memory_fail_open,omitempty"`
-	MemoryResultCount    int    `json:"memory_result_count,omitempty"`
+	Decision             string                 `json:"decision,omitempty"`
+	DecisionTier         int                    `json:"decision_tier,omitempty"`
+	DecisionPriority     int                    `json:"decision_priority,omitempty"`
+	SelectionMethod      string                 `json:"selection_method,omitempty"`
+	SelectionReasoning   string                 `json:"selection_reasoning,omitempty"`
+	OriginalModel        string                 `json:"original_model,omitempty"`
+	ProposalModel        string                 `json:"proposal_model,omitempty"`
+	PreviousModel        string                 `json:"previous_model,omitempty"`
+	SelectedModel        string                 `json:"selected_model,omitempty"`
+	SessionPolicyApplied bool                   `json:"session_policy_applied,omitempty"`
+	SessionAction        string                 `json:"session_action,omitempty"`
+	SessionPhase         string                 `json:"session_phase,omitempty"`
+	SessionReason        string                 `json:"session_reason,omitempty"`
+	HardLockReason       string                 `json:"hard_lock_reason,omitempty"`
+	DecisionReason       string                 `json:"decision_reason,omitempty"`
+	MemoryBackend        string                 `json:"memory_backend,omitempty"`
+	MemoryStatus         string                 `json:"memory_status,omitempty"`
+	MemoryReason         string                 `json:"memory_reason,omitempty"`
+	MemoryFallbackReason string                 `json:"memory_fallback_reason,omitempty"`
+	MemoryFailOpen       bool                   `json:"memory_fail_open,omitempty"`
+	MemoryResultCount    int                    `json:"memory_result_count,omitempty"`
+	Annotations          map[string]interface{} `json:"annotations,omitempty"`
+	SignalErrors         map[string]string      `json:"signal_errors,omitempty"`
 }
 
 // HallucinationSpan is a single unsupported span with its NLI explanation,
@@ -397,6 +402,9 @@ func cloneSignal(signal Signal) Signal {
 		PII:          cloneStringSlice(signal.PII),
 		KB:           cloneStringSlice(signal.KB),
 		Conversation: cloneStringSlice(signal.Conversation),
+		Event:        cloneStringSlice(signal.Event),
+		Metadata:     cloneStringSlice(signal.Metadata),
+		Classifier:   cloneStringSlice(signal.Classifier),
 	}
 }
 
@@ -467,6 +475,8 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 		return nil
 	}
 	cloned := *value
+	cloned.Annotations = cloneInterfaceMap(value.Annotations)
+	cloned.SignalErrors = cloneStringMap(value.SignalErrors)
 	return &cloned
 }
 

@@ -87,9 +87,13 @@ type SignalMatches struct {
 	KBRules           []string // KB signal names matched from global.model_catalog.kbs bindings
 	ConversationRules []string // Conversation-shape signal names matched
 	EventRules        []string // event rule names (event type, severity, temporal, action codes)
+	MetadataRules     []string // untrusted request metadata rule names matched
+	ClassifierRules   []string // generic classifier label names matched
 	ProjectionRules   []string // Derived routing outputs from routing.projections.mappings
 
 	SignalConfidences map[string]float64 // "signalType:ruleName" → real score (0.0-1.0), e.g. {"embedding:ai": 0.88}. Defaults to 1.0 if missing
+	SignalValues      map[string]float64 // raw numeric values exposed by signal evaluators
+	SignalErrors      map[string]string  // signal evaluation errors keyed by "type:name"
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -182,7 +186,7 @@ func (e *DecisionEngine) evalNode(
 	signals *SignalMatches,
 ) (matched bool, confidence float64, matchedRules []string) {
 	if node.IsLeaf() {
-		return e.evalLeaf(node.Type, node.Name, signals)
+		return e.evalLeaf(node, signals)
 	}
 
 	switch strings.ToUpper(node.Operator) {
@@ -197,21 +201,93 @@ func (e *DecisionEngine) evalNode(
 
 // evalLeaf evaluates a single signal condition (leaf node).
 func (e *DecisionEngine) evalLeaf(
-	typ, name string,
+	node config.RuleNode,
 	signals *SignalMatches,
 ) (matched bool, confidence float64, matchedRules []string) {
-	normalizedType := strings.ToLower(strings.TrimSpace(typ))
+	normalizedType := strings.ToLower(strings.TrimSpace(node.Type))
 
-	matched, supported := e.matchesSignalType(normalizedType, name, signals)
+	matched, supported := e.matchesSignalType(normalizedType, node.Name, signals)
 	if !supported {
 		return false, 0, nil
+	}
+	if node.Predicate != nil {
+		return evaluatePredicateLeaf(node, normalizedType, signals)
 	}
 	if !matched {
 		return false, 0, nil
 	}
 
-	confidence = signalConfidence(signals.SignalConfidences, normalizedType, name)
-	return true, confidence, []string{fmt.Sprintf("%s:%s", typ, name)}
+	confidence = signalConfidence(signals.SignalConfidences, normalizedType, node.Name)
+	return true, confidence, []string{formatMatchedRule(node)}
+}
+
+func evaluatePredicateLeaf(
+	node config.RuleNode,
+	normalizedType string,
+	signals *SignalMatches,
+) (bool, float64, []string) {
+	value, available := signalPredicateValue(signals, normalizedType, node.Name, node.Label)
+	if available {
+		if numericPredicateMatches(value, node.Predicate) {
+			return true, value, []string{formatMatchedRule(node)}
+		}
+		return false, value, nil
+	}
+	errorKey := fmt.Sprintf("%s:%s", normalizedType, node.Name)
+	_, failed := signals.SignalErrors[errorKey]
+	if failed && strings.EqualFold(strings.TrimSpace(node.OnError), "match") {
+		return true, 1.0, []string{formatMatchedRule(node)}
+	}
+	return false, 0, nil
+}
+
+func formatMatchedRule(node config.RuleNode) string {
+	rule := fmt.Sprintf("%s:%s", node.Type, node.Name)
+	if node.Label != "" {
+		rule += ":" + node.Label
+	}
+	return rule
+}
+
+func signalPredicateValue(
+	signals *SignalMatches,
+	signalType string,
+	name string,
+	label string,
+) (float64, bool) {
+	key := fmt.Sprintf("%s:%s", signalType, name)
+	if label != "" {
+		key += ":" + label
+	}
+	if signals.SignalValues != nil {
+		if value, ok := signals.SignalValues[key]; ok {
+			return value, true
+		}
+	}
+	if signals.SignalConfidences != nil {
+		value, ok := signals.SignalConfidences[key]
+		return value, ok
+	}
+	return 0, false
+}
+
+func numericPredicateMatches(value float64, predicate *config.NumericPredicate) bool {
+	if predicate == nil {
+		return true
+	}
+	if predicate.GT != nil && value <= *predicate.GT {
+		return false
+	}
+	if predicate.GTE != nil && value < *predicate.GTE {
+		return false
+	}
+	if predicate.LT != nil && value >= *predicate.LT {
+		return false
+	}
+	if predicate.LTE != nil && value > *predicate.LTE {
+		return false
+	}
+	return true
 }
 
 func (e *DecisionEngine) matchesSignalType(
@@ -221,6 +297,11 @@ func (e *DecisionEngine) matchesSignalType(
 ) (matched bool, supported bool) {
 	if normalizedType == "domain" {
 		return e.matchesDomainCondition(name, signals.DomainRules), true
+	}
+	if normalizedType == config.SignalTypeClassifier {
+		// Classifier conditions are predicate-only and configuration validation
+		// guarantees that the named classifier exists.
+		return false, true
 	}
 
 	ruleSets := map[string][]string{
@@ -241,6 +322,7 @@ func (e *DecisionEngine) matchesSignalType(
 		"kb":            signals.KBRules,
 		"conversation":  signals.ConversationRules,
 		"event":         signals.EventRules,
+		"metadata":      signals.MetadataRules,
 		"projection":    signals.ProjectionRules,
 	}
 
@@ -257,7 +339,7 @@ func signalConfidence(confidences map[string]float64, signalType string, name st
 	}
 
 	signalKey := fmt.Sprintf("%s:%s", signalType, name)
-	if score, ok := confidences[signalKey]; ok && score > 0 {
+	if score, ok := confidences[signalKey]; ok {
 		return score
 	}
 	return 1.0
