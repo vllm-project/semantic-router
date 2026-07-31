@@ -45,6 +45,11 @@ type routerComponents struct {
 	credentialResolver   *authz.CredentialResolver
 	rateLimiter          *ratelimit.RateLimitResolver
 	lookupTableCancel    func()
+	// generation owns every closeable resource above, registered in
+	// construction order. It doubles as the rollback stack while
+	// buildRouterComponents runs and as the router's teardown driver
+	// afterwards, so there is exactly one list of what a router owns.
+	generation *routerruntime.Generation
 }
 
 // NewOpenAIRouter creates a new OpenAI API router instance.
@@ -204,14 +209,34 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 
 	responseAPIFilter := createResponseAPIFilter(cfg)
 	replayRecorders, replayRecorder, replayStoreShared := createReplayRuntime(cfg)
+	gen.Defer(func() error {
+		return closeReplayRecorders(replayRecorder, replayRecorders, replayStoreShared)
+	})
+
 	var replayReaderForLookup store.Reader
 	if replayRecorder != nil {
 		replayReaderForLookup = replayRecorder.Reader()
 	}
 	recipeModelSelectors, modelSelector, lookupTable, lookupTableCancel := createModelSelectorRegistries(cfg, replayReaderForLookup)
+	gen.Defer(modelSelector.Close)
+	// Registered after the selector so the reverse teardown cancels the
+	// lookup table's auto-save/re-population goroutines first, before the
+	// selectors those goroutines read through are closed.
+	if lookupTableCancel != nil {
+		gen.Defer(func() error {
+			lookupTableCancel()
+			return nil
+		})
+	}
+
 	memoryStore, memoryExtractor := createMemoryRuntime(cfg)
+	if memoryStore != nil {
+		gen.Defer(memoryStore.Close)
+	}
+
 	credentialResolver := buildCredentialResolver(cfg)
 	rateLimiter := buildRateLimitResolver(cfg)
+	gen.Defer(rateLimiter.Close)
 
 	if credentialResolver != nil {
 		logging.ComponentEvent("extproc", "credential_resolver_initialized", map[string]interface{}{
@@ -244,6 +269,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		credentialResolver:   credentialResolver,
 		rateLimiter:          rateLimiter,
 		lookupTableCancel:    lookupTableCancel,
+		generation:           gen,
 	}, nil
 }
 
@@ -280,5 +306,6 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		CredentialResolver:    components.credentialResolver,
 		RateLimiter:           components.rateLimiter,
 		lookupTableCancel:     components.lookupTableCancel,
+		generation:            components.generation,
 	}
 }

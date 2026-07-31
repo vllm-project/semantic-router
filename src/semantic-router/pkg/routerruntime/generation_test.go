@@ -10,7 +10,6 @@ func TestGenerationCloseRunsClosersInReverseOrder(t *testing.T) {
 	var order []int
 	gen := NewGeneration()
 	for i := 0; i < 3; i++ {
-		i := i
 		gen.Defer(func() error {
 			order = append(order, i)
 			return nil
@@ -92,7 +91,6 @@ func TestGenerationFaultInjectionExactOnceReverseCleanupAtEachStep(t *testing.T)
 				if step == failAt {
 					break
 				}
-				step := step
 				gen.Defer(func() error {
 					closeOrder = append(closeOrder, step)
 					closeCounts[step]++

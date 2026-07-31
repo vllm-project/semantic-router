@@ -78,46 +78,80 @@ type OpenAIRouter struct {
 	routerLearningMu      sync.Mutex
 	routerLearningRuntime *routerLearningRuntime
 	lookupTableCancel     func()
+
+	// generation owns every closeable resource buildRouterComponents
+	// produced for this router, registered in construction order so Close
+	// tears them down in reverse. It is nil for routers assembled by hand
+	// (e.g. in tests), which Close falls back to closing field by field.
+	generation *routerruntime.Generation
+	closeOnce  sync.Once
+	closeErr   error
 }
 
-// Close releases every resource this router owns: the lookup table
-// auto-save/re-population goroutines, plus every closeable field
-// (cache, tools database, classifier, replay recorder(s), model selector,
-// memory store, rate limiter). It closes each field directly — rather than
-// going through a construction-time generation — so Close() behaves
-// correctly regardless of whether the router was assembled via
-// buildRouterComponents or constructed directly (e.g. in tests).
+// Close releases every resource this router owns. It is idempotent and safe
+// to call concurrently: only the first call runs the teardown, and every
+// caller observes the same error. Idempotence matters because a router can
+// be reached by more than one shutdown path — a config reload retiring the
+// lease it replaced, and process shutdown retiring whatever lease is
+// current — and the underlying resources (gRPC connections, MCP clients)
+// are not all safe to close twice.
 func (r *OpenAIRouter) Close() error {
 	if r == nil {
 		return nil
 	}
+	r.closeOnce.Do(func() {
+		r.closeErr = r.closeResources()
+	})
+	return r.closeErr
+}
+
+func (r *OpenAIRouter) closeResources() error {
+	if r.generation != nil {
+		// Built via buildRouterComponents, which registered a closer for
+		// every resource it created — including lookupTableCancel — so the
+		// generation is the single source of truth for what this router
+		// owns and the only thing Close has to drive.
+		return r.generation.Close()
+	}
+	return r.closeOwnedFields()
+}
+
+// closeOwnedFields closes the lookup table goroutines plus every closeable
+// field (cache, tools database, classifier, replay recorder(s), model
+// selector, memory store, rate limiter) directly. It is the fallback for
+// routers assembled by hand rather than by buildRouterComponents, which
+// registers the same set of resources on a Generation.
+//
+// Note the deliberate asymmetry in nil handling: a method value such as
+// r.ToolsDatabase.Close is non-nil even when the receiver is a nil pointer,
+// so pointer-typed fields rely on the nil-receiver guard inside their own
+// Close. Interface-typed fields (Cache, MemoryStore) must be nil-checked
+// here, because taking a method value off a nil interface panics.
+func (r *OpenAIRouter) closeOwnedFields() error {
 	if r.lookupTableCancel != nil {
 		r.lookupTableCancel()
 	}
 
 	var errs []error
-	closeIfNotNil := func(closer func() error) {
-		if closer == nil {
-			return
-		}
-		if err := closer(); err != nil {
+	collect := func(err error) {
+		if err != nil {
 			errs = append(errs, err)
 		}
 	}
 
 	if r.Cache != nil {
-		closeIfNotNil(r.Cache.Close)
+		collect(r.Cache.Close())
 	}
-	closeIfNotNil(r.ToolsDatabase.Close)
-	closeIfNotNil(r.Classifier.Close)
-	closeReplayRecorders(&errs, r.ReplayRecorder, r.ReplayRecorders, r.ReplayStoreShared)
-	closeIfNotNil(r.ModelSelector.Close)
+	collect(r.ToolsDatabase.Close())
+	collect(r.Classifier.Close())
+	collect(closeReplayRecorders(r.ReplayRecorder, r.ReplayRecorders, r.ReplayStoreShared))
+	collect(r.ModelSelector.Close())
 	if r.MemoryStore != nil {
-		closeIfNotNil(r.MemoryStore.Close)
+		collect(r.MemoryStore.Close())
 	}
-	closeIfNotNil(r.RateLimiter.Close)
+	collect(r.RateLimiter.Close())
 	if r.CompressionRecovery != nil {
-		closeIfNotNil(r.CompressionRecovery.Close)
+		collect(r.CompressionRecovery.Close())
 	}
 
 	return errors.Join(errs...)
@@ -133,32 +167,24 @@ func (r *OpenAIRouter) Close() error {
 // empty (e.g. a router assembled directly with only ReplayRecorder set,
 // as in tests), replayRecorder is closed as a fallback.
 func closeReplayRecorders(
-	errs *[]error,
 	replayRecorder *routerreplay.Recorder,
 	replayRecorders map[string]*routerreplay.Recorder,
 	replayStoreShared bool,
-) {
-	if replayStoreShared {
-		if replayRecorder != nil {
-			if err := replayRecorder.Close(); err != nil {
-				*errs = append(*errs, err)
-			}
+) error {
+	if replayStoreShared || len(replayRecorders) == 0 {
+		if replayRecorder == nil {
+			return nil
 		}
-		return
+		return replayRecorder.Close()
 	}
-	if len(replayRecorders) == 0 {
-		if replayRecorder != nil {
-			if err := replayRecorder.Close(); err != nil {
-				*errs = append(*errs, err)
-			}
-		}
-		return
-	}
+
+	var errs []error
 	for _, recorder := range replayRecorders {
 		if err := recorder.Close(); err != nil {
-			*errs = append(*errs, err)
+			errs = append(errs, err)
 		}
 	}
+	return errors.Join(errs...)
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls.

@@ -22,6 +22,7 @@ func (reloadMemoryStore) Store(_ context.Context, _ *memory.Memory) error { retu
 func (reloadMemoryStore) Retrieve(_ context.Context, _ memory.RetrieveOptions) ([]*memory.RetrieveResult, error) {
 	return nil, nil
 }
+
 func (reloadMemoryStore) Get(_ context.Context, _ string) (*memory.Memory, error)    { return nil, nil }
 func (reloadMemoryStore) Update(_ context.Context, _ string, _ *memory.Memory) error { return nil }
 func (reloadMemoryStore) List(_ context.Context, _ memory.ListOptions) (*memory.ListResult, error) {
@@ -33,35 +34,28 @@ func (reloadMemoryStore) IsEnabled() bool                                       
 func (reloadMemoryStore) CheckConnection(_ context.Context) error                     { return nil }
 func (reloadMemoryStore) Close() error                                                { return nil }
 
-// reloadRendezvousCache is a CacheBackend stub whose FindSimilar signals
-// entry on a channel and then blocks until released, so a test can land a
-// "request" goroutine inside the call before triggering a concurrent close.
+// reloadRendezvousCache is a CacheBackend stub whose LookupSimilarWithThreshold
+// signals entry on a channel and then blocks until released, so a test can
+// land a "request" goroutine inside the call before triggering a concurrent
+// close.
 type reloadRendezvousCache struct {
 	entered chan struct{}
 	release chan struct{}
 	closed  atomic.Bool
 }
 
-func (c *reloadRendezvousCache) IsEnabled() bool            { return true }
-func (c *reloadRendezvousCache) CheckConnection() error     { return nil }
-func (c *reloadRendezvousCache) LastSimilarity() float32    { return 0 }
-func (c *reloadRendezvousCache) GetStats() cache.CacheStats { return cache.CacheStats{} }
-func (c *reloadRendezvousCache) AddPendingRequest(_, _, _ string, _ []byte, _ int) error {
-	return nil
-}
-func (c *reloadRendezvousCache) UpdateWithResponse(_ string, _ []byte, _ int) error { return nil }
-func (c *reloadRendezvousCache) AddEntry(_, _, _ string, _, _ []byte, _ int) error  { return nil }
-func (c *reloadRendezvousCache) FindSimilarWithThreshold(_, _ string, _ float32) ([]byte, bool, error) {
-	return nil, false, nil
-}
+func (c *reloadRendezvousCache) IsEnabled() bool                                   { return true }
+func (c *reloadRendezvousCache) CheckConnection() error                            { return nil }
+func (c *reloadRendezvousCache) GetStats() cache.CacheStats                        { return cache.CacheStats{} }
+func (c *reloadRendezvousCache) AddEntry(_, _, _ string, _, _ []byte, _ int) error { return nil }
 
-func (c *reloadRendezvousCache) FindSimilar(_, _ string) ([]byte, bool, error) {
+func (c *reloadRendezvousCache) LookupSimilarWithThreshold(_, _ string, _ float32) (cache.LookupResult, error) {
 	close(c.entered)
 	<-c.release
 	if c.closed.Load() {
-		return nil, false, errors.New("cache closed while request was in flight")
+		return cache.LookupResult{}, errors.New("cache closed while request was in flight")
 	}
-	return nil, false, nil
+	return cache.LookupResult{}, nil
 }
 
 func (c *reloadRendezvousCache) Close() error {
@@ -101,7 +95,7 @@ func TestReloadDrainsInFlightRequestBeforeClosingOldRouterCache(t *testing.T) {
 	resultErr := make(chan error, 1)
 	go func() {
 		defer oldLease.release()
-		_, _, err := oldRouter.Cache.FindSimilar("model", "query")
+		_, err := oldRouter.Cache.LookupSimilarWithThreshold("model", "query", 0)
 		resultErr <- err
 	}()
 
@@ -146,6 +140,73 @@ func TestReloadDrainsInFlightRequestBeforeClosingOldRouterCache(t *testing.T) {
 	}
 	if !fakeCache.closed.Load() {
 		t.Fatal("Retire() did not close the old router's cache after the in-flight request finished")
+	}
+}
+
+// TestReloadPublishesRuntimeStateBeforeDrainingOldRouter asserts a reload
+// updates the control plane as soon as the new router starts serving,
+// instead of after the old router has drained. Swap makes the new router
+// live immediately, so publishing behind Retire — which blocks for up to
+// defaultRouterDrainTimeout — would leave the runtime registry describing
+// the old router while the data plane already runs the new one.
+func TestReloadPublishesRuntimeStateBeforeDrainingOldRouter(t *testing.T) {
+	restoreReloadSeams := stubReloadSeams(t)
+	defer restoreReloadSeams()
+
+	newRouter := &OpenAIRouter{MemoryStore: reloadMemoryStore{}}
+	ensureReloadConfigModels = func(*config.RouterConfig) error { return nil }
+	prepareReloadRuntime = func(*config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
+		return modelruntime.EmbeddingRuntimeState{}, nil
+	}
+	buildReloadRouter = func(*config.RouterConfig) (*OpenAIRouter, error) { return newRouter, nil }
+	warmupReloadRouter = func(*OpenAIRouter, modelruntime.EmbeddingRuntimeState) error { return nil }
+
+	registry := routerruntime.NewRegistry(&config.RouterConfig{})
+	server := &Server{
+		service: NewRouterService(&OpenAIRouter{}),
+		runtime: registry,
+	}
+
+	// Hold a lease on the old router so the reload's Retire has to block on
+	// the drain, making the publish-vs-drain ordering observable.
+	oldLease := server.service.current.Load()
+	if !oldLease.acquire() {
+		t.Fatal("acquire() = false, want true before any reload")
+	}
+
+	reloadDone := make(chan error, 1)
+	go func() {
+		reloadDone <- server.reloadRouterFromConfig("file", "config.yaml", &config.RouterConfig{})
+	}()
+
+	deadline := time.After(5 * time.Second)
+	for registry.MemoryStore() == nil {
+		select {
+		case err := <-reloadDone:
+			t.Fatalf("reload returned before publishing runtime state (error = %v)", err)
+		case <-deadline:
+			t.Fatal("reload never published runtime state; it is blocked draining the old router first")
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+
+	// The publish landed while the reload was still draining — which is the
+	// whole point, so confirm it really is still blocked.
+	select {
+	case err := <-reloadDone:
+		t.Fatalf("reload finished without draining the held lease (error = %v)", err)
+	default:
+	}
+
+	oldLease.release()
+	select {
+	case err := <-reloadDone:
+		if err != nil {
+			t.Fatalf("reloadRouterFromConfig() error = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("reload did not finish after the in-flight lease released")
 	}
 }
 

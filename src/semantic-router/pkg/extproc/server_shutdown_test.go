@@ -50,6 +50,8 @@ func TestServerStopRunsShutdownHooksAfterGracefulDrainBeforeProcessExits(t *test
 		t.Fatalf("failed to allocate a free port: %v", err)
 	}
 
+	// #nosec G204 -- os.Args[0] is this test binary, re-executed with a fixed
+	// -test.run filter; there is no external input in either argument.
 	cmd := exec.Command(os.Args[0], "-test.run=^TestServerStopRunsShutdownHooksAfterGracefulDrainBeforeProcessExits$")
 	cmd.Env = append(os.Environ(),
 		sigtermDrainChildEnv+"=1",
@@ -59,8 +61,8 @@ func TestServerStopRunsShutdownHooksAfterGracefulDrainBeforeProcessExits(t *test
 	if err != nil {
 		t.Fatalf("StdoutPipe() error = %v", err)
 	}
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("Start() error = %v", err)
+	if startErr := cmd.Start(); startErr != nil {
+		t.Fatalf("Start() error = %v", startErr)
 	}
 
 	// Drain stdout continuously for the life of the test instead of reading
@@ -87,8 +89,8 @@ func TestServerStopRunsShutdownHooksAfterGracefulDrainBeforeProcessExits(t *test
 	}
 
 	sigSentAt := time.Now()
-	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		t.Fatalf("Signal(SIGTERM) error = %v", err)
+	if signalErr := cmd.Process.Signal(syscall.SIGTERM); signalErr != nil {
+		t.Fatalf("Signal(SIGTERM) error = %v", signalErr)
 	}
 
 	drainLine, err := readLineWithTimeout(lines, sigtermDrainSlowHookDur+10*time.Second)

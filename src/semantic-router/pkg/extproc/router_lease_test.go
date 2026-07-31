@@ -3,6 +3,9 @@ package extproc
 import (
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestRouterLeaseRetireWaitsForInFlightAcquireToRelease(t *testing.T) {
@@ -90,6 +93,56 @@ func TestRouterLeaseConcurrentAcquireDuringRetireNeverRacesAfterWait(t *testing.
 			// assertion that no deadlock or double-release occurred.
 			continue
 		}
+	}
+}
+
+// TestRouterServiceProcessRejectsInsteadOfSpinningAfterShutdown covers the
+// one case where acquire can never succeed: Shutdown retires the current
+// lease without installing a replacement, so the retired lease stays
+// installed forever. Retrying against it would be an unbounded busy loop
+// burning a core; Process must reject the call instead.
+func TestRouterServiceProcessRejectsInsteadOfSpinningAfterShutdown(t *testing.T) {
+	rs := NewRouterService(&OpenAIRouter{})
+	if err := rs.Shutdown(time.Second); err != nil {
+		t.Fatalf("Shutdown() error = %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := rs.acquireCurrentLease()
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if status.Code(err) != codes.Unavailable {
+			t.Fatalf("acquireCurrentLease() error = %v, want an Unavailable status", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("acquireCurrentLease() never returned after Shutdown — it is spinning on a permanently retired lease")
+	}
+}
+
+// TestRouterServiceProcessRetriesAcrossReload asserts the other side of that
+// bound: when a reload has installed a replacement, a call that loses the
+// race against retirement is served by the new lease rather than rejected.
+func TestRouterServiceProcessRetriesAcrossReload(t *testing.T) {
+	oldRouter := &OpenAIRouter{}
+	rs := NewRouterService(oldRouter)
+
+	staleLease := rs.current.Load()
+	newRouter := &OpenAIRouter{}
+	rs.Swap(newRouter)
+	staleLease.retire(time.Second) // the reload's Retire, minus the Close
+
+	lease, err := rs.acquireCurrentLease()
+	if err != nil {
+		t.Fatalf("acquireCurrentLease() error = %v, want it to fall through to the new lease", err)
+	}
+	defer lease.release()
+
+	if lease.router != newRouter {
+		t.Fatal("acquireCurrentLease() returned the retired lease instead of the reload's replacement")
 	}
 }
 

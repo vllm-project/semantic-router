@@ -427,14 +427,10 @@ func TestClassifierCloseClosesMCPCategoryClient(t *testing.T) {
 		t.Fatalf("newClassifierWithOptions() error = %v", err)
 	}
 
-	closeable, ok := interface{}(classifier).(closer)
-	if !ok {
-		t.Fatal("Classifier does not implement Close() error; the MCP category client leaks on every router reload")
-	}
-	if err := closeable.Close(); err != nil {
+	if err := classifier.Close(); err != nil {
 		t.Fatalf("Classifier.Close() error = %v", err)
 	}
 	if mockClient.connected {
-		t.Fatal("Classifier.Close() did not close the MCP category classifier's client")
+		t.Fatal("Classifier.Close() did not close the MCP category classifier's client; it leaks on every router reload")
 	}
 }
