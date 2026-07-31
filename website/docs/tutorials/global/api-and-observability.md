@@ -30,6 +30,22 @@ Use these blocks when:
 
 ## Configuration
 
+### Router config validation
+
+The management API validates and normalizes a candidate config without writing
+it:
+
+```http
+POST /config/router/validate
+Content-Type: application/json
+
+{"yaml":"version: v0.3\n..."}
+```
+
+Successful responses include `valid: true` and the normalized canonical YAML.
+Validation uses the same parser and semantic checks as `PATCH /config/router`
+and `PUT /config/router`.
+
 ### API
 
 ```yaml

@@ -231,6 +231,12 @@ func apiNonRecipeConfigRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleConfigGet,
 		),
 		managedRoute(
+			EndpointMetadata{Path: "/config/router/validate", Method: "POST", Description: "Validate and normalize a router config without writing it"},
+			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityConfig},
+			(*ClassificationAPIServer).handleConfigValidate,
+			jsonBody(),
+		),
+		managedRoute(
 			EndpointMetadata{Path: "/config/router", Method: "PATCH", Description: "Merge a router config update (validates, backs up, writes, triggers hot-reload)"},
 			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionConfigPatch},
 			(*ClassificationAPIServer).handleConfigPatch,
