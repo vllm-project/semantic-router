@@ -556,6 +556,8 @@ class Condition(BaseModel):
             raise ValueError("leaf condition node cannot define child conditions")
         if self.label is not None and self.type != "classifier":
             raise ValueError("label is only valid for classifier conditions")
+        if self.type == "classifier" and (self.label is None or self.predicate is None):
+            raise ValueError("classifier conditions require label and predicate")
         return self
 
 

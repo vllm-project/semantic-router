@@ -85,12 +85,20 @@ class TestPromptSelectionConfig:
         assert config.prompt.timeout_seconds is None
         assert config.on_error == "fallback"
 
-    def test_timeout_must_be_positive(self):
+    def test_zero_timeout_uses_runtime_default(self):
+        prompt = PromptSelectionConfig(
+            model="router-small",
+            instructions="Choose.",
+            timeout_seconds=0,
+        )
+        assert prompt.timeout_seconds == 0
+
+    def test_timeout_cannot_be_negative(self):
         with pytest.raises(PydanticValidationError):
             PromptSelectionConfig(
                 model="router-small",
                 instructions="Choose.",
-                timeout_seconds=0,
+                timeout_seconds=-1,
             )
 
     def test_prompt_block_is_required(self):

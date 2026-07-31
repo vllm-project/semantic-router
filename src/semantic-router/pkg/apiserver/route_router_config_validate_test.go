@@ -22,3 +22,15 @@ func TestHandleConfigValidate(t *testing.T) {
 		t.Fatalf("body = %s", response.Body.String())
 	}
 }
+
+func TestConfigValidateRouteRequiresReadPermission(t *testing.T) {
+	for _, route := range apiConfigRoutes() {
+		if route.Path == "/config/router/validate" && route.Method == "POST" {
+			if route.Permission != PermConfigRead {
+				t.Fatalf("permission = %q, want %q", route.Permission, PermConfigRead)
+			}
+			return
+		}
+	}
+	t.Fatal("config validation route not found")
+}

@@ -232,7 +232,7 @@ func apiNonRecipeConfigRoutes() []apiRoute {
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/config/router/validate", Method: "POST", Description: "Validate and normalize a router config without writing it"},
-			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityConfig},
+			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleConfigValidate,
 			jsonBody(),
 		),

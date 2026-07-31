@@ -75,6 +75,11 @@ def test_classifier_condition_score_shape():
     assert condition.predicate.gte == 0.5
 
 
+def test_classifier_condition_requires_label_and_predicate():
+    with pytest.raises(ValidationError):
+        Condition(type="classifier", name="risk")
+
+
 def test_non_classifier_condition_rejects_label():
     with pytest.raises(ValidationError):
         Condition(type="embedding", name="risk", label="RISKY")

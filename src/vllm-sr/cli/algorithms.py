@@ -353,7 +353,7 @@ class PromptSelectionConfig(BaseModel):
 
     model: str
     instructions: str
-    timeout_seconds: int | None = Field(default=None, ge=1)
+    timeout_seconds: int | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def validate_required_text(self):
