@@ -304,33 +304,79 @@ func (e *DecisionEngine) matchesSignalType(
 		return false, true
 	}
 
-	ruleSets := map[string][]string{
-		"keyword":       signals.KeywordRules,
-		"embedding":     signals.EmbeddingRules,
-		"fact_check":    signals.FactCheckRules,
-		"user_feedback": signals.UserFeedbackRules,
-		"reask":         signals.ReaskRules,
-		"preference":    signals.PreferenceRules,
-		"language":      signals.LanguageRules,
-		"context":       signals.ContextRules,
-		"structure":     signals.StructureRules,
-		"complexity":    signals.ComplexityRules,
-		"modality":      signals.ModalityRules,
-		"authz":         signals.AuthzRules,
-		"jailbreak":     signals.JailbreakRules,
-		"pii":           signals.PIIRules,
-		"kb":            signals.KBRules,
-		"conversation":  signals.ConversationRules,
-		"event":         signals.EventRules,
-		"metadata":      signals.MetadataRules,
-		"projection":    signals.ProjectionRules,
-	}
-
-	rules, ok := ruleSets[normalizedType]
+	rules, ok := resolveSignalRules(normalizedType, signals)
 	if !ok {
 		return false, false
 	}
 	return slices.Contains(rules, name), true
+}
+
+func resolveSignalRules(
+	signalType string,
+	signals *SignalMatches,
+) ([]string, bool) {
+	if rules, ok := resolvePrimarySignalRules(signalType, signals); ok {
+		return rules, true
+	}
+	return resolvePolicySignalRules(signalType, signals)
+}
+
+func resolvePrimarySignalRules(
+	signalType string,
+	signals *SignalMatches,
+) ([]string, bool) {
+	switch signalType {
+	case config.SignalTypeKeyword:
+		return signals.KeywordRules, true
+	case config.SignalTypeEmbedding:
+		return signals.EmbeddingRules, true
+	case config.SignalTypeFactCheck:
+		return signals.FactCheckRules, true
+	case config.SignalTypeUserFeedback:
+		return signals.UserFeedbackRules, true
+	case config.SignalTypeReask:
+		return signals.ReaskRules, true
+	case config.SignalTypePreference:
+		return signals.PreferenceRules, true
+	case config.SignalTypeLanguage:
+		return signals.LanguageRules, true
+	case config.SignalTypeContext:
+		return signals.ContextRules, true
+	case config.SignalTypeStructure:
+		return signals.StructureRules, true
+	case config.SignalTypeComplexity:
+		return signals.ComplexityRules, true
+	default:
+		return nil, false
+	}
+}
+
+func resolvePolicySignalRules(
+	signalType string,
+	signals *SignalMatches,
+) ([]string, bool) {
+	switch signalType {
+	case config.SignalTypeModality:
+		return signals.ModalityRules, true
+	case config.SignalTypeAuthz:
+		return signals.AuthzRules, true
+	case config.SignalTypeJailbreak:
+		return signals.JailbreakRules, true
+	case config.SignalTypePII:
+		return signals.PIIRules, true
+	case config.SignalTypeKB:
+		return signals.KBRules, true
+	case config.SignalTypeConversation:
+		return signals.ConversationRules, true
+	case config.SignalTypeEvent:
+		return signals.EventRules, true
+	case config.SignalTypeMetadata:
+		return signals.MetadataRules, true
+	case config.SignalTypeProjection:
+		return signals.ProjectionRules, true
+	default:
+		return nil, false
+	}
 }
 
 func signalConfidence(confidences map[string]float64, signalType string, name string) float64 {
