@@ -1,0 +1,14 @@
+[
+  {
+    "name": "multi_step_reasoning",
+    "description": "A synthesis-heavy, multi-step reasoning prompt should be classified by the trained model and emit a rule:difficulty signal",
+    "query": "A train leaves city A at 60 mph and another leaves city B, 300 miles away, at 40 mph toward each other. Derive the general formula for their meeting time, then explain how the answer changes if the second train accelerates uniformly, and discuss the assumptions.",
+    "expected_rule": "needs_reasoning"
+  },
+  {
+    "name": "simple_lookup",
+    "description": "A trivial factual prompt should still emit a rule:difficulty signal (any valid difficulty)",
+    "query": "What is the capital of France?",
+    "expected_rule": "needs_reasoning"
+  }
+]

@@ -274,12 +274,37 @@ func HasImageCandidatesInRules(rules []ComplexityRule) bool {
 }
 
 type ComplexityRule struct {
-	Name        string               `yaml:"name"`
+	Name string `yaml:"name"`
+	// Method selects how the rule decides difficulty. "" or "embedding" uses the
+	// hard/easy prototype-bank similarity path; "model" uses the trained complexity
+	// classifier configured under global.model_catalog.modules.complexity.classifier.
+	Method      string               `yaml:"method,omitempty"`
 	Threshold   float32              `yaml:"threshold"`
 	Hard        ComplexityCandidates `yaml:"hard"`
 	Easy        ComplexityCandidates `yaml:"easy"`
 	Description string               `yaml:"description,omitempty"`
 	Composer    *RuleCombination     `yaml:"composer,omitempty"`
+}
+
+// Complexity rule method values.
+const (
+	ComplexityMethodEmbedding = "embedding"
+	ComplexityMethodModel     = "model"
+)
+
+// UsesModel reports whether the rule is decided by the trained complexity classifier.
+func (r ComplexityRule) UsesModel() bool {
+	return r.Method == ComplexityMethodModel
+}
+
+// HasModelComplexityRule reports whether any rule opts into the trained classifier.
+func HasModelComplexityRule(rules []ComplexityRule) bool {
+	for _, r := range rules {
+		if r.UsesModel() {
+			return true
+		}
+	}
+	return false
 }
 
 type Category struct {

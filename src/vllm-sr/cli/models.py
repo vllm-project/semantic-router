@@ -308,7 +308,12 @@ class EmbeddingEndpointConfig(BaseModel):
 
 
 class ComplexityRule(BaseModel):
-    """Complexity-based signal configuration using embedding similarity.
+    """Complexity-based signal configuration.
+
+    Supports two methods:
+    - "embedding" (default): decided by the hard/easy prototype-similarity banks.
+    - "model": decided by the trained complexity classifier configured under
+      global.model_catalog.modules.complexity.classifier; hard/easy are not used.
 
     The composer field allows filtering based on other signals (e.g., only apply
     code_complexity when domain is "computer science"). This is evaluated after
@@ -316,11 +321,29 @@ class ComplexityRule(BaseModel):
     """
 
     name: str
+    method: Optional[str] = None  # "embedding" (default) or "model"
     threshold: float = 0.1
-    hard: ComplexityCandidates
-    easy: ComplexityCandidates
+    # Required for embedding mode; omitted in model mode. Enforced by the
+    # validator below rather than the field default so method: model configs
+    # are accepted.
+    hard: Optional[ComplexityCandidates] = None
+    easy: Optional[ComplexityCandidates] = None
     description: Optional[str] = None
     composer: Optional["Rules"] = None  # Forward reference, defined below
+
+    @model_validator(mode="after")
+    def validate_method_shape(self):
+        if self.method not in (None, "", "embedding", "model"):
+            raise ValueError(
+                "complexity rule method must be 'embedding' (default) or 'model', "
+                f"got {self.method!r}"
+            )
+        if self.method != "model" and (self.hard is None or self.easy is None):
+            raise ValueError(
+                "embedding-mode complexity rule requires both 'hard' and 'easy' "
+                "candidate banks (set method: model to use the trained classifier instead)"
+            )
+        return self
 
 
 class JailbreakRule(BaseModel):

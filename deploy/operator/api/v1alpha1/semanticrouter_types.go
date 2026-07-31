@@ -292,6 +292,10 @@ type ConfigSpec struct {
 	// +optional
 	ComplexityRules []ComplexityRulesConfig `json:"complexity_rules,omitempty"`
 
+	// Complexity classifier module (model mode) for complexity rules using method: model
+	// +optional
+	ComplexityClassifier *ComplexityClassifierConfig `json:"complexity_classifier,omitempty"`
+
 	// Decision routing strategy ("priority" for priority-based matching)
 	// +kubebuilder:validation:Enum=priority
 	// +optional
@@ -1205,6 +1209,7 @@ type EmbeddingEndpointConfig struct {
 }
 
 // ComplexityRulesConfig defines complexity-based signal classification
+// +kubebuilder:validation:XValidation:rule="(has(self.method) && self.method == 'model') || (has(self.hard) && has(self.easy))",message="embedding-mode complexity rules require both 'hard' and 'easy' candidate banks; set method: model to use the trained classifier instead"
 type ComplexityRulesConfig struct {
 	// Name of the complexity rule (e.g., "code-complexity", "reasoning-complexity")
 	Name string `json:"name"`
@@ -1213,17 +1218,28 @@ type ComplexityRulesConfig struct {
 	// +optional
 	Description string `json:"description,omitempty"`
 
+	// Method selects how the rule decides difficulty. "embedding" (default) uses the
+	// hard/easy prototype-bank similarity path; "model" uses the trained complexity
+	// classifier configured under complexity_classifier.
+	// +kubebuilder:validation:Enum=embedding;model
+	// +optional
+	Method string `json:"method,omitempty"`
+
 	// Threshold for difficulty classification (0.0-1.0). Stored as string to avoid float precision issues.
 	// Queries scoring above this threshold are classified as "hard"
 	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
 	// +optional
 	Threshold string `json:"threshold,omitempty"`
 
-	// Hard candidates represent complex/difficult examples
-	Hard ComplexityCandidates `json:"hard"`
+	// Hard candidates represent complex/difficult examples. Required for embedding
+	// mode; omitted for method: model.
+	// +optional
+	Hard ComplexityCandidates `json:"hard,omitempty"`
 
-	// Easy candidates represent simple/easy examples
-	Easy ComplexityCandidates `json:"easy"`
+	// Easy candidates represent simple/easy examples. Required for embedding mode;
+	// omitted for method: model.
+	// +optional
+	Easy ComplexityCandidates `json:"easy,omitempty"`
 
 	// Composer allows filtering based on other signals (e.g., only apply this rule if domain:medical)
 	// +optional
@@ -1234,6 +1250,25 @@ type ComplexityRulesConfig struct {
 type ComplexityCandidates struct {
 	// List of candidate phrases or examples
 	Candidates []string `json:"candidates"`
+}
+
+// ComplexityClassifierConfig defines the trained complexity classifier module
+// used by complexity rules with method "model". It maps to the router's
+// global.model_catalog.modules.complexity.classifier.
+type ComplexityClassifierConfig struct {
+	// ModelID is a HuggingFace repo id or local path to the trained ModernBERT
+	// complexity classifier.
+	// +optional
+	ModelID string `json:"model_id,omitempty"`
+
+	// UseCPU forces CPU inference for the complexity classifier.
+	// +optional
+	UseCPU bool `json:"use_cpu,omitempty"`
+
+	// ComplexityMappingPath points at the class-index -> difficulty label mapping
+	// (JSON) required for model mode.
+	// +optional
+	ComplexityMappingPath string `json:"complexity_mapping_path,omitempty"`
 }
 
 // RuleComposition defines how to compose/filter rules based on other signals

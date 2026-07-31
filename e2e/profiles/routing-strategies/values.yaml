@@ -117,6 +117,21 @@ config:
             configuration:
               enabled: true
               similarity_threshold: 0.75
+      - name: complexity_reasoning_decision
+        description: Route reasoning-heavy prompts using the trained complexity classifier (method model)
+        priority: 140
+        rules:
+          operator: OR
+          conditions:
+            - type: complexity
+              name: needs_reasoning:hard
+            - type: complexity
+              name: needs_reasoning:medium
+            - type: complexity
+              name: needs_reasoning:easy
+        modelRefs:
+          - model: base-model
+            use_reasoning: true
     signals:
       keywords:
         - name: code_keywords
@@ -233,11 +248,24 @@ config:
           threshold: 0.7
           include_history: false
           description: Block all PII
+      complexity:
+        - name: needs_reasoning
+          method: model
+          # 0 => always report the predicted class (no confidence-floor neutral band),
+          # so the emitted rule:difficulty is deterministic for the e2e assertion.
+          threshold: 0.0
+          description: Model-mode complexity classification (trained mmBERT difficulty classifier)
     modelCards:
       - name: base-model
   global:
     model_catalog:
       kbs: []
+      modules:
+        complexity:
+          classifier:
+            model_id: models/mom-complexity-classifier
+            use_cpu: true
+            complexity_mapping_path: models/mom-complexity-classifier/category_mapping.json
     router:
       strategy: priority
     services:

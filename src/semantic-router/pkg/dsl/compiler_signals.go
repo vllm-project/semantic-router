@@ -191,6 +191,9 @@ func (c *Compiler) compileStructureSignal(s *SignalDecl) {
 
 func (c *Compiler) compileComplexitySignal(s *SignalDecl) {
 	rule := config.ComplexityRule{Name: s.Name}
+	if v, ok := getStringField(s.Fields, "method"); ok {
+		rule.Method = v
+	}
 	if v, ok := getFloat32Field(s.Fields, "threshold"); ok {
 		rule.Threshold = v
 	}

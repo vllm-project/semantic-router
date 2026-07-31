@@ -55,6 +55,17 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 		}
 		canonical.Global.ModelCatalog.Modules.Classifier = classifier
 	}
+
+	if spec.ComplexityClassifier != nil {
+		// Assign only the Classifier sub-struct: the enclosing Complexity module is
+		// pre-seeded with defaulted PrototypeScoring, which a whole-struct overwrite
+		// would wipe.
+		classifier, err := convertToTypedConfig[routerconfig.ComplexityClassifierModelConfig](r, spec.ComplexityClassifier)
+		if err != nil {
+			return fmt.Errorf("config.complexity_classifier: %w", err)
+		}
+		canonical.Global.ModelCatalog.Modules.Complexity.Classifier = classifier
+	}
 	return nil
 }
 

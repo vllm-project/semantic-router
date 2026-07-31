@@ -85,6 +85,28 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 	return c.jailbreakInitializer.Init(c.Config.PromptGuard.ModelID, c.Config.PromptGuard.UseCPU, numClasses)
 }
 
+// IsComplexityModelEnabled reports whether the trained complexity classifier is configured.
+func (c *Classifier) IsComplexityModelEnabled() bool {
+	return c.Config.ComplexityModel.Classifier.ModelID != "" &&
+		c.ComplexityMapping != nil &&
+		c.complexityModelInference != nil
+}
+
+// initializeComplexityModelClassifier initializes the trained complexity classification model.
+func (c *Classifier) initializeComplexityModelClassifier() error {
+	if !c.IsComplexityModelEnabled() || c.complexityModelInitializer == nil {
+		return fmt.Errorf("complexity model classification is not properly configured")
+	}
+
+	cfg := c.Config.ComplexityModel.Classifier
+	logging.ComponentEvent("classifier", "complexity_classifier_init_started", map[string]interface{}{
+		"model_ref": cfg.ModelID,
+		"use_cpu":   cfg.UseCPU,
+	})
+
+	return c.complexityModelInitializer.Init(cfg.ModelID, cfg.UseCPU)
+}
+
 // CheckForJailbreak analyzes the given text for jailbreak attempts.
 func (c *Classifier) CheckForJailbreak(text string) (bool, string, float32, error) {
 	return c.CheckForJailbreakWithThreshold(text, c.Config.PromptGuard.Threshold)

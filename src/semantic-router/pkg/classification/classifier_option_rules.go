@@ -127,11 +127,20 @@ func (b *classifierOptionBuilder) buildReaskClassifierOption() (option, error) {
 }
 
 func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, error) {
-	if len(b.cfg.ComplexityRules) == 0 {
+	// Only embedding-mode rules use the prototype-bank similarity classifier; rules with
+	// method: model are handled by the trained complexity classifier (see addComplexityModelClassifier).
+	embeddingRules := make([]config.ComplexityRule, 0, len(b.cfg.ComplexityRules))
+	for _, rule := range b.cfg.ComplexityRules {
+		if rule.UsesModel() {
+			continue
+		}
+		embeddingRules = append(embeddingRules, rule)
+	}
+	if len(embeddingRules) == 0 {
 		return nil, nil
 	}
 	modelType := b.defaultEmbeddingModelType()
-	if config.HasImageCandidatesInRules(b.cfg.ComplexityRules) {
+	if config.HasImageCandidatesInRules(embeddingRules) {
 		if err := b.initMultiModalIfNeeded("complexity image_candidates"); err != nil {
 			return nil, err
 		}
@@ -146,7 +155,7 @@ func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, err
 		return nil, err
 	}
 	complexityClassifier, err := NewComplexityClassifier(
-		b.cfg.ComplexityRules,
+		embeddingRules,
 		modelType,
 		b.cfg.ComplexityModel.WithDefaults().PrototypeScoring,
 		provider,

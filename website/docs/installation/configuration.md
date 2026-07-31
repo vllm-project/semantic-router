@@ -65,6 +65,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
 - built-in knowledge bases keep canonical source paths like `knowledge_bases/privacy/`; local runtime seeds missing KBs into `.vllm-sr/knowledge_bases/<dir>/` once and then reads the shared runtime KB store from there
 - `global.model_catalog.classifiers[]` is the reusable registry for startup-loaded classifier packages such as taxonomy classifiers
 - `global.model_catalog.modules` groups capability modules such as `prompt_guard`, `classifier`, `complexity`, and `hallucination_mitigation`
+- `routing.signals.complexity[].method` selects how each complexity rule decides difficulty: `embedding` (default) uses the rule's `hard`/`easy` prototype banks, while `model` uses the trained classifier under `global.model_catalog.modules.complexity.classifier` (set `model_id` and `complexity_mapping_path`; the `hard`/`easy` banks are not required in model mode)
 - `global.model_catalog.modules.prompt_compression.profile` provides built-in signal-compression scoring defaults for `default`, `coding`, `medical`, `security`, and `multi_turn` workloads. The `multi-turn` alias is normalized to `multi_turn`, unknown profile names fail config validation, and explicit weights/preserve counts override the selected profile.
 
 ## Canonical example

@@ -85,7 +85,7 @@ func (c *Classifier) InitializeRuntime() error {
 }
 
 func (c *Classifier) runtimeTasks() []modelruntime.Task {
-	tasks := make([]modelruntime.Task, 0, 9)
+	tasks := make([]modelruntime.Task, 0, 10)
 	appendTask := func(name string, bestEffort bool, enabled bool, init func() error) {
 		if !enabled {
 			return
@@ -102,6 +102,7 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 	appendTask("classifier.category", false, c.usesRoutingSignalType(config.SignalTypeDomain) && (c.IsCategoryEnabled() || c.IsMCPCategoryEnabled()), c.initializeConfiguredCategoryRuntime)
 	appendTask("classifier.jailbreak", false, c.usesRoutingSignalType(config.SignalTypeJailbreak) && c.IsJailbreakEnabled(), c.initializeJailbreakClassifier)
 	appendTask("classifier.pii", false, c.usesRoutingSignalType(config.SignalTypePII) && c.IsPIIEnabled(), c.initializePIIClassifier)
+	appendTask("classifier.complexity_model", false, c.usesRoutingSignalType(config.SignalTypeComplexity) && c.IsComplexityModelEnabled(), c.initializeComplexityModelClassifier)
 	appendTask("classifier.keyword_embedding", false, c.IsKeywordEmbeddingClassifierEnabled(), c.initializeKeywordEmbeddingClassifier)
 	appendTask("classifier.fact_check", true, c.IsFactCheckEnabled(), c.initializeFactCheckClassifier)
 	appendTask("classifier.hallucination", true, c.IsHallucinationDetectionEnabled(), c.initializeHallucinationDetector)

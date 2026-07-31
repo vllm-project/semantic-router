@@ -180,6 +180,9 @@ func (d *decompiler) decompileConversationSignals() {
 func (d *decompiler) decompileComplexitySignals() {
 	for _, comp := range d.cfg.ComplexityRules {
 		d.write("SIGNAL complexity %s {\n", quoteName(comp.Name))
+		if comp.Method != "" {
+			d.write("  method: %q\n", comp.Method)
+		}
 		if comp.Threshold != 0 {
 			d.write("  threshold: %v\n", comp.Threshold)
 		}
