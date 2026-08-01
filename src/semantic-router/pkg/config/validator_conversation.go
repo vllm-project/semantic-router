@@ -67,6 +67,9 @@ func validateConversationPredicate(rule ConversationRule) error {
 	if rule.Predicate == nil {
 		return nil
 	}
+	if !numericPredicateIsFinite(rule.Predicate) {
+		return fmt.Errorf("predicate values must be finite")
+	}
 	if rule.Feature.Type == "exists" {
 		return fmt.Errorf("feature.type \"exists\" does not accept a predicate")
 	}

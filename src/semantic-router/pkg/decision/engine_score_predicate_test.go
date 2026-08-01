@@ -59,3 +59,65 @@ func TestScorePredicateOnErrorMatch(t *testing.T) {
 		t.Fatalf("result = %#v, want fail-closed decision", result)
 	}
 }
+
+func TestPredicateMatchesUseBooleanConfidenceForRanking(t *testing.T) {
+	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{
+		{
+			Name:     "strong-lower-bound-match",
+			Priority: 10,
+			Tier:     1,
+			Rules: config.RuleNode{
+				Type:      "structure",
+				Name:      "small",
+				Predicate: &config.NumericPredicate{LT: float64Ptr(0.2)},
+			},
+		},
+		{
+			Name:     "priority-wins-after-predicate-match",
+			Priority: 20,
+			Tier:     1,
+			Rules: config.RuleNode{
+				Type:      "structure",
+				Name:      "large",
+				Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
+			},
+		},
+	}, "priority")
+
+	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
+		SignalValues: map[string]float64{
+			"structure:small": 0.01,
+			"structure:large": 0.5,
+		},
+	})
+	if err != nil {
+		t.Fatalf("EvaluateDecisionsWithSignals() error = %v", err)
+	}
+	if result == nil || result.Decision.Name != "priority-wins-after-predicate-match" {
+		t.Fatalf("result = %#v, want priority-based winner", result)
+	}
+	if result.Confidence != 1 {
+		t.Fatalf("confidence = %v, want boolean predicate confidence 1", result.Confidence)
+	}
+}
+
+func TestScorePredicateCanMatchPublishedZeroValue(t *testing.T) {
+	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{
+		Name: "empty",
+		Rules: config.RuleNode{
+			Type:      "structure",
+			Name:      "bytes",
+			Predicate: &config.NumericPredicate{LTE: float64Ptr(0)},
+		},
+	}}, "priority")
+
+	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
+		SignalValues: map[string]float64{"structure:bytes": 0},
+	})
+	if err != nil {
+		t.Fatalf("EvaluateDecisionsWithSignals() error = %v", err)
+	}
+	if result == nil || result.Decision.Name != "empty" {
+		t.Fatalf("result = %#v, want zero-value decision", result)
+	}
+}

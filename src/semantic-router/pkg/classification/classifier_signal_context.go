@@ -55,7 +55,7 @@ func textForSignalFunc(text, uncompressedText string, skipCompressionSignals map
 // skipCompressionSignals: signal types that must use uncompressedText instead of text
 // imageURL: image URL for multimodal signals ("" when the request carries no image)
 func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, convFacts ConversationFacts, imageURL string) *SignalResults {
-	return c.evaluateAllSignalsWithContext(
+	return c.EvaluateAllSignalsWithRequestFacts(
 		text,
 		contextText,
 		currentUserText,
@@ -68,8 +68,75 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		convFacts,
 		imageURL,
 		RequestFacts{},
+	)
+}
+
+// EvaluateAllSignalsWithRequestFacts extends context-aware evaluation with
+// bounded request-envelope facts used by metadata and conversation signals.
+func (c *Classifier) EvaluateAllSignalsWithRequestFacts(
+	text string,
+	contextText string,
+	currentUserText string,
+	priorUserMessages []string,
+	nonUserMessages []string,
+	hasPriorAssistantReply bool,
+	forceEvaluateAll bool,
+	uncompressedText string,
+	skipCompressionSignals map[string]bool,
+	convFacts ConversationFacts,
+	imageURL string,
+	requestFacts RequestFacts,
+) *SignalResults {
+	return c.evaluateAllSignalsWithContext(
+		text,
+		contextText,
+		currentUserText,
+		priorUserMessages,
+		nonUserMessages,
+		hasPriorAssistantReply,
+		forceEvaluateAll,
+		uncompressedText,
+		skipCompressionSignals,
+		convFacts,
+		imageURL,
+		requestFacts,
 		nil,
 		false,
+	)
+}
+
+// EvaluateAllSignalsWithRequestFactsForDecisions scopes signal usage to one
+// routing profile while carrying request-envelope facts.
+func (c *Classifier) EvaluateAllSignalsWithRequestFactsForDecisions(
+	text string,
+	contextText string,
+	currentUserText string,
+	priorUserMessages []string,
+	nonUserMessages []string,
+	hasPriorAssistantReply bool,
+	forceEvaluateAll bool,
+	uncompressedText string,
+	skipCompressionSignals map[string]bool,
+	convFacts ConversationFacts,
+	imageURL string,
+	requestFacts RequestFacts,
+	decisions []config.Decision,
+) *SignalResults {
+	return c.evaluateAllSignalsWithContext(
+		text,
+		contextText,
+		currentUserText,
+		priorUserMessages,
+		nonUserMessages,
+		hasPriorAssistantReply,
+		forceEvaluateAll,
+		uncompressedText,
+		skipCompressionSignals,
+		convFacts,
+		imageURL,
+		requestFacts,
+		decisions,
+		true,
 	)
 }
 

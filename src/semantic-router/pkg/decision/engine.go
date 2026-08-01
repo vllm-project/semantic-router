@@ -229,9 +229,9 @@ func evaluatePredicateLeaf(
 	value, available := signalPredicateValue(signals, normalizedType, node.Name, node.Label)
 	if available {
 		if numericPredicateMatches(value, node.Predicate) {
-			return true, value, []string{formatMatchedRule(node)}
+			return true, 1.0, []string{formatMatchedRule(node)}
 		}
-		return false, value, nil
+		return false, 0, nil
 	}
 	errorKey := fmt.Sprintf("%s:%s", normalizedType, node.Name)
 	_, failed := signals.SignalErrors[errorKey]

@@ -9,6 +9,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
+const genericClassifierErrorCode = "classifier_evaluation_failed"
+
 func (c *Classifier) evaluateGenericClassifierSignals(
 	results *SignalResults,
 	mu *sync.Mutex,
@@ -28,14 +30,18 @@ func (c *Classifier) evaluateGenericClassifierSignals(
 		result, err := classifier.Classify(context.Background(), text)
 		if err != nil {
 			mu.Lock()
-			results.SignalErrors[signalConfidenceKey(config.SignalTypeClassifier, rule.Name)] = err.Error()
+			results.SignalErrors[signalConfidenceKey(
+				config.SignalTypeClassifier,
+				rule.Name,
+			)] = genericClassifierErrorCode
 			mu.Unlock()
 			continue
 		}
 		mu.Lock()
 		bestLabel := ""
 		bestLabelScore := -1.0
-		for label, score := range result.Scores {
+		for _, label := range rule.Labels {
+			score := result.Scores[label]
 			key := classifierLabelKey(rule.Name, label)
 			results.SignalValues[key] = score
 			results.SignalConfidences[key] = score

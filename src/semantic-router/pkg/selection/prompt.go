@@ -3,10 +3,17 @@ package selection
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
+
+var (
+	ErrPromptInvocation          = errors.New("prompt selector invocation failed")
+	ErrPromptInvalidOutput       = errors.New("prompt selector output is invalid")
+	ErrPromptUndeclaredCandidate = errors.New("prompt selector chose undeclared candidate")
 )
 
 // PromptInvoke calls the concrete helper model without running model selection
@@ -53,6 +60,9 @@ func (s *PromptSelector) Select(
 	if err := ValidateSelectionContext(selCtx); err != nil {
 		return nil, err
 	}
+	if err := validatePromptCandidateModels(selCtx.CandidateModels); err != nil {
+		return nil, err
+	}
 	if s.invoke == nil {
 		return nil, fmt.Errorf("prompt selector model invoker is not configured")
 	}
@@ -64,7 +74,7 @@ func (s *PromptSelector) Select(
 		selCtx.Query,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("prompt selector invocation failed: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrPromptInvocation, err)
 	}
 
 	choice, err := parsePromptChoice(reply)
@@ -75,9 +85,24 @@ func (s *PromptSelector) Select(
 		return s.selectionResult(selCtx.CandidateModels, *candidate, choice.Rationale), nil
 	}
 	return nil, fmt.Errorf(
-		"prompt selector chose model %q outside decision candidates",
+		"%w: model %q",
+		ErrPromptUndeclaredCandidate,
 		choice.SelectedModel,
 	)
+}
+
+func validatePromptCandidateModels(candidates []config.ModelRef) error {
+	seen := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		if _, exists := seen[candidate.Model]; exists {
+			return fmt.Errorf(
+				"prompt selector requires unique candidate models; duplicate %q",
+				candidate.Model,
+			)
+		}
+		seen[candidate.Model] = struct{}{}
+	}
+	return nil
 }
 
 type promptChoice struct {
@@ -89,21 +114,19 @@ func parsePromptChoice(reply string) (promptChoice, error) {
 	content := strings.TrimSpace(reply)
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(content), &raw); err != nil {
-		return promptChoice{}, fmt.Errorf("prompt selector returned invalid JSON: %w", err)
+		return promptChoice{}, fmt.Errorf("%w: JSON decode failed", ErrPromptInvalidOutput)
 	}
 	if len(raw) != 2 || raw["selected_model"] == nil || raw["rationale"] == nil {
-		return promptChoice{}, fmt.Errorf(
-			"prompt selector response must contain exactly selected_model and rationale",
-		)
+		return promptChoice{}, fmt.Errorf("%w: unexpected response fields", ErrPromptInvalidOutput)
 	}
 	var choice promptChoice
 	if err := json.Unmarshal([]byte(content), &choice); err != nil {
-		return promptChoice{}, fmt.Errorf("prompt selector returned invalid JSON: %w", err)
+		return promptChoice{}, fmt.Errorf("%w: response decode failed", ErrPromptInvalidOutput)
 	}
 	choice.SelectedModel = strings.TrimSpace(choice.SelectedModel)
 	choice.Rationale = strings.TrimSpace(choice.Rationale)
 	if choice.SelectedModel == "" || choice.Rationale == "" {
-		return promptChoice{}, fmt.Errorf("prompt selector response requires selected_model and rationale")
+		return promptChoice{}, fmt.Errorf("%w: empty required field", ErrPromptInvalidOutput)
 	}
 	return choice, nil
 }

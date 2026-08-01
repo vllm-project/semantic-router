@@ -2,10 +2,17 @@ package services
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
+)
+
+const (
+	maxIntentMetadataEntries    = 32
+	maxIntentMetadataKeyBytes   = 128
+	maxIntentMetadataValueBytes = 1024
 )
 
 type IntentMessage struct {
@@ -24,10 +31,12 @@ type intentSignalInput struct {
 	hasAssistantReply bool
 	imageURL          string
 	conversationFacts classification.ConversationFacts
+	requestFacts      classification.RequestFacts
 }
 
 type intentConversationHistory struct {
 	currentUserMessage  string
+	currentUserRawText  string
 	currentUserImageURL string
 	priorUserMessages   []string
 	nonUserMessages     []string
@@ -65,24 +74,32 @@ type intentMessageContentPart struct {
 }
 
 func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
-	text := strings.TrimSpace(req.Text)
+	if err := validateIntentMetadata(req.Metadata); err != nil {
+		return intentSignalInput{}, err
+	}
+	rawText := req.Text
 
 	if input, ok := resolveIntentSignalInputFromMessages(req.Messages, len(req.Tools)); ok {
-		return applyTopLevelTextFallback(input, text), nil
+		input = applyTopLevelTextFallback(input, rawText)
+		input.requestFacts.Metadata = cloneIntentMetadata(req.Metadata)
+		return input, nil
 	}
 
-	if text == "" {
+	if rawText == "" && len(req.Metadata) == 0 {
 		return intentSignalInput{}, ErrEmptyText
 	}
 
 	return intentSignalInput{
-		evaluationText:  text,
-		contextText:     text,
-		currentUserText: text,
+		evaluationText:  rawText,
+		contextText:     rawText,
+		currentUserText: rawText,
 		conversationFacts: classification.ConversationFacts{
 			UserMessageCount:    1,
 			ToolDefinitionCount: len(req.Tools),
 			LastMessageRole:     "user",
+		},
+		requestFacts: classification.RequestFacts{
+			Metadata: cloneIntentMetadata(req.Metadata),
 		},
 	}, nil
 }
@@ -90,16 +107,16 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 // applyTopLevelTextFallback fills empty text slots from req.Text when the
 // messages path was accepted solely because it carries an image, so image safety
 // cannot toggle whether the caller-supplied text is scored.
-func applyTopLevelTextFallback(input intentSignalInput, text string) intentSignalInput {
-	if text == "" || strings.TrimSpace(input.evaluationText) != "" {
+func applyTopLevelTextFallback(input intentSignalInput, rawText string) intentSignalInput {
+	if rawText == "" || strings.TrimSpace(input.evaluationText) != "" {
 		return input
 	}
-	input.evaluationText = text
+	input.evaluationText = rawText
 	if strings.TrimSpace(input.contextText) == "" {
-		input.contextText = text
+		input.contextText = rawText
 	}
-	if strings.TrimSpace(input.currentUserText) == "" {
-		input.currentUserText = text
+	if input.currentUserText == "" {
+		input.currentUserText = rawText
 	}
 	return input
 }
@@ -110,10 +127,14 @@ func resolveIntentSignalInputFromMessages(messages []IntentMessage, toolDefiniti
 	}
 
 	history := extractIntentConversationHistory(messages, toolDefinitionCount)
+	evaluationText := history.currentUserRawText
+	if evaluationText == "" {
+		evaluationText = history.currentUserMessage
+	}
 	input := intentSignalInput{
-		evaluationText:    history.currentUserMessage,
+		evaluationText:    evaluationText,
 		contextText:       strings.Join(history.nonUserMessages, " "),
-		currentUserText:   history.currentUserMessage,
+		currentUserText:   evaluationText,
 		priorUserMessages: append([]string(nil), history.priorUserMessages...),
 		nonUserMessages:   append([]string(nil), history.nonUserMessages...),
 		hasAssistantReply: history.hasAssistantReply,
@@ -141,7 +162,23 @@ func resolveIntentSignalInputFromMessages(messages []IntentMessage, toolDefiniti
 	// An image-only user turn (no accompanying text) is still a valid input for
 	// image-modality signals, so accept the message path when an image is present
 	// even if there is no evaluation text to score.
-	return input, strings.TrimSpace(input.evaluationText) != "" || input.imageURL != ""
+	return input,
+		strings.TrimSpace(input.evaluationText) != "" ||
+			input.currentUserText != "" ||
+			input.imageURL != "" ||
+			hasIntentConversationFacts(input.conversationFacts)
+}
+
+func hasIntentConversationFacts(facts classification.ConversationFacts) bool {
+	return facts.UserMessageCount > 0 ||
+		facts.AssistantMessageCount > 0 ||
+		facts.SystemMessageCount > 0 ||
+		facts.ToolMessageCount > 0 ||
+		facts.ImageContentCount > 0 ||
+		facts.ToolDefinitionCount > 0 ||
+		facts.AssistantToolCallCount > 0 ||
+		facts.ToolResultCount > 0 ||
+		facts.HasDeveloperMessage
 }
 
 func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCount int) intentConversationHistory {
@@ -153,8 +190,16 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 	sawToolResult := false
 
 	for _, msg := range messages {
-		text := extractIntentMessageText(msg.Content)
 		role := strings.ToLower(strings.TrimSpace(msg.Role))
+		rawText := extractIntentMessageRawText(msg.Content)
+		text := strings.TrimSpace(rawText)
+		if role == "user" {
+			if rawText != "" {
+				history.currentUserRawText = rawText
+			}
+			history.conversationFacts.ImageContentCount +=
+				countIntentMessageImages(msg.Content)
+		}
 		sawToolResult = observeIntentConversationMessage(
 			&history.conversationFacts,
 			role,
@@ -277,7 +322,30 @@ func firstSafeImageURL(parts []intentMessageContentPart) string {
 	return ""
 }
 
-func extractIntentMessageText(raw json.RawMessage) string {
+func countIntentMessageImages(raw json.RawMessage) int {
+	raw = bytesTrimSpace(raw)
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0
+	}
+	var parts []intentMessageContentPart
+	if err := json.Unmarshal(raw, &parts); err != nil {
+		var part intentMessageContentPart
+		if err := json.Unmarshal(raw, &part); err != nil {
+			return 0
+		}
+		parts = []intentMessageContentPart{part}
+	}
+	count := 0
+	for _, part := range parts {
+		switch strings.ToLower(strings.TrimSpace(part.Type)) {
+		case "image_url", "input_image":
+			count++
+		}
+	}
+	return count
+}
+
+func extractIntentMessageRawText(raw json.RawMessage) string {
 	raw = bytesTrimSpace(raw)
 	if len(raw) == 0 || string(raw) == "null" {
 		return ""
@@ -285,34 +353,73 @@ func extractIntentMessageText(raw json.RawMessage) string {
 
 	var text string
 	if err := json.Unmarshal(raw, &text); err == nil {
-		return strings.TrimSpace(text)
+		return text
 	}
 
 	var parts []intentMessageContentPart
 	if err := json.Unmarshal(raw, &parts); err == nil {
-		return joinIntentMessageContentParts(parts)
+		return joinIntentMessageRawTextParts(parts)
 	}
 
 	var part intentMessageContentPart
 	if err := json.Unmarshal(raw, &part); err == nil {
-		return joinIntentMessageContentParts([]intentMessageContentPart{part})
+		return joinIntentMessageRawTextParts([]intentMessageContentPart{part})
 	}
 
 	return ""
 }
 
-func joinIntentMessageContentParts(parts []intentMessageContentPart) string {
+func joinIntentMessageRawTextParts(parts []intentMessageContentPart) string {
 	textParts := make([]string, 0, len(parts))
 	for _, part := range parts {
 		partType := strings.ToLower(strings.TrimSpace(part.Type))
 		if partType != "" && partType != "text" && partType != "input_text" {
 			continue
 		}
-		if text := strings.TrimSpace(part.Text); text != "" {
-			textParts = append(textParts, text)
+		if part.Text != "" {
+			textParts = append(textParts, part.Text)
 		}
 	}
 	return strings.Join(textParts, " ")
+}
+
+func validateIntentMetadata(metadata map[string]string) error {
+	if len(metadata) > maxIntentMetadataEntries {
+		return fmt.Errorf(
+			"%w: metadata cannot contain more than %d entries",
+			ErrInvalidRequestFacts,
+			maxIntentMetadataEntries,
+		)
+	}
+	for key, value := range metadata {
+		if len(key) == 0 || len(key) > maxIntentMetadataKeyBytes {
+			return fmt.Errorf(
+				"%w: metadata key length must be between 1 and %d bytes",
+				ErrInvalidRequestFacts,
+				maxIntentMetadataKeyBytes,
+			)
+		}
+		if len(value) > maxIntentMetadataValueBytes {
+			return fmt.Errorf(
+				"%w: metadata value for key %q exceeds %d bytes",
+				ErrInvalidRequestFacts,
+				key,
+				maxIntentMetadataValueBytes,
+			)
+		}
+	}
+	return nil
+}
+
+func cloneIntentMetadata(metadata map[string]string) map[string]string {
+	if len(metadata) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(metadata))
+	for key, value := range metadata {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func bytesTrimSpace(raw []byte) []byte {

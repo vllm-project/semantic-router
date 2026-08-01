@@ -35,7 +35,7 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	}
 
 	wantTrace := req.Options != nil && req.Options.Trace
-	signals := classifier.EvaluateAllSignalsWithContext(
+	signals := classifier.EvaluateAllSignalsWithRequestFacts(
 		input.evaluationText,
 		input.contextText,
 		input.currentUserText,
@@ -47,6 +47,7 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 		nil,
 		input.conversationFacts,
 		input.imageURL,
+		input.requestFacts,
 	)
 
 	var decisionResult *decision.DecisionResult

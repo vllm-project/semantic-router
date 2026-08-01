@@ -2,6 +2,7 @@ package classification
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -100,5 +101,71 @@ func TestGenericClassifierSignalsRespectDecisionScope(t *testing.T) {
 
 	if firstCalls != 1 || secondCalls != 0 {
 		t.Fatalf("classifier calls = (%d, %d), want (1, 0)", firstCalls, secondCalls)
+	}
+}
+
+func TestGenericClassifierSignalExposesSanitizedErrorCode(t *testing.T) {
+	classifier := &Classifier{
+		Config: &config.RouterConfig{IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{ClassifierRules: []config.ClassifierSignalRule{{
+				Name: "risk",
+				Type: "llm",
+			}}},
+		}},
+		genericClassifiers: map[string]labelClassifier{
+			"risk": fakeLabelClassifier{err: errors.New("sensitive upstream detail")},
+		},
+	}
+	results := &SignalResults{
+		SignalConfidences: map[string]float64{},
+		SignalValues:      map[string]float64{},
+		SignalErrors:      map[string]string{},
+		Metrics:           &SignalMetricsCollection{},
+	}
+
+	classifier.evaluateGenericClassifierSignals(
+		results,
+		&sync.Mutex{},
+		"route me",
+		map[string]bool{"classifier:risk": true},
+	)
+
+	if results.SignalErrors["classifier:risk"] != genericClassifierErrorCode {
+		t.Fatalf("signal error = %q", results.SignalErrors["classifier:risk"])
+	}
+}
+
+func TestGenericClassifierSignalUsesConfiguredLabelOrderForTies(t *testing.T) {
+	classifier := &Classifier{
+		Config: &config.RouterConfig{IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{ClassifierRules: []config.ClassifierSignalRule{{
+				Name:   "risk",
+				Type:   "llm",
+				Labels: []string{"SAFE", "RISKY"},
+			}}},
+		}},
+		genericClassifiers: map[string]labelClassifier{
+			"risk": fakeLabelClassifier{result: labelClassification{
+				Scores: map[string]float64{"RISKY": 0.5, "SAFE": 0.5},
+			}},
+		},
+	}
+	results := &SignalResults{
+		SignalConfidences: map[string]float64{},
+		SignalValues:      map[string]float64{},
+		SignalErrors:      map[string]string{},
+		Metrics:           &SignalMetricsCollection{},
+	}
+
+	classifier.evaluateGenericClassifierSignals(
+		results,
+		&sync.Mutex{},
+		"route me",
+		map[string]bool{"classifier:risk": true},
+	)
+
+	if len(results.MatchedClassifierRules) != 1 ||
+		results.MatchedClassifierRules[0] != "risk:SAFE" {
+		t.Fatalf("matched labels = %v, want configured first label", results.MatchedClassifierRules)
 	}
 }

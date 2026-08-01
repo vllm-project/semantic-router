@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -82,6 +83,14 @@ func validateDecisionLeafNode(
 			return err
 		}
 	}
+	if strings.EqualFold(node.Type, SignalTypeMetadata) &&
+		metadataRuleByName(cfg.MetadataRules, node.Name) == nil {
+		return fmt.Errorf(
+			"decision '%s': metadata condition references unknown signal %q",
+			decisionName,
+			node.Name,
+		)
+	}
 	if node.OnError != "" && node.OnError != "no_match" && node.OnError != "match" {
 		return fmt.Errorf(
 			"decision '%s': condition %s(%q) on_error must be no_match or match",
@@ -90,7 +99,24 @@ func validateDecisionLeafNode(
 			node.Name,
 		)
 	}
+	if node.OnError != "" && !strings.EqualFold(node.Type, SignalTypeClassifier) {
+		return fmt.Errorf(
+			"decision '%s': condition %s(%q) on_error is only supported for classifier conditions",
+			decisionName,
+			node.Type,
+			node.Name,
+		)
+	}
 	return validateDecisionLeafPredicate(decisionName, node)
+}
+
+func metadataRuleByName(rules []MetadataRule, name string) *MetadataRule {
+	for i := range rules {
+		if rules[i].Name == name {
+			return &rules[i]
+		}
+	}
+	return nil
 }
 
 func validateClassifierDecisionLeaf(
@@ -146,6 +172,14 @@ func validateDecisionLeafPredicate(decisionName string, node *RuleNode) error {
 	if node.Predicate == nil {
 		return nil
 	}
+	if !numericPredicateIsFinite(node.Predicate) {
+		return fmt.Errorf(
+			"decision '%s': condition %s(%q) predicate values must be finite",
+			decisionName,
+			node.Type,
+			node.Name,
+		)
+	}
 	if structurePredicateComparatorCount(node.Predicate) == 0 {
 		return fmt.Errorf(
 			"decision '%s': condition %s(%q) predicate must set at least one comparator",
@@ -171,6 +205,20 @@ func validateDecisionLeafPredicate(decisionName string, node *RuleNode) error {
 		)
 	}
 	return nil
+}
+
+func numericPredicateIsFinite(predicate *NumericPredicate) bool {
+	for _, value := range []*float64{
+		predicate.GT,
+		predicate.GTE,
+		predicate.LT,
+		predicate.LTE,
+	} {
+		if value != nil && (math.IsNaN(*value) || math.IsInf(*value, 0)) {
+			return false
+		}
+	}
+	return true
 }
 
 func classifierSignalRuleByName(
@@ -573,6 +621,17 @@ func validatePromptAlgorithmConfig(
 	if len(modelRefs) < 2 {
 		return fmt.Errorf("decision '%s': algorithm.type=prompt requires at least two modelRefs", decisionName)
 	}
+	seenModels := make(map[string]struct{}, len(modelRefs))
+	for _, modelRef := range modelRefs {
+		if _, exists := seenModels[modelRef.Model]; exists {
+			return fmt.Errorf(
+				"decision '%s': algorithm.type=prompt requires unique modelRefs; duplicate model %q",
+				decisionName,
+				modelRef.Model,
+			)
+		}
+		seenModels[modelRef.Model] = struct{}{}
+	}
 	if strings.TrimSpace(algorithm.Prompt.Model) == "" {
 		return fmt.Errorf("decision '%s', algorithm.prompt: model is required", decisionName)
 	}
@@ -599,9 +658,17 @@ func validateDecisionPromptModel(cfg *RouterConfig, decision Decision) error {
 		)
 	}
 	model := strings.TrimSpace(decision.Algorithm.Prompt.Model)
-	if _, ok := cfg.ModelConfig[model]; !ok {
+	modelConfig, ok := cfg.ModelConfig[model]
+	if !ok {
 		return fmt.Errorf(
 			"decision '%s', algorithm.prompt.model %q is not declared in routing.modelCards",
+			decision.Name,
+			model,
+		)
+	}
+	if strings.EqualFold(modelConfig.APIFormat, ClientProtocolAnthropic) {
+		return fmt.Errorf(
+			"decision '%s', algorithm.prompt.model %q must use an OpenAI-compatible API format",
 			decision.Name,
 			model,
 		)

@@ -12,7 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
-const promptSelectorMaxCompletionTokens = 128
+const promptSelectorMaxCompletionTokens = 512
 
 func (r *OpenAIRouter) newDecisionPromptSelector(
 	cfg config.PromptSelectionConfig,

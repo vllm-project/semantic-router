@@ -89,6 +89,7 @@ func extractMetadataFast(body []byte, result *FastExtractResult) error {
 	}
 	values := make(map[string]string)
 	var invalidKey string
+	invalidValue := false
 	var validationErr error
 	metadata.ForEach(func(key, value gjson.Result) bool {
 		if len(values) >= maxRoutingMetadataEntries {
@@ -97,6 +98,7 @@ func extractMetadataFast(body []byte, result *FastExtractResult) error {
 		}
 		if value.Type != gjson.String {
 			invalidKey = key.String()
+			invalidValue = true
 			return false
 		}
 		keyValue := key.String()
@@ -119,9 +121,13 @@ func extractMetadataFast(body []byte, result *FastExtractResult) error {
 	if validationErr != nil {
 		return validationErr
 	}
-	if invalidKey != "" {
+	if invalidValue {
+		field := "metadata"
+		if invalidKey != "" {
+			field += "." + invalidKey
+		}
 		return &jsonTypeError{
-			field: "metadata." + invalidKey,
+			field: field,
 			want:  "string",
 			got:   "non-string",
 		}

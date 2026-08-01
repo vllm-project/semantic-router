@@ -12,14 +12,14 @@ func (s *ClassificationService) RefreshRuntimeConfig(newConfig *config.RouterCon
 	s.configMutex.Lock()
 	defer s.configMutex.Unlock()
 
-	s.config = newConfig
-	if s.classifier != nil {
-		rebuiltClassifier, err := classification.NewLegacyClassifierFromConfig(newConfig)
-		if err != nil {
-			logging.Warnf("Failed to rebuild classifier during config update, falling back to in-place config swap: %v", err)
-			s.classifier.Config = newConfig
-		} else {
-			s.classifier = rebuiltClassifier
-		}
+	rebuiltClassifier, err := classification.NewLegacyClassifierFromConfig(newConfig)
+	if err != nil {
+		logging.Errorf(
+			"Classifier config reload rejected; retaining the previous runtime snapshot: %v",
+			err,
+		)
+		return
 	}
+	s.classifier = rebuiltClassifier
+	s.config = newConfig
 }

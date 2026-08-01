@@ -14,6 +14,7 @@ type IntentRequest struct {
 	Messages []IntentMessage   `json:"messages,omitempty"`
 	Tools    []json.RawMessage `json:"tools,omitempty"`
 	Model    string            `json:"model,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
 	Options  *IntentOptions    `json:"options,omitempty"`
 }
 
@@ -80,6 +81,7 @@ type EvalResponse struct {
 	Metrics           *classification.SignalMetricsCollection `json:"metrics"`                      // Performance and confidence for each signal
 	SignalConfidences map[string]float64                      `json:"signal_confidences,omitempty"` // Real ML confidence scores per signal, e.g. "domain:economics" -> 0.81
 	SignalValues      map[string]float64                      `json:"signal_values,omitempty"`      // Raw signal values per signal when exposed, e.g. "structure:many_questions" -> 4
+	SignalErrors      map[string]string                       `json:"signal_errors,omitempty"`      // Bounded evaluator failures that can affect on_error routing
 }
 
 // IntentResponse represents the response from intent classification.
@@ -90,8 +92,9 @@ type IntentResponse struct {
 	RoutingDecision  string             `json:"routing_decision,omitempty"`
 
 	// Signal-driven fields
-	MatchedSignals *MatchedSignals `json:"matched_signals,omitempty"`
-	DecisionResult *DecisionResult `json:"decision_result,omitempty"`
+	MatchedSignals *MatchedSignals   `json:"matched_signals,omitempty"`
+	DecisionResult *DecisionResult   `json:"decision_result,omitempty"`
+	SignalErrors   map[string]string `json:"signal_errors,omitempty"`
 }
 
 // Classification represents basic classification result.

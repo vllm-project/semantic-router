@@ -173,6 +173,14 @@ func registerSelectionMetrics() {
 		[]string{"method", "tier"},
 	)
 
+	ModelSelectionFallbackTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_model_selection_fallback_total",
+			Help: "Total selector fallbacks by method, decision, and bounded reason",
+		},
+		[]string{"method", "decision", "reason"},
+	)
+
 	ModelSelectionScore = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "llm_model_selection_score",
@@ -384,6 +392,7 @@ func preInitializeMetrics() {
 		ModelSelectionScore.WithLabelValues(method, "_init")
 		ModelSelectionConfidence.WithLabelValues(method, "supported")
 		ModelSelectionHistory.WithLabelValues(method, "_init")
+		ModelSelectionFallbackTotal.WithLabelValues(method, "_init", "_init")
 	}
 
 	// Initialize Elo metrics
@@ -424,18 +433,6 @@ func preInitializeMetrics() {
 // IsMetricsEnabled returns true if metrics have been initialized
 func IsMetricsEnabled() bool {
 	return metricsEnabled
-}
-
-// RecordSelection records a basic model selection event with tier label.
-func RecordSelection(method string, decision string, model string, tier AlgorithmTier, score float64) {
-	if !metricsEnabled {
-		return
-	}
-
-	tierStr := string(tier)
-	ModelSelectionTotal.WithLabelValues(method, model, decision, tierStr).Inc()
-	ModelSelectionScore.WithLabelValues(method, model).Observe(score)
-	ModelSelectionHistory.WithLabelValues(method, decision).Inc()
 }
 
 // RecordEloRating records the current Elo rating for a model in a category

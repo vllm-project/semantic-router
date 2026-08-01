@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -67,13 +68,21 @@ func validateClassifierSignalIdentity(
 	index int,
 	seen map[string]struct{},
 ) error {
-	if strings.TrimSpace(rule.Name) == "" {
+	trimmedName := strings.TrimSpace(rule.Name)
+	if trimmedName == "" {
 		return fmt.Errorf("routing.signals.classifiers[%d]: name is required", index)
 	}
-	if _, exists := seen[rule.Name]; exists {
+	if trimmedName != rule.Name {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%d]: name must not contain surrounding whitespace",
+			index,
+		)
+	}
+	normalizedName := strings.ToLower(rule.Name)
+	if _, exists := seen[normalizedName]; exists {
 		return fmt.Errorf("routing.signals.classifiers[%d]: duplicate name %q", index, rule.Name)
 	}
-	seen[rule.Name] = struct{}{}
+	seen[normalizedName] = struct{}{}
 	return nil
 }
 
@@ -141,6 +150,37 @@ func validateLLMClassifierSignal(cfg *RouterConfig, rule ClassifierSignalRule) e
 			rule.Model,
 			ModelRoleClassification,
 		)
+	}
+	return nil
+}
+
+// ValidateLocalClassifierReload rejects mutations that cannot be applied
+// atomically by the process-global native classifier binding.
+func ValidateLocalClassifierReload(current *RouterConfig, next *RouterConfig) error {
+	currentRule := localClassifierRule(current)
+	if currentRule == nil {
+		return nil
+	}
+	nextRule := localClassifierRule(next)
+	if nextRule == nil ||
+		currentRule.ModelPath != nextRule.ModelPath ||
+		currentRule.UseCPU != nextRule.UseCPU ||
+		!slices.Equal(currentRule.Labels, nextRule.Labels) {
+		return fmt.Errorf(
+			"local classifier model, labels, and device cannot change during hot reload; restart the router",
+		)
+	}
+	return nil
+}
+
+func localClassifierRule(cfg *RouterConfig) *ClassifierSignalRule {
+	if cfg == nil {
+		return nil
+	}
+	for i := range cfg.ClassifierRules {
+		if cfg.ClassifierRules[i].Type == "local" {
+			return &cfg.ClassifierRules[i]
+		}
 	}
 	return nil
 }

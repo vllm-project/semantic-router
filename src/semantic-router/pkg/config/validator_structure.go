@@ -125,6 +125,12 @@ func validateStructurePredicate(
 	if predicate == nil {
 		return nil
 	}
+	if !numericPredicateIsFinite(predicate) {
+		return fmt.Errorf(
+			"routing.signals.structure[%q]: predicate values must be finite",
+			ruleName,
+		)
+	}
 	count := structurePredicateComparatorCount(predicate)
 	if count == 0 {
 		return fmt.Errorf("routing.signals.structure[%q]: predicate must set at least one comparator", ruleName)

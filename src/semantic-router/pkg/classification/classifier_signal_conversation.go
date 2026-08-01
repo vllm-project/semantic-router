@@ -25,35 +25,56 @@ type ConversationFacts struct {
 	LastUserAfterToolResult bool
 }
 
-func (c *Classifier) evaluateConversationSignal(results *SignalResults, mu *sync.Mutex, facts ConversationFacts) {
+func (c *Classifier) evaluateConversationSignal(
+	results *SignalResults,
+	mu *sync.Mutex,
+	facts ConversationFacts,
+	usedSignals map[string]bool,
+) {
 	rules := c.Config.ConversationRules
 	if len(rules) == 0 {
 		return
 	}
 
 	start := time.Now()
+	matchedAny := false
 
 	for _, rule := range rules {
-		value := resolveConversationValue(rule.Feature, facts)
-		if !conversationPredicateMatches(rule, value) {
+		if !signalRuleUsed(
+			usedSignals,
+			config.SignalTypeConversation,
+			rule.Name,
+		) {
 			continue
 		}
-
+		value := resolveConversationValue(rule.Feature, facts)
+		matched := conversationPredicateMatches(rule, value)
 		elapsed := time.Since(start)
 		mu.Lock()
 		key := signalConfidenceKey(config.SignalTypeConversation, rule.Name)
-		results.MatchedConversationRules = append(results.MatchedConversationRules, rule.Name)
-		results.SignalConfidences[key] = 1.0
 		results.SignalValues[key] = value
+		if matched {
+			matchedAny = true
+			results.SignalConfidences[key] = 1.0
+			results.MatchedConversationRules = append(results.MatchedConversationRules, rule.Name)
+		} else {
+			results.SignalConfidences[key] = 0
+		}
 		mu.Unlock()
 
 		c.recordSignalExtraction(config.SignalTypeConversation, rule.Name, elapsed.Seconds())
-		c.recordSignalMatch(config.SignalTypeConversation, rule.Name)
+		if matched {
+			c.recordSignalMatch(config.SignalTypeConversation, rule.Name)
+		}
 	}
 
 	elapsed := time.Since(start)
 	results.Metrics.Conversation.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-	results.Metrics.Conversation.Confidence = 1.0
+	if matchedAny {
+		results.Metrics.Conversation.Confidence = 1.0
+	} else {
+		results.Metrics.Conversation.Confidence = 0
+	}
 	logging.Debugf("[Signal Computation] Conversation signal evaluation completed in %v", elapsed)
 }
 

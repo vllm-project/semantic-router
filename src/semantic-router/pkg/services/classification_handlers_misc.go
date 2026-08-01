@@ -31,9 +31,10 @@ func (s *ClassificationService) ClassifyFactCheck(req FactCheckRequest) (*FactCh
 	if blankText(req.Text) {
 		return nil, ErrEmptyText
 	}
+	classifier := s.classifierSnapshot()
 
 	// Check if classifier is available
-	if s.classifier == nil {
+	if classifier == nil {
 		processingTime := time.Since(start).Milliseconds()
 		return &FactCheckResponse{
 			NeedsFactCheck:   false,
@@ -44,7 +45,7 @@ func (s *ClassificationService) ClassifyFactCheck(req FactCheckRequest) (*FactCh
 	}
 
 	// Check if fact-check classifier is enabled
-	if !s.classifier.IsFactCheckEnabled() {
+	if !classifier.IsFactCheckEnabled() {
 		processingTime := time.Since(start).Milliseconds()
 		return &FactCheckResponse{
 			NeedsFactCheck:   false,
@@ -55,7 +56,7 @@ func (s *ClassificationService) ClassifyFactCheck(req FactCheckRequest) (*FactCh
 	}
 
 	// Perform fact-check classification
-	result, err := s.classifier.ClassifyFactCheck(req.Text)
+	result, err := classifier.ClassifyFactCheck(req.Text)
 	if err != nil {
 		return nil, fmt.Errorf("fact-check classification failed: %w", err)
 	}
@@ -96,9 +97,10 @@ func (s *ClassificationService) ClassifyUserFeedback(req UserFeedbackRequest) (*
 	if blankText(req.Text) {
 		return nil, ErrEmptyText
 	}
+	classifier := s.classifierSnapshot()
 
 	// Check if classifier is available
-	if s.classifier == nil {
+	if classifier == nil {
 		processingTime := time.Since(start).Milliseconds()
 		return &UserFeedbackResponse{
 			FeedbackType:     "unknown",
@@ -109,7 +111,7 @@ func (s *ClassificationService) ClassifyUserFeedback(req UserFeedbackRequest) (*
 	}
 
 	// Check if feedback detector is enabled
-	if !s.classifier.IsFeedbackDetectorEnabled() {
+	if !classifier.IsFeedbackDetectorEnabled() {
 		processingTime := time.Since(start).Milliseconds()
 		return &UserFeedbackResponse{
 			FeedbackType:     "feedback_detector_disabled",
@@ -120,7 +122,7 @@ func (s *ClassificationService) ClassifyUserFeedback(req UserFeedbackRequest) (*
 	}
 
 	// Perform user feedback classification
-	result, err := s.classifier.ClassifyFeedback(req.Text)
+	result, err := classifier.ClassifyFeedback(req.Text)
 	if err != nil {
 		return nil, fmt.Errorf("user feedback classification failed: %w", err)
 	}
@@ -161,11 +163,12 @@ func (s *ClassificationService) ClassifyNLI(req NLIRequest) (*NLIResponse, error
 		return nil, fmt.Errorf("both premise and hypothesis must be provided")
 	}
 
-	if s.classifier == nil {
+	classifier := s.classifierSnapshot()
+	if classifier == nil {
 		return nil, fmt.Errorf("classification service not available")
 	}
 
-	det := s.classifier.GetHallucinationDetector()
+	det := classifier.GetHallucinationDetector()
 	if det == nil || !det.IsNLIInitialized() {
 		return nil, fmt.Errorf("NLI model not initialized — configure hallucination_mitigation.nli_model in your router config")
 	}
@@ -187,9 +190,10 @@ func (s *ClassificationService) ClassifyNLI(req NLIRequest) (*NLIResponse, error
 
 // IsNLIReady reports whether the NLI model is loaded and ready for inference.
 func (s *ClassificationService) IsNLIReady() bool {
-	if s.classifier == nil {
+	classifier := s.classifierSnapshot()
+	if classifier == nil {
 		return false
 	}
-	det := s.classifier.GetHallucinationDetector()
+	det := classifier.GetHallucinationDetector()
 	return det != nil && det.IsNLIInitialized()
 }

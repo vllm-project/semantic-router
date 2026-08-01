@@ -60,3 +60,24 @@ func TestPromptSelectorRejectsUndeclaredCandidate(t *testing.T) {
 		t.Fatal("Select() expected undeclared candidate error")
 	}
 }
+
+func TestPromptSelectorRejectsDuplicateBaseModels(t *testing.T) {
+	selector := NewPromptSelector(
+		config.PromptSelectionConfig{Model: "router-small", Instructions: "Choose."},
+		func(context.Context, string, string, string) (string, error) {
+			t.Fatal("duplicate candidates must fail before invoking the helper model")
+			return "", nil
+		},
+		nil,
+	)
+	_, err := selector.Select(context.Background(), &SelectionContext{
+		Query: "hello",
+		CandidateModels: []config.ModelRef{
+			{Model: "general-small"},
+			{Model: "general-small", LoRAName: "specialist"},
+		},
+	})
+	if err == nil {
+		t.Fatal("Select() expected duplicate candidate error")
+	}
+}

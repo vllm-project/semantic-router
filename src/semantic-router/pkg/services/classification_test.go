@@ -380,12 +380,14 @@ func TestBuildEvalResponse_IncludesSignalValues(t *testing.T) {
 		Metrics:               &classification.SignalMetricsCollection{},
 		SignalConfidences:     map[string]float64{"structure:many_questions": 1},
 		SignalValues:          map[string]float64{"structure:many_questions": 4},
+		SignalErrors:          map[string]string{"classifier:risk": "timeout"},
 	}
 
 	response := service.buildEvalResponse("why? why? why? why?", signals, nil)
 	require.NotNil(t, response)
 	require.NotNil(t, response.SignalValues)
 	assert.Equal(t, 4.0, response.SignalValues["structure:many_questions"])
+	assert.Equal(t, "timeout", response.SignalErrors["classifier:risk"])
 }
 
 // Benchmark tests for performance validation

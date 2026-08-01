@@ -28,6 +28,7 @@ func (s *ClassificationService) buildIntentResponseFromSignals(
 	response.RoutingDecision = s.resolveRoutingDecision(decisionResult, confidence, req.Options)
 	if signals != nil {
 		response.MatchedSignals = buildMatchedSignals(signals)
+		response.SignalErrors = signals.SignalErrors
 	}
 	if decisionPayload := buildDecisionResultPayload(decisionResult); decisionPayload != nil {
 		response.DecisionResult = decisionPayload
@@ -47,6 +48,7 @@ func (s *ClassificationService) buildEvalResponse(
 		Metrics:           signals.Metrics,
 		SignalConfidences: signals.SignalConfidences,
 		SignalValues:      signals.SignalValues,
+		SignalErrors:      signals.SignalErrors,
 	}
 
 	matchedSignals := buildMatchedSignals(signals)

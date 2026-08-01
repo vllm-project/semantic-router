@@ -34,6 +34,42 @@ type selectionResultSelector struct {
 	err    error
 }
 
+type cancellationSelector struct {
+	cancelled *bool
+}
+
+func (s cancellationSelector) Select(
+	ctx context.Context,
+	_ *selection.SelectionContext,
+) (*selection.SelectionResult, error) {
+	select {
+	case <-ctx.Done():
+		*s.cancelled = true
+		return nil, ctx.Err()
+	default:
+		return nil, fmt.Errorf("selection context was not cancelled")
+	}
+}
+
+func (s cancellationSelector) Method() selection.SelectionMethod {
+	return selection.MethodStatic
+}
+
+func (s cancellationSelector) UpdateFeedback(
+	context.Context,
+	*selection.Feedback,
+) error {
+	return nil
+}
+
+func (s cancellationSelector) Tier() selection.AlgorithmTier {
+	return selection.TierSupported
+}
+
+func (s cancellationSelector) ExternalDependencies() []selection.Dependency {
+	return nil
+}
+
 func (s selectionResultSelector) Select(ctx context.Context, selCtx *selection.SelectionContext) (*selection.SelectionResult, error) {
 	return s.result, s.err
 }
@@ -72,9 +108,10 @@ func TestSelectModelFromCandidatesUsesDefaultCandidateOnInvalidSelectionResult(t
 			registry.Register(selection.MethodStatic, selectionResultSelector{result: tc.result})
 
 			router := &OpenAIRouter{ModelSelector: registry}
+			requestContext := &RequestContext{}
 			selected, method := router.selectModelFromCandidates(&selection.SelectionContext{
 				CandidateModels: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
-			}, nil, nil)
+			}, nil, requestContext)
 
 			if selected == nil || selected.Model != "model-a" {
 				t.Fatalf("expected default candidate model-a, got %#v", selected)
@@ -82,21 +119,81 @@ func TestSelectModelFromCandidatesUsesDefaultCandidateOnInvalidSelectionResult(t
 			if method != string(selection.MethodStatic) {
 				t.Fatalf("expected static method, got %q", method)
 			}
+			if requestContext.VSRSelectionReasoning != selectionFallbackInvalidResult {
+				t.Fatalf(
+					"fallback reason = %q, want %q",
+					requestContext.VSRSelectionReasoning,
+					selectionFallbackInvalidResult,
+				)
+			}
 		})
 	}
 }
 
 func TestSelectModelFromCandidatesUsesFirstValidDefaultCandidateOnInvalidContext(t *testing.T) {
 	router := &OpenAIRouter{}
+	requestContext := &RequestContext{}
 	selected, method := router.selectModelFromCandidates(&selection.SelectionContext{
 		CandidateModels: []config.ModelRef{{Model: " "}, {Model: "model-b"}},
-	}, nil, nil)
+	}, nil, requestContext)
 
 	if selected == nil || selected.Model != "model-b" {
 		t.Fatalf("expected default candidate model-b, got %#v", selected)
 	}
-	if method != "" {
-		t.Fatalf("expected empty method for invalid context default, got %q", method)
+	if method != string(selection.MethodStatic) {
+		t.Fatalf("expected static method for invalid context default, got %q", method)
+	}
+	if requestContext.VSRSelectionReasoning != selectionFallbackInvalidContext {
+		t.Fatalf("fallback reason = %q", requestContext.VSRSelectionReasoning)
+	}
+}
+
+func TestPromptSelectionDoesNotResolveBaseModelThroughLoRAAlias(t *testing.T) {
+	candidates := []config.ModelRef{
+		{Model: "model-b", LoRAName: "model-a"},
+		{Model: "model-a"},
+	}
+	selected := selectedModelRefFromResult(
+		&selection.SelectionContext{CandidateModels: candidates},
+		&selection.SelectionResult{
+			SelectedModel: "model-a",
+			Method:        selection.MethodPrompt,
+		},
+	)
+	if selected == nil || selected.Model != "model-a" || selected.LoRAName != "" {
+		t.Fatalf("selected = %#v, want base model-a candidate", selected)
+	}
+}
+
+func TestSelectModelFromCandidatesPropagatesRequestCancellation(t *testing.T) {
+	cancelled := false
+	registry := selection.NewRegistry()
+	registry.Register(
+		selection.MethodStatic,
+		cancellationSelector{cancelled: &cancelled},
+	)
+	cancelledContext, cancel := context.WithCancel(context.Background())
+	cancel()
+	requestContext := &RequestContext{TraceContext: cancelledContext}
+	router := &OpenAIRouter{ModelSelector: registry}
+
+	selected, _ := router.selectModelFromCandidates(
+		&selection.SelectionContext{
+			DecisionName:    "cancelled",
+			CandidateModels: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
+		},
+		nil,
+		requestContext,
+	)
+
+	if !cancelled {
+		t.Fatal("selector did not observe request cancellation")
+	}
+	if selected == nil || selected.Model != "model-a" {
+		t.Fatalf("selected = %#v, want fallback model-a", selected)
+	}
+	if requestContext.VSRSelectionReasoning != selectionFallbackCancelled {
+		t.Fatalf("fallback reason = %q", requestContext.VSRSelectionReasoning)
 	}
 }
 

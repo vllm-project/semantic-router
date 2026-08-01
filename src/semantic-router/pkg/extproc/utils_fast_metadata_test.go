@@ -33,3 +33,10 @@ func TestExtractContentFastRejectsNonStringMetadata(t *testing.T) {
 		t.Fatal("extractContentFast() expected metadata type error")
 	}
 }
+
+func TestExtractContentFastRejectsNonStringMetadataWithEmptyKey(t *testing.T) {
+	body := []byte(`{"model":"m","metadata":{"":1},"messages":[]}`)
+	if _, err := extractContentFast(body); err == nil {
+		t.Fatal("extractContentFast() expected empty-key metadata type error")
+	}
+}

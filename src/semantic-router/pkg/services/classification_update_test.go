@@ -1,6 +1,7 @@
 package services
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
@@ -63,9 +64,61 @@ func TestClassificationServiceRefreshRuntimeConfigDoesNotReplaceGlobalConfig(t *
 	if got := service.GetConfig(); got != newConfig {
 		t.Fatalf("service.GetConfig() = %p, want %p", got, newConfig)
 	}
+	if !service.HasClassifier() {
+		t.Fatal("reload did not activate a classifier for placeholder service")
+	}
 	if got := config.Get(); got != globalConfig {
 		t.Fatalf("config.Get() = %p, want unchanged global config %p", got, globalConfig)
 	}
+}
+
+func TestClassificationServiceRefreshRuntimeConfigRetainsSnapshotOnFailure(t *testing.T) {
+	oldConfig := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{Name: "old_route"}},
+		},
+	}
+	oldClassifier := &classification.Classifier{Config: oldConfig}
+	service := &ClassificationService{
+		classifier: oldClassifier,
+		config:     oldConfig,
+	}
+
+	service.RefreshRuntimeConfig(nil)
+
+	if service.config != oldConfig {
+		t.Fatal("failed reload replaced the service config")
+	}
+	if service.classifier != oldClassifier {
+		t.Fatal("failed reload replaced the classifier")
+	}
+}
+
+func TestClassificationServiceConcurrentClassifyAndRefresh(t *testing.T) {
+	oldConfig := &config.RouterConfig{}
+	newConfig := &config.RouterConfig{}
+	service := &ClassificationService{
+		classifier: &classification.Classifier{Config: oldConfig},
+		config:     oldConfig,
+	}
+
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			for range 20 {
+				_, _ = service.ClassifyIntentForEval(IntentRequest{Text: "hello"})
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			for range 20 {
+				service.RefreshRuntimeConfig(newConfig)
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func replaceGlobalConfigForServiceTest(newCfg *config.RouterConfig) func() {

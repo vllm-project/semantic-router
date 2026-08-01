@@ -46,7 +46,14 @@ func (c *Classifier) buildPolicySignalDispatchers(
 		},
 		{
 			config.SignalTypeConversation, "Conversation",
-			func() { c.evaluateConversationSignal(results, mu, convFacts) },
+			func() {
+				c.evaluateConversationSignal(
+					results,
+					mu,
+					convFacts,
+					usedSignals,
+				)
+			},
 		},
 		{
 			config.SignalTypeEvent, "Event",

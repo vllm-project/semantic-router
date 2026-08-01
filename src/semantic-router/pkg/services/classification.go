@@ -116,7 +116,13 @@ func GetGlobalClassificationService() *ClassificationService {
 
 // HasClassifier returns true if the service has a real classifier (not placeholder)
 func (s *ClassificationService) HasClassifier() bool {
-	return s.classifier != nil
+	return s.classifierSnapshot() != nil
+}
+
+func (s *ClassificationService) classifierSnapshot() *classification.Classifier {
+	s.configMutex.RLock()
+	defer s.configMutex.RUnlock()
+	return s.classifier
 }
 
 // NewPlaceholderClassificationService creates a placeholder service for API-only mode
@@ -135,6 +141,8 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	if err != nil {
 		return nil, err
 	}
+	s.configMutex.RLock()
+	defer s.configMutex.RUnlock()
 
 	classifier, err := s.classifierForRequestModel(req.Model)
 	if err != nil {
@@ -158,7 +166,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	// Use signal-driven architecture: evaluate all signals first
 	// Check if we should force evaluate all signals (for eval scenarios)
 	forceEvaluateAll := req.Options != nil && req.Options.EvaluateAllSignals
-	signals := classifier.EvaluateAllSignalsWithContext(
+	signals := classifier.EvaluateAllSignalsWithRequestFacts(
 		input.evaluationText,
 		input.contextText,
 		input.currentUserText,
@@ -170,6 +178,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		nil,
 		input.conversationFacts,
 		input.imageURL,
+		input.requestFacts,
 	)
 
 	// Evaluate decision with engine (if decisions are configured)
@@ -241,7 +250,7 @@ func (s *ClassificationService) classifierForRequestModel(modelName string) (*cl
 
 // GetClassifier returns the classifier instance (for signal-driven methods)
 func (s *ClassificationService) GetClassifier() *classification.Classifier {
-	return s.classifier
+	return s.classifierSnapshot()
 }
 
 // GetConfig returns the current configuration
