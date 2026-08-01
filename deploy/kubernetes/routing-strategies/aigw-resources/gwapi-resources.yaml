@@ -153,6 +153,10 @@ spec:
               clusterName: semantic-router
             timeout: 60s
           message_timeout: 60s
+          metadataOptions:
+            receivingNamespaces:
+              untyped:
+              - vllm.semantic_router
           processing_mode:
             request_body_mode: BUFFERED
             request_header_mode: SEND
