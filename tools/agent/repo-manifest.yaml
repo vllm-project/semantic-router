@@ -150,6 +150,7 @@ docs:
 - docs/agent/tech-debt/td-042-ffi-embedding-structure-debt.md
 - docs/agent/tech-debt/td-043-semantic-router-go-cyclop-debt.md
 - docs/agent/tech-debt/td-044-flow-tool-state-durability-gap.md
+- docs/agent/tech-debt/td-045-dashboard-recipe-scope-blindness.md
 local_agent_rules:
 - path: src/vllm-sr/cli/AGENTS.md
   scope: src/vllm-sr/cli/**
@@ -317,6 +318,9 @@ doc_governance:
   - path: docs/agent/tech-debt/td-044-flow-tool-state-durability-gap.md
     steward: router-core
     freshness: update when the TD044 debt record changes materially
+  - path: docs/agent/tech-debt/td-045-dashboard-recipe-scope-blindness.md
+    steward: dashboard
+    freshness: update when the TD045 debt record changes materially
 skills:
 - tools/agent/skills/config-platform-change/SKILL.md
 - tools/agent/skills/cross-stack-bugfix/SKILL.md

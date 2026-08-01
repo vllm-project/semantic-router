@@ -57,9 +57,9 @@ var defaultDecisionsAllowlist = map[string]string{
 	"src/semantic-router/pkg/services/classification_signal_contract.go":    "gate matches EvaluateDecisionWithEngine's default scope",
 	"src/semantic-router/pkg/services/classification_recommendation.go":     "recommendation must not name a model only a recipe entrypoint can reach",
 
-	// Known limitation: the dashboard topology test-query panel replays the
-	// default profile's rules and does not model recipe scoping yet.
-	"dashboard/backend/handlers/topology_response.go": "topology test-query panel does not model recipe scoping yet",
+	// Known limitation: the dashboard does not model recipe scoping yet;
+	// tech-debt entry TD045 tracks the gap.
+	"dashboard/backend/handlers/topology_response.go": "topology test-query panel does not model recipe scoping yet (TD045)",
 }
 
 // defaultDecisionsSpellings are the source spellings that read the default

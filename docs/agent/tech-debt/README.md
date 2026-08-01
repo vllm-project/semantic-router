@@ -70,6 +70,10 @@ Every debt entry should include:
 
 - [TD044 Flow Tool State Durability Follow-Up](td-044-flow-tool-state-durability-gap.md)
 
+### PL0038 Entrypoints and Recipes
+
+- [TD045 Dashboard Surfaces Are Blind to Named Recipes](td-045-dashboard-recipe-scope-blindness.md)
+
 ## Retired Debt Policy
 
 Retired TD files are removed from this directory. Keep the ID in commit history

@@ -15,11 +15,12 @@ of it.
   `recipes` adds named additional profiles. A recipe named `default` may only
   appear when the top-level `routing` block carries no profile of its own.
 - Internal representation: normalized `Recipes`/`Entrypoints` on `RouterConfig`;
-  the default recipe's decisions stay bridged into the flat `Decisions` field so
-  current read sites keep working unchanged, while the flat
-  `Signals`/`Projections` fields hold the global registry (the union across
-  recipes, per the issue's "signal registry stays global" non-goal) so one
-  classifier evaluates any recipe's rules.
+  the default recipe's decisions stay bridged into the flat field (renamed
+  `Decisions` → `DefaultDecisions` in #2724 so the default-profile scope is
+  visible at every read site), while the flat `Signals`/`Projections` fields
+  hold the global registry (the union across recipes, per the issue's "signal
+  registry stays global" non-goal) so one classifier evaluates any recipe's
+  rules.
 - Request path: resolve model name → entrypoint → recipe before signal
   evaluation in `pkg/extproc`; decision evaluation reads the per-request recipe.
 - Validation: structural recipe/entrypoint checks first, then cross-surface
@@ -73,12 +74,19 @@ single-profile configs.
 
 ## Next Action
 
-The runtime PR (#2613, stacked on #2612) is complete: T5–T7 plus T9 E2E.
-T8 docs ride with the config-contract PR (#2612). T3 stays pending the
-maintainer confirmation recorded in Open Decisions. Deferred from T5: signal
-evaluation runs over the global registry filtered by all recipes' decisions;
-scoping the evaluated signal set to the per-request recipe is a performance
-follow-up, not a correctness gap.
+The read-site correction PR (#2724, closes #2723) is complete: the flat field
+is renamed `DefaultDecisions`, the whole-surface read sites (plugin
+enablement, contract validators, lookups, replay) read every recipe, the
+deliberate default-profile reads are pinned in
+`pkg/config/default_decisions_allowlist_test.go` with per-site rationale, and
+cross-recipe case-aliased decision names are rejected at load. Remaining
+tasks: T10 DSL round-trip, T11 CLI/operator, T12 dashboard (the dashboard's
+recipe blindness is registered as
+[TD045](../tech-debt/td-045-dashboard-recipe-scope-blindness.md)). T3 stays
+pending the maintainer confirmation recorded in Open Decisions. Deferred from
+T5: signal evaluation runs over the global registry filtered by all recipes'
+decisions; scoping the evaluated signal set to the per-request recipe is a
+performance follow-up, not a correctness gap.
 
 ## Operating Rules
 
@@ -86,10 +94,11 @@ follow-up, not a correctness gap.
   `recipes.go` and canonical normalization in `canonical_recipes.go`.
 - `processor_req_body.go` stays an orchestrator; entrypoint resolution lives in
   a dedicated `req_filter_entrypoint.go`.
-- The flat `Decisions` field on `RouterConfig` must always equal the default
-  recipe; the flat `Signals`/`Projections` fields hold the global registry
-  (union of every recipe's profile). Runtime code moves to recipe reads, never
-  the reverse.
+- The flat `DefaultDecisions` field on `RouterConfig` must always alias the
+  default recipe; the flat `Signals`/`Projections` fields hold the global
+  registry (union of every recipe's profile). Runtime code moves to recipe
+  reads, never the reverse; a new default-profile read must be entered in
+  `pkg/config/default_decisions_allowlist_test.go` with its scope rationale.
 - Every step passes `make agent-lint` and the affected package tests before the
   next step starts.
 
