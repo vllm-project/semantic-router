@@ -13,7 +13,7 @@ routing:
     - name: test-model
 providers:
   defaults:
-    default_model: test-model
+    model: test-model
   models:
     - name: test-model
       backend_refs:
@@ -44,7 +44,7 @@ routing:
     - name: foo
 providers:
   defaults:
-    default_model: foo
+    model: foo
   models:
     - name: foo
       backend_refs:
