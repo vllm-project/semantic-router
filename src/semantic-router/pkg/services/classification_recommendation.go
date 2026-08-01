@@ -7,16 +7,13 @@ import (
 )
 
 func (s *ClassificationService) getRecommendedModel(category string, _ float64) string {
-	if s.classifier != nil {
-		model := s.classifier.SelectBestModelForCategory(category)
-		if model != "" {
-			return model
-		}
-	}
+	// The classify API previews routing against the default profile only
+	// (EvaluateDecisionWithEngine's scope), so the recommendation must not
+	// name a model reachable only through a named recipe's entrypoint.
 	if s.config == nil {
 		return ""
 	}
-	if model := recommendedModelFromDecisions(s.config.AllRoutingDecisions(), category); model != "" {
+	if model := recommendedModelFromDecisions(s.config.DefaultDecisions, category); model != "" {
 		return model
 	}
 	return s.config.DefaultModel

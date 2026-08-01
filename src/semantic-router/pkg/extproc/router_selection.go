@@ -159,7 +159,11 @@ type decisionScopedSelectionConfigs struct {
 func findDecisionScopedSelectionConfigs(cfg *config.RouterConfig) decisionScopedSelectionConfigs {
 	var result decisionScopedSelectionConfigs
 
-	for _, decision := range cfg.AllRoutingDecisions() {
+	// First-match-wins into a process-level selector singleton: the source
+	// must be the default profile. Reading every recipe would let a named
+	// recipe's tuning claim the global config, decided by YAML declaration
+	// order (recipes-only layouts preserve it).
+	for _, decision := range cfg.DefaultDecisions {
 		if decision.Algorithm == nil {
 			continue
 		}

@@ -63,11 +63,13 @@ func (c *Classifier) tryKeywordBasedClassification(text string) (string, float64
 
 // makeReasoningDecisionForKeywordCategory creates a reasoning decision for keyword-matched categories
 func (c *Classifier) makeReasoningDecisionForKeywordCategory(category string) entropy.ReasoningDecision {
-	// Find the decision configuration
+	// Find the decision configuration. Default profile only: this serves the
+	// classify API, whose decision engine evaluates the default profile, so a
+	// named recipe's use_reasoning must not leak into its lookup space.
 	normalizedCategory := strings.ToLower(strings.TrimSpace(category))
 	useReasoning := false
 
-	for _, decision := range c.Config.AllRoutingDecisions() {
+	for _, decision := range c.Config.DefaultDecisions {
 		if strings.ToLower(decision.Name) == normalizedCategory {
 			// Check if the decision has reasoning enabled in its best model
 			if len(decision.ModelRefs) > 0 && decision.ModelRefs[0].UseReasoning != nil {
@@ -117,9 +119,10 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 	}
 
 	// Build decision reasoning map from configuration
-	// Use the best model's reasoning capability for each decision
+	// Use the best model's reasoning capability for each decision.
+	// Default profile only: same scope as the classify API's decision engine.
 	categoryReasoningMap := make(map[string]bool)
-	for _, decision := range c.Config.AllRoutingDecisions() {
+	for _, decision := range c.Config.DefaultDecisions {
 		useReasoning := false
 		if len(decision.ModelRefs) > 0 && decision.ModelRefs[0].UseReasoning != nil {
 			// Use the first (best) model's reasoning capability

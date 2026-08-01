@@ -42,14 +42,18 @@ var defaultDecisionsAllowlist = map[string]string{
 	// would let a recipe's decisions be selected without going through that
 	// recipe's entrypoint; HasXDecision gates whether /v1/models advertises
 	// the slug, and advertising one that cannot route would be a lie.
-	"src/semantic-router/pkg/config/fusion_config.go":                      "HasFusionDecision gates the fusion slug in /v1/models",
-	"src/semantic-router/pkg/config/remom_config.go":                       "HasReMoMDecision gates the remom slug in /v1/models",
-	"src/semantic-router/pkg/config/workflows_config.go":                   "HasFlowDecision gates the flow slug in /v1/models",
-	"src/semantic-router/pkg/extproc/req_filter_fusion.go":                 "algorithm slugs resolve against the default profile only",
-	"src/semantic-router/pkg/extproc/req_filter_classification_runtime.go": "authz scope for requests without an entrypoint recipe",
-	"src/semantic-router/pkg/classification/classifier_signal_decision.go": "default candidate set for unscoped requests",
-	"src/semantic-router/pkg/services/classification.go":                   "gate matches EvaluateDecisionWithEngine's default scope",
-	"src/semantic-router/pkg/services/classification_signal_contract.go":   "gate matches EvaluateDecisionWithEngine's default scope",
+	"src/semantic-router/pkg/config/fusion_config.go":                       "HasFusionDecision gates the fusion slug in /v1/models",
+	"src/semantic-router/pkg/config/remom_config.go":                        "HasReMoMDecision gates the remom slug in /v1/models",
+	"src/semantic-router/pkg/config/workflows_config.go":                    "HasFlowDecision gates the flow slug in /v1/models",
+	"src/semantic-router/pkg/extproc/req_filter_fusion.go":                  "algorithm slugs resolve against the default profile only",
+	"src/semantic-router/pkg/extproc/req_filter_classification_runtime.go":  "authz scope for requests without an entrypoint recipe",
+	"src/semantic-router/pkg/extproc/router_selection.go":                   "first-match into the process-level selector singleton must not depend on recipe declaration order",
+	"src/semantic-router/pkg/classification/classifier_signal_decision.go":  "default candidate set for unscoped requests",
+	"src/semantic-router/pkg/classification/classifier_category_entropy.go": "reasoning maps serve the classify API, same scope as its decision engine",
+	"src/semantic-router/pkg/classification/mcp_classifier_runtime.go":      "reasoning map serves the classify API, same scope as its decision engine",
+	"src/semantic-router/pkg/services/classification.go":                    "gate matches EvaluateDecisionWithEngine's default scope",
+	"src/semantic-router/pkg/services/classification_signal_contract.go":    "gate matches EvaluateDecisionWithEngine's default scope",
+	"src/semantic-router/pkg/services/classification_recommendation.go":     "recommendation must not name a model only a recipe entrypoint can reach",
 
 	// Known limitation: the dashboard topology test-query panel replays the
 	// default profile's rules and does not model recipe scoping yet.

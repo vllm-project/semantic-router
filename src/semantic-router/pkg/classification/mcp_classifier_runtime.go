@@ -139,8 +139,9 @@ func (c *Classifier) mcpCategoryNames(probabilities []float32) []string {
 }
 
 func (c *Classifier) makeMCPReasoningDecision(probabilities []float32, categoryNames []string) (entropy.ReasoningDecision, float64) {
+	// Default profile only: same scope as the classify API's decision engine.
 	categoryReasoningMap := make(map[string]bool)
-	for _, decision := range c.Config.AllRoutingDecisions() {
+	for _, decision := range c.Config.DefaultDecisions {
 		useReasoning := false
 		if len(decision.ModelRefs) > 0 && decision.ModelRefs[0].UseReasoning != nil {
 			useReasoning = *decision.ModelRefs[0].UseReasoning
