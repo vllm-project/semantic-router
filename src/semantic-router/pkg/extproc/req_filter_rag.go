@@ -172,7 +172,7 @@ func (r *OpenAIRouter) getCachedRAGContext(query string, ragConfig *config.RAGPl
 
 	if cached, found := r.getRAGCache(query, ragConfig); found {
 		metrics.RecordRAGCacheHit(ragConfig.Backend)
-		logging.Debugf("RAG cache hit for query: %s", query[:min(50, len(query))])
+		logging.Debugf("RAG cache hit for query: %s", logging.ContentDescriptor(query))
 		return cached, true
 	}
 
@@ -219,7 +219,7 @@ func (r *OpenAIRouter) retrieveContextFromBackend(
 func (r *OpenAIRouter) logEmptyRAGContext(backend string, query string, retrievedContext string) {
 	if retrievedContext == "" {
 		logging.Debugf("[RAG] Backend '%s' returned empty context for query: %s",
-			backend, query[:min(60, len(query))])
+			backend, logging.ContentDescriptor(query))
 	}
 }
 
