@@ -110,6 +110,38 @@ func TestHandleConfigPutPreservesBackendRefNameReturnedByGet(t *testing.T) {
 	}
 }
 
+func TestHandleConfigPutPreservesDisabledRouterReplay(t *testing.T) {
+	configPath := writeDeployTestBaseConfig(t)
+	payloadCfg := minimalDeployTestConfig("new_route")
+	payloadCfg.RouterReplay = config.RouterReplayConfig{
+		Enabled:      false,
+		StoreBackend: "memory",
+		TTLSeconds:   600,
+	}
+	payloadYAML := mustMarshalCanonicalConfigYAML(t, payloadCfg)
+	body, err := json.Marshal(RouterConfigUpdateRequest{YAML: string(payloadYAML)})
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+
+	apiServer := &ClassificationAPIServer{configPath: configPath}
+	req := httptest.NewRequest(http.MethodPut, "/config/router", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	apiServer.handleConfigPut(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d: %s", rr.Code, rr.Body.String())
+	}
+	reloaded, err := config.Parse(configPath)
+	if err != nil {
+		t.Fatalf("parse deployed config: %v", err)
+	}
+	if reloaded.RouterReplay.Enabled {
+		t.Fatal("expected router_replay.enabled=false to survive canonical PUT normalization")
+	}
+}
+
 func TestHandleConfigPatchRejectsInvalidRemoteEmbeddingProvider(t *testing.T) {
 	configPath := writeDeployTestBaseConfig(t)
 	invalidCfg := minimalDeployTestConfig("new_route")
