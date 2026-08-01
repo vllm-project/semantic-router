@@ -8,6 +8,9 @@ from typing import Any
 
 CANONICAL_VERSION = "v0.3"
 
+CONDITION_TYPE_DOMAIN = "domain"
+CONDITION_TYPE_PROJECTION = "projection"
+
 CANONICAL_TOP_LEVEL_KEYS = frozenset(
     {
         "version",
@@ -66,7 +69,7 @@ class SignalFamilySpec:
 SIGNAL_FAMILY_SPECS = (
     SignalFamilySpec("keywords", "keywords", "keyword", "keyword_rules"),
     SignalFamilySpec("embeddings", "embeddings", "embedding", "embedding_rules"),
-    SignalFamilySpec("domains", "domains", "domain", "categories"),
+    SignalFamilySpec("domains", "domains", CONDITION_TYPE_DOMAIN, "categories"),
     SignalFamilySpec("fact_check", "fact_check", "fact_check", "fact_check_rules"),
     SignalFamilySpec(
         "user_feedbacks",
@@ -115,6 +118,16 @@ def iter_routing_profiles(config: Any) -> Iterable[tuple[str, Any]]:
     yield "default", config.routing
     for recipe in config.recipes:
         yield recipe.name, recipe.routing
+
+
+def iter_condition_leaves(conditions: Any) -> Iterable[Any]:
+    """Yield leaf conditions from a nested decision expression."""
+    for condition in conditions or ():
+        children = getattr(condition, "conditions", None)
+        if children:
+            yield from iter_condition_leaves(children)
+        else:
+            yield condition
 
 
 def iter_named_signal_entries(signals: Any) -> Iterable[tuple[str, str]]:

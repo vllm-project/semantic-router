@@ -1,18 +1,12 @@
 """Recipe, entrypoint, and global profile contract validation."""
 
-from cli.config_contract import iter_routing_profiles
+from cli.config_contract import (
+    CONDITION_TYPE_DOMAIN,
+    iter_condition_leaves,
+    iter_routing_profiles,
+)
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
-
-
-def _iter_condition_nodes(conditions):
-    """Depth-first traversal over recursive condition trees."""
-    if not conditions:
-        return
-    for condition in conditions:
-        yield condition
-        if getattr(condition, "conditions", None):
-            yield from _iter_condition_nodes(condition.conditions)
 
 
 def validate_domain_references(config: UserConfig) -> list[ValidationError]:
@@ -36,8 +30,8 @@ def validate_domain_references(config: UserConfig) -> list[ValidationError]:
             generated_names = {
                 condition.name
                 for decision in decisions
-                for condition in _iter_condition_nodes(decision.rules.conditions)
-                if condition.type == "domain" and condition.name
+                for condition in iter_condition_leaves(decision.rules.conditions)
+                if condition.type == CONDITION_TYPE_DOMAIN and condition.name
             }
             effective_domains = [
                 {
@@ -49,8 +43,11 @@ def validate_domain_references(config: UserConfig) -> list[ValidationError]:
             ]
         domain_names = {domain["name"] for domain in effective_domains}
         for decision in decisions:
-            for condition in _iter_condition_nodes(decision.rules.conditions):
-                if condition.type == "domain" and condition.name not in domain_names:
+            for condition in iter_condition_leaves(decision.rules.conditions):
+                if (
+                    condition.type == CONDITION_TYPE_DOMAIN
+                    and condition.name not in domain_names
+                ):
                     errors.append(
                         ValidationError(
                             f"Decision '{decision.name}' in recipe '{profile_name}' "

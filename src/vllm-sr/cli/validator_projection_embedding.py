@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cli.config_contract import iter_routing_profiles
+from cli.config_contract import CONDITION_TYPE_PROJECTION, iter_routing_profiles
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
 
@@ -62,7 +62,7 @@ def _projection_deps_from_inputs(
 ) -> list[str]:
     deps: list[str] = []
     for inp in inputs or []:
-        if (getattr(inp, "type", "") or "").lower() != "projection":
+        if (getattr(inp, "type", "") or "").lower() != CONDITION_TYPE_PROJECTION:
             continue
         dep_name = getattr(inp, "name", None)
         if not dep_name:

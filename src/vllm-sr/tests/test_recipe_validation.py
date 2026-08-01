@@ -239,6 +239,31 @@ def test_signal_references_cannot_cross_signal_families():
     )
 
 
+def test_nested_signal_conditions_validate_only_leaf_references():
+    config = recipe_config()
+    config.routing.signals.keywords = [
+        KeywordSignal(
+            name="nested-keyword",
+            operator="OR",
+            keywords=["nested"],
+            case_sensitive=False,
+        )
+    ]
+    config.routing.decisions[0].rules.conditions = [
+        Condition(
+            operator="OR",
+            conditions=[Condition(type="keyword", name="nested-keyword")],
+        )
+    ]
+
+    errors = validate_user_config(config)
+
+    assert not any(
+        "unsupported signal type 'None'" in error.message for error in errors
+    )
+    assert not any("nested-keyword" in error.message for error in errors)
+
+
 def test_decision_names_can_repeat_across_recipes():
     config = recipe_config()
     config.recipes[0].routing.decisions[0].name = "default-route"
