@@ -42,35 +42,53 @@ func validateNamedRoutingCollections(prefix string, collections interface{}) err
 		if field.Kind() != reflect.Slice {
 			continue
 		}
-		collectionName := strings.Split(typeOfValue.Field(i).Tag.Get("yaml"), ",")[0]
-		if collectionName == "" || collectionName == "-" {
-			collectionName = typeOfValue.Field(i).Name
+		path := prefix + "." + routingCollectionName(typeOfValue.Field(i))
+		names, err := namedRoutingCollectionNames(path, field)
+		if err != nil {
+			return err
 		}
-
-		names := make([]string, 0, field.Len())
-		for j := 0; j < field.Len(); j++ {
-			item := field.Index(j)
-			if item.Kind() == reflect.Pointer {
-				if item.IsNil() {
-					names = append(names, "")
-					continue
-				}
-				item = item.Elem()
-			}
-			if item.Kind() != reflect.Struct {
-				return fmt.Errorf("%s.%s: schema item must be a named struct", prefix, collectionName)
-			}
-			name := item.FieldByName("Name")
-			if !name.IsValid() || name.Kind() != reflect.String {
-				return fmt.Errorf("%s.%s: schema item does not expose a string Name field", prefix, collectionName)
-			}
-			names = append(names, name.String())
-		}
-		if err := validateUniqueRoutingNames(prefix+"."+collectionName, names); err != nil {
+		if err := validateUniqueRoutingNames(path, names); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func routingCollectionName(field reflect.StructField) string {
+	name := strings.Split(field.Tag.Get("yaml"), ",")[0]
+	if name == "" || name == "-" {
+		return field.Name
+	}
+	return name
+}
+
+func namedRoutingCollectionNames(path string, collection reflect.Value) ([]string, error) {
+	names := make([]string, 0, collection.Len())
+	for i := 0; i < collection.Len(); i++ {
+		name, err := namedRoutingCollectionItem(path, collection.Index(i))
+		if err != nil {
+			return nil, err
+		}
+		names = append(names, name)
+	}
+	return names, nil
+}
+
+func namedRoutingCollectionItem(path string, item reflect.Value) (string, error) {
+	if item.Kind() == reflect.Pointer {
+		if item.IsNil() {
+			return "", nil
+		}
+		item = item.Elem()
+	}
+	if item.Kind() != reflect.Struct {
+		return "", fmt.Errorf("%s: schema item must be a named struct", path)
+	}
+	name := item.FieldByName("Name")
+	if !name.IsValid() || name.Kind() != reflect.String {
+		return "", fmt.Errorf("%s: schema item does not expose a string Name field", path)
+	}
+	return name.String(), nil
 }
 
 func validateUniqueRoutingNames(path string, names []string) error {

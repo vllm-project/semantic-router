@@ -34,34 +34,7 @@ func validateRuleNodeSignalReferences(
 		return nil
 	}
 	if node.IsLeaf() {
-		signalType := strings.ToLower(strings.TrimSpace(node.Type))
-		name := strings.TrimSpace(node.Name)
-		if signalType == SignalTypeProjection {
-			// Projection output references are validated after the projection DAG
-			// has been checked and its output names are available.
-			return nil
-		}
-		if !IsSupportedSignalType(signalType) {
-			return fmt.Errorf("routing.decisions[%q]: unsupported signal type %q", decisionName, node.Type)
-		}
-		if name == "" {
-			if !strictReferences {
-				return nil
-			}
-			return fmt.Errorf("routing.decisions[%q]: signal condition of type %q requires a name", decisionName, signalType)
-		}
-		if !projectionInputDeclared(declared, signalType, name) {
-			if !strictReferences {
-				return nil
-			}
-			return fmt.Errorf(
-				"routing.decisions[%q]: signal %s(%q) is not declared in this recipe",
-				decisionName,
-				signalType,
-				name,
-			)
-		}
-		return nil
+		return validateLeafSignalReference(decisionName, node, declared, strictReferences)
 	}
 	for i := range node.Conditions {
 		if err := validateRuleNodeSignalReferences(decisionName, &node.Conditions[i], declared, strictReferences); err != nil {
@@ -69,4 +42,37 @@ func validateRuleNodeSignalReferences(
 		}
 	}
 	return nil
+}
+
+func validateLeafSignalReference(
+	decisionName string,
+	node *RuleNode,
+	declared map[string]map[string]struct{},
+	strictReferences bool,
+) error {
+	signalType := strings.ToLower(strings.TrimSpace(node.Type))
+	name := strings.TrimSpace(node.Name)
+	if signalType == SignalTypeProjection {
+		// Projection output references are validated after the projection DAG
+		// has been checked and its output names are available.
+		return nil
+	}
+	if !IsSupportedSignalType(signalType) {
+		return fmt.Errorf("routing.decisions[%q]: unsupported signal type %q", decisionName, node.Type)
+	}
+	if !strictReferences {
+		return nil
+	}
+	if name == "" {
+		return fmt.Errorf("routing.decisions[%q]: signal condition of type %q requires a name", decisionName, signalType)
+	}
+	if projectionInputDeclared(declared, signalType, name) {
+		return nil
+	}
+	return fmt.Errorf(
+		"routing.decisions[%q]: signal %s(%q) is not declared in this recipe",
+		decisionName,
+		signalType,
+		name,
+	)
 }
