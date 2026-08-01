@@ -28,6 +28,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/publicmodels"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 )
@@ -3370,8 +3371,20 @@ func TestHandleModelsRequest(t *testing.T) {
 				if model.Created == 0 {
 					t.Error("Expected non-zero created timestamp")
 				}
-				if model.OwnedBy != "vllm-semantic-router" {
-					t.Errorf("Expected model owned_by 'vllm-semantic-router', got %s", model.OwnedBy)
+				if model.OwnedBy == "" {
+					t.Errorf("Expected non-empty model owner for %s", model.ID)
+				}
+				switch model.Routing.Resolution {
+				case publicmodels.ResolutionVirtual:
+					if !model.Routing.Selectable {
+						t.Errorf("Expected virtual model %s to be selectable", model.ID)
+					}
+				case publicmodels.ResolutionPassthrough:
+					if model.Routing.Selectable {
+						t.Errorf("Expected passthrough model %s to be non-selectable", model.ID)
+					}
+				default:
+					t.Errorf("Expected model %s to declare a supported routing resolution, got %q", model.ID, model.Routing.Resolution)
 				}
 			}
 
