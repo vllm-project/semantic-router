@@ -107,7 +107,7 @@ func TestRecipeDecisionsReachDownstreamReadSites(t *testing.T) {
 	})
 
 	t.Run("memory plugin auto-enable", func(t *testing.T) {
-		if !isMemoryEnabled(cfg) {
+		if !cfg.IsMemoryEnabled() {
 			t.Fatal("expected the recipe decision's memory plugin to enable the memory runtime")
 		}
 	})

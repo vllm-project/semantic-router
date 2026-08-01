@@ -84,7 +84,7 @@ func InitWithOptions(opts InitOptions) error {
 
 	// Get memory store if available (set by ExtProc router during init)
 	var memoryStore memory.Store
-	if shouldInitMemoryStore(cfg) {
+	if cfg.IsMemoryEnabled() {
 		memoryStore = resolveMemoryStore(cfg, opts.RuntimeRegistry)
 		if memoryStore != nil {
 			logging.ComponentEvent("apiserver", "memory_api_enabled", map[string]interface{}{})
@@ -283,20 +283,6 @@ func initMemoryStore(maxRetries int, retryInterval time.Duration) memory.Store {
 	return nil
 }
 
-func shouldInitMemoryStore(cfg *config.RouterConfig) bool {
-	if cfg == nil {
-		return false
-	}
-	if cfg.Memory.Enabled {
-		return true
-	}
-	for _, decision := range cfg.AllRoutingDecisions() {
-		if decision.HasPlugin("memory") {
-			return true
-		}
-	}
-	return false
-}
 
 // setupRoutes configures all API routes
 func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {

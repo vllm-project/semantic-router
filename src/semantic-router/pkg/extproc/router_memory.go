@@ -16,8 +16,13 @@ import (
 )
 
 func createMemoryRuntime(cfg *config.RouterConfig) (memory.Store, *memory.MemoryExtractor) {
-	if !isMemoryEnabled(cfg) {
+	if !cfg.IsMemoryEnabled() {
 		return nil, nil
+	}
+	if !cfg.Memory.Enabled {
+		if name := cfg.MemoryPluginDecisionName(); name != "" {
+			logging.Infof("Memory auto-enabled: decision '%s' uses memory plugin", name)
+		}
 	}
 
 	memoryStore, err := createMemoryStore(cfg)
@@ -45,20 +50,6 @@ func createMemoryRuntime(cfg *config.RouterConfig) (memory.Store, *memory.Memory
 	return memoryStore, memoryExtractor
 }
 
-func isMemoryEnabled(cfg *config.RouterConfig) bool {
-	if cfg.Memory.Enabled {
-		return true
-	}
-
-	for _, decision := range cfg.AllRoutingDecisions() {
-		if decision.HasPlugin("memory") {
-			logging.Infof("Memory auto-enabled: decision '%s' uses memory plugin", decision.Name)
-			return true
-		}
-	}
-
-	return false
-}
 
 // createMemoryStore creates a memory store based on configuration.
 // Switches on cfg.Memory.Backend: "valkey" creates a ValkeyStore, "milvus" (or empty) creates a MilvusStore.

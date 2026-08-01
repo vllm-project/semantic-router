@@ -33,6 +33,30 @@ func (c *RouterConfig) GetFactCheckRules() []FactCheckRule {
 }
 
 // IsHallucinationModelEnabled reports whether hallucination detection should run.
+// MemoryPluginDecisionName returns the name of the first decision in any
+// routing profile that declares the memory plugin, or "" when none does.
+func (c *RouterConfig) MemoryPluginDecisionName() string {
+	if c == nil {
+		return ""
+	}
+	for _, decision := range c.AllRoutingDecisions() {
+		if decision.HasPlugin("memory") {
+			return decision.Name
+		}
+	}
+	return ""
+}
+
+// IsMemoryEnabled reports whether the memory runtime must be wired up:
+// memory is explicitly enabled, or some routing profile's decision uses the
+// memory plugin.
+func (c *RouterConfig) IsMemoryEnabled() bool {
+	if c == nil {
+		return false
+	}
+	return c.Memory.Enabled || c.MemoryPluginDecisionName() != ""
+}
+
 func (c *RouterConfig) IsHallucinationModelEnabled() bool {
 	if c.HallucinationMitigation.HallucinationModel.ModelID == "" {
 		return false

@@ -51,9 +51,9 @@ func TestShouldInitMemoryStore(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := shouldInitMemoryStore(tt.cfg)
+			got := tt.cfg.IsMemoryEnabled()
 			if got != tt.want {
-				t.Fatalf("shouldInitMemoryStore() = %v, want %v", got, tt.want)
+				t.Fatalf("IsMemoryEnabled() = %v, want %v", got, tt.want)
 			}
 		})
 	}

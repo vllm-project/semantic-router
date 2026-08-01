@@ -455,24 +455,10 @@ func memoryNeedsBERT(cfg *config.RouterConfig) bool {
 	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
 		return false
 	}
-	if !memoryConfigured(cfg) {
+	if !cfg.IsMemoryEnabled() {
 		return false
 	}
 	return resolveMemoryEmbeddingModel(cfg) == "bert"
-}
-
-func memoryConfigured(cfg *config.RouterConfig) bool {
-	if cfg.Memory.Enabled {
-		return true
-	}
-	// Every recipe's decisions count: a memory plugin declared by a
-	// non-default recipe still needs the memory runtime wired up.
-	for _, decision := range cfg.AllRoutingDecisions() {
-		if decision.HasPlugin("memory") {
-			return true
-		}
-	}
-	return false
 }
 
 func resolveSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
