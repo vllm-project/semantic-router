@@ -6,490 +6,215 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+type evaluateDecisionsCase struct {
+	name                  string
+	decisions             []config.Decision
+	strategy              config.RoutingStrategy
+	matchedKeywordRules   []string
+	matchedEmbeddingRules []string
+	matchedDomainRules    []string
+	expectedDecision      string
+}
+
+type evaluateSignalsCase struct {
+	name             string
+	decisions        []config.Decision
+	signals          *SignalMatches
+	expectedDecision string
+}
+
+func ruleDecision(
+	name string,
+	priority int,
+	operator string,
+	conditions ...config.RuleCondition,
+) config.Decision {
+	return config.Decision{
+		Name:     name,
+		Priority: priority,
+		Rules: config.RuleCombination{
+			Operator:   operator,
+			Conditions: conditions,
+		},
+		ModelRefs: []config.ModelRef{{Model: "test-model"}},
+	}
+}
+
+func notCodingDecision() config.Decision {
+	return ruleDecision(
+		"exclude-coding",
+		10,
+		"NOT",
+		config.RuleCondition{
+			Operator: "OR",
+			Conditions: []config.RuleCondition{
+				{Type: config.SignalTypeKeyword, Name: "programming"},
+				{Type: config.SignalTypeDomain, Name: "coding"},
+			},
+		},
+	)
+}
+
 func TestDecisionEngine_EvaluateDecisions(t *testing.T) {
-	tests := []struct {
-		name                  string
-		decisions             []config.Decision
-		strategy              config.RoutingStrategy
-		matchedKeywordRules   []string
-		matchedEmbeddingRules []string
-		matchedDomainRules    []string
-		expectedDecision      string
-		expectError           bool
-	}{
+	tests := []evaluateDecisionsCase{
 		{
-			name: "Single decision with AND operator - all rules match",
-			decisions: []config.Decision{
-				{
-					Name:     "coding-task",
-					Priority: 10,
-					Rules: config.RuleCombination{
-						Operator: "AND",
-						Conditions: []config.RuleCondition{
-							{Type: "keyword", Name: "programming"},
-							{Type: "domain", Name: "coding"},
-						},
-					},
-					ModelRefs: []config.ModelRef{
-						{Model: "codellama"},
-					},
-				},
-			},
-			strategy:              "priority",
-			matchedKeywordRules:   []string{"programming"},
-			matchedEmbeddingRules: []string{},
-			matchedDomainRules:    []string{"coding"},
-			expectedDecision:      "coding-task",
-			expectError:           false,
+			name: "all AND conditions match",
+			decisions: []config.Decision{ruleDecision(
+				"coding-task", 10, "AND",
+				config.RuleCondition{Type: config.SignalTypeKeyword, Name: "programming"},
+				config.RuleCondition{Type: config.SignalTypeDomain, Name: "coding"},
+			)},
+			strategy:            config.RoutingStrategyPriority,
+			matchedKeywordRules: []string{"programming"},
+			matchedDomainRules:  []string{"coding"},
+			expectedDecision:    "coding-task",
 		},
 		{
-			name: "Single decision with AND operator - partial match",
-			decisions: []config.Decision{
-				{
-					Name:     "coding-task",
-					Priority: 10,
-					Rules: config.RuleCombination{
-						Operator: "AND",
-						Conditions: []config.RuleCondition{
-							{Type: "keyword", Name: "programming"},
-							{Type: "domain", Name: "coding"},
-						},
-					},
-				},
-			},
-			strategy:              "priority",
-			matchedKeywordRules:   []string{"programming"},
-			matchedEmbeddingRules: []string{},
-			matchedDomainRules:    []string{}, // Missing domain rule
-			expectedDecision:      "",
-			expectError:           false, // Changed: no match should return nil result, not error
+			name: "partial AND conditions do not match",
+			decisions: []config.Decision{ruleDecision(
+				"coding-task", 10, "AND",
+				config.RuleCondition{Type: config.SignalTypeKeyword, Name: "programming"},
+				config.RuleCondition{Type: config.SignalTypeDomain, Name: "coding"},
+			)},
+			strategy:            config.RoutingStrategyPriority,
+			matchedKeywordRules: []string{"programming"},
 		},
 		{
-			name: "Single decision with OR operator - partial match",
-			decisions: []config.Decision{
-				{
-					Name:     "coding-task",
-					Priority: 10,
-					Rules: config.RuleCombination{
-						Operator: "OR",
-						Conditions: []config.RuleCondition{
-							{Type: "keyword", Name: "programming"},
-							{Type: "domain", Name: "coding"},
-						},
-					},
-				},
-			},
-			strategy:              "priority",
-			matchedKeywordRules:   []string{"programming"},
-			matchedEmbeddingRules: []string{},
-			matchedDomainRules:    []string{}, // Missing domain rule, but OR should still match
-			expectedDecision:      "coding-task",
-			expectError:           false,
+			name: "one OR condition matches",
+			decisions: []config.Decision{ruleDecision(
+				"coding-task", 10, "OR",
+				config.RuleCondition{Type: config.SignalTypeKeyword, Name: "programming"},
+				config.RuleCondition{Type: config.SignalTypeDomain, Name: "coding"},
+			)},
+			strategy:            config.RoutingStrategyPriority,
+			matchedKeywordRules: []string{"programming"},
+			expectedDecision:    "coding-task",
 		},
 		{
-			name: "Multiple decisions - priority strategy",
+			name: "priority strategy chooses highest priority match",
 			decisions: []config.Decision{
-				{
-					Name:     "high-priority-task",
-					Priority: 20,
-					Rules: config.RuleCombination{
-						Operator: "OR",
-						Conditions: []config.RuleCondition{
-							{Type: "keyword", Name: "urgent"},
-						},
-					},
-				},
-				{
-					Name:     "low-priority-task",
-					Priority: 10,
-					Rules: config.RuleCombination{
-						Operator: "OR",
-						Conditions: []config.RuleCondition{
-							{Type: "keyword", Name: "urgent"},
-						},
-					},
-				},
+				ruleDecision("high-priority-task", 20, "OR", config.RuleCondition{Type: config.SignalTypeKeyword, Name: "urgent"}),
+				ruleDecision("low-priority-task", 10, "OR", config.RuleCondition{Type: config.SignalTypeKeyword, Name: "urgent"}),
 			},
-			strategy:              "priority",
-			matchedKeywordRules:   []string{"urgent"},
-			matchedEmbeddingRules: []string{},
-			matchedDomainRules:    []string{},
-			expectedDecision:      "high-priority-task", // Higher priority wins
-			expectError:           false,
+			strategy:            config.RoutingStrategyPriority,
+			matchedKeywordRules: []string{"urgent"},
+			expectedDecision:    "high-priority-task",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			engine := NewDecisionEngine(
-				[]config.KeywordRule{},
-				[]config.EmbeddingRule{},
-				[]config.Category{},
-				tt.decisions,
-				tt.strategy,
-			)
-
+			engine := NewDecisionEngine(nil, nil, nil, tt.decisions, tt.strategy)
 			result, err := engine.EvaluateDecisions(
 				tt.matchedKeywordRules,
 				tt.matchedEmbeddingRules,
 				tt.matchedDomainRules,
 			)
-
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
-				return
-			}
-
-			// If expectedDecision is empty, we expect nil result (no match)
-			if tt.expectedDecision == "" {
-				if result != nil {
-					t.Errorf("Expected nil result but got decision: %s", result.Decision.Name)
-				}
-				return
-			}
-
-			if result == nil {
-				t.Errorf("Expected result but got nil")
-				return
-			}
-
-			if result.Decision.Name != tt.expectedDecision {
-				t.Errorf("Expected decision %s, got %s", tt.expectedDecision, result.Decision.Name)
-			}
+			assertDecisionResult(t, result, err, tt.expectedDecision)
 		})
 	}
 }
 
 func TestDecisionEngine_EvaluateDecisionsWithFactCheck(t *testing.T) {
-	tests := []struct {
-		name             string
-		decisions        []config.Decision
-		signals          *SignalMatches
-		expectedDecision string
-		expectError      bool
-	}{
+	tests := []evaluateSignalsCase{
 		{
-			name: "Decision with fact_check condition - needs_fact_check matches",
-			decisions: []config.Decision{
-				{
-					Name:     "factual-query",
-					Priority: 10,
-					Rules: config.RuleCombination{
-						Operator: "AND",
-						Conditions: []config.RuleCondition{
-							{Type: "fact_check", Name: "needs_fact_check"},
-						},
-					},
-				},
-			},
-			signals: &SignalMatches{
-				FactCheckRules: []string{"needs_fact_check"},
-			},
+			name: "needs fact check",
+			decisions: []config.Decision{ruleDecision(
+				"factual-query", 10, "AND",
+				config.RuleCondition{Type: config.SignalTypeFactCheck, Name: "needs_fact_check"},
+			)},
+			signals:          &SignalMatches{FactCheckRules: []string{"needs_fact_check"}},
 			expectedDecision: "factual-query",
-			expectError:      false,
 		},
 		{
-			name: "Decision with fact_check condition - no_fact_check_needed matches",
-			decisions: []config.Decision{
-				{
-					Name:     "creative-query",
-					Priority: 10,
-					Rules: config.RuleCombination{
-						Operator: "AND",
-						Conditions: []config.RuleCondition{
-							{Type: "fact_check", Name: "no_fact_check_needed"},
-						},
-					},
-				},
-			},
-			signals: &SignalMatches{
-				FactCheckRules: []string{"no_fact_check_needed"},
-			},
+			name: "no fact check needed",
+			decisions: []config.Decision{ruleDecision(
+				"creative-query", 10, "AND",
+				config.RuleCondition{Type: config.SignalTypeFactCheck, Name: "no_fact_check_needed"},
+			)},
+			signals:          &SignalMatches{FactCheckRules: []string{"no_fact_check_needed"}},
 			expectedDecision: "creative-query",
-			expectError:      false,
 		},
 		{
-			name: "Decision with mixed conditions - fact_check AND domain",
-			decisions: []config.Decision{
-				{
-					Name:     "factual-science",
-					Priority: 10,
-					Rules: config.RuleCombination{
-						Operator: "AND",
-						Conditions: []config.RuleCondition{
-							{Type: "fact_check", Name: "needs_fact_check"},
-							{Type: "domain", Name: "science"},
-						},
-					},
-				},
-			},
+			name: "fact check and domain",
+			decisions: []config.Decision{ruleDecision(
+				"factual-science", 10, "AND",
+				config.RuleCondition{Type: config.SignalTypeFactCheck, Name: "needs_fact_check"},
+				config.RuleCondition{Type: config.SignalTypeDomain, Name: "science"},
+			)},
 			signals: &SignalMatches{
 				DomainRules:    []string{"science"},
 				FactCheckRules: []string{"needs_fact_check"},
 			},
 			expectedDecision: "factual-science",
-			expectError:      false,
 		},
 		{
-			name: "Decision with fact_check condition - no match",
-			decisions: []config.Decision{
-				{
-					Name:     "factual-query",
-					Priority: 10,
-					Rules: config.RuleCombination{
-						Operator: "AND",
-						Conditions: []config.RuleCondition{
-							{Type: "fact_check", Name: "needs_fact_check"},
-						},
-					},
-				},
-			},
-			signals: &SignalMatches{
-				FactCheckRules: []string{"no_fact_check_needed"},
-			},
-			expectedDecision: "",
-			expectError:      false, // Changed: no match should return nil result, not error
+			name: "fact check does not match",
+			decisions: []config.Decision{ruleDecision(
+				"factual-query", 10, "AND",
+				config.RuleCondition{Type: config.SignalTypeFactCheck, Name: "needs_fact_check"},
+			)},
+			signals: &SignalMatches{FactCheckRules: []string{"no_fact_check_needed"}},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			engine := NewDecisionEngine(
-				[]config.KeywordRule{},
-				[]config.EmbeddingRule{},
-				[]config.Category{},
-				tt.decisions,
-				"priority",
-			)
-
+			engine := NewDecisionEngine(nil, nil, nil, tt.decisions, config.RoutingStrategyPriority)
 			result, err := engine.EvaluateDecisionsWithSignals(tt.signals)
-
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
-				return
-			}
-
-			// If expectedDecision is empty, we expect nil result (no match)
-			if tt.expectedDecision == "" {
-				if result != nil {
-					t.Errorf("Expected nil result but got decision: %s", result.Decision.Name)
-				}
-				return
-			}
-
-			if result == nil {
-				t.Errorf("Expected result but got nil")
-				return
-			}
-
-			if result.Decision.Name != tt.expectedDecision {
-				t.Errorf("Expected decision %s, got %s", tt.expectedDecision, result.Decision.Name)
-			}
+			assertDecisionResult(t, result, err, tt.expectedDecision)
 		})
 	}
 }
 
 func TestDecisionEngine_EvaluateDecisionsWithNOTOperator(t *testing.T) {
-	tests := []struct {
-		name             string
-		decisions        []config.Decision
-		signals          *SignalMatches
-		expectedDecision string
-		expectError      bool
-	}{
+	tests := []evaluateSignalsCase{
 		{
-			// NOT(OR(keyword:programming, domain:coding)) — neither signal present → OR=false → NOT=true
-			name: "NOT operator - no conditions match (should match)",
-			decisions: []config.Decision{
-				{
-					Name:     "exclude-coding",
-					Priority: 10,
-					Rules: config.RuleCombination{
-						Operator: "NOT",
-						Conditions: []config.RuleCondition{
-							{
-								Operator: "OR",
-								Conditions: []config.RuleCondition{
-									{Type: "keyword", Name: "programming"},
-									{Type: "domain", Name: "coding"},
-								},
-							},
-						},
-					},
-					ModelRefs: []config.ModelRef{
-						{Model: "general-model"},
-					},
-				},
-			},
+			name:             "matches when no nested OR condition matches",
+			decisions:        []config.Decision{notCodingDecision()},
 			signals:          &SignalMatches{},
 			expectedDecision: "exclude-coding",
-			expectError:      false,
 		},
 		{
-			// NOT(OR(keyword:programming, domain:coding)) — programming present → OR=true → NOT=false
-			name: "NOT operator - one condition matches (should NOT match)",
-			decisions: []config.Decision{
-				{
-					Name:     "exclude-coding",
-					Priority: 10,
-					Rules: config.RuleCombination{
-						Operator: "NOT",
-						Conditions: []config.RuleCondition{
-							{
-								Operator: "OR",
-								Conditions: []config.RuleCondition{
-									{Type: "keyword", Name: "programming"},
-									{Type: "domain", Name: "coding"},
-								},
-							},
-						},
-					},
-				},
-			},
-			signals: &SignalMatches{
-				KeywordRules: []string{"programming"},
-			},
-			expectedDecision: "",
-			expectError:      false,
+			name:      "does not match when one nested OR condition matches",
+			decisions: []config.Decision{notCodingDecision()},
+			signals:   &SignalMatches{KeywordRules: []string{"programming"}},
 		},
 		{
-			// NOT(OR(keyword:programming, domain:coding)) — both present → OR=true → NOT=false
-			name: "NOT operator - all conditions match (should NOT match)",
-			decisions: []config.Decision{
-				{
-					Name:     "exclude-coding",
-					Priority: 10,
-					Rules: config.RuleCombination{
-						Operator: "NOT",
-						Conditions: []config.RuleCondition{
-							{
-								Operator: "OR",
-								Conditions: []config.RuleCondition{
-									{Type: "keyword", Name: "programming"},
-									{Type: "domain", Name: "coding"},
-								},
-							},
-						},
-					},
-				},
-			},
+			name:      "does not match when all nested OR conditions match",
+			decisions: []config.Decision{notCodingDecision()},
 			signals: &SignalMatches{
 				KeywordRules: []string{"programming"},
 				DomainRules:  []string{"coding"},
 			},
-			expectedDecision: "",
-			expectError:      false,
 		},
 		{
-			name: "NOT operator - confidence is 1.0 when matched",
-			decisions: []config.Decision{
-				{
-					Name:     "non-medical",
-					Priority: 10,
-					Rules: config.RuleCombination{
-						Operator: "NOT",
-						Conditions: []config.RuleCondition{
-							{Type: "domain", Name: "medical"},
-						},
-					},
-					ModelRefs: []config.ModelRef{
-						{Model: "general-model"},
-					},
-				},
-			},
-			signals:          &SignalMatches{DomainRules: []string{}},
+			name: "matched NOT decision has full confidence",
+			decisions: []config.Decision{ruleDecision(
+				"non-medical", 10, "NOT",
+				config.RuleCondition{Type: config.SignalTypeDomain, Name: "medical"},
+			)},
+			signals:          &SignalMatches{},
 			expectedDecision: "non-medical",
-			expectError:      false,
 		},
 		{
-			name: "NOT operator priority over lower priority decision",
+			name: "priority applies to matching NOT decisions",
 			decisions: []config.Decision{
-				{
-					Name:     "not-medical-high",
-					Priority: 20,
-					Rules: config.RuleCombination{
-						Operator: "NOT",
-						Conditions: []config.RuleCondition{
-							{Type: "domain", Name: "medical"},
-						},
-					},
-					ModelRefs: []config.ModelRef{{Model: "general-model"}},
-				},
-				{
-					Name:     "not-medical-low",
-					Priority: 5,
-					Rules: config.RuleCombination{
-						Operator: "NOT",
-						Conditions: []config.RuleCondition{
-							{Type: "domain", Name: "medical"},
-						},
-					},
-					ModelRefs: []config.ModelRef{{Model: "backup-model"}},
-				},
+				ruleDecision("not-medical-high", 20, "NOT", config.RuleCondition{Type: config.SignalTypeDomain, Name: "medical"}),
+				ruleDecision("not-medical-low", 5, "NOT", config.RuleCondition{Type: config.SignalTypeDomain, Name: "medical"}),
 			},
 			signals:          &SignalMatches{},
 			expectedDecision: "not-medical-high",
-			expectError:      false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			engine := NewDecisionEngine(
-				[]config.KeywordRule{},
-				[]config.EmbeddingRule{},
-				[]config.Category{},
-				tt.decisions,
-				"priority",
-			)
-
+			engine := NewDecisionEngine(nil, nil, nil, tt.decisions, config.RoutingStrategyPriority)
 			result, err := engine.EvaluateDecisionsWithSignals(tt.signals)
-
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
-				return
-			}
-
-			if tt.expectedDecision == "" {
-				if result != nil {
-					t.Errorf("Expected nil result but got decision: %s", result.Decision.Name)
-				}
-				return
-			}
-
-			if result == nil {
-				t.Errorf("Expected result but got nil")
-				return
-			}
-
-			if result.Decision.Name != tt.expectedDecision {
-				t.Errorf("Expected decision %s, got %s", tt.expectedDecision, result.Decision.Name)
-			}
-
-			// Verify confidence is 1.0 for NOT operator matches
-			if result.Confidence != 1.0 {
-				t.Errorf("Expected confidence 1.0 for NOT operator match, got %f", result.Confidence)
+			assertDecisionResult(t, result, err, tt.expectedDecision)
+			if result != nil && result.Confidence != 1.0 {
+				t.Errorf("expected confidence 1.0 for NOT match, got %f", result.Confidence)
 			}
 		})
 	}
@@ -497,29 +222,16 @@ func TestDecisionEngine_EvaluateDecisionsWithNOTOperator(t *testing.T) {
 
 func TestDecisionEngine_UnsupportedConditionDoesNotMatch(t *testing.T) {
 	engine := NewDecisionEngine(
-		[]config.KeywordRule{},
-		[]config.EmbeddingRule{},
-		[]config.Category{},
-		[]config.Decision{
-			{
-				Name:     "unsupported-signal",
-				Priority: 10,
-				Rules: config.RuleCombination{
-					Operator: "AND",
-					Conditions: []config.RuleCondition{
-						{Type: "unsupported", Name: "unknown"},
-					},
-				},
-			},
-		},
-		"priority",
+		nil,
+		nil,
+		nil,
+		[]config.Decision{ruleDecision(
+			"unsupported-signal", 10, "AND",
+			config.RuleCondition{Type: "unsupported", Name: "unknown"},
+		)},
+		config.RoutingStrategyPriority,
 	)
 
 	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{})
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-	if result != nil {
-		t.Fatalf("Expected no decision match for deprecated latency condition, got %q", result.Decision.Name)
-	}
+	assertDecisionResult(t, result, err, "")
 }
