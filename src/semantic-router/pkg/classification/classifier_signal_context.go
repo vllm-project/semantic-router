@@ -64,7 +64,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		skipCompressionSignals,
 		convFacts,
 		imageURL,
-		c.Config.Decisions,
+		c.Config.AllRoutingDecisions(),
 		nil,
 	)
 }
