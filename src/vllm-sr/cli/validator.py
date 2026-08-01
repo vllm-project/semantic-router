@@ -84,6 +84,7 @@ def _all_projection_reference_names(config: UserConfig) -> set[str]:
         names.update(build_projection_reference_index(recipe.routing.projections))
     return names
 
+
 MIGRATED_LEARNING_ALGORITHM_TARGETS = {
     "elo": "global.router.learning.adaptation",
     "rl_driven": "global.router.learning.adaptation",
@@ -705,7 +706,9 @@ def validate_recipe_contracts(config: UserConfig) -> List[ValidationError]:
     errors: list[ValidationError] = []
     top_level_has_profile = bool(
         config.routing.signals.model_dump(exclude_defaults=True, exclude_none=True)
-        or config.routing.projections.model_dump(exclude_defaults=True, exclude_none=True)
+        or config.routing.projections.model_dump(
+            exclude_defaults=True, exclude_none=True
+        )
         or config.routing.decisions
     )
     recipe_names = {"default"} if top_level_has_profile else set()

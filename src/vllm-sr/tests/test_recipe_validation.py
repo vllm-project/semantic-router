@@ -79,5 +79,7 @@ def test_recipes_only_default_profile_is_allowed():
 
     errors = validate_user_config(config)
 
-    assert not any("Duplicate recipe name 'default'" in error.message for error in errors)
+    assert not any(
+        "Duplicate recipe name 'default'" in error.message for error in errors
+    )
     assert not any("unknown recipe 'default'" in error.message for error in errors)
