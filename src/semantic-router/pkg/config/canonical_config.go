@@ -180,8 +180,14 @@ func mergeCanonicalProviderModelParams(modelConfig map[string]ModelParams, model
 }
 
 func validateCanonicalContract(canonical *CanonicalConfig) error {
+	type backendRefOwner struct {
+		modelName string
+		index     int
+	}
+
 	modelCards := canonicalRoutingModels(canonical.Routing)
 	modelsByName := make(map[string]RoutingModel, len(modelCards))
+	endpointOwners := make(map[string]backendRefOwner)
 	for _, model := range modelCards {
 		if model.Name == "" {
 			return fmt.Errorf("routing.modelCards.name cannot be empty")
@@ -220,13 +226,26 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 		if err := validateProviderReliability(model.Name, model.Reliability); err != nil {
 			return err
 		}
-		if len(canonicalBackendRefs(model)) == 0 {
+		backendRefs := canonicalBackendRefs(model)
+		if len(backendRefs) == 0 {
 			if !canonicalProviderModelHasMetadata(model) {
 				return fmt.Errorf("providers.models[%s] must define backend_refs or provider metadata such as reasoning_family, pricing, api_format, external_model_ids, or provider_model_id", model.Name)
 			}
 			continue
 		}
-		for _, backendRef := range canonicalBackendRefs(model) {
+		for index, backendRef := range backendRefs {
+			endpointName := canonicalEndpointName(model.Name, backendRef, index)
+			if owner, exists := endpointOwners[endpointName]; exists {
+				return fmt.Errorf(
+					"providers.models[%s].backend_refs[%d]: normalized endpoint name %q collides with providers.models[%s].backend_refs[%d]",
+					model.Name,
+					index,
+					endpointName,
+					owner.modelName,
+					owner.index,
+				)
+			}
+			endpointOwners[endpointName] = backendRefOwner{modelName: model.Name, index: index}
 			if strings.TrimSpace(backendRef.Endpoint) == "" && strings.TrimSpace(backendRef.BaseURL) == "" {
 				return fmt.Errorf("providers.models[%s].backend_refs requires endpoint or base_url", model.Name)
 			}
