@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/publicmodels"
 )
 
 const entrypointTestConfigYAML = `
@@ -273,19 +274,19 @@ func TestModelsListingIncludesEntrypointNames(t *testing.T) {
 	}
 }
 
-func TestAMDModelsListingUsesBrandedMetadata(t *testing.T) {
+func TestModelsListingUsesExplicitRoutingTypes(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
 			RouterOptions: config.RouterOptions{
-				AutoModelNames: []string{"amd/rocm-v1-balanced"},
+				AutoModelNames: []string{"router/balanced"},
 			},
 			Entrypoints: []config.EntrypointMapping{
-				{ModelNames: []string{"amd/rocm-v1-flash"}, Recipe: "speed-first"},
+				{ModelNames: []string{"router/flash"}, Recipe: "speed-first"},
 			},
 			Recipes: []config.RoutingRecipe{
 				{
 					Name:        "speed-first",
-					Description: "AMD Mixture-of-Models · Speed First — low-latency routing.",
+					Description: "Intelligent Router for Mixture-of-Models",
 				},
 			},
 		},
@@ -302,9 +303,16 @@ func TestAMDModelsListingUsesBrandedMetadata(t *testing.T) {
 	if len(modelList.Data) != 2 {
 		t.Fatalf("model count = %d, want 2", len(modelList.Data))
 	}
+	wantRoutingTypes := map[string]publicmodels.RoutingType{
+		"router/balanced": publicmodels.RoutingTypeAutoAlias,
+		"router/flash":    publicmodels.RoutingTypeEntrypoint,
+	}
 	for _, model := range modelList.Data {
-		if model.OwnedBy != "amd" {
-			t.Fatalf("%s owned_by = %q, want amd", model.ID, model.OwnedBy)
+		if model.OwnedBy != "vllm-semantic-router" {
+			t.Fatalf("%s owned_by = %q, want vllm-semantic-router", model.ID, model.OwnedBy)
+		}
+		if model.RoutingType != wantRoutingTypes[model.ID] {
+			t.Fatalf("%s routing_type = %q, want %q", model.ID, model.RoutingType, wantRoutingTypes[model.ID])
 		}
 		if model.Description == "" {
 			t.Fatalf("%s has an empty description", model.ID)

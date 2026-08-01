@@ -178,6 +178,9 @@ func assertOpenAIModelList(t *testing.T, resp OpenAIModelList, expectedModels []
 		if model.Created == 0 {
 			t.Fatalf("expected created timestamp to be non-zero")
 		}
+		if model.RoutingType == "" {
+			t.Fatalf("expected %s to declare a routing type", model.ID)
+		}
 	}
 
 	for _, model := range expectedModels {

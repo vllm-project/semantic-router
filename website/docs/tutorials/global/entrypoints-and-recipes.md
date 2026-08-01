@@ -61,7 +61,7 @@ recipes:
 
 - A request model name that matches an entrypoint behaves like an auto-model alias: the router evaluates the selected recipe's decisions and rewrites the body to the concrete model the recipe chooses. The virtual name never reaches a backend.
 - If no decision in the recipe matches, the request falls back to `providers.defaults.default_model`, the same way `vllm-sr/auto` does.
-- Entrypoint names appear in `/v1/models` next to the auto aliases, using the recipe description as the listing description.
+- Entrypoint names appear in `/v1/models` next to the auto aliases, using the recipe description as the listing description. Each item also declares a `routing_type` (`auto_alias`, `entrypoint`, `looper`, or `backend`) so clients never need to infer routing behavior from model IDs, owners, or descriptions.
 - Request models that match no entrypoint keep the existing behavior: auto aliases run the default profile, concrete model names pass through.
 
 ### Sharing rules

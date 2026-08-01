@@ -124,6 +124,7 @@ async function mockPlaygroundBootstrap(page: import('@playwright/test').Page): P
             object: 'model',
             owned_by: 'vllm-semantic-router',
             description: 'Intelligent Router for Mixture-of-Models',
+            routing_type: 'auto_alias',
           },
         ],
       }),
@@ -178,6 +179,60 @@ test.describe('Playground Chat Component', () => {
     await expect(motionBackground).toBeVisible();
     await expect(motionBackground).toHaveCSS('pointer-events', 'none');
     await expect(motionBackground).toHaveAttribute('data-motion', 'animated');
+  });
+
+  test('uses explicit routing types and keeps the model selector vendor-neutral', async ({ page }) => {
+    await page.unroute('**/api/router/v1/models*');
+    await page.route('**/api/router/v1/models*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          object: 'list',
+          data: [
+            {
+              id: 'vllm-sr/mom-balanced-v1',
+              object: 'model',
+              owned_by: 'vllm-semantic-router',
+              description: 'Intelligent Router for Mixture-of-Models',
+              routing_type: 'entrypoint',
+            },
+            {
+              id: 'vllm-sr/mom-flash-v1',
+              object: 'model',
+              owned_by: 'vllm-semantic-router',
+              description: 'Latency-first routing profile',
+              routing_type: 'entrypoint',
+            },
+            {
+              id: 'vllm-sr/auto',
+              object: 'model',
+              owned_by: 'vllm-semantic-router',
+              description: 'Automatic model routing',
+              routing_type: 'auto_alias',
+            },
+            {
+              id: 'partner/backend',
+              object: 'model',
+              owned_by: 'upstream-endpoint',
+              routing_type: 'backend',
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const selector = page.getByTestId('playground-composer-model-select');
+    await expect(selector).toContainText('vllm-sr/mom-balanced-v1');
+    await expect(selector).toContainText('MoM');
+    await selector.click();
+
+    await expect(page.getByText('Mixture-of-Models', { exact: true })).toBeVisible();
+    await expect(page.getByText('AMD Mixture-of-Models', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('option')).toHaveCount(2);
+    await page.getByRole('option', { name: /vllm-sr\/mom-flash-v1/ }).click();
+    await expect(selector).toContainText('vllm-sr/mom-flash-v1');
   });
 
   test('consolidates composer tools into an accessible mobile add menu', async ({ page }) => {
@@ -289,6 +344,7 @@ test.describe('Playground Chat Component', () => {
               object: 'model',
               owned_by: 'vllm-semantic-router',
               description: 'Intelligent Router for Mixture-of-Models',
+              routing_type: 'auto_alias',
             },
           ],
         }),
@@ -367,6 +423,7 @@ test.describe('Playground Chat Component', () => {
               object: 'model',
               owned_by: 'vllm-semantic-router',
               description: 'Intelligent Router for Mixture-of-Models',
+              routing_type: 'auto_alias',
             },
           ],
         }),

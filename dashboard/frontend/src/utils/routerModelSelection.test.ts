@@ -12,9 +12,9 @@ describe('router model selection', () => {
     expect(
       selectRouterAutoModel({
         data: [
-          { id: 'MoM', owned_by: 'vllm-semantic-router' },
-          { id: CANONICAL_AUTO_MODEL, owned_by: 'vllm-semantic-router' },
-          { id: 'qwen/qwen3.5-rocm', owned_by: 'vllm' },
+          { id: 'MoM', routing_type: 'auto_alias' },
+          { id: CANONICAL_AUTO_MODEL, routing_type: 'auto_alias' },
+          { id: 'qwen/qwen3.5-rocm', routing_type: 'backend' },
         ],
       }),
     ).toBe(CANONICAL_AUTO_MODEL)
@@ -26,10 +26,10 @@ describe('router model selection', () => {
         data: [
           {
             id: 'router/production',
-            owned_by: 'vllm-semantic-router',
-            description: 'Automatic model routing',
+            routing_type: 'auto_alias',
+            description: 'Any display copy can be used here',
           },
-          { id: 'qwen/qwen3.5-rocm', owned_by: 'vllm' },
+          { id: 'qwen/qwen3.5-rocm', routing_type: 'backend' },
         ],
       }),
     ).toBe('router/production')
@@ -45,17 +45,22 @@ describe('router model selection', () => {
 
   it('does not mistake a backend model for the automatic router', () => {
     expect(
-      selectRouterAutoModel({ data: [{ id: 'qwen/qwen3.5-rocm', owned_by: 'vllm' }] }),
+      selectRouterAutoModel({ data: [{ id: 'qwen/qwen3.5-rocm', routing_type: 'backend' }] }),
     ).toBeNull()
     expect(
       selectRouterAutoModel({
         data: [
           {
             id: 'backend/auto',
-            owned_by: 'upstream-endpoint',
+            routing_type: 'backend',
             description: 'Automatic model routing',
           },
         ],
+      }),
+    ).toBeNull()
+    expect(
+      selectRouterAutoModel({
+        data: [{ id: 'backend/auto', owned_by: 'upstream-endpoint' }],
       }),
     ).toBeNull()
     expect(selectRouterAutoModel({ data: 'invalid' })).toBeNull()
@@ -67,12 +72,12 @@ describe('router model selection', () => {
         data: [
           {
             id: 'MoM',
-            owned_by: 'vllm-semantic-router',
+            routing_type: 'auto_alias',
             description: 'Intelligent Router for Mixture-of-Models',
           },
           {
             id: 'vllm-sr/MoM',
-            owned_by: 'vllm-semantic-router',
+            routing_type: 'auto_alias',
             description: 'Intelligent Router for Mixture-of-Models',
           },
         ],
@@ -80,13 +85,13 @@ describe('router model selection', () => {
     ).toBeNull()
   })
 
-  it('requires the canonical alias to be advertised by the semantic router', () => {
+  it('requires the canonical alias to be advertised as an auto alias', () => {
     expect(
       selectRouterAutoModel({
         data: [
           {
             id: CANONICAL_AUTO_MODEL,
-            owned_by: 'upstream-endpoint',
+            routing_type: 'backend',
             description: 'Automatic model routing',
           },
         ],
@@ -94,40 +99,40 @@ describe('router model selection', () => {
     ).toBeNull()
   })
 
-  it('lists AMD branded MoM profiles with descriptions and hides upstream-owned models', () => {
+  it('lists explicit routing profiles without interpreting their descriptions', () => {
     expect(
       listRouterModels({
         data: [
           {
-            id: 'amd/rocm-v1-balanced',
-            owned_by: 'amd',
-            description: 'Balanced Mixture-of-Models profile',
+            id: 'vllm-sr/mom-balanced-v1',
+            routing_type: 'entrypoint',
+            description: 'Intelligent Router for Mixture-of-Models',
           },
           {
-            id: 'amd/rocm-v1-flash',
-            owned_by: 'vllm-semantic-router',
+            id: 'vllm-sr/mom-flash-v1',
+            routing_type: 'entrypoint',
             description: 'Latency-first Mixture-of-Models profile',
           },
           {
             id: 'vllm-sr/auto',
-            owned_by: 'vllm-semantic-router',
+            routing_type: 'auto_alias',
             description: 'Intelligent Router for Mixture-of-Models',
           },
           {
             id: 'router/production',
-            owned_by: 'vllm-semantic-router',
+            routing_type: 'auto_alias',
             description: 'Automatic model routing',
           },
-          { id: 'amd-internal/gemma', owned_by: 'upstream-endpoint' },
+          { id: 'partner/backend', routing_type: 'backend' },
         ],
       }),
     ).toEqual([
       {
-        id: 'amd/rocm-v1-balanced',
-        description: 'Balanced Mixture-of-Models profile',
+        id: 'vllm-sr/mom-balanced-v1',
+        description: 'Intelligent Router for Mixture-of-Models',
       },
       {
-        id: 'amd/rocm-v1-flash',
+        id: 'vllm-sr/mom-flash-v1',
         description: 'Latency-first Mixture-of-Models profile',
       },
     ])
@@ -137,12 +142,27 @@ describe('router model selection', () => {
     expect(
       listRouterModels({
         data: [
-          { id: 'auto', owned_by: 'vllm-semantic-router' },
-          { id: CANONICAL_AUTO_MODEL, owned_by: 'vllm-semantic-router' },
-          { id: 'MoM', owned_by: 'vllm-semantic-router' },
+          { id: 'auto', routing_type: 'auto_alias' },
+          { id: CANONICAL_AUTO_MODEL, routing_type: 'auto_alias' },
+          { id: 'MoM', routing_type: 'auto_alias' },
         ],
       }),
     ).toEqual([{ id: CANONICAL_AUTO_MODEL, description: '' }])
+  })
+
+  it('rejects model records without a recognized routing type', () => {
+    const payload = {
+      data: [
+        {
+          id: 'router/profile',
+          owned_by: 'vllm-semantic-router',
+          description: 'Intelligent Router for Mixture-of-Models',
+        },
+        { id: 'router/unknown', routing_type: 'unknown' },
+      ],
+    }
+    expect(selectRouterAutoModel(payload)).toBeNull()
+    expect(listRouterModels(payload)).toEqual([])
   })
 
   it('derives the models endpoint from local and absolute chat endpoints', () => {

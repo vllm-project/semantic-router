@@ -7,12 +7,12 @@ import ChatComposerModelSelect from './ChatComposerModelSelect'
 
 const models = [
   {
-    id: 'amd/rocm-v1-balanced',
-    description: 'Balanced AMD Mixture-of-Models profile',
+    id: 'vllm-sr/mom-balanced-v1',
+    description: 'Balanced Mixture-of-Models profile',
   },
   {
-    id: 'amd/rocm-v1-flash',
-    description: 'Latency-first AMD Mixture-of-Models profile',
+    id: 'vllm-sr/mom-flash-v1',
+    description: 'Latency-first Mixture-of-Models profile',
   },
 ]
 
@@ -29,8 +29,9 @@ describe('ChatComposerModelSelect', () => {
     expect(markup).toContain('data-testid="playground-composer-model-select"')
     expect(markup).toContain('aria-haspopup="listbox"')
     expect(markup).toContain('aria-expanded="false"')
-    expect(markup).toContain('AMD')
-    expect(markup).toContain('amd/rocm-v1-balanced')
+    expect(markup).toContain('MoM')
+    expect(markup).not.toContain('AMD')
+    expect(markup).toContain('vllm-sr/mom-balanced-v1')
   })
 
   it('disables selection while model discovery is unavailable', () => {
@@ -39,7 +40,7 @@ describe('ChatComposerModelSelect', () => {
         disabled: true,
         models: [],
         onChange: vi.fn(),
-        value: 'amd/rocm-v1-balanced',
+        value: 'vllm-sr/mom-balanced-v1',
       }),
     )
 
