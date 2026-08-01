@@ -230,7 +230,7 @@ func (r *OpenAIRouter) learningCandidateModels(
 	switch candidateSet {
 	case config.RouterLearningCandidateSetTier:
 		if tier := decisionTier(ctx); tier > 0 {
-			return r.eligibleLearningModelRefs(r.unionDecisionModelRefs(func(decision config.Decision) bool {
+			return r.eligibleLearningModelRefs(unionDecisionModelRefs(r.learningScopedDecisions(ctx), func(decision config.Decision) bool {
 				return decision.Tier == tier
 			}))
 		}
@@ -259,7 +259,9 @@ func (r *OpenAIRouter) deployedLearningModelRefs() []config.ModelRef {
 		refs = append(refs, ref)
 	}
 	add(config.ModelRef{Model: r.Config.DefaultModel})
-	for _, ref := range r.unionDecisionModelRefs(func(config.Decision) bool { return true }) {
+	// candidate_set: global is the deployed model inventory, so every
+	// profile's decisions count here by design.
+	for _, ref := range unionDecisionModelRefs(r.Config.AllRoutingDecisions(), func(config.Decision) bool { return true }) {
 		add(ref)
 	}
 	for _, endpoint := range r.Config.VLLMEndpoints {
@@ -276,13 +278,28 @@ func (r *OpenAIRouter) deployedLearningModelRefs() []config.ModelRef {
 	return refs
 }
 
-func (r *OpenAIRouter) unionDecisionModelRefs(match func(config.Decision) bool) []config.ModelRef {
-	if r == nil || r.Config == nil || match == nil {
+// learningScopedDecisions returns the decisions the tier candidate set may
+// draw models from: the request's entrypoint recipe when one is scoped, the
+// default profile otherwise. Mirrors decisionCandidatesForRequest — a tier
+// match must not pull in models reachable only through another recipe's
+// entrypoint.
+func (r *OpenAIRouter) learningScopedDecisions(ctx *RequestContext) []config.Decision {
+	if ctx != nil && ctx.EntrypointRecipe != nil && ctx.EntrypointRecipe.Name != config.DefaultRecipeName {
+		return ctx.EntrypointRecipe.Decisions
+	}
+	if r == nil || r.Config == nil {
+		return nil
+	}
+	return r.Config.DefaultDecisions
+}
+
+func unionDecisionModelRefs(decisions []config.Decision, match func(config.Decision) bool) []config.ModelRef {
+	if match == nil {
 		return nil
 	}
 	seen := map[string]struct{}{}
 	var refs []config.ModelRef
-	for _, decision := range r.Config.AllRoutingDecisions() {
+	for _, decision := range decisions {
 		if !match(decision) {
 			continue
 		}

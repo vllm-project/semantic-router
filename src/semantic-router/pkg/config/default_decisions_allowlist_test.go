@@ -48,6 +48,7 @@ var defaultDecisionsAllowlist = map[string]string{
 	"src/semantic-router/pkg/extproc/req_filter_fusion.go":                  "algorithm slugs resolve against the default profile only",
 	"src/semantic-router/pkg/extproc/req_filter_classification_runtime.go":  "authz scope for requests without an entrypoint recipe",
 	"src/semantic-router/pkg/extproc/router_selection.go":                   "first-match into the process-level selector singleton must not depend on recipe declaration order",
+	"src/semantic-router/pkg/extproc/router_learning_adaptation.go":         "tier candidates follow the request's decision scope, default profile for unscoped requests",
 	"src/semantic-router/pkg/classification/classifier_signal_decision.go":  "default candidate set for unscoped requests",
 	"src/semantic-router/pkg/classification/classifier_category_entropy.go": "reasoning maps serve the classify API, same scope as its decision engine",
 	"src/semantic-router/pkg/classification/mcp_classifier_runtime.go":      "reasoning map serves the classify API, same scope as its decision engine",
