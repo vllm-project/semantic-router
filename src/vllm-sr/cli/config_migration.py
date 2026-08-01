@@ -525,6 +525,10 @@ def _normalize_global_layout(global_config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _place_global_block(global_config: dict[str, Any], key: str, value: Any) -> None:
+    if key == "auto_model_names" and isinstance(value, list):
+        _ensure_dict(global_config, "router").setdefault(key, deepcopy(value))
+        global_config.pop(key, None)
+        return
     if value in (None, "", [], {}):
         return
 

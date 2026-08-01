@@ -221,6 +221,7 @@ export interface DecisionConfig {
   modelRefs: DecisionModelRef[]
   plugins?: DecisionPluginConfig[]
   algorithm?: Record<string, unknown>
+  candidateIterations?: unknown
 }
 
 export interface RoutingConfig {

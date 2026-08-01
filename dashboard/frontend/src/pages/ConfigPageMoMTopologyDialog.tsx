@@ -1,5 +1,8 @@
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
-import { collectRecipeTargetModels } from './configPageEntrypointsRecipesSupport'
+import {
+  collectDecisionTargetModels,
+  collectRecipeTargetModels,
+} from './configPageEntrypointsRecipesSupport'
 import type { EntrypointConfig, RecipeConfig } from './configPageSupport'
 import styles from './ConfigPageMoMTopologyDialog.module.css'
 
@@ -75,9 +78,12 @@ export default function ConfigPageMoMTopologyDialog({
               {decisions.map((decision) => (
                 <div key={decision.name} className={`${styles.node} ${styles.decisionNode}`}>
                   <strong>{decision.name}</strong>
-                  <small>
-                    P{decision.priority} · {decision.modelRefs?.length ?? 0} models
-                  </small>
+                  <small>P{decision.priority}</small>
+                  <div className={styles.decisionTargets}>
+                    {collectDecisionTargetModels(decision).map((model) => (
+                      <code key={`${decision.name}-${model}`}>{model}</code>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>

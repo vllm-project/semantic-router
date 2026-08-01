@@ -44,7 +44,7 @@ func initializeIsolatedReplayRecorders(
 ) map[string]*routerreplay.Recorder {
 	recorders := make(map[string]*routerreplay.Recorder)
 
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		pluginCfg := cfg.EffectiveRouterReplayConfigForDecision(decision.Name)
 		if pluginCfg == nil {
 			continue
@@ -72,7 +72,7 @@ func initializeSharedReplayRecorders(
 		replayRecorder *routerreplay.Recorder
 	)
 
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		pluginCfg := cfg.EffectiveRouterReplayConfigForDecision(decision.Name)
 		if pluginCfg == nil {
 			continue

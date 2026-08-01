@@ -9,6 +9,7 @@ from pydantic import (
     Field,
     StrictBool,
     StrictStr,
+    field_validator,
     model_validator,
 )
 
@@ -867,6 +868,25 @@ class DecisionAdaptationsConfig(BaseModel):
     adaptation: Optional[DecisionLearningAdaptationConfig] = None
     protection: Optional[DecisionLearningProtectionConfig] = None
 
+    @model_validator(mode="after")
+    def validate_mode_boundaries(self):
+        component_modes = [
+            ("adaptation", self.adaptation.mode if self.adaptation else None),
+            ("protection", self.protection.mode if self.protection else None),
+        ]
+        for component, component_mode in component_modes:
+            if component_mode is None:
+                continue
+            if self.mode == "bypass" and component_mode != "bypass":
+                raise ValueError(
+                    f"{component}.mode cannot be {component_mode!r} when mode is 'bypass'"
+                )
+            if self.mode == "observe" and component_mode == "apply":
+                raise ValueError(
+                    f"{component}.mode cannot be 'apply' when mode is 'observe'"
+                )
+        return self
+
 
 class RouterLearningAdaptationConfig(BaseModel):
     """Global Router Learning adaptation controls."""
@@ -1159,6 +1179,26 @@ class Entrypoint(BaseModel):
     model_names: List[str] = Field(min_length=1)
     recipe: str = Field(min_length=1)
 
+    @field_validator("model_names", mode="before")
+    @classmethod
+    def normalize_model_names(cls, value):
+        if not isinstance(value, list):
+            return value
+        if any(not isinstance(item, str) for item in value):
+            raise ValueError("model_names entries must be strings")
+        normalized = list(dict.fromkeys(item.strip() for item in value if item.strip()))
+        if not normalized:
+            raise ValueError("model_names must contain at least one non-empty name")
+        return normalized
+
+    @field_validator("recipe")
+    @classmethod
+    def normalize_recipe(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("recipe must not be empty")
+        return normalized
+
 
 class RecipeRouting(BaseModel):
     """Recipe-owned routing profile; the shared model catalog stays top-level."""
@@ -1178,6 +1218,14 @@ class Recipe(BaseModel):
     name: str = Field(min_length=1)
     description: Optional[str] = None
     routing: RecipeRouting = Field(default_factory=RecipeRouting)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("name must not be empty")
+        return normalized
 
 
 class EmbeddingModelsConfig(BaseModel):

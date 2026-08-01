@@ -12,6 +12,9 @@ providers:
       qwen3:
         type: chat_template_kwargs
         parameter: enable_thinking
+      reasoning-effort:
+        type: reasoning_effort
+        parameter: reasoning_effort
   models:
   - name: qwen/qwen3.5-rocm
     provider_model_id: qwen/qwen3.5-rocm
@@ -28,6 +31,7 @@ providers:
       weight: 1
   - name: google/gemini-2.5-flash-lite
     provider_model_id: google/gemini-2.5-flash-lite
+    reasoning_family: reasoning-effort
     pricing:
       currency: USD
       prompt_per_1m: 0.01
@@ -40,6 +44,7 @@ providers:
       weight: 1
   - name: google/gemini-3.1-pro
     provider_model_id: google/gemini-3.1-pro
+    reasoning_family: reasoning-effort
     pricing:
       currency: USD
       prompt_per_1m: 0.48
@@ -52,6 +57,7 @@ providers:
       weight: 1
   - name: openai/gpt5.4
     provider_model_id: openai/gpt5.4
+    reasoning_family: reasoning-effort
     pricing:
       currency: USD
       prompt_per_1m: 1.2
@@ -64,6 +70,7 @@ providers:
       weight: 1
   - name: anthropic/claude-opus-4.6
     provider_model_id: anthropic/claude-opus-4.6
+    reasoning_family: reasoning-effort
     pricing:
       currency: USD
       prompt_per_1m: 1.8

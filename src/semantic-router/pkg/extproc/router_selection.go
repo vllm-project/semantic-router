@@ -118,7 +118,7 @@ func collectConfiguredAlgorithmMethods(cfg *config.RouterConfig) []selection.Sel
 	seen := make(map[string]bool)
 	var methods []selection.SelectionMethod
 
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		if decision.Algorithm == nil || decision.Algorithm.Type == "" {
 			continue
 		}
@@ -157,10 +157,9 @@ type decisionScopedSelectionConfigs struct {
 }
 
 func findDecisionScopedSelectionConfigs(cfg *config.RouterConfig) decisionScopedSelectionConfigs {
-	intelligentRouting := cfg.IntelligentRouting
 	var result decisionScopedSelectionConfigs
 
-	for _, decision := range intelligentRouting.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		if decision.Algorithm == nil {
 			continue
 		}

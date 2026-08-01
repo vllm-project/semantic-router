@@ -17,6 +17,9 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	if err != nil {
 		return nil, err
 	}
+	s.configMutex.RLock()
+	defer s.configMutex.RUnlock()
+
 	candidates, recipeName, err := s.evalDecisionCandidates(req.Model)
 	if err != nil {
 		return nil, err

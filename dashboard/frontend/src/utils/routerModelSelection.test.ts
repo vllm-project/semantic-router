@@ -113,6 +113,11 @@ describe('router model selection', () => {
             owned_by: 'vllm-semantic-router',
             description: 'Intelligent Router for Mixture-of-Models',
           },
+          {
+            id: 'router/production',
+            owned_by: 'vllm-semantic-router',
+            description: 'Automatic model routing',
+          },
           { id: 'amd-internal/gemma', owned_by: 'upstream-endpoint' },
         ],
       }),

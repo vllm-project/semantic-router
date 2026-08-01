@@ -35,6 +35,25 @@ func TestInitializeReplayRecordersUsesGlobalReplayDefault(t *testing.T) {
 	}
 }
 
+func TestInitializeReplayRecordersIncludesNamedRecipeDecisions(t *testing.T) {
+	cfg := &config.RouterConfig{
+		RouterReplay: config.RouterReplayConfig{Enabled: true, StoreBackend: "memory"},
+		Recipes: []config.RoutingRecipe{
+			{
+				Name: "balanced",
+				Decisions: []config.Decision{
+					{Name: "balanced-route", ModelRefs: []config.ModelRef{{Model: "m"}}},
+				},
+			},
+		},
+	}
+
+	recorders := initializeReplayRecorders(cfg)
+	if _, ok := recorders["balanced-route"]; !ok {
+		t.Fatalf("expected replay recorder for named-recipe decision")
+	}
+}
+
 func TestApplyDecisionResultToContextUsesEffectiveRouterReplayConfig(t *testing.T) {
 	cfg := &config.RouterConfig{
 		RouterReplay: config.RouterReplayConfig{Enabled: true, StoreBackend: "memory"},

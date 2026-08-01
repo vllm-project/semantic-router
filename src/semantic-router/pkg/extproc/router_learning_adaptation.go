@@ -282,7 +282,7 @@ func (r *OpenAIRouter) unionDecisionModelRefs(match func(config.Decision) bool) 
 	}
 	seen := map[string]struct{}{}
 	var refs []config.ModelRef
-	for _, decision := range r.Config.Decisions {
+	for _, decision := range r.Config.AllRoutingDecisions() {
 		if !match(decision) {
 			continue
 		}

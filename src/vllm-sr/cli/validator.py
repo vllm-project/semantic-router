@@ -31,6 +31,10 @@ from cli.validator_projection_embedding import (
     validate_embedding_modality_compatibility,
     validate_projection_score_dependencies,
 )
+from cli.validator_recipe_contracts import (
+    validate_domain_references,
+    validate_recipe_contracts,
+)
 from cli.validator_workflows import (
     validate_static_workflow_roles,
     validate_workflow_final_model,
@@ -315,7 +319,8 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
     # Check decision conditions
     for decision in _iter_profile_decisions(config):
         for condition in _iter_condition_nodes(decision.rules.conditions):
-            if (condition.type or "").strip().lower() == "projection":
+            condition_type = (condition.type or "").strip().lower()
+            if condition_type == "projection":
                 if condition.name in projection_names:
                     continue
                 errors.append(
@@ -324,6 +329,8 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
                         field=f"decisions.{decision.name}.rules.conditions",
                     )
                 )
+                continue
+            if condition_type == "domain":
                 continue
             if not is_signal_condition_type(condition.type):
                 continue
@@ -335,49 +342,6 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
                     field=f"decisions.{decision.name}.rules.conditions",
                 )
             )
-
-    return errors
-
-
-def validate_domain_references(config: UserConfig) -> List[ValidationError]:
-    """
-    Validate that all domain references in decisions exist.
-
-    Args:
-        config: User configuration
-
-    Returns:
-        list: List of validation errors
-    """
-    errors = []
-
-    # Build domain name index
-    domain_names = set()
-    if config.signals and config.signals.domains:
-        for domain in config.signals.domains:
-            domain_names.add(domain.name)
-    for recipe in config.recipes:
-        for domain in recipe.routing.signals.domains or []:
-            domain_names.add(domain.name)
-
-    # If no domains defined, collect from decisions (will be auto-generated)
-    if not domain_names:
-        for decision in _iter_profile_decisions(config):
-            for condition in _iter_condition_nodes(decision.rules.conditions):
-                if condition.type == "domain":
-                    domain_names.add(condition.name)
-
-    # Check decision conditions
-    for decision in _iter_profile_decisions(config):
-        for condition in _iter_condition_nodes(decision.rules.conditions):
-            if condition.type == "domain":
-                if not domain_names:
-                    errors.append(
-                        ValidationError(
-                            f"Decision '{decision.name}' references domain '{condition.name}' but no domains are defined",
-                            field=f"decisions.{decision.name}.rules.conditions",
-                        )
-                    )
 
     return errors
 
@@ -699,93 +663,21 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
             if mode == "static":
                 errors.extend(validate_static_workflow_roles(decision, workflows_cfg))
 
-    return errors
-
-
-def validate_recipe_contracts(config: UserConfig) -> List[ValidationError]:
-    errors: list[ValidationError] = []
-    top_level_has_profile = bool(
-        config.routing.signals.model_dump(exclude_defaults=True, exclude_none=True)
-        or config.routing.projections.model_dump(
-            exclude_defaults=True, exclude_none=True
-        )
-        or config.routing.decisions
-    )
-    recipe_names = {"default"} if top_level_has_profile else set()
-    for recipe in config.recipes:
-        if recipe.name in recipe_names:
+        remom_cfg = getattr(algo, "remom", None)
+        if (
+            algo_type == "remom"
+            and remom_cfg is not None
+            and remom_cfg.synthesis_model
+            and remom_cfg.synthesis_model
+            not in {model_ref.model for model_ref in decision.modelRefs}
+        ):
             errors.append(
                 ValidationError(
-                    f"Duplicate recipe name '{recipe.name}'",
-                    field=f"recipes.{recipe.name}",
+                    f"Decision '{decision.name}' ReMoM synthesis_model "
+                    f"'{remom_cfg.synthesis_model}' is not present in modelRefs",
+                    field=f"decisions.{decision.name}.algorithm.remom.synthesis_model",
                 )
             )
-        recipe_names.add(recipe.name)
-
-    claimed_models: set[str] = set()
-    reserved_models = {model.name for model in config.providers.models}
-    for card in config.routing.model_cards:
-        reserved_models.add(card.name)
-        reserved_models.update(adapter.name for adapter in (card.loras or []))
-
-    global_config = config.global_ or {}
-    router_config = global_config.get("router", {})
-    if "auto_model_names" in router_config:
-        reserved_models.update(router_config.get("auto_model_names") or [])
-    else:
-        reserved_models.update(
-            {
-                "vllm-sr/auto",
-                "auto",
-                router_config.get("auto_model_name") or "MoM",
-            }
-        )
-    looper = global_config.get("integrations", {}).get("looper", {})
-    for family, default_name in (
-        ("remom", "vllm-sr/remom"),
-        ("fusion", "vllm-sr/fusion"),
-        ("flow", "vllm-sr/flow"),
-    ):
-        family_config = looper.get(family, {})
-        if family_config:
-            reserved_models.add(default_name)
-            reserved_models.update(family_config.get("model_names") or [])
-
-    for index, entrypoint in enumerate(config.entrypoints):
-        if entrypoint.recipe not in recipe_names:
-            errors.append(
-                ValidationError(
-                    f"Entrypoint references unknown recipe '{entrypoint.recipe}'",
-                    field=f"entrypoints.{index}.recipe",
-                )
-            )
-        for model_name in entrypoint.model_names:
-            if model_name in claimed_models:
-                errors.append(
-                    ValidationError(
-                        f"Entrypoint model '{model_name}' is mapped more than once",
-                        field=f"entrypoints.{index}.model_names",
-                    )
-                )
-            claimed_models.add(model_name)
-            if model_name in reserved_models:
-                errors.append(
-                    ValidationError(
-                        f"Entrypoint model '{model_name}' conflicts with a configured model or reserved alias",
-                        field=f"entrypoints.{index}.model_names",
-                    )
-                )
-
-    decision_names: set[str] = set()
-    for decision in _iter_profile_decisions(config):
-        if decision.name in decision_names:
-            errors.append(
-                ValidationError(
-                    f"Decision name '{decision.name}' is used by more than one routing profile",
-                    field=f"decisions.{decision.name}",
-                )
-            )
-        decision_names.add(decision.name)
 
     return errors
 

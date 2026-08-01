@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
@@ -43,5 +44,15 @@ describe('ChatComposerModelSelect', () => {
     )
 
     expect(markup).toContain('disabled=""')
+  })
+
+  it('supports listbox keyboard traversal and restores trigger focus', () => {
+    const source = readFileSync(new URL('./ChatComposerModelSelect.tsx', import.meta.url), 'utf8')
+
+    expect(source).toContain("event.key === 'ArrowDown'")
+    expect(source).toContain("event.key === 'ArrowUp'")
+    expect(source).toContain("event.key === 'Home'")
+    expect(source).toContain("event.key === 'End'")
+    expect(source).toContain('triggerRef.current?.focus()')
   })
 })

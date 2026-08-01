@@ -67,10 +67,9 @@
 
 .canvas {
   display: grid;
-  grid-template-columns: minmax(150px, 0.9fr) auto minmax(130px, 0.7fr) auto minmax(
-      190px,
-      1fr
-    ) auto minmax(230px, 1.25fr);
+  grid-template-columns:
+    minmax(150px, 0.9fr) auto minmax(130px, 0.7fr) auto minmax(190px, 1fr)
+    auto minmax(230px, 1.25fr);
   align-items: center;
   gap: 14px;
   min-height: 390px;
@@ -135,6 +134,19 @@
 
 .decisionNode {
   border-left: 2px solid #8f949c;
+}
+
+.decisionTargets {
+  display: grid;
+  gap: 3px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.decisionTargets code {
+  color: #aeb4bd;
+  font-size: 0.58rem;
 }
 
 .modelNode {

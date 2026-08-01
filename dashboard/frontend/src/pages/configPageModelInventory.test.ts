@@ -121,6 +121,7 @@ describe('model inventory filtering', () => {
               },
               remom: { synthesis_model: synthesisModel },
             },
+            candidateIterations: [{ models: [{ model: models[14].name }] }],
           },
         ],
       },
@@ -130,6 +131,7 @@ describe('model inventory filtering', () => {
     expect(referenceCounts.get(synthesisModel)).toBe(1)
     expect(referenceCounts.get(models[12].name)).toBe(1)
     expect(referenceCounts.get(models[13].name)).toBe(1)
+    expect(referenceCounts.get(models[14].name)).toBe(1)
     expect(getModelDeleteBlocker(coordinator, models[0].name, referenceCounts)).toMatch(
       /routing decision/i,
     )

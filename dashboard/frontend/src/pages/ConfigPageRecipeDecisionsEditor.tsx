@@ -26,7 +26,10 @@ export default function ConfigPageRecipeDecisionsEditor({
   onChange,
 }: ConfigPageRecipeDecisionsEditorProps) {
   const rows = Array.isArray(value) ? value : []
-  const modelOptions = models.map((model) => model.name)
+  const modelOptions = models.flatMap((model) => [
+    model.name,
+    ...(model.loras ?? []).map((adapter) => adapter.name),
+  ])
 
   const updateDecision = (index: number, patch: Partial<DecisionConfig>) => {
     onChange(
@@ -66,7 +69,7 @@ export default function ConfigPageRecipeDecisionsEditor({
         Model allocation is editable here. Existing rules, algorithms, and plugins are preserved.
       </p>
       {rows.map((decision, decisionIndex) => (
-        <article key={`${decision.name || 'new'}-${decisionIndex}`} className={styles.decisionCard}>
+        <article key={decisionIndex} className={styles.decisionCard}>
           <div className={styles.decisionCardHeader}>
             <strong>Decision {decisionIndex + 1}</strong>
             <button

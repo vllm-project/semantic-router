@@ -154,6 +154,15 @@ func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMetho
 	if method == selection.MethodHybrid && algorithm != nil && algorithm.Hybrid != nil {
 		return r.newDecisionHybridSelector(algorithm.Hybrid)
 	}
+	if method == selection.MethodMultiFactor && algorithm != nil && algorithm.MultiFactor != nil {
+		selector := selection.NewMultiFactorSelector(
+			buildMultiFactorSelectionConfig(algorithm.MultiFactor),
+		)
+		if r != nil && r.Config != nil {
+			selector.InitializeFromConfig(r.Config.ModelConfig)
+		}
+		return selector
+	}
 	if r.ModelSelector == nil {
 		return nil
 	}

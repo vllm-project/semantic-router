@@ -98,6 +98,7 @@ export function getModelReferenceCounts(config: ConfigData | null): Map<string, 
       (decision.modelRefs ?? []).map((reference) => reference.model).filter(Boolean),
     )
     collectAlgorithmModelReferences(decision.algorithm, models)
+    collectAlgorithmModelReferences(decision.candidateIterations, models)
     for (const model of models) {
       counts.set(model, (counts.get(model) ?? 0) + 1)
     }
@@ -123,6 +124,7 @@ function collectAlgorithmModelReferences(
     if (fieldName === 'models' || fieldName === 'model_names' || fieldName.endsWith('_models')) {
       for (const modelName of value) {
         if (typeof modelName === 'string' && modelName.trim()) references.add(modelName.trim())
+        else collectAlgorithmModelReferences(modelName, references)
       }
       return
     }

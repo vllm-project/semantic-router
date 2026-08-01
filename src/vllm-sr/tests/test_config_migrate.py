@@ -34,6 +34,35 @@ def test_migrate_preserves_recipes_entrypoints_and_explicit_empty_auto_aliases()
     assert migrated["global"]["router"]["auto_model_names"] == []
 
 
+def test_migrate_relocates_legacy_flat_empty_auto_aliases():
+    migrated = migrate_config_data(
+        {
+            "global": {
+                "auto_model_names": [],
+            },
+        }
+    )
+
+    assert migrated["global"]["router"]["auto_model_names"] == []
+    assert "auto_model_names" not in migrated["global"]
+
+
+def test_migrate_prefers_canonical_auto_aliases_over_legacy_flat_value():
+    migrated = migrate_config_data(
+        {
+            "global": {
+                "auto_model_names": [],
+                "router": {
+                    "auto_model_names": ["router/canonical"],
+                },
+            },
+        }
+    )
+
+    assert migrated["global"]["router"]["auto_model_names"] == ["router/canonical"]
+    assert "auto_model_names" not in migrated["global"]
+
+
 def test_migrate_config_data_splits_legacy_provider_models():
     legacy = {
         "version": "v0.1",

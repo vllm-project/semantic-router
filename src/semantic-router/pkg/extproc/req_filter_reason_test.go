@@ -248,6 +248,37 @@ func TestGetModelReasoningFamily(t *testing.T) {
 	}
 }
 
+func TestGetReasoningEffortUsesNamedRecipeDecision(t *testing.T) {
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				ReasoningConfig: config.ReasoningConfig{
+					DefaultReasoningEffort: "medium",
+				},
+			},
+			Recipes: []config.RoutingRecipe{
+				{
+					Name: "accuracy-first",
+					Decisions: []config.Decision{
+						reasoningDecision(
+							"frontier-route",
+							"",
+							0,
+							"model-a",
+							boolPtr(true),
+							"high",
+						),
+					},
+				},
+			},
+		},
+	}
+
+	if got := router.getReasoningEffort("frontier-route", "model-a"); got != "high" {
+		t.Fatalf("named-recipe reasoning effort = %q, want high", got)
+	}
+}
+
 // TestBuildReasoningRequestFields tests the buildReasoningRequestFieldsForProvider method.
 func TestBuildReasoningRequestFields(t *testing.T) {
 	router := newBuildReasoningRequestFieldsRouter()

@@ -508,11 +508,26 @@ const ChatComponent = ({
         (earliestTask, task) => (task.createdAt < earliestTask.createdAt ? task : earliestTask),
         queue[0],
       )
+      if (!routingModels.some((modelOption) => modelOption.id === nextTask.requestOptions.model)) {
+        setConversationError(
+          targetConversationId,
+          `Queued model "${nextTask.requestOptions.model}" is no longer available. Delete the queued task and resend it with an available model.`,
+        )
+        return
+      }
 
       removeQueuedTask(targetConversationId, nextTask.id)
       startTask(nextTask)
     })
-  }, [activeTasks, executeTask, isRoutingModelReady, queues, removeQueuedTask, startTask])
+  }, [
+    activeTasks,
+    isRoutingModelReady,
+    queues,
+    removeQueuedTask,
+    routingModels,
+    setConversationError,
+    startTask,
+  ])
 
   const handleDeleteQueuedTask = useCallback(
     (taskId: string) => {

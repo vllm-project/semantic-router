@@ -55,8 +55,13 @@
 }
 
 .chevron {
-  color: var(--text-secondary, #a1a1aa);
-  font-size: 0.8rem;
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: var(--text-secondary, #a1a1aa);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
 }
 
 .menu {

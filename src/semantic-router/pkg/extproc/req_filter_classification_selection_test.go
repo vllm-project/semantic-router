@@ -178,6 +178,41 @@ func TestSelectorForDecisionMethodBuildsDecisionScopedHybridSelector(t *testing.
 	}
 }
 
+func TestSelectorForDecisionMethodBuildsDecisionScopedMultiFactorSelector(t *testing.T) {
+	cfg := config.DefaultGlobalConfig()
+	cfg.BackendModels.ModelConfig = map[string]config.ModelParams{
+		"fast":    {QualityScore: 0.4},
+		"quality": {QualityScore: 0.95},
+	}
+	registry := selection.NewFactory(buildModelSelectionConfig(&cfg)).
+		WithModelConfig(cfg.BackendModels.ModelConfig).
+		CreateAll()
+	router := &OpenAIRouter{Config: &cfg, ModelSelector: registry}
+
+	selector := router.selectorForDecisionMethod(
+		selection.MethodMultiFactor,
+		&config.AlgorithmConfig{
+			Type: "multi_factor",
+			MultiFactor: &config.MultiFactorSelectionConfig{
+				Weights: &config.MultiFactorWeightsConfig{Quality: 1},
+			},
+		},
+	)
+	result, err := selector.Select(context.Background(), &selection.SelectionContext{
+		DecisionName:    "quality-first",
+		CandidateModels: []config.ModelRef{{Model: "fast"}, {Model: "quality"}},
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.SelectedModel != "quality" {
+		t.Fatalf("selected model = %q, want quality", result.SelectedModel)
+	}
+	if !strings.Contains(result.Reasoning, "weights{q=1.00 l=0.00 c=0.00 L=0.00}") {
+		t.Fatalf("decision-scoped multi-factor weights missing from %q", result.Reasoning)
+	}
+}
+
 func TestBuildSelectionContextUsesPinnedSessionIDAndToolLoopFacts(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{
 		BackendModels: config.BackendModels{

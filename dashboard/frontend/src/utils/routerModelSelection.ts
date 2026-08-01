@@ -77,6 +77,7 @@ export function listRouterModels(payload: unknown): RouterModelOption[] {
     .map((entry) => ({
       id: modelId(entry),
       description: typeof entry.description === 'string' ? entry.description.trim() : '',
+      automatic: isAutomaticRouterModel(entry),
     }))
     .filter((model) => {
       const normalizedId = model.id.toLowerCase()
@@ -90,14 +91,15 @@ export function listRouterModels(payload: unknown): RouterModelOption[] {
       seen.add(model.id)
       return true
     })
-  const explicitModels = models.filter((model) => {
-    const normalizedId = model.id.toLowerCase()
-    return normalizedId !== 'auto' && !normalizedId.endsWith('/auto')
+  const toOption = (model: (typeof models)[number]): RouterModelOption => ({
+    id: model.id,
+    description: model.description,
   })
-  if (explicitModels.length > 0) return explicitModels
+  const explicitModels = models.filter((model) => !model.automatic)
+  if (explicitModels.length > 0) return explicitModels.map(toOption)
 
   const canonical = models.find((model) => model.id === CANONICAL_AUTO_MODEL)
-  return canonical ? [canonical] : models.slice(0, 1)
+  return canonical ? [toOption(canonical)] : models.slice(0, 1).map(toOption)
 }
 
 export function getRouterModelsEndpoint(chatCompletionsEndpoint: string): string {

@@ -59,12 +59,21 @@ export function collectRecipeTargetModels(recipe: RecipeConfig | null): string[]
   if (!recipe) return []
   const models = new Set<string>()
   for (const decision of recipe.routing.decisions ?? []) {
-    for (const reference of decision.modelRefs ?? []) {
-      const modelName = reference.model?.trim()
-      if (modelName) models.add(modelName)
+    for (const modelName of collectDecisionTargetModels(decision)) {
+      models.add(modelName)
     }
-    collectAlgorithmModelReferences(decision.algorithm, models)
   }
+  return [...models]
+}
+
+export function collectDecisionTargetModels(decision: DecisionConfig): string[] {
+  const models = new Set<string>()
+  for (const reference of decision.modelRefs ?? []) {
+    const modelName = reference.model?.trim()
+    if (modelName) models.add(modelName)
+  }
+  collectAlgorithmModelReferences(decision.algorithm, models)
+  collectAlgorithmModelReferences(decision.candidateIterations, models)
   return [...models]
 }
 
@@ -105,12 +114,39 @@ export function validateEntrypointForm(
     ),
   )
   const autoNames = new Set(
-    config.global?.router?.auto_model_names ?? [
-      'vllm-sr/auto',
-      'auto',
-      config.global?.router?.auto_model_name?.trim() || 'MoM',
-    ],
+    (
+      config.global?.router?.auto_model_names ?? [
+        'vllm-sr/auto',
+        'auto',
+        config.global?.router?.auto_model_name?.trim() || 'MoM',
+      ]
+    )
+      .map((name) => name.trim())
+      .filter(Boolean),
   )
+  const directNames = new Set<string>()
+  const looper = (config.global?.integrations?.looper ?? {}) as Record<string, unknown>
+  for (const [family, defaultName] of [
+    ['remom', 'vllm-sr/remom'],
+    ['fusion', 'vllm-sr/fusion'],
+    ['flow', 'vllm-sr/flow'],
+  ] as const) {
+    const familyConfig = looper[family]
+    const modelNames =
+      familyConfig && typeof familyConfig === 'object'
+        ? (familyConfig as Record<string, unknown>).model_names
+        : undefined
+    const customNames = Array.isArray(modelNames)
+      ? modelNames.filter(
+          (name): name is string => typeof name === 'string' && Boolean(name.trim()),
+        )
+      : []
+    if (customNames.length > 0) {
+      customNames.forEach((name) => directNames.add(name.trim()))
+      continue
+    }
+    directNames.add(defaultName)
+  }
 
   for (const modelName of modelNames) {
     if (claimedNames.has(modelName)) {
@@ -121,6 +157,9 @@ export function validateEntrypointForm(
     }
     if (autoNames.has(modelName)) {
       throw new Error(`Entrypoint model "${modelName}" is reserved as an auto-model alias.`)
+    }
+    if (directNames.has(modelName)) {
+      throw new Error(`Entrypoint model "${modelName}" is reserved for direct router dispatch.`)
     }
   }
 
@@ -135,6 +174,9 @@ export function validateRecipeForm(
 ): RecipeConfig {
   const name = form.name.trim()
   if (!name) throw new Error('Recipe name is required.')
+  if (originalName === DEFAULT_RECIPE_NAME && name !== DEFAULT_RECIPE_NAME) {
+    throw new Error('The explicit default recipe cannot be renamed.')
+  }
   if (name === DEFAULT_RECIPE_NAME && originalName !== DEFAULT_RECIPE_NAME) {
     throw new Error('The default recipe is owned by the top-level routing profile.')
   }
@@ -144,7 +186,9 @@ export function validateRecipeForm(
     throw new Error(`Recipe "${name}" already exists.`)
   }
 
-  const knownModels = new Set(models.map((model) => model.name))
+  const knownModels = new Set(
+    models.flatMap((model) => [model.name, ...(model.loras ?? []).map((adapter) => adapter.name)]),
+  )
   const decisionNames = new Set<string>()
   for (const decision of config.routing?.decisions ?? config.decisions ?? []) {
     decisionNames.add(decision.name)
@@ -174,10 +218,6 @@ export function validateRecipeForm(
       }
       return { ...reference, model }
     })
-    if (modelRefs.length === 0) {
-      throw new Error(`Decision "${decisionName}" needs at least one target model.`)
-    }
-
     return {
       ...decision,
       name: decisionName,
@@ -203,6 +243,9 @@ export function validateRecipeForm(
 }
 
 export function getRecipeDeleteBlocker(config: ConfigData, recipeName: string): string | null {
+  if (recipeName === DEFAULT_RECIPE_NAME) {
+    return 'The explicit default recipe cannot be deleted from this surface.'
+  }
   const aliases = countRecipeEntrypoints(config.entrypoints ?? [], recipeName)
   if (aliases > 0) {
     return `Move or delete ${aliases} entrypoint ${aliases === 1 ? 'model' : 'models'} before deleting this recipe.`
@@ -226,6 +269,7 @@ function collectAlgorithmModelReferences(
     if (fieldName === 'models' || fieldName === 'model_names' || fieldName.endsWith('_models')) {
       for (const item of value) {
         if (typeof item === 'string' && item.trim()) references.add(item.trim())
+        else collectAlgorithmModelReferences(item, references)
       }
       return
     }

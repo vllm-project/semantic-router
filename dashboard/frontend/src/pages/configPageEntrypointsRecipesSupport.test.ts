@@ -86,7 +86,7 @@ describe('entrypoints and recipes support', () => {
         null,
       ),
     ).toThrow(/reserved/)
-    config.global = { router: { auto_model_name: 'router/custom-auto' } }
+    config.global = { router: { auto_model_name: ' router/custom-auto ' } }
     expect(() =>
       validateEntrypointForm(
         { modelNames: 'router/custom-auto', recipe: 'default' },
@@ -95,6 +95,51 @@ describe('entrypoints and recipes support', () => {
         null,
       ),
     ).toThrow(/reserved/)
+    config.global = {
+      integrations: {
+        looper: {
+          fusion: { model_names: ['router/custom-fusion'] },
+        },
+      },
+    } as ConfigData['global']
+    expect(() =>
+      validateEntrypointForm(
+        { modelNames: 'router/custom-fusion', recipe: 'default' },
+        config,
+        models,
+        null,
+      ),
+    ).toThrow(/direct router dispatch/)
+    expect(() =>
+      validateEntrypointForm(
+        { modelNames: 'vllm-sr/fusion', recipe: 'default' },
+        config,
+        models,
+        null,
+      ),
+    ).not.toThrow()
+    config.global = undefined
+    config.routing = {
+      ...config.routing,
+      decisions: [
+        {
+          name: 'remom-route',
+          description: 'Direct ReMoM route',
+          priority: 1,
+          rules: { operator: 'AND', conditions: [] },
+          modelRefs: [],
+          algorithm: { type: 'remom' },
+        },
+      ],
+    }
+    expect(() =>
+      validateEntrypointForm(
+        { modelNames: 'vllm-sr/remom', recipe: 'default' },
+        config,
+        models,
+        null,
+      ),
+    ).toThrow(/direct router dispatch/)
   })
 
   it('rejects entrypoint IDs that collide with physical models', () => {
@@ -191,5 +236,18 @@ describe('entrypoints and recipes support', () => {
         'default',
       ),
     ).not.toThrow()
+    expect(() =>
+      validateRecipeForm(
+        {
+          name: 'renamed-default',
+          description: 'Invalid rename',
+          decisions: explicitDefault.routing.decisions ?? [],
+        },
+        config,
+        models,
+        'default',
+      ),
+    ).toThrow(/cannot be renamed/)
+    expect(getRecipeDeleteBlocker(config, 'default')).toMatch(/cannot be deleted/)
   })
 })
