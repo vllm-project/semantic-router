@@ -273,6 +273,45 @@ func TestModelsListingIncludesEntrypointNames(t *testing.T) {
 	}
 }
 
+func TestAMDModelsListingUsesBrandedMetadata(t *testing.T) {
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			RouterOptions: config.RouterOptions{
+				AutoModelNames: []string{"amd/rocm-v1-balanced"},
+			},
+			Entrypoints: []config.EntrypointMapping{
+				{ModelNames: []string{"amd/rocm-v1-flash"}, Recipe: "speed-first"},
+			},
+			Recipes: []config.RoutingRecipe{
+				{
+					Name:        "speed-first",
+					Description: "AMD Mixture-of-Models · Speed First — low-latency routing.",
+				},
+			},
+		},
+	}
+
+	response, err := router.handleModelsRequest("/v1/models")
+	if err != nil {
+		t.Fatalf("handleModelsRequest failed: %v", err)
+	}
+	var modelList OpenAIModelList
+	if err := json.Unmarshal(response.GetImmediateResponse().Body, &modelList); err != nil {
+		t.Fatalf("failed to parse response body: %v", err)
+	}
+	if len(modelList.Data) != 2 {
+		t.Fatalf("model count = %d, want 2", len(modelList.Data))
+	}
+	for _, model := range modelList.Data {
+		if model.OwnedBy != "amd" {
+			t.Fatalf("%s owned_by = %q, want amd", model.ID, model.OwnedBy)
+		}
+		if model.Description == "" {
+			t.Fatalf("%s has an empty description", model.ID)
+		}
+	}
+}
+
 // entrypointRecipesOnlyConfigYAML keeps every decision inside a non-default
 // recipe: the flat Decisions field stays empty, which used to trip the
 // "no decisions configured" short-circuit before decision evaluation.

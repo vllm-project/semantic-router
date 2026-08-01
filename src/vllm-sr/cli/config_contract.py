@@ -14,6 +14,8 @@ CANONICAL_TOP_LEVEL_KEYS = frozenset(
         "listeners",
         "providers",
         "routing",
+        "entrypoints",
+        "recipes",
         "global",
         "setup",
     }

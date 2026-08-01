@@ -1,0 +1,341 @@
+version: v0.3
+listeners:
+- name: http-8899
+  address: 0.0.0.0
+  port: 8899
+  timeout: 1200s
+providers:
+  defaults:
+    default_model: qwen/qwen3.5-rocm
+    default_reasoning_effort: low
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: qwen/qwen3.5-rocm
+    provider_model_id: qwen/qwen3.5-rocm
+    reasoning_family: qwen3
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.001
+      completion_per_1m: 0.004
+      cached_input_per_1m: 0.0001
+    backend_refs:
+    - name: vllm_primary
+      endpoint: vllm:8000
+      protocol: http
+      weight: 1
+  - name: google/gemini-2.5-flash-lite
+    provider_model_id: google/gemini-2.5-flash-lite
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.01
+      completion_per_1m: 0.04
+      cached_input_per_1m: 0.002
+    backend_refs:
+    - name: vllm_primary
+      endpoint: vllm:8000
+      protocol: http
+      weight: 1
+  - name: google/gemini-3.1-pro
+    provider_model_id: google/gemini-3.1-pro
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.48
+      completion_per_1m: 1.92
+      cached_input_per_1m: 0.12
+    backend_refs:
+    - name: vllm_primary
+      endpoint: vllm:8000
+      protocol: http
+      weight: 1
+  - name: openai/gpt5.4
+    provider_model_id: openai/gpt5.4
+    pricing:
+      currency: USD
+      prompt_per_1m: 1.2
+      completion_per_1m: 4.8
+      cached_input_per_1m: 0.3
+    backend_refs:
+    - name: vllm_primary
+      endpoint: vllm:8000
+      protocol: http
+      weight: 1
+  - name: anthropic/claude-opus-4.6
+    provider_model_id: anthropic/claude-opus-4.6
+    pricing:
+      currency: USD
+      prompt_per_1m: 1.8
+      completion_per_1m: 7.2
+      cached_input_per_1m: 0.45
+    backend_refs:
+    - name: vllm_primary
+      endpoint: vllm:8000
+      protocol: http
+      weight: 1
+routing:
+  modelCards:
+  - name: qwen/qwen3.5-rocm
+    description: Self-hosted general model and strict local-policy target.
+    context_window_size: 262144
+    quality_score: 0.58
+    modality: text
+    capabilities:
+    - fast_qa
+    - self_hosted
+    - general_chat
+    - privacy_locality
+    tags:
+    - tier:simple
+    - cost:lowest
+    - deployment:self_hosted
+  - name: google/gemini-2.5-flash-lite
+    description: Low-cost managed lane for fast general workloads.
+    context_window_size: 262144
+    quality_score: 0.68
+    modality: text
+    capabilities:
+    - fast_qa
+    - explanation
+    - coding
+    tags:
+    - tier:medium
+    - cost:low
+    - latency:fast
+  - name: google/gemini-3.1-pro
+    description: Strong general reasoning and long-context model.
+    context_window_size: 262144
+    quality_score: 0.82
+    modality: text
+    capabilities:
+    - reasoning
+    - architecture
+    - long_context
+    tags:
+    - tier:complex
+    - cost:upper_mid
+  - name: openai/gpt5.4
+    description: Frontier formal reasoning and proof model.
+    context_window_size: 262144
+    quality_score: 0.9
+    modality: text
+    capabilities:
+    - reasoning
+    - proofs
+    - formal_derivation
+    tags:
+    - tier:reasoning
+    - cost:high
+  - name: anthropic/claude-opus-4.6
+    description: Highest-quality model for accuracy-first routing.
+    context_window_size: 262144
+    quality_score: 0.94
+    modality: text
+    capabilities:
+    - legal_analysis
+    - high_risk_review
+    - deep_synthesis
+    tags:
+    - tier:premium
+    - cost:highest
+entrypoints:
+- model_names:
+  - vllm-sr/mom-balanced-v1
+  recipe: balanced
+- model_names:
+  - vllm-sr/mom-flash-v1
+  recipe: speed-first
+- model_names:
+  - vllm-sr/mom-economy-v1
+  recipe: cost-first
+- model_names:
+  - vllm-sr/mom-frontier-v1
+  recipe: accuracy-first
+- model_names:
+  - vllm-sr/mom-private-v1
+  recipe: privacy-first
+recipes:
+- name: balanced
+  description: Mixture-of-Models · Balanced — quality, speed, and efficiency optimized
+    for everyday routing.
+  routing:
+    decisions:
+    - name: unified_balance_route
+      description: Balance quality, observed latency, configured cost, and current
+        load.
+      priority: 100
+      tier: 1
+      rules:
+        operator: AND
+      modelRefs:
+      - model: qwen/qwen3.5-rocm
+        use_reasoning: false
+      - model: google/gemini-2.5-flash-lite
+        use_reasoning: false
+      - model: google/gemini-3.1-pro
+        use_reasoning: true
+        reasoning_effort: medium
+      - model: openai/gpt5.4
+        use_reasoning: true
+        reasoning_effort: high
+      - model: anthropic/claude-opus-4.6
+        use_reasoning: true
+        reasoning_effort: high
+      algorithm:
+        type: multi_factor
+        multi_factor:
+          weights:
+            quality: 0.4
+            latency: 0.2
+            cost: 0.25
+            load: 0.15
+          latency_percentile: 95
+          on_no_candidates: cheapest
+- name: speed-first
+  description: Prefer the lowest observed generation latency and current load.
+  routing:
+    decisions:
+    - name: unified_speed_first_route
+      description: Choose the fastest healthy candidate from live p90 latency and
+        load.
+      priority: 100
+      tier: 1
+      rules:
+        operator: AND
+      modelRefs:
+      - model: qwen/qwen3.5-rocm
+        use_reasoning: false
+      - model: google/gemini-2.5-flash-lite
+        use_reasoning: false
+      - model: google/gemini-3.1-pro
+        use_reasoning: false
+      - model: openai/gpt5.4
+        use_reasoning: false
+      - model: anthropic/claude-opus-4.6
+        use_reasoning: false
+      algorithm:
+        type: multi_factor
+        multi_factor:
+          weights:
+            latency: 0.85
+            load: 0.15
+          latency_percentile: 90
+          on_no_candidates: first
+- name: cost-first
+  description: Keep all requests on the lowest configured-cost self-hosted model.
+  routing:
+    decisions:
+    - name: unified_cost_first_route
+      description: Deterministic local route that does not spend on managed models.
+      priority: 100
+      tier: 1
+      rules:
+        operator: AND
+      modelRefs:
+      - model: qwen/qwen3.5-rocm
+        use_reasoning: false
+      algorithm:
+        type: static
+- name: accuracy-first
+  description: Maximize model-card quality without applying cost or latency penalties.
+  routing:
+    decisions:
+    - name: unified_accuracy_first_route
+      description: Select the highest-quality candidate from the shared model catalog.
+      priority: 100
+      tier: 1
+      rules:
+        operator: AND
+      modelRefs:
+      - model: qwen/qwen3.5-rocm
+        use_reasoning: true
+        reasoning_effort: high
+      - model: google/gemini-2.5-flash-lite
+        use_reasoning: true
+        reasoning_effort: high
+      - model: google/gemini-3.1-pro
+        use_reasoning: true
+        reasoning_effort: high
+      - model: openai/gpt5.4
+        use_reasoning: true
+        reasoning_effort: high
+      - model: anthropic/claude-opus-4.6
+        use_reasoning: true
+        reasoning_effort: high
+      algorithm:
+        type: multi_factor
+        multi_factor:
+          weights:
+            quality: 1.0
+          on_no_candidates: first
+- name: privacy-first
+  description: Keep every request local and isolate sensitive or suspicious prompts.
+  routing:
+    signals:
+      keywords:
+      - name: unified_privacy_local_only_markers
+        operator: OR
+        method: bm25
+        bm25_threshold: 0.18
+        keywords:
+        - local processing only
+        - on-prem only
+        - do not send to the cloud
+        - confidential handling
+        - internal use only
+        - private repository
+        - proprietary code
+        - internal document
+        - 本地处理
+        - 不要发到云端
+        - 仅供内部使用
+        - 私有仓库
+        - 内部文档
+      jailbreak:
+      - name: unified_privacy_jailbreak_strict
+        method: classifier
+        threshold: 0.45
+        description: Detect suspicious prompts that require local containment.
+      pii:
+      - name: unified_privacy_pii_strict
+        threshold: 0.85
+        description: Detect personally identifiable information that must remain local.
+    decisions:
+    - name: unified_privacy_sensitive_route
+      description: Keep PII, suspicious prompts, and explicit local-only work on the
+        local model.
+      priority: 200
+      tier: 1
+      rules:
+        operator: OR
+        conditions:
+        - type: keyword
+          name: unified_privacy_local_only_markers
+        - type: jailbreak
+          name: unified_privacy_jailbreak_strict
+        - type: pii
+          name: unified_privacy_pii_strict
+      modelRefs:
+      - model: qwen/qwen3.5-rocm
+        use_reasoning: false
+      plugins:
+      - type: tools
+        configuration:
+          enabled: true
+          mode: none
+    - name: unified_privacy_local_default
+      description: Route non-sensitive traffic locally as the privacy-first default.
+      priority: 100
+      tier: 2
+      rules:
+        operator: AND
+      modelRefs:
+      - model: qwen/qwen3.5-rocm
+        use_reasoning: true
+        reasoning_effort: medium
+global:
+  router:
+    strategy: priority
+    auto_model_names: []
+    include_config_models_in_list: false

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
 
@@ -96,14 +98,44 @@ def validate_projection_score_dependencies(
     config: UserConfig,
 ) -> list[ValidationError]:
     """Validate that projection scores have no dependency cycles."""
+    projection_sets = [config.routing.projections]
+    projection_sets.extend(recipe.routing.projections for recipe in config.recipes)
     errors: list[ValidationError] = []
-    projections = getattr(getattr(config, "routing", None), "projections", None)
-    if not projections:
-        return errors
+    scores = []
+    mappings = []
+    partitions = []
+    declared_names: set[str] = set()
+    for projections in projection_sets:
+        for kind, collection in (
+            ("scores", getattr(projections, "scores", None) or []),
+            ("mappings", getattr(projections, "mappings", None) or []),
+            ("partitions", getattr(projections, "partitions", None) or []),
+        ):
+            for projection in collection:
+                name = getattr(projection, "name", "")
+                if name and name in declared_names:
+                    errors.append(
+                        ValidationError(
+                            field=f"routing.projections.{kind}",
+                            message=f'duplicate global projection name "{name}"',
+                        )
+                    )
+                if name:
+                    declared_names.add(name)
+            if kind == "scores":
+                scores.extend(collection)
+            elif kind == "mappings":
+                mappings.extend(collection)
+            else:
+                partitions.extend(collection)
 
-    scores = getattr(projections, "scores", None) or []
+    merged = SimpleNamespace(
+        scores=scores,
+        mappings=mappings,
+        partitions=partitions,
+    )
     score_names = {s.name for s in scores if s.name}
-    output_to_source = _projection_output_to_source_from_mappings(projections)
+    output_to_source = _projection_output_to_source_from_mappings(merged)
 
     adj: dict[str, list[str]] = {}
     for score in scores:
@@ -159,7 +191,9 @@ def validate_embedding_modality_compatibility(
         list: List of validation errors
     """
     errors: list[ValidationError] = []
-    embeddings = config.signals.embeddings or []
+    embeddings = list(config.signals.embeddings or [])
+    for recipe in config.recipes:
+        embeddings.extend(recipe.routing.signals.embeddings or [])
     if not embeddings:
         return errors
 

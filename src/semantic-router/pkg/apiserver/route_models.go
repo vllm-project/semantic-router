@@ -49,7 +49,7 @@ func (b *openAIModelListBuilder) appendAutoAliases(cfg *config.RouterConfig) {
 		autoModelNames = cfg.EffectiveAutoModelNames()
 	}
 	for _, model := range autoModelNames {
-		b.append(model, "vllm-semantic-router", "Intelligent Router for Mixture-of-Models")
+		b.append(model, config.PublicModelOwner(model), config.PublicAutoModelDescription(model))
 	}
 }
 
@@ -60,7 +60,11 @@ func (b *openAIModelListBuilder) appendEntrypointAliases(cfg *config.RouterConfi
 	for _, entrypoint := range cfg.Entrypoints {
 		description := cfg.EntrypointRecipeDescription(entrypoint.Recipe)
 		for _, model := range entrypoint.ModelNames {
-			b.append(model, "vllm-semantic-router", description)
+			b.append(
+				model,
+				config.PublicModelOwner(model),
+				config.PublicEntrypointDescription(model, entrypoint.Recipe, description),
+			)
 		}
 	}
 }

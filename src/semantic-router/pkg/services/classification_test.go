@@ -53,6 +53,44 @@ func TestNewUnifiedClassificationService_WithBothClassifiers(t *testing.T) {
 	}
 }
 
+func TestEvalDecisionCandidatesSelectsEntrypointRecipe(t *testing.T) {
+	routerConfig := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{Name: "balanced_route"}},
+		},
+		Entrypoints: []config.EntrypointMapping{
+			{ModelNames: []string{"amd/rocm-v1-flash"}, Recipe: "speed-first"},
+		},
+		Recipes: []config.RoutingRecipe{
+			{Name: config.DefaultRecipeName, Decisions: []config.Decision{{Name: "balanced_route"}}},
+			{Name: "speed-first", Decisions: []config.Decision{{Name: "flash_route"}}},
+		},
+	}
+	service := &ClassificationService{config: routerConfig}
+
+	candidates, recipe, err := service.evalDecisionCandidates("amd/rocm-v1-flash")
+	require.NoError(t, err)
+	require.Len(t, candidates, 1)
+	assert.Equal(t, "flash_route", candidates[0].Name)
+	assert.Equal(t, "speed-first", recipe)
+
+	_, _, err = service.evalDecisionCandidates("amd/rocm-v1-missing")
+	require.ErrorIs(t, err, ErrUnknownRoutingModel)
+
+	response, err := service.ClassifyIntentForEval(IntentRequest{
+		Text:  "hello",
+		Model: "amd/rocm-v1-flash",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "speed-first", response.Recipe)
+
+	_, err = service.ClassifyIntentForEval(IntentRequest{
+		Text:  "hello",
+		Model: "amd/rocm-v1-missing",
+	})
+	require.ErrorIs(t, err, ErrUnknownRoutingModel)
+}
+
 func TestClassificationService_HasUnifiedClassifier(t *testing.T) {
 	t.Run("No_classifier", func(t *testing.T) {
 		service := &ClassificationService{

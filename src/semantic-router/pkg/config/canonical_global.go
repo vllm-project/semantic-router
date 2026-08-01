@@ -22,7 +22,7 @@ type CanonicalRouterGlobal struct {
 	ConfigSource              ConfigSource          `yaml:"config_source,omitempty"`
 	Strategy                  string                `yaml:"strategy,omitempty"`
 	AutoModelName             string                `yaml:"auto_model_name,omitempty"`
-	AutoModelNames            []string              `yaml:"auto_model_names,omitempty"`
+	AutoModelNames            *[]string             `yaml:"auto_model_names,omitempty"`
 	IncludeConfigModelsInList bool                  `yaml:"include_config_models_in_list"`
 	ClearRouteCache           bool                  `yaml:"clear_route_cache"`
 	StreamedBody              CanonicalStreamedBody `yaml:"streamed_body"`
@@ -211,7 +211,10 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.ConfigSource = global.Router.ConfigSource
 	cfg.Strategy = global.Router.Strategy
 	cfg.AutoModelName = global.Router.AutoModelName
-	cfg.AutoModelNames = append([]string(nil), global.Router.AutoModelNames...)
+	cfg.AutoModelNames = nil
+	if global.Router.AutoModelNames != nil {
+		cfg.AutoModelNames = append([]string{}, (*global.Router.AutoModelNames)...)
+	}
 	cfg.IncludeConfigModelsInList = global.Router.IncludeConfigModelsInList
 	cfg.ClearRouteCache = global.Router.ClearRouteCache
 	cfg.StreamedBodyMode = global.Router.StreamedBody.Enabled

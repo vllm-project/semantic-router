@@ -95,9 +95,14 @@ def append_port_mappings(cmd, port_mappings: list[tuple[int, int]]):
         cmd.extend(["-p", f"{host_port}:{container_port}"])
 
 
-def append_env_vars(cmd, env_vars: dict[str, str]):
+def append_env_vars(
+    cmd,
+    env_vars: dict[str, str],
+    inherited_env_keys: set[str] | None = None,
+):
+    inherited_env_keys = inherited_env_keys or set()
     for key, value in env_vars.items():
-        cmd.extend(["-e", f"{key}={value}"])
+        cmd.extend(["-e", key if key in inherited_env_keys else f"{key}={value}"])
 
 
 def maybe_append_amd_gpu_passthrough(cmd, enable_amd_gpu: bool):

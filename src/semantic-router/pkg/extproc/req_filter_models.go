@@ -62,7 +62,7 @@ func (b *extProcOpenAIModelListBuilder) appendAutoAliases(cfg *config.RouterConf
 		autoModelNames = cfg.EffectiveAutoModelNames()
 	}
 	for _, model := range autoModelNames {
-		b.append(model, "Intelligent Router for Mixture-of-Models")
+		b.append(model, config.PublicAutoModelDescription(model))
 	}
 }
 
@@ -73,7 +73,10 @@ func (b *extProcOpenAIModelListBuilder) appendEntrypointAliases(cfg *config.Rout
 	for _, entrypoint := range cfg.Entrypoints {
 		description := cfg.EntrypointRecipeDescription(entrypoint.Recipe)
 		for _, model := range entrypoint.ModelNames {
-			b.append(model, description)
+			b.append(
+				model,
+				config.PublicEntrypointDescription(model, entrypoint.Recipe, description),
+			)
 		}
 	}
 }
@@ -109,7 +112,7 @@ func (b *extProcOpenAIModelListBuilder) append(id string, description string) {
 		ID:          id,
 		Object:      "model",
 		Created:     b.now,
-		OwnedBy:     "vllm-semantic-router",
+		OwnedBy:     config.PublicModelOwner(id),
 		Description: description,
 	})
 }

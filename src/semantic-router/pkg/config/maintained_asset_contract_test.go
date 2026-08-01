@@ -13,6 +13,7 @@ var maintainedFullConfigAssets = []string{
 	"deploy/recipes/agentic-saars.yaml",
 	"deploy/recipes/balance.yaml",
 	"deploy/recipes/feedback/feedback-router.yaml",
+	"deploy/recipes/unified-entrypoints.yaml",
 	"deploy/kubernetes/istio/config.yaml",
 	"deploy/kubernetes/llmd-base/llmd+public-llm/config.yaml.local",
 	"deploy/kubernetes/llmd-base/llmd+public-llm/config.yaml.openai",

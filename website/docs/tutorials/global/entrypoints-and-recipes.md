@@ -8,7 +8,10 @@ One router configuration can carry multiple named routing profiles. The top-leve
 
 - One deployment serves several routing policies without duplicating provider, model-catalog, or global system configuration.
 - Clients opt into a profile with nothing but the OpenAI-compatible `model` field; no extra headers or endpoints.
-- The default profile keeps working unchanged: `vllm-sr/auto`, `auto`, and concrete model names behave exactly as before.
+- The default profile keeps working unchanged when `auto_model_names` is omitted:
+  `vllm-sr/auto`, `auto`, and concrete model names behave exactly as before.
+  Set `global.router.auto_model_names: []` when every public virtual model is
+  represented by an entrypoint and legacy auto aliases should be disabled.
 
 ## What Problem Does It Solve?
 

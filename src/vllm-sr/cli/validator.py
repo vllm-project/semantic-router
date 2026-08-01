@@ -64,6 +64,26 @@ ALGORITHM_CONFIG_BLOCKS = (
     "multi_factor",
 )
 
+
+def _iter_profile_decisions(config: UserConfig):
+    yield from config.decisions
+    for recipe in config.recipes:
+        yield from recipe.routing.decisions
+
+
+def _all_signal_reference_names(config: UserConfig) -> set[str]:
+    names = build_signal_reference_index(config.signals)
+    for recipe in config.recipes:
+        names.update(build_signal_reference_index(recipe.routing.signals))
+    return names
+
+
+def _all_projection_reference_names(config: UserConfig) -> set[str]:
+    names = build_projection_reference_index(config.routing.projections)
+    for recipe in config.recipes:
+        names.update(build_projection_reference_index(recipe.routing.projections))
+    return names
+
 MIGRATED_LEARNING_ALGORITHM_TARGETS = {
     "elo": "global.router.learning.adaptation",
     "rl_driven": "global.router.learning.adaptation",
@@ -111,7 +131,7 @@ def validate_latency_compatibility(config: UserConfig) -> List[ValidationError]:
     errors = []
     has_legacy_conditions = any(
         _is_latency_condition(condition.type)
-        for decision in config.decisions
+        for decision in _iter_profile_decisions(config)
         for condition in _iter_condition_nodes(decision.rules.conditions)
     )
 
@@ -130,7 +150,7 @@ def validate_latency_aware_algorithm_config(
     config: UserConfig,
 ) -> List[ValidationError]:
     errors = []
-    for decision in config.decisions:
+    for decision in _iter_profile_decisions(config):
         if not _is_latency_aware_algorithm(decision):
             continue
         latency_cfg = decision.algorithm.latency_aware
@@ -223,7 +243,7 @@ def validate_migrated_learning_blocks(decision) -> List[ValidationError]:
 def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
     errors = []
 
-    for decision in config.decisions:
+    for decision in _iter_profile_decisions(config):
         if decision.algorithm is None:
             continue
 
@@ -288,11 +308,11 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
     """
     errors = []
 
-    signal_names = build_signal_reference_index(config.signals)
-    projection_names = build_projection_reference_index(config.routing.projections)
+    signal_names = _all_signal_reference_names(config)
+    projection_names = _all_projection_reference_names(config)
 
     # Check decision conditions
-    for decision in config.decisions:
+    for decision in _iter_profile_decisions(config):
         for condition in _iter_condition_nodes(decision.rules.conditions):
             if (condition.type or "").strip().lower() == "projection":
                 if condition.name in projection_names:
@@ -335,16 +355,19 @@ def validate_domain_references(config: UserConfig) -> List[ValidationError]:
     if config.signals and config.signals.domains:
         for domain in config.signals.domains:
             domain_names.add(domain.name)
+    for recipe in config.recipes:
+        for domain in recipe.routing.signals.domains or []:
+            domain_names.add(domain.name)
 
     # If no domains defined, collect from decisions (will be auto-generated)
     if not domain_names:
-        for decision in config.decisions:
+        for decision in _iter_profile_decisions(config):
             for condition in _iter_condition_nodes(decision.rules.conditions):
                 if condition.type == "domain":
                     domain_names.add(condition.name)
 
     # Check decision conditions
-    for decision in config.decisions:
+    for decision in _iter_profile_decisions(config):
         for condition in _iter_condition_nodes(decision.rules.conditions):
             if condition.type == "domain":
                 if not domain_names:
@@ -396,7 +419,7 @@ def validate_model_references(config: UserConfig) -> List[ValidationError]:
             )
 
     # Check decision model references
-    for decision in config.decisions:
+    for decision in _iter_profile_decisions(config):
         for model_ref in decision.modelRefs:
             if model_ref.model not in provider_model_names:
                 errors.append(
@@ -522,7 +545,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.TOOL_SELECTION.value: ToolSelectionPluginConfig,
     }
 
-    for decision in config.decisions:
+    for decision in _iter_profile_decisions(config):
         if not decision.plugins:
             continue
 
@@ -626,7 +649,7 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     }
     all_types = looper_types | selection_types
 
-    for decision in config.decisions:
+    for decision in _iter_profile_decisions(config):
         if not decision.algorithm:
             continue
 
@@ -678,6 +701,92 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     return errors
 
 
+def validate_recipe_contracts(config: UserConfig) -> List[ValidationError]:
+    errors: list[ValidationError] = []
+    top_level_has_profile = bool(
+        config.routing.signals.model_dump(exclude_defaults=True, exclude_none=True)
+        or config.routing.projections.model_dump(exclude_defaults=True, exclude_none=True)
+        or config.routing.decisions
+    )
+    recipe_names = {"default"} if top_level_has_profile else set()
+    for recipe in config.recipes:
+        if recipe.name in recipe_names:
+            errors.append(
+                ValidationError(
+                    f"Duplicate recipe name '{recipe.name}'",
+                    field=f"recipes.{recipe.name}",
+                )
+            )
+        recipe_names.add(recipe.name)
+
+    claimed_models: set[str] = set()
+    reserved_models = {model.name for model in config.providers.models}
+    for card in config.routing.model_cards:
+        reserved_models.add(card.name)
+        reserved_models.update(adapter.name for adapter in (card.loras or []))
+
+    global_config = config.global_ or {}
+    router_config = global_config.get("router", {})
+    if "auto_model_names" in router_config:
+        reserved_models.update(router_config.get("auto_model_names") or [])
+    else:
+        reserved_models.update(
+            {
+                "vllm-sr/auto",
+                "auto",
+                router_config.get("auto_model_name") or "MoM",
+            }
+        )
+    looper = global_config.get("integrations", {}).get("looper", {})
+    for family, default_name in (
+        ("remom", "vllm-sr/remom"),
+        ("fusion", "vllm-sr/fusion"),
+        ("flow", "vllm-sr/flow"),
+    ):
+        family_config = looper.get(family, {})
+        if family_config:
+            reserved_models.add(default_name)
+            reserved_models.update(family_config.get("model_names") or [])
+
+    for index, entrypoint in enumerate(config.entrypoints):
+        if entrypoint.recipe not in recipe_names:
+            errors.append(
+                ValidationError(
+                    f"Entrypoint references unknown recipe '{entrypoint.recipe}'",
+                    field=f"entrypoints.{index}.recipe",
+                )
+            )
+        for model_name in entrypoint.model_names:
+            if model_name in claimed_models:
+                errors.append(
+                    ValidationError(
+                        f"Entrypoint model '{model_name}' is mapped more than once",
+                        field=f"entrypoints.{index}.model_names",
+                    )
+                )
+            claimed_models.add(model_name)
+            if model_name in reserved_models:
+                errors.append(
+                    ValidationError(
+                        f"Entrypoint model '{model_name}' conflicts with a configured model or reserved alias",
+                        field=f"entrypoints.{index}.model_names",
+                    )
+                )
+
+    decision_names: set[str] = set()
+    for decision in _iter_profile_decisions(config):
+        if decision.name in decision_names:
+            errors.append(
+                ValidationError(
+                    f"Decision name '{decision.name}' is used by more than one routing profile",
+                    field=f"decisions.{decision.name}",
+                )
+            )
+        decision_names.add(decision.name)
+
+    return errors
+
+
 def validate_user_config(config: UserConfig) -> List[ValidationError]:
     """
     Validate user configuration.
@@ -691,6 +800,8 @@ def validate_user_config(config: UserConfig) -> List[ValidationError]:
     log.info("Validating user configuration...")
 
     errors = []
+
+    errors.extend(validate_recipe_contracts(config))
 
     # Validate signal references
     errors.extend(validate_signal_references(config))

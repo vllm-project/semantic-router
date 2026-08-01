@@ -78,6 +78,7 @@ func TestHandleEvalClassification_AcceptsMessagesArray(t *testing.T) {
 	apiServer := &ClassificationAPIServer{classificationSvc: fakeSvc}
 
 	reqBody := map[string]interface{}{
+		"model": "amd/rocm-v1-private",
 		"messages": []map[string]interface{}{
 			{"role": "system", "content": "You are a careful tutor."},
 			{"role": "user", "content": "Explain inflation vs recession in plain English."},
@@ -107,6 +108,9 @@ func TestHandleEvalClassification_AcceptsMessagesArray(t *testing.T) {
 	}
 	if fakeSvc.lastEvalReq.Options == nil || !fakeSvc.lastEvalReq.Options.EvaluateAllSignals {
 		t.Fatalf("expected evaluate_all_signals=true, got %#v", fakeSvc.lastEvalReq.Options)
+	}
+	if fakeSvc.lastEvalReq.Model != "amd/rocm-v1-private" {
+		t.Fatalf("expected model to be forwarded, got %q", fakeSvc.lastEvalReq.Model)
 	}
 
 	var resp services.EvalResponse

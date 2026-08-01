@@ -2,6 +2,8 @@ from pathlib import Path
 
 import yaml
 from cli.bootstrap import build_bootstrap_config
+from cli.container_start import _build_dashboard_runtime_env
+from cli.runtime_stack import resolve_runtime_stack
 from cli.commands.runtime_support import (
     append_passthrough_env_vars,
     apply_runtime_mode_env_vars,
@@ -65,6 +67,28 @@ def test_append_passthrough_env_vars_includes_router_logging_settings(monkeypatc
 
     assert env_vars["SR_LOG_LEVEL"] == "debug"
     assert env_vars["SR_LOG_ENCODING"] == "console"
+
+
+def test_dashboard_bootstrap_admin_is_scoped_to_dashboard(monkeypatch):
+    monkeypatch.setenv("DASHBOARD_ADMIN_EMAIL", "core@vllm-sr.ai")
+    monkeypatch.setenv("DASHBOARD_ADMIN_PASSWORD", "core")
+    monkeypatch.setenv("DASHBOARD_ADMIN_NAME", "Core")
+
+    env_vars: dict[str, str] = {}
+    append_passthrough_env_vars(env_vars)
+
+    assert "DASHBOARD_ADMIN_EMAIL" not in env_vars
+    assert "DASHBOARD_ADMIN_PASSWORD" not in env_vars
+    assert "DASHBOARD_ADMIN_NAME" not in env_vars
+
+    dashboard_env = _build_dashboard_runtime_env(
+        common_env=env_vars,
+        listener_port=8899,
+        stack_layout=resolve_runtime_stack(stack_name="test", port_offset=100),
+    )
+    assert dashboard_env["DASHBOARD_ADMIN_EMAIL"] == "core@vllm-sr.ai"
+    assert dashboard_env["DASHBOARD_ADMIN_PASSWORD"] == "core"
+    assert dashboard_env["DASHBOARD_ADMIN_NAME"] == "Core"
 
 
 def test_resolve_effective_config_path_enables_amd_gpu_by_default(

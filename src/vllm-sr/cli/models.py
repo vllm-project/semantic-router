@@ -1151,6 +1151,35 @@ class Routing(BaseModel):
     decisions: List[Decision] = Field(default_factory=list)
 
 
+class Entrypoint(BaseModel):
+    """Request-facing virtual model names mapped to one routing recipe."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model_names: List[str] = Field(min_length=1)
+    recipe: str = Field(min_length=1)
+
+
+class RecipeRouting(BaseModel):
+    """Recipe-owned routing profile; the shared model catalog stays top-level."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    signals: Signals = Field(default_factory=Signals)
+    projections: Projections = Field(default_factory=Projections)
+    decisions: List[Decision] = Field(default_factory=list)
+
+
+class Recipe(BaseModel):
+    """Named routing profile selected through an entrypoint."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    description: Optional[str] = None
+    routing: RecipeRouting = Field(default_factory=RecipeRouting)
+
+
 class EmbeddingModelsConfig(BaseModel):
     """Embedding models configuration for memory and semantic features."""
 
@@ -1194,6 +1223,8 @@ class UserConfig(BaseModel):
     listeners: List[Listener] = Field(default_factory=list)
     providers: Providers = Field(default_factory=Providers)
     routing: Routing = Field(default_factory=Routing)
+    entrypoints: List[Entrypoint] = Field(default_factory=list)
+    recipes: List[Recipe] = Field(default_factory=list)
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
     setup: Optional[Dict[str, Any]] = None
 

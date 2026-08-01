@@ -96,8 +96,8 @@ func (c *RouterConfig) EffectiveAutoModelNames() []string {
 	if c == nil {
 		return DefaultAutoModelNames()
 	}
-	if names := normalizeAutoModelNames(c.AutoModelNames); len(names) > 0 {
-		return names
+	if c.AutoModelNames != nil {
+		return normalizeAutoModelNames(c.AutoModelNames)
 	}
 	return normalizeAutoModelNames([]string{
 		DefaultVSRAutoModelName,

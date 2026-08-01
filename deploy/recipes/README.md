@@ -10,6 +10,7 @@ global KB catalog.
 |---|---|---|
 | `balance` | `balance.yaml`, `balance.dsl`, `balance.probes.yaml` | [balance/README.md](balance/README.md) |
 | `privacy-first` | `privacy/privacy-router.yaml`, `privacy-router.dsl`, `privacy.probes.yaml` | [privacy/README.md](privacy/README.md) |
+| `unified-entrypoints` | `unified-entrypoints.yaml` | Five versioned `vllm-sr/mom-*-v1` models for balanced, flash, economy, frontier, and private objectives |
 
 Other maintained examples such as `feedback/` and `mmlu/` illustrate focused routing patterns; see each directory's README for scope and validation commands.
 
