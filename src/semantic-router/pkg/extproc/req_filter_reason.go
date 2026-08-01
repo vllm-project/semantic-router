@@ -273,7 +273,7 @@ func (r *OpenAIRouter) getReasoningEffort(categoryName string, modelName string)
 	// By-name lookup across every recipe, without materializing a merged
 	// decision slice: this runs several times per request.
 	if decision := r.Config.GetDecisionByName(categoryName); decision != nil {
-		if effort := r.reasoningEffortForDecision(*decision, modelName); effort != "" {
+		if effort := r.reasoningEffortForDecision(decision, modelName); effort != "" {
 			return effort
 		}
 	}
@@ -287,7 +287,7 @@ func (r *OpenAIRouter) getReasoningEffort(categoryName string, modelName string)
 	return "medium"
 }
 
-func (r *OpenAIRouter) reasoningEffortForDecision(decision config.Decision, modelName string) string {
+func (r *OpenAIRouter) reasoningEffortForDecision(decision *config.Decision, modelName string) string {
 	for _, modelRef := range decision.ModelRefs {
 		if !r.Config.ModelNameMatches(modelRef.Model, modelName) {
 			continue

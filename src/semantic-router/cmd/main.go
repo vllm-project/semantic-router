@@ -138,7 +138,7 @@ func applyKubernetesConfigUpdate(newConfig *config.RouterConfig) error {
 	replaceKubernetesRuntimeConfig(newConfig)
 	logging.ComponentEvent("router", "kubernetes_config_applied", map[string]interface{}{
 		"config_source":  newConfig.ConfigSource,
-		"decision_count": len(newConfig.AllRoutingDecisions()),
+		"decision_count": newConfig.CountRoutingDecisions(),
 	})
 	return nil
 }

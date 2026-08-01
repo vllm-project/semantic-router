@@ -274,7 +274,7 @@ func TestModelsListingIncludesEntrypointNames(t *testing.T) {
 }
 
 // entrypointRecipesOnlyConfigYAML keeps every decision inside a non-default
-// recipe: the flat Decisions field stays empty, which used to trip the
+// recipe: the flat DefaultDecisions field stays empty, which used to trip the
 // "no decisions configured" short-circuit before decision evaluation.
 const entrypointRecipesOnlyConfigYAML = `
 version: v0.3

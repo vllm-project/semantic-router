@@ -116,7 +116,7 @@ func (c *Classifier) SelectBestModelFromList(candidateModels []string, categoryN
 func (c *Classifier) GetModelsForCategory(categoryName string) []string {
 	var models []string
 
-	decision := c.Config.GetDecisionByNameFold(categoryName)
+	decision := c.findDecision(categoryName)
 	if decision == nil {
 		return models
 	}

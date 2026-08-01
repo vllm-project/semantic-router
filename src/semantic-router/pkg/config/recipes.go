@@ -11,7 +11,7 @@ import (
 const DefaultRecipeName = "default"
 
 // RoutingRecipe is one normalized routing profile. The recipe named
-// DefaultRecipeName always mirrors the flat Decisions field on RouterConfig,
+// DefaultRecipeName always mirrors the flat DefaultDecisions field on RouterConfig,
 // so existing single-profile read sites and recipe-aware read sites observe
 // the same default behavior. The flat Signals and Projections fields instead
 // hold the global registry: the union of every recipe's profile, so one
@@ -96,7 +96,9 @@ func (c *RouterConfig) EntrypointRecipeDescription(recipeName string) string {
 // AllRoutingDecisions returns the decisions of every routing profile, for
 // callers that reason about routing as a whole (signal usage analysis,
 // contract validation). Configs built without the canonical loader carry no
-// recipes; their flat decisions are the only profile.
+// recipes; their flat decisions are the only profile. Element order is
+// unspecified — callers needing a priority order resolve by name
+// (GetDecisionByName) or read one profile explicitly.
 func (c *RouterConfig) AllRoutingDecisions() []Decision {
 	if c == nil {
 		return nil
@@ -120,8 +122,8 @@ func (c *RouterConfig) AllRoutingDecisions() []Decision {
 
 // HasRoutingDecisions reports whether any routing profile declares decisions,
 // without the per-request allocation of AllRoutingDecisions. The flat gate
-// `len(c.Decisions) == 0` is wrong for recipes-only configs, where every
-// decision lives in a non-default recipe.
+// `len(c.DefaultDecisions) == 0` is wrong for recipes-only configs, where
+// every decision lives in a non-default recipe.
 func (c *RouterConfig) HasRoutingDecisions() bool {
 	if c == nil {
 		return false
@@ -135,6 +137,23 @@ func (c *RouterConfig) HasRoutingDecisions() bool {
 		}
 	}
 	return false
+}
+
+// CountRoutingDecisions returns the number of decisions across every routing
+// profile, without the merge AllRoutingDecisions performs for multi-recipe
+// configs. Mirrors AllRoutingDecisions' profile selection exactly.
+func (c *RouterConfig) CountRoutingDecisions() int {
+	if c == nil {
+		return 0
+	}
+	if len(c.Recipes) == 0 {
+		return len(c.DefaultDecisions)
+	}
+	total := 0
+	for i := range c.Recipes {
+		total += len(c.Recipes[i].Decisions)
+	}
+	return total
 }
 
 // RoutingProfileSignals returns the default profile's signals for canonical

@@ -113,7 +113,7 @@ func loadRuntimeConfigOrFatal(configPath string) *config.RouterConfig {
 	logging.ComponentDebugEvent("router", "runtime_config_loaded", map[string]interface{}{
 		"config_path":    configPath,
 		"config_source":  cfg.ConfigSource,
-		"decision_count": len(cfg.AllRoutingDecisions()),
+		"decision_count": cfg.CountRoutingDecisions(),
 	})
 	return cfg
 }

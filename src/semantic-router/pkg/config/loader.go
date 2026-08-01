@@ -122,7 +122,7 @@ func parseYAMLBytesWithBaseDir(data []byte, baseDir string) (*RouterConfig, erro
 	}
 
 	logging.ComponentDebugEvent("config", "config_parse_complete", map[string]interface{}{
-		"decision_count": len(cfg.AllRoutingDecisions()),
+		"decision_count": cfg.CountRoutingDecisions(),
 		"base_dir":       baseDir,
 	})
 	return cfg, nil
