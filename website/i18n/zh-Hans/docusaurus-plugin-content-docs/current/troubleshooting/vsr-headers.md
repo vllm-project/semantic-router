@@ -11,10 +11,6 @@ translation:
 
 本文档描述了 VSR（Vector Semantic Router，向量 Semantic Router ）决策追踪 Header，这些 Header 会自动添加到成功的响应中，用于调试和监控目的。
 
-### `x-vsr-selected-recipe`
-
-表示由 entrypoint 或 auto/looper alias 选中的 recipe 隔离域，例如 `privacy-first`。同名 signal、projection 和 decision 必须结合该 Header 才能确定完整身份；直接指定具体 backend model 时不会设置该 Header。
-
 ## 概述
 
  Semantic Router 会自动添加响应 Header 以追踪 VSR 决策信息。这些 Header 帮助开发者和运维团队了解请求是如何被处理和路由的。
@@ -26,6 +22,10 @@ translation:
 3. VSR 在请求处理期间做出了路由决策
 
 ## 添加的 Header
+
+### `x-vsr-selected-recipe`
+
+表示由 entrypoint 或 auto/looper alias 选中的 recipe 隔离域，例如 `privacy-first`。同名 signal、projection 和 decision 必须结合该 Header 才能确定完整身份；直接指定具体 backend model 时不会设置该 Header。
 
 ### `x-vsr-selected-category`
 

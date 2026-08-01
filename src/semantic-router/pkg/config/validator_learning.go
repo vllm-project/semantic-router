@@ -5,13 +5,6 @@ import (
 	"strings"
 )
 
-func validateRouterLearningConfig(cfg *RouterConfig) error {
-	if err := validateGlobalRouterLearningConfig(cfg); err != nil {
-		return err
-	}
-	return validateDecisionRouterLearningConfig(cfg)
-}
-
 func validateGlobalRouterLearningConfig(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
