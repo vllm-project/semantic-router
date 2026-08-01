@@ -65,7 +65,8 @@ func (r *OpenAIRouter) applySelectedTools(
 	}
 	openAIRequest.Tools = sdkTools
 	logging.Infof("Auto-selected %d tools via strategy %q (confidence=%.3f, latency=%s) for query: %s",
-		len(sdkTools), strategyID, confidence, latency.Round(time.Millisecond), classificationText)
+		len(sdkTools), strategyID, confidence, latency.Round(time.Millisecond),
+		logging.ContentDescriptor(classificationText))
 	return nil
 }
 
