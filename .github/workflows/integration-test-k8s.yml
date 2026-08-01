@@ -66,6 +66,7 @@ jobs:
           [[ "${{ needs.changes.outputs.e2e_multi_endpoint }}" == "true" ]] && profiles+=("multi-endpoint")
           [[ "${{ needs.changes.outputs.e2e_authz_rbac }}" == "true" ]] && profiles+=("authz-rbac")
           [[ "${{ needs.changes.outputs.e2e_streaming }}" == "true" ]] && profiles+=("streaming")
+          [[ "${{ needs.changes.outputs.e2e_no_model }}" == "true" ]] && profiles+=("no-model")
 
           # Convert to JSON array
           if [ ${#profiles[@]} -eq 0 ]; then
