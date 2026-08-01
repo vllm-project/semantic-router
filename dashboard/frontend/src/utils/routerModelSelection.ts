@@ -4,7 +4,13 @@ interface RouterModelRecord {
   id?: unknown
   owned_by?: unknown
   description?: unknown
-  routing_type?: unknown
+  routing?: unknown
+}
+
+interface RouterModelRoutingRecord {
+  resolution?: unknown
+  selectable?: unknown
+  default_route?: unknown
 }
 
 interface RouterModelsResponse {
@@ -16,10 +22,15 @@ export interface RouterModelOption {
   description: string
 }
 
-type RouterModelRoutingType = 'auto_alias' | 'entrypoint' | 'looper' | 'backend'
+type RouterModelResolution = 'virtual' | 'passthrough'
 
-const LEGACY_AUTO_MODEL_IDS = new Set(['auto', 'mom', CANONICAL_AUTO_MODEL])
-const RETIRED_MOM_MODEL_IDS = new Set(['mom', 'vllm-sr/mom'])
+interface RouterModelRoutingMetadata {
+  resolution: RouterModelResolution
+  selectable: boolean
+  defaultRoute: boolean
+}
+
+const LEGACY_AUTO_MODEL_IDS = new Set(['auto', CANONICAL_AUTO_MODEL])
 
 function normalizeModelRecords(payload: unknown): RouterModelRecord[] {
   if (!payload || typeof payload !== 'object') {
@@ -40,42 +51,47 @@ function modelId(entry: RouterModelRecord): string {
   return typeof entry.id === 'string' ? entry.id.trim() : ''
 }
 
-function modelRoutingType(entry: RouterModelRecord): RouterModelRoutingType | null {
-  switch (entry.routing_type) {
-    case 'auto_alias':
-    case 'entrypoint':
-    case 'looper':
-    case 'backend':
-      return entry.routing_type
-    default:
-      if (entry.routing_type !== undefined) return null
+function modelRoutingMetadata(entry: RouterModelRecord): RouterModelRoutingMetadata | null {
+  if (entry.routing !== undefined) {
+    if (!entry.routing || typeof entry.routing !== 'object' || Array.isArray(entry.routing)) {
+      return null
+    }
+    const {
+      resolution,
+      selectable,
+      default_route: defaultRoute,
+    } = entry.routing as RouterModelRoutingRecord
+    if (
+      (resolution !== 'virtual' && resolution !== 'passthrough') ||
+      typeof selectable !== 'boolean' ||
+      (defaultRoute !== undefined && typeof defaultRoute !== 'boolean')
+    ) {
+      return null
+    }
+
+    const isDefaultRoute = defaultRoute ?? false
+    if (isDefaultRoute && (resolution !== 'virtual' || !selectable)) return null
+    return { resolution, selectable, defaultRoute: isDefaultRoute }
   }
 
-  // Older routers do not emit routing_type. Preserve only their standard auto
-  // aliases; custom aliases and entrypoints require the explicit contract.
+  // Older routers do not emit routing metadata. Preserve only their standard
+  // auto aliases; custom aliases require the explicit contract.
   const owner = typeof entry.owned_by === 'string' ? entry.owned_by.trim().toLowerCase() : ''
   if (owner !== 'vllm-semantic-router') return null
   const normalizedId = modelId(entry).toLowerCase()
-  return LEGACY_AUTO_MODEL_IDS.has(normalizedId) ? 'auto_alias' : null
-}
-
-function isRetiredMomAlias(id: string): boolean {
-  return RETIRED_MOM_MODEL_IDS.has(id.toLowerCase())
+  if (!LEGACY_AUTO_MODEL_IDS.has(normalizedId)) return null
+  return { resolution: 'virtual', selectable: true, defaultRoute: true }
 }
 
 function isAutomaticRouterModel(entry: RouterModelRecord): boolean {
   const id = modelId(entry)
-  return Boolean(id) && !isRetiredMomAlias(id) && modelRoutingType(entry) === 'auto_alias'
+  const routing = modelRoutingMetadata(entry)
+  return Boolean(id) && Boolean(routing?.selectable && routing.defaultRoute)
 }
 
 function isSelectableRouterModel(entry: RouterModelRecord): boolean {
   const id = modelId(entry)
-  const routingType = modelRoutingType(entry)
-  return (
-    Boolean(id) &&
-    !isRetiredMomAlias(id) &&
-    (routingType === 'auto_alias' || routingType === 'entrypoint' || routingType === 'looper')
-  )
+  return Boolean(id) && modelRoutingMetadata(entry)?.selectable === true
 }
 
 export function selectRouterAutoModel(payload: unknown): string | null {
@@ -98,7 +114,7 @@ export function listRouterModels(payload: unknown): RouterModelOption[] {
     .map((entry) => ({
       id: modelId(entry),
       description: typeof entry.description === 'string' ? entry.description.trim() : '',
-      routingType: modelRoutingType(entry),
+      defaultRoute: modelRoutingMetadata(entry)?.defaultRoute ?? false,
     }))
     .filter((model) => {
       if (seen.has(model.id)) return false
@@ -109,7 +125,7 @@ export function listRouterModels(payload: unknown): RouterModelOption[] {
     id: model.id,
     description: model.description,
   })
-  const explicitModels = models.filter((model) => model.routingType !== 'auto_alias')
+  const explicitModels = models.filter((model) => !model.defaultRoute)
   if (explicitModels.length > 0) return explicitModels.map(toOption)
 
   const canonical = models.find((model) => model.id === CANONICAL_AUTO_MODEL)

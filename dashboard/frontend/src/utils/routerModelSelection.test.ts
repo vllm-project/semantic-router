@@ -7,14 +7,20 @@ import {
   selectRouterAutoModel,
 } from './routerModelSelection'
 
+const routingMetadata = {
+  defaultRoute: { resolution: 'virtual', selectable: true, default_route: true },
+  profile: { resolution: 'virtual', selectable: true },
+  passthrough: { resolution: 'passthrough', selectable: false },
+} as const
+
 describe('router model selection', () => {
   it('prefers the canonical automatic-routing alias', () => {
     expect(
       selectRouterAutoModel({
         data: [
-          { id: 'MoM', routing_type: 'auto_alias' },
-          { id: CANONICAL_AUTO_MODEL, routing_type: 'auto_alias' },
-          { id: 'qwen/qwen3.5-rocm', routing_type: 'backend' },
+          { id: 'MoM', routing: routingMetadata.defaultRoute },
+          { id: CANONICAL_AUTO_MODEL, routing: routingMetadata.defaultRoute },
+          { id: 'qwen/qwen3.5-rocm', routing: routingMetadata.passthrough },
         ],
       }),
     ).toBe(CANONICAL_AUTO_MODEL)
@@ -26,10 +32,10 @@ describe('router model selection', () => {
         data: [
           {
             id: 'router/production',
-            routing_type: 'auto_alias',
+            routing: routingMetadata.defaultRoute,
             description: 'Any display copy can be used here',
           },
-          { id: 'qwen/qwen3.5-rocm', routing_type: 'backend' },
+          { id: 'qwen/qwen3.5-rocm', routing: routingMetadata.passthrough },
         ],
       }),
     ).toBe('router/production')
@@ -45,14 +51,16 @@ describe('router model selection', () => {
 
   it('does not mistake a backend model for the automatic router', () => {
     expect(
-      selectRouterAutoModel({ data: [{ id: 'qwen/qwen3.5-rocm', routing_type: 'backend' }] }),
+      selectRouterAutoModel({
+        data: [{ id: 'qwen/qwen3.5-rocm', routing: routingMetadata.passthrough }],
+      }),
     ).toBeNull()
     expect(
       selectRouterAutoModel({
         data: [
           {
             id: 'backend/auto',
-            routing_type: 'backend',
+            routing: routingMetadata.passthrough,
             description: 'Automatic model routing',
           },
         ],
@@ -66,32 +74,27 @@ describe('router model selection', () => {
     expect(selectRouterAutoModel({ data: 'invalid' })).toBeNull()
   })
 
-  it('rejects the retired MoM compatibility alias instead of sending it from Playground', () => {
+  it('trusts explicit routing metadata instead of special-casing model IDs', () => {
     expect(
       selectRouterAutoModel({
         data: [
           {
             id: 'MoM',
-            routing_type: 'auto_alias',
-            description: 'Intelligent Router for Mixture-of-Models',
-          },
-          {
-            id: 'vllm-sr/MoM',
-            routing_type: 'auto_alias',
+            routing: routingMetadata.defaultRoute,
             description: 'Intelligent Router for Mixture-of-Models',
           },
         ],
       }),
-    ).toBeNull()
+    ).toBe('MoM')
   })
 
-  it('requires the canonical alias to be advertised as an auto alias', () => {
+  it('requires the canonical alias to be advertised as a selectable default route', () => {
     expect(
       selectRouterAutoModel({
         data: [
           {
             id: CANONICAL_AUTO_MODEL,
-            routing_type: 'backend',
+            routing: routingMetadata.passthrough,
             description: 'Automatic model routing',
           },
         ],
@@ -105,25 +108,25 @@ describe('router model selection', () => {
         data: [
           {
             id: 'vllm-sr/mom-balanced-v1',
-            routing_type: 'entrypoint',
+            routing: routingMetadata.profile,
             description: 'Intelligent Router for Mixture-of-Models',
           },
           {
             id: 'vllm-sr/mom-flash-v1',
-            routing_type: 'entrypoint',
+            routing: { ...routingMetadata.profile, mode: 'future-orchestrator' },
             description: 'Latency-first Mixture-of-Models profile',
           },
           {
             id: 'vllm-sr/auto',
-            routing_type: 'auto_alias',
+            routing: routingMetadata.defaultRoute,
             description: 'Intelligent Router for Mixture-of-Models',
           },
           {
             id: 'router/production',
-            routing_type: 'auto_alias',
+            routing: routingMetadata.defaultRoute,
             description: 'Automatic model routing',
           },
-          { id: 'partner/backend', routing_type: 'backend' },
+          { id: 'partner/backend', routing: routingMetadata.passthrough },
         ],
       }),
     ).toEqual([
@@ -142,15 +145,15 @@ describe('router model selection', () => {
     expect(
       listRouterModels({
         data: [
-          { id: 'auto', routing_type: 'auto_alias' },
-          { id: CANONICAL_AUTO_MODEL, routing_type: 'auto_alias' },
-          { id: 'MoM', routing_type: 'auto_alias' },
+          { id: 'auto', routing: routingMetadata.defaultRoute },
+          { id: CANONICAL_AUTO_MODEL, routing: routingMetadata.defaultRoute },
+          { id: 'MoM', routing: routingMetadata.defaultRoute },
         ],
       }),
     ).toEqual([{ id: CANONICAL_AUTO_MODEL, description: '' }])
   })
 
-  it('rejects model records without a recognized routing type', () => {
+  it('rejects model records without valid routing metadata', () => {
     const payload = {
       data: [
         {
@@ -158,7 +161,11 @@ describe('router model selection', () => {
           owned_by: 'vllm-semantic-router',
           description: 'Intelligent Router for Mixture-of-Models',
         },
-        { id: 'router/unknown', routing_type: 'unknown' },
+        { id: 'router/unknown', routing: { resolution: 'future', selectable: true } },
+        {
+          id: 'router/invalid-default',
+          routing: { resolution: 'passthrough', selectable: false, default_route: true },
+        },
       ],
     }
     expect(selectRouterAutoModel(payload)).toBeNull()

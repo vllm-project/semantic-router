@@ -274,7 +274,7 @@ func TestModelsListingIncludesEntrypointNames(t *testing.T) {
 	}
 }
 
-func TestModelsListingUsesExplicitRoutingTypes(t *testing.T) {
+func TestModelsListingUsesExplicitRoutingMetadata(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
 			RouterOptions: config.RouterOptions{
@@ -303,16 +303,24 @@ func TestModelsListingUsesExplicitRoutingTypes(t *testing.T) {
 	if len(modelList.Data) != 2 {
 		t.Fatalf("model count = %d, want 2", len(modelList.Data))
 	}
-	wantRoutingTypes := map[string]publicmodels.RoutingType{
-		"router/balanced": publicmodels.RoutingTypeAutoAlias,
-		"router/flash":    publicmodels.RoutingTypeEntrypoint,
+	wantDefaultRoute := map[string]bool{
+		"router/balanced": true,
+		"router/flash":    false,
 	}
 	for _, model := range modelList.Data {
 		if model.OwnedBy != "vllm-semantic-router" {
 			t.Fatalf("%s owned_by = %q, want vllm-semantic-router", model.ID, model.OwnedBy)
 		}
-		if model.RoutingType != wantRoutingTypes[model.ID] {
-			t.Fatalf("%s routing_type = %q, want %q", model.ID, model.RoutingType, wantRoutingTypes[model.ID])
+		if model.Routing.Resolution != publicmodels.ResolutionVirtual || !model.Routing.Selectable {
+			t.Fatalf("%s routing metadata = %+v, want selectable virtual model", model.ID, model.Routing)
+		}
+		if model.Routing.DefaultRoute != wantDefaultRoute[model.ID] {
+			t.Fatalf(
+				"%s default_route = %t, want %t",
+				model.ID,
+				model.Routing.DefaultRoute,
+				wantDefaultRoute[model.ID],
+			)
 		}
 		if model.Description == "" {
 			t.Fatalf("%s has an empty description", model.ID)

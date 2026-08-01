@@ -45,13 +45,17 @@ Related issue: [#1217](https://github.com/vllm-project/semantic-router/issues/12
 
 | Location | Types | SDK alignment | Notes |
 |----------|-------|---------------|-------|
-| `pkg/extproc/req_filter_models.go` | `OpenAIModel`, `OpenAIModelList` | Custom | Router-generated list |
+| `pkg/publicmodels/models.go` | `OpenAIModel`, `OpenAIModelList`, `RoutingMetadata` | Custom | Shared router-generated catalog |
+| `pkg/extproc/req_filter_models.go` | aliases shared catalog types | Custom | ExtProc transport adapter |
 | `pkg/extproc/models_compat_test.go` | wire-format tests | Partial | Core fields match `openai.Model` |
-| `pkg/apiserver/config.go` | `OpenAIModel`, `OpenAIModelList` | Custom | Dashboard status mirror |
+| `pkg/apiserver/config.go` | aliases shared catalog types | Custom | Router API transport adapter |
 
 **Documented differences from `openai.Model`:**
 
-- Extra fields: `description`, `logo_url` (Chat UI extensions)
+- Extra fields: `description`, `logo_url`, and `routing` (router discovery extensions)
+- `routing.resolution` is the stable `virtual` or `passthrough` request boundary;
+  `selectable` and optional `default_route` are client-facing discovery behavior.
+  Internal recipe and orchestration modes are intentionally not part of this contract.
 - `owned_by` is always `vllm-semantic-router` for router-managed entries
 
 ### Response API (`/v1/responses`)

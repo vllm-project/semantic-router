@@ -124,7 +124,7 @@ async function mockPlaygroundBootstrap(page: import('@playwright/test').Page): P
             object: 'model',
             owned_by: 'vllm-semantic-router',
             description: 'Intelligent Router for Mixture-of-Models',
-            routing_type: 'auto_alias',
+            routing: { resolution: 'virtual', selectable: true, default_route: true },
           },
         ],
       }),
@@ -181,7 +181,9 @@ test.describe('Playground Chat Component', () => {
     await expect(motionBackground).toHaveAttribute('data-motion', 'animated');
   });
 
-  test('uses explicit routing types and keeps the model selector vendor-neutral', async ({ page }) => {
+  test('uses explicit routing metadata and keeps the model selector vendor-neutral', async ({
+    page,
+  }) => {
     await page.unroute('**/api/router/v1/models*');
     await page.route('**/api/router/v1/models*', async (route) => {
       await route.fulfill({
@@ -195,27 +197,31 @@ test.describe('Playground Chat Component', () => {
               object: 'model',
               owned_by: 'vllm-semantic-router',
               description: 'Intelligent Router for Mixture-of-Models',
-              routing_type: 'entrypoint',
+              routing: { resolution: 'virtual', selectable: true },
             },
             {
               id: 'vllm-sr/mom-flash-v1',
               object: 'model',
               owned_by: 'vllm-semantic-router',
               description: 'Latency-first routing profile',
-              routing_type: 'entrypoint',
+              routing: {
+                resolution: 'virtual',
+                selectable: true,
+                mode: 'future-orchestrator',
+              },
             },
             {
               id: 'vllm-sr/auto',
               object: 'model',
               owned_by: 'vllm-semantic-router',
               description: 'Automatic model routing',
-              routing_type: 'auto_alias',
+              routing: { resolution: 'virtual', selectable: true, default_route: true },
             },
             {
               id: 'partner/backend',
               object: 'model',
               owned_by: 'upstream-endpoint',
-              routing_type: 'backend',
+              routing: { resolution: 'passthrough', selectable: false },
             },
           ],
         }),
@@ -344,7 +350,7 @@ test.describe('Playground Chat Component', () => {
               object: 'model',
               owned_by: 'vllm-semantic-router',
               description: 'Intelligent Router for Mixture-of-Models',
-              routing_type: 'auto_alias',
+              routing: { resolution: 'virtual', selectable: true, default_route: true },
             },
           ],
         }),
@@ -423,7 +429,7 @@ test.describe('Playground Chat Component', () => {
               object: 'model',
               owned_by: 'vllm-semantic-router',
               description: 'Intelligent Router for Mixture-of-Models',
-              routing_type: 'auto_alias',
+              routing: { resolution: 'virtual', selectable: true, default_route: true },
             },
           ],
         }),

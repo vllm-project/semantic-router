@@ -6,35 +6,40 @@ package publicmodels
 import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 
 const (
-	routerOwner            = "vllm-semantic-router"
-	upstreamEndpointOwner  = "upstream-endpoint"
-	autoModelDescription   = "Intelligent Router for Mixture-of-Models"
-	remomModelDescription  = "ReMoM multi-round reasoning"
-	fusionModelDescription = "Fusion multi-model deliberation"
-	flowModelDescription   = "Router Flow micro-agent workflows"
+	routerOwner                  = "vllm-semantic-router"
+	upstreamEndpointOwner        = "upstream-endpoint"
+	autoModelDescription         = "Intelligent Router for Mixture-of-Models"
+	orchestratedModelDescription = "Router-orchestrated model"
 )
 
-// RoutingType identifies how a request-facing model ID is handled by the
-// semantic router. Clients should use this field instead of inferring behavior
-// from IDs, owners, or display descriptions.
-type RoutingType string
+// ResolutionKind describes the stable request-handling boundary exposed to
+// clients. Internal routing and orchestration modes intentionally remain out
+// of this contract so they can evolve without requiring client changes.
+type ResolutionKind string
 
 const (
-	RoutingTypeAutoAlias  RoutingType = "auto_alias"
-	RoutingTypeEntrypoint RoutingType = "entrypoint"
-	RoutingTypeLooper     RoutingType = "looper"
-	RoutingTypeBackend    RoutingType = "backend"
+	ResolutionVirtual     ResolutionKind = "virtual"
+	ResolutionPassthrough ResolutionKind = "passthrough"
 )
+
+// RoutingMetadata describes the public behavior clients need for model
+// discovery. Display metadata and internal execution modes are not control
+// signals.
+type RoutingMetadata struct {
+	Resolution   ResolutionKind `json:"resolution"`
+	Selectable   bool           `json:"selectable"`
+	DefaultRoute bool           `json:"default_route,omitempty"`
+}
 
 // OpenAIModel represents a single model in the OpenAI /v1/models response.
 type OpenAIModel struct {
-	ID          string      `json:"id"`
-	Object      string      `json:"object"`
-	Created     int64       `json:"created"`
-	OwnedBy     string      `json:"owned_by"`
-	Description string      `json:"description,omitempty"`
-	LogoURL     string      `json:"logo_url,omitempty"`
-	RoutingType RoutingType `json:"routing_type"`
+	ID          string          `json:"id"`
+	Object      string          `json:"object"`
+	Created     int64           `json:"created"`
+	OwnedBy     string          `json:"owned_by"`
+	Description string          `json:"description,omitempty"`
+	LogoURL     string          `json:"logo_url,omitempty"`
+	Routing     RoutingMetadata `json:"routing"`
 }
 
 // OpenAIModelList is the container for the models list response.
@@ -44,7 +49,7 @@ type OpenAIModelList struct {
 }
 
 // NewOpenAIModelList builds the public model catalog from the effective router
-// configuration. The source of each model determines its routing type.
+// configuration. The source determines only its stable public behavior.
 func NewOpenAIModelList(cfg *config.RouterConfig, created int64) OpenAIModelList {
 	builder := modelListBuilder{
 		created: created,
@@ -52,7 +57,7 @@ func NewOpenAIModelList(cfg *config.RouterConfig, created int64) OpenAIModelList
 	}
 	builder.appendAutoAliases(cfg)
 	builder.appendEntrypointAliases(cfg)
-	builder.appendLooperAliases(cfg)
+	builder.appendOrchestratedModels(cfg)
 	builder.appendBackendModels(cfg)
 
 	return OpenAIModelList{
@@ -76,7 +81,7 @@ func (b *modelListBuilder) appendAutoAliases(cfg *config.RouterConfig) {
 		autoModelNames,
 		routerOwner,
 		autoModelDescription,
-		RoutingTypeAutoAlias,
+		selectableVirtualRoute(true),
 	)
 }
 
@@ -86,34 +91,43 @@ func (b *modelListBuilder) appendEntrypointAliases(cfg *config.RouterConfig) {
 	}
 	for _, entrypoint := range cfg.Entrypoints {
 		description := cfg.EntrypointRecipeDescription(entrypoint.Recipe)
-		b.appendAll(entrypoint.ModelNames, routerOwner, description, RoutingTypeEntrypoint)
+		b.appendAll(entrypoint.ModelNames, routerOwner, description, selectableVirtualRoute(false))
 	}
 }
 
-func (b *modelListBuilder) appendLooperAliases(cfg *config.RouterConfig) {
+func (b *modelListBuilder) appendOrchestratedModels(cfg *config.RouterConfig) {
 	if cfg == nil || !cfg.Looper.IsEnabled() {
 		return
 	}
-	b.appendAll(cfg.ExposedReMoMModelNames(), routerOwner, remomModelDescription, RoutingTypeLooper)
-	b.appendAll(cfg.ExposedFusionModelNames(), routerOwner, fusionModelDescription, RoutingTypeLooper)
-	b.appendAll(cfg.ExposedFlowModelNames(), routerOwner, flowModelDescription, RoutingTypeLooper)
+	for _, models := range [][]string{
+		cfg.ExposedReMoMModelNames(),
+		cfg.ExposedFusionModelNames(),
+		cfg.ExposedFlowModelNames(),
+	} {
+		b.appendAll(
+			models,
+			routerOwner,
+			orchestratedModelDescription,
+			selectableVirtualRoute(false),
+		)
+	}
 }
 
 func (b *modelListBuilder) appendBackendModels(cfg *config.RouterConfig) {
 	if cfg == nil || !cfg.IncludeConfigModelsInList {
 		return
 	}
-	b.appendAll(cfg.GetAllModels(), upstreamEndpointOwner, "", RoutingTypeBackend)
+	b.appendAll(cfg.GetAllModels(), upstreamEndpointOwner, "", passthroughRoute())
 }
 
 func (b *modelListBuilder) appendAll(
 	models []string,
 	owner string,
 	description string,
-	routingType RoutingType,
+	routing RoutingMetadata,
 ) {
 	for _, model := range models {
-		b.append(model, owner, description, routingType)
+		b.append(model, owner, description, routing)
 	}
 }
 
@@ -121,7 +135,7 @@ func (b *modelListBuilder) append(
 	id string,
 	owner string,
 	description string,
-	routingType RoutingType,
+	routing RoutingMetadata,
 ) {
 	if id == "" || b.seen[id] {
 		return
@@ -133,6 +147,18 @@ func (b *modelListBuilder) append(
 		Created:     b.created,
 		OwnedBy:     owner,
 		Description: description,
-		RoutingType: routingType,
+		Routing:     routing,
 	})
+}
+
+func selectableVirtualRoute(defaultRoute bool) RoutingMetadata {
+	return RoutingMetadata{
+		Resolution:   ResolutionVirtual,
+		Selectable:   true,
+		DefaultRoute: defaultRoute,
+	}
+}
+
+func passthroughRoute() RoutingMetadata {
+	return RoutingMetadata{Resolution: ResolutionPassthrough}
 }

@@ -34,15 +34,27 @@ func TestNewOpenAIModelListUsesSourceMetadata(t *testing.T) {
 		modelsByID[model.ID] = model
 	}
 
-	assertPublicModel(t, modelsByID["router/custom"], routerOwner, RoutingTypeAutoAlias, autoModelDescription)
+	assertPublicModel(
+		t,
+		modelsByID["router/custom"],
+		routerOwner,
+		selectableVirtualRoute(true),
+		autoModelDescription,
+	)
 	assertPublicModel(
 		t,
 		modelsByID["partner/balanced"],
 		routerOwner,
-		RoutingTypeEntrypoint,
+		selectableVirtualRoute(false),
 		"Intelligent Router for Mixture-of-Models",
 	)
-	assertPublicModel(t, modelsByID["partner/backend"], upstreamEndpointOwner, RoutingTypeBackend, "")
+	assertPublicModel(
+		t,
+		modelsByID["partner/backend"],
+		upstreamEndpointOwner,
+		passthroughRoute(),
+		"",
+	)
 }
 
 func TestNewOpenAIModelListKeepsDefaultAliasesGeneric(t *testing.T) {
@@ -51,7 +63,7 @@ func TestNewOpenAIModelListKeepsDefaultAliasesGeneric(t *testing.T) {
 		t.Fatalf("default model count = %d, want %d", len(modelList.Data), len(config.DefaultAutoModelNames()))
 	}
 	for _, model := range modelList.Data {
-		assertPublicModel(t, model, routerOwner, RoutingTypeAutoAlias, autoModelDescription)
+		assertPublicModel(t, model, routerOwner, selectableVirtualRoute(true), autoModelDescription)
 	}
 }
 
@@ -59,7 +71,7 @@ func assertPublicModel(
 	t *testing.T,
 	model OpenAIModel,
 	wantOwner string,
-	wantRoutingType RoutingType,
+	wantRouting RoutingMetadata,
 	wantDescription string,
 ) {
 	t.Helper()
@@ -72,8 +84,8 @@ func assertPublicModel(
 	if model.OwnedBy != wantOwner {
 		t.Fatalf("%s owned_by = %q, want %q", model.ID, model.OwnedBy, wantOwner)
 	}
-	if model.RoutingType != wantRoutingType {
-		t.Fatalf("%s routing_type = %q, want %q", model.ID, model.RoutingType, wantRoutingType)
+	if model.Routing != wantRouting {
+		t.Fatalf("%s routing metadata = %+v, want %+v", model.ID, model.Routing, wantRouting)
 	}
 	if model.Description != wantDescription {
 		t.Fatalf("%s description = %q, want %q", model.ID, model.Description, wantDescription)
