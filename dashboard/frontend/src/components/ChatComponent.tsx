@@ -46,7 +46,9 @@ const ChatComponent = ({
   const [activeTasks, setActiveTasks] = useState<Record<string, PlaygroundTask>>({})
   const {
     model,
+    models: routingModels,
     retry: retryRoutingModelDiscovery,
+    setModel,
     status: routingModelStatus,
   } = usePlaygroundRoutingModel(endpoint)
   const isRoutingModelReady = routingModelStatus === 'ready'
@@ -79,10 +81,11 @@ const ChatComponent = ({
   const activeTasksRef = useRef<Record<string, PlaygroundTask>>({})
   const conversationIdRef = useRef(conversationId)
 
-  const { conversations, saveConversation, getConversation, deleteConversation } = useConversationStorage<Message[]>({
-    storageKey: 'sr:chat:conversations',
-    maxConversations: 20,
-  })
+  const { conversations, saveConversation, getConversation, deleteConversation } =
+    useConversationStorage<Message[]>({
+      storageKey: 'sr:chat:conversations',
+      maxConversations: 20,
+    })
   const {
     clearConversationQueue,
     enqueueTask,
@@ -128,24 +131,30 @@ const ChatComponent = ({
     setActiveTasks(next)
   }, [])
 
-  const clearActiveTaskForConversation = useCallback((targetConversationId: string, taskId: string) => {
-    const currentTask = activeTasksRef.current[targetConversationId]
-    if (!currentTask || currentTask.id !== taskId) {
-      return
-    }
-    const next = { ...activeTasksRef.current }
-    delete next[targetConversationId]
-    activeTasksRef.current = next
-    setActiveTasks(next)
-  }, [])
+  const clearActiveTaskForConversation = useCallback(
+    (targetConversationId: string, taskId: string) => {
+      const currentTask = activeTasksRef.current[targetConversationId]
+      if (!currentTask || currentTask.id !== taskId) {
+        return
+      }
+      const next = { ...activeTasksRef.current }
+      delete next[targetConversationId]
+      activeTasksRef.current = next
+      setActiveTasks(next)
+    },
+    [],
+  )
 
-  const registerAbortController = useCallback((targetConversationId: string, controller: AbortController | null) => {
-    if (controller) {
-      abortControllersRef.current[targetConversationId] = controller
-      return
-    }
-    delete abortControllersRef.current[targetConversationId]
-  }, [])
+  const registerAbortController = useCallback(
+    (targetConversationId: string, controller: AbortController | null) => {
+      if (controller) {
+        abortControllersRef.current[targetConversationId] = controller
+        return
+      }
+      delete abortControllersRef.current[targetConversationId]
+    },
+    [],
+  )
 
   useEffect(() => {
     conversationIdRef.current = conversationId
@@ -167,12 +176,12 @@ const ChatComponent = ({
   })
 
   const baseOtherToolDefinitions = useMemo(
-    () => otherToolDefinitions.filter(def => !isOpenClawMCPToolName(def.function.name)),
-    [otherToolDefinitions]
+    () => otherToolDefinitions.filter((def) => !isOpenClawMCPToolName(def.function.name)),
+    [otherToolDefinitions],
   )
   const clawToolDefinitions = useMemo(
-    () => otherToolDefinitions.filter(def => isOpenClawMCPToolName(def.function.name)),
-    [otherToolDefinitions]
+    () => otherToolDefinitions.filter((def) => isOpenClawMCPToolName(def.function.name)),
+    [otherToolDefinitions],
   )
   const clawManagementDisabled = readonlyLoading || isReadonly
   const currentHeaderRevealState = headerRevealStates[conversationId]
@@ -249,12 +258,15 @@ const ChatComponent = ({
 
     if (conversations.length === 0) return
 
-    const restoredConversationMessages = conversations.reduce<Record<string, Message[]>>((acc, conv) => {
-      if (Array.isArray(conv.payload)) {
-        acc[conv.id] = restoreMessages(conv.payload)
-      }
-      return acc
-    }, {})
+    const restoredConversationMessages = conversations.reduce<Record<string, Message[]>>(
+      (acc, conv) => {
+        if (Array.isArray(conv.payload)) {
+          acc[conv.id] = restoreMessages(conv.payload)
+        }
+        return acc
+      },
+      {},
+    )
 
     setConversationMessages(restoredConversationMessages)
 
@@ -279,9 +291,9 @@ const ChatComponent = ({
   const conversationPreviews = useMemo<ConversationPreview[]>(() => {
     return [...conversations]
       .sort((a, b) => a.createdAt - b.createdAt)
-      .map(conv => {
+      .map((conv) => {
         const firstUserMessage = Array.isArray(conv.payload)
-          ? conv.payload.find(msg => msg.role === 'user')
+          ? conv.payload.find((msg) => msg.role === 'user')
           : undefined
         const title = (firstUserMessage?.content || 'New conversation').trim()
         const preview = title.length > 60 ? `${title.slice(0, 60)}…` : title || 'New conversation'
@@ -296,7 +308,7 @@ const ChatComponent = ({
 
   const messages = useMemo(
     () => conversationMessages[conversationId] ?? getStoredMessagesForConversation(conversationId),
-    [conversationId, conversationMessages, getStoredMessagesForConversation]
+    [conversationId, conversationMessages, getStoredMessagesForConversation],
   )
   const queuedTasks = useMemo(() => getQueue(conversationId), [conversationId, getQueue])
   const generateId = generateMessageId
@@ -310,26 +322,19 @@ const ChatComponent = ({
       enableWebSearch,
       model,
     }),
-    [clawManagementDisabled, enableClawMode, enableWebSearch, model]
+    [clawManagementDisabled, enableClawMode, enableWebSearch, model],
   )
 
   const buildTaskTools = useCallback(
     (task: PlaygroundTask) => {
-      const otherTools = task.requestOptions.enableClawMode && !clawManagementDisabled
-        ? [...baseOtherToolDefinitions, ...clawToolDefinitions]
-        : baseOtherToolDefinitions
+      const otherTools =
+        task.requestOptions.enableClawMode && !clawManagementDisabled
+          ? [...baseOtherToolDefinitions, ...clawToolDefinitions]
+          : baseOtherToolDefinitions
 
-      return [
-        ...otherTools,
-        ...(task.requestOptions.enableWebSearch ? searchToolDefinitions : []),
-      ]
+      return [...otherTools, ...(task.requestOptions.enableWebSearch ? searchToolDefinitions : [])]
     },
-    [
-      baseOtherToolDefinitions,
-      clawManagementDisabled,
-      clawToolDefinitions,
-      searchToolDefinitions,
-    ]
+    [baseOtherToolDefinitions, clawManagementDisabled, clawToolDefinitions, searchToolDefinitions],
   )
 
   const handleThinkingComplete = useCallback(() => {}, [])
@@ -340,19 +345,19 @@ const ChatComponent = ({
 
   const handleSelectConversation = useCallback(
     (id: string) => {
-      const target = conversations.find(conv => conv.id === id)
+      const target = conversations.find((conv) => conv.id === id)
       if (!target) return
 
       setConversationId(target.id)
       setInputValue('')
       setExpandedToolCards(new Set())
     },
-    [conversations]
+    [conversations],
   )
 
   const handleDeleteConversation = useCallback(
     (id: string) => {
-      const remaining = conversations.filter(conv => conv.id !== id)
+      const remaining = conversations.filter((conv) => conv.id !== id)
       const deletingActiveConversation = Boolean(activeTasksRef.current[id])
 
       clearConversationQueue(id)
@@ -392,61 +397,58 @@ const ChatComponent = ({
       setConversationError,
       setConversationHeaderReveal,
       setConversationThinkingState,
-    ]
+    ],
   )
 
-  const executeTask = useCallback((task: PlaygroundTask) => runPlaygroundTask({
-    buildTaskTools,
-    clawManagementDisabled,
-    clearConversationActiveTask: clearActiveTaskForConversation,
-    endpoint,
-    executeTools,
-    expandedToolCardCount: expandedToolCards.size,
-    generateId,
-    getConversationMessagesSnapshot,
-    getCurrentConversationId: () => conversationIdRef.current,
-    registerAbortController,
-    setConversationError,
-    setConversationHeaderReveal,
-    setConversationThinking: setConversationThinkingState,
-    setExpandedToolCards,
-    task,
-    updateConversationMessages,
-  }), [
-    buildTaskTools,
-    clawManagementDisabled,
-    clearActiveTaskForConversation,
-    endpoint,
-    executeTools,
-    expandedToolCards.size,
-    generateId,
-    getConversationMessagesSnapshot,
-    registerAbortController,
-    setConversationError,
-    setConversationHeaderReveal,
-    setConversationThinkingState,
-    setExpandedToolCards,
-    updateConversationMessages,
-  ])
+  const executeTask = useCallback(
+    (task: PlaygroundTask) =>
+      runPlaygroundTask({
+        buildTaskTools,
+        clawManagementDisabled,
+        clearConversationActiveTask: clearActiveTaskForConversation,
+        endpoint,
+        executeTools,
+        expandedToolCardCount: expandedToolCards.size,
+        generateId,
+        getConversationMessagesSnapshot,
+        getCurrentConversationId: () => conversationIdRef.current,
+        registerAbortController,
+        setConversationError,
+        setConversationHeaderReveal,
+        setConversationThinking: setConversationThinkingState,
+        setExpandedToolCards,
+        task,
+        updateConversationMessages,
+      }),
+    [
+      buildTaskTools,
+      clawManagementDisabled,
+      clearActiveTaskForConversation,
+      endpoint,
+      executeTools,
+      expandedToolCards.size,
+      generateId,
+      getConversationMessagesSnapshot,
+      registerAbortController,
+      setConversationError,
+      setConversationHeaderReveal,
+      setConversationThinkingState,
+      setExpandedToolCards,
+      updateConversationMessages,
+    ],
+  )
 
-  const startTask = useCallback((task: PlaygroundTask) => {
-    if (!isRoutingModelReady || activeTasksRef.current[task.conversationId]) {
-      return
-    }
+  const startTask = useCallback(
+    (task: PlaygroundTask) => {
+      if (!isRoutingModelReady || activeTasksRef.current[task.conversationId]) {
+        return
+      }
 
-    const reboundTask = task.requestOptions.model === model
-      ? task
-      : {
-          ...task,
-          requestOptions: {
-            ...task.requestOptions,
-            model,
-          },
-        }
-
-    setActiveTaskForConversation(reboundTask)
-    void executeTask(reboundTask)
-  }, [executeTask, isRoutingModelReady, model, setActiveTaskForConversation])
+      setActiveTaskForConversation(task)
+      void executeTask(task)
+    },
+    [executeTask, isRoutingModelReady, setActiveTaskForConversation],
+  )
 
   const handleSend = useCallback(() => {
     if (!isRoutingModelReady) return
@@ -463,7 +465,7 @@ const ChatComponent = ({
       requestOptions: buildTaskRequestOptions(),
     }
 
-    if (!conversations.some(conv => conv.id === conversationId)) {
+    if (!conversations.some((conv) => conv.id === conversationId)) {
       hasHydratedConversation.current = true
       saveConversation(conversationId, getConversationMessagesSnapshot(conversationId))
     }
@@ -502,48 +504,51 @@ const ChatComponent = ({
         return
       }
 
-      const nextTask = queue.reduce<PlaygroundTask>((earliestTask, task) => (
-        task.createdAt < earliestTask.createdAt ? task : earliestTask
-      ), queue[0])
+      const nextTask = queue.reduce<PlaygroundTask>(
+        (earliestTask, task) => (task.createdAt < earliestTask.createdAt ? task : earliestTask),
+        queue[0],
+      )
 
       removeQueuedTask(targetConversationId, nextTask.id)
       startTask(nextTask)
     })
-  }, [
-    activeTasks,
-    executeTask,
-    isRoutingModelReady,
-    queues,
-    removeQueuedTask,
-    startTask,
-  ])
+  }, [activeTasks, executeTask, isRoutingModelReady, queues, removeQueuedTask, startTask])
 
-  const handleDeleteQueuedTask = useCallback((taskId: string) => {
-    removeQueuedTask(conversationId, taskId)
-  }, [conversationId, removeQueuedTask])
+  const handleDeleteQueuedTask = useCallback(
+    (taskId: string) => {
+      removeQueuedTask(conversationId, taskId)
+    },
+    [conversationId, removeQueuedTask],
+  )
 
-  const handleEditQueuedTask = useCallback((taskId: string) => {
-    const taskToEdit = queuedTasks.find(task => task.id === taskId)
-    if (!taskToEdit) {
-      return
-    }
+  const handleEditQueuedTask = useCallback(
+    (taskId: string) => {
+      const taskToEdit = queuedTasks.find((task) => task.id === taskId)
+      if (!taskToEdit) {
+        return
+      }
 
-    removeQueuedTask(conversationId, taskId)
-    setInputValue(taskToEdit.prompt)
-    restorePendingAttachments(taskToEdit.attachments)
+      removeQueuedTask(conversationId, taskId)
+      setInputValue(taskToEdit.prompt)
+      restorePendingAttachments(taskToEdit.attachments)
 
-    if (typeof window !== 'undefined') {
-      window.requestAnimationFrame(() => {
-        inputRef.current?.focus()
-        const promptLength = taskToEdit.prompt.length
-        inputRef.current?.setSelectionRange(promptLength, promptLength)
-      })
-    }
-  }, [conversationId, queuedTasks, removeQueuedTask, restorePendingAttachments])
+      if (typeof window !== 'undefined') {
+        window.requestAnimationFrame(() => {
+          inputRef.current?.focus()
+          const promptLength = taskToEdit.prompt.length
+          inputRef.current?.setSelectionRange(promptLength, promptLength)
+        })
+      }
+    },
+    [conversationId, queuedTasks, removeQueuedTask, restorePendingAttachments],
+  )
 
-  const handleReorderQueuedTasks = useCallback((sourceTaskId: string, targetTaskId: string) => {
-    reorderTasks(conversationId, sourceTaskId, targetTaskId)
-  }, [conversationId, reorderTasks])
+  const handleReorderQueuedTasks = useCallback(
+    (sourceTaskId: string, targetTaskId: string) => {
+      reorderTasks(conversationId, sourceTaskId, targetTaskId)
+    },
+    [conversationId, reorderTasks],
+  )
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -574,22 +579,26 @@ const ChatComponent = ({
     setConversationError(conversationId, null)
   }, [conversationId, enableClawMode, hasRunningTasks, isTogglingClawMode, setConversationError])
 
-  const isTeamRoomView = enableClawMode && clawView === 'room', roomCreateDisabled = isTeamRoomView && clawManagementDisabled
+  const isTeamRoomView = enableClawMode && clawView === 'room',
+    roomCreateDisabled = isTeamRoomView && clawManagementDisabled
   const modeToggleDisabled = hasRunningTasks || isTogglingClawMode || readonlyLoading
 
-  const handleToggleTeamView = useCallback(() => { if (!enableClawMode || modeToggleDisabled) return; setClawView(prev => (prev === 'room' ? 'control' : 'room')) }, [enableClawMode, modeToggleDisabled])
+  const handleToggleTeamView = useCallback(() => {
+    if (!enableClawMode || modeToggleDisabled) return
+    setClawView((prev) => (prev === 'room' ? 'control' : 'room'))
+  }, [enableClawMode, modeToggleDisabled])
 
   const handleTopBarCreate = useCallback(() => {
     if (roomCreateDisabled) return
     if (isTeamRoomView) {
-      setTeamRoomCreateToken(prev => prev + 1)
+      setTeamRoomCreateToken((prev) => prev + 1)
       return
     }
     handleNewConversation()
   }, [handleNewConversation, isTeamRoomView, roomCreateDisabled])
 
   const handleToggleToolCard = useCallback((toolCallId: string) => {
-    setExpandedToolCards(prev => {
+    setExpandedToolCards((prev) => {
       const next = new Set(prev)
       if (next.has(toolCallId)) {
         next.delete(toolCallId)
@@ -600,13 +609,18 @@ const ChatComponent = ({
     })
   }, [])
 
-  const liveThinkingProcess = messages.reduceRight((thinking, message) =>
-    thinking || (message.role === 'assistant' && message.isStreaming ? message.thinkingProcess || '' : ''), '')
+  const liveThinkingProcess = messages.reduceRight(
+    (thinking, message) =>
+      thinking ||
+      (message.role === 'assistant' && message.isStreaming ? message.thinkingProcess || '' : ''),
+    '',
+  )
   const visibleError = conversationErrors[conversationId] ?? null
   const shouldShowThinking = !isTeamRoomView && Boolean(conversationThinking[conversationId])
-  const shouldShowHeaderReveal = !isTeamRoomView
-    && Boolean(currentHeaderRevealState?.visible)
-    && Boolean(currentHeaderRevealState?.headers)
+  const shouldShowHeaderReveal =
+    !isTeamRoomView &&
+    Boolean(currentHeaderRevealState?.visible) &&
+    Boolean(currentHeaderRevealState?.headers)
 
   return (
     <>
@@ -632,7 +646,7 @@ const ChatComponent = ({
             isOpen={isSidebarOpen}
             isTeamRoomView={isTeamRoomView}
             onCreate={handleTopBarCreate}
-            onToggleSidebar={() => setIsSidebarOpen(prev => !prev)}
+            onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
           >
             {!isTeamRoomView ? (
               <ChatConversationSidebar
@@ -649,7 +663,7 @@ const ChatComponent = ({
               <ClawRoomChat
                 isSidebarOpen={isSidebarOpen}
                 createRoomRequestToken={teamRoomCreateToken}
-                inputModeControls={(
+                inputModeControls={
                   <ChatComposerAddMenu
                     clawModeDisabled={modeToggleDisabled}
                     clawModeEnabled={enableClawMode}
@@ -663,7 +677,7 @@ const ChatComponent = ({
                     webSearchEnabled
                     webSearchLocked
                   />
-                )}
+                }
               />
             ) : (
               <>
@@ -716,20 +730,26 @@ const ChatComponent = ({
                   isLoading={isCurrentConversationRunning}
                   isTogglingClawMode={isTogglingClawMode}
                   modeToggleDisabled={modeToggleDisabled}
+                  modelOptions={routingModels}
+                  modelSelectDisabled={!isRoutingModelReady || isCurrentConversationRunning}
+                  selectedModel={model}
                   voiceInputDisabled={isCurrentConversationRunning || readonlyLoading || isReadonly}
                   onAttachFiles={handleAttachFiles}
                   onChangeInput={setInputValue}
                   onKeyDown={handleKeyDown}
+                  onModelChange={setModel}
                   onRemoveAttachment={handleRemoveAttachment}
                   onSend={handleSend}
                   onStop={handleStop}
                   onToggleClawMode={handleToggleClawMode}
                   onToggleClawRoom={handleToggleTeamView}
-                  onToggleWebSearch={() => setEnableWebSearch(prev => !prev)}
+                  onToggleWebSearch={() => setEnableWebSearch((prev) => !prev)}
                   sendDisabled={!isRoutingModelReady}
-                  sendDisabledReason={routingModelStatus === 'error'
-                    ? 'Retry model discovery before sending'
-                    : 'Discovering an available router model'}
+                  sendDisabledReason={
+                    routingModelStatus === 'error'
+                      ? 'Retry model discovery before sending'
+                      : 'Discovering an available router model'
+                  }
                   showClawRoom={enableClawMode}
                 />
               </>

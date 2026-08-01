@@ -23,7 +23,11 @@ function searchableModelValues(model: NormalizedModel): string[] {
     ...(model.tags ?? []),
     ...(model.capabilities ?? []),
     ...(model.endpoints ?? []).flatMap((endpoint) => [endpoint.name, endpoint.protocol]),
-    ...(model.backend_refs ?? []).flatMap((backend) => [backend.name, backend.provider, backend.type]),
+    ...(model.backend_refs ?? []).flatMap((backend) => [
+      backend.name,
+      backend.provider,
+      backend.type,
+    ]),
   ].filter((value): value is string => typeof value === 'string' && value.length > 0)
 }
 
@@ -34,7 +38,10 @@ export function filterModelInventory(
   const query = filters.search.trim().toLocaleLowerCase()
 
   return models.filter((model) => {
-    if (query && !searchableModelValues(model).some((value) => value.toLocaleLowerCase().includes(query))) {
+    if (
+      query &&
+      !searchableModelValues(model).some((value) => value.toLocaleLowerCase().includes(query))
+    ) {
       return false
     }
 
@@ -42,9 +49,9 @@ export function filterModelInventory(
       return false
     }
     if (
-      filters.reasoningFamily !== 'all'
-      && filters.reasoningFamily !== '__unassigned__'
-      && model.reasoning_family !== filters.reasoningFamily
+      filters.reasoningFamily !== 'all' &&
+      filters.reasoningFamily !== '__unassigned__' &&
+      model.reasoning_family !== filters.reasoningFamily
     ) {
       return false
     }
@@ -70,18 +77,26 @@ export function filterModelInventory(
 }
 
 export function getReasoningFamilyFilterOptions(models: NormalizedModel[]): string[] {
-  return [...new Set(models
-    .map((model) => model.reasoning_family?.trim())
-    .filter((family): family is string => Boolean(family)))]
-    .sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }))
+  return [
+    ...new Set(
+      models
+        .map((model) => model.reasoning_family?.trim())
+        .filter((family): family is string => Boolean(family)),
+    ),
+  ].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }))
 }
 
 export function getModelReferenceCounts(config: ConfigData | null): Map<string, number> {
   const counts = new Map<string, number>()
-  const decisions = config?.routing?.decisions ?? config?.decisions ?? []
+  const decisions = [
+    ...(config?.routing?.decisions ?? config?.decisions ?? []),
+    ...(config?.recipes ?? []).flatMap((recipe) => recipe.routing.decisions ?? []),
+  ]
 
   for (const decision of decisions) {
-    const models = new Set((decision.modelRefs ?? []).map((reference) => reference.model).filter(Boolean))
+    const models = new Set(
+      (decision.modelRefs ?? []).map((reference) => reference.model).filter(Boolean),
+    )
     collectAlgorithmModelReferences(decision.algorithm, models)
     for (const model of models) {
       counts.set(model, (counts.get(model) ?? 0) + 1)
@@ -91,7 +106,11 @@ export function getModelReferenceCounts(config: ConfigData | null): Map<string, 
   return counts
 }
 
-function collectAlgorithmModelReferences(value: unknown, references: Set<string>, fieldName = ''): void {
+function collectAlgorithmModelReferences(
+  value: unknown,
+  references: Set<string>,
+  fieldName = '',
+): void {
   if (typeof value === 'string') {
     if (fieldName === 'model' || fieldName.endsWith('_model')) {
       const modelName = value.trim()
@@ -163,10 +182,10 @@ export function validateModelStructuredFields(data: Record<string, unknown>): vo
   ] as const
   for (const [field, label] of stringListFields) {
     const value = data[field]
-    if (value !== undefined && (
-      !Array.isArray(value)
-      || value.some((item) => typeof item !== 'string')
-    )) {
+    if (
+      value !== undefined &&
+      (!Array.isArray(value) || value.some((item) => typeof item !== 'string'))
+    ) {
       throw new Error(`${label} must be a list of text values.`)
     }
   }
@@ -198,23 +217,33 @@ export function validateModelStructuredFields(data: Record<string, unknown>): vo
       if (!endpoint && !baseUrl) {
         throw new Error(`Provider backend ${index + 1} requires an endpoint or base URL.`)
       }
-      if (backend.protocol !== undefined && backend.protocol !== 'http' && backend.protocol !== 'https') {
+      if (
+        backend.protocol !== undefined &&
+        backend.protocol !== 'http' &&
+        backend.protocol !== 'https'
+      ) {
         throw new Error(`Provider backend ${index + 1} protocol must be HTTP or HTTPS.`)
       }
-      if (backend.weight !== undefined && (
-        typeof backend.weight !== 'number'
-        || !Number.isFinite(backend.weight)
-        || backend.weight < 0
-      )) {
+      if (
+        backend.weight !== undefined &&
+        (typeof backend.weight !== 'number' ||
+          !Number.isFinite(backend.weight) ||
+          backend.weight < 0)
+      ) {
         throw new Error(`Provider backend ${index + 1} weight must be zero or greater.`)
       }
-      if (backend.extra_headers !== undefined && (
-        !backend.extra_headers
-        || typeof backend.extra_headers !== 'object'
-        || Array.isArray(backend.extra_headers)
-        || Object.values(backend.extra_headers).some((headerValue) => typeof headerValue !== 'string')
-      )) {
-        throw new Error(`Provider backend ${index + 1} extra headers must contain text key/value pairs.`)
+      if (
+        backend.extra_headers !== undefined &&
+        (!backend.extra_headers ||
+          typeof backend.extra_headers !== 'object' ||
+          Array.isArray(backend.extra_headers) ||
+          Object.values(backend.extra_headers).some(
+            (headerValue) => typeof headerValue !== 'string',
+          ))
+      ) {
+        throw new Error(
+          `Provider backend ${index + 1} extra headers must contain text key/value pairs.`,
+        )
       }
     })
   }
@@ -230,7 +259,11 @@ export function validateModelStructuredFields(data: Record<string, unknown>): vo
     }
   }
 
-  if (data.external_model_ids && typeof data.external_model_ids === 'object' && !Array.isArray(data.external_model_ids)) {
+  if (
+    data.external_model_ids &&
+    typeof data.external_model_ids === 'object' &&
+    !Array.isArray(data.external_model_ids)
+  ) {
     for (const [provider, modelId] of Object.entries(data.external_model_ids)) {
       if (!provider.trim() || typeof modelId !== 'string' || !modelId.trim()) {
         throw new Error('External Model IDs must contain non-empty provider/model ID pairs.')
@@ -243,14 +276,18 @@ export function validateModelStructuredFields(data: Record<string, unknown>): vo
     if (pricing.currency !== undefined && typeof pricing.currency !== 'string') {
       throw new Error('Pricing currency must be text.')
     }
-    const rateFields = ['prompt_per_1m', 'cached_input_per_1m', 'cache_write_per_1m', 'completion_per_1m']
+    const rateFields = [
+      'prompt_per_1m',
+      'cached_input_per_1m',
+      'cache_write_per_1m',
+      'completion_per_1m',
+    ]
     for (const field of rateFields) {
       const value = pricing[field]
-      if (value !== undefined && (
-        typeof value !== 'number'
-        || !Number.isFinite(value)
-        || value < 0
-      )) {
+      if (
+        value !== undefined &&
+        (typeof value !== 'number' || !Number.isFinite(value) || value < 0)
+      ) {
         throw new Error(`Pricing ${field} must be zero or greater.`)
       }
     }

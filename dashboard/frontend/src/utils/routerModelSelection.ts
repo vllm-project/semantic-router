@@ -10,6 +10,11 @@ interface RouterModelsResponse {
   data?: unknown
 }
 
+export interface RouterModelOption {
+  id: string
+  description: string
+}
+
 function normalizeModelRecords(payload: unknown): RouterModelRecord[] {
   if (!payload || typeof payload !== 'object') {
     return []
@@ -20,7 +25,9 @@ function normalizeModelRecords(payload: unknown): RouterModelRecord[] {
     return []
   }
 
-  return data.filter((entry): entry is RouterModelRecord => Boolean(entry && typeof entry === 'object'))
+  return data.filter((entry): entry is RouterModelRecord =>
+    Boolean(entry && typeof entry === 'object'),
+  )
 }
 
 function modelId(entry: RouterModelRecord): string {
@@ -28,30 +35,26 @@ function modelId(entry: RouterModelRecord): string {
 }
 
 function isRouterOwned(entry: RouterModelRecord): boolean {
-  return (
-    typeof entry.owned_by === 'string' &&
-    entry.owned_by.trim().toLowerCase() === 'vllm-semantic-router'
-  )
+  if (typeof entry.owned_by !== 'string') return false
+  const owner = entry.owned_by.trim().toLowerCase()
+  return owner === 'vllm-semantic-router' || owner === 'amd'
 }
 
 function isAutomaticRouterModel(entry: RouterModelRecord): boolean {
   const id = modelId(entry)
   const normalizedId = id.toLowerCase()
-  if (
-    !id ||
-    !isRouterOwned(entry) ||
-    normalizedId === 'mom' ||
-    normalizedId.endsWith('/mom')
-  ) {
+  if (!id || !isRouterOwned(entry) || normalizedId === 'mom' || normalizedId.endsWith('/mom')) {
     return false
   }
 
   const description = typeof entry.description === 'string' ? entry.description.toLowerCase() : ''
 
-  return normalizedId === 'auto'
-    || normalizedId.endsWith('/auto')
-    || description.includes('automatic model routing')
-    || description.includes('intelligent router for mixture-of-models')
+  return (
+    normalizedId === 'auto' ||
+    normalizedId.endsWith('/auto') ||
+    description.includes('automatic model routing') ||
+    description.includes('intelligent router for mixture-of-models')
+  )
 }
 
 export function selectRouterAutoModel(payload: unknown): string | null {
@@ -65,6 +68,36 @@ export function selectRouterAutoModel(payload: unknown): string | null {
 
   const automatic = records.find(isAutomaticRouterModel)
   return automatic ? modelId(automatic) : null
+}
+
+export function listRouterModels(payload: unknown): RouterModelOption[] {
+  const seen = new Set<string>()
+  const models = normalizeModelRecords(payload)
+    .filter(isRouterOwned)
+    .map((entry) => ({
+      id: modelId(entry),
+      description: typeof entry.description === 'string' ? entry.description.trim() : '',
+    }))
+    .filter((model) => {
+      const normalizedId = model.id.toLowerCase()
+      if (
+        !model.id ||
+        normalizedId === 'mom' ||
+        normalizedId.endsWith('/mom') ||
+        seen.has(model.id)
+      )
+        return false
+      seen.add(model.id)
+      return true
+    })
+  const explicitModels = models.filter((model) => {
+    const normalizedId = model.id.toLowerCase()
+    return normalizedId !== 'auto' && !normalizedId.endsWith('/auto')
+  })
+  if (explicitModels.length > 0) return explicitModels
+
+  const canonical = models.find((model) => model.id === CANONICAL_AUTO_MODEL)
+  return canonical ? [canonical] : models.slice(0, 1)
 }
 
 export function getRouterModelsEndpoint(chatCompletionsEndpoint: string): string {

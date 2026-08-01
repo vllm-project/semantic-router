@@ -3,86 +3,148 @@ import { describe, expect, it } from 'vitest'
 import {
   CANONICAL_AUTO_MODEL,
   getRouterModelsEndpoint,
+  listRouterModels,
   selectRouterAutoModel,
 } from './routerModelSelection'
 
 describe('router model selection', () => {
   it('prefers the canonical automatic-routing alias', () => {
-    expect(selectRouterAutoModel({
-      data: [
-        { id: 'MoM', owned_by: 'vllm-semantic-router' },
-        { id: CANONICAL_AUTO_MODEL, owned_by: 'vllm-semantic-router' },
-        { id: 'qwen/qwen3.5-rocm', owned_by: 'vllm' },
-      ],
-    })).toBe(CANONICAL_AUTO_MODEL)
+    expect(
+      selectRouterAutoModel({
+        data: [
+          { id: 'MoM', owned_by: 'vllm-semantic-router' },
+          { id: CANONICAL_AUTO_MODEL, owned_by: 'vllm-semantic-router' },
+          { id: 'qwen/qwen3.5-rocm', owned_by: 'vllm' },
+        ],
+      }),
+    ).toBe(CANONICAL_AUTO_MODEL)
   })
 
   it('uses a live custom auto alias when the canonical alias is not exposed', () => {
-    expect(selectRouterAutoModel({
-      data: [
-        {
-          id: 'router/production',
-          owned_by: 'vllm-semantic-router',
-          description: 'Automatic model routing',
-        },
-        { id: 'qwen/qwen3.5-rocm', owned_by: 'vllm' },
-      ],
-    })).toBe('router/production')
+    expect(
+      selectRouterAutoModel({
+        data: [
+          {
+            id: 'router/production',
+            owned_by: 'vllm-semantic-router',
+            description: 'Automatic model routing',
+          },
+          { id: 'qwen/qwen3.5-rocm', owned_by: 'vllm' },
+        ],
+      }),
+    ).toBe('router/production')
   })
 
   it('accepts a case-insensitive bare auto alias advertised by the router', () => {
-    expect(selectRouterAutoModel({
-      data: [{ id: 'AUTO', owned_by: 'vllm-semantic-router' }],
-    })).toBe('AUTO')
+    expect(
+      selectRouterAutoModel({
+        data: [{ id: 'AUTO', owned_by: 'vllm-semantic-router' }],
+      }),
+    ).toBe('AUTO')
   })
 
   it('does not mistake a backend model for the automatic router', () => {
-    expect(selectRouterAutoModel({ data: [{ id: 'qwen/qwen3.5-rocm', owned_by: 'vllm' }] }))
-      .toBeNull()
-    expect(selectRouterAutoModel({
-      data: [
-        {
-          id: 'backend/auto',
-          owned_by: 'upstream-endpoint',
-          description: 'Automatic model routing',
-        },
-      ],
-    })).toBeNull()
+    expect(
+      selectRouterAutoModel({ data: [{ id: 'qwen/qwen3.5-rocm', owned_by: 'vllm' }] }),
+    ).toBeNull()
+    expect(
+      selectRouterAutoModel({
+        data: [
+          {
+            id: 'backend/auto',
+            owned_by: 'upstream-endpoint',
+            description: 'Automatic model routing',
+          },
+        ],
+      }),
+    ).toBeNull()
     expect(selectRouterAutoModel({ data: 'invalid' })).toBeNull()
   })
 
   it('rejects the retired MoM compatibility alias instead of sending it from Playground', () => {
-    expect(selectRouterAutoModel({
-      data: [
-        {
-          id: 'MoM',
-          owned_by: 'vllm-semantic-router',
-          description: 'Intelligent Router for Mixture-of-Models',
-        },
-        {
-          id: 'vllm-sr/MoM',
-          owned_by: 'vllm-semantic-router',
-          description: 'Intelligent Router for Mixture-of-Models',
-        },
-      ],
-    })).toBeNull()
+    expect(
+      selectRouterAutoModel({
+        data: [
+          {
+            id: 'MoM',
+            owned_by: 'vllm-semantic-router',
+            description: 'Intelligent Router for Mixture-of-Models',
+          },
+          {
+            id: 'vllm-sr/MoM',
+            owned_by: 'vllm-semantic-router',
+            description: 'Intelligent Router for Mixture-of-Models',
+          },
+        ],
+      }),
+    ).toBeNull()
   })
 
   it('requires the canonical alias to be advertised by the semantic router', () => {
-    expect(selectRouterAutoModel({
-      data: [
-        {
-          id: CANONICAL_AUTO_MODEL,
-          owned_by: 'upstream-endpoint',
-          description: 'Automatic model routing',
-        },
-      ],
-    })).toBeNull()
+    expect(
+      selectRouterAutoModel({
+        data: [
+          {
+            id: CANONICAL_AUTO_MODEL,
+            owned_by: 'upstream-endpoint',
+            description: 'Automatic model routing',
+          },
+        ],
+      }),
+    ).toBeNull()
+  })
+
+  it('lists AMD branded MoM profiles with descriptions and hides upstream-owned models', () => {
+    expect(
+      listRouterModels({
+        data: [
+          {
+            id: 'amd/rocm-v1-balanced',
+            owned_by: 'amd',
+            description: 'Balanced Mixture-of-Models profile',
+          },
+          {
+            id: 'amd/rocm-v1-flash',
+            owned_by: 'vllm-semantic-router',
+            description: 'Latency-first Mixture-of-Models profile',
+          },
+          {
+            id: 'vllm-sr/auto',
+            owned_by: 'vllm-semantic-router',
+            description: 'Intelligent Router for Mixture-of-Models',
+          },
+          { id: 'amd-internal/gemma', owned_by: 'upstream-endpoint' },
+        ],
+      }),
+    ).toEqual([
+      {
+        id: 'amd/rocm-v1-balanced',
+        description: 'Balanced Mixture-of-Models profile',
+      },
+      {
+        id: 'amd/rocm-v1-flash',
+        description: 'Latency-first Mixture-of-Models profile',
+      },
+    ])
+  })
+
+  it('keeps the canonical auto model usable when no entrypoints are advertised', () => {
+    expect(
+      listRouterModels({
+        data: [
+          { id: 'auto', owned_by: 'vllm-semantic-router' },
+          { id: CANONICAL_AUTO_MODEL, owned_by: 'vllm-semantic-router' },
+          { id: 'MoM', owned_by: 'vllm-semantic-router' },
+        ],
+      }),
+    ).toEqual([{ id: CANONICAL_AUTO_MODEL, description: '' }])
   })
 
   it('derives the models endpoint from local and absolute chat endpoints', () => {
     expect(getRouterModelsEndpoint('/api/router/v1/chat/completions')).toBe('/api/router/v1/models')
-    expect(getRouterModelsEndpoint('http://localhost:8080/v1/chat/completions')).toBe('http://localhost:8080/v1/models')
+    expect(getRouterModelsEndpoint('http://localhost:8080/v1/chat/completions')).toBe(
+      'http://localhost:8080/v1/models',
+    )
     expect(getRouterModelsEndpoint('/custom/chat')).toBe('/api/router/v1/models')
   })
 })
