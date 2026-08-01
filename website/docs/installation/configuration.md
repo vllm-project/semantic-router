@@ -263,6 +263,7 @@ For `routing.signals.structure`, `feature.type: density` now uses built-in multi
 The repository now separates the exhaustive canonical reference config from reusable routing fragments:
 
 - `config/config.yaml`: exhaustive canonical reference config
+- `config/quickstart.yaml`: smallest maintained config that passes validation; model-free keyword routing for first-run evaluation, not a production baseline
 - `config/signal/`: reusable `routing.signals` fragments
 - `config/decision/`: reusable `routing.decisions` rule-shape fragments
 - `config/algorithm/`: reusable `decision.algorithm` snippets
@@ -291,7 +292,7 @@ Repo-owned runtime and harness assets now live outside `config/`:
 
 Test-only ONNX binding assets now live under `e2e/config/onnx-binding/`.
 
-Those directories are support assets, not the main user-facing config contract. For hand-authored config, start from `config/config.yaml` or the fragment directories above. In this repository, the exhaustive reference config points `global.integrations.tools.tools_db_path` at `config/runtime/tools/tools_db.json` for local development.
+Those directories are support assets, not the main user-facing config contract. For hand-authored config, start from `config/quickstart.yaml` for a minimal validated baseline, or `config/config.yaml` and the fragment directories above for the full surface. In this repository, the exhaustive reference config points `global.integrations.tools.tools_db_path` at `config/runtime/tools/tools_db.json` for local development.
 
 `config/config.yaml` is not just a sample anymore. The repository enforces it as the exhaustive public-contract reference:
 
