@@ -4,6 +4,15 @@
 against the canonical router defaults without carrying their own copy of the
 global KB catalog.
 
+## Out-of-the-Box Presets
+
+| Preset | Recipe assets | Documentation |
+|---|---|---|
+| `balance` | `balance.yaml`, `balance.dsl`, `balance.probes.yaml` | [balance/README.md](balance/README.md) |
+| `privacy-first` | `privacy/privacy-router.yaml`, `privacy-router.dsl`, `privacy.probes.yaml` | [privacy/README.md](privacy/README.md) |
+
+Other maintained examples such as `feedback/` and `mmlu/` illustrate focused routing patterns; see each directory's README for scope and validation commands.
+
 ## DSL and YAML Pairs
 
 Some recipes keep a `.dsl` authoring source next to the compiled `.yaml`

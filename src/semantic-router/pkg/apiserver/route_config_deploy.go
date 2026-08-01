@@ -201,7 +201,8 @@ func (s *ClassificationAPIServer) handleConfigVersions(w http.ResponseWriter, _ 
 }
 
 // handleConfigGet handles GET /config/router and returns the current router config as JSON.
-func (s *ClassificationAPIServer) handleConfigGet(w http.ResponseWriter, _ *http.Request) {
+// Access requires config.read; plaintext secrets require secret_view (otherwise redacted).
+func (s *ClassificationAPIServer) handleConfigGet(w http.ResponseWriter, r *http.Request) {
 	if s.configPath == "" {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "NO_CONFIG_PATH", "Router configPath not set")
 		return
@@ -220,7 +221,7 @@ func (s *ClassificationAPIServer) handleConfigGet(w http.ResponseWriter, _ *http
 		return
 	}
 
-	s.writeJSONResponse(w, http.StatusOK, cfgMap)
+	s.writeJSONResponse(w, http.StatusOK, s.maybeRedactConfigView(r, cfgMap))
 }
 
 func configCleanupBackups(backupDir string) {

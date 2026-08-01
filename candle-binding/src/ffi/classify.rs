@@ -2188,6 +2188,68 @@ pub extern "C" fn classify_mmbert_32k_jailbreak(
     }
 }
 
+/// Classify text using the mmBERT-32K jailbreak detector and return the full
+/// softmax probability distribution across classes (not just the argmax).
+///
+/// This lets callers report the probability mass on the jailbreak class itself,
+/// rather than the confidence of whichever class wins argmax.
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+///
+/// # Returns
+/// `ModernBertClassificationResultWithProbs` with `class`/`confidence` for the
+/// top prediction plus the full `probabilities` array (`class` = -1 on error).
+/// The `probabilities` array is heap-allocated and must be freed with
+/// `free_modernbert_probabilities`.
+#[no_mangle]
+pub extern "C" fn classify_mmbert_32k_jailbreak_with_probabilities(
+    text: *const c_char,
+) -> ModernBertClassificationResultWithProbs {
+    let default_result = ModernBertClassificationResultWithProbs {
+        class: -1,
+        confidence: 0.0,
+        probabilities: std::ptr::null_mut(),
+        num_classes: 0,
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                eprintln!("Failed to convert text from C string");
+                return default_result;
+            }
+        }
+    };
+
+    if let Some(classifier) = MMBERT_32K_JAILBREAK_CLASSIFIER.get() {
+        match classifier.classify_text_with_probabilities(text) {
+            Ok((class_id, confidence, probabilities)) => {
+                let num_classes = probabilities.len();
+                let probabilities_ptr = unsafe { allocate_c_float_array(&probabilities) };
+
+                ModernBertClassificationResultWithProbs {
+                    class: class_id as i32,
+                    confidence,
+                    probabilities: probabilities_ptr,
+                    num_classes: num_classes as i32,
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "mmBERT-32K jailbreak classification (with probs) failed: {}",
+                    e
+                );
+                default_result
+            }
+        }
+    } else {
+        eprintln!("mmBERT-32K jailbreak classifier not initialized");
+        default_result
+    }
+}
+
 /// Classify text using mmBERT-32K feedback detector
 ///
 /// Detects user satisfaction from follow-up messages.

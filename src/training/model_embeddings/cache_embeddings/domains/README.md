@@ -7,7 +7,7 @@ This directory contains configuration files for training domain-specific cache e
 ### Train a Domain Model
 
 ```bash
-# From src/training/cache_embeddings/
+# From src/training/model_embeddings/cache_embeddings/
 ./train-domain.sh medical
 ```
 

@@ -9,11 +9,13 @@ import (
 
 // CanonicalConfig is the public v0.3 config contract.
 type CanonicalConfig struct {
-	Version   string             `yaml:"version,omitempty"`
-	Listeners []Listener         `yaml:"listeners,omitempty"`
-	Providers CanonicalProviders `yaml:"providers,omitempty"`
-	Routing   CanonicalRouting   `yaml:"routing,omitempty"`
-	Global    *CanonicalGlobal   `yaml:"global,omitempty"`
+	Version     string                `yaml:"version,omitempty"`
+	Listeners   []Listener            `yaml:"listeners,omitempty"`
+	Providers   CanonicalProviders    `yaml:"providers,omitempty"`
+	Routing     CanonicalRouting      `yaml:"routing,omitempty"`
+	Entrypoints []CanonicalEntrypoint `yaml:"entrypoints,omitempty"`
+	Recipes     []CanonicalRecipe     `yaml:"recipes,omitempty"`
+	Global      *CanonicalGlobal      `yaml:"global,omitempty"`
 
 	globalOverrideRaw *StructuredPayload `yaml:"-"`
 }
@@ -90,6 +92,9 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	}
 
 	applyCanonicalRoutingState(&cfg, canonical)
+	if err := applyCanonicalRecipeState(&cfg, canonical); err != nil {
+		return nil, err
+	}
 	if err := applyCanonicalProviderState(&cfg, canonical.Providers); err != nil {
 		return nil, err
 	}

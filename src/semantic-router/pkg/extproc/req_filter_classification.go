@@ -31,9 +31,10 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
-	// Check if decisions are configured
-	if len(r.Config.Decisions) == 0 {
-		if r.Config.IsAutoModelName(originalModel) {
+	// Check if decisions are configured in any routing profile; the flat
+	// Decisions field only carries the default recipe's.
+	if !r.Config.HasRoutingDecisions() {
+		if r.requestModelActsAsAuto(originalModel) {
 			logging.Warnf("No decisions configured, using default model")
 			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel, nil
 		}
@@ -46,12 +47,13 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
-	signals, authzErr := r.evaluateSignalsForDecision(originalModel, signalInput, history.nonUserMessages, ctx)
+	candidates := r.decisionCandidatesForRequest(originalModel, ctx)
+	signals, authzErr := r.evaluateSignalsForDecision(originalModel, signalInput, history.nonUserMessages, ctx, candidates)
 	if authzErr != nil {
 		return "", 0, entropy.ReasoningDecision{}, "", authzErr
 	}
 
-	result, defaultModel := r.runDecisionEngine(originalModel, ctx, signals, r.decisionCandidatesForRequestModel(originalModel))
+	result, defaultModel := r.runDecisionEngine(originalModel, ctx, signals, candidates)
 	if result == nil {
 		return "", 0.0, entropy.ReasoningDecision{}, defaultModel, nil
 	}
@@ -152,10 +154,21 @@ func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMetho
 	if method == selection.MethodHybrid && algorithm != nil && algorithm.Hybrid != nil {
 		return r.newDecisionHybridSelector(algorithm.Hybrid)
 	}
+	if method == selection.MethodMultiFactor && algorithm != nil {
+		return r.newDecisionMultiFactorSelector(algorithm.MultiFactor)
+	}
 	if r.ModelSelector == nil {
 		return nil
 	}
 	selector, _ := r.ModelSelector.Get(method)
+	return selector
+}
+
+func (r *OpenAIRouter) newDecisionMultiFactorSelector(decisionCfg *config.MultiFactorSelectionConfig) selection.Selector {
+	selector := selection.NewMultiFactorSelector(buildMultiFactorSelectionConfig(decisionCfg))
+	if r != nil && r.Config != nil && r.Config.ModelConfig != nil {
+		selector.InitializeFromConfig(r.Config.ModelConfig)
+	}
 	return selector
 }
 

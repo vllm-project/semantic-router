@@ -142,18 +142,17 @@ func buildModelSelectionConfig(cfg *config.RouterConfig) *selection.ModelSelecti
 	modelSelectionCfg.AutoMix = buildAutoMixSelectionConfig(cfg)
 	modelSelectionCfg.Hybrid = buildHybridSelectionConfig(cfg, nil)
 	modelSelectionCfg.ML = buildMLSelectionConfig(cfg)
-	modelSelectionCfg.MultiFactor = buildMultiFactorSelectionConfig(decisionCfgs.multiFactor)
+	modelSelectionCfg.MultiFactor = buildMultiFactorSelectionConfig(nil)
 	modelSelectionCfg.RLDriven = buildRLDrivenSelectionConfig(decisionCfgs.rlDriven)
 	modelSelectionCfg.GMTRouter = buildGMTRouterSelectionConfig(decisionCfgs.gmtRouter)
 	return modelSelectionCfg
 }
 
 type decisionScopedSelectionConfigs struct {
-	elo         *config.EloSelectionConfig
-	routerDC    *config.RouterDCSelectionConfig
-	rlDriven    *config.RLDrivenSelectionConfig
-	gmtRouter   *config.GMTRouterSelectionConfig
-	multiFactor *config.MultiFactorSelectionConfig
+	elo       *config.EloSelectionConfig
+	routerDC  *config.RouterDCSelectionConfig
+	rlDriven  *config.RLDrivenSelectionConfig
+	gmtRouter *config.GMTRouterSelectionConfig
 }
 
 func findDecisionScopedSelectionConfigs(cfg *config.RouterConfig) decisionScopedSelectionConfigs {
@@ -183,11 +182,6 @@ func findDecisionScopedSelectionConfigs(cfg *config.RouterConfig) decisionScoped
 			decision.Algorithm.GMTRouter != nil &&
 			result.gmtRouter == nil {
 			result.gmtRouter = decision.Algorithm.GMTRouter
-		}
-		if decision.Algorithm.Type == "multi_factor" &&
-			decision.Algorithm.MultiFactor != nil &&
-			result.multiFactor == nil {
-			result.multiFactor = decision.Algorithm.MultiFactor
 		}
 	}
 
@@ -564,7 +558,12 @@ func maybePopulateFromReplay(
 	if !ltCfg.PopulateFromReplay || reader == nil {
 		return
 	}
-	go populateFromReplay(storage, reader)
+	// Same #1843 exposure as the periodic populator below: this one-shot
+	// call also parses replay-store entries, and it runs on every router
+	// build, including config reloads of a live router.
+	goSafely("lookup_table_populator_initial", func() {
+		populateFromReplay(storage, reader)
+	})
 
 	if ltCfg.PopulateInterval == "" {
 		return

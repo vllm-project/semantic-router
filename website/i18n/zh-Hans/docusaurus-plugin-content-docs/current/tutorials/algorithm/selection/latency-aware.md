@@ -2,7 +2,7 @@
 translation:
   source_commit: "043cee97"
   source_file: "docs/tutorials/algorithm/selection/latency-aware.md"
-  outdated: false
+  outdated: true
 ---
 
 # Latency Aware

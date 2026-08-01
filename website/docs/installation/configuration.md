@@ -22,7 +22,9 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
 - `version`: schema version. Use `v0.3`.
 - `listeners`: router listener ports and timeouts.
 - `providers`: deployment bindings and provider defaults.
-- `routing`: routing semantics.
+- `routing`: routing semantics. This top-level profile is the `default` recipe.
+- `entrypoints`: optional table mapping request-facing virtual model names onto named recipes.
+- `recipes`: optional named routing profiles beside the default `routing` profile.
 - `global`: sparse runtime overrides. If you omit a field here, the router's built-in default is used.
 
 ## Ownership by section
@@ -33,6 +35,12 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `routing.signals`
   - `routing.projections` for partitions plus derived routing outputs
   - `routing.decisions`
+- `entrypoints` and `recipes` own multi-profile routing.
+  - `entrypoints[].model_names` are request-facing virtual model names; they behave like auto-model aliases, never reach a backend, and are listed by `/v1/models`
+  - `entrypoints[].recipe` selects which recipe evaluates matching requests
+  - `recipes[].routing` carries the same profile shape as the top-level `routing` block (`signals`, `projections`, `decisions`) but never `modelCards`: the model catalog stays shared
+  - signal and projection names share one global registry across recipes; a name declared by two profiles fails validation
+  - a recipe named `default` is only valid when the top-level `routing` block carries no profile of its own
 - `providers` owns deployment and default-selection metadata.
   - `defaults`
   - `models`
@@ -179,6 +187,30 @@ routing:
             drop: false
             ttl_turns: 2
 
+entrypoints:
+  - model_names: ["vllm-sr/privacy"]
+    recipe: privacy-first
+
+recipes:
+  - name: privacy-first
+    description: Keep privacy-sensitive prompts on the local model.
+    routing:
+      signals:
+        keywords:
+          - name: privacy_terms
+            operator: OR
+            keywords: ["ssn", "passport number"]
+      decisions:
+        - name: privacy_route
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: privacy_terms
+          modelRefs:
+            - model: qwen3-8b
+              use_reasoning: false
+
 global:
   router:
     config_source: file
@@ -199,6 +231,14 @@ such as turn-aware cache TTL, current-model affinity, and prefix/KV-cache
 warmth. Conversation, tool, replay, and transition-history signals keep their
 own storage surfaces; retention directives only declare the decision's desired
 post-selection side effects.
+
+`entrypoints` and `recipes` are the optional multi-profile layer above
+`routing`. The top-level `routing` block is the `default` recipe; each
+additional recipe carries its own `signals`, `projections`, and `decisions`
+under the same shape, while `modelCards` and `providers` stay shared. A request
+whose model name matches an entrypoint is routed by that recipe's decisions and
+never forwarded under the virtual name; requests using `vllm-sr/auto` or a
+concrete model name keep the default profile behavior.
 
 For `routing.signals.structure`, `feature.type: density` now uses built-in multilingual text-unit normalization. The router counts each CJK character as one unit, counts contiguous runs of other letters and digits as one unit, and ignores punctuation, so the same density rule shape behaves consistently across English, Chinese, and mixed-script prompts without a separate `normalize_by` field.
 

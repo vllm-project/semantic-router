@@ -2,7 +2,7 @@
 translation:
   source_commit: "043cee97"
   source_file: "docs/tutorials/algorithm/selection/knn.md"
-  outdated: false
+  outdated: true
 ---
 
 # KNN

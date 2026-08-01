@@ -9,7 +9,11 @@ Scans source trees for patterns seen in real supply chain attacks:
   - Suspicious subprocess/network calls
 
 All regex signatures are in scan_sensitive_paths.toml (base64-encoded).
-The entire tools/security/ directory is excluded from scans (SELF_DIR).
+Only the known scanner implementation files are excluded from scans
+(OWN_SOURCE_SUFFIXES), matched by exact trailing path components so this
+still applies when the scanner and the scanned tree are different checkouts
+— any other file under tools/security/, including a newly added one, is
+still scanned (see _is_self_path).
 
 Exit codes: 0 — clean, 1 — findings, 2 — scanner error
 """
@@ -53,7 +57,28 @@ SKIP_DIRS = {
     "supply-chain-security-scan",
 }
 
-SELF_DIR = str(SECURITY_DIR) + os.sep
+OWN_SOURCE_SUFFIXES = {
+    ("tools", "security", "ast_security_scanner.py"),
+    ("tools", "security", "scan_malicious_code.py"),
+}
+
+
+def _is_self_path(fpath: Path) -> bool:
+    """True if fpath is one of the known scanner implementation files.
+
+    Matches by exact trailing (dir, dir, filename) components, not a bare
+    directory prefix, so this still excludes the scanner's own files when it
+    runs from one checkout (e.g. a trusted base/ tree in CI) against a
+    different checkout (e.g. an untrusted pr-code/ tree) that contains its
+    own copy of these files — without exempting every other file that
+    happens to live in tools/security/ (see #2632 review).
+    """
+    try:
+        parts = fpath.resolve().parts
+    except (OSError, ValueError):
+        parts = fpath.parts
+    return any(tuple(parts[-len(suffix) :]) == suffix for suffix in OWN_SOURCE_SUFFIXES)
+
 
 SKIP_DIR_PATTERNS = {
     "model",
@@ -296,7 +321,7 @@ def scan_source_patterns(
         dirnames[:] = [d for d in dirnames if not should_skip_dir(d)]
         for fname in filenames:
             fpath = Path(dirpath) / fname
-            if str(fpath.resolve()).startswith(SELF_DIR):
+            if _is_self_path(fpath):
                 continue
             suffix = fpath.suffix.lower()
             if suffix not in SOURCE_EXTENSIONS:
@@ -392,7 +417,7 @@ def scan_binary_anomalies(root: Path, result: ScanResult):
         )
         for fname in filenames:
             fpath = Path(dirpath) / fname
-            if str(fpath.resolve()).startswith(SELF_DIR):
+            if _is_self_path(fpath):
                 continue
             suffix = fpath.suffix.lower()
 

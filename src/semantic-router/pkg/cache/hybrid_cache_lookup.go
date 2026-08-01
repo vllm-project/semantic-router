@@ -41,8 +41,8 @@ func (h *HybridCache) findSimilar(
 		return nil, false, nil
 	}
 
-	logging.Debugf("%s: searching for model='%s', query='%s', threshold=%.3f",
-		logPrefix, model, shortenHybridQuery(query), threshold)
+	logging.Debugf("%s: searching for model='%s', query=%s, threshold=%.3f",
+		logPrefix, model, logging.ContentDescriptor(query), threshold)
 
 	queryEmbedding, err := h.generateEmbedding(query)
 	if err != nil {
@@ -167,11 +167,4 @@ func (h *HybridCache) recordLookupMiss(
 		"candidates": qualifiedCandidates,
 	})
 	metrics.RecordCacheOperation("hybrid", metricOp, "miss", time.Since(start).Seconds())
-}
-
-func shortenHybridQuery(query string) string {
-	if len(query) <= 50 {
-		return query
-	}
-	return query[:50] + "..."
 }

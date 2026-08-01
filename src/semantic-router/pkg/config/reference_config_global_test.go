@@ -46,7 +46,50 @@ func assertReferenceConfigServiceGlobalCoverage(t testingT, services map[string]
 	assertReferenceConfigObservabilityCoverage(t, mustMapAt(t, services, "observability"))
 	assertReferenceConfigAuthzCoverage(t, mustMapAt(t, services, "authz"))
 	assertReferenceConfigRateLimitCoverage(t, mustMapAt(t, services, "ratelimit"))
+	assertReferenceConfigManagementAPICoverage(t, mustMapAt(t, services, "management_api"))
 	assertReferenceConfigRouterReplayCoverage(t, mustMapAt(t, services, "router_replay"))
+}
+
+func assertReferenceConfigManagementAPICoverage(t testingT, managementAPI map[string]interface{}) {
+	assertMapCoversStructFields(t, managementAPI, reflect.TypeOf(ManagementAPIConfig{}), "global.services.management_api")
+	assertMapCoversStructFields(t, mustMapAt(t, managementAPI, "auth"), reflect.TypeOf(ManagementAPIAuthConfig{}), "global.services.management_api.auth")
+	assertSliceUnionCoversStructFields(
+		t,
+		mustSliceAt(t, managementAPI, "auth", "tokens"),
+		reflect.TypeOf(ManagementAPITokenRef{}),
+		"global.services.management_api.auth.tokens",
+	)
+	assertReferenceConfigManagementAPIRolesAlign(t, mustMapAt(t, managementAPI, "auth", "roles"))
+}
+
+// assertReferenceConfigManagementAPIRolesAlign keeps the exhaustive reference
+// YAML role lists in sync with DefaultManagementAPIRoles so copying the sample
+// into a bearer deployment does not silently weaken operator permissions.
+func assertReferenceConfigManagementAPIRolesAlign(t testingT, roles map[string]interface{}) {
+	defaults := DefaultManagementAPIRoles()
+	for role, wantPerms := range defaults {
+		raw, ok := roles[role]
+		if !ok {
+			t.Fatalf("global.services.management_api.auth.roles missing %q", role)
+		}
+		gotList, ok := raw.([]interface{})
+		if !ok {
+			t.Fatalf("global.services.management_api.auth.roles.%s must be a list", role)
+		}
+		got := make(map[string]struct{}, len(gotList))
+		for _, item := range gotList {
+			perm, ok := item.(string)
+			if !ok {
+				t.Fatalf("global.services.management_api.auth.roles.%s entries must be strings", role)
+			}
+			got[perm] = struct{}{}
+		}
+		for _, want := range wantPerms {
+			if _, ok := got[want]; !ok {
+				t.Fatalf("global.services.management_api.auth.roles.%s missing permission %q (must match DefaultManagementAPIRoles)", role, want)
+			}
+		}
+	}
 }
 
 func assertReferenceConfigAPIServiceCoverage(t testingT, api map[string]interface{}) {

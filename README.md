@@ -41,6 +41,8 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash
 
 For platform notes, detailed setup options, and troubleshooting, see the **[Installation Guide](https://vllm-sr.ai/docs/installation/)**.
 
+To evaluate the router — component performance regressions, routing quality across reasoning datasets, or backend comparisons — see the **[Benchmarking Guide](https://vllm-sr.ai/docs/benchmarking/overview)**.
+
 <details>
 <summary>Online playground credentials</summary>
 
@@ -51,6 +53,7 @@ For platform notes, detailed setup options, and troubleshooting, see the **[Inst
 
 ## Latest News
 
+- [2026/07/21] New Blog: [Beyond a Single Model: Building Mixture-of-Models Systems with vLLM Semantic Router](https://vllm.ai/blog/2026-07-21-vllm-sr-new-chapter-mom)
 - [2026/06/29] New Blog: [Micro-Agent: Beat Frontier Models with Collaboration inside Model API](https://vllm.ai/blog/2026-06-29-micro-agent-frontier-models)
 - [2026/06/16] New Blog: [Beyond One Model: Fusion in vLLM Semantic Router](https://vllm.ai/blog/2026-06-16-vllm-sr-fusion-api)
 - [2026/06/05] v0.3 Released: [vLLM Semantic Router v0.3 Themis: From Signals to Stateful Production Routing](https://vllm.ai/blog/2026-06-05-v0.3-vllm-sr-themis-release)
@@ -111,10 +114,6 @@ If you find Semantic Router helpful in your research or projects, please conside
   howpublished={\url{https://github.com/vllm-project/semantic-router}},
 }
 ```
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=vllm-project/semantic-router&type=Date)](https://www.star-history.com/#vllm-project/semantic-router&Date)
 
 ## Sponsors
 

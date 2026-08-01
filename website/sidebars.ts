@@ -221,6 +221,7 @@ const sidebars: SidebarsConfig = {
           label: 'Global',
           items: [
             'tutorials/global/overview',
+            'tutorials/global/entrypoints-and-recipes',
             'tutorials/global/api-and-observability',
             'tutorials/global/stores-and-tools',
             'tutorials/global/safety-models-and-policy',
@@ -270,6 +271,13 @@ const sidebars: SidebarsConfig = {
         'training/training-overview',
         'training/model-performance-eval',
         'training/ml-model-selection',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Benchmarking',
+      items: [
+        'benchmarking/overview',
       ],
     },
     {

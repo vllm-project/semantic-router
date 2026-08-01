@@ -92,6 +92,7 @@ global:
   integrations:
     looper:
       endpoint: http://localhost:8899/v1/chat/completions
+      max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
       remom:
         model_names:
           - vllm-sr/remom

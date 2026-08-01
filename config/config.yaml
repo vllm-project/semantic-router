@@ -812,6 +812,13 @@ routing:
           analysis_models:
             - qwen3-8b
             - qwen3-32b
+          analysis_overrides:
+            - model: qwen3-8b
+              temperature: 0.2
+              max_completion_tokens: 384
+            - model: qwen3-32b
+              temperature: 0.15
+              max_completion_tokens: 512
           max_concurrent: 2
           max_completion_tokens: 512
           round_timeout_seconds: 90
@@ -1354,6 +1361,39 @@ routing:
             max_inference_steps: 28
             timeout_seconds: 90
 
+entrypoints:
+  - model_names: ["vllm-sr/exhaustive-default"]
+    recipe: default
+  - model_names: ["vllm-sr/exhaustive-privacy"]
+    recipe: privacy-first
+
+recipes:
+  - name: privacy-first
+    description: Keeps privacy-sensitive traffic on the local default-tier model.
+    routing:
+      signals:
+        keywords:
+          - name: privacy_recipe_keywords
+            operator: OR
+            method: bm25
+            keywords: ["ssn", "passport number", "credit card number"]
+            case_sensitive: false
+            bm25_threshold: 0.1
+      decisions:
+        - name: privacy_recipe_route
+          description: Route privacy-sensitive prompts to the local model.
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: privacy_recipe_keywords
+          modelRefs:
+            - model: qwen3-8b
+              use_reasoning: false
+          algorithm:
+            type: static
+
 global:
   router:
     config_source: file
@@ -1534,6 +1574,37 @@ global:
               requests_per_unit: 1000
               tokens_per_unit: 2000000
               unit: hour
+    management_api:
+      bind_address: 127.0.0.1
+      port: 8080
+      remote_exposure: false
+      auth:
+        mode: disabled
+        tokens:
+          - env: VSR_MGMT_TOKEN
+            role: admin
+        roles:
+          viewer:
+            - health.read
+            - ready.read
+            - docs.read
+            - metrics.read
+            - classify.invoke
+            - config.read
+            - data.read
+          operator:
+            - health.read
+            - ready.read
+            - docs.read
+            - metrics.read
+            - classify.invoke
+            - config.read
+            - config.write
+            - learning.ingest
+            - data.read
+            - data.write
+          admin:
+            - "*"
     startup_status:
       store_backend: file
     router_replay:
@@ -1782,6 +1853,7 @@ global:
       embedding_model: multimodal
       embedding_dimension: 384
       ingestion_workers: 4
+      ingestion_drain_timeout_seconds: 30
       supported_formats: [.txt, .md, .json, .csv, .html, .pdf]
       milvus:
         connection:
@@ -1911,6 +1983,7 @@ global:
     looper:
       endpoint: http://localhost:8899/v1/chat/completions
       grpc_max_msg_size_mb: 16
+      max_response_bytes_mb: 32
       timeout_seconds: 120
       retry_count: 2
       headers:

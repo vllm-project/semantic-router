@@ -105,6 +105,14 @@ type JailbreakInference interface {
 	Classify(text string) (candle_binding.ClassResult, error)
 }
 
+// JailbreakProbInference is optionally implemented by jailbreak backends that can
+// return the full class-probability distribution, not just the argmax class. When a
+// backend implements it, callers can report the probability of the jailbreak class
+// itself rather than the confidence of whichever class wins argmax.
+type JailbreakProbInference interface {
+	ClassifyWithProbs(text string) (candle_binding.ClassResultWithProbs, error)
+}
+
 type JailbreakInferenceImpl struct{}
 
 func (c *JailbreakInferenceImpl) Classify(text string) (candle_binding.ClassResult, error) {
@@ -127,6 +135,12 @@ type MmBERT32KJailbreakInferenceImpl struct{}
 
 func (c *MmBERT32KJailbreakInferenceImpl) Classify(text string) (candle_binding.ClassResult, error) {
 	return candle_binding.ClassifyMmBert32KJailbreak(text)
+}
+
+// ClassifyWithProbs returns the mmBERT-32K jailbreak prediction together with the
+// full softmax probability distribution, satisfying JailbreakProbInference.
+func (c *MmBERT32KJailbreakInferenceImpl) ClassifyWithProbs(text string) (candle_binding.ClassResultWithProbs, error) {
+	return candle_binding.ClassifyMmBert32KJailbreakWithProbs(text)
 }
 
 // createMmBERT32KJailbreakInference creates mmBERT-32K jailbreak inference.

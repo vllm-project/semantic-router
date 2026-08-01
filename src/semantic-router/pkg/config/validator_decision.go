@@ -18,7 +18,7 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 }
 
 func validateDecisionModelContracts(cfg *RouterConfig) error {
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		if err := validateDecisionModelRefs(cfg, decision); err != nil {
 			return err
 		}
@@ -164,7 +164,7 @@ func validateDecisionCandidateIterationOutputs(iter CandidateIterationConfig, co
 }
 
 func validateDecisionPluginContracts(cfg *RouterConfig) error {
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		if toolsCfg := decision.GetToolsConfig(); toolsCfg != nil {
 			if err := toolsCfg.Validate(); err != nil {
 				return fmt.Errorf("decision '%s': %w", decision.Name, err)
@@ -228,7 +228,7 @@ func cachePersonalizationConflictDescription(ragActive, memActive bool) string {
 }
 
 func hasLegacyLatencyRoutingConfig(cfg *RouterConfig) bool {
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		for _, condition := range decision.Rules.Conditions {
 			if condition.Type == "latency" {
 				return true

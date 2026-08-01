@@ -41,7 +41,7 @@ func (r *OpenAIRouter) retrieveFromVectorStore(traceCtx context.Context, ctx *Re
 		return "", fmt.Errorf("embedder not initialized for vectorstore RAG")
 	}
 
-	queryEmbedding, err := embedder.Embed(params.query)
+	queryEmbedding, err := embedder.Embed(traceCtx, params.query)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate query embedding: %w", err)
 	}
