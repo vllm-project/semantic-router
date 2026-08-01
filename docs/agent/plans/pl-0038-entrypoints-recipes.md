@@ -7,7 +7,14 @@ by isolated routing recipes. Preserve the original single-profile contract by
 normalizing the top-level `routing` block as the `default` recipe selected by
 `vllm-sr/auto` and the other configured auto aliases.
 
-## Final Architecture
+## Scope
+
+This plan covers the canonical config, runtime, validation, API, dashboard,
+observability, and E2E work required for isolated routing recipes. Multi-profile
+DSL syntax and round-trip support are a separate language-design extension and
+are not part of this plan.
+
+### Final Architecture
 
 - `entrypoints[].model_names` are virtual request model IDs. They select one
   named recipe and never reach a backend.
@@ -30,7 +37,7 @@ normalizing the top-level `routing` block as the `default` recipe selected by
   aliases select the default recipe and then constrain the eligible decisions
   to the requested looper type.
 
-## Request Resolution
+### Request Resolution
 
 1. Resolve the request model before signal evaluation.
 2. Entrypoint model → mapped named recipe.
@@ -42,7 +49,7 @@ normalizing the top-level `routing` block as the `default` recipe selected by
 7. Emit `x-vsr-selected-recipe`; record the same scope in replay/Insights and
    all internal state keys.
 
-## Validation Contract
+### Validation Contract
 
 Config loading rejects:
 
@@ -56,7 +63,7 @@ Config loading rejects:
 The Go loader, Python CLI validator, and dashboard editor enforce the same
 local-namespace contract.
 
-## Compatibility and User-Visible Changes
+### Compatibility and User-Visible Changes
 
 - Existing single-profile files keep their routing behavior; their flat profile
   is exposed internally as `default` even when configs are built
@@ -72,22 +79,35 @@ local-namespace contract.
 - Responses expose `x-vsr-selected-recipe`. Replay APIs and Insights expose a
   recipe field/filter, and metrics/state keys distinguish recipe identity.
 
-## Completion Checklist
+## Exit Criteria
 
-- [x] canonical `entrypoints`/`recipes` schema, normalization, export, and
+- Every request-facing routing model resolves to exactly one recipe or explicit
+  backend passthrough before signal evaluation.
+- Recipe-owned routing state and references cannot cross recipe boundaries.
+- Go, Python CLI, dashboard, operator, and E2E validation agree on the public
+  contract.
+- Existing single-profile configurations retain their default-route behavior.
+- The repository PR gates pass for the complete cross-surface change.
+
+## Task List
+
+- [x] EP-001 canonical `entrypoints`/`recipes` schema, normalization, export, and
       default-profile compatibility bridge
-- [x] local-namespace validation in Go and the CLI
-- [x] entrypoint resolution before signal evaluation and concrete passthrough
-- [x] per-recipe classifiers, decisions, strategies, selectors, and plugins
-- [x] recipe-scoped cache, replay, learning/session state, metrics, and handoff
+- [x] EP-002 local-namespace validation in Go and the CLI
+- [x] EP-003 entrypoint resolution before signal evaluation and concrete passthrough
+- [x] EP-004 per-recipe classifiers, decisions, strategies, selectors, and plugins
+- [x] EP-005 recipe-scoped cache, replay, learning/session state, metrics, and handoff
       lookup state
-- [x] `/v1/models` entrypoint metadata and `x-vsr-selected-recipe`
-- [x] dashboard recipe strategy editing and recipe-filtered Insights
-- [x] unit, contract, and E2E coverage, including different definitions with
+- [x] EP-006 `/v1/models` entrypoint metadata and `x-vsr-selected-recipe`
+- [x] EP-007 dashboard recipe strategy editing and recipe-filtered Insights
+- [x] EP-008 unit, contract, and E2E coverage, including different definitions with
       the same local signal name
-- [x] reference config and user documentation
-- [ ] multi-profile DSL syntax/round-trip; this is a separate language-design
-      extension because the current DSL compiles one routing profile per file
+- [x] EP-009 reference config and user documentation
+
+## Next Action
+
+Land PR #2741 after the repository CI and maintainer review complete. Track
+multi-profile DSL syntax separately if that language extension is prioritized.
 
 ## Operating Rules
 

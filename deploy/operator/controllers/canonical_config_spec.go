@@ -26,7 +26,7 @@ func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconf
 		return err
 	}
 	if spec.Strategy != "" {
-		canonical.Global.Router.Strategy = spec.Strategy
+		canonical.Global.Router.Strategy = routerconfig.RoutingStrategy(spec.Strategy)
 	}
 	return nil
 }
