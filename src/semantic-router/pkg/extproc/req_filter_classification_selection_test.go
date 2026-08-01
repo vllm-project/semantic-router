@@ -178,6 +178,60 @@ func TestSelectorForDecisionMethodBuildsDecisionScopedHybridSelector(t *testing.
 	}
 }
 
+func TestSelectorForDecisionMethodBuildsDecisionScopedMultiFactorSelector(t *testing.T) {
+	qualityPolicy := &config.AlgorithmConfig{
+		Type: "multi_factor",
+		MultiFactor: &config.MultiFactorSelectionConfig{
+			Weights: &config.MultiFactorWeightsConfig{Quality: 1},
+		},
+	}
+	costPolicy := &config.AlgorithmConfig{
+		Type: "multi_factor",
+		MultiFactor: &config.MultiFactorSelectionConfig{
+			Weights: &config.MultiFactorWeightsConfig{Cost: 1},
+		},
+	}
+	cfg := config.DefaultGlobalConfig()
+	cfg.BackendModels.ModelConfig = map[string]config.ModelParams{
+		"premium": {
+			QualityScore: 0.9,
+			Pricing:      config.ModelPricing{PromptPer1M: 10},
+		},
+		"economy": {
+			QualityScore: 0.1,
+			Pricing:      config.ModelPricing{PromptPer1M: 1},
+		},
+	}
+	cfg.Decisions = []config.Decision{
+		{Name: "quality", Algorithm: qualityPolicy},
+		{Name: "cost", Algorithm: costPolicy},
+	}
+
+	registry := selection.NewFactory(buildModelSelectionConfig(&cfg)).
+		WithModelConfig(cfg.BackendModels.ModelConfig).
+		CreateAll()
+	router := &OpenAIRouter{Config: &cfg, ModelSelector: registry}
+	candidates := []config.ModelRef{{Model: "premium"}, {Model: "economy"}}
+
+	qualityResult, err := router.selectorForDecisionMethod(selection.MethodMultiFactor, qualityPolicy).
+		Select(context.Background(), &selection.SelectionContext{DecisionName: "quality", CandidateModels: candidates})
+	if err != nil {
+		t.Fatalf("quality selector returned error: %v", err)
+	}
+	if qualityResult.SelectedModel != "premium" {
+		t.Fatalf("quality decision selected %q, want premium", qualityResult.SelectedModel)
+	}
+
+	costResult, err := router.selectorForDecisionMethod(selection.MethodMultiFactor, costPolicy).
+		Select(context.Background(), &selection.SelectionContext{DecisionName: "cost", CandidateModels: candidates})
+	if err != nil {
+		t.Fatalf("cost selector returned error: %v", err)
+	}
+	if costResult.SelectedModel != "economy" {
+		t.Fatalf("cost decision selected %q, want economy", costResult.SelectedModel)
+	}
+}
+
 func TestBuildSelectionContextUsesPinnedSessionIDAndToolLoopFacts(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{
 		BackendModels: config.BackendModels{
