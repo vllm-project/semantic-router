@@ -16,7 +16,7 @@ import type {
   DecisionPluginConfiguration,
   NormalizedModel,
 } from './configPageSupport'
-import { TABLE_COLUMN_WIDTH } from './configPageSupport'
+import { mergeDecisionForSave, TABLE_COLUMN_WIDTH } from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 import ConfigPageDecisionPluginsEditor from './ConfigPageDecisionPluginsEditor'
@@ -347,6 +347,9 @@ export default function ConfigPageDecisionsSection({
             conditions: (decision.rules?.conditions || []).map((cond) => ({
               type: cond.type,
               name: cond.name,
+              label: cond.label,
+              predicate: cond.predicate,
+              on_error: cond.on_error,
             })),
             modelRefs: (decision.modelRefs || []).map((ref) => ({
               model: ref.model,
@@ -704,7 +707,13 @@ export default function ConfigPageDecisionsSection({
         if (!type || !conditionName) {
           throw new Error(`Condition #${idx + 1} needs both type and name.`)
         }
-        return { type, name: conditionName }
+        return {
+          type,
+          name: conditionName,
+          ...(condition.label ? { label: condition.label } : {}),
+          ...(condition.predicate ? { predicate: condition.predicate } : {}),
+          ...(condition.on_error ? { on_error: condition.on_error } : {}),
+        }
       })
 
       const normalizedModelRefs = (formData.modelRefs || []).filter((m) => (m?.model || '').trim())
@@ -766,7 +775,7 @@ export default function ConfigPageDecisionsSection({
         return { type, configuration }
       })
 
-      const newDecision: DecisionConfig = {
+      const newDecision = mergeDecisionForSave(mode === 'edit' ? decision : undefined, {
         name,
         description: formData.description,
         priority: priority || 0,
@@ -776,7 +785,7 @@ export default function ConfigPageDecisionsSection({
         },
         modelRefs,
         plugins,
-      }
+      })
 
       const newConfig: ConfigData = cloneConfigData(config)
       newConfig.decisions = [...(newConfig.decisions || [])]

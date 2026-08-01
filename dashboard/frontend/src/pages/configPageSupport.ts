@@ -192,6 +192,9 @@ export interface RoutingModelCard {
 export interface DecisionCondition {
   type: string
   name: string
+  label?: string
+  predicate?: NumericPredicate
+  on_error?: 'no_match' | 'match'
 }
 
 export interface DecisionRuleSet {
@@ -222,6 +225,9 @@ export interface DecisionConfig {
   plugins?: DecisionPluginConfig[]
   algorithm?: Record<string, unknown>
   candidateIterations?: unknown
+  tier?: number
+  annotations?: Record<string, unknown>
+  output_contract?: string
 }
 
 export const ROUTING_STRATEGIES = ['priority', 'confidence'] as const
@@ -1228,6 +1234,16 @@ export interface DecisionFormState {
   conditions: DecisionCondition[]
   modelRefs: DecisionModelRef[]
   plugins: { type: string; configuration: string | DecisionPluginConfiguration }[]
+}
+
+export function mergeDecisionForSave(
+  existing: DecisionConfig | undefined,
+  update: DecisionConfig,
+): DecisionConfig {
+  return {
+    ...(existing || {}),
+    ...update,
+  }
 }
 
 export interface AddSignalFormState {

@@ -50,6 +50,15 @@ describe('DSL structured field schemas', () => {
       'max_cost_per_1m',
       'max_inflight',
     ])
+
+    const prompt = getAlgorithmFieldSchema('prompt')
+    const promptConfig = requireField(prompt, 'prompt')
+    expect(promptConfig.type).toBe('object')
+    expect(promptConfig.fields?.map((field) => field.key)).toEqual([
+      'model',
+      'instructions',
+      'timeout_seconds',
+    ])
   })
 
   it('maps stable signal and header contracts to object and object-list editors', () => {
