@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"strings"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -62,7 +61,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 
 	ctx.RequestModel = requestModel
 	ctx.RequestQuery = requestQuery
-	ctx.CacheQuery = cache.ScopeQueryToNamespace(requestQuery, semanticCacheNamespace(ctx))
+	ctx.CacheQuery = cache.ScopeQueryToUser(requestQuery, cacheScopeUserID(ctx))
 
 	cacheEnabled := r.semanticCacheEnabledForRequest(ctx)
 
@@ -87,25 +86,22 @@ func (r *OpenAIRouter) handleLooperCacheSkip(ctx *RequestContext, categoryName s
 	}
 	ctx.RequestModel = requestModel
 	ctx.RequestQuery = requestQuery
-	ctx.CacheQuery = cache.ScopeQueryToNamespace(requestQuery, semanticCacheNamespace(ctx))
+	ctx.CacheQuery = cache.ScopeQueryToUser(requestQuery, cacheScopeUserID(ctx))
 
 	cacheEnabled := r.semanticCacheEnabledForRequest(ctx)
 	r.storePendingCacheRequest(ctx, categoryName, requestModel, cacheEnabled)
 	return nil, false
 }
 
-func semanticCacheNamespace(ctx *RequestContext) string {
+// semanticCachePartition keeps recipe identity out of the text passed to the
+// embedding model. Cache backends treat model as an exact partition key, so
+// named recipes cannot read each other's entries while the default recipe
+// preserves the legacy model key and semantic similarity behavior.
+func semanticCachePartition(ctx *RequestContext, model string) string {
 	if ctx == nil {
-		return ""
+		return model
 	}
-	parts := make([]string, 0, 2)
-	if recipe := strings.TrimSpace(string(ctx.Routing.RecipeName())); recipe != "" {
-		parts = append(parts, "recipe="+recipe)
-	}
-	if userID := strings.TrimSpace(cacheScopeUserID(ctx)); userID != "" {
-		parts = append(parts, "user="+userID)
-	}
-	return strings.Join(parts, "\x1f")
+	return config.RoutingNamespaceKey(ctx.Routing.RecipeName(), model)
 }
 
 // storePendingCacheRequest adds a pending cache request if caching is enabled for this decision.
@@ -115,7 +111,8 @@ func (r *OpenAIRouter) storePendingCacheRequest(ctx *RequestContext, categoryNam
 		return
 	}
 	ttlSeconds := r.Config.GetCacheTTLSecondsForDecisionObject(ctx.VSRSelectedDecision)
-	if err := r.Cache.AddPendingRequest(ctx.RequestID, requestModel, cacheQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
+	partition := semanticCachePartition(ctx, requestModel)
+	if err := r.Cache.AddPendingRequest(ctx.RequestID, partition, cacheQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
 		logging.Errorf("Error adding pending request to cache: %v", err)
 	}
 }
@@ -141,7 +138,8 @@ func (r *OpenAIRouter) performCacheLookup(
 	spanCtx, span := tracing.StartPluginSpan(ctx.TraceContext, "semantic-cache", categoryName)
 
 	startTime := time.Now()
-	cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(requestModel, cacheQuery, threshold)
+	partition := semanticCachePartition(ctx, requestModel)
+	cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(partition, cacheQuery, threshold)
 	lookupTime := time.Since(startTime).Milliseconds()
 
 	logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)

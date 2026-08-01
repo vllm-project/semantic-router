@@ -3,8 +3,19 @@
 package cache
 
 import (
+	"strings"
 	"testing"
 )
+
+func TestMilvusActiveEntryFilterIncludesEscapedModelPartition(t *testing.T) {
+	filter := milvusActiveEntryFilterExpr(`privacy::model\"one`)
+	if !strings.Contains(filter, `model == "privacy::model\\\"one"`) {
+		t.Fatalf("model partition missing or unescaped in Milvus filter: %q", filter)
+	}
+	if !strings.Contains(filter, `response_body != ""`) {
+		t.Fatalf("active-entry predicate missing from Milvus filter: %q", filter)
+	}
+}
 
 func TestCacheScopeNamespaceOfAndSameScope(t *testing.T) {
 	base := "explain mitosis versus meiosis in eukaryotic cells in great detail"
@@ -42,6 +53,7 @@ func TestCacheScopeNamespaceOfAndSameScope(t *testing.T) {
 // runFindSimilarEmbeddingSearch, which dispatches to the configured path.
 func TestSearchEnforcesUserScope(t *testing.T) {
 	const base = "a sufficiently long question whose embedding dominates the short scope prefix"
+	const model = "model-a"
 	emb := []float32{1, 0, 0}
 	aliceResponse := []byte(`{"choices":[{"message":{"content":"alice-only"}}]}`)
 
@@ -66,6 +78,7 @@ func TestSearchEnforcesUserScope(t *testing.T) {
 
 			c.entries = append(c.entries, CacheEntry{
 				RequestID:    "alice-1",
+				Model:        model,
 				Query:        ScopeQueryToUser(base, "alice"),
 				ResponseBody: aliceResponse,
 				Embedding:    emb,
@@ -78,12 +91,12 @@ func TestSearchEnforcesUserScope(t *testing.T) {
 			}
 
 			// Bob (different scope), IDENTICAL embedding → must NOT match Alice.
-			if idx, _, _, _, _ := c.runFindSimilarEmbeddingSearch(emb, bobScope); idx != -1 {
+			if idx, _, _, _, _ := c.runFindSimilarEmbeddingSearch(emb, model, bobScope); idx != -1 {
 				t.Fatalf("cross-tenant leak: bob matched alice's entry (idx=%d)", idx)
 			}
 
 			// Alice (same scope), same embedding → must match and return her response.
-			idx, entry, _, _, _ := c.runFindSimilarEmbeddingSearch(emb, aliceScope)
+			idx, entry, _, _, _ := c.runFindSimilarEmbeddingSearch(emb, model, aliceScope)
 			if idx != 0 {
 				t.Fatalf("same-user lookup must hit, got idx=%d", idx)
 			}
@@ -92,8 +105,12 @@ func TestSearchEnforcesUserScope(t *testing.T) {
 			}
 
 			// Anonymous (unscoped) lookup → must NOT match a scoped entry.
-			if idx, _, _, _, _ := c.runFindSimilarEmbeddingSearch(emb, ""); idx != -1 {
+			if idx, _, _, _, _ := c.runFindSimilarEmbeddingSearch(emb, model, ""); idx != -1 {
 				t.Fatalf("unscoped lookup must not match a scoped entry, idx=%d", idx)
+			}
+
+			if idx, _, _, _, _ := c.runFindSimilarEmbeddingSearch(emb, "model-b", aliceScope); idx != -1 {
+				t.Fatalf("a different model partition must not match, idx=%d", idx)
 			}
 		})
 	}

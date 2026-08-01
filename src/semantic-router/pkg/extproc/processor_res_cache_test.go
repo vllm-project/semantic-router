@@ -24,6 +24,8 @@ type mockStreamingCache struct {
 	addEntryErr        error
 	updateErr          error
 	lastTTLSeconds     int
+	addPendingModel    string
+	findSimilarModel   string
 }
 
 func (m *mockStreamingCache) IsEnabled() bool { return true }
@@ -32,12 +34,13 @@ func (m *mockStreamingCache) CheckConnection() error { return nil }
 
 func (m *mockStreamingCache) AddPendingRequest(
 	_ string,
-	_ string,
+	model string,
 	_ string,
 	_ []byte,
 	_ int,
 ) error {
 	m.addPendingCalled = true
+	m.addPendingModel = model
 	return nil
 }
 
@@ -67,11 +70,12 @@ func (m *mockStreamingCache) FindSimilar(_ string, _ string) ([]byte, bool, erro
 }
 
 func (m *mockStreamingCache) FindSimilarWithThreshold(
-	_ string,
+	model string,
 	_ string,
 	_ float32,
 ) ([]byte, bool, error) {
 	m.findSimilarCalled = true
+	m.findSimilarModel = model
 	return nil, false, nil
 }
 
