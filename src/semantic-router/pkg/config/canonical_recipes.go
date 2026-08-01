@@ -85,23 +85,35 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 // validateDecisionNamesAcrossRecipes rejects a decision name declared by more
 // than one profile. Everything that keys on the bare decision name at runtime
 // (x-vsr-selected-decision, metrics, plugin lookups) would silently attribute
-// one recipe's decision to another's.
+// one recipe's decision to another's. Across profiles the check folds case:
+// GetDecisionByNameFold matches loosely, so two profiles declaring names that
+// differ only by case would alias each other there. Within one profile the
+// exact rule is unchanged.
 func validateDecisionNamesAcrossRecipes(recipes []RoutingRecipe) error {
 	owners := make(map[string]string)
+	foldOwners := make(map[string]string)
 	for _, recipe := range recipes {
 		for _, decision := range recipe.Decisions {
-			owner, exists := owners[decision.Name]
-			if !exists {
-				owners[decision.Name] = recipe.Name
-				continue
+			if owner, exists := owners[decision.Name]; exists {
+				if owner == recipe.Name {
+					return fmt.Errorf("recipes[%s]: duplicate decision name %q", recipe.Name, decision.Name)
+				}
+				return fmt.Errorf(
+					"recipes: decision %q is defined by both the %q and %q profiles; decision names are global (headers, metrics, plugin lookups), rename one",
+					decision.Name, owner, recipe.Name,
+				)
 			}
-			if owner == recipe.Name {
-				return fmt.Errorf("recipes[%s]: duplicate decision name %q", recipe.Name, decision.Name)
+			owners[decision.Name] = recipe.Name
+			folded := strings.ToLower(decision.Name)
+			if foldOwner, exists := foldOwners[folded]; exists && foldOwner != recipe.Name {
+				return fmt.Errorf(
+					"recipes: decision %q in the %q profile differs only by case from a decision in the %q profile; by-name lookups fold case, rename one",
+					decision.Name, recipe.Name, foldOwner,
+				)
 			}
-			return fmt.Errorf(
-				"recipes: decision %q is defined by both the %q and %q profiles; decision names are global (headers, metrics, plugin lookups), rename one",
-				decision.Name, owner, recipe.Name,
-			)
+			if _, exists := foldOwners[folded]; !exists {
+				foldOwners[folded] = recipe.Name
+			}
 		}
 	}
 	return nil

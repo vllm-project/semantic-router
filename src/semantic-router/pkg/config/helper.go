@@ -462,8 +462,9 @@ func (c *RouterConfig) GetDecisionByNameFold(name string) *Decision {
 // findDecisionBy walks the default profile and then every named recipe without
 // materializing a merged slice, so the request-path lookups stay allocation
 // free. The returned pointer always addresses the config itself, never a
-// temporary copy. Decision names are globally unique across recipes (validated
-// at load), so the first match is the only match.
+// temporary copy. Decision names are unique across recipes case-insensitively
+// (validated at load), so the first match is the only match for the exact and
+// the fold predicate alike.
 func (c *RouterConfig) findDecisionBy(match func(string) bool) *Decision {
 	if c == nil {
 		return nil

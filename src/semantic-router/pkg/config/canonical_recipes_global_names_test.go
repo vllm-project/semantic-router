@@ -161,6 +161,36 @@ recipes:
 	}
 }
 
+func TestCaseAliasedDecisionNameAcrossRecipesRejected(t *testing.T) {
+	yamlConfig := recipeTestBaseYAML + `
+recipes:
+  - name: privacy
+    routing:
+      signals:
+        keywords:
+          - name: pii_keywords
+            operator: OR
+            keywords: ["ssn"]
+      decisions:
+        - name: Default_Route
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: pii_keywords
+          modelRefs:
+            - model: model-b
+              use_reasoning: false
+`
+	_, err := ParseYAMLBytes([]byte(yamlConfig))
+	if err == nil {
+		t.Fatal("expected a case-aliased decision name across recipes to be rejected: GetDecisionByNameFold would treat the two as one")
+	}
+	if !strings.Contains(err.Error(), `differs only by case`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestEntrypointNameCollisionsRejected(t *testing.T) {
 	cases := []struct {
 		name          string
