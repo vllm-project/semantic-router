@@ -87,9 +87,6 @@ func readAuthzSignalScopeMetric(
 	if err != nil {
 		return 0, err
 	}
-	if !strings.Contains(metrics, "# HELP "+authzSignalScopeMetric+" ") {
-		return 0, fmt.Errorf("metrics body missing %s descriptor %s", authzSignalScopeMetric, phase)
-	}
 
 	value, err := signalExtractionMetricValue(metrics, authzSignalScopeType, authzSignalScopeName)
 	if err != nil {

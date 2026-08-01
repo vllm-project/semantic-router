@@ -31,6 +31,13 @@ llm_signal_extraction_total{signal_name="admin_only_marker",signal_type="keyword
 			want:       0,
 		},
 		{
+			name:       "treats an uninstantiated metric family as zero",
+			metrics:    "# HELP go_gc_duration_seconds A summary of the pause duration of garbage collection cycles.\n",
+			signalType: "keyword",
+			signalName: "admin_only_marker",
+			want:       0,
+		},
+		{
 			name: "rejects malformed matching sample",
 			metrics: `llm_signal_extraction_total{signal_name="admin_only_marker",signal_type="keyword"} invalid
 `,
