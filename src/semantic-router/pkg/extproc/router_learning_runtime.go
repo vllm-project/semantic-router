@@ -87,31 +87,45 @@ func (rt *routerLearningRuntime) resolveOutcomeDecisionContext(outcome *routerru
 	recipe := config.RecipeName(strings.TrimSpace(outcome.Metadata["recipe"]))
 	tier := outcomeDecisionTier(outcome)
 	if decision != "" && tier != 0 {
-		return config.RoutingDecisionKey(recipe, decision), tier
+		return outcomeDecisionKey(recipe, decision), tier
 	}
 	record, ok := rt.replayRecord(outcome.ReplayID)
 	if !ok {
-		return decision, tier
+		return outcomeDecisionKey(recipe, decision), tier
 	}
 	if decision == "" {
-		decision = strings.TrimSpace(record.Decision)
-		if record.RouteDiagnostics != nil && strings.TrimSpace(record.RouteDiagnostics.Decision) != "" {
-			decision = strings.TrimSpace(record.RouteDiagnostics.Decision)
-		}
+		decision = replayRecordDecision(record)
 	}
 	if recipe == "" {
 		recipe = config.RecipeName(strings.TrimSpace(record.Recipe))
 	}
 	if tier == 0 {
-		tier = record.DecisionTier
-		if record.RouteDiagnostics != nil && record.RouteDiagnostics.DecisionTier != 0 {
-			tier = record.RouteDiagnostics.DecisionTier
+		tier = replayRecordDecisionTier(record)
+	}
+	return outcomeDecisionKey(recipe, decision), tier
+}
+
+func replayRecordDecision(record routerreplay.RoutingRecord) string {
+	if record.RouteDiagnostics != nil {
+		if decision := strings.TrimSpace(record.RouteDiagnostics.Decision); decision != "" {
+			return decision
 		}
 	}
-	if decision == "" {
-		return "", tier
+	return strings.TrimSpace(record.Decision)
+}
+
+func replayRecordDecisionTier(record routerreplay.RoutingRecord) int {
+	if record.RouteDiagnostics != nil && record.RouteDiagnostics.DecisionTier != 0 {
+		return record.RouteDiagnostics.DecisionTier
 	}
-	return config.RoutingDecisionKey(recipe, decision), tier
+	return record.DecisionTier
+}
+
+func outcomeDecisionKey(recipe config.RecipeName, decision string) string {
+	if decision == "" {
+		return ""
+	}
+	return config.RoutingDecisionKey(recipe, decision)
 }
 
 func (rt *routerLearningRuntime) replayRecord(replayID string) (routerreplay.RoutingRecord, bool) {

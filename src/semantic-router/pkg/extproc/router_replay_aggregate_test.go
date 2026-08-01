@@ -40,6 +40,13 @@ func TestHandleRouterReplayAggregateAPIReturnsChartsAndSummary(t *testing.T) {
 	}
 
 	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
+	assertReplayAggregateSummary(t, body)
+	assertReplayAggregateCharts(t, body)
+	assertReplayAggregateOptions(t, body)
+}
+
+func assertReplayAggregateSummary(t *testing.T, body map[string]interface{}) {
+	t.Helper()
 	if got := body["object"]; got != "router_replay.aggregate" {
 		t.Fatalf("expected aggregate object, got %#v", got)
 	}
@@ -57,7 +64,10 @@ func TestHandleRouterReplayAggregateAPIReturnsChartsAndSummary(t *testing.T) {
 	if got := int(summary["excluded_record_count"].(float64)); got != 1 {
 		t.Fatalf("expected excluded_record_count=1, got %d", got)
 	}
+}
 
+func assertReplayAggregateCharts(t *testing.T, body map[string]interface{}) {
+	t.Helper()
 	modelSelection := body["model_selection"].([]interface{})
 	if got := modelSelection[0].(map[string]interface{})["name"]; got != "gpt-4o" {
 		t.Fatalf("expected alphabetical tie-breaker for model_selection, got %#v", got)
@@ -73,7 +83,10 @@ func TestHandleRouterReplayAggregateAPIReturnsChartsAndSummary(t *testing.T) {
 	if got := byDecision[0].(map[string]interface{})["name"]; got != "beta::decision-b" {
 		t.Fatalf("expected highest token decision first, got %#v", got)
 	}
+}
 
+func assertReplayAggregateOptions(t *testing.T, body map[string]interface{}) {
+	t.Helper()
 	availableRecipes := body["available_recipes"].([]interface{})
 	if len(availableRecipes) != 2 || availableRecipes[0] != "alpha" || availableRecipes[1] != "beta" {
 		t.Fatalf("expected sorted recipe options, got %#v", availableRecipes)
