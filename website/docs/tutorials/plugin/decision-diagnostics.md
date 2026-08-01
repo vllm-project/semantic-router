@@ -67,8 +67,22 @@ ProcessingResponse.dynamic_metadata
     ["decision_diagnostics"]               Struct
 ```
 
-`decision_diagnostics` is a structured value, not a JSON-encoded string. In a
-Lua HTTP filter placed after ext_proc, it can be traversed directly:
+`decision_diagnostics` is a structured value, not a JSON-encoded string.
+
+Envoy accepts ExtProc response metadata only for explicitly configured
+receiving namespaces. Add the namespace to the ext_proc filter before adding a
+following filter:
+
+```yaml
+metadata_options:
+  receiving_namespaces:
+    untyped:
+      - vllm.semantic_router
+```
+
+Without this allowlist Envoy discards the returned metadata. With it enabled, a
+Lua HTTP filter placed after ext_proc can traverse the native structure
+directly:
 
 ```lua
 local namespace = handle:streamInfo():dynamicMetadata():get("vllm.semantic_router")

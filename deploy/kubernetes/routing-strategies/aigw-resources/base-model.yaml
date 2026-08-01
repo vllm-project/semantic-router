@@ -33,6 +33,8 @@ spec:
         - '{"name": "humanities-expert"}'
         - '{"name": "law-expert"}'
         - '{"name": "general-expert"}'
+        - '{"name": "premium-model"}'
+        - '{"name": "economy-model"}'
         env:
         - name: POD_NAME
           valueFrom:
