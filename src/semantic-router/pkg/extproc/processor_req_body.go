@@ -28,7 +28,11 @@ type requestDecisionState struct {
 func (r *OpenAIRouter) handleRequestBody(
 	v *ext_proc.ProcessingRequest_RequestBody,
 	ctx *RequestContext,
-) (*ext_proc.ProcessingResponse, error) {
+) (response *ext_proc.ProcessingResponse, err error) {
+	defer func() {
+		attachDecisionDiagnosticsOnSuccess(response, err, ctx)
+	}()
+
 	ctx.ProcessingStartTime = time.Now()
 	requestBody := v.RequestBody.GetBody()
 	request, earlyResponse := r.prepareProtocolRequest(requestBody, ctx)
@@ -90,7 +94,7 @@ func (r *OpenAIRouter) handleModelRoutingWithPersonalizedCache(
 		ctx.InflightToken = 0
 		return response, nil
 	}
-	return r.handleModelRoutingWithDecisionDiagnostics(
+	return r.handleModelRouting(
 		request,
 		originalModel,
 		decisionState.decisionName,
@@ -98,29 +102,6 @@ func (r *OpenAIRouter) handleModelRoutingWithPersonalizedCache(
 		decisionState.selectedModel,
 		ctx,
 	)
-}
-
-func (r *OpenAIRouter) handleModelRoutingWithDecisionDiagnostics(
-	request *llmprotocol.Request,
-	originalModel string,
-	decisionName string,
-	reasoningDecision entropy.ReasoningDecision,
-	selectedModel string,
-	ctx *RequestContext,
-) (*ext_proc.ProcessingResponse, error) {
-	response, err := r.handleModelRouting(
-		request,
-		originalModel,
-		decisionName,
-		reasoningDecision,
-		selectedModel,
-		ctx,
-	)
-	if err != nil {
-		return response, err
-	}
-	attachDecisionDiagnostics(response, ctx)
-	return response, nil
 }
 
 // handleModelRouting handles model selection and routing logic

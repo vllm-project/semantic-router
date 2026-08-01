@@ -200,11 +200,12 @@ func (c *Classifier) evaluateAllSignalsWithContext(
 	ready := c.signalReadiness()
 
 	results := &SignalResults{
-		Metrics:            &SignalMetricsCollection{},
-		SignalConfidences:  make(map[string]float64),
-		SignalValues:       make(map[string]float64),
-		SignalErrors:       make(map[string]string),
-		SignalErrorMatches: make(map[string]bool),
+		ExecutedSignalTypes: make(map[string]bool),
+		Metrics:             &SignalMetricsCollection{},
+		SignalConfidences:   make(map[string]float64),
+		SignalValues:        make(map[string]float64),
+		SignalErrors:        make(map[string]string),
+		SignalErrorMatches:  make(map[string]bool),
 	}
 	if requestFacts.Context == nil {
 		// The legacy, context-free classifier APIs do not have a caller context.
@@ -244,7 +245,7 @@ func (c *Classifier) evaluateAllSignalsWithContext(
 		requestFacts,
 		usedSignals,
 	)
-	runSignalDispatchers(dispatchers, usedSignals, ready, &wg)
+	runSignalDispatchers(dispatchers, usedSignals, ready, results.ExecutedSignalTypes, &wg)
 
 	wg.Wait()
 	results = c.applySignalGroups(results)

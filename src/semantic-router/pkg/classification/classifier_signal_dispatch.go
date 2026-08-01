@@ -190,9 +190,16 @@ func boundedReaskMessages(messages []string) []string {
 	return bounded
 }
 
-func runSignalDispatchers(dispatchers []signalDispatch, usedSignals map[string]bool, ready map[string]bool, wg *sync.WaitGroup) {
+func runSignalDispatchers(
+	dispatchers []signalDispatch,
+	usedSignals map[string]bool,
+	ready map[string]bool,
+	executed map[string]bool,
+	wg *sync.WaitGroup,
+) {
 	for _, d := range dispatchers {
 		if isSignalTypeUsed(usedSignals, d.signalType) && ready[d.signalType] {
+			executed[d.signalType] = true
 			wg.Add(1)
 			go func(dispatch signalDispatch) {
 				defer wg.Done()

@@ -161,6 +161,42 @@ spec:
             response_header_mode: SEND
             response_trailer_mode: SKIP
     type: type.googleapis.com/envoy.config.listener.v3.Listener
+  # E2E-only following filter: traverse the structured diagnostics and expose
+  # a synthetic header for the test client. Product deployments add no header.
+  - name: default/semantic-router/http
+    operation:
+      op: add
+      path: /default_filter_chain/filters/0/typed_config/http_filters/1
+      value:
+        name: envoy.filters.http.lua
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+          defaultSourceCode:
+            inlineString: |
+              function envoy_on_response(response_handle)
+                local namespace = response_handle:streamInfo():dynamicMetadata():get("vllm.semantic_router")
+                if namespace == nil then
+                  return
+                end
+                local diagnostics = namespace["decision_diagnostics"]
+                if type(diagnostics) ~= "table" then
+                  return
+                end
+                local signals = diagnostics["signals"]
+                local first_signal = type(signals) == "table" and signals[1] or nil
+                if type(diagnostics["schemaVersion"]) ~= "number"
+                    or type(diagnostics["decision"]) ~= "string"
+                    or type(first_signal) ~= "table"
+                    or type(first_signal["executed"]) ~= "boolean"
+                    or type(first_signal["name"]) ~= "string" then
+                  return
+                end
+                local value = diagnostics["decision"]
+                    .. ":v" .. tostring(math.floor(diagnostics["schemaVersion"]))
+                    .. ":" .. first_signal["name"]
+                response_handle:headers():add("x-test-vsr-decision-diagnostics", value)
+              end
+    type: type.googleapis.com/envoy.config.listener.v3.Listener
   - name: semantic-router
     operation:
       op: add

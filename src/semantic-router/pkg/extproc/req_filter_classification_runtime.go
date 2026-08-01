@@ -265,6 +265,7 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 
 func (r *OpenAIRouter) applyDecisionResultToContext(result *decision.DecisionResult, ctx *RequestContext) string {
 	ctx.VSRSelectedDecision = result.Decision
+	ctx.VSRMatchedDecisionRules = append([]string(nil), result.MatchedRules...)
 	if pluginCfg := r.Config.EffectiveRouterReplayConfig(result.Decision); pluginCfg != nil {
 		ctx.RouterReplayPluginConfig = pluginCfg
 	}

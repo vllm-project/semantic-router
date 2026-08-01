@@ -129,6 +129,7 @@ type RequestContext struct {
 	Routing RequestRoutingContext
 
 	// VSR decision tracking
+	VSRMatchedDecisionRules         []string                                    // Matched rule labels returned by the selected decision evaluation
 	VSRSelectedCategory             string                                      // The category from domain classification (MMLU category)
 	VSRSelectedDecisionName         string                                      // The decision name from DecisionEngine evaluation
 	VSRSelectedDecisionConfidence   float64                                     // Confidence score from DecisionEngine evaluation
@@ -171,6 +172,7 @@ type RequestContext struct {
 	ModalityClassification *ModalityClassificationResult // Set by classifyModality()
 
 	// VSR signal tracking - stores all matched signals for response headers
+	VSRExecutedSignalTypes    map[string]bool
 	VSRMatchedKeywords        []string // Matched keyword rule names
 	VSRMatchedEmbeddings      []string // Matched embedding rule names
 	VSRMatchedDomains         []string // Matched domain rule names
