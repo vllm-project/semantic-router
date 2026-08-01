@@ -8,14 +8,14 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-  - port: {{ .Values.service.grpc.port }}
-    targetPort: {{ .Values.service.grpc.targetPort }}
-    protocol: {{ .Values.service.grpc.protocol }}
-    name: grpc
-  - port: {{ .Values.service.api.port }}
-    targetPort: {{ .Values.service.api.targetPort }}
-    protocol: {{ .Values.service.api.protocol }}
-    name: classify-api
+    - port: {{ .Values.service.grpc.port }}
+      targetPort: {{ .Values.service.grpc.targetPort }}
+      protocol: {{ .Values.service.grpc.protocol }}
+      name: grpc
+    - port: {{ .Values.service.api.port }}
+      targetPort: {{ .Values.service.api.targetPort }}
+      protocol: {{ .Values.service.api.protocol }}
+      name: classify-api
   selector:
     {{- include "semantic-router.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: router
@@ -54,10 +54,10 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-  - port: {{ .Values.service.metrics.port }}
-    targetPort: {{ .Values.service.metrics.targetPort }}
-    protocol: {{ .Values.service.metrics.protocol }}
-    name: metrics
+    - port: {{ .Values.service.metrics.port }}
+      targetPort: {{ .Values.service.metrics.targetPort }}
+      protocol: {{ .Values.service.metrics.protocol }}
+      name: metrics
   selector:
     {{- include "semantic-router.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: router

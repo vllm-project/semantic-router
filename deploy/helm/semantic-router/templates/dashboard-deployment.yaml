@@ -47,49 +47,49 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-      - name: dashboard
+        - name: dashboard
         image: "{{ .Values.dashboard.image.repository }}:{{ .Values.dashboard.image.tag }}"
         imagePullPolicy: {{ .Values.dashboard.image.pullPolicy }}
         ports:
-        - containerPort: {{ .Values.dashboard.service.targetPort }}
+          - containerPort: {{ .Values.dashboard.service.targetPort }}
           name: http
           protocol: TCP
         env:
-        - name: TARGET_ROUTER_API_URL
+          - name: TARGET_ROUTER_API_URL
           value: "http://{{ include "semantic-router.fullname" . }}:{{ .Values.service.api.port }}"
-        - name: TARGET_ROUTER_METRICS_URL
+          - name: TARGET_ROUTER_METRICS_URL
           value: "http://{{ include "semantic-router.fullname" . }}-metrics:{{ .Values.service.metrics.port }}/metrics"
         {{- if .Values.dashboard.jwtSecret.existingSecret }}
-        - name: DASHBOARD_JWT_SECRET
+          - name: DASHBOARD_JWT_SECRET
           valueFrom:
             secretKeyRef:
               name: {{ .Values.dashboard.jwtSecret.existingSecret }}
               key: {{ .Values.dashboard.jwtSecret.existingSecretKey }}
         {{- end }}
         {{- if .Values.dashboard.readonly }}
-        - name: DASHBOARD_READONLY
+          - name: DASHBOARD_READONLY
           value: "true"
         {{- end }}
         {{- if .Values.dashboard.allowOpenBootstrap }}
-        - name: DASHBOARD_ALLOW_OPEN_BOOTSTRAP
+          - name: DASHBOARD_ALLOW_OPEN_BOOTSTRAP
           value: "true"
         {{- end }}
         {{- if .Values.dashboard.persistence.enabled }}
-        - name: DASHBOARD_AUTH_DB_PATH
+          - name: DASHBOARD_AUTH_DB_PATH
           value: "{{ .Values.dashboard.persistence.mountPath }}/auth.db"
-        - name: DASHBOARD_WORKFLOW_DB_PATH
+          - name: DASHBOARD_WORKFLOW_DB_PATH
           value: "{{ .Values.dashboard.persistence.mountPath }}/workflow.sqlite"
         {{- end }}
         {{- if .Values.dependencies.observability.prometheus.enabled }}
-        - name: TARGET_PROMETHEUS_URL
+          - name: TARGET_PROMETHEUS_URL
           value: "http://{{ .Release.Name }}-prometheus-server:80"
         {{- end }}
         {{- if .Values.dependencies.observability.grafana.enabled }}
-        - name: TARGET_GRAFANA_URL
+          - name: TARGET_GRAFANA_URL
           value: "http://{{ .Release.Name }}-grafana:80"
         {{- end }}
         {{- if .Values.dependencies.observability.jaeger.enabled }}
-        - name: TARGET_JAEGER_URL
+          - name: TARGET_JAEGER_URL
           value: "http://{{ .Release.Name }}-jaeger:16686"
         {{- end }}
         {{- with .Values.dashboard.extraEnv }}
@@ -100,16 +100,16 @@ spec:
           {{- toYaml . | nindent 10 }}
         {{- end }}
         volumeMounts:
-        - name: config-volume
+          - name: config-volume
           mountPath: /app/config/config.yaml
           subPath: config.yaml
           readOnly: true
-        - name: config-volume
+          - name: config-volume
           mountPath: /app/config/tools_db.json
           subPath: tools_db.json
           readOnly: true
         {{- if .Values.dashboard.persistence.enabled }}
-        - name: dashboard-data
+          - name: dashboard-data
           mountPath: {{ .Values.dashboard.persistence.mountPath }}
         {{- end }}
         livenessProbe:
@@ -127,11 +127,11 @@ spec:
         resources:
           {{- toYaml .Values.dashboard.resources | nindent 10 }}
       volumes:
-      - name: config-volume
+        - name: config-volume
         configMap:
           name: {{ include "semantic-router.fullname" . }}-config
       {{- if .Values.dashboard.persistence.enabled }}
-      - name: dashboard-data
+        - name: dashboard-data
         persistentVolumeClaim:
           claimName: {{ include "semantic-router.dashboardPvcName" . }}
       {{- end }}

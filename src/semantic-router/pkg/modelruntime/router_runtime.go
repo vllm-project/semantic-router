@@ -8,9 +8,10 @@ import (
 	"sync"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -182,12 +183,19 @@ func semanticCacheBERTTask(cfg *config.RouterConfig, component string) []Task {
 				"model_ref": bertModelID,
 				"use_cpu":   cfg.UseCPU,
 			})
-			if err := candle_binding.InitModel(bertModelID, cfg.UseCPU); err != nil {
-				logging.ComponentErrorEvent(component, "semantic_cache_bert_init_failed", map[string]interface{}{
+			if _, err := native.LoadModel(context.Background(), native.BackendCandle, native.LoadRequest{
+				ModelID:    bertModelID,
+				ModelPath:  bertModelID,
+				Format:     native.ArtifactFormatSafetensors,
+				Family:     native.FamilyModernBERT, // Simplification for now
+				Modality:   native.ModalityText,
+				Capability: native.CapabilityEmbedding,
+			}); err != nil {
+				logging.ComponentErrorEvent(component, "bert_init_failed", map[string]interface{}{
 					"model_ref": bertModelID,
 					"error":     err.Error(),
 				})
-				return fmt.Errorf("failed to initialize semantic cache bert model: %w", err)
+				return fmt.Errorf("failed to initialize bert model: %w", err)
 			}
 			logging.ComponentEvent(component, "semantic_cache_bert_initialized", map[string]interface{}{
 				"model_ref": bertModelID,
@@ -210,7 +218,14 @@ func vectorStoreBERTTask(cfg *config.RouterConfig, component string) []Task {
 				"model_ref": bertModelID,
 				"use_cpu":   cfg.UseCPU,
 			})
-			if err := candle_binding.InitModel(bertModelID, cfg.UseCPU); err != nil {
+			if _, err := native.LoadModel(context.Background(), native.BackendCandle, native.LoadRequest{
+				ModelID:    bertModelID,
+				ModelPath:  bertModelID,
+				Format:     native.ArtifactFormatSafetensors,
+				Family:     native.FamilyModernBERT, // Simplification for now
+				Modality:   native.ModalityText,
+				Capability: native.CapabilityEmbedding,
+			}); err != nil {
 				logging.ComponentErrorEvent(component, "vector_store_bert_init_failed", map[string]interface{}{
 					"model_ref": bertModelID,
 					"error":     err.Error(),
@@ -238,7 +253,14 @@ func memoryBERTTask(cfg *config.RouterConfig, component string) []Task {
 				"model_ref": bertModelID,
 				"use_cpu":   cfg.UseCPU,
 			})
-			if err := candle_binding.InitModel(bertModelID, cfg.UseCPU); err != nil {
+			if _, err := native.LoadModel(context.Background(), native.BackendCandle, native.LoadRequest{
+				ModelID:    bertModelID,
+				ModelPath:  bertModelID,
+				Format:     native.ArtifactFormatSafetensors,
+				Family:     native.FamilyModernBERT, // Simplification for now
+				Modality:   native.ModalityText,
+				Capability: native.CapabilityEmbedding,
+			}); err != nil {
 				logging.ComponentErrorEvent(component, "memory_bert_init_failed", map[string]interface{}{
 					"model_ref": bertModelID,
 					"error":     err.Error(),
@@ -372,14 +394,14 @@ func logBatchedEmbeddingNeeds(component string, semanticCacheNeedsBatched bool, 
 }
 
 func initUnifiedEmbeddingModelFactory(cfg *config.RouterConfig, paths embeddingPaths, useBatched bool) error {
-	if !useBatched {
-		return candle_binding.InitEmbeddingModels(paths.qwen3, paths.gemma, paths.mmBert, cfg.UseCPU)
-	}
-
-	if err := candle_binding.InitEmbeddingModelsBatched(paths.qwen3, 64, 10, cfg.UseCPU); err != nil {
-		return err
-	}
-	return candle_binding.InitEmbeddingModels(paths.qwen3, paths.gemma, paths.mmBert, cfg.UseCPU)
+	// Refactored to native AdapterRegistry
+	_, err := native.LoadModel(context.Background(), native.BackendCandle, native.LoadRequest{
+		ModelPath:  paths.qwen3, // or gemma/mmBert
+		Format:     native.ArtifactFormatSafetensors,
+		Capability: native.CapabilityEmbedding,
+		Parameters: map[string]interface{}{"batched": useBatched, "cpu": cfg.UseCPU},
+	})
+	return err
 }
 
 func initializeBERTModel(component string, useCPU bool, bertPath string, eventPrefix string) bool {
@@ -391,7 +413,14 @@ func initializeBERTModel(component string, useCPU bool, bertPath string, eventPr
 		"model_ref": bertPath,
 		"use_cpu":   useCPU,
 	})
-	if err := candle_binding.InitModel(bertPath, useCPU); err != nil {
+	if _, err := native.LoadModel(context.Background(), native.BackendCandle, native.LoadRequest{
+		ModelID:    bertPath,
+		ModelPath:  bertPath,
+		Format:     native.ArtifactFormatSafetensors,
+		Family:     native.FamilyModernBERT, // Simplification for now
+		Modality:   native.ModalityText,
+		Capability: native.CapabilityEmbedding,
+	}); err != nil {
 		logging.ComponentWarnEvent(component, eventPrefix+"_init_failed", map[string]interface{}{
 			"model_ref": bertPath,
 			"error":     err.Error(),
@@ -413,7 +442,13 @@ func initializeMultiModalEmbeddingModel(component string, useCPU bool, multiModa
 		"model_ref": multiModalPath,
 		"use_cpu":   useCPU,
 	})
-	if err := candle_binding.InitMultiModalEmbeddingModel(multiModalPath, useCPU); err != nil {
+	if _, err := native.LoadModel(context.Background(), native.BackendCandle, native.LoadRequest{
+		ModelPath:  multiModalPath,
+		Format:     native.ArtifactFormatSafetensors,
+		Modality:   native.ModalityImage,
+		Capability: native.CapabilityEmbedding,
+		Parameters: map[string]interface{}{"cpu": useCPU},
+	}); err != nil {
 		logging.ComponentWarnEvent(component, "multimodal_embedding_init_failed", map[string]interface{}{
 			"model_ref":               multiModalPath,
 			"error":                   err.Error(),

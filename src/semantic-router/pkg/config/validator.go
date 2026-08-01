@@ -130,6 +130,11 @@ var (
 			validate: validatePromptCompressionContracts,
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
 		},
+		{
+			name:     "native_backend",
+			validate: validateNativeBackendContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
 	}
 )
 
