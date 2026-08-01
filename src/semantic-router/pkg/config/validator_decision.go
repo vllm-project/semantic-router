@@ -47,8 +47,8 @@ func validateDecisionModelRefs(cfg *RouterConfig, decision Decision) error {
 		if modelRef.UseReasoning == nil {
 			return fmt.Errorf("decision '%s', model '%s': missing required field 'use_reasoning'", decision.Name, modelRef.Model)
 		}
-		if modelRef.QualityScore != nil && (math.IsNaN(*modelRef.QualityScore) || *modelRef.QualityScore < 0 || *modelRef.QualityScore > 1) {
-			return fmt.Errorf("decision '%s', modelRefs[%d].quality_score must be between 0 and 1", decision.Name, i)
+		if err := validateModelRefQualityScore(modelRef, fmt.Sprintf("decision '%s', modelRefs[%d]", decision.Name, i)); err != nil {
+			return err
 		}
 		if modelRef.LoRAName == "" {
 			continue
@@ -56,6 +56,16 @@ func validateDecisionModelRefs(cfg *RouterConfig, decision Decision) error {
 		if err := validateLoRAName(cfg, modelRef.Model, modelRef.LoRAName); err != nil {
 			return fmt.Errorf("decision '%s', model '%s': %w", decision.Name, modelRef.Model, err)
 		}
+	}
+	return nil
+}
+
+func validateModelRefQualityScore(modelRef ModelRef, context string) error {
+	if modelRef.QualityScore == nil {
+		return nil
+	}
+	if math.IsNaN(*modelRef.QualityScore) || *modelRef.QualityScore < 0 || *modelRef.QualityScore > 1 {
+		return fmt.Errorf("%s.quality_score must be between 0 and 1", context)
 	}
 	return nil
 }
@@ -150,6 +160,9 @@ func validateDecisionCandidateIterationModels(models []ModelRef, context string)
 	for j, modelRef := range models {
 		if strings.TrimSpace(modelRef.Model) == "" {
 			return fmt.Errorf("%s, models[%d]: model name cannot be empty", context, j)
+		}
+		if err := validateModelRefQualityScore(modelRef, fmt.Sprintf("%s, models[%d]", context, j)); err != nil {
+			return err
 		}
 	}
 	return nil

@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -237,6 +236,15 @@ func validateCanonicalDecisions(decisions []Decision, modelsByName map[string]Ro
 		if err := validateCanonicalDecisionModelRefs(decision, modelsByName, modelCards); err != nil {
 			return err
 		}
+		for i, iteration := range decision.CandidateIterations {
+			if strings.TrimSpace(iteration.Source) != "models" {
+				continue
+			}
+			context := fmt.Sprintf("routing.decisions[%s].candidateIterations[%d]", decision.Name, i)
+			if err := validateDecisionCandidateIterationModels(iteration.Models, context); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -247,8 +255,8 @@ func validateCanonicalDecisionModelRefs(decision Decision, modelsByName map[stri
 		if modelRef.Model == "" {
 			continue
 		}
-		if modelRef.QualityScore != nil && (math.IsNaN(*modelRef.QualityScore) || *modelRef.QualityScore < 0 || *modelRef.QualityScore > 1) {
-			return fmt.Errorf("routing.decisions[%s].modelRefs[%s].quality_score must be between 0 and 1", decision.Name, modelRef.Model)
+		if err := validateModelRefQualityScore(modelRef, fmt.Sprintf("routing.decisions[%s].modelRefs[%s]", decision.Name, modelRef.Model)); err != nil {
+			return err
 		}
 		// Reject modelRefs that point at a model the config does not define.
 		// Previously this was only checked when a lora_name was also set, so a

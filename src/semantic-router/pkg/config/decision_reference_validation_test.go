@@ -153,6 +153,44 @@ func TestDecisionModelRefQualityScoreRejectsNaN(t *testing.T) {
 	}
 }
 
+func TestDecisionCandidateIterationModelQualityScoreRejectsInvalidValues(t *testing.T) {
+	tests := []struct {
+		name  string
+		score string
+	}{
+		{name: "negative", score: "-0.1"},
+		{name: "above one", score: "2"},
+		{name: "NaN", score: ".nan"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payload := buildDecisionRefConfig(`    - name: d1
+      priority: 1
+      rules: {operator: AND, conditions: []}
+      candidateIterations:
+        - variable: candidate
+          source: models
+          models:
+            - model: m1
+              quality_score: ` + tt.score + `
+              use_reasoning: false
+`)
+			var canonical CanonicalConfig
+			if err := yaml.Unmarshal(payload, &canonical); err != nil {
+				t.Fatalf("unmarshal canonical config: %v", err)
+			}
+			err := validateCanonicalContract(&canonical)
+			if err == nil {
+				t.Fatalf("expected candidate iteration quality score %s to be rejected", tt.score)
+			}
+			if !strings.Contains(err.Error(), "candidateIterations[0]") || !strings.Contains(err.Error(), "quality_score") {
+				t.Fatalf("error should identify candidate iteration quality_score, got: %v", err)
+			}
+		})
+	}
+}
+
 // G2: two decisions sharing the same name are ambiguous and must be rejected.
 func TestDuplicateDecisionNamesRejected(t *testing.T) {
 	cfg := buildDecisionRefConfig(`    - name: dup
