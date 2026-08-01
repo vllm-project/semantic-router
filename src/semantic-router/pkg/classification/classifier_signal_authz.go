@@ -87,6 +87,10 @@ func (c *Classifier) appendAuthzFromHeaders(results *SignalResults, headers map[
 	if c.authzClassifier == nil {
 		return nil
 	}
+	if results.ExecutedSignalTypes == nil {
+		results.ExecutedSignalTypes = make(map[string]bool)
+	}
+	results.ExecutedSignalTypes[config.SignalTypeAuthz] = true
 
 	start := time.Now()
 	userID := headers[c.authzUserIDHeader]

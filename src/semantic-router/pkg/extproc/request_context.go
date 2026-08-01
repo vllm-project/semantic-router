@@ -151,6 +151,7 @@ type RequestContext struct {
 	VSRReasoningMode               string                                      // "on" or "off" - whether reasoning mode was determined to be used
 	VSRSelectedModel               string                                      // The model selected by VSR
 	VSRSelectionMethod             string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
+	VSRMatchedDecisionRules        []string                                    // Matched rule labels returned by the selected decision evaluation
 	VSRLearningPolicy              *routerLearningPolicy                       // Primary Router Learning trace
 	VSRLearningPolicies            routerLearningPolicies                      // Router Learning traces by component
 	VSRLearningProtectionPreflight *routerreplay.LearningProtectionDiagnostics // Protection preflight trace for replay
@@ -197,6 +198,7 @@ type RequestContext struct {
 	VSRProjectionScores    map[string]float64
 	VSRSignalConfidences   map[string]float64
 	VSRSignalValues        map[string]float64
+	VSRExecutedSignalTypes map[string]bool
 	VSRProjectionTrace     *projectiontrace.Trace
 
 	// Hallucination mitigation tracking

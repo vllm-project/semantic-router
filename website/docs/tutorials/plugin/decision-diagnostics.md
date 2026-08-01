@@ -55,3 +55,57 @@ projection scores, 512 runes per text value, and 65536 serialized bytes.
 
 The plugin is independent of `router_replay`: enabling diagnostics does not
 create a replay record or require a replay store.
+
+## Dynamic Metadata Contract
+
+The schema version is `1`. The ExtProc response writes untyped Envoy dynamic
+metadata using native `google.protobuf.Struct` values at this exact location:
+
+```text
+ProcessingResponse.dynamic_metadata
+  ["vllm.semantic_router"]                 Struct
+    ["decision_diagnostics"]               Struct
+```
+
+`decision_diagnostics` is a structured value, not a JSON-encoded string. In a
+Lua HTTP filter placed after ext_proc, it can be traversed directly:
+
+```lua
+local namespace = handle:streamInfo():dynamicMetadata():get("vllm.semantic_router")
+local diagnostics = namespace["decision_diagnostics"]
+local decision = diagnostics["decision"]
+local first_signal_name = diagnostics["signals"][1]["name"]
+```
+
+The schema uses these field names and logical types. Protobuf `Struct` carries
+all logical `number` values as protobuf `double` values; `schemaVersion` is an
+integer-valued number.
+
+| Field | Type | Presence |
+| --- | --- | --- |
+| `schemaVersion` | number (`1`) | always |
+| `decision` | string | always |
+| `category` | string | omitted when empty |
+| `selectedModel` | string | omitted when empty |
+| `selectionAlgorithm` | string | omitted when empty |
+| `selectionMethod` | string | omitted when empty |
+| `decisionConfidence` | number | always |
+| `matchedRules` | list of strings | always, possibly empty |
+| `signals` | list of signal objects | always, possibly empty |
+| `projections` | list of projection objects | always, possibly empty |
+| `truncated` | boolean | always |
+
+Each signal object contains `key`, `type`, and `name` strings plus the boolean
+fields `executed` and `matched`. `value` and `confidence` are optional numbers
+and are omitted when the evaluator did not produce them. `executed` is true
+only when that signal type's evaluator actually started for this request.
+
+Each projection object contains a `name` string and `matched` boolean. Its
+numeric `score` is omitted when no projection score was produced.
+
+The metadata is best-effort. It is absent when the plugin is disabled, no
+decision was selected, serialization fails, or the bounded payload cannot fit.
+For a selected decision it is attached to normal routing responses and
+decision-owned immediate responses such as fast response, cache hit, rate
+limit, and modality routing paths. It never changes the selected route or the
+public response-header contract.

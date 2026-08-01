@@ -9,6 +9,10 @@ func (c *Classifier) applyProjections(results *SignalResults) *SignalResults {
 	if len(c.Config.Projections.Scores) == 0 || len(c.Config.Projections.Mappings) == 0 {
 		return results
 	}
+	if results.ExecutedSignalTypes == nil {
+		results.ExecutedSignalTypes = make(map[string]bool)
+	}
+	results.ExecutedSignalTypes[config.SignalTypeProjection] = true
 
 	if results.ProjectionScores == nil {
 		results.ProjectionScores = make(map[string]float64)

@@ -62,6 +62,10 @@ config:
               latency: 0
               cost: 0
               load: 0
+        plugins:
+          - type: decision_diagnostics
+            configuration:
+              enabled: true
       - name: cost_policy_decision
         description: Cost-only multi-factor policy
         priority: 250

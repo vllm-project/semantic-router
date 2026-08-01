@@ -26,6 +26,7 @@ type decisionDiagnosticsPayload struct {
 	SelectionAlgorithm string                         `json:"selectionAlgorithm,omitempty"`
 	SelectionMethod    string                         `json:"selectionMethod,omitempty"`
 	DecisionConfidence float64                        `json:"decisionConfidence"`
+	MatchedRules       []string                       `json:"matchedRules"`
 	Signals            []decisionDiagnosticSignal     `json:"signals"`
 	Projections        []decisionDiagnosticProjection `json:"projections"`
 	Truncated          bool                           `json:"truncated"`
@@ -34,6 +35,7 @@ type decisionDiagnosticsPayload struct {
 type decisionDiagnosticSignal struct {
 	Key        string   `json:"key"`
 	Type       string   `json:"type"`
+	Name       string   `json:"name"`
 	Executed   bool     `json:"executed"`
 	Matched    bool     `json:"matched"`
 	Value      *float64 `json:"value,omitempty"`
@@ -59,11 +61,44 @@ func attachDecisionDiagnostics(response *ext_proc.ProcessingResponse, ctx *Reque
 	if !ok {
 		return
 	}
-	raw, err := json.Marshal(payload)
-	if err != nil || len(raw) > cfg.MaxPayloadBytes {
+	metadata, ok := decisionDiagnosticsStructValue(payload, cfg.MaxPayloadBytes)
+	if !ok {
 		return
 	}
+	setDecisionDiagnosticsMetadata(response, metadata)
+}
 
+func attachDecisionDiagnosticsOnSuccess(
+	response *ext_proc.ProcessingResponse,
+	requestErr error,
+	ctx *RequestContext,
+) {
+	if requestErr != nil {
+		return
+	}
+	attachDecisionDiagnostics(response, ctx)
+}
+
+func decisionDiagnosticsStructValue(
+	payload decisionDiagnosticsPayload,
+	maxPayloadBytes int,
+) (*structpb.Struct, bool) {
+	raw, err := json.Marshal(payload)
+	if err != nil || len(raw) > maxPayloadBytes {
+		return nil, false
+	}
+	var fields map[string]interface{}
+	if unmarshalErr := json.Unmarshal(raw, &fields); unmarshalErr != nil {
+		return nil, false
+	}
+	metadata, err := structpb.NewStruct(fields)
+	if err != nil {
+		return nil, false
+	}
+	return metadata, true
+}
+
+func setDecisionDiagnosticsMetadata(response *ext_proc.ProcessingResponse, metadata *structpb.Struct) {
 	if response.DynamicMetadata == nil {
 		response.DynamicMetadata = &structpb.Struct{Fields: map[string]*structpb.Value{}}
 	}
@@ -78,7 +113,7 @@ func attachDecisionDiagnostics(response *ext_proc.ProcessingResponse, ctx *Reque
 	if namespace.Fields == nil {
 		namespace.Fields = map[string]*structpb.Value{}
 	}
-	namespace.Fields[decisionDiagnosticsField] = structpb.NewStringValue(string(raw))
+	namespace.Fields[decisionDiagnosticsField] = structpb.NewStructValue(metadata)
 }
 
 func buildDecisionDiagnosticsPayload(
@@ -89,7 +124,7 @@ func buildDecisionDiagnosticsPayload(
 		return decisionDiagnosticsPayload{}, false
 	}
 
-	payload := newDecisionDiagnosticsPayload(ctx, cfg.MaxTextRunes)
+	payload := newDecisionDiagnosticsPayload(ctx, cfg.MaxSignals, cfg.MaxTextRunes)
 	appendDecisionDiagnosticSignals(&payload, ctx, cfg)
 	return fitDecisionDiagnosticsPayload(payload, cfg.MaxPayloadBytes)
 }
@@ -99,7 +134,7 @@ func decisionDiagnosticsConfigUsable(ctx *RequestContext, cfg *config.DecisionDi
 		cfg.MaxSignals > 0 && cfg.MaxProjections > 0 && cfg.MaxTextRunes > 0 && cfg.MaxPayloadBytes > 0
 }
 
-func newDecisionDiagnosticsPayload(ctx *RequestContext, maxTextRunes int) decisionDiagnosticsPayload {
+func newDecisionDiagnosticsPayload(ctx *RequestContext, maxSignals int, maxTextRunes int) decisionDiagnosticsPayload {
 	payload := decisionDiagnosticsPayload{
 		SchemaVersion:      decisionDiagnosticsSchemaVersion,
 		Decision:           truncateDiagnosticText(ctx.VSRSelectedDecisionName, maxTextRunes),
@@ -108,17 +143,19 @@ func newDecisionDiagnosticsPayload(ctx *RequestContext, maxTextRunes int) decisi
 		SelectionAlgorithm: truncateDiagnosticText(decisionDiagnosticsAlgorithm(ctx.VSRSelectedDecision), maxTextRunes),
 		SelectionMethod:    truncateDiagnosticText(ctx.VSRSelectionMethod, maxTextRunes),
 		DecisionConfidence: ctx.VSRSelectedDecisionConfidence,
+		MatchedRules:       []string{},
 		Signals:            []decisionDiagnosticSignal{},
 		Projections:        []decisionDiagnosticProjection{},
 	}
 	if payload.Decision == "" {
 		payload.Decision = truncateDiagnosticText(ctx.VSRSelectedDecision.Name, maxTextRunes)
 	}
+	payload.MatchedRules, payload.Truncated = boundedDecisionMatchedRules(ctx, maxSignals, maxTextRunes)
 	payload.Truncated = diagnosticTextWasTruncated(ctx.VSRSelectedDecisionName, payload.Decision) ||
 		diagnosticTextWasTruncated(ctx.VSRSelectedCategory, payload.Category) ||
 		diagnosticTextWasTruncated(ctx.VSRSelectedModel, payload.SelectedModel) ||
 		diagnosticTextWasTruncated(decisionDiagnosticsAlgorithm(ctx.VSRSelectedDecision), payload.SelectionAlgorithm) ||
-		diagnosticTextWasTruncated(ctx.VSRSelectionMethod, payload.SelectionMethod)
+		diagnosticTextWasTruncated(ctx.VSRSelectionMethod, payload.SelectionMethod) || payload.Truncated
 	return payload
 }
 
@@ -165,7 +202,8 @@ func newDecisionDiagnosticSignal(
 	signal := decisionDiagnosticSignal{
 		Key:      boundedKey,
 		Type:     truncateDiagnosticText(ref.signalType, maxTextRunes),
-		Executed: true,
+		Name:     truncateDiagnosticText(ref.name, maxTextRunes),
+		Executed: ctx.VSRExecutedSignalTypes[ref.signalType],
 		Matched:  matched,
 	}
 	if value, exists := ctx.VSRSignalValues[ref.signalKey()]; exists {
@@ -217,6 +255,8 @@ func fitDecisionDiagnosticsPayload(
 			payload.Projections = payload.Projections[:len(payload.Projections)-1]
 		case len(payload.Signals) > 0:
 			payload.Signals = payload.Signals[:len(payload.Signals)-1]
+		case len(payload.MatchedRules) > 0:
+			payload.MatchedRules = payload.MatchedRules[:len(payload.MatchedRules)-1]
 		default:
 			return decisionDiagnosticsPayload{}, false
 		}
@@ -299,7 +339,50 @@ func matchedDecisionDiagnosticSignals(ctx *RequestContext) map[string]bool {
 	add(config.SignalTypeConversation, ctx.VSRMatchedConversation)
 	add(config.SignalTypeEvent, ctx.VSRMatchedEvent)
 	add(config.SignalTypeProjection, ctx.VSRMatchedProjection)
+	for _, label := range ctx.VSRMatchedDecisionRules {
+		if ref, ok := decisionDiagnosticSignalRefFromLabel(label); ok {
+			matched[ref.signalKey()] = true
+		}
+	}
 	return matched
+}
+
+func boundedDecisionMatchedRules(ctx *RequestContext, maxSignals int, maxTextRunes int) ([]string, bool) {
+	eligible := map[string]bool{}
+	for _, ref := range collectDecisionDiagnosticSignalRefs(&ctx.VSRSelectedDecision.Rules) {
+		eligible[ref.signalKey()] = true
+	}
+
+	labels := make([]string, 0, len(ctx.VSRMatchedDecisionRules))
+	seen := map[string]bool{}
+	truncated := false
+	for _, label := range ctx.VSRMatchedDecisionRules {
+		ref, ok := decisionDiagnosticSignalRefFromLabel(label)
+		if !ok || !eligible[ref.signalKey()] || seen[ref.signalKey()] {
+			continue
+		}
+		bounded := truncateDiagnosticText(ref.signalKey(), maxTextRunes)
+		truncated = truncated || bounded != ref.signalKey()
+		labels = append(labels, bounded)
+		seen[ref.signalKey()] = true
+	}
+	sort.Strings(labels)
+	if len(labels) > maxSignals {
+		labels = labels[:maxSignals]
+		truncated = true
+	}
+	return labels, truncated
+}
+
+func decisionDiagnosticSignalRefFromLabel(label string) (decisionDiagnosticSignalRef, bool) {
+	signalType, name, ok := strings.Cut(strings.TrimSpace(label), ":")
+	if !ok || strings.TrimSpace(signalType) == "" || strings.TrimSpace(name) == "" {
+		return decisionDiagnosticSignalRef{}, false
+	}
+	return decisionDiagnosticSignalRef{
+		signalType: strings.ToLower(strings.TrimSpace(signalType)),
+		name:       strings.TrimSpace(name),
+	}, true
 }
 
 func projectionDiagnosticScore(ctx *RequestContext, name string) (float64, bool) {
