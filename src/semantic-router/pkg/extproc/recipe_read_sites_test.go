@@ -112,7 +112,11 @@ func TestRecipeDecisionsReachDownstreamReadSites(t *testing.T) {
 		}
 	})
 
-	t.Run("model reference validation reaches recipes", func(t *testing.T) {
+	// ValidateEndpoints is a config helper with no load-path caller: the
+	// load path checks recipe modelRefs against modelCards only, and a
+	// missing endpoint surfaces at request time. This pins the helper's
+	// recipe scope, not a load-time endpoint check.
+	t.Run("ValidateEndpoints helper sees recipe decisions", func(t *testing.T) {
 		if err := cfg.ValidateEndpoints(); err != nil {
 			t.Fatalf("expected the recipe's model reference to validate, got %v", err)
 		}

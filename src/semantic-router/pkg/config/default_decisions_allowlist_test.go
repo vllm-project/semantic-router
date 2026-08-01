@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"sort"
@@ -61,18 +62,35 @@ var defaultDecisionsAllowlist = map[string]string{
 	"dashboard/backend/handlers/topology_response.go": "topology test-query panel does not model recipe scoping yet",
 }
 
+// defaultDecisionsSpellings are the source spellings that read the default
+// routing profile. DefaultRecipe() is listed alongside the field because
+// rewriting a read site from cfg.DefaultDecisions to
+// cfg.DefaultRecipe().Decisions is semantically identical and would otherwise
+// silence this guard for free.
+//
+// Deliberately NOT listed: ".Recipes[" and a bare "DefaultRecipeName". Both
+// match the sanctioned whole-surface pattern (AllRoutingDecisions iterates
+// c.Recipes[i]) and the deliberate per-request resolver
+// (req_filter_entrypoint.go), so they would flag correct code and force
+// entries that cannot answer this allowlist's scope question.
+var defaultDecisionsSpellings = [][]byte{
+	[]byte("DefaultDecisions"),
+	[]byte("DefaultRecipe()"),
+}
+
 // TestDefaultDecisionsReadSitesAreAllowlisted walks every production Go file
 // in the repository (all modules) and fails when a file references the flat
 // DefaultDecisions field without an allowlist entry, or when an entry goes
 // stale. A new site must either switch to a whole-surface accessor or state
 // its scope rationale here, in front of the reviewer.
 func TestDefaultDecisionsReadSitesAreAllowlisted(t *testing.T) {
-	repoRoot, err := filepath.Abs(filepath.Join("..", "..", "..", ".."))
-	if err != nil {
-		t.Fatalf("resolving repo root: %v", err)
-	}
-	if _, statErr := os.Stat(filepath.Join(repoRoot, ".git")); statErr != nil {
-		t.Fatalf("repo root %s does not look like a git checkout: %v", repoRoot, statErr)
+	repoRoot := repoRootFromTestFile(t)
+	// Sanity-check the walk root against a repository-root marker rather than
+	// .git: the guard must fail loudly if the path arithmetic stops pointing
+	// at the repo root, but it must not depend on VCS metadata (.dockerignore
+	// strips .git/, and source tarballs carry none).
+	if _, statErr := os.Stat(filepath.Join(repoRoot, "src", "semantic-router", "go.mod")); statErr != nil {
+		t.Fatalf("repo root %s does not look like the repository root: %v", repoRoot, statErr)
 	}
 
 	found := scanDefaultDecisionsReferences(t, repoRoot)
@@ -113,8 +131,10 @@ func scanDefaultDecisionsReferences(t *testing.T, repoRoot string) map[string]bo
 			return err
 		}
 		if d.IsDir() {
-			skip := (strings.HasPrefix(d.Name(), ".") && path != repoRoot) || d.Name() == "node_modules"
-			if skip {
+			switch {
+			case strings.HasPrefix(d.Name(), ".") && path != repoRoot,
+				d.Name() == "node_modules",
+				d.Name() == "target": // Rust build output: thousands of entries, no Go sources.
 				return filepath.SkipDir
 			}
 			return nil
@@ -126,7 +146,7 @@ func scanDefaultDecisionsReferences(t *testing.T, repoRoot string) map[string]bo
 		if readErr != nil {
 			return readErr
 		}
-		if !strings.Contains(string(content), "DefaultDecisions") {
+		if !containsAnySpelling(content, defaultDecisionsSpellings) {
 			return nil
 		}
 		rel, relErr := filepath.Rel(repoRoot, path)
@@ -140,4 +160,13 @@ func scanDefaultDecisionsReferences(t *testing.T, repoRoot string) map[string]bo
 		t.Fatalf("walking repo: %v", walkErr)
 	}
 	return found
+}
+
+func containsAnySpelling(content []byte, needles [][]byte) bool {
+	for _, needle := range needles {
+		if bytes.Contains(content, needle) {
+			return true
+		}
+	}
+	return false
 }

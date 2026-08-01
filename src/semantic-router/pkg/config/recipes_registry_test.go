@@ -23,6 +23,13 @@ func TestCanonicalRecipeSignalsMergeIntoGlobalRegistry(t *testing.T) {
 		t.Fatalf("expected the exported top-level routing block to keep only the default profile, got %+v", canonical.Routing.Signals.Keywords)
 	}
 
+	// The accessor the export goes through must make the same cut on its own.
+	for _, rule := range cfg.RoutingProfileSignals().KeywordRules {
+		if rule.Name == "pii_keywords" {
+			t.Fatal("the privacy recipe's signal leaked into RoutingProfileSignals")
+		}
+	}
+
 	if got := len(cfg.AllRoutingDecisions()); got != 2 {
 		t.Fatalf("expected AllRoutingDecisions to cover both recipes, got %d", got)
 	}

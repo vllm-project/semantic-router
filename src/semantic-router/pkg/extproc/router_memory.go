@@ -50,7 +50,6 @@ func createMemoryRuntime(cfg *config.RouterConfig) (memory.Store, *memory.Memory
 	return memoryStore, memoryExtractor
 }
 
-
 // createMemoryStore creates a memory store based on configuration.
 // Switches on cfg.Memory.Backend: "valkey" creates a ValkeyStore, "milvus" (or empty) creates a MilvusStore.
 func createMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {

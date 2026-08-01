@@ -132,8 +132,10 @@ func TestCanonicalEntrypointsResolveDefaultRecipeAlias(t *testing.T) {
 	}
 }
 
-func TestCanonicalRecipesOnlyDefaultBridgesFlatFields(t *testing.T) {
-	yaml := `
+// recipeTestRecipesOnlyYAML declares every decision inside an explicit
+// default recipe, with no top-level routing profile. Shared by the bridge
+// test below and the mirror invariant in recipes_invariant_test.go.
+const recipeTestRecipesOnlyYAML = `
 version: v0.3
 routing:
   modelCards:
@@ -165,7 +167,9 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
 `
-	cfg, err := ParseYAMLBytes([]byte(yaml))
+
+func TestCanonicalRecipesOnlyDefaultBridgesFlatFields(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(recipeTestRecipesOnlyYAML))
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}

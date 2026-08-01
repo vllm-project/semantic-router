@@ -283,7 +283,6 @@ func initMemoryStore(maxRetries int, retryInterval time.Duration) memory.Store {
 	return nil
 }
 
-
 // setupRoutes configures all API routes
 func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
