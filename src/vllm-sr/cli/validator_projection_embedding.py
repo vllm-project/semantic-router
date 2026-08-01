@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-
+from cli.config_contract import iter_routing_profiles
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
 
@@ -100,14 +99,18 @@ def _register_projection_names(
     declared_names: dict[str, set[str]],
     output_names: set[str],
     errors: list[ValidationError],
+    profile_name: str,
 ) -> None:
     for projection in collection:
         name = getattr(projection, "name", "")
         if name and name in declared_names[kind]:
             errors.append(
                 ValidationError(
-                    field=f"routing.projections.{kind}",
-                    message=f'duplicate global projection name "{name}"',
+                    field=f"recipes.{profile_name}.routing.projections.{kind}",
+                    message=(
+                        f'duplicate projection name "{name}" in recipe '
+                        f'"{profile_name}"'
+                    ),
                 )
             )
         if name:
@@ -119,67 +122,44 @@ def _register_projection_names(
             if output_name and output_name in output_names:
                 errors.append(
                     ValidationError(
-                        field="routing.projections.mappings",
-                        message=f'duplicate global projection output "{output_name}"',
+                        field=(f"recipes.{profile_name}.routing.projections.mappings"),
+                        message=(
+                            f'duplicate projection output "{output_name}" in recipe '
+                            f'"{profile_name}"'
+                        ),
                     )
                 )
             if output_name:
                 output_names.add(output_name)
 
 
-def _merged_projection_registry(
-    config: UserConfig,
-) -> tuple[SimpleNamespace, list[ValidationError]]:
-    projection_sets = [config.routing.projections]
-    projection_sets.extend(recipe.routing.projections for recipe in config.recipes)
+def _validate_projection_profile(
+    projections, profile_name: str
+) -> list[ValidationError]:
     errors: list[ValidationError] = []
-    scores = []
-    mappings = []
-    partitions = []
     declared_names: dict[str, set[str]] = {
         "scores": set(),
         "mappings": set(),
         "partitions": set(),
     }
     output_names: set[str] = set()
-    merged_collections = {
-        "scores": scores,
-        "mappings": mappings,
-        "partitions": partitions,
-    }
-    for projections in projection_sets:
-        for kind, collection in (
-            ("scores", getattr(projections, "scores", None) or []),
-            ("mappings", getattr(projections, "mappings", None) or []),
-            ("partitions", getattr(projections, "partitions", None) or []),
-        ):
-            _register_projection_names(
-                kind,
-                collection,
-                declared_names,
-                output_names,
-                errors,
-            )
-            merged_collections[kind].extend(collection)
+    for kind, collection in (
+        ("scores", getattr(projections, "scores", None) or []),
+        ("mappings", getattr(projections, "mappings", None) or []),
+        ("partitions", getattr(projections, "partitions", None) or []),
+    ):
+        _register_projection_names(
+            kind,
+            collection,
+            declared_names,
+            output_names,
+            errors,
+            profile_name,
+        )
 
-    return (
-        SimpleNamespace(
-            scores=scores,
-            mappings=mappings,
-            partitions=partitions,
-        ),
-        errors,
-    )
-
-
-def validate_projection_score_dependencies(
-    config: UserConfig,
-) -> list[ValidationError]:
-    """Validate that projection scores have no dependency cycles."""
-    merged, errors = _merged_projection_registry(config)
-    scores = merged.scores
+    scores = getattr(projections, "scores", None) or []
     score_names = {s.name for s in scores if s.name}
-    output_to_source = _projection_output_to_source_from_mappings(merged)
+    output_to_source = _projection_output_to_source_from_mappings(projections)
 
     adj: dict[str, list[str]] = {}
     for score in scores:
@@ -211,6 +191,16 @@ def validate_projection_score_dependencies(
     return errors
 
 
+def validate_projection_score_dependencies(
+    config: UserConfig,
+) -> list[ValidationError]:
+    """Validate each recipe's projection graph as an isolated namespace."""
+    errors: list[ValidationError] = []
+    for profile_name, routing in iter_routing_profiles(config):
+        errors.extend(_validate_projection_profile(routing.projections, profile_name))
+    return errors
+
+
 def validate_embedding_modality_compatibility(
     config: UserConfig,
 ) -> list[ValidationError]:
@@ -235,9 +225,11 @@ def validate_embedding_modality_compatibility(
         list: List of validation errors
     """
     errors: list[ValidationError] = []
-    embeddings = list(config.signals.embeddings or [])
-    for recipe in config.recipes:
-        embeddings.extend(recipe.routing.signals.embeddings or [])
+    embeddings = [
+        embedding
+        for _, routing in iter_routing_profiles(config)
+        for embedding in routing.signals.embeddings or []
+    ]
     if not embeddings:
         return errors
 

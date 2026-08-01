@@ -15,6 +15,8 @@ from pydantic import (
 
 from .algorithms import AlgorithmConfig, ModelRef
 
+RoutingStrategy = Literal["priority", "confidence"]
+
 
 class Listener(BaseModel):
     """Network listener configuration."""
@@ -1169,6 +1171,7 @@ class Routing(BaseModel):
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
+    strategy: Optional[RoutingStrategy] = None
 
 
 class Entrypoint(BaseModel):
@@ -1208,6 +1211,7 @@ class RecipeRouting(BaseModel):
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
+    strategy: Optional[RoutingStrategy] = None
 
 
 class Recipe(BaseModel):

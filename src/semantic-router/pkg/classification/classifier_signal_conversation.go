@@ -6,7 +6,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // ConversationFacts holds request-shape facts extracted from the incoming
@@ -47,8 +46,8 @@ func (c *Classifier) evaluateConversationSignal(results *SignalResults, mu *sync
 		results.SignalValues[key] = value
 		mu.Unlock()
 
-		metrics.RecordSignalExtraction(config.SignalTypeConversation, rule.Name, elapsed.Seconds())
-		metrics.RecordSignalMatch(config.SignalTypeConversation, rule.Name)
+		c.recordSignalExtraction(config.SignalTypeConversation, rule.Name, elapsed.Seconds())
+		c.recordSignalMatch(config.SignalTypeConversation, rule.Name)
 	}
 
 	elapsed := time.Since(start)

@@ -159,6 +159,7 @@ describe('entrypoints and recipes support', () => {
       {
         name: 'frontier-v2',
         description: 'updated',
+        strategy: 'confidence',
         decisions: [
           {
             name: 'frontier_route',
@@ -182,6 +183,7 @@ describe('entrypoints and recipes support', () => {
     )
 
     expect(updated.routing.signals).toEqual(config.recipes?.[0].routing.signals)
+    expect(updated.routing.strategy).toBe('confidence')
     expect(updated.routing.decisions?.[0].modelRefs[0]).toMatchObject({
       model: models[1].name,
       use_reasoning: true,
@@ -229,6 +231,7 @@ describe('entrypoints and recipes support', () => {
         {
           name: 'default',
           description: 'Updated default',
+          strategy: 'priority',
           decisions: explicitDefault.routing.decisions ?? [],
         },
         config,
@@ -241,6 +244,7 @@ describe('entrypoints and recipes support', () => {
         {
           name: 'renamed-default',
           description: 'Invalid rename',
+          strategy: 'priority',
           decisions: explicitDefault.routing.decisions ?? [],
         },
         config,
@@ -249,5 +253,44 @@ describe('entrypoints and recipes support', () => {
       ),
     ).toThrow(/cannot be renamed/)
     expect(getRecipeDeleteBlocker(config, 'default')).toMatch(/cannot be deleted/)
+  })
+
+  it('allows decision names to repeat across recipes but not within one recipe', () => {
+    const config = baseConfig()
+    const sharedDecision = {
+      name: 'default_route',
+      description: 'recipe-local route',
+      priority: 1,
+      rules: { operator: 'AND' as const, conditions: [] },
+      modelRefs: [{ model: models[1].name, use_reasoning: false }],
+    }
+
+    expect(() =>
+      validateRecipeForm(
+        {
+          name: 'frontier',
+          description: 'updated',
+          strategy: 'priority',
+          decisions: [sharedDecision],
+        },
+        config,
+        models,
+        'frontier',
+      ),
+    ).not.toThrow()
+
+    expect(() =>
+      validateRecipeForm(
+        {
+          name: 'frontier',
+          description: 'updated',
+          strategy: 'priority',
+          decisions: [sharedDecision, sharedDecision],
+        },
+        config,
+        models,
+        'frontier',
+      ),
+    ).toThrow(/within this recipe/)
   })
 })

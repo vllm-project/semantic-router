@@ -20,7 +20,7 @@ routing:
       description: privacy tier
   signals:
     keywords:
-      - name: urgent_keywords
+      - name: route_keyword
         operator: OR
         keywords: ["urgent"]
   decisions:
@@ -29,7 +29,7 @@ routing:
         operator: AND
         conditions:
           - type: keyword
-            name: urgent_keywords
+            name: route_keyword
       modelRefs:
         - model: model-a
           use_reasoning: false
@@ -38,7 +38,7 @@ recipes:
     routing:
       signals:
         keywords:
-          - name: pii_keywords
+          - name: route_keyword
             operator: OR
             keywords: ["ssn"]
       decisions:
@@ -47,7 +47,7 @@ recipes:
             operator: AND
             conditions:
               - type: keyword
-                name: pii_keywords
+                name: route_keyword
           modelRefs:
             - model: model-b
               use_reasoning: false
@@ -82,14 +82,31 @@ func TestResolveEntrypointForRequest(t *testing.T) {
 
 	ctx := &RequestContext{}
 	router.resolveEntrypointForRequest("vllm-sr/privacy", ctx)
-	if ctx.EntrypointRecipe == nil || ctx.EntrypointRecipe.Name != "privacy" {
-		t.Fatalf("expected the privacy recipe to be resolved, got %+v", ctx.EntrypointRecipe)
+	if ctx.Routing.SelectedRecipe() == nil || ctx.Routing.SelectedRecipe().Name != "privacy" {
+		t.Fatalf("expected the privacy recipe to be resolved, got %+v", ctx.Routing.SelectedRecipe())
 	}
 
 	ctx = &RequestContext{}
 	router.resolveEntrypointForRequest("model-a", ctx)
-	if ctx.EntrypointRecipe != nil {
-		t.Fatalf("expected a plain model name to resolve no recipe, got %+v", ctx.EntrypointRecipe)
+	if ctx.Routing.SelectedRecipe() != nil {
+		t.Fatalf("expected a plain model name to resolve no recipe, got %+v", ctx.Routing.SelectedRecipe())
+	}
+}
+
+func TestClassifierForRequestNeverFallsBackAcrossRecipes(t *testing.T) {
+	defaultClassifier := &classification.Classifier{}
+	router := &OpenAIRouter{Classifier: defaultClassifier}
+
+	defaultContext := &RequestContext{}
+	defaultContext.Routing.SelectRecipe(&config.RoutingRecipe{Name: config.DefaultRecipeName})
+	if got := router.classifierForRequest(defaultContext); got != defaultClassifier {
+		t.Fatalf("default recipe classifier = %p, want %p", got, defaultClassifier)
+	}
+
+	namedContext := &RequestContext{}
+	namedContext.Routing.SelectRecipe(&config.RoutingRecipe{Name: "privacy"})
+	if got := router.classifierForRequest(namedContext); got != nil {
+		t.Fatalf("named recipe unexpectedly fell back to the default classifier: %p", got)
 	}
 }
 
@@ -123,20 +140,21 @@ func TestDecisionCandidatesForRequest(t *testing.T) {
 		t.Fatalf("expected the privacy recipe's decisions as candidates, got %+v", candidates)
 	}
 
-	// An entrypoint alias of the default recipe keeps the engine-default
-	// candidate path (nil), which evaluates the flat default decisions.
+	// Default aliases resolve to the normalized default recipe just like named
+	// entrypoints resolve to their named recipe.
 	ctx = &RequestContext{}
 	router.resolveEntrypointForRequest("vllm-sr/default-alias", ctx)
-	if ctx.EntrypointRecipe == nil || ctx.EntrypointRecipe.Name != config.DefaultRecipeName {
-		t.Fatalf("expected the default recipe to be resolved, got %+v", ctx.EntrypointRecipe)
+	if ctx.Routing.SelectedRecipe() == nil || ctx.Routing.SelectedRecipe().Name != config.DefaultRecipeName {
+		t.Fatalf("expected the default recipe to be resolved, got %+v", ctx.Routing.SelectedRecipe())
 	}
-	if candidates := router.decisionCandidatesForRequest("vllm-sr/default-alias", ctx); candidates != nil {
-		t.Fatalf("expected nil candidates for a default-recipe alias, got %+v", candidates)
+	if candidates := router.decisionCandidatesForRequest("vllm-sr/default-alias", ctx); len(candidates) != 1 || candidates[0].Name != "default_route" {
+		t.Fatalf("expected the default recipe candidates, got %+v", candidates)
 	}
 
 	ctx = &RequestContext{}
-	if candidates := router.decisionCandidatesForRequest(config.DefaultVSRAutoModelName, ctx); candidates != nil {
-		t.Fatalf("expected nil candidates for the auto model, got %+v", candidates)
+	router.resolveEntrypointForRequest(config.DefaultVSRAutoModelName, ctx)
+	if candidates := router.decisionCandidatesForRequest(config.DefaultVSRAutoModelName, ctx); len(candidates) != 1 || candidates[0].Name != "default_route" {
+		t.Fatalf("expected the auto model to use default recipe candidates, got %+v", candidates)
 	}
 }
 
@@ -149,11 +167,15 @@ func newEntrypointFlowRouter(t *testing.T) *OpenAIRouter {
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
 	if err != nil {
-		t.Fatalf("failed to build classifier: %v", err)
+		t.Fatalf("failed to build recipe classifiers: %v", err)
 	}
-	return &OpenAIRouter{Config: cfg, Classifier: classifier}
+	return &OpenAIRouter{
+		Config:            cfg,
+		Classifier:        classifiers.Default(),
+		RecipeClassifiers: classifiers,
+	}
 }
 
 func TestPerformDecisionEvaluationSelectsRecipeByEntrypoint(t *testing.T) {
@@ -174,9 +196,7 @@ func TestPerformDecisionEvaluationSelectsRecipeByEntrypoint(t *testing.T) {
 			wantModel:    "model-b",
 		},
 		{
-			// The pii signal matches globally, but the default recipe's
-			// decisions do not reference it: the request falls back to the
-			// default model instead of leaking into another recipe's routes.
+			// The privacy signal does not even run for the default recipe.
 			name:         "auto model ignores other recipes' decisions",
 			model:        config.DefaultVSRAutoModelName,
 			message:      "my ssn is exposed",
@@ -208,7 +228,7 @@ func TestPerformDecisionEvaluationSelectsRecipeByEntrypoint(t *testing.T) {
 			name:         "explicit model preserves the client selection",
 			model:        "model-a",
 			message:      "this is urgent",
-			wantDecision: "default_route",
+			wantDecision: "",
 			wantModel:    "",
 		},
 	}
@@ -377,11 +397,11 @@ func TestPerformDecisionEvaluationRecipesOnlyConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
 	if err != nil {
-		t.Fatalf("failed to build classifier: %v", err)
+		t.Fatalf("failed to build recipe classifiers: %v", err)
 	}
-	router := &OpenAIRouter{Config: cfg, Classifier: classifier}
+	router := &OpenAIRouter{Config: cfg, Classifier: classifiers.Default(), RecipeClassifiers: classifiers}
 
 	cases := []struct {
 		name         string
@@ -480,11 +500,11 @@ func TestDecisionlessRecipeStaysIsolatedFromDefaultDecisions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
 	if err != nil {
-		t.Fatalf("failed to build classifier: %v", err)
+		t.Fatalf("failed to build recipe classifiers: %v", err)
 	}
-	router := &OpenAIRouter{Config: cfg, Classifier: classifier}
+	router := &OpenAIRouter{Config: cfg, Classifier: classifiers.Default(), RecipeClassifiers: classifiers}
 
 	ctx := &RequestContext{}
 	router.resolveEntrypointForRequest("vllm-sr/screening", ctx)
@@ -517,15 +537,6 @@ func TestDecisionlessRecipeStaysIsolatedFromDefaultDecisions(t *testing.T) {
 	}
 }
 
-func TestFindDecisionByNameSeesRecipeDecisions(t *testing.T) {
-	router := newEntrypointTestRouter(t)
-
-	decision := router.findDecisionByName("privacy_route")
-	if decision == nil || decision.Name != "privacy_route" {
-		t.Fatalf("expected the looper decision lookup to see recipe decisions, got %+v", decision)
-	}
-}
-
 func TestSemanticCacheScopeStaysRouteLocalForRecipesOnlyConfig(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(entrypointRecipesOnlyConfigYAML))
 	if err != nil {
@@ -534,12 +545,29 @@ func TestSemanticCacheScopeStaysRouteLocalForRecipesOnlyConfig(t *testing.T) {
 	cfg.SemanticCache.Enabled = true
 	router := &OpenAIRouter{Config: cfg}
 
-	// Decisions exist (inside the privacy recipe), so an unmatched request
-	// must not fall back to the global cache toggle.
-	if router.semanticCacheEnabledForScope("") {
-		t.Fatal("recipes-only configs must keep semantic cache route-local, not global")
+	privacy, ok := cfg.RecipeByName("privacy")
+	if !ok || len(privacy.Profile.Decisions) != 1 {
+		t.Fatalf("privacy recipe not normalized: %+v", privacy)
 	}
-	if router.semanticCacheEnabledForScope("privacy_route") != cfg.IsCacheEnabledForDecision("privacy_route") {
-		t.Fatal("decision-scoped lookup must delegate to IsCacheEnabledForDecision")
+	ctx := &RequestContext{}
+	ctx.Routing.SelectRecipe(privacy)
+	if router.semanticCacheEnabledForRequest(ctx) {
+		t.Fatal("an unmatched recipe request must not fall back to the global cache toggle")
+	}
+	ctx.VSRSelectedDecision = &privacy.Profile.Decisions[0]
+	if router.semanticCacheEnabledForRequest(ctx) != cfg.IsCacheEnabledForDecisionObject(&privacy.Profile.Decisions[0]) {
+		t.Fatal("request-scoped lookup must use the selected recipe decision object")
+	}
+}
+
+func TestConcreteModelBypassesSemanticCache(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{
+		SemanticCache: config.SemanticCache{Enabled: true},
+	}}
+	ctx := &RequestContext{}
+	ctx.Routing.SelectPassthrough()
+
+	if router.semanticCacheEnabledForRequest(ctx) {
+		t.Fatal("a concrete backend request must not enter recipe cache state")
 	}
 }

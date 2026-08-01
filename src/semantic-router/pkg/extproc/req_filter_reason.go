@@ -20,15 +20,19 @@ type reasoningRequestMutation struct {
 	reasoningApplied        bool
 }
 
-func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled bool, categoryName string) ([]byte, error) {
-	return r.setReasoningModeToRequestBodyForProvider(requestBody, enabled, categoryName, nil)
+func (r *OpenAIRouter) setReasoningModeToRequestBody(
+	requestBody []byte,
+	enabled bool,
+	decision *config.Decision,
+) ([]byte, error) {
+	return r.setReasoningModeToRequestBodyForProvider(requestBody, enabled, decision, nil)
 }
 
 // setReasoningModeToRequestBodyForProvider adds provider-compatible reasoning fields to the JSON request body.
 func (r *OpenAIRouter) setReasoningModeToRequestBodyForProvider(
 	requestBody []byte,
 	enabled bool,
-	categoryName string,
+	decision *config.Decision,
 	profile *config.ProviderProfile,
 ) ([]byte, error) {
 	mutation, err := parseReasoningRequestMutation(requestBody)
@@ -38,7 +42,7 @@ func (r *OpenAIRouter) setReasoningModeToRequestBodyForProvider(
 	familyConfig := r.getModelReasoningFamily(mutation.model)
 	dialect := resolveOpenAIBackendDialect(profile)
 	if enabled {
-		r.applyEnabledReasoningMutation(mutation, familyConfig, categoryName, dialect)
+		r.applyEnabledReasoningMutation(mutation, familyConfig, decision, dialect)
 	} else {
 		r.applyDisabledReasoningMutation(mutation, familyConfig, dialect)
 	}
@@ -101,14 +105,14 @@ func extractChatTemplateKwargs(requestMap map[string]interface{}) map[string]int
 func (r *OpenAIRouter) applyEnabledReasoningMutation(
 	mutation *reasoningRequestMutation,
 	familyConfig *config.ReasoningFamilyConfig,
-	categoryName string,
+	decision *config.Decision,
 	dialect openAIBackendDialect,
 ) {
 	if familyConfig == nil {
 		return
 	}
 	if usesDeepSeekOfficialReasoning(familyConfig, dialect) {
-		effort := r.getReasoningEffort(categoryName, mutation.model)
+		effort := r.getReasoningEffort(decision, mutation.model)
 		applyDeepSeekOfficialReasoningMutation(mutation, true, effort)
 		return
 	}
@@ -118,7 +122,7 @@ func (r *OpenAIRouter) applyEnabledReasoningMutation(
 		mutation.requestMap["chat_template_kwargs"] = mutation.chatTemplateKwargs
 		mutation.reasoningApplied = true
 	case "reasoning_effort":
-		effort := r.getReasoningEffort(categoryName, mutation.model)
+		effort := r.getReasoningEffort(decision, mutation.model)
 		applyReasoningEffortField(mutation, familyConfig.Parameter, effort, dialect)
 		mutation.appliedEffort = effort
 		mutation.reasoningApplied = true
@@ -264,13 +268,16 @@ func applyDeepSeekOfficialReasoningMutation(mutation *reasoningRequestMutation, 
 }
 
 // getReasoningEffort returns the reasoning effort level for a given decision and model
-func (r *OpenAIRouter) getReasoningEffort(categoryName string, modelName string) string {
+func (r *OpenAIRouter) getReasoningEffort(
+	decision *config.Decision,
+	modelName string,
+) string {
 	// Handle case where Config is nil (e.g., in tests)
 	if r.Config == nil {
 		return "medium"
 	}
 
-	if decision := r.Config.GetDecisionByName(categoryName); decision != nil {
+	if decision != nil {
 		if effort := r.reasoningEffortForDecision(*decision, modelName); effort != "" {
 			return effort
 		}
@@ -306,7 +313,7 @@ func (r *OpenAIRouter) getModelReasoningFamily(model string) *config.ReasoningFa
 func (r *OpenAIRouter) buildReasoningRequestFieldsForProvider(
 	model string,
 	useReasoning bool,
-	categoryName string,
+	decision *config.Decision,
 	profile *config.ProviderProfile,
 ) (map[string]interface{}, string) {
 	familyConfig := r.getModelReasoningFamily(model)
@@ -324,7 +331,7 @@ func (r *OpenAIRouter) buildReasoningRequestFieldsForProvider(
 	// When reasoning is enabled, use the configured family syntax
 	dialect := resolveOpenAIBackendDialect(profile)
 	if usesDeepSeekOfficialReasoning(familyConfig, dialect) {
-		effort := r.getReasoningEffort(categoryName, model)
+		effort := r.getReasoningEffort(decision, model)
 		return map[string]interface{}{
 			"thinking":         map[string]interface{}{"type": "enabled"},
 			"reasoning_effort": effort,
@@ -337,7 +344,7 @@ func (r *OpenAIRouter) buildReasoningRequestFieldsForProvider(
 		}
 		return map[string]interface{}{"chat_template_kwargs": kwargs}, ""
 	case "reasoning_effort":
-		effort := r.getReasoningEffort(categoryName, model)
+		effort := r.getReasoningEffort(decision, model)
 		if dialect.usesTopLevelReasoningEffort() {
 			return map[string]interface{}{familyConfig.Parameter: effort}, effort
 		}

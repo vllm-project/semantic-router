@@ -7,7 +7,6 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // cachedJailbreakResult stores a cached jailbreak classification result.
@@ -76,7 +75,7 @@ func (c *Classifier) evaluateJailbreakSignal(results *SignalResults, mu *sync.Mu
 		results.Metrics.Jailbreak.Confidence = float64(results.JailbreakConfidence)
 	}
 
-	metrics.RecordSignalExtraction(config.SignalTypeJailbreak, "jailbreak_evaluated", latencySeconds)
+	c.recordSignalExtraction(config.SignalTypeJailbreak, "jailbreak_evaluated", latencySeconds)
 	logging.Debugf("[Signal Computation] Jailbreak signal evaluation completed in %v", elapsed)
 }
 
@@ -121,8 +120,8 @@ func (c *Classifier) evaluateContrastiveJailbreakRule(rule config.JailbreakRule,
 		return
 	}
 
-	metrics.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
-	metrics.RecordSignalMatch(config.SignalTypeJailbreak, rule.Name)
+	c.recordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
+	c.recordSignalMatch(config.SignalTypeJailbreak, rule.Name)
 
 	confidence := analysisResult.MaxScore
 	mu.Lock()
@@ -145,8 +144,8 @@ func (c *Classifier) evaluateBERTJailbreakRule(rule config.JailbreakRule, conten
 		return
 	}
 
-	metrics.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
-	metrics.RecordSignalMatch(config.SignalTypeJailbreak, rule.Name)
+	c.recordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
+	c.recordSignalMatch(config.SignalTypeJailbreak, rule.Name)
 
 	mu.Lock()
 	results.MatchedJailbreakRules = append(results.MatchedJailbreakRules, rule.Name)

@@ -54,6 +54,7 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 		Signals:     canonicalSignalsFromSignals(cfg.RoutingProfileSignals()),
 		Projections: canonicalProjectionsFromProjections(cfg.RoutingProfileProjections()),
 		Decisions:   copyDecisions(cfg.Decisions),
+		Strategy:    cfg.Strategy,
 	}
 }
 

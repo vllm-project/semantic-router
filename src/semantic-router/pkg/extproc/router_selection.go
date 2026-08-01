@@ -13,7 +13,29 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
 
-func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Reader) (*selection.Registry, lookuptable.LookupTableStorage, func()) {
+func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.Reader) (map[config.RecipeName]*selection.Registry, *selection.Registry, lookuptable.LookupTableStorage, func()) {
+	lt, cancel := buildLookupTable(cfg, replayReader)
+	embed := resolveSelectionEmbeddingFunc(cfg)
+	registries := make(map[config.RecipeName]*selection.Registry)
+
+	if len(cfg.Recipes) == 0 {
+		registry := createModelSelectorRegistry(cfg, lt, embed)
+		registries[config.DefaultRecipeName] = registry
+		selection.GlobalRegistry = registry
+		return registries, registry, lt, cancel
+	}
+
+	for i := range cfg.Recipes {
+		recipe := &cfg.Recipes[i]
+		scopedConfig := cfg.ConfigForRecipe(recipe)
+		registries[recipe.Name] = createModelSelectorRegistry(scopedConfig, lt, embed)
+	}
+	defaultRegistry := registries[config.DefaultRecipeName]
+	selection.GlobalRegistry = defaultRegistry
+	return registries, defaultRegistry, lt, cancel
+}
+
+func createModelSelectorRegistry(cfg *config.RouterConfig, lt lookuptable.LookupTableStorage, embed func(string) ([]float32, error)) *selection.Registry {
 	modelSelectionCfg := buildModelSelectionConfig(cfg)
 	backendModels := cfg.BackendModels
 	selectionFactory := selection.NewFactory(modelSelectionCfg)
@@ -24,15 +46,12 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Re
 	if len(cfg.Categories) > 0 {
 		selectionFactory = selectionFactory.WithCategories(cfg.Categories)
 	}
-	selectionFactory = selectionFactory.WithEmbeddingFunc(resolveSelectionEmbeddingFunc(cfg))
-
-	lt, cancel := buildLookupTable(cfg, replayReader)
+	selectionFactory = selectionFactory.WithEmbeddingFunc(embed)
 	if lt != nil {
 		selectionFactory = selectionFactory.WithLookupTable(lt)
 	}
 
 	registry := selectionFactory.CreateAll()
-	selection.GlobalRegistry = registry
 
 	// Collect algorithm methods actually configured in decisions
 	configuredMethods := collectConfiguredAlgorithmMethods(cfg)
@@ -44,7 +63,7 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Re
 	logging.ComponentEvent("extproc", "model_selection_registry_initialized", map[string]interface{}{
 		"mode": "per_decision_algorithm_config",
 	})
-	return registry, lt, cancel
+	return registry
 }
 
 func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) func(string) ([]float32, error) {

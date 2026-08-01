@@ -22,6 +22,7 @@ const (
 
 type routerReplayFilters struct {
 	search      string
+	recipe      string
 	decision    string
 	model       string
 	cacheStatus string
@@ -215,6 +216,7 @@ func parseRouterReplayListQuery(rawQuery string) (routerReplayListQuery, error) 
 func parseRouterReplayFilters(values url.Values) (routerReplayFilters, error) {
 	filters := routerReplayFilters{
 		search:    strings.TrimSpace(values.Get("search")),
+		recipe:    strings.TrimSpace(values.Get("recipe")),
 		decision:  strings.TrimSpace(values.Get("decision")),
 		model:     strings.TrimSpace(values.Get("model")),
 		sessionID: strings.TrimSpace(values.Get("session_id")),
@@ -277,13 +279,18 @@ func doesRouterReplayRecordMatchFilters(
 	if filters.decision != "" && record.Decision != filters.decision {
 		return false
 	}
+	if filters.recipe != "" && record.Recipe != filters.recipe {
+		return false
+	}
 	if filters.model != "" && !doesModelMatch(record, filters.model) {
 		return false
 	}
 	if filters.sessionID != "" && record.SessionID != filters.sessionID {
 		return false
 	}
-	if search != "" && !strings.Contains(strings.ToLower(record.RequestID), search) {
+	if search != "" &&
+		!strings.Contains(strings.ToLower(record.RequestID), search) &&
+		!strings.Contains(strings.ToLower(record.Recipe), search) {
 		return false
 	}
 	return true

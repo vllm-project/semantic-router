@@ -63,6 +63,10 @@ const (
 	// Example values: "math", "business", "biology", "computer science"
 	VSRSelectedCategory = "x-vsr-selected-category"
 
+	// VSRSelectedRecipe identifies the isolated routing profile selected by the
+	// inbound virtual model. Concrete backend model requests omit this header.
+	VSRSelectedRecipe = "x-vsr-selected-recipe"
+
 	// VSRSelectedDecision indicates the decision selected by VSR during decision evaluation.
 	// This is the final routing decision made by the DecisionEngine.
 	// Example values: "math_decision", "business_decision", "thinking_decision"

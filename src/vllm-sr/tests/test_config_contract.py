@@ -41,19 +41,26 @@ def test_build_signal_reference_index_expands_complexity_levels_and_authz_names(
 
     signal_names = build_signal_reference_index(signals)
 
-    assert "difficulty:easy" in signal_names
-    assert "difficulty:medium" in signal_names
-    assert "difficulty:hard" in signal_names
-    assert "admin-access" in signal_names
-    assert "critical_event" in signal_names
+    assert signal_names["complexity"] == {
+        "difficulty:easy",
+        "difficulty:medium",
+        "difficulty:hard",
+    }
+    assert signal_names["authz"] == {"admin-access"}
+    assert signal_names["event"] == {"critical_event"}
 
 
-def test_signal_reference_exists_strips_suffixes_for_non_complexity_signals():
-    signal_names = {"security", "admin-access"}
+def test_signal_reference_exists_is_scoped_by_family_and_exact_runtime_name():
+    signal_names = {
+        "keyword": {"security"},
+        "authz": {"admin-access"},
+    }
 
-    assert signal_reference_exists(signal_names, "keyword", "security:match")
+    assert signal_reference_exists(signal_names, "keyword", "security")
+    assert not signal_reference_exists(signal_names, "keyword", "security:match")
     assert signal_reference_exists(signal_names, "authz", "admin-access")
     assert not signal_reference_exists(signal_names, "complexity", "security:match")
+    assert not signal_reference_exists(signal_names, "authz", "security")
 
 
 def test_projection_reference_index_collects_mapping_outputs():

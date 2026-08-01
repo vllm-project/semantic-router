@@ -328,7 +328,7 @@ func (r *OpenAIRouter) scoreRoutingSamplingCandidates(
 		if model == "" {
 			continue
 		}
-		exp := r.routerLearningRuntimeState().experienceSnapshot(selCtx.DecisionName, decisionTier(ctx), model)
+		exp := r.routerLearningRuntimeState().experienceSnapshot(selectionDecisionStateKey(selCtx), decisionTier(ctx), model)
 		if params, ok := r.Config.ModelConfig[model]; ok && params.QualityScore > 0 && exp.GoodFitCount+exp.UnderpoweredCount == 0 {
 			exp.QualitySeed = clamp01(params.QualityScore)
 			exp.SeedWeight = 2

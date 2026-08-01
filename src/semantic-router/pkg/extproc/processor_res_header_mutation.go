@@ -332,6 +332,7 @@ func addRetentionDirectiveHeaders(builder *responseHeaderMutationBuilder, ctx *R
 // its confidence, the selection algorithm, the selected model, and the replay-id
 // entry point.
 func addFinalDecisionHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
+	builder.addString(headers.VSRSelectedRecipe, string(ctx.Routing.RecipeName()))
 	builder.addString(headers.VSRSelectedDecision, ctx.VSRSelectedDecisionName)
 	if ctx.VSRSelectedDecisionName != "" {
 		builder.addNonNegativeFloat(headers.VSRSelectedConfidence, ctx.VSRSelectedDecisionConfidence)

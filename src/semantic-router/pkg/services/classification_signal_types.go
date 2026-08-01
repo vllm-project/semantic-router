@@ -2,6 +2,7 @@ package services
 
 import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 )
 
@@ -64,7 +65,7 @@ type EvalDecisionResult struct {
 type EvalResponse struct {
 	OriginalText      string                                  `json:"original_text"` // The evaluated user turn or fallback query text
 	RequestedModel    string                                  `json:"requested_model,omitempty"`
-	Recipe            string                                  `json:"recipe,omitempty"`
+	Recipe            config.RecipeName                       `json:"recipe,omitempty"`
 	DecisionResult    *EvalDecisionResult                     `json:"decision_result,omitempty"`
 	EvalTrace         []decision.DecisionTrace                `json:"eval_trace,omitempty"`         // Per-decision evaluation trace (when ?trace=true)
 	RecommendedModels []string                                `json:"recommended_models,omitempty"` // All models from matched decision's modelRefs

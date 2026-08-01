@@ -189,9 +189,7 @@ routing:
       description: Default catch-all decision - blocks all PII for safety
       priority: 1
       rules:
-        operator: OR
-        conditions:
-          - type: always
+        operator: AND
       modelRefs:
         - model: Model-B
           use_reasoning: false

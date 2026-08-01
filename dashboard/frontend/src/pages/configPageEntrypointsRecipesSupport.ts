@@ -4,7 +4,9 @@ import type {
   EntrypointConfig,
   NormalizedModel,
   RecipeConfig,
+  RoutingStrategy,
 } from './configPageSupport'
+import { DEFAULT_ROUTING_STRATEGY } from './configPageSupport'
 
 export const DEFAULT_RECIPE_NAME = 'default'
 
@@ -16,7 +18,12 @@ export interface EntrypointFormState {
 export interface RecipeFormState {
   name: string
   description: string
+  strategy: RoutingStrategy
   decisions: DecisionConfig[]
+}
+
+export function normalizeRecipeStrategy(value: unknown): RoutingStrategy {
+  return value === 'confidence' ? 'confidence' : DEFAULT_ROUTING_STRATEGY
 }
 
 export function normalizeEntrypointModelNames(value: string | string[]): string[] {
@@ -49,6 +56,9 @@ export function getRecipeByName(
         signals: config?.routing?.signals ?? config?.signals,
         projections: config?.routing?.projections ?? config?.projections,
         decisions: config?.routing?.decisions ?? config?.decisions ?? [],
+        strategy: normalizeRecipeStrategy(
+          config?.routing?.strategy ?? config?.global?.router?.strategy,
+        ),
       },
     }
   }
@@ -190,21 +200,12 @@ export function validateRecipeForm(
     models.flatMap((model) => [model.name, ...(model.loras ?? []).map((adapter) => adapter.name)]),
   )
   const decisionNames = new Set<string>()
-  for (const decision of config.routing?.decisions ?? config.decisions ?? []) {
-    decisionNames.add(decision.name)
-  }
-  for (const recipe of config.recipes ?? []) {
-    if (recipe.name === originalName) continue
-    for (const decision of recipe.routing.decisions ?? []) {
-      decisionNames.add(decision.name)
-    }
-  }
 
   const decisions = (form.decisions ?? []).map((decision, index) => {
     const decisionName = decision.name?.trim()
     if (!decisionName) throw new Error(`Decision #${index + 1} needs a name.`)
     if (decisionNames.has(decisionName)) {
-      throw new Error(`Decision name "${decisionName}" is already used by another recipe.`)
+      throw new Error(`Decision name "${decisionName}" is duplicated within this recipe.`)
     }
     decisionNames.add(decisionName)
 
@@ -237,6 +238,7 @@ export function validateRecipeForm(
     description: form.description.trim() || undefined,
     routing: {
       ...existingRouting,
+      strategy: form.strategy,
       decisions,
     },
   }

@@ -84,9 +84,10 @@ func (rt *routerLearningRuntime) resolveOutcomeDecisionContext(outcome *routerru
 		return "", 0
 	}
 	decision := strings.TrimSpace(outcome.Metadata["decision"])
+	recipe := config.RecipeName(strings.TrimSpace(outcome.Metadata["recipe"]))
 	tier := outcomeDecisionTier(outcome)
 	if decision != "" && tier != 0 {
-		return decision, tier
+		return config.RoutingDecisionKey(recipe, decision), tier
 	}
 	record, ok := rt.replayRecord(outcome.ReplayID)
 	if !ok {
@@ -98,13 +99,19 @@ func (rt *routerLearningRuntime) resolveOutcomeDecisionContext(outcome *routerru
 			decision = strings.TrimSpace(record.RouteDiagnostics.Decision)
 		}
 	}
+	if recipe == "" {
+		recipe = config.RecipeName(strings.TrimSpace(record.Recipe))
+	}
 	if tier == 0 {
 		tier = record.DecisionTier
 		if record.RouteDiagnostics != nil && record.RouteDiagnostics.DecisionTier != 0 {
 			tier = record.RouteDiagnostics.DecisionTier
 		}
 	}
-	return decision, tier
+	if decision == "" {
+		return "", tier
+	}
+	return config.RoutingDecisionKey(recipe, decision), tier
 }
 
 func (rt *routerLearningRuntime) replayRecord(replayID string) (routerreplay.RoutingRecord, bool) {

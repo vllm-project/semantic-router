@@ -224,11 +224,16 @@ export interface DecisionConfig {
   candidateIterations?: unknown
 }
 
+export const ROUTING_STRATEGIES = ['priority', 'confidence'] as const
+export type RoutingStrategy = (typeof ROUTING_STRATEGIES)[number]
+export const DEFAULT_ROUTING_STRATEGY: RoutingStrategy = 'priority'
+
 export interface RoutingConfig {
   modelCards?: RoutingModelCard[]
   signals?: ConfigSignals
   projections?: ConfigProjections
   decisions?: DecisionConfig[]
+  strategy?: RoutingStrategy
 }
 
 export interface EntrypointConfig {
@@ -240,6 +245,7 @@ export interface RecipeRoutingConfig {
   signals?: ConfigSignals
   projections?: ConfigProjections
   decisions?: DecisionConfig[]
+  strategy?: RoutingStrategy
 }
 
 export interface RecipeConfig {

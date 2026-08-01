@@ -110,7 +110,7 @@ func handleRAGRetrievalError(
 ) error {
 	tracing.RecordError(ragSpan, err)
 	ragSpan.SetStatus(codes.Error, err.Error())
-	metrics.RecordRAGRetrieval(ragConfig.Backend, decisionName, "error", latency)
+	metrics.RecordRAGRetrieval(ragConfig.Backend, requestDecisionStateKey(ctx), "error", latency)
 
 	switch ragFailureMode(ragConfig) {
 	case "block":
@@ -147,16 +147,17 @@ func (r *OpenAIRouter) finalizeRAGRetrieval(
 	}
 
 	ragSpan.SetStatus(codes.Ok, "Retrieval successful")
-	metrics.RecordRAGRetrieval(ragConfig.Backend, decisionName, "success", latency)
-	metrics.RecordRAGContextLength(ragConfig.Backend, decisionName, len(retrievedContext))
+	metricDecision := requestDecisionStateKey(ctx)
+	metrics.RecordRAGRetrieval(ragConfig.Backend, metricDecision, "success", latency)
+	metrics.RecordRAGContextLength(ragConfig.Backend, metricDecision, len(retrievedContext))
 	if ctx.RAGSimilarityScore > 0 {
-		metrics.RecordRAGSimilarityScore(ragConfig.Backend, decisionName, ctx.RAGSimilarityScore)
+		metrics.RecordRAGSimilarityScore(ragConfig.Backend, metricDecision, ctx.RAGSimilarityScore)
 	}
 
 	if err := r.injectRAGContext(ctx, retrievedContext, ragConfig); err != nil {
 		logging.Errorf("[RAG] Failed to inject context for decision '%s' (backend=%s): %v",
 			decisionName, ragConfig.Backend, err)
-		metrics.RecordPluginExecution("rag", decisionName, "injection_error", 0)
+		metrics.RecordPluginExecution("rag", metricDecision, "injection_error", 0)
 		return nil
 	}
 
@@ -412,7 +413,7 @@ func (r *OpenAIRouter) resolveRAGPluginConfig(ctx *RequestContext, decisionName 
 
 	if ragConfig.Backend == "" {
 		logging.Warnf("[RAG] Decision '%s' has RAG enabled but no backend configured, skipping", decisionName)
-		metrics.RecordRAGRetrieval("unknown", decisionName, "config_error", 0)
+		metrics.RecordRAGRetrieval("unknown", requestDecisionStateKey(ctx), "config_error", 0)
 		return nil, false
 	}
 

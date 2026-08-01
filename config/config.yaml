@@ -96,6 +96,7 @@ providers:
           weight: 100
 
 routing:
+  strategy: priority
   modelCards:
     - name: qwen3-8b
       param_size: 8B
@@ -1371,6 +1372,7 @@ recipes:
   - name: privacy-first
     description: Keeps privacy-sensitive traffic on the local default-tier model.
     routing:
+      strategy: confidence
       signals:
         keywords:
           - name: privacy_recipe_keywords

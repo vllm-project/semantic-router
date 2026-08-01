@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"strings"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -61,9 +62,9 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 
 	ctx.RequestModel = requestModel
 	ctx.RequestQuery = requestQuery
-	ctx.CacheQuery = cache.ScopeQueryToUser(requestQuery, cacheScopeUserID(ctx))
+	ctx.CacheQuery = cache.ScopeQueryToNamespace(requestQuery, semanticCacheNamespace(ctx))
 
-	cacheEnabled := r.semanticCacheEnabledForScope(categoryName)
+	cacheEnabled := r.semanticCacheEnabledForRequest(ctx)
 
 	if response, shouldReturn := r.performCacheLookup(ctx, categoryName, requestModel, cacheEnabled); shouldReturn {
 		return response, true
@@ -86,11 +87,25 @@ func (r *OpenAIRouter) handleLooperCacheSkip(ctx *RequestContext, categoryName s
 	}
 	ctx.RequestModel = requestModel
 	ctx.RequestQuery = requestQuery
-	ctx.CacheQuery = cache.ScopeQueryToUser(requestQuery, cacheScopeUserID(ctx))
+	ctx.CacheQuery = cache.ScopeQueryToNamespace(requestQuery, semanticCacheNamespace(ctx))
 
-	cacheEnabled := r.semanticCacheEnabledForScope(categoryName)
+	cacheEnabled := r.semanticCacheEnabledForRequest(ctx)
 	r.storePendingCacheRequest(ctx, categoryName, requestModel, cacheEnabled)
 	return nil, false
+}
+
+func semanticCacheNamespace(ctx *RequestContext) string {
+	if ctx == nil {
+		return ""
+	}
+	parts := make([]string, 0, 2)
+	if recipe := strings.TrimSpace(string(ctx.Routing.RecipeName())); recipe != "" {
+		parts = append(parts, "recipe="+recipe)
+	}
+	if userID := strings.TrimSpace(cacheScopeUserID(ctx)); userID != "" {
+		parts = append(parts, "user="+userID)
+	}
+	return strings.Join(parts, "\x1f")
 }
 
 // storePendingCacheRequest adds a pending cache request if caching is enabled for this decision.
@@ -99,7 +114,7 @@ func (r *OpenAIRouter) storePendingCacheRequest(ctx *RequestContext, categoryNam
 	if cacheQuery == "" || !r.Cache.IsEnabled() || !cacheEnabled {
 		return
 	}
-	ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
+	ttlSeconds := r.Config.GetCacheTTLSecondsForDecisionObject(ctx.VSRSelectedDecision)
 	if err := r.Cache.AddPendingRequest(ctx.RequestID, requestModel, cacheQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
 		logging.Errorf("Error adding pending request to cache: %v", err)
 	}
@@ -116,8 +131,8 @@ func (r *OpenAIRouter) performCacheLookup(
 	}
 
 	threshold := r.Config.GetCacheSimilarityThreshold()
-	if categoryName != "" {
-		threshold = r.Config.GetCacheSimilarityThresholdForDecision(categoryName)
+	if ctx.VSRSelectedDecision != nil {
+		threshold = r.Config.GetCacheSimilarityThresholdForDecisionObject(ctx.VSRSelectedDecision)
 	}
 
 	logging.Infof("handleCaching: Performing cache lookup - model=%s, query=%s, threshold=%.2f",
@@ -150,7 +165,7 @@ func (r *OpenAIRouter) performCacheLookup(
 			ctx.VSRSelectedDecisionName = categoryName
 		}
 
-		metrics.RecordCachePluginHit(categoryName, "semantic-cache")
+		metrics.RecordCachePluginHit(requestDecisionStateKey(ctx), "semantic-cache")
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_hit")
 
 		r.startRouterReplay(ctx, requestModel, requestModel, categoryName)
@@ -171,7 +186,7 @@ func (r *OpenAIRouter) performCacheLookup(
 		return response, true
 	} else {
 		ctx.VSRCacheSimilarity = r.Cache.LastSimilarity()
-		metrics.RecordCachePluginMiss(categoryName, "semantic-cache")
+		metrics.RecordCachePluginMiss(requestDecisionStateKey(ctx), "semantic-cache")
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_miss")
 	}
 	ctx.TraceContext = spanCtx
@@ -195,19 +210,19 @@ func (r *OpenAIRouter) createCacheHitResponse(
 		matchedKeywords,
 		similarity,
 	)
-	if !isResponseAPIRequest(ctx) {
-		return response
+	if isResponseAPIRequest(ctx) {
+		if responseAPIResponse, ok := r.createResponseAPICacheHitResponse(
+			ctx,
+			cachedResponse,
+			category,
+			decisionName,
+			matchedKeywords,
+			similarity,
+		); ok {
+			response = responseAPIResponse
+		}
 	}
-	if responseAPIResponse, ok := r.createResponseAPICacheHitResponse(
-		ctx,
-		cachedResponse,
-		category,
-		decisionName,
-		matchedKeywords,
-		similarity,
-	); ok {
-		return responseAPIResponse
-	}
+	appendRecipeHeaderToImmediateResponse(response, ctx)
 	return response
 }
 

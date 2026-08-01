@@ -1,10 +1,11 @@
 package config
 
 import (
+	"strings"
 	"testing"
 )
 
-func TestCanonicalRecipeSignalsMergeIntoGlobalRegistry(t *testing.T) {
+func TestCanonicalRecipeSignalsRemainIsolated(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + recipeTestPrivacyBlockYAML))
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
@@ -14,8 +15,12 @@ func TestCanonicalRecipeSignalsMergeIntoGlobalRegistry(t *testing.T) {
 	for _, rule := range cfg.Signals.KeywordRules {
 		registry[rule.Name] = true
 	}
-	if !registry["urgent_keywords"] || !registry["pii_keywords"] {
-		t.Fatalf("expected the flat signal registry to union all recipes, got %+v", registry)
+	if !registry["urgent_keywords"] || registry["pii_keywords"] {
+		t.Fatalf("expected the flat registry to contain only default signals, got %+v", registry)
+	}
+	privacy, _ := cfg.RecipeByName("privacy")
+	if privacy == nil || len(privacy.Profile.Signals.KeywordRules) != 1 || privacy.Profile.Signals.KeywordRules[0].Name != "pii_keywords" {
+		t.Fatalf("expected the named recipe to own pii_keywords, got %+v", privacy)
 	}
 
 	canonical := CanonicalConfigFromRouterConfig(cfg)
@@ -89,5 +94,73 @@ func TestAllRoutingDecisionsFallsBackToFlatDecisions(t *testing.T) {
 	decisions := cfg.AllRoutingDecisions()
 	if len(decisions) != 1 || decisions[0].Name != "flat_route" {
 		t.Fatalf("expected the flat decisions to back the routing view, got %+v", decisions)
+	}
+}
+
+func TestDefaultRecipeFallsBackToFlatRoutingProfile(t *testing.T) {
+	cfg := &RouterConfig{
+		IntelligentRouting: IntelligentRouting{
+			Signals:   Signals{KeywordRules: []KeywordRule{{Name: "default_signal"}}},
+			Decisions: []Decision{{Name: "default_route"}},
+			Strategy:  "confidence",
+		},
+	}
+
+	recipe := cfg.DefaultRecipe()
+	if recipe == nil {
+		t.Fatal("expected a synthetic default recipe for a flat config")
+	}
+	if recipe.Name != DefaultRecipeName || recipe.Profile.Strategy != RoutingStrategyConfidence {
+		t.Fatalf("unexpected default recipe metadata: %+v", recipe)
+	}
+	if len(recipe.Profile.Signals.KeywordRules) != 1 || recipe.Profile.Signals.KeywordRules[0].Name != "default_signal" {
+		t.Fatalf("expected the flat signals in the default recipe, got %+v", recipe.Profile.Signals)
+	}
+	if len(recipe.Profile.Decisions) != 1 || recipe.Profile.Decisions[0].Name != "default_route" {
+		t.Fatalf("expected the flat decisions in the default recipe, got %+v", recipe.Profile.Decisions)
+	}
+
+	resolved, ok := cfg.RecipeForRoutingModel(DefaultVSRAutoModelName)
+	if !ok || resolved == nil || resolved.Name != DefaultRecipeName {
+		t.Fatalf("expected the auto alias to resolve the synthetic default recipe, got %+v, %v", resolved, ok)
+	}
+}
+
+func TestRoutingNamespaceKeyIsCollisionSafe(t *testing.T) {
+	left := RoutingNamespaceKey("a::b", "c")
+	right := RoutingNamespaceKey("a", "b::c")
+	if left == right {
+		t.Fatalf("distinct recipe/local pairs produced the same key %q", left)
+	}
+	if got := RoutingDecisionKey("privacy-first", "protected_route"); got != "privacy-first::protected_route" {
+		t.Fatalf("simple routing key lost its readable form: %q", got)
+	}
+	if got := RoutingNamespaceScope("a::b"); got != "a%3A%3Ab" {
+		t.Fatalf("routing scope was not escaped for storage: %q", got)
+	}
+}
+
+func TestRecipeRoutingStrategyIsValidatedLocally(t *testing.T) {
+	_, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + `
+recipes:
+  - name: privacy
+    routing:
+      strategy: random
+      decisions:
+        - name: privacy_route
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: urgent_keywords
+          modelRefs:
+            - model: model-b
+              use_reasoning: false
+`))
+	if err == nil {
+		t.Fatal("expected an unsupported recipe strategy to fail validation")
+	}
+	if got := err.Error(); !strings.Contains(got, `routing recipe "privacy"`) || !strings.Contains(got, `routing.strategy must be "priority" or "confidence"`) {
+		t.Fatalf("unexpected validation error: %v", err)
 	}
 }

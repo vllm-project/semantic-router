@@ -8,7 +8,6 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // cachedPIIResult stores a cached PII token classification result.
@@ -69,7 +68,7 @@ func (c *Classifier) evaluatePIISignal(results *SignalResults, mu *sync.Mutex, p
 		results.Metrics.PII.Confidence = 1.0 // Binary: PII found or not
 	}
 
-	metrics.RecordSignalExtraction(config.SignalTypePII, "pii_evaluated", latencySeconds)
+	c.recordSignalExtraction(config.SignalTypePII, "pii_evaluated", latencySeconds)
 	logging.Debugf("[Signal Computation] PII signal evaluation completed in %v", elapsed)
 }
 
@@ -83,8 +82,8 @@ func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUse
 	deniedEntities := findDeniedEntities(entityTypes, rule.PIITypesAllowed)
 
 	if len(deniedEntities) > 0 {
-		metrics.RecordSignalExtraction(config.SignalTypePII, rule.Name, time.Since(start).Seconds())
-		metrics.RecordSignalMatch(config.SignalTypePII, rule.Name)
+		c.recordSignalExtraction(config.SignalTypePII, rule.Name, time.Since(start).Seconds())
+		c.recordSignalMatch(config.SignalTypePII, rule.Name)
 
 		logging.Debugf("[Signal Computation] PII rule %q matched: denied_entities=%v", rule.Name, deniedEntities)
 

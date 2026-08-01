@@ -10,7 +10,7 @@ func TestDecisionEngine_EvaluateDecisions(t *testing.T) {
 	tests := []struct {
 		name                  string
 		decisions             []config.Decision
-		strategy              string
+		strategy              config.RoutingStrategy
 		matchedKeywordRules   []string
 		matchedEmbeddingRules []string
 		matchedDomainRules    []string
@@ -495,19 +495,19 @@ func TestDecisionEngine_EvaluateDecisionsWithNOTOperator(t *testing.T) {
 	}
 }
 
-func TestDecisionEngine_LatencyConditionIsIgnored(t *testing.T) {
+func TestDecisionEngine_UnsupportedConditionDoesNotMatch(t *testing.T) {
 	engine := NewDecisionEngine(
 		[]config.KeywordRule{},
 		[]config.EmbeddingRule{},
 		[]config.Category{},
 		[]config.Decision{
 			{
-				Name:     "legacy-latency",
+				Name:     "unsupported-signal",
 				Priority: 10,
 				Rules: config.RuleCombination{
 					Operator: "AND",
 					Conditions: []config.RuleCondition{
-						{Type: "latency", Name: "low_latency"},
+						{Type: "unsupported", Name: "unknown"},
 					},
 				},
 			},

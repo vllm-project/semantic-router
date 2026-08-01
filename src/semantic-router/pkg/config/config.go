@@ -82,8 +82,10 @@ type RouterConfig struct {
 	IntelligentRouting `yaml:",inline"`
 	Entrypoints        []EntrypointMapping `yaml:"-"`
 	Recipes            []RoutingRecipe     `yaml:"-"`
-	BackendModels      `yaml:",inline"`
-	ToolSelection      `yaml:",inline"`
+	// RoutingScope is populated only on immutable recipe views.
+	RoutingScope  RecipeName `yaml:"-"`
+	BackendModels `yaml:",inline"`
+	ToolSelection `yaml:",inline"`
 
 	Authz         AuthzConfig         `yaml:"authz,omitempty"`
 	RateLimit     RateLimitConfig     `yaml:"ratelimit,omitempty"`
@@ -210,7 +212,7 @@ type IntelligentRouting struct {
 	Signals         `yaml:",inline"`
 	Projections     Projections          `yaml:"projections,omitempty"`
 	Decisions       []Decision           `yaml:"decisions,omitempty"`
-	Strategy        string               `yaml:"strategy,omitempty"`
+	Strategy        RoutingStrategy      `yaml:"strategy,omitempty"`
 	ModelSelection  ModelSelectionConfig `yaml:"model_selection,omitempty"`
 	ReasoningConfig `yaml:",inline"`
 }

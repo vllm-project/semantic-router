@@ -14,6 +14,7 @@ import {
   getRecipeByName,
   getRecipeDeleteBlocker,
   getRecipeNames,
+  normalizeRecipeStrategy,
   type EntrypointFormState,
   type RecipeFormState,
   validateEntrypointForm,
@@ -25,6 +26,7 @@ import type {
   NormalizedModel,
   RecipeConfig,
 } from './configPageSupport'
+import { DEFAULT_ROUTING_STRATEGY, ROUTING_STRATEGIES } from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 
 interface ConfigPageEntrypointsRecipesSectionProps {
@@ -136,6 +138,9 @@ export default function ConfigPageEntrypointsRecipesSection({
     const form: RecipeFormState = {
       name: recipe?.name ?? '',
       description: recipe?.description ?? '',
+      strategy: normalizeRecipeStrategy(
+        recipe?.routing.strategy ?? config.global?.router?.strategy,
+      ),
       decisions: recipe ? cloneDecisions(recipe) : [],
     }
     const fields: FieldConfig<RecipeFormState>[] = [
@@ -152,6 +157,14 @@ export default function ConfigPageEntrypointsRecipesSection({
         label: 'Description',
         type: 'textarea',
         placeholder: 'Explain the objective and model allocation policy.',
+      },
+      {
+        name: 'strategy',
+        label: 'Decision strategy',
+        type: 'select',
+        required: true,
+        options: [...ROUTING_STRATEGIES],
+        description: 'How this recipe chooses among matching decisions.',
       },
       {
         name: 'decisions',
@@ -234,6 +247,10 @@ export default function ConfigPageEntrypointsRecipesSection({
               fullWidth: true,
             },
             { label: 'Entrypoint models', value: countRecipeEntrypoints(entrypoints, recipe.name) },
+            {
+              label: 'Decision strategy',
+              value: recipe.routing.strategy ?? DEFAULT_ROUTING_STRATEGY,
+            },
             { label: 'Decisions', value: recipe.routing.decisions?.length ?? 0 },
             { label: 'Signals', value: Object.values(recipe.routing.signals ?? {}).flat().length },
             { label: 'Projections', value: Object.keys(recipe.routing.projections ?? {}).length },

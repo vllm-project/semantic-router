@@ -20,7 +20,7 @@ type CanonicalGlobal struct {
 // CanonicalRouterGlobal captures router-engine control knobs.
 type CanonicalRouterGlobal struct {
 	ConfigSource              ConfigSource          `yaml:"config_source,omitempty"`
-	Strategy                  string                `yaml:"strategy,omitempty"`
+	Strategy                  RoutingStrategy       `yaml:"strategy,omitempty"`
 	AutoModelName             string                `yaml:"auto_model_name,omitempty"`
 	AutoModelNames            *[]string             `yaml:"auto_model_names,omitempty"`
 	IncludeConfigModelsInList bool                  `yaml:"include_config_models_in_list"`

@@ -2804,7 +2804,7 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 			}
 
 			// Call the function under test
-			modifiedBytes, err := router.setReasoningModeToRequestBody(requestBytes, tc.enabled, "test-category")
+			modifiedBytes, err := router.setReasoningModeToRequestBody(requestBytes, tc.enabled, router.Config.GetDecisionByName("test-category"))
 			if err != nil {
 				t.Fatalf("setReasoningModeToRequestBody failed: %v", err)
 			}
@@ -2986,7 +2986,7 @@ func TestAddReasoningModeToRequestBody(_ *testing.T) {
 	fmt.Printf("Original request body:\n%s\n\n", string(originalBody))
 
 	// Add reasoning mode
-	modifiedBody, err := router.setReasoningModeToRequestBody(originalBody, true, "math")
+	modifiedBody, err := router.setReasoningModeToRequestBody(originalBody, true, router.Config.GetDecisionByName("math"))
 	if err != nil {
 		fmt.Printf("Error adding reasoning mode: %v\n", err)
 		return
@@ -3034,7 +3034,7 @@ func TestAddReasoningModeToRequestBody(_ *testing.T) {
 	fmt.Printf("Original deepseek request:\n%s\n\n", string(deepseekBody))
 
 	// Add reasoning mode to DeepSeek model
-	modifiedDeepseekBody, err := router.setReasoningModeToRequestBody(deepseekBody, true, "math")
+	modifiedDeepseekBody, err := router.setReasoningModeToRequestBody(deepseekBody, true, router.Config.GetDecisionByName("math"))
 	if err != nil {
 		fmt.Printf("Error adding reasoning mode to deepseek: %v\n", err)
 		return
@@ -3086,7 +3086,7 @@ func TestAddReasoningModeToRequestBody(_ *testing.T) {
 		return
 	}
 
-	modifiedComplexBody, err := router.setReasoningModeToRequestBody(complexBody, true, "chemistry")
+	modifiedComplexBody, err := router.setReasoningModeToRequestBody(complexBody, true, router.Config.GetDecisionByName("chemistry"))
 	if err != nil {
 		fmt.Printf("Error adding reasoning mode to complex request: %v\n", err)
 		return

@@ -28,7 +28,7 @@ func assertUnifiedEntrypointMappings(t *testing.T, cfg *RouterConfig) {
 	if len(cfg.Recipes) != len(expectedEntrypoints)+1 {
 		t.Fatalf("normalized recipe count = %d, want %d named recipes plus internal default", len(cfg.Recipes), len(expectedEntrypoints))
 	}
-	if defaultRecipe := cfg.DefaultRecipe(); defaultRecipe == nil || len(defaultRecipe.Decisions) != 0 {
+	if defaultRecipe := cfg.DefaultRecipe(); defaultRecipe == nil || len(defaultRecipe.Profile.Decisions) != 0 {
 		t.Fatalf("expected decisionless internal default recipe, got %+v", defaultRecipe)
 	}
 	if cfg.AutoModelNames == nil || len(cfg.EffectiveAutoModelNames()) != 0 {
@@ -39,10 +39,10 @@ func assertUnifiedEntrypointMappings(t *testing.T, cfg *RouterConfig) {
 		if !ok {
 			t.Fatalf("entrypoint %q did not resolve", modelName)
 		}
-		if recipe.Name != recipeName {
+		if recipe.Name != RecipeName(recipeName) {
 			t.Fatalf("entrypoint %q resolved to %q, want %q", modelName, recipe.Name, recipeName)
 		}
-		if len(recipe.Decisions) == 0 {
+		if len(recipe.Profile.Decisions) == 0 {
 			t.Fatalf("entrypoint %q resolved to a recipe without decisions", modelName)
 		}
 	}
@@ -78,7 +78,7 @@ func assertUnifiedObjectiveRecipes(t *testing.T, cfg *RouterConfig) {
 func assertUnifiedEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	speed, _ := cfg.RecipeByName("speed-first")
-	speedAlgorithm := speed.Decisions[0].Algorithm
+	speedAlgorithm := speed.Profile.Decisions[0].Algorithm
 	if speedAlgorithm == nil || speedAlgorithm.Type != "multi_factor" ||
 		speedAlgorithm.MultiFactor == nil || speedAlgorithm.MultiFactor.Weights == nil ||
 		speedAlgorithm.MultiFactor.Weights.Latency != 0.85 {
@@ -86,7 +86,7 @@ func assertUnifiedEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 	}
 
 	cost, _ := cfg.RecipeByName("cost-first")
-	if refs := cost.Decisions[0].ModelRefs; len(refs) != 1 || refs[0].Model != "qwen/qwen3.5-rocm" {
+	if refs := cost.Profile.Decisions[0].ModelRefs; len(refs) != 1 || refs[0].Model != "qwen/qwen3.5-rocm" {
 		t.Fatalf("cost-first recipe must remain on the self-hosted model: %+v", refs)
 	}
 }
@@ -94,7 +94,7 @@ func assertUnifiedEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 func assertUnifiedAccuracyRecipe(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	accuracy, _ := cfg.RecipeByName("accuracy-first")
-	accuracyAlgorithm := accuracy.Decisions[0].Algorithm
+	accuracyAlgorithm := accuracy.Profile.Decisions[0].Algorithm
 	if accuracyAlgorithm == nil || accuracyAlgorithm.MultiFactor == nil ||
 		accuracyAlgorithm.MultiFactor.Weights == nil ||
 		accuracyAlgorithm.MultiFactor.Weights.Quality != 1.0 {
@@ -105,10 +105,10 @@ func assertUnifiedAccuracyRecipe(t *testing.T, cfg *RouterConfig) {
 func assertUnifiedPrivacyRecipe(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	privacy, _ := cfg.RecipeByName("privacy-first")
-	if len(privacy.Signals.JailbreakRules) != 1 || len(privacy.Signals.PIIRules) != 1 {
-		t.Fatalf("privacy-first recipe must keep jailbreak and PII signals: %+v", privacy.Signals)
+	if len(privacy.Profile.Signals.JailbreakRules) != 1 || len(privacy.Profile.Signals.PIIRules) != 1 {
+		t.Fatalf("privacy-first recipe must keep jailbreak and PII signals: %+v", privacy.Profile.Signals)
 	}
-	for _, decision := range privacy.Decisions {
+	for _, decision := range privacy.Profile.Decisions {
 		for _, ref := range decision.ModelRefs {
 			if ref.Model != "qwen/qwen3.5-rocm" {
 				t.Fatalf("privacy-first decision %q routes to non-local model %q", decision.Name, ref.Model)

@@ -12,6 +12,8 @@ version:
 listeners:
 providers:
 routing:
+entrypoints:
+recipes:
 global:
 ```
 
@@ -35,11 +37,13 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `routing.signals`
   - `routing.projections` for partitions plus derived routing outputs
   - `routing.decisions`
+  - `routing.strategy` (`priority` or `confidence`)
 - `entrypoints` and `recipes` own multi-profile routing.
   - `entrypoints[].model_names` are request-facing virtual model names; they behave like auto-model aliases, never reach a backend, and are listed by `/v1/models`
   - `entrypoints[].recipe` selects which recipe evaluates matching requests
-  - `recipes[].routing` carries the same profile shape as the top-level `routing` block (`signals`, `projections`, `decisions`) but never `modelCards`: the model catalog stays shared
-  - signal and projection names share one global registry across recipes; a name declared by two profiles fails validation
+  - `recipes[].routing` carries the same profile shape as the top-level `routing` block (`signals`, `projections`, `decisions`, `strategy`) but never `modelCards`: the model catalog stays shared
+  - each recipe is an isolation boundary: signal, projection, and decision names are local; references cannot cross recipes; PII, jailbreak, authorization role bindings, algorithms, and route plugins run only in the selected recipe
+  - cache, replay, learning/session state, selector state, handoff penalties, and routing metrics are namespaced by recipe even when two recipes reuse the same local name
   - a recipe named `default` is only valid when the top-level `routing` block carries no profile of its own
 - `providers` owns deployment and default-selection metadata.
   - `defaults`
@@ -98,6 +102,7 @@ providers:
           api_key_env: OPENAI_API_KEY
 
 routing:
+  strategy: priority
   modelCards:
     - name: qwen3-8b
       modality: text
@@ -195,6 +200,7 @@ recipes:
   - name: privacy-first
     description: Keep privacy-sensitive prompts on the local model.
     routing:
+      strategy: confidence
       signals:
         keywords:
           - name: privacy_terms
@@ -235,10 +241,19 @@ post-selection side effects.
 `entrypoints` and `recipes` are the optional multi-profile layer above
 `routing`. The top-level `routing` block is the `default` recipe; each
 additional recipe carries its own `signals`, `projections`, and `decisions`
-under the same shape, while `modelCards` and `providers` stay shared. A request
-whose model name matches an entrypoint is routed by that recipe's decisions and
-never forwarded under the virtual name; requests using `vllm-sr/auto` or a
-concrete model name keep the default profile behavior.
+and `strategy` under the same shape, while `modelCards`, providers, model
+assets, and storage/service infrastructure stay shared. A request whose model
+name matches an entrypoint is routed only by that recipe and is never forwarded
+under the virtual name. `vllm-sr/auto` and other auto aliases select the
+`default` recipe. A concrete model or LoRA request bypasses recipe evaluation
+and recipe-local plugin/state mutation, then uses only the shared provider and
+service path needed to reach that backend.
+
+Local names may repeat across recipes. Validation resolves every decision and
+projection reference inside its owning recipe, so a reference that exists only
+in another recipe is an error. Shared PII/jailbreak model artifacts and authz
+identity extraction are infrastructure; the rules, thresholds, and role
+bindings that affect routing remain recipe-local.
 
 For `routing.signals.structure`, `feature.type: density` now uses built-in multilingual text-unit normalization. The router counts each CJK character as one unit, counts contiguous runs of other letters and digits as one unit, and ignores punctuation, so the same density rule shape behaves consistently across English, Chinese, and mixed-script prompts without a separate `normalize_by` field.
 

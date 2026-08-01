@@ -21,6 +21,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
@@ -115,14 +116,15 @@ func (b *Builder) deriveQualityGaps(records []store.Record, batch map[Key]Entry,
 		if r.Category == "" || r.SelectedModel == "" || r.ConfidenceScore == 0 {
 			continue
 		}
-		if _, ok := acc[r.Category]; !ok {
-			acc[r.Category] = make(map[string]*scoreAcc)
+		category := config.RoutingNamespaceKey(config.RecipeName(r.Recipe), r.Category)
+		if _, ok := acc[category]; !ok {
+			acc[category] = make(map[string]*scoreAcc)
 		}
-		if _, ok := acc[r.Category][r.SelectedModel]; !ok {
-			acc[r.Category][r.SelectedModel] = &scoreAcc{}
+		if _, ok := acc[category][r.SelectedModel]; !ok {
+			acc[category][r.SelectedModel] = &scoreAcc{}
 		}
-		acc[r.Category][r.SelectedModel].sum += r.ConfidenceScore
-		acc[r.Category][r.SelectedModel].n++
+		acc[category][r.SelectedModel].sum += r.ConfidenceScore
+		acc[category][r.SelectedModel].n++
 	}
 
 	for category, models := range acc {
@@ -164,7 +166,8 @@ func groupIntoSessions(records []store.Record) [][]store.Record {
 	// Group by Decision first.
 	byDecision := make(map[string][]store.Record)
 	for _, r := range records {
-		byDecision[r.Decision] = append(byDecision[r.Decision], r)
+		decision := config.RoutingDecisionKey(config.RecipeName(r.Recipe), r.Decision)
+		byDecision[decision] = append(byDecision[decision], r)
 	}
 
 	var sessions [][]store.Record
@@ -198,7 +201,7 @@ func (b *Builder) deriveHandoffPenalties(records []store.Record, batch map[Key]E
 		ema float64
 		n   int
 	}
-	acc := make(map[[2]string]*switchAcc)
+	acc := make(map[[3]string]*switchAcc)
 
 	for _, recs := range sessions {
 		for i := 1; i < len(recs); i++ {
@@ -215,7 +218,11 @@ func (b *Builder) deriveHandoffPenalties(records []store.Record, batch map[Key]E
 			if !ok {
 				continue
 			}
-			pair := [2]string{prev.SelectedModel, cur.SelectedModel}
+			scope := prev.Recipe
+			if scope == string(config.DefaultRecipeName) {
+				scope = ""
+			}
+			pair := [3]string{scope, prev.SelectedModel, cur.SelectedModel}
 			if _, ok := acc[pair]; !ok {
 				acc[pair] = &switchAcc{ema: delta}
 			} else {
@@ -226,7 +233,7 @@ func (b *Builder) deriveHandoffPenalties(records []store.Record, batch map[Key]E
 	}
 
 	for pair, a := range acc {
-		key := HandoffPenaltyKey(pair[0], pair[1])
+		key := ScopedHandoffPenaltyKey(pair[0], pair[1], pair[2])
 		batch[key] = Entry{
 			Value:             a.ema,
 			Source:            SourceReplayDerived,
@@ -257,7 +264,7 @@ func (b *Builder) deriveRemainingTurnPriors(records []store.Record, batch map[Ke
 		seen := make(map[string]bool)
 		for _, r := range recs {
 			if r.Category != "" {
-				seen[r.Category] = true
+				seen[config.RoutingNamespaceKey(config.RecipeName(r.Recipe), r.Category)] = true
 			}
 		}
 		for cat := range seen {

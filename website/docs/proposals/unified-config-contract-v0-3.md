@@ -102,11 +102,13 @@ recipes:
       signals: {}
       projections: {}
       decisions: []
+      strategy: priority
 ```
 
 - the top-level `routing` block is the `default` recipe; `recipes[]` adds named additional profiles
-- each `recipes[].routing` block keeps the recipe-level profile shape — `signals`, `projections`, `decisions` — and never owns `modelCards` or provider bindings
-- signal and projection names share one global registry across recipes, so one classifier evaluates any recipe's rules and cross-recipe name collisions fail validation
+- each `recipes[].routing` block keeps the complete recipe-level profile shape — `signals`, `projections`, `decisions`, and `strategy` — and never owns `modelCards` or provider bindings
+- signals (including PII, jailbreak, and authz role bindings), projections, decisions, algorithms, and route plugins are recipe-local; local names may repeat, references cannot cross recipes, and request/runtime state is namespaced by recipe
+- model cards, provider bindings, model assets, and service/store infrastructure remain shared without turning their consuming policy into global policy
 - `entrypoints[]` maps request-facing virtual model names onto recipes; the names behave like auto-model aliases, are listed by `/v1/models`, and never reach a backend
 - a recipe named `default` is only valid when the top-level `routing` block carries no profile of its own, so single-profile configs keep working unchanged
 

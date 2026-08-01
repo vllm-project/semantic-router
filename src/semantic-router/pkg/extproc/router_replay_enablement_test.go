@@ -5,6 +5,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
 func TestInitializeReplayRecordersUsesGlobalReplayDefault(t *testing.T) {
@@ -41,16 +42,39 @@ func TestInitializeReplayRecordersIncludesNamedRecipeDecisions(t *testing.T) {
 		Recipes: []config.RoutingRecipe{
 			{
 				Name: "balanced",
-				Decisions: []config.Decision{
-					{Name: "balanced-route", ModelRefs: []config.ModelRef{{Model: "m"}}},
-				},
+				Profile: config.RoutingProfile{Decisions: []config.Decision{
+					{Name: "shared-route", ModelRefs: []config.ModelRef{{Model: "m"}}},
+				}},
+			},
+			{
+				Name: "speed",
+				Profile: config.RoutingProfile{Decisions: []config.Decision{
+					{Name: "shared-route", ModelRefs: []config.ModelRef{{Model: "m"}}},
+				}},
 			},
 		},
 	}
 
 	recorders := initializeReplayRecorders(cfg)
-	if _, ok := recorders["balanced-route"]; !ok {
-		t.Fatalf("expected replay recorder for named-recipe decision")
+	for _, key := range []string{"balanced::shared-route", "speed::shared-route"} {
+		if _, ok := recorders[key]; !ok {
+			t.Fatalf("expected isolated replay recorder %q, got keys %+v", key, recorders)
+		}
+	}
+}
+
+func TestNamedRecipeRecorderNeverFallsBackToBareDecisionKey(t *testing.T) {
+	bareRecorder := new(routerreplay.Recorder)
+	router := &OpenAIRouter{
+		ReplayRecorders: map[string]*routerreplay.Recorder{
+			"shared-route": bareRecorder,
+		},
+	}
+	ctx := &RequestContext{}
+	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: "privacy"})
+
+	if recorder := router.resolveReplayRecorder(ctx, "shared-route"); recorder != nil {
+		t.Fatal("named recipe must not reuse a bare/default-recipe recorder")
 	}
 }
 
@@ -127,7 +151,7 @@ func TestResolveReplayStoreBackend(t *testing.T) {
 			want: "qdrant",
 		},
 		{
-			name: "empty config remains memory compatibility fallback",
+			name: "empty config defaults to memory",
 			cfg:  config.RouterReplayConfig{},
 			want: "memory",
 		},

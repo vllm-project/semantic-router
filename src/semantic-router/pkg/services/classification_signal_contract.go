@@ -20,12 +20,12 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	s.configMutex.RLock()
 	defer s.configMutex.RUnlock()
 
-	candidates, recipeName, err := s.evalDecisionCandidates(req.Model)
+	classifier, candidates, recipeName, err := s.evalRoutingScope(req.Model)
 	if err != nil {
 		return nil, err
 	}
 
-	if s.classifier == nil {
+	if classifier == nil {
 		return &EvalResponse{
 			OriginalText:   input.evaluationText,
 			RequestedModel: strings.TrimSpace(req.Model),
@@ -35,7 +35,7 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	}
 
 	wantTrace := req.Options != nil && req.Options.Trace
-	signals := s.classifier.EvaluateAllSignalsWithContext(
+	signals := classifier.EvaluateAllSignalsWithContext(
 		input.evaluationText,
 		input.contextText,
 		input.currentUserText,
@@ -52,7 +52,7 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	var decisionResult *decision.DecisionResult
 	var traces []decision.DecisionTrace
 	if len(candidates) > 0 {
-		decisionResult, traces = s.evaluateIntentDecision(signals, candidates, wantTrace)
+		decisionResult, traces = s.evaluateIntentDecision(classifier, signals, candidates, wantTrace)
 	}
 
 	resp := s.buildEvalResponse(input.evaluationText, signals, decisionResult)
@@ -63,19 +63,20 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 }
 
 func (s *ClassificationService) evaluateIntentDecision(
+	classifier *classification.Classifier,
 	signals *classification.SignalResults,
 	candidates []config.Decision,
 	wantTrace bool,
 ) (*decision.DecisionResult, []decision.DecisionTrace) {
 	if !wantTrace {
-		decisionResult, err := s.classifier.EvaluateDecisionWithEngineForDecisions(signals, candidates)
+		decisionResult, err := classifier.EvaluateDecisionWithEngineForDecisions(signals, candidates)
 		if err != nil && !strings.Contains(err.Error(), "no decisions configured") {
 			logging.Warnf("Decision evaluation failed: %v", err)
 		}
 		return decisionResult, nil
 	}
 
-	decisionResult, traces, err := s.classifier.EvaluateDecisionWithEngineAndTraceForDecisions(
+	decisionResult, traces, err := classifier.EvaluateDecisionWithEngineAndTraceForDecisions(
 		signals,
 		candidates,
 	)
@@ -85,16 +86,25 @@ func (s *ClassificationService) evaluateIntentDecision(
 	return decisionResult, traces
 }
 
-func (s *ClassificationService) evalDecisionCandidates(modelName string) ([]config.Decision, string, error) {
+func (s *ClassificationService) evalRoutingScope(modelName string) (*classification.Classifier, []config.Decision, config.RecipeName, error) {
 	if s.config == nil {
-		return nil, "", nil
+		return s.classifier, nil, "", nil
 	}
 	trimmed := strings.TrimSpace(modelName)
-	if trimmed == "" || s.config.IsAutoModelName(trimmed) {
-		return s.config.Decisions, config.DefaultRecipeName, nil
+	if trimmed == "" {
+		trimmed = config.DefaultVSRAutoModelName
 	}
-	if recipe, ok := s.config.RecipeForRequestModel(trimmed); ok {
-		return recipe.Decisions, recipe.Name, nil
+	recipe, ok := s.config.RecipeForRoutingModel(trimmed)
+	if !ok {
+		return nil, nil, "", fmt.Errorf("%w %q", ErrUnknownRoutingModel, trimmed)
 	}
-	return nil, "", fmt.Errorf("%w %q", ErrUnknownRoutingModel, trimmed)
+	classifier := s.classifier
+	if s.recipeClassifiers != nil {
+		var found bool
+		classifier, found = s.recipeClassifiers.ForRecipe(recipe.Name)
+		if !found {
+			return nil, nil, "", fmt.Errorf("classifier for routing recipe %q is unavailable", recipe.Name)
+		}
+	}
+	return classifier, recipe.Profile.Decisions, recipe.Name, nil
 }

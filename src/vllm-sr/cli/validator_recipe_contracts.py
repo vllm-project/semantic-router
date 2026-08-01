@@ -1,13 +1,8 @@
 """Recipe, entrypoint, and global profile contract validation."""
 
+from cli.config_contract import iter_routing_profiles
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
-
-
-def _iter_profile_decisions(config: UserConfig):
-    yield from config.decisions
-    for recipe in config.recipes:
-        yield from recipe.routing.decisions
 
 
 def _iter_condition_nodes(conditions):
@@ -31,19 +26,9 @@ def validate_domain_references(config: UserConfig) -> list[ValidationError]:
         list: List of validation errors
     """
     errors = []
-    profiles = [
-        ("default", config.signals.domains or [], config.decisions),
-        *[
-            (
-                recipe.name,
-                recipe.routing.signals.domains or [],
-                recipe.routing.decisions,
-            )
-            for recipe in config.recipes
-        ],
-    ]
-    domain_registry: dict[str, tuple[str, dict]] = {}
-    for profile_name, domains, decisions in profiles:
+    for profile_name, routing in iter_routing_profiles(config):
+        domains = routing.signals.domains or []
+        decisions = routing.decisions
         effective_domains = [
             domain.model_dump(mode="json", exclude_none=True) for domain in domains
         ]
@@ -62,30 +47,16 @@ def validate_domain_references(config: UserConfig) -> list[ValidationError]:
                 }
                 for name in sorted(generated_names)
             ]
-        for domain in effective_domains:
-            name = domain["name"]
-            if name in domain_registry:
-                owner, existing = domain_registry[name]
-                if domain != existing:
-                    errors.append(
-                        ValidationError(
-                            f"Domain '{name}' has conflicting definitions in "
-                            f"'{owner}' and '{profile_name}' profiles",
-                            field=f"recipes.{profile_name}.routing.signals.domains",
-                        )
-                    )
-            else:
-                domain_registry[name] = (profile_name, domain)
-
-    for _, _, decisions in profiles:
+        domain_names = {domain["name"] for domain in effective_domains}
         for decision in decisions:
             for condition in _iter_condition_nodes(decision.rules.conditions):
-                if condition.type == "domain" and condition.name not in domain_registry:
+                if condition.type == "domain" and condition.name not in domain_names:
                     errors.append(
                         ValidationError(
-                            f"Decision '{decision.name}' references unknown domain "
+                            f"Decision '{decision.name}' in recipe '{profile_name}' "
+                            "references unknown domain "
                             f"'{condition.name}'",
-                            field=f"decisions.{decision.name}.rules.conditions",
+                            field=f"recipes.{profile_name}.routing.decisions.{decision.name}.rules.conditions",
                         )
                     )
 
@@ -102,6 +73,7 @@ def _recipe_name_contract(
             exclude_defaults=True, exclude_none=True
         )
         or config.routing.decisions
+        or config.routing.strategy is not None
     )
     recipe_names = {"default"}
     explicit_default_seen = False
@@ -122,34 +94,6 @@ def _recipe_name_contract(
             explicit_default_seen = True
         recipe_names.add(recipe.name)
     return recipe_names, errors
-
-
-def _global_signal_contract(config: UserConfig) -> list[ValidationError]:
-    errors: list[ValidationError] = []
-    owners: dict[tuple[str, str], tuple[str, dict]] = {}
-    profiles = [("default", config.signals)]
-    profiles.extend((recipe.name, recipe.routing.signals) for recipe in config.recipes)
-    for profile_name, signals in profiles:
-        for family in type(signals).model_fields:
-            for signal in getattr(signals, family, None) or []:
-                name = getattr(signal, "name", "")
-                if not name:
-                    continue
-                key = (family, name)
-                definition = signal.model_dump(mode="json", exclude_none=True)
-                if key not in owners:
-                    owners[key] = (profile_name, definition)
-                    continue
-                owner, owner_definition = owners[key]
-                if definition != owner_definition:
-                    errors.append(
-                        ValidationError(
-                            f"Signal '{name}' in family '{family}' has conflicting "
-                            f"definitions in '{owner}' and '{profile_name}' profiles",
-                            field=f"recipes.{profile_name}.routing.signals.{family}",
-                        )
-                    )
-    return errors
 
 
 def _optional_mapping(
@@ -297,27 +241,9 @@ def _validate_entrypoints(
     return errors
 
 
-def _validate_global_decision_names(config: UserConfig) -> list[ValidationError]:
-    errors: list[ValidationError] = []
-    decision_names: set[str] = set()
-    for decision in _iter_profile_decisions(config):
-        if decision.name in decision_names:
-            errors.append(
-                ValidationError(
-                    f"Decision name '{decision.name}' is used by more than one "
-                    "routing profile",
-                    field=f"decisions.{decision.name}",
-                )
-            )
-        decision_names.add(decision.name)
-    return errors
-
-
 def validate_recipe_contracts(config: UserConfig) -> list[ValidationError]:
     recipe_names, errors = _recipe_name_contract(config)
-    errors.extend(_global_signal_contract(config))
     reserved_models, alias_errors = _reserved_routing_models(config)
     errors.extend(alias_errors)
     errors.extend(_validate_entrypoints(config, recipe_names, reserved_models))
-    errors.extend(_validate_global_decision_names(config))
     return errors

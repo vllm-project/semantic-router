@@ -53,7 +53,7 @@ type OpenAIModelList struct {
 func NewOpenAIModelList(cfg *config.RouterConfig, created int64) OpenAIModelList {
 	builder := modelListBuilder{
 		created: created,
-		seen:    map[string]bool{},
+		seen:    map[string]struct{}{},
 	}
 	builder.appendAutoAliases(cfg)
 	builder.appendEntrypointAliases(cfg)
@@ -69,7 +69,7 @@ func NewOpenAIModelList(cfg *config.RouterConfig, created int64) OpenAIModelList
 type modelListBuilder struct {
 	created int64
 	models  []OpenAIModel
-	seen    map[string]bool
+	seen    map[string]struct{}
 }
 
 func (b *modelListBuilder) appendAutoAliases(cfg *config.RouterConfig) {
@@ -137,10 +137,10 @@ func (b *modelListBuilder) append(
 	description string,
 	routing RoutingMetadata,
 ) {
-	if id == "" || b.seen[id] {
+	if _, exists := b.seen[id]; id == "" || exists {
 		return
 	}
-	b.seen[id] = true
+	b.seen[id] = struct{}{}
 	b.models = append(b.models, OpenAIModel{
 		ID:          id,
 		Object:      "model",

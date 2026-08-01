@@ -6,6 +6,13 @@ import (
 )
 
 func validateRouterLearningConfig(cfg *RouterConfig) error {
+	if err := validateGlobalRouterLearningConfig(cfg); err != nil {
+		return err
+	}
+	return validateDecisionRouterLearningConfig(cfg)
+}
+
+func validateGlobalRouterLearningConfig(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
@@ -14,6 +21,13 @@ func validateRouterLearningConfig(cfg *RouterConfig) error {
 	}
 	if err := validateRouterLearningProtectionConfig(cfg.RouterLearning.Protection); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateDecisionRouterLearningConfig(cfg *RouterConfig) error {
+	if cfg == nil {
+		return nil
 	}
 	for _, decision := range cfg.Decisions {
 		if err := validateDecisionAdaptationsConfig(decision.Name, decision.Adaptations); err != nil {

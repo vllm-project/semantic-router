@@ -99,6 +99,18 @@ def test_recipes_only_default_profile_is_allowed():
     assert not any("unknown recipe 'default'" in error.message for error in errors)
 
 
+def test_explicit_default_recipe_conflicts_with_top_level_strategy():
+    config = recipe_config()
+    config.routing.decisions = []
+    config.routing.strategy = "priority"
+    config.recipes[0].name = "default"
+    config.entrypoints[0].recipe = "default"
+
+    errors = validate_user_config(config)
+
+    assert any("Duplicate recipe name 'default'" in error.message for error in errors)
+
+
 def test_decision_adaptation_mode_boundaries_apply_inside_recipes():
     with pytest.raises(PydanticValidationError, match="cannot be 'apply'"):
         DecisionAdaptationsConfig(
@@ -141,7 +153,7 @@ def test_entrypoint_identifiers_are_trimmed_and_deduplicated():
         )
 
 
-def test_duplicate_signals_across_recipes_are_rejected():
+def test_duplicate_signal_names_are_isolated_across_recipes():
     config = recipe_config()
     config.routing.signals.keywords = [
         KeywordSignal(
@@ -162,7 +174,7 @@ def test_duplicate_signals_across_recipes_are_rejected():
 
     errors = validate_user_config(config)
 
-    assert any("conflicting definitions" in error.message for error in errors)
+    assert not any("shared-keyword" in error.message for error in errors)
 
 
 def test_identical_signals_can_be_shared_across_recipes():
@@ -179,6 +191,61 @@ def test_identical_signals_can_be_shared_across_recipes():
     errors = validate_user_config(config)
 
     assert not any("shared-keyword" in error.message for error in errors)
+
+
+def test_signal_references_cannot_cross_recipe_boundaries():
+    config = recipe_config()
+    config.recipes[0].routing.signals.keywords = [
+        KeywordSignal(
+            name="private-only",
+            operator="OR",
+            keywords=["private"],
+            case_sensitive=False,
+        )
+    ]
+    config.routing.decisions[0].rules.conditions = [
+        Condition(type="keyword", name="private-only")
+    ]
+
+    errors = validate_user_config(config)
+
+    assert any(
+        "recipe 'default'" in error.message
+        and "unknown signal 'private-only'" in error.message
+        for error in errors
+    )
+
+
+def test_signal_references_cannot_cross_signal_families():
+    config = recipe_config()
+    config.routing.signals.keywords = [
+        KeywordSignal(
+            name="shared-name",
+            operator="OR",
+            keywords=["shared"],
+            case_sensitive=False,
+        )
+    ]
+    config.routing.decisions[0].rules.conditions = [
+        Condition(type="authz", name="shared-name")
+    ]
+
+    errors = validate_user_config(config)
+
+    assert any(
+        "recipe 'default'" in error.message
+        and "unknown signal 'shared-name'" in error.message
+        for error in errors
+    )
+
+
+def test_decision_names_can_repeat_across_recipes():
+    config = recipe_config()
+    config.recipes[0].routing.decisions[0].name = "default-route"
+
+    errors = validate_user_config(config)
+
+    assert not any("more than one routing profile" in error.message for error in errors)
 
 
 def test_default_looper_aliases_are_reserved_for_entrypoints():
@@ -252,7 +319,7 @@ def test_configured_model_names_keep_exact_collision_semantics():
     )
 
 
-def test_projection_dependencies_can_cross_recipe_profiles():
+def test_projection_dependencies_cannot_cross_recipe_profiles():
     config = recipe_config()
     config.routing.projections.scores = [
         ProjectionScore(name="base-score", method="weighted_sum", inputs=[])
@@ -274,10 +341,10 @@ def test_projection_dependencies_can_cross_recipe_profiles():
 
     errors = validate_user_config(config)
 
-    assert not any("undefined score" in error.message for error in errors)
+    assert any("undefined score" in error.message for error in errors)
 
 
-def test_projection_outputs_are_globally_unique_across_recipes():
+def test_projection_outputs_can_repeat_across_recipes():
     config = recipe_config()
     output = ProjectionMappingOutput(name="shared-band", gte=0)
     config.routing.projections.mappings = [
@@ -299,9 +366,7 @@ def test_projection_outputs_are_globally_unique_across_recipes():
 
     errors = validate_user_config(config)
 
-    assert any(
-        "duplicate global projection output" in error.message for error in errors
-    )
+    assert not any("duplicate projection output" in error.message for error in errors)
 
 
 def test_domain_auto_generation_is_scoped_per_recipe():
@@ -322,7 +387,7 @@ def test_domain_auto_generation_is_scoped_per_recipe():
     assert not any("recipe-generated-domain" in error.message for error in errors)
 
 
-def test_domain_references_use_the_merged_global_registry():
+def test_domain_references_cannot_cross_recipe_boundaries():
     config = recipe_config()
     config.routing.signals.domains = [
         Domain(name="top-level-domain", description="Top-level only")
@@ -336,10 +401,13 @@ def test_domain_references_use_the_merged_global_registry():
 
     errors = validate_user_config(config)
 
-    assert not any("recipe-domain" in error.message for error in errors)
+    assert any(
+        "recipe 'default'" in error.message and "recipe-domain" in error.message
+        for error in errors
+    )
 
 
-def test_generated_domains_conflict_with_different_explicit_definitions():
+def test_domain_names_can_have_different_definitions_across_recipes():
     config = recipe_config()
     config.routing.signals.domains = [
         Domain(name="shared-domain", description="Custom definition")
@@ -350,4 +418,4 @@ def test_generated_domains_conflict_with_different_explicit_definitions():
 
     errors = validate_user_config(config)
 
-    assert any("conflicting definitions" in error.message for error in errors)
+    assert not any("conflicting definitions" in error.message for error in errors)

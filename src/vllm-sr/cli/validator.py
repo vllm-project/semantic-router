@@ -1,12 +1,7 @@
 """Configuration validator for vLLM Semantic Router."""
 
 from typing import Any, List
-from cli.config_contract import (
-    build_projection_reference_index,
-    build_signal_reference_index,
-    is_signal_condition_type,
-    signal_reference_exists,
-)
+from cli.config_contract import iter_routing_profiles
 from cli.models import (
     UserConfig,
     PluginType,
@@ -39,6 +34,7 @@ from cli.validator_workflows import (
     validate_static_workflow_roles,
     validate_workflow_final_model,
 )
+from cli.validator_signal_references import validate_signal_references
 
 log = get_logger(__name__)
 
@@ -70,23 +66,8 @@ ALGORITHM_CONFIG_BLOCKS = (
 
 
 def _iter_profile_decisions(config: UserConfig):
-    yield from config.decisions
-    for recipe in config.recipes:
-        yield from recipe.routing.decisions
-
-
-def _all_signal_reference_names(config: UserConfig) -> set[str]:
-    names = build_signal_reference_index(config.signals)
-    for recipe in config.recipes:
-        names.update(build_signal_reference_index(recipe.routing.signals))
-    return names
-
-
-def _all_projection_reference_names(config: UserConfig) -> set[str]:
-    names = build_projection_reference_index(config.routing.projections)
-    for recipe in config.recipes:
-        names.update(build_projection_reference_index(recipe.routing.projections))
-    return names
+    for _, routing in iter_routing_profiles(config):
+        yield from routing.decisions
 
 
 MIGRATED_LEARNING_ALGORITHM_TARGETS = {
@@ -96,22 +77,6 @@ MIGRATED_LEARNING_ALGORITHM_TARGETS = {
     "bandit": "global.router.learning.adaptation",
     "personalization": "global.router.learning.adaptation",
 }
-
-
-def _is_latency_condition(condition_type: str) -> bool:
-    if not condition_type:
-        return False
-    return condition_type.strip().lower() == "latency"
-
-
-def _iter_condition_nodes(conditions):
-    """Depth-first traversal over recursive condition trees."""
-    if not conditions:
-        return
-    for condition in conditions:
-        yield condition
-        if getattr(condition, "conditions", None):
-            yield from _iter_condition_nodes(condition.conditions)
 
 
 def _iter_merged_condition_nodes(conditions):
@@ -130,25 +95,6 @@ def _is_latency_aware_algorithm(decision) -> bool:
     if not decision.algorithm:
         return False
     return (decision.algorithm.type or "").strip().lower() == "latency_aware"
-
-
-def validate_latency_compatibility(config: UserConfig) -> List[ValidationError]:
-    errors = []
-    has_legacy_conditions = any(
-        _is_latency_condition(condition.type)
-        for decision in _iter_profile_decisions(config)
-        for condition in _iter_condition_nodes(decision.rules.conditions)
-    )
-
-    if has_legacy_conditions:
-        errors.append(
-            ValidationError(
-                "legacy latency config is no longer supported; use decision.algorithm.type=latency_aware and remove conditions.type=latency",
-                field="decisions.rules.conditions",
-            )
-        )
-
-    return errors
 
 
 def validate_latency_aware_algorithm_config(
@@ -295,51 +241,6 @@ def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
                     f"decision '{decision.name}' algorithm.type={display_type} requires algorithm.{expected_block} configuration; "
                     f"found algorithm.{configured_blocks[0]}",
                     field=f"decisions.{decision.name}.algorithm.{configured_blocks[0]}",
-                )
-            )
-
-    return errors
-
-
-def validate_signal_references(config: UserConfig) -> List[ValidationError]:
-    """
-    Validate that all signal references in decisions exist.
-
-    Args:
-        config: User configuration
-
-    Returns:
-        list: List of validation errors
-    """
-    errors = []
-
-    signal_names = _all_signal_reference_names(config)
-    projection_names = _all_projection_reference_names(config)
-
-    # Check decision conditions
-    for decision in _iter_profile_decisions(config):
-        for condition in _iter_condition_nodes(decision.rules.conditions):
-            condition_type = (condition.type or "").strip().lower()
-            if condition_type == "projection":
-                if condition.name in projection_names:
-                    continue
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' references unknown projection '{condition.name}'",
-                        field=f"decisions.{decision.name}.rules.conditions",
-                    )
-                )
-                continue
-            if condition_type == "domain":
-                continue
-            if not is_signal_condition_type(condition.type):
-                continue
-            if signal_reference_exists(signal_names, condition.type, condition.name):
-                continue
-            errors.append(
-                ValidationError(
-                    f"Decision '{decision.name}' references unknown signal '{condition.name}'",
-                    field=f"decisions.{decision.name}.rules.conditions",
                 )
             )
 
@@ -700,7 +601,6 @@ def validate_user_config(config: UserConfig) -> List[ValidationError]:
 
     # Validate signal references
     errors.extend(validate_signal_references(config))
-    errors.extend(validate_latency_compatibility(config))
     errors.extend(validate_algorithm_one_of(config))
     errors.extend(validate_latency_aware_algorithm_config(config))
 

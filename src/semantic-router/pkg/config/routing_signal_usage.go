@@ -25,11 +25,30 @@ func (c *RouterConfig) UsesSignalTypeInRouting(signalType string) bool {
 		return false
 	}
 
+	if len(c.Recipes) > 0 {
+		for i := range c.Recipes {
+			if recipeUsesSignalType(&c.Recipes[i], normalizedType) {
+				return true
+			}
+		}
+		return false
+	}
+
+	return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
+}
+
+func recipeUsesSignalType(recipe *RoutingRecipe, signalType string) bool {
+	if recipe == nil {
+		return false
+	}
+	return decisionsUseSignalType(recipe.Profile.Decisions, recipe.Profile.Projections, signalType)
+}
+
+func decisionsUseSignalType(decisions []Decision, projections Projections, signalType string) bool {
 	projectionOutputs := make(map[string]struct{})
-	decisions := c.AllRoutingDecisions()
 	for i := range decisions {
 		decision := &decisions[i]
-		if decision.HasSignalType(normalizedType) {
+		if decision.HasSignalType(signalType) {
 			return true
 		}
 		for _, name := range collectSignalNames(&decision.Rules, SignalTypeProjection) {
@@ -40,7 +59,7 @@ func (c *RouterConfig) UsesSignalTypeInRouting(signalType string) bool {
 		}
 	}
 
-	return projectionsReferenceSignalType(c.Projections, projectionOutputs, normalizedType)
+	return projectionsReferenceSignalType(projections, projectionOutputs, signalType)
 }
 
 // NeedsCategoryMappingForRouting returns true when routing actually depends on
