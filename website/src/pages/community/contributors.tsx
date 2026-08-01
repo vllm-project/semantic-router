@@ -245,6 +245,7 @@ const ContributorsPage: React.FC = () => {
                 entry={entry}
                 dateLocale={dateLocale}
                 numberLocale={numberLocale}
+                showNewContributorStatus={selectedRange !== 'all'}
               />
             ))}
           </div>
@@ -286,13 +287,15 @@ const ContributorRow: React.FC<{
   entry: ContributorRankEntry
   numberLocale: string
   dateLocale: string
-}> = ({ entry, numberLocale, dateLocale }) => {
+  showNewContributorStatus: boolean
+}> = ({ entry, numberLocale, dateLocale, showNewContributorStatus }) => {
   const profileUrl = entry.login ? `https://github.com/${entry.login}` : undefined
   const sharePercent = formatPercent(entry.share)
   const barWidth = `${Math.max(entry.share * 100, 1.5)}%`
+  const isNewContributor = showNewContributorStatus && entry.isNewContributorSinceRelease
 
   return (
-    <article className={`${styles.rankItem} ${entry.isNewContributorSinceRelease ? styles.rankItemNew : ''}`}>
+    <article className={`${styles.rankItem} ${isNewContributor ? styles.rankItemNew : ''}`}>
       <span className={styles.rankBadge}>
         {formatRankNumber(entry.rank)}
       </span>
@@ -302,7 +305,7 @@ const ContributorRow: React.FC<{
         <div className={styles.identity}>
           <span className={styles.nameLine}>
             <span className={styles.name}>{entry.name}</span>
-            {entry.isNewContributorSinceRelease && (
+            {isNewContributor && (
               <span className={styles.newContributorPill}>
                 <Translate id="community.contributors.newContributor">New Contributor</Translate>
               </span>

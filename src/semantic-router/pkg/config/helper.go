@@ -457,6 +457,20 @@ func (c *RouterConfig) GetDecisionByName(name string) *Decision {
 			return &c.Decisions[i]
 		}
 	}
+	// Non-default recipe decisions live only on their recipe; the default
+	// recipe mirrors the flat Decisions field scanned above. Decision names
+	// are globally unique across recipes (validated at load), so the first
+	// match is the only match.
+	for i := range c.Recipes {
+		if c.Recipes[i].Name == DefaultRecipeName {
+			continue
+		}
+		for j := range c.Recipes[i].Decisions {
+			if c.Recipes[i].Decisions[j].Name == name {
+				return &c.Recipes[i].Decisions[j]
+			}
+		}
+	}
 	return nil
 }
 

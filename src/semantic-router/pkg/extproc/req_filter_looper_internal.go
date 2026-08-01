@@ -20,19 +20,13 @@ type looperBackendRoute struct {
 	found          bool
 }
 
-// findDecisionByName finds a decision by name in the router configuration.
+// findDecisionByName finds a decision by name in the router configuration,
+// including decisions living in non-default recipes.
 func (r *OpenAIRouter) findDecisionByName(name string) *config.Decision {
-	if r.Config == nil || r.Config.Decisions == nil {
+	if r.Config == nil {
 		return nil
 	}
-
-	for i := range r.Config.Decisions {
-		if r.Config.Decisions[i].Name == name {
-			return &r.Config.Decisions[i]
-		}
-	}
-
-	return nil
+	return r.Config.GetDecisionByName(name)
 }
 
 // getReasoningInfoFromDecision extracts reasoning configuration from a decision for a specific model.
