@@ -866,12 +866,12 @@ development:
 			Expect(found).To(BeTrue()) // Should find exact match
 			Expect(response).To(Equal([]byte("response")))
 
-			// Search for different model - should match due to cross-model cache sharing
-			// (model filtering removed to improve cache hit rates)
+			// A different model selects a different cache partition, even when the
+			// query and its embedding are identical.
 			response, found, err = inMemoryCache.FindSimilar("different-model", "test query")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(found).To(BeTrue())
-			Expect(response).To(Equal([]byte("response")))
+			Expect(found).To(BeFalse())
+			Expect(response).To(BeNil())
 		})
 
 		It("should handle AddPendingRequest and UpdateWithResponse", func() {
