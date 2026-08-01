@@ -44,7 +44,9 @@ Content-Type: application/json
 
 Successful responses include `valid: true` and the normalized canonical YAML.
 Validation uses the same parser and semantic checks as `PATCH /config/router`
-and `PUT /config/router`.
+and `PUT /config/router`, but preserves `${ENV_VAR}` references verbatim rather
+than reading process secrets. The endpoint requires `config.read`; plaintext
+secret viewing is not implied.
 
 ### API
 

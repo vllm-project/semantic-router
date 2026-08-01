@@ -1,5 +1,6 @@
 """Pydantic models for vLLM Semantic Router configuration."""
 
+import math
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
@@ -212,6 +213,13 @@ class NumericPredicate(BaseModel):
     gte: Optional[float] = None
     lt: Optional[float] = None
     lte: Optional[float] = None
+
+    @model_validator(mode="after")
+    def validate_finite_values(self):
+        for value in (self.gt, self.gte, self.lt, self.lte):
+            if value is not None and not math.isfinite(value):
+                raise ValueError("numeric predicate values must be finite")
+        return self
 
 
 class StructureRule(BaseModel):
@@ -447,6 +455,14 @@ class MetadataRule(BaseModel):
     key: str
     predicate: MetadataPredicate
 
+    @model_validator(mode="after")
+    def validate_canonical_names(self):
+        if not self.name.strip() or self.name != self.name.strip():
+            raise ValueError("metadata signal name must be nonempty and trimmed")
+        if not self.key.strip() or self.key != self.key.strip():
+            raise ValueError("metadata key must be nonempty and trimmed")
+        return self
+
 
 class ClassifierSignal(BaseModel):
     """Generic label-score classifier signal."""
@@ -464,6 +480,8 @@ class ClassifierSignal(BaseModel):
 
     @model_validator(mode="after")
     def validate_classifier(self):
+        if not self.name.strip() or self.name != self.name.strip():
+            raise ValueError("classifier signal name must be nonempty and trimmed")
         if not self.labels or any(not label.strip() for label in self.labels):
             raise ValueError("labels cannot be empty")
         if len(set(self.labels)) != len(self.labels):
@@ -506,6 +524,23 @@ class Signals(BaseModel):
     events: Optional[List[EventRule]] = []
     metadata: Optional[List[MetadataRule]] = []
     classifiers: Optional[List[ClassifierSignal]] = []
+
+    @model_validator(mode="after")
+    def validate_rule_names(self):
+        for family in type(self).model_fields:
+            seen: set[str] = set()
+            for signal in getattr(self, family) or []:
+                name = (
+                    signal.name.lower()
+                    if family in {"metadata", "classifiers"}
+                    else signal.name
+                )
+                if name in seen:
+                    raise ValueError(
+                        f"{family} signal names must be unique within a recipe"
+                    )
+                seen.add(name)
+        return self
 
 
 class Condition(BaseModel):
@@ -558,6 +593,8 @@ class Condition(BaseModel):
             raise ValueError("label is only valid for classifier conditions")
         if self.type == "classifier" and (self.label is None or self.predicate is None):
             raise ValueError("classifier conditions require label and predicate")
+        if self.on_error is not None and self.type != "classifier":
+            raise ValueError("on_error is only valid for classifier conditions")
         return self
 
 
@@ -583,7 +620,12 @@ class Rules(BaseModel):
             return data
         # Leaf node: has type/name but no operator → wrap in AND
         if "type" in data and "operator" not in data:
-            leaf = {"type": data["type"], "name": data.get("name", "")}
+            leaf = {
+                key: data[key]
+                for key in ("type", "name", "label", "predicate", "on_error")
+                if key in data
+            }
+            leaf.setdefault("name", "")
             return {"operator": "AND", "conditions": [leaf]}
         return data
 
@@ -1151,6 +1193,10 @@ class Decision(BaseModel):
             and len(self.modelRefs) < PROMPT_MIN_CANDIDATES
         ):
             raise ValueError("algorithm.type=prompt requires at least two modelRefs")
+        if self.algorithm and self.algorithm.type == "prompt":
+            model_names = [model_ref.model for model_ref in self.modelRefs]
+            if len(model_names) != len(set(model_names)):
+                raise ValueError("algorithm.type=prompt requires unique modelRefs")
         return self
 
 

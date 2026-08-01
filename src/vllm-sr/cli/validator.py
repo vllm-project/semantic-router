@@ -22,6 +22,11 @@ from cli.models import (
 from pydantic import ValidationError as PydanticValidationError
 from cli.utils import get_logger
 from cli.validation_error import ValidationError
+from cli.validator_latency import (
+    validate_latency_aware_algorithm_config,
+    validate_latency_compatibility,
+)
+from cli.validator_prompt import validate_prompt_dependencies
 from cli.validator_projection_embedding import (
     validate_embedding_modality_compatibility,
     validate_projection_score_dependencies,
@@ -49,6 +54,7 @@ EXPECTED_ALGORITHM_BLOCK_BY_TYPE = {
     "hybrid": "hybrid",
     "latency_aware": "latency_aware",
     "multi_factor": "multi_factor",
+    "prompt": "prompt",
 }
 
 ALGORITHM_CONFIG_BLOCKS = (
@@ -62,6 +68,7 @@ ALGORITHM_CONFIG_BLOCKS = (
     "hybrid",
     "latency_aware",
     "multi_factor",
+    "prompt",
 )
 
 
@@ -70,6 +77,25 @@ def _iter_profile_decisions(config: UserConfig):
         yield from routing.decisions
 
 
+VALID_ALGORITHM_TYPES = {
+    "confidence",
+    "ratings",
+    "remom",
+    "fusion",
+    "workflows",
+    "static",
+    "router_dc",
+    "automix",
+    "hybrid",
+    "knn",
+    "kmeans",
+    "svm",
+    "mlp",
+    "multi_factor",
+    "latency_aware",
+    "prompt",
+}
+
 MIGRATED_LEARNING_ALGORITHM_TARGETS = {
     "elo": "global.router.learning.adaptation",
     "rl_driven": "global.router.learning.adaptation",
@@ -77,6 +103,31 @@ MIGRATED_LEARNING_ALGORITHM_TARGETS = {
     "bandit": "global.router.learning.adaptation",
     "personalization": "global.router.learning.adaptation",
 }
+
+
+def _routing_profiles(config: UserConfig):
+    profiles = [("decisions", config.routing)]
+    profiles.extend(
+        (f"recipes.{recipe.name}.decisions", recipe.routing)
+        for recipe in config.recipes
+    )
+    return profiles
+
+
+def _all_decisions(config: UserConfig):
+    for field_prefix, routing in _routing_profiles(config):
+        for decision in routing.decisions:
+            yield field_prefix, decision
+
+
+def _iter_condition_nodes(conditions):
+    """Depth-first traversal over recursive condition trees."""
+    if not conditions:
+        return
+    for condition in conditions:
+        yield condition
+        if getattr(condition, "conditions", None):
+            yield from _iter_condition_nodes(condition.conditions)
 
 
 def _iter_merged_condition_nodes(conditions):
@@ -91,59 +142,6 @@ def _iter_merged_condition_nodes(conditions):
             yield from _iter_merged_condition_nodes(condition["conditions"])
 
 
-def _is_latency_aware_algorithm(decision) -> bool:
-    if not decision.algorithm:
-        return False
-    return (decision.algorithm.type or "").strip().lower() == "latency_aware"
-
-
-def validate_latency_aware_algorithm_config(
-    config: UserConfig,
-) -> List[ValidationError]:
-    errors = []
-    for decision in _iter_profile_decisions(config):
-        if not _is_latency_aware_algorithm(decision):
-            continue
-        latency_cfg = decision.algorithm.latency_aware
-        if latency_cfg is None:
-            errors.append(
-                ValidationError(
-                    f"decision '{decision.name}' requires algorithm.latency_aware when algorithm.type=latency_aware",
-                    field=f"decisions.{decision.name}.algorithm.latency_aware",
-                )
-            )
-            continue
-
-        has_tpot = (
-            latency_cfg.tpot_percentile is not None and latency_cfg.tpot_percentile > 0
-        )
-        has_ttft = (
-            latency_cfg.ttft_percentile is not None and latency_cfg.ttft_percentile > 0
-        )
-        if not has_tpot and not has_ttft:
-            errors.append(
-                ValidationError(
-                    f"decision '{decision.name}' must set tpot_percentile or ttft_percentile in algorithm.latency_aware",
-                    field=f"decisions.{decision.name}.algorithm.latency_aware",
-                )
-            )
-        if has_tpot and not (1 <= latency_cfg.tpot_percentile <= 100):
-            errors.append(
-                ValidationError(
-                    f"decision '{decision.name}' algorithm.latency_aware.tpot_percentile must be between 1 and 100",
-                    field=f"decisions.{decision.name}.algorithm.latency_aware.tpot_percentile",
-                )
-            )
-        if has_ttft and not (1 <= latency_cfg.ttft_percentile <= 100):
-            errors.append(
-                ValidationError(
-                    f"decision '{decision.name}' algorithm.latency_aware.ttft_percentile must be between 1 and 100",
-                    field=f"decisions.{decision.name}.algorithm.latency_aware.ttft_percentile",
-                )
-            )
-    return errors
-
-
 def configured_algorithm_blocks(algorithm: Any) -> List[str]:
     return [
         block_name
@@ -152,7 +150,9 @@ def configured_algorithm_blocks(algorithm: Any) -> List[str]:
     ]
 
 
-def validate_migrated_learning_algorithm(decision, normalized_type: str):
+def validate_migrated_learning_algorithm(
+    decision, normalized_type: str, field_prefix: str = "decisions"
+):
     algorithm = decision.algorithm
     if (
         normalized_type == "session_aware"
@@ -164,19 +164,21 @@ def validate_migrated_learning_algorithm(decision, normalized_type: str):
             "algorithm.type=session_aware and configure a normal base algorithm only "
             "when this decision needs one. Enable global.router.learning.protection "
             "for session or conversation protection.",
-            field=f"decisions.{decision.name}.algorithm",
+            field=f"{field_prefix}.{decision.name}.algorithm",
         )
     if normalized_type in MIGRATED_LEARNING_ALGORITHM_TARGETS:
         return ValidationError(
             f"decision '{decision.name}' algorithm.type={normalized_type} has moved to "
             f"{MIGRATED_LEARNING_ALGORITHM_TARGETS[normalized_type]}; remove the learning "
             "algorithm type and choose a request-time base algorithm only when needed",
-            field=f"decisions.{decision.name}.algorithm",
+            field=f"{field_prefix}.{decision.name}.algorithm",
         )
     return None
 
 
-def validate_migrated_learning_blocks(decision) -> List[ValidationError]:
+def validate_migrated_learning_blocks(
+    decision, field_prefix: str = "decisions"
+) -> List[ValidationError]:
     errors = []
     algorithm = decision.algorithm
     for block_name, target in MIGRATED_LEARNING_ALGORITHM_TARGETS.items():
@@ -185,7 +187,7 @@ def validate_migrated_learning_blocks(decision) -> List[ValidationError]:
                 ValidationError(
                     f"decision '{decision.name}' algorithm.{block_name} has moved to "
                     f"{target}",
-                    field=f"decisions.{decision.name}.algorithm.{block_name}",
+                    field=f"{field_prefix}.{decision.name}.algorithm.{block_name}",
                 )
             )
     return errors
@@ -194,7 +196,7 @@ def validate_migrated_learning_blocks(decision) -> List[ValidationError]:
 def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
     errors = []
 
-    for decision in _iter_profile_decisions(config):
+    for field_prefix, decision in _all_decisions(config):
         if decision.algorithm is None:
             continue
 
@@ -204,12 +206,19 @@ def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
         display_type = (algorithm.type or "").strip() or "<empty>"
         normalized_type = (algorithm.type or "").strip().lower()
 
-        migrated_error = validate_migrated_learning_algorithm(decision, normalized_type)
+        migrated_error = validate_migrated_learning_algorithm(
+            decision,
+            normalized_type,
+            field_prefix,
+        )
         if migrated_error is not None:
             errors.append(migrated_error)
             continue
 
-        migrated_block_errors = validate_migrated_learning_blocks(decision)
+        migrated_block_errors = validate_migrated_learning_blocks(
+            decision,
+            field_prefix,
+        )
         if migrated_block_errors:
             errors.extend(migrated_block_errors)
             continue
@@ -219,7 +228,7 @@ def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
                 ValidationError(
                     f"decision '{decision.name}' algorithm.type={display_type} cannot be combined with multiple algorithm config blocks: "
                     f"{', '.join(configured_blocks)}",
-                    field=f"decisions.{decision.name}.algorithm",
+                    field=f"{field_prefix}.{decision.name}.algorithm",
                 )
             )
             continue
@@ -230,7 +239,7 @@ def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
                 errors.append(
                     ValidationError(
                         f"decision '{decision.name}' algorithm.type={display_type} cannot be used with algorithm.{configured_blocks[0]} configuration",
-                        field=f"decisions.{decision.name}.algorithm.{configured_blocks[0]}",
+                        field=f"{field_prefix}.{decision.name}.algorithm.{configured_blocks[0]}",
                     )
                 )
             continue
@@ -240,7 +249,7 @@ def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
                 ValidationError(
                     f"decision '{decision.name}' algorithm.type={display_type} requires algorithm.{expected_block} configuration; "
                     f"found algorithm.{configured_blocks[0]}",
-                    field=f"decisions.{decision.name}.algorithm.{configured_blocks[0]}",
+                    field=f"{field_prefix}.{decision.name}.algorithm.{configured_blocks[0]}",
                 )
             )
 
@@ -285,13 +294,13 @@ def validate_model_references(config: UserConfig) -> List[ValidationError]:
             )
 
     # Check decision model references
-    for decision in _iter_profile_decisions(config):
+    for field_prefix, decision in _all_decisions(config):
         for model_ref in decision.modelRefs:
             if model_ref.model not in provider_model_names:
                 errors.append(
                     ValidationError(
                         f"Decision '{decision.name}' references unknown model '{model_ref.model}'",
-                        field=f"decisions.{decision.name}.modelRefs",
+                        field=f"{field_prefix}.{decision.name}.modelRefs",
                     )
                 )
                 continue
@@ -299,7 +308,7 @@ def validate_model_references(config: UserConfig) -> List[ValidationError]:
                 errors.append(
                     ValidationError(
                         f"Decision '{decision.name}' references model '{model_ref.model}' without a routing.modelCards entry",
-                        field=f"decisions.{decision.name}.modelRefs",
+                        field=f"{field_prefix}.{decision.name}.modelRefs",
                     )
                 )
                 continue
@@ -314,14 +323,14 @@ def validate_model_references(config: UserConfig) -> List[ValidationError]:
                         ValidationError(
                             f"Decision '{decision.name}' references LoRA '{model_ref.lora_name}' for model '{model_ref.model}', "
                             "but routing.modelCards declares no loras for that model",
-                            field=f"decisions.{decision.name}.modelRefs",
+                            field=f"{field_prefix}.{decision.name}.modelRefs",
                         )
                     )
                 elif model_ref.lora_name not in declared_loras:
                     errors.append(
                         ValidationError(
                             f"Decision '{decision.name}' references unknown LoRA '{model_ref.lora_name}' for model '{model_ref.model}'",
-                            field=f"decisions.{decision.name}.modelRefs",
+                            field=f"{field_prefix}.{decision.name}.modelRefs",
                         )
                     )
 
@@ -358,10 +367,11 @@ def _validate_single_plugin_configuration(
     plugin_type: str,
     plugin_config: dict,
     config_model: type | None,
+    field_prefix: str = "decisions",
 ) -> List[ValidationError]:
     if config_model is None:
         return []
-    field = f"decisions.{decision_name}.plugins[{idx}]"
+    field = f"{field_prefix}.{decision_name}.plugins[{idx}]"
     try:
         config_model(**plugin_config)
         return []
@@ -411,7 +421,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.TOOL_SELECTION.value: ToolSelectionPluginConfig,
     }
 
-    for decision in _iter_profile_decisions(config):
+    for field_prefix, decision in _all_decisions(config):
         if not decision.plugins:
             continue
 
@@ -427,6 +437,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
                     plugin_type,
                     plugin.configuration,
                     config_model,
+                    field_prefix,
                 )
             )
 
@@ -459,7 +470,10 @@ def _router_dc_missing_description_errors(
 
 
 def _maybe_hybrid_weight_error(
-    decision_name: str, algo_type: str, algo
+    decision_name: str,
+    algo_type: str,
+    algo,
+    field_prefix: str = "decisions",
 ) -> ValidationError | None:
     if algo_type != "hybrid" or not algo.hybrid:
         return None
@@ -477,7 +491,7 @@ def _maybe_hybrid_weight_error(
         return ValidationError(
             f"Decision '{decision_name}' hybrid weights are all zero; "
             "at least one weight must be positive",
-            field=f"decisions.{decision_name}.algorithm.hybrid",
+            field=f"{field_prefix}.{decision_name}.algorithm.hybrid",
         )
     return None
 
@@ -489,7 +503,7 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     Validates both looper algorithms (confidence, ratings, remom, fusion,
     workflows)
     and selection algorithms (static, router_dc, automix, hybrid,
-    knn, kmeans, svm, mlp, multi_factor, latency_aware).
+    knn, kmeans, svm, mlp, multi_factor, latency_aware, prompt).
 
     Args:
         config: User configuration
@@ -499,23 +513,7 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     """
     errors = []
 
-    # Valid algorithm types
-    looper_types = {"confidence", "ratings", "remom", "fusion", "workflows"}
-    selection_types = {
-        "static",
-        "router_dc",
-        "automix",
-        "hybrid",
-        "knn",
-        "kmeans",
-        "svm",
-        "mlp",
-        "multi_factor",
-        "latency_aware",
-    }
-    all_types = looper_types | selection_types
-
-    for decision in _iter_profile_decisions(config):
+    for field_prefix, decision in _all_decisions(config):
         if not decision.algorithm:
             continue
 
@@ -523,19 +521,24 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
         algo_type = algo.type
 
         # Validate algorithm type
-        if algo_type not in all_types:
+        if algo_type not in VALID_ALGORITHM_TYPES:
             errors.append(
                 ValidationError(
                     f"Decision '{decision.name}' has invalid algorithm type '{algo_type}'. "
-                    f"Valid types: {', '.join(sorted(all_types))}",
-                    field=f"decisions.{decision.name}.algorithm.type",
+                    f"Valid types: {', '.join(sorted(VALID_ALGORITHM_TYPES))}",
+                    field=f"{field_prefix}.{decision.name}.algorithm.type",
                 )
             )
             continue
 
         errors.extend(_router_dc_missing_description_errors(decision, algo, config))
 
-        hybrid_err = _maybe_hybrid_weight_error(decision.name, algo_type, algo)
+        hybrid_err = _maybe_hybrid_weight_error(
+            decision.name,
+            algo_type,
+            algo,
+            field_prefix,
+        )
         if hybrid_err is not None:
             errors.append(hybrid_err)
 
@@ -550,19 +553,31 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
                 errors.append(
                     ValidationError(
                         f"Decision '{decision.name}' uses workflows mode=dynamic but does not set planner.model",
-                        field=f"decisions.{decision.name}.algorithm.workflows.planner.model",
+                        field=f"{field_prefix}.{decision.name}.algorithm.workflows.planner.model",
                     )
                 )
             if mode == "dynamic" and workflows_cfg.roles:
                 errors.append(
                     ValidationError(
                         f"Decision '{decision.name}' uses workflows mode=dynamic but also sets static roles",
-                        field=f"decisions.{decision.name}.algorithm.workflows.roles",
+                        field=f"{field_prefix}.{decision.name}.algorithm.workflows.roles",
                     )
                 )
-            errors.extend(validate_workflow_final_model(decision, workflows_cfg))
+            errors.extend(
+                validate_workflow_final_model(
+                    decision,
+                    workflows_cfg,
+                    field_prefix,
+                )
+            )
             if mode == "static":
-                errors.extend(validate_static_workflow_roles(decision, workflows_cfg))
+                errors.extend(
+                    validate_static_workflow_roles(
+                        decision,
+                        workflows_cfg,
+                        field_prefix,
+                    )
+                )
 
         remom_cfg = getattr(algo, "remom", None)
         if (
@@ -615,6 +630,7 @@ def validate_user_config(config: UserConfig) -> List[ValidationError]:
 
     # Validate algorithm configurations
     errors.extend(validate_algorithm_configurations(config))
+    errors.extend(validate_prompt_dependencies(config))
 
     # Validate projection score dependency ordering
     errors.extend(validate_projection_score_dependencies(config))

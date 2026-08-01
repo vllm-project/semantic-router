@@ -52,8 +52,15 @@ routing:
 ```
 
 `model` must be a concrete model declared in `routing.modelCards` and backed by
-`providers.models`. Candidate names and available model-card descriptions are
-added by the runtime. The selector receives the current user turn and returns a
-fixed JSON object containing an exact candidate name and a short rationale.
+`providers.models`, and it must use an OpenAI-compatible API format. Candidate
+base-model names must be unique; use separate decisions when LoRA or reasoning
+variants share the same base model. Candidate names and available model-card
+descriptions are added by the runtime. The selector receives the current user
+turn and returns a fixed JSON object containing an exact candidate name and a
+short rationale.
 The internal helper call uses `global.integrations.looper.endpoint`, which must
 address the router's OpenAI-compatible chat endpoint.
+
+Model-generated rationale text is not logged or persisted verbatim. Replay
+stores bounded result/fallback reason codes, and metrics expose selector
+duration plus fallback counts without request content.

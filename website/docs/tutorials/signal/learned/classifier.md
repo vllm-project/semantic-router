@@ -57,11 +57,14 @@ routing:
 
 LLM classifiers reference a named `global.model_catalog.external` entry and
 add `instructions`. The runtime fixes temperature, output schema, token bounds,
-and exact-label validation.
+and exact-label validation. Classifier leaves are the only decision predicates
+that accept `on_error`; failures expose the bounded
+`classifier_evaluation_failed` code in eval/replay diagnostics.
 
 Local classifiers use `model_path`; paths under `models/` participate in the
 normal model registry/download flow. One binary local generic classifier is
 supported per process, and its decision predicates use `gte: 0.5` or higher on
 the winning-label confidence. Changing its model or label order requires a
 router restart so an in-flight config reload cannot swap process-global native
-state.
+state. Management API updates that attempt this mutation return
+`RESTART_REQUIRED` rather than applying a partial runtime snapshot.
