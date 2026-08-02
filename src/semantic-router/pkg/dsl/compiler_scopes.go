@@ -14,7 +14,11 @@ func (c *Compiler) compileScopes() {
 	if err := c.config.Strategy.Validate(); err != nil {
 		c.errors = append(c.errors, err)
 	}
+	recipeNames := c.compileRecipes()
+	c.compileEntrypoints(recipeNames)
+}
 
+func (c *Compiler) compileRecipes() map[config.RecipeName]struct{} {
 	c.config.Recipes = []config.RoutingRecipe{{
 		Name: config.DefaultRecipeName,
 		Profile: config.RoutingProfile{
@@ -57,7 +61,10 @@ func (c *Compiler) compileScopes() {
 			},
 		})
 	}
+	return recipeNames
+}
 
+func (c *Compiler) compileEntrypoints(recipeNames map[config.RecipeName]struct{}) {
 	seenModels := make(map[string]struct{})
 	for _, entrypoint := range c.prog.Entrypoints {
 		recipeName := config.RecipeName(entrypoint.Recipe)

@@ -50,6 +50,7 @@ from typing import Any
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
+from routing_policy import decide_routing
 
 # Configure logging
 logging.basicConfig(
@@ -186,61 +187,6 @@ def calculate_entropy(probabilities: list[float]) -> float:
         if p > 0:
             entropy -= p * math.log2(p)
     return entropy
-
-
-def decide_routing(
-    text: str, category_name: str, confidence: float
-) -> tuple[str, bool]:
-    """
-    Decide which model to use and whether to enable reasoning based on query analysis.
-
-    This is a simple example that demonstrates intelligent routing. In production,
-    this could use ML models, query complexity analysis, etc.
-
-    Args:
-        text: Input text being classified
-        category_name: Predicted category
-        confidence: Classification confidence
-
-    Returns:
-        Tuple of (model_name, use_reasoning)
-    """
-    # Analyze query complexity
-    text_lower = text.lower()
-    word_count = len(text.split())
-
-    # Check for complexity indicators
-    complex_words = [
-        "why",
-        "how",
-        "explain",
-        "analyze",
-        "compare",
-        "evaluate",
-        "describe",
-    ]
-    has_complex_words = any(word in text_lower for word in complex_words)
-
-    # Simple routing logic (you can make this much more sophisticated)
-
-    # Long queries with complex words → use reasoning
-    if word_count > 20 and has_complex_words:
-        return "openai/gpt-oss-20b", True
-
-    # Math category with simple queries → no reasoning needed
-    if category_name == "math" and word_count < 15:
-        return "openai/gpt-oss-20b", False
-
-    # High confidence → can use simpler model
-    if confidence > 0.9:
-        return "openai/gpt-oss-20b", False
-
-    # Low confidence → use reasoning to be safe
-    if confidence < 0.6:
-        return "openai/gpt-oss-20b", True
-
-    # Default: use reasoning for better quality
-    return "openai/gpt-oss-20b", True
 
 
 def classify_text(text: str, with_probabilities: bool = False) -> dict[str, Any]:
@@ -421,7 +367,7 @@ async def main_http(port: int = 8080):
         )
         return
 
-    logger.info(f"Starting Regex-Based MCP Classification Server (HTTP mode)")
+    logger.info("Starting Regex-Based MCP Classification Server (HTTP mode)")
     logger.info(f"Available categories: {', '.join(CATEGORY_NAMES)}")
     logger.info(f"Listening on http://0.0.0.0:{port}/mcp")
 
@@ -537,7 +483,7 @@ async def main_http(port: int = 8080):
             error = {
                 "jsonrpc": "2.0",
                 "id": request.get("id") if isinstance(request, dict) else None,
-                "error": {"code": -32603, "message": f"Internal error: {str(e)}"},
+                "error": {"code": -32603, "message": f"Internal error: {e!s}"},
             }
             return web.json_response(error, status=500)
 

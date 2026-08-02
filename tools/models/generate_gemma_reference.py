@@ -18,17 +18,22 @@ Note: We use sentence-transformers to ensure we get the complete model
 with Dense Bottleneck, and also extract tokenization details for Rust testing.
 
 Usage:
-    python scripts/generate_gemma_reference.py
+    python tools/models/generate_gemma_reference.py
 """
 
 import json
 import sys
+import traceback
 from pathlib import Path
 
 import numpy as np
 import torch
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer
+
+FULL_EMBEDDING_DIMENSION = 768
+TEXT_PREVIEW_CHARS = 100
+BATCH_TEXT_PREVIEW_CHARS = 50
 
 
 def mean_pool(
@@ -89,7 +94,7 @@ def main():
     print("=" * 80)
 
     # Model path (relative to project root)
-    # Script should be run from project root: python scripts/generate_gemma_reference.py
+    # Run from the project root: python tools/models/generate_gemma_reference.py
     model_path = Path("models/mom-embedding-flash")
 
     if not model_path.exists():
@@ -101,7 +106,7 @@ def main():
             "     huggingface-cli download google/embeddinggemma-300m --local-dir embeddinggemma-300m"
         )
         print("  2. Run this script from the project root directory:")
-        print("     python scripts/generate_gemma_reference.py")
+        print("     python tools/models/generate_gemma_reference.py")
         sys.exit(1)
 
     print(f"Model path: {model_path.absolute()}")
@@ -216,7 +221,7 @@ def main():
         # Generate Matryoshka variants
         matryoshka_embeddings = {}
         for dim in matryoshka_dims:
-            if dim == 768:
+            if dim == FULL_EMBEDDING_DIMENSION:
                 # Full dimension, no truncation
                 matryoshka_embeddings[dim] = embeddings_np.tolist()
             else:
@@ -236,8 +241,8 @@ def main():
             "name": case["name"],
             "input": {
                 "text": (
-                    case["text"][:100] + "..."
-                    if len(case["text"]) > 100
+                    case["text"][:TEXT_PREVIEW_CHARS] + "..."
+                    if len(case["text"]) > TEXT_PREVIEW_CHARS
                     else case["text"]
                 ),
                 "full_text_length": len(case["text"]),
@@ -303,7 +308,12 @@ def main():
                 "name": "batch_processing_test",
                 "input": {
                     "texts": [
-                        t[:50] + "..." if len(t) > 50 else t for t in batch_texts
+                        (
+                            t[:BATCH_TEXT_PREVIEW_CHARS] + "..."
+                            if len(t) > BATCH_TEXT_PREVIEW_CHARS
+                            else t
+                        )
+                        for t in batch_texts
                     ],
                     "batch_size": len(batch_texts),
                 },
@@ -318,8 +328,6 @@ def main():
             print("  Batch result stored")
     except Exception as e:
         print(f"  Batch processing failed: {e}")
-        import traceback
-
         traceback.print_exc()
 
     # Save results

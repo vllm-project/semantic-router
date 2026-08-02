@@ -259,7 +259,7 @@ fn test_config_load_from_pretrained() {
 
     // Verify pattern: full_attention every 6 layers (controlled by _sliding_window_pattern: 6)
     // Expected pattern: [S, S, S, S, S, F, S, S, S, S, S, F, ...]
-    let expected_full_attention_layers = vec![5, 11, 17, 23];
+    let expected_full_attention_layers = [5, 11, 17, 23];
     for (i, layer_type) in config.layer_types.iter().enumerate() {
         let expected = if expected_full_attention_layers.contains(&i) {
             AttentionLayerType::FullAttention
@@ -552,7 +552,7 @@ fn test_config_rms_norm_eps_validation(#[case] rms_norm_eps: f64, #[case] should
 #[case(128)]
 #[serial]
 fn test_matryoshka_supported_dimensions(#[case] embedding_dim: usize) {
-    let supported_dims = vec![768, 512, 256, 128];
+    let supported_dims = [768, 512, 256, 128];
     assert!(
         supported_dims.contains(&embedding_dim),
         "Dimension {} should be supported",
@@ -566,7 +566,7 @@ fn test_matryoshka_supported_dimensions(#[case] embedding_dim: usize) {
 fn test_matryoshka_invalid_dimension() {
     let invalid_dims = vec![0, 64, 100, 384, 1024, 2048];
     for dim in invalid_dims {
-        let supported_dims = vec![768, 512, 256, 128];
+        let supported_dims = [768, 512, 256, 128];
         assert!(
             !supported_dims.contains(&dim),
             "Dimension {} should not be supported",

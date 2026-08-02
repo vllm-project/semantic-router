@@ -35,7 +35,11 @@ func DecompileConfig(cfg *config.RouterConfig) (string, error) {
 		}
 		writeRecipe(&sb, recipe, body)
 	}
-	return sb.String(), nil
+	return canonicalDSLOutput(sb.String()), nil
+}
+
+func canonicalDSLOutput(input string) string {
+	return strings.TrimRight(input, "\n") + "\n"
 }
 
 func writeEntrypoints(sb *strings.Builder, entrypoints []config.EntrypointMapping) {

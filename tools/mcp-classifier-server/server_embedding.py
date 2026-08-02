@@ -49,7 +49,6 @@ import csv
 import json
 import logging
 import math
-import os
 from pathlib import Path
 from typing import Any
 
@@ -59,6 +58,7 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 from pymilvus import MilvusClient
+from routing_policy import decide_routing
 from transformers import AutoModel, AutoTokenizer
 
 # Configure logging
@@ -230,7 +230,7 @@ class EmbeddingClassifier:
 
         logger.info(f"Loading training data from {self.csv_path}")
 
-        with open(self.csv_path, "r", encoding="utf-8") as f:
+        with open(self.csv_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 texts.append(row["text"])
@@ -300,7 +300,7 @@ class EmbeddingClassifier:
         # Prepare data for insertion
         data = []
         for i, (text, category, embedding) in enumerate(
-            zip(self.texts, self.categories, embeddings)
+            zip(self.texts, self.categories, embeddings, strict=True)
         ):
             data.append(
                 {
@@ -359,9 +359,11 @@ class EmbeddingClassifier:
                 neighbor_similarities.append(hit.get("distance", 0))
 
         # Calculate confidence scores for each category
-        category_scores = {cat: 0.0 for cat in self.category_names}
+        category_scores = dict.fromkeys(self.category_names, 0.0)
 
-        for category, similarity in zip(neighbor_categories, neighbor_similarities):
+        for category, similarity in zip(
+            neighbor_categories, neighbor_similarities, strict=True
+        ):
             # Weight by similarity score (cosine similarity is already in [0, 1] after normalization)
             category_scores[category] += similarity
 
@@ -381,9 +383,7 @@ class EmbeddingClassifier:
         class_index = self.category_to_index[best_category_name]
 
         # Decide routing
-        model, use_reasoning = self._decide_routing(
-            text, best_category_name, best_confidence
-        )
+        model, use_reasoning = decide_routing(text, best_category_name, best_confidence)
 
         result = {
             "class": int(class_index),
@@ -430,80 +430,42 @@ class EmbeddingClassifier:
                 entropy -= p * math.log2(p)
         return entropy
 
-    def _decide_routing(
-        self, text: str, category_name: str, confidence: float
-    ) -> tuple[str, bool]:
-        """
-        Decide which model to use and whether to enable reasoning.
 
-        Args:
-            text: Input text being classified
-            category_name: Predicted category
-            confidence: Classification confidence
+class ClassifierRuntime:
+    """Own the lazily initialized classifier and its immutable startup config."""
 
-        Returns:
-            Tuple of (model_name, use_reasoning)
-        """
-        text_lower = text.lower()
-        word_count = len(text.split())
+    def __init__(self) -> None:
+        self._classifier: EmbeddingClassifier | None = None
+        self._device = "auto"
+        self._milvus_uri = "./milvus_data.db"
 
-        # Check for complexity indicators
-        complex_words = [
-            "why",
-            "how",
-            "explain",
-            "analyze",
-            "compare",
-            "evaluate",
-            "describe",
-        ]
-        has_complex_words = any(word in text_lower for word in complex_words)
+    def configure(self, device: str, milvus_uri: str) -> None:
+        if self._classifier is not None and (
+            device != self._device or milvus_uri != self._milvus_uri
+        ):
+            raise RuntimeError("classifier configuration cannot change after startup")
+        self._device = device
+        self._milvus_uri = milvus_uri
 
-        # Long queries with complex words → use reasoning
-        if word_count > 20 and has_complex_words:
-            return "openai/gpt-oss-20b", True
-
-        # Math category with simple queries → no reasoning needed
-        if category_name == "math" and word_count < 15:
-            return "openai/gpt-oss-20b", False
-
-        # High confidence → can use simpler model
-        if confidence > 0.9:
-            return "openai/gpt-oss-20b", False
-
-        # Low confidence → use reasoning to be safe
-        if confidence < 0.6:
-            return "openai/gpt-oss-20b", True
-
-        # Default: use reasoning for better quality
-        return "openai/gpt-oss-20b", True
+    def get(self) -> EmbeddingClassifier:
+        if self._classifier is None:
+            script_dir = Path(__file__).parent
+            self._classifier = EmbeddingClassifier(
+                model_name="Qwen/Qwen3-Embedding-0.6B",
+                csv_path=str(script_dir / "training_data.csv"),
+                collection_name="embedding_classifier",
+                device=self._device,
+                milvus_uri=str(script_dir / self._milvus_uri),
+            )
+        return self._classifier
 
 
-# Initialize classifier globally
-# Note: This is safe for aiohttp as it uses a single-threaded event loop.
-# For multi-process deployments, each process gets its own instance.
-classifier = None
-classifier_device = "auto"  # Default device setting
-classifier_milvus_uri = "./milvus_data.db"  # Default Milvus Lite database path
+classifier_runtime = ClassifierRuntime()
 
 
-def get_classifier():
-    """Get or create the global classifier instance."""
-    global classifier
-    if classifier is None:
-        # Get script directory
-        script_dir = Path(__file__).parent
-        csv_path = script_dir / "training_data.csv"
-        milvus_uri = script_dir / classifier_milvus_uri
-
-        classifier = EmbeddingClassifier(
-            model_name="Qwen/Qwen3-Embedding-0.6B",
-            csv_path=str(csv_path),
-            collection_name="embedding_classifier",
-            device=classifier_device,
-            milvus_uri=str(milvus_uri),
-        )
-    return classifier
+def get_classifier() -> EmbeddingClassifier:
+    """Get or create the process-local classifier instance."""
+    return classifier_runtime.get()
 
 
 # Initialize MCP server
@@ -600,9 +562,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
 
 async def main_stdio(device: str = "auto", milvus_uri: str = "./milvus_data.db"):
     """Run the MCP server in stdio mode."""
-    global classifier_device, classifier_milvus_uri
-    classifier_device = device
-    classifier_milvus_uri = milvus_uri
+    classifier_runtime.configure(device, milvus_uri)
 
     logger.info("Starting Embedding-Based MCP Classification Server (stdio mode)")
     clf = get_classifier()
@@ -621,9 +581,7 @@ async def main_http(
     port: int = 8091, device: str = "auto", milvus_uri: str = "./milvus_data.db"
 ):
     """Run the MCP server in HTTP mode."""
-    global classifier_device, classifier_milvus_uri
-    classifier_device = device
-    classifier_milvus_uri = milvus_uri
+    classifier_runtime.configure(device, milvus_uri)
 
     try:
         from aiohttp import web
@@ -633,7 +591,7 @@ async def main_http(
         )
         return
 
-    logger.info(f"Starting Embedding-Based MCP Classification Server (HTTP mode)")
+    logger.info("Starting Embedding-Based MCP Classification Server (HTTP mode)")
     clf = get_classifier()
     logger.info(f"Available categories: {', '.join(clf.category_names)}")
     logger.info(f"Model: {clf.model_name}")
@@ -772,7 +730,7 @@ async def main_http(
                     if "data" in locals() and isinstance(data, dict)
                     else None
                 ),
-                "error": {"code": -32603, "message": f"Internal error: {str(e)}"},
+                "error": {"code": -32603, "message": f"Internal error: {e!s}"},
             }
             # Per JSON-RPC 2.0 spec, return HTTP 200 even for errors
             return web.json_response(error)

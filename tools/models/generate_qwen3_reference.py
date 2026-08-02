@@ -7,7 +7,7 @@ from the Qwen3-Embedding-0.6B model, which will be compared against our Rust
 implementation to ensure numerical consistency.
 
 Usage:
-    python scripts/generate_qwen3_reference.py
+    python tools/models/generate_qwen3_reference.py
 """
 
 import json
@@ -16,6 +16,8 @@ from pathlib import Path
 
 import torch
 from transformers import AutoModel, AutoTokenizer
+
+TEXT_PREVIEW_CHARS = 100
 
 
 def last_token_pool(
@@ -68,7 +70,7 @@ def main():
     print("=" * 80)
 
     # Model path (relative to project root)
-    # Script should be run from project root: python scripts/generate_qwen3_reference.py
+    # Run from the project root: python tools/models/generate_qwen3_reference.py
     model_path = Path("models/mom-embedding-pro")
 
     if not model_path.exists():
@@ -80,7 +82,7 @@ def main():
             "     huggingface-cli download Qwen/Qwen3-Embedding-0.6B --local-dir Qwen3-Embedding-0.6B"
         )
         print("  2. Run this script from the project root directory:")
-        print("     python scripts/generate_qwen3_reference.py")
+        print("     python tools/models/generate_qwen3_reference.py")
         sys.exit(1)
 
     print(f"Model path: {model_path.absolute()}")
@@ -202,8 +204,8 @@ def main():
                 "name": case["name"],
                 "input": {
                     "text": (
-                        case["text"][:100] + "..."
-                        if len(case["text"]) > 100
+                        case["text"][:TEXT_PREVIEW_CHARS] + "..."
+                        if len(case["text"]) > TEXT_PREVIEW_CHARS
                         else case["text"]
                     ),
                     "full_text_length": len(case["text"]),

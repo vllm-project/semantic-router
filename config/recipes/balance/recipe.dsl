@@ -506,6 +506,7 @@ ROUTE premium_legal (description = "Premium-only route for high-value legal and 
     max_body_bytes: 4096
   }
 }
+
 ROUTE formal_math_proof (description = "Narrow premium reasoning lane for formal math proofs and derivations.") {
   PRIORITY 252
   TIER 2

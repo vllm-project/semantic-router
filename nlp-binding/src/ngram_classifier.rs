@@ -56,6 +56,7 @@ impl NgramRule {
 }
 
 /// N-gram keyword classifier holding multiple rules.
+#[derive(Default)]
 pub struct NgramClassifier {
     rules: Vec<NgramRule>,
 }
@@ -71,7 +72,7 @@ pub struct NgramClassifyResult {
 
 impl NgramClassifier {
     pub fn new() -> Self {
-        NgramClassifier { rules: Vec::new() }
+        Self::default()
     }
 
     pub fn add_rule(

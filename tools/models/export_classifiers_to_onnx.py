@@ -12,30 +12,32 @@ Models:
 Uses optimum for ONNX export with proper handling of ModernBERT architecture.
 """
 
-import os
 import argparse
+import os
 import shutil
 from pathlib import Path
 
 import torch
-from transformers import (
-    AutoTokenizer,
-    AutoModelForSequenceClassification,
-    AutoModelForTokenClassification,
-    PreTrainedTokenizerFast,
-)
 from optimum.onnxruntime import (
     ORTModelForSequenceClassification,
     ORTModelForTokenClassification,
 )
+from transformers import (
+    AutoModelForSequenceClassification,
+    AutoModelForTokenClassification,
+    AutoTokenizer,
+    PreTrainedTokenizerFast,
+)
+
+ONNX_VERIFICATION_TOLERANCE = 1e-4
 
 
 def export_sequence_classifier(model_path: str, output_path: str, opset: int = 14):
     """Export a sequence classification model to ONNX."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Exporting: {model_path}")
     print(f"Output: {output_path}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # Load tokenizer (fallback for TokenizersBackend or incompatible tokenizer_config)
     try:
@@ -118,7 +120,7 @@ def export_sequence_classifier(model_path: str, output_path: str, opset: int = 1
     diff = abs(pt_logits - ort_logits).max()
     print(f"  Max logit difference: {diff:.6f}")
 
-    if diff < 1e-4:
+    if diff < ONNX_VERIFICATION_TOLERANCE:
         print("  ONNX model verified successfully!")
     else:
         print(f"  ⚠ Warning: Logit difference {diff} is larger than expected")
@@ -134,10 +136,10 @@ def export_sequence_classifier(model_path: str, output_path: str, opset: int = 1
 
 def export_token_classifier(model_path: str, output_path: str, opset: int = 14):
     """Export a token classification model to ONNX."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Exporting: {model_path}")
     print(f"Output: {output_path}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_path)
@@ -200,7 +202,7 @@ def export_token_classifier(model_path: str, output_path: str, opset: int = 14):
     diff = abs(pt_logits - ort_logits).max()
     print(f"  Max logit difference: {diff:.6f}")
 
-    if diff < 1e-4:
+    if diff < ONNX_VERIFICATION_TOLERANCE:
         print("  ONNX model verified successfully!")
     else:
         print(f"  ⚠ Warning: Logit difference {diff} is larger than expected")

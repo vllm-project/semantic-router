@@ -13,6 +13,21 @@
 The repository intentionally has no root `docs/` or `scripts/` catch-all.
 Place new assets by ownership and lifecycle instead of by file extension.
 
+## Root Contract
+
+The root is reserved for repository-wide contracts, community health files,
+the public installer, and configuration files whose tools require root
+discovery. Tool-specific configuration belongs with the tool:
+
+- GitHub ownership metadata lives in `.github/CODEOWNERS`.
+- CRD reference generation config lives in `tools/crd/ref-docs.yaml`.
+- Security scanner policy lives in `tools/security/ast-scan-allowlist.txt`.
+- Local editor or assistant files such as `.cursorrules`, `.opencode.yaml`, and
+  `CLAUDE.md` are ignored; `AGENTS.md` is the single agent entrypoint.
+
+`tools/agent/structure-rules.yaml` owns the executable root-file allowlist, and
+the changed-file structure gate rejects unowned additions.
+
 ## Core Subsystems
 
 - `src/semantic-router/`

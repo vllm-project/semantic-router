@@ -184,8 +184,12 @@ pub extern "C" fn bm25_classifier_new() -> u64 {
 /// * `num_keywords` - Length of the keywords array.
 /// * `threshold` - BM25 score threshold for a keyword to count as matched.
 /// * `case_sensitive` - Whether matching is case-sensitive.
+///
+/// # Safety
+/// Non-null string pointers must reference valid NUL-terminated strings, and
+/// `keywords` must reference `num_keywords` readable pointers.
 #[no_mangle]
-pub extern "C" fn bm25_classifier_add_rule(
+pub unsafe extern "C" fn bm25_classifier_add_rule(
     handle: u64,
     name: *const c_char,
     operator: *const c_char,
@@ -227,8 +231,14 @@ pub extern "C" fn bm25_classifier_add_rule(
 }
 
 /// Classify text using a BM25 classifier.
+///
+/// # Safety
+/// A non-null `text` pointer must reference a valid NUL-terminated string.
 #[no_mangle]
-pub extern "C" fn bm25_classifier_classify(handle: u64, text: *const c_char) -> ClassifyResult {
+pub unsafe extern "C" fn bm25_classifier_classify(
+    handle: u64,
+    text: *const c_char,
+) -> ClassifyResult {
     let text = match unsafe { from_c_str(text) } {
         Some(s) => s,
         None => return ClassifyResult::empty(),
@@ -253,8 +263,11 @@ pub extern "C" fn bm25_classifier_classify(handle: u64, text: *const c_char) -> 
 }
 
 /// Classify text and return every matching BM25 rule in declaration order.
+///
+/// # Safety
+/// A non-null `text` pointer must reference a valid NUL-terminated string.
 #[no_mangle]
-pub extern "C" fn bm25_classifier_classify_all(
+pub unsafe extern "C" fn bm25_classifier_classify_all(
     handle: u64,
     text: *const c_char,
 ) -> ClassifyResults {
@@ -315,8 +328,12 @@ pub extern "C" fn ngram_classifier_new() -> u64 {
 /// * `threshold` - Similarity threshold (0.0-1.0) for n-gram matching.
 /// * `case_sensitive` - Whether matching is case-sensitive.
 /// * `arity` - N-gram arity (2 for bigrams, 3 for trigrams, etc.).
+///
+/// # Safety
+/// Non-null string pointers must reference valid NUL-terminated strings, and
+/// `keywords` must reference `num_keywords` readable pointers.
 #[no_mangle]
-pub extern "C" fn ngram_classifier_add_rule(
+pub unsafe extern "C" fn ngram_classifier_add_rule(
     handle: u64,
     name: *const c_char,
     operator: *const c_char,
@@ -366,8 +383,14 @@ pub extern "C" fn ngram_classifier_add_rule(
 }
 
 /// Classify text using an N-gram classifier.
+///
+/// # Safety
+/// A non-null `text` pointer must reference a valid NUL-terminated string.
 #[no_mangle]
-pub extern "C" fn ngram_classifier_classify(handle: u64, text: *const c_char) -> ClassifyResult {
+pub unsafe extern "C" fn ngram_classifier_classify(
+    handle: u64,
+    text: *const c_char,
+) -> ClassifyResult {
     let text = match unsafe { from_c_str(text) } {
         Some(s) => s,
         None => return ClassifyResult::empty(),
@@ -392,8 +415,11 @@ pub extern "C" fn ngram_classifier_classify(handle: u64, text: *const c_char) ->
 }
 
 /// Classify text and return every matching N-gram rule in declaration order.
+///
+/// # Safety
+/// A non-null `text` pointer must reference a valid NUL-terminated string.
 #[no_mangle]
-pub extern "C" fn ngram_classifier_classify_all(
+pub unsafe extern "C" fn ngram_classifier_classify_all(
     handle: u64,
     text: *const c_char,
 ) -> ClassifyResults {

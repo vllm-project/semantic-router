@@ -7,7 +7,6 @@ ignore: |
   .github
   .agent-harness
   node_modules
-  .crd-ref-docs.yaml
   deploy/helm
   .venv
   **/build

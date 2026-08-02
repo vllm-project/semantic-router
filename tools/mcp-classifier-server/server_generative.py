@@ -46,8 +46,8 @@ import json
 import logging
 import math
 import os
-from pathlib import Path
-from typing import Any, Optional, Sequence, TypedDict
+from collections.abc import Sequence
+from typing import Any
 
 import torch
 import torch.nn.functional as F
@@ -56,7 +56,10 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 from peft import PeftModel
+from routing_policy import decide_routing
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+MIN_FP16_COMPUTE_CAPABILITY_MAJOR = 7
 
 # Configure logging
 logging.basicConfig(
@@ -258,7 +261,7 @@ class GenerativeClassifier:
         label_mapping_path = self._get_label_mapping_path(model_path)
         logger.info(f"Loading label mapping from: {label_mapping_path}")
 
-        with open(label_mapping_path, "r") as f:
+        with open(label_mapping_path) as f:
             mapping_data = json.load(f)
             self.label2id = mapping_data["label2id"]
             self.id2label = mapping_data["id2label"]
@@ -283,7 +286,9 @@ class GenerativeClassifier:
         if torch.cuda.is_available():
             try:
                 compute_capability = torch.cuda.get_device_capability()
-                use_fp16 = compute_capability[0] >= 7  # Volta and newer
+                use_fp16 = (
+                    compute_capability[0] >= MIN_FP16_COMPUTE_CAPABILITY_MAJOR
+                )  # Volta and newer
             except Exception:
                 use_fp16 = False
 
@@ -323,10 +328,7 @@ class GenerativeClassifier:
 
         # Check if it looks like a HuggingFace model ID (contains /)
         # and is not an absolute path
-        if "/" in model_path and not os.path.isabs(model_path):
-            return True
-
-        return False
+        return "/" in model_path and not os.path.isabs(model_path)
 
     def _get_label_mapping_path(self, model_path: str) -> str:
         """
@@ -391,7 +393,7 @@ class GenerativeClassifier:
             # Fallback template
             instruction_content = f"""You are an expert academic classifier. Classify the following question into exactly ONE category. Respond with ONLY the category name.
 
-Categories: {', '.join(self.category_names)}
+Categories: {", ".join(self.category_names)}
 
 Now classify this question:
 Q: {question}
@@ -453,9 +455,7 @@ A:"""
         best_confidence = float(probabilities[best_idx].item())
 
         # Decide routing
-        model, use_reasoning = self._decide_routing(
-            text, best_category, best_confidence
-        )
+        model, use_reasoning = decide_routing(text, best_category, best_confidence)
 
         result = {
             "class": int(best_idx),
@@ -500,79 +500,41 @@ A:"""
                 entropy -= p * math.log2(p)
         return entropy
 
-    def _decide_routing(
-        self, text: str, category_name: str, confidence: float
-    ) -> tuple[str, bool]:
-        """
-        Decide which model to use and whether to enable reasoning.
 
-        Args:
-            text: Input text being classified
-            category_name: Predicted category
-            confidence: Classification confidence
+class ClassifierRuntime:
+    """Own the lazily initialized classifier and its immutable startup config."""
 
-        Returns:
-            Tuple of (model_name, use_reasoning)
-        """
-        text_lower = text.lower()
-        word_count = len(text.split())
+    def __init__(self) -> None:
+        self._classifier: GenerativeClassifier | None = None
+        self._model_path: str | None = None
+        self._base_model_name = "Qwen/Qwen3-0.6B"
+        self._device = "auto"
 
-        # Check for complexity indicators
-        complex_words = [
-            "why",
-            "how",
-            "explain",
-            "analyze",
-            "compare",
-            "evaluate",
-            "describe",
-        ]
-        has_complex_words = any(word in text_lower for word in complex_words)
+    def configure(self, model_path: str, base_model_name: str, device: str) -> None:
+        requested = (model_path, base_model_name, device)
+        current = (self._model_path, self._base_model_name, self._device)
+        if self._classifier is not None and requested != current:
+            raise RuntimeError("classifier configuration cannot change after startup")
+        self._model_path, self._base_model_name, self._device = requested
 
-        # Long queries with complex words → use reasoning
-        if word_count > 20 and has_complex_words:
-            return "openai/gpt-oss-20b", True
-
-        # Math category with simple queries → no reasoning needed
-        if category_name == "math" and word_count < 15:
-            return "openai/gpt-oss-20b", False
-
-        # High confidence → can use simpler model
-        if confidence > 0.9:
-            return "openai/gpt-oss-20b", False
-
-        # Low confidence → use reasoning to be safe
-        if confidence < 0.6:
-            return "openai/gpt-oss-20b", True
-
-        # Default: use reasoning for better quality
-        return "openai/gpt-oss-20b", True
-
-
-# Initialize classifier globally
-# Note: This is safe for aiohttp as it uses a single-threaded event loop.
-# For multi-process deployments, each process gets its own instance.
-classifier = None
-classifier_config = {
-    "model_path": None,
-    "base_model_name": "Qwen/Qwen3-0.6B",
-    "device": "auto",
-}
-
-
-def get_classifier():
-    """Get or create the global classifier instance."""
-    global classifier
-    if classifier is None:
-        if classifier_config["model_path"] is None:
+    def get(self) -> GenerativeClassifier:
+        if self._model_path is None:
             raise ValueError("Model path not set. Use --model-path argument.")
+        if self._classifier is None:
+            self._classifier = GenerativeClassifier(
+                model_path=self._model_path,
+                base_model_name=self._base_model_name,
+                device=self._device,
+            )
+        return self._classifier
 
-        classifier = GenerativeClassifier(
-            model_path=classifier_config["model_path"],
-            base_model_name=classifier_config["base_model_name"],
-            device=classifier_config["device"],
-        )
-    return classifier
+
+classifier_runtime = ClassifierRuntime()
+
+
+def get_classifier() -> GenerativeClassifier:
+    """Get or create the process-local classifier instance."""
+    return classifier_runtime.get()
 
 
 # Initialize MCP server
@@ -643,14 +605,22 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         category_descriptions = {}
         category_system_prompts = {}
 
-        for name in clf.category_names:
-            if name in CATEGORY_CONFIG:
-                category_descriptions[name] = CATEGORY_CONFIG[name]["description"]
-                category_system_prompts[name] = CATEGORY_CONFIG[name]["system_prompt"]
+        for category_name in clf.category_names:
+            if category_name in CATEGORY_CONFIG:
+                category_descriptions[category_name] = CATEGORY_CONFIG[category_name][
+                    "description"
+                ]
+                category_system_prompts[category_name] = CATEGORY_CONFIG[category_name][
+                    "system_prompt"
+                ]
             else:
                 # Fallback for categories not in config
-                category_descriptions[name] = f"{name.title()} related queries"
-                category_system_prompts[name] = f"You are a {name} expert."
+                category_descriptions[category_name] = (
+                    f"{category_name.title()} related queries"
+                )
+                category_system_prompts[category_name] = (
+                    f"You are a {category_name} expert."
+                )
 
         categories_response = {
             "categories": clf.category_names,
@@ -673,9 +643,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
 
 async def main_stdio(model_path: str, base_model_name: str, device: str):
     """Run the MCP server in stdio mode."""
-    classifier_config["model_path"] = model_path
-    classifier_config["base_model_name"] = base_model_name
-    classifier_config["device"] = device
+    classifier_runtime.configure(model_path, base_model_name, device)
 
     logger.info(
         "Starting Generative Model-Based MCP Classification Server (stdio mode)"
@@ -692,9 +660,7 @@ async def main_stdio(model_path: str, base_model_name: str, device: str):
 
 async def main_http(port: int, model_path: str, base_model_name: str, device: str):
     """Run the MCP server in HTTP mode."""
-    classifier_config["model_path"] = model_path
-    classifier_config["base_model_name"] = base_model_name
-    classifier_config["device"] = device
+    classifier_runtime.configure(model_path, base_model_name, device)
 
     try:
         from aiohttp import web
@@ -704,9 +670,7 @@ async def main_http(port: int, model_path: str, base_model_name: str, device: st
         )
         return
 
-    logger.info(
-        f"Starting Generative Model-Based MCP Classification Server (HTTP mode)"
-    )
+    logger.info("Starting Generative Model-Based MCP Classification Server (HTTP mode)")
     clf = get_classifier()
     logger.info(f"Available categories: {', '.join(clf.category_names)}")
     logger.info(f"Base model: {clf.base_model_name}")
@@ -843,7 +807,7 @@ async def main_http(port: int, model_path: str, base_model_name: str, device: st
                     if "data" in locals() and isinstance(data, dict)
                     else None
                 ),
-                "error": {"code": -32603, "message": f"Internal error: {str(e)}"},
+                "error": {"code": -32603, "message": f"Internal error: {e!s}"},
             }
             # Per JSON-RPC 2.0 spec, return HTTP 200 even for errors
             return web.json_response(error)

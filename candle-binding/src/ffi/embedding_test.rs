@@ -1,6 +1,6 @@
 //! Unit tests for FFI embedding functions
 //!
-//! Following .cursorrules Line 20-25 specifications:
+//! Following the repository's Rust test conventions:
 //! - Test framework: rstest (parameterized testing)
 //! - Concurrency control: serial_test (#[serial] for serial execution)
 //! - File naming: embedding.rs → embedding_test.rs

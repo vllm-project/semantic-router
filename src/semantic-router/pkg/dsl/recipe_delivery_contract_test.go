@@ -37,8 +37,17 @@ func assertRecipeDSLContract(t *testing.T, directory string) {
 	if err != nil {
 		t.Fatalf("read %s: %v", dslPath, err)
 	}
+	dsl := string(dslBytes)
 
-	diagnostics, parseErrs := Validate(string(dslBytes))
+	assertRecipeDSLValid(t, dslPath, dsl)
+	assertCanonicalRuntimeDSL(t, yamlPath, dslPath, dsl, runtimeConfig)
+	compiled := compileStableRecipeDSL(t, dslPath, dsl)
+	assertMergedRecipeDSL(t, yamlPath, dslPath, dsl, compiled)
+}
+
+func assertRecipeDSLValid(t *testing.T, dslPath, dsl string) {
+	t.Helper()
+	diagnostics, parseErrs := Validate(dsl)
 	if len(parseErrs) > 0 {
 		t.Fatalf("parse DSL %s: %v", dslPath, parseErrs)
 	}
@@ -49,20 +58,28 @@ func assertRecipeDSLContract(t *testing.T, directory string) {
 		}
 		t.Fatalf("%s must validate without diagnostics:\n%s", dslPath, strings.Join(messages, "\n"))
 	}
+}
 
-	// The committed DSL must be the canonical projection of the runnable
-	// config. This avoids comparing raw structs where semantically equivalent
-	// forms (for example, a single-condition OR versus AND) differ only in
-	// normalization details.
+func assertCanonicalRuntimeDSL(
+	t *testing.T,
+	yamlPath string,
+	dslPath string,
+	dsl string,
+	runtimeConfig *config.RouterConfig,
+) {
+	t.Helper()
 	canonicalDSL, err := Decompile(runtimeConfig)
 	if err != nil {
 		t.Fatalf("decompile %s: %v", yamlPath, err)
 	}
-	if canonicalDSL != string(dslBytes) {
+	if canonicalDSL != dsl {
 		t.Fatalf("%s is not the canonical DSL generated from %s", dslPath, yamlPath)
 	}
+}
 
-	compiled, compileErrs := Compile(string(dslBytes))
+func compileStableRecipeDSL(t *testing.T, dslPath, dsl string) *config.RouterConfig {
+	t.Helper()
+	compiled, compileErrs := Compile(dsl)
 	if len(compileErrs) > 0 {
 		t.Fatalf("compile %s: %v", dslPath, compileErrs)
 	}
@@ -71,12 +88,20 @@ func assertRecipeDSLContract(t *testing.T, directory string) {
 	if err != nil {
 		t.Fatalf("decompile compiled %s: %v", dslPath, err)
 	}
-	if stableDSL != string(dslBytes) {
+	if stableDSL != dsl {
 		t.Fatalf("%s is not byte-stable after compile/decompile", dslPath)
 	}
+	return compiled
+}
 
-	// Compiling the DSL is only useful if it can be overlaid on the scenario's
-	// infrastructure config and accepted by the real runtime parser.
+func assertMergedRecipeDSL(
+	t *testing.T,
+	yamlPath string,
+	dslPath string,
+	dsl string,
+	compiled *config.RouterConfig,
+) {
+	t.Helper()
 	baseYAML, err := os.ReadFile(yamlPath)
 	if err != nil {
 		t.Fatalf("read base config %s: %v", yamlPath, err)
@@ -93,7 +118,7 @@ func assertRecipeDSLContract(t *testing.T, directory string) {
 	if err != nil {
 		t.Fatalf("decompile DSL-generated %s: %v", dslPath, err)
 	}
-	if mergedDSL != string(dslBytes) {
+	if mergedDSL != dsl {
 		t.Fatalf("%s changes after compile, base merge, and runtime parse", dslPath)
 	}
 }

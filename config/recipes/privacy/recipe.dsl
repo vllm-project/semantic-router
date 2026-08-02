@@ -236,6 +236,7 @@ ROUTE local_security_containment (description = "Keep suspicious or jailbreak-li
     max_body_bytes: 2048
   }
 }
+
 ROUTE local_privacy_policy (description = "Route PII, private code, and internal documents to the local model with local-only tool access.") {
   PRIORITY 250
   TIER 2

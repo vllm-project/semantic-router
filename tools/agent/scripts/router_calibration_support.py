@@ -218,7 +218,7 @@ def evaluate_probe(
     )
     data = ensure_success(status, payload, "POST /api/v1/eval")
     if not isinstance(data, dict):
-        raise RuntimeError(  # noqa: TRY004 - malformed remote response, not caller type misuse
+        raise RuntimeError(
             f"unexpected eval payload for probe {probe.probe_id}: {data!r}"
         )
 

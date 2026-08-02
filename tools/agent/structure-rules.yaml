@@ -11,6 +11,26 @@ limits:
   interface_methods:
     error: 5
 
+root_files:
+  allowed:
+    - .dockerignore
+    - .editorconfig
+    - .gitattributes
+    - .gitignore
+    - .mergify.yml
+    - .pre-commit-config.yaml
+    - .prowlabels.yaml
+    - AGENTS.md
+    - CODE_OF_CONDUCT.md
+    - CONTRIBUTING.md
+    - GOVERNANCE.md
+    - LICENSE
+    - Makefile
+    - OWNER
+    - README.md
+    - SECURITY.md
+    - install.sh
+
 languages:
   go:
     globs:
@@ -221,6 +241,26 @@ structure_exceptions:
       - tools/security/scan_malicious_code.py
       - tools/security/scan_sensitive_paths.toml
     file_checks: relaxed
+    function_checks: relaxed
+  # These model-backed test suites predate the shared structure gate. This PR
+  # only updates their reference-generator path, so retain a no-growth ratchet.
+  - paths:
+      - candle-binding/src/model_architectures/embedding/gemma_embedding_test.rs
+      - candle-binding/src/model_architectures/embedding/qwen3_embedding_test.rs
+    file_checks: relaxed
+    function_checks: relaxed
+  # Standalone MCP reference servers keep protocol dispatch visible in one
+  # executable file; shared routing policy and runtime ownership are extracted.
+  - paths:
+      - tools/mcp-classifier-server/server_embedding.py
+      - tools/mcp-classifier-server/server_generative.py
+      - tools/mcp-classifier-server/server_keyword.py
+    file_checks: relaxed
+    function_checks: relaxed
+  # One-shot reference generators are intentionally linear pipelines.
+  - paths:
+      - tools/models/generate_gemma_reference.py
+      - tools/models/generate_qwen3_reference.py
     function_checks: relaxed
   - paths:
       - src/semantic-router/pkg/vectorstore/filestore_test.go

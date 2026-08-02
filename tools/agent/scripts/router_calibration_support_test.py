@@ -78,25 +78,27 @@ class DeployConfigTest(unittest.TestCase):
         self.assertEqual(http_json.call_count, 2)
 
     def test_wait_for_config_activation_rejects_superseded_deploy(self) -> None:
-        with mock.patch.object(
-            router_calibration_support,
-            "http_json",
-            return_value=(
-                200,
-                {
-                    "status": "pending",
-                    "runtime_hash": "newer-runtime",
-                    "active_hash": "old-runtime",
-                },
+        with (
+            mock.patch.object(
+                router_calibration_support,
+                "http_json",
+                return_value=(
+                    200,
+                    {
+                        "status": "pending",
+                        "runtime_hash": "newer-runtime",
+                        "active_hash": "old-runtime",
+                    },
+                ),
             ),
+            self.assertRaisesRegex(RuntimeError, "superseded"),
         ):
-            with self.assertRaisesRegex(RuntimeError, "superseded"):
-                router_calibration_support.wait_for_config_activation(
-                    "http://router.example:8080",
-                    "expected-runtime",
-                    timeout_seconds=1,
-                    interval_seconds=0.001,
-                )
+            router_calibration_support.wait_for_config_activation(
+                "http://router.example:8080",
+                "expected-runtime",
+                timeout_seconds=1,
+                interval_seconds=0.001,
+            )
 
 
 class RecipeScopedProbeTest(unittest.TestCase):

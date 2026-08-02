@@ -2,6 +2,11 @@
 
 This file is the short entrypoint for coding agents. The detailed human-readable system of record lives in [tools/agent/docs/README.md](tools/agent/docs/README.md). The executable rule layer lives in [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml), [tools/agent/maintainer-policy.yaml](tools/agent/maintainer-policy.yaml), and [tools/make/agent.mk](tools/make/agent.mk).
 
+vLLM Semantic Router is an Envoy ExtProc request router for LLM inference. It
+resolves a request-facing entrypoint to an isolated recipe, evaluates that
+recipe's signals and projections, applies its decision and algorithm, then
+invokes the selected backend and recipe-scoped plugins.
+
 ## Read First
 
 1. [tools/agent/docs/README.md](tools/agent/docs/README.md)
@@ -17,6 +22,22 @@ This file is the short entrypoint for coding agents. The detailed human-readable
 - `tools/agent/**` remains the canonical harness source; `.agents/skills/**` is only a discovery bridge.
 
 If you need real AMD model deployment details instead of the minimal smoke path, also read [website/docs/installation/amd-rocm.md](website/docs/installation/amd-rocm.md) and [config/recipes/balance/config.yaml](config/recipes/balance/config.yaml).
+
+## Repository Map
+
+- `src/semantic-router/`: Go router, Envoy ExtProc server, routing runtime, and APIs
+- `src/vllm-sr/`: Python CLI and local stack orchestration
+- `config/`: canonical config, reusable fragments, runtime examples, and complete recipes
+- `candle-binding/`, `ml-binding/`, `nlp-binding/`, `onnx-binding/`: inference bindings
+- `dashboard/`: React frontend and Go management backend
+- `deploy/`: artifacts that create or configure deployment targets
+- `e2e/`: end-to-end framework and profiles
+- `tools/`: build, development, release, security, smoke, and agent tooling
+- `website/`: the only public documentation tree
+
+The root contains only repository-wide contracts, community metadata, and
+tool-mandated entrypoints. The executable allowlist is in
+`tools/agent/structure-rules.yaml`; do not add root catch-all files.
 
 ## Supported Environments
 
@@ -34,6 +55,8 @@ If you need real AMD model deployment details instead of the minimal smoke path,
 - Drive the active task to its reported completion boundary: fix failures and rerun the applicable gates until the current change or subtask is done, and do not hand off on the first failing run.
 - Treat docs-only and website-only edits as lightweight unless the task matrix says otherwise.
 - Contributor workflow, issue or PR intake rules, and maintainer label taxonomy live in `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/**`, and `.prowlabels.yaml`; commits intended for PRs must use `git commit -s`.
+- Keep commits reviewable and logically coherent. Each commit must build and lint, describe why the change exists, and avoid unrelated drive-by cleanup.
+- Keep PR blast radius aligned with the requested behavior; couple subsystems only when their contracts change together.
 - Maintainer release, issue, PR, stale-work, and daily-board workflows live in [tools/agent/docs/maintainer-ops.md](tools/agent/docs/maintainer-ops.md) and write local state only under `.agent-harness/maintainer/` unless an explicit reviewed apply step mutates GitHub.
 - Behavior-visible routing, startup, config, Docker, CLI, or API changes need E2E updates unless the change is a pure refactor.
 - If the work needs multiple resumable loops across sessions or contributors, use the indexed current execution plans under [tools/agent/docs/plans/README.md](tools/agent/docs/plans/README.md) instead of ad hoc task notes. Historical plans are not kept in the current tree.
@@ -44,18 +67,11 @@ If you need real AMD model deployment details instead of the minimal smoke path,
 
 ## Canonical Commands
 
-- `make agent-bootstrap`
-- `make agent-validate`
-- `make agent-scorecard`
-- `make agent-dev ENV=cpu|amd`
-- `make agent-serve-local ENV=cpu|amd`
-- `make agent-report ENV=cpu|amd CHANGED_FILES="..."`
-- `make agent-lint CHANGED_FILES="..."`
-- `make agent-ci-gate CHANGED_FILES="..."`
-- `make agent-pr-gate`
-- `make test-and-build-local`
-- `make agent-feature-gate ENV=cpu|amd CHANGED_FILES="..."`
-- `make agent-e2e-affected CHANGED_FILES="..."`
+- Harness: `make agent-bootstrap`, `make agent-validate`, `make agent-report ENV=cpu|amd CHANGED_FILES="..."`, `make agent-lint`, `make agent-ci-gate`, `make agent-pr-gate`
+- Build and core: `make test-and-build-local`, `make test-semantic-router`, `make test-binding`, `make check-go-mod-tidy`
+- Classifiers: `make test-category-classifier`, `make test-pii-classifier`, `make test-jailbreak-classifier`
+- Runtime and E2E: `make agent-dev ENV=cpu|amd`, `make agent-serve-local ENV=cpu|amd`, `make agent-feature-gate ENV=cpu|amd CHANGED_FILES="..."`, `make agent-e2e-affected CHANGED_FILES="..."`
+- Full lint: `pre-commit run --all-files`
 
 ## Rule Layers
 

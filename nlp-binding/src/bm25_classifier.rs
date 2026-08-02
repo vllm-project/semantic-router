@@ -51,6 +51,7 @@ impl Bm25Rule {
 }
 
 /// BM25 keyword classifier holding multiple rules.
+#[derive(Default)]
 pub struct Bm25Classifier {
     rules: Vec<Bm25Rule>,
 }
@@ -66,7 +67,7 @@ pub struct Bm25ClassifyResult {
 
 impl Bm25Classifier {
     pub fn new() -> Self {
-        Bm25Classifier { rules: Vec::new() }
+        Self::default()
     }
 
     pub fn add_rule(
@@ -99,9 +100,9 @@ impl Bm25Classifier {
         let mut matched_keywords = Vec::new();
         let mut matched_scores = Vec::new();
         for result in &results {
-            if result.score as f32 >= rule.threshold {
+            if result.score >= rule.threshold {
                 matched_keywords.push(rule.keywords[result.document.id].clone());
-                matched_scores.push(result.score as f32);
+                matched_scores.push(result.score);
             }
         }
 

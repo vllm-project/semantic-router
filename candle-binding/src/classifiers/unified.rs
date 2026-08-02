@@ -886,7 +886,7 @@ impl DualPathUnifiedClassifier {
         _task: TaskType,
         _index: usize,
     ) -> Result<UnifiedTaskResult, UnifiedClassifierError> {
-        // Real implementation required - no hardcoded values allowed per .cursorrules
+        // Real implementation required; repository policy forbids placeholder output.
         Err(UnifiedClassifierError::ProcessingError(
             "Traditional single text classification not implemented - requires real model inference".to_string()
         ))

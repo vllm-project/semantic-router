@@ -198,7 +198,7 @@ CATEGORIES = {
 
 Each category can have its own specialized system prompt tailored to that domain.
 
-**Edit `decide_routing()` for custom routing logic:**
+**Edit the shared `routing_policy.py` for custom routing logic:**
 
 ```python
 def decide_routing(text, category, confidence):
