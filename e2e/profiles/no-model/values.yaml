@@ -27,10 +27,16 @@ config:
   global:
     stores:
       semantic_cache:
-        embedding_model: mmbert
+        # This profile verifies the API behavior when no embedding model is loaded.
+        # Disable the cache so it cannot initialize its default embedding model.
+        enabled: false
       memory:
-        embedding_model: mmbert
+        enabled: false
       vector_store:
-        embedding_model: mmbert
+        enabled: false
+    integrations:
+      tools:
+        # Tool-database indexing also embeds its entries during startup.
+        enabled: false
 persistence:
   enabled: false
