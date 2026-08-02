@@ -23,6 +23,10 @@ const DEFAULT_PREDICTED_CLASS: usize = 0;
 /// Default class ID used in category name generation
 const UNKNOWN_CLASS_ID: usize = 0;
 
+type ClassificationModel =
+    dyn CoreModel<Output = (usize, f32), Config = String, Error = candle_core::Error>;
+type ClassificationModelRegistry = HashMap<String, Box<ClassificationModel>>;
+
 /// LoRA classification output with performance metrics
 #[derive(Debug, Clone)]
 pub struct LoRAClassificationOutput {
@@ -96,10 +100,7 @@ pub struct EmbeddingRequirements {
 #[derive(Debug)]
 pub struct TraditionalModelManager {
     /// Available traditional models
-    pub models: HashMap<
-        String,
-        Box<dyn CoreModel<Output = (usize, f32), Config = String, Error = candle_core::Error>>,
-    >,
+    pub models: ClassificationModelRegistry,
     /// Device for computation
     pub device: Device,
 }
@@ -147,10 +148,7 @@ impl TraditionalModelManager {
 #[derive(Debug)]
 pub struct LoRAModelManager {
     /// Available LoRA models
-    pub models: HashMap<
-        String,
-        Box<dyn CoreModel<Output = (usize, f32), Config = String, Error = candle_core::Error>>,
-    >,
+    pub models: ClassificationModelRegistry,
     /// Device for computation
     pub device: Device,
 }
@@ -614,8 +612,8 @@ impl DualPathUnifiedClassifier {
         // Convert LoRA output to unified result with enhanced metrics
         let avg_confidence = lora_output
             .task_results
-            .iter()
-            .map(|(_, r)| r.confidence)
+            .values()
+            .map(|result| result.confidence)
             .sum::<f32>()
             / lora_output.task_results.len() as f32;
 
@@ -706,9 +704,7 @@ impl DualPathUnifiedClassifier {
                 // Calculate actual parallel efficiency based on processing time
                 let sequential_estimate = processing_time * task_count as f32;
                 let parallel_actual = processing_time;
-                ((sequential_estimate - parallel_actual) / sequential_estimate)
-                    .max(0.0)
-                    .min(1.0)
+                ((sequential_estimate - parallel_actual) / sequential_estimate).clamp(0.0, 1.0)
             } else {
                 0.0
             },
