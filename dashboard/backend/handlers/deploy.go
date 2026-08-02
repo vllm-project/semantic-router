@@ -9,9 +9,10 @@ import (
 	"strings"
 	"sync"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"gopkg.in/yaml.v3"
 )
 
 // deployMu ensures only one deploy operation at a time
@@ -338,11 +339,11 @@ func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
 		return nil, fmt.Errorf("failed to parse compiled routing fragment: %w", err)
 	}
 
-	if err := mergeDSLOwnedNodes(baseRoot, fragmentRoot, req.Mode); err != nil {
-		return nil, err
+	if mergeErr := mergeDSLOwnedNodes(baseRoot, fragmentRoot, req.Mode); mergeErr != nil {
+		return nil, mergeErr
 	}
-	if err := mergeFragmentGlobalNode(baseRoot, fragmentConfig.Global); err != nil {
-		return nil, err
+	if mergeErr := mergeFragmentGlobalNode(baseRoot, fragmentConfig.Global); mergeErr != nil {
+		return nil, mergeErr
 	}
 
 	mergedYAML, err := marshalYAMLDocument(baseDoc)
