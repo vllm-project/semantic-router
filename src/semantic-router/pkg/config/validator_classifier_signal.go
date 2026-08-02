@@ -78,6 +78,12 @@ func validateClassifierSignalIdentity(
 			index,
 		)
 	}
+	if strings.Contains(rule.Name, ":") {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%d]: name cannot contain ':'",
+			index,
+		)
+	}
 	normalizedName := strings.ToLower(rule.Name)
 	if _, exists := seen[normalizedName]; exists {
 		return fmt.Errorf("routing.signals.classifiers[%d]: duplicate name %q", index, rule.Name)
@@ -111,8 +117,23 @@ func validateClassifierLabels(rule ClassifierSignalRule) error {
 	}
 	labels := make(map[string]struct{}, len(rule.Labels))
 	for _, label := range rule.Labels {
-		if strings.TrimSpace(label) == "" {
+		trimmedLabel := strings.TrimSpace(label)
+		if trimmedLabel == "" {
 			return fmt.Errorf("routing.signals.classifiers[%q]: labels cannot contain empty values", rule.Name)
+		}
+		if trimmedLabel != label {
+			return fmt.Errorf(
+				"routing.signals.classifiers[%q]: label %q must not contain surrounding whitespace",
+				rule.Name,
+				label,
+			)
+		}
+		if strings.Contains(label, ":") {
+			return fmt.Errorf(
+				"routing.signals.classifiers[%q]: label %q cannot contain ':'",
+				rule.Name,
+				label,
+			)
 		}
 		if _, exists := labels[label]; exists {
 			return fmt.Errorf("routing.signals.classifiers[%q]: duplicate label %q", rule.Name, label)
@@ -149,6 +170,39 @@ func validateLLMClassifierSignal(cfg *RouterConfig, rule ClassifierSignalRule) e
 			rule.Name,
 			rule.Model,
 			ModelRoleClassification,
+		)
+	}
+	return validateLLMClassifierExternalDependency(rule, external)
+}
+
+func validateLLMClassifierExternalDependency(
+	rule ClassifierSignalRule,
+	external *ExternalModelConfig,
+) error {
+	if strings.TrimSpace(external.ModelName) == "" {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%q]: external model %q requires llm_model_name",
+			rule.Name,
+			rule.Model,
+		)
+	}
+	if strings.TrimSpace(external.ModelEndpoint.Address) == "" ||
+		external.ModelEndpoint.Port < 1 ||
+		external.ModelEndpoint.Port > 65535 {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%q]: external model %q requires a valid llm_endpoint address and port",
+			rule.Name,
+			rule.Model,
+		)
+	}
+	protocol := strings.ToLower(
+		strings.TrimSpace(external.ModelEndpoint.Protocol),
+	)
+	if protocol != "" && protocol != "http" && protocol != "https" {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%q]: external model %q llm_endpoint.protocol must be http or https",
+			rule.Name,
+			rule.Model,
 		)
 	}
 	return nil

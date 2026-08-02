@@ -1,6 +1,8 @@
 routing:
   decisions:
     - name: prompt-selected-route
+      description: Select a candidate with a concrete helper model.
+      priority: 100
       rules:
         operator: AND
         conditions: []

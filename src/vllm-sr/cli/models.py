@@ -1,5 +1,6 @@
 """Pydantic models for vLLM Semantic Router configuration."""
 
+import json
 import math
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
@@ -19,6 +20,8 @@ from .algorithms import AlgorithmConfig, ModelRef
 RoutingStrategy = Literal["priority", "confidence"]
 LOCAL_CLASSIFIER_LABEL_COUNT = 2
 PROMPT_MIN_CANDIDATES = 2
+MAX_DECISION_ANNOTATIONS = 32
+MAX_DECISION_ANNOTATION_BYTES = 4096
 
 
 class Listener(BaseModel):
@@ -215,10 +218,22 @@ class NumericPredicate(BaseModel):
     lte: Optional[float] = None
 
     @model_validator(mode="after")
-    def validate_finite_values(self):
+    def validate_contract(self):
         for value in (self.gt, self.gte, self.lt, self.lte):
             if value is not None and not math.isfinite(value):
                 raise ValueError("numeric predicate values must be finite")
+        if all(value is None for value in (self.gt, self.gte, self.lt, self.lte)):
+            raise ValueError("numeric predicate requires at least one comparator")
+        if self.gt is not None and self.gte is not None:
+            raise ValueError("numeric predicate cannot set both gt and gte")
+        if self.lt is not None and self.lte is not None:
+            raise ValueError("numeric predicate cannot set both lt and lte")
+        lower = self.gt if self.gt is not None else self.gte
+        upper = self.lt if self.lt is not None else self.lte
+        if lower is not None and upper is not None:
+            strict = self.gt is not None or self.lt is not None
+            if lower > upper or (lower == upper and strict):
+                raise ValueError("numeric predicate defines an empty range")
         return self
 
 
@@ -482,8 +497,12 @@ class ClassifierSignal(BaseModel):
     def validate_classifier(self):
         if not self.name.strip() or self.name != self.name.strip():
             raise ValueError("classifier signal name must be nonempty and trimmed")
+        if ":" in self.name:
+            raise ValueError("classifier signal name cannot contain ':'")
         if not self.labels or any(not label.strip() for label in self.labels):
             raise ValueError("labels cannot be empty")
+        if any(label != label.strip() or ":" in label for label in self.labels):
+            raise ValueError("labels must be trimmed and cannot contain ':'")
         if len(set(self.labels)) != len(self.labels):
             raise ValueError("labels cannot contain duplicates")
         if self.type == "local" and not self.model_path:
@@ -1197,6 +1216,32 @@ class Decision(BaseModel):
             model_names = [model_ref.model for model_ref in self.modelRefs]
             if len(model_names) != len(set(model_names)):
                 raise ValueError("algorithm.type=prompt requires unique modelRefs")
+            effective_names = [
+                model_ref.lora_name or model_ref.model for model_ref in self.modelRefs
+            ]
+            if len(effective_names) != len(set(effective_names)):
+                raise ValueError(
+                    "algorithm.type=prompt requires unique effective model identities"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_annotation_bounds(self):
+        if self.annotations is None:
+            return self
+        if len(self.annotations) > MAX_DECISION_ANNOTATIONS:
+            raise ValueError(
+                f"annotations cannot contain more than {MAX_DECISION_ANNOTATIONS} entries"
+            )
+        encoded = json.dumps(
+            self.annotations,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        if len(encoded) > MAX_DECISION_ANNOTATION_BYTES:
+            raise ValueError(
+                f"annotations cannot exceed {MAX_DECISION_ANNOTATION_BYTES} encoded bytes"
+            )
         return self
 
 

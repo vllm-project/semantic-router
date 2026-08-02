@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -172,53 +171,16 @@ func validateDecisionLeafPredicate(decisionName string, node *RuleNode) error {
 	if node.Predicate == nil {
 		return nil
 	}
-	if !numericPredicateIsFinite(node.Predicate) {
+	if err := validateNumericPredicateContract(node.Predicate); err != nil {
 		return fmt.Errorf(
-			"decision '%s': condition %s(%q) predicate values must be finite",
+			"decision '%s': condition %s(%q) %w",
 			decisionName,
 			node.Type,
 			node.Name,
-		)
-	}
-	if structurePredicateComparatorCount(node.Predicate) == 0 {
-		return fmt.Errorf(
-			"decision '%s': condition %s(%q) predicate must set at least one comparator",
-			decisionName,
-			node.Type,
-			node.Name,
-		)
-	}
-	if node.Predicate.GT != nil && node.Predicate.GTE != nil {
-		return fmt.Errorf(
-			"decision '%s': condition %s(%q) predicate cannot set both gt and gte",
-			decisionName,
-			node.Type,
-			node.Name,
-		)
-	}
-	if node.Predicate.LT != nil && node.Predicate.LTE != nil {
-		return fmt.Errorf(
-			"decision '%s': condition %s(%q) predicate cannot set both lt and lte",
-			decisionName,
-			node.Type,
-			node.Name,
+			err,
 		)
 	}
 	return nil
-}
-
-func numericPredicateIsFinite(predicate *NumericPredicate) bool {
-	for _, value := range []*float64{
-		predicate.GT,
-		predicate.GTE,
-		predicate.LT,
-		predicate.LTE,
-	} {
-		if value != nil && (math.IsNaN(*value) || math.IsInf(*value, 0)) {
-			return false
-		}
-	}
-	return true
 }
 
 func classifierSignalRuleByName(
@@ -386,28 +348,45 @@ func validateDecisionCandidateIterationOutputs(iter CandidateIterationConfig, co
 
 func validateDecisionPluginContracts(cfg *RouterConfig) error {
 	for _, decision := range cfg.AllRoutingDecisions() {
-		if toolsCfg := decision.GetToolsConfig(); toolsCfg != nil {
-			if err := toolsCfg.Validate(); err != nil {
-				return fmt.Errorf("decision '%s': %w", decision.Name, err)
-			}
-		}
-		if tsCfg := decision.GetToolSelectionConfig(); tsCfg != nil {
-			if err := tsCfg.Validate(); err != nil {
-				return fmt.Errorf("decision '%s': %w", decision.Name, err)
-			}
-		}
-
-		if imageGenCfg := decision.GetImageGenConfig(); imageGenCfg != nil {
-			if err := imageGenCfg.Validate(); err != nil {
-				return fmt.Errorf("decision '%s': %w", decision.Name, err)
-			}
-		}
-
-		if err := validateDecisionRAGAndMemoryPlugins(cfg, &decision); err != nil {
+		if err := validateOneDecisionPluginContracts(
+			cfg,
+			&decision,
+		); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func validateOneDecisionPluginContracts(
+	cfg *RouterConfig,
+	decision *Decision,
+) error {
+	for index, plugin := range decision.Plugins {
+		if err := validateDecisionPluginPayload(
+			decision.Name,
+			index,
+			plugin,
+		); err != nil {
+			return err
+		}
+	}
+	if toolsCfg := decision.GetToolsConfig(); toolsCfg != nil {
+		if err := toolsCfg.Validate(); err != nil {
+			return fmt.Errorf("decision '%s': %w", decision.Name, err)
+		}
+	}
+	if tsCfg := decision.GetToolSelectionConfig(); tsCfg != nil {
+		if err := tsCfg.Validate(); err != nil {
+			return fmt.Errorf("decision '%s': %w", decision.Name, err)
+		}
+	}
+	if imageGenCfg := decision.GetImageGenConfig(); imageGenCfg != nil {
+		if err := imageGenCfg.Validate(); err != nil {
+			return fmt.Errorf("decision '%s': %w", decision.Name, err)
+		}
+	}
+	return validateDecisionRAGAndMemoryPlugins(cfg, decision)
 }
 
 // validateDecisionRAGAndMemoryPlugins validates RAG config and warns about
@@ -453,44 +432,29 @@ func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, 
 		return nil
 	}
 
-	normalizedType := strings.ToLower(strings.TrimSpace(algorithm.Type))
-	displayType := strings.TrimSpace(algorithm.Type)
-	if displayType == "" {
-		displayType = "<empty>"
-	}
-	if normalizedType == "session_aware" || algorithm.SessionAware != nil {
-		return fmt.Errorf(
-			"decision '%s': algorithm.type=session_aware is no longer supported; remove algorithm.type=session_aware and enable global.router.learning.protection. If this decision needs an explicit base selector, configure a normal algorithm.type; otherwise omit algorithm",
-			decisionName,
-		)
-	}
-	if err := validateMigratedLearningAlgorithm(decisionName, normalizedType, algorithm); err != nil {
+	normalizedType, displayType, err := normalizeDecisionAlgorithmType(
+		decisionName,
+		algorithm,
+	)
+	if err != nil {
 		return err
 	}
 
 	configuredBlocks := configuredAlgorithmBlocks(algorithm)
-	if len(configuredBlocks) > 1 {
-		return fmt.Errorf(
-			"decision '%s': algorithm.type=%s cannot be combined with multiple algorithm config blocks: %s",
-			decisionName,
-			displayType,
-			strings.Join(configuredBlocks, ", "),
-		)
+	terminal, err := validateAlgorithmBlockContract(
+		decisionName,
+		normalizedType,
+		displayType,
+		configuredBlocks,
+	)
+	if err != nil {
+		return err
 	}
-
-	expectedBlock, hasExpectedBlock := expectedAlgorithmBlock(normalizedType)
-	if !hasExpectedBlock {
-		if len(configuredBlocks) > 0 {
-			return fmt.Errorf(
-				"decision '%s': algorithm.type=%s cannot be used with algorithm.%s configuration",
-				decisionName,
-				displayType,
-				configuredBlocks[0],
-			)
-		}
+	if terminal {
 		return nil
 	}
 
+	expectedBlock, _ := expectedAlgorithmBlock(normalizedType)
 	if len(configuredBlocks) == 1 && configuredBlocks[0] != expectedBlock {
 		return fmt.Errorf(
 			"decision '%s': algorithm.type=%s requires algorithm.%s configuration; found algorithm.%s",
@@ -506,6 +470,82 @@ func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, 
 	}
 
 	return nil
+}
+
+func normalizeDecisionAlgorithmType(
+	decisionName string,
+	algorithm *AlgorithmConfig,
+) (string, string, error) {
+	displayType := strings.TrimSpace(algorithm.Type)
+	normalizedType := strings.ToLower(displayType)
+	if displayType != "" && displayType != normalizedType {
+		return "", "", fmt.Errorf(
+			"decision '%s': algorithm.type must use lowercase canonical value %q",
+			decisionName,
+			normalizedType,
+		)
+	}
+	if displayType == "" {
+		displayType = "<empty>"
+	}
+	if normalizedType == "session_aware" || algorithm.SessionAware != nil {
+		return "", "", fmt.Errorf(
+			"decision '%s': algorithm.type=session_aware is no longer supported; remove algorithm.type=session_aware and enable global.router.learning.protection. If this decision needs an explicit base selector, configure a normal algorithm.type; otherwise omit algorithm",
+			decisionName,
+		)
+	}
+	if err := validateMigratedLearningAlgorithm(
+		decisionName,
+		normalizedType,
+		algorithm,
+	); err != nil {
+		return "", "", err
+	}
+	return normalizedType, displayType, nil
+}
+
+func validateAlgorithmBlockContract(
+	decisionName string,
+	normalizedType string,
+	displayType string,
+	configuredBlocks []string,
+) (bool, error) {
+	if len(configuredBlocks) > 1 {
+		return false, fmt.Errorf(
+			"decision '%s': algorithm.type=%s cannot be combined with multiple algorithm config blocks: %s",
+			decisionName,
+			displayType,
+			strings.Join(configuredBlocks, ", "),
+		)
+	}
+	if _, hasExpectedBlock := expectedAlgorithmBlock(normalizedType); hasExpectedBlock {
+		return false, nil
+	}
+	if !blocklessAlgorithmTypeSupported(normalizedType) {
+		return false, fmt.Errorf(
+			"decision '%s': unsupported algorithm.type=%s",
+			decisionName,
+			displayType,
+		)
+	}
+	if len(configuredBlocks) > 0 {
+		return false, fmt.Errorf(
+			"decision '%s': algorithm.type=%s cannot be used with algorithm.%s configuration",
+			decisionName,
+			displayType,
+			configuredBlocks[0],
+		)
+	}
+	return true, nil
+}
+
+func blocklessAlgorithmTypeSupported(normalizedType string) bool {
+	switch normalizedType {
+	case "static", "knn", "kmeans", "svm", "mlp":
+		return true
+	default:
+		return false
+	}
 }
 
 func validateMigratedLearningAlgorithm(decisionName string, normalizedType string, algorithm *AlgorithmConfig) error {
@@ -606,79 +646,6 @@ func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRe
 		}
 	case "prompt":
 		return validatePromptAlgorithmConfig(decisionName, modelRefs, algorithm)
-	}
-	return nil
-}
-
-func validatePromptAlgorithmConfig(
-	decisionName string,
-	modelRefs []ModelRef,
-	algorithm *AlgorithmConfig,
-) error {
-	if algorithm.Prompt == nil {
-		return fmt.Errorf("decision '%s': algorithm.type=prompt requires algorithm.prompt configuration", decisionName)
-	}
-	if len(modelRefs) < 2 {
-		return fmt.Errorf("decision '%s': algorithm.type=prompt requires at least two modelRefs", decisionName)
-	}
-	seenModels := make(map[string]struct{}, len(modelRefs))
-	for _, modelRef := range modelRefs {
-		if _, exists := seenModels[modelRef.Model]; exists {
-			return fmt.Errorf(
-				"decision '%s': algorithm.type=prompt requires unique modelRefs; duplicate model %q",
-				decisionName,
-				modelRef.Model,
-			)
-		}
-		seenModels[modelRef.Model] = struct{}{}
-	}
-	if strings.TrimSpace(algorithm.Prompt.Model) == "" {
-		return fmt.Errorf("decision '%s', algorithm.prompt: model is required", decisionName)
-	}
-	if strings.TrimSpace(algorithm.Prompt.Instructions) == "" {
-		return fmt.Errorf("decision '%s', algorithm.prompt: instructions are required", decisionName)
-	}
-	if algorithm.Prompt.TimeoutSeconds < 0 {
-		return fmt.Errorf("decision '%s', algorithm.prompt: timeout_seconds cannot be negative", decisionName)
-	}
-	if algorithm.OnError != "" && algorithm.OnError != "fallback" {
-		return fmt.Errorf("decision '%s': algorithm.type=prompt on_error must be fallback", decisionName)
-	}
-	return nil
-}
-
-func validateDecisionPromptModel(cfg *RouterConfig, decision Decision) error {
-	if decision.Algorithm == nil || decision.Algorithm.Prompt == nil {
-		return nil
-	}
-	if !cfg.Looper.IsEnabled() {
-		return fmt.Errorf(
-			"decision '%s': algorithm.type=prompt requires global.integrations.looper.endpoint",
-			decision.Name,
-		)
-	}
-	model := strings.TrimSpace(decision.Algorithm.Prompt.Model)
-	modelConfig, ok := cfg.ModelConfig[model]
-	if !ok {
-		return fmt.Errorf(
-			"decision '%s', algorithm.prompt.model %q is not declared in routing.modelCards",
-			decision.Name,
-			model,
-		)
-	}
-	if strings.EqualFold(modelConfig.APIFormat, ClientProtocolAnthropic) {
-		return fmt.Errorf(
-			"decision '%s', algorithm.prompt.model %q must use an OpenAI-compatible API format",
-			decision.Name,
-			model,
-		)
-	}
-	if cfg.IsAutoModelName(model) || cfg.IsEntrypointModelName(model) {
-		return fmt.Errorf(
-			"decision '%s', algorithm.prompt.model %q must be a concrete provider model",
-			decision.Name,
-			model,
-		)
 	}
 	return nil
 }

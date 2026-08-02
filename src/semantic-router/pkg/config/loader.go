@@ -138,6 +138,7 @@ func parseYAMLBytesWithOptions(
 	cfg.ConfigBaseDir = baseDir
 	documentDigest := sha256.Sum256(data)
 	cfg.DocumentHash = hex.EncodeToString(documentDigest[:])
+	cfg.SkipExternalAssetValidation = !expandEnvironment
 	if err := finalizeParsedConfig(cfg); err != nil {
 		return nil, err
 	}

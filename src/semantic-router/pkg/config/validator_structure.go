@@ -125,19 +125,14 @@ func validateStructurePredicate(
 	if predicate == nil {
 		return nil
 	}
-	if !numericPredicateIsFinite(predicate) {
+	if err := validateNumericPredicateContract(predicate); err != nil {
 		return fmt.Errorf(
-			"routing.signals.structure[%q]: predicate values must be finite",
+			"routing.signals.structure[%q]: %w",
 			ruleName,
+			err,
 		)
 	}
 	count := structurePredicateComparatorCount(predicate)
-	if count == 0 {
-		return fmt.Errorf("routing.signals.structure[%q]: predicate must set at least one comparator", ruleName)
-	}
-	if err := validateStructurePredicateBounds(ruleName, predicate); err != nil {
-		return err
-	}
 	if featureType == "exists" && count > 0 {
 		return fmt.Errorf("routing.signals.structure[%q]: feature.type=exists does not accept predicate", ruleName)
 	}
@@ -159,14 +154,4 @@ func structurePredicateComparatorCount(predicate *NumericPredicate) int {
 		count++
 	}
 	return count
-}
-
-func validateStructurePredicateBounds(ruleName string, predicate *NumericPredicate) error {
-	if predicate.GT != nil && predicate.GTE != nil {
-		return fmt.Errorf("routing.signals.structure[%q]: predicate cannot set both gt and gte", ruleName)
-	}
-	if predicate.LT != nil && predicate.LTE != nil {
-		return fmt.Errorf("routing.signals.structure[%q]: predicate cannot set both lt and lte", ruleName)
-	}
-	return nil
 }

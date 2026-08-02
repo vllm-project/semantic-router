@@ -67,7 +67,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
 - `global.model_catalog.embeddings.semantic` can use an external text embedding service with `model_type: remote` and `backend: openai_compatible`; see [Remote Embedding Providers](../tutorials/global/remote-embeddings) for endpoint, secret, Dashboard, Operator, and status configuration
 - `prototype_scoring` is the shared prototype-aware scoring block for embedding-backed signal families; use it under `global.model_catalog.embeddings.semantic.embedding_config`, `global.model_catalog.modules.classifier.preference`, `global.model_catalog.kbs[]`, and `global.model_catalog.modules.complexity` when you want exemplar banks compressed into representative prototypes
 - built-in knowledge bases keep canonical source paths like `knowledge_bases/privacy/`; local runtime seeds missing KBs into `.vllm-sr/knowledge_bases/<dir>/` once and then reads the shared runtime KB store from there
-- `global.model_catalog.classifiers[]` is the reusable registry for startup-loaded classifier packages such as taxonomy classifiers
+- LLM-backed classifier signals reference `global.model_catalog.external[]` entries with `model_role: classification`; local classifier packages are declared directly under `routing.signals.classifiers`
 - `global.model_catalog.modules` groups capability modules such as `prompt_guard`, `classifier`, `complexity`, and `hallucination_mitigation`
 - `routing.signals.metadata` matches bounded, untrusted caller hints; authenticated identity remains under `authz`
 - `routing.signals.classifiers` exposes generic native or constrained-LLM label scores to decision predicates

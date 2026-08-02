@@ -22,6 +22,7 @@ from cli.models import (
 from pydantic import ValidationError as PydanticValidationError
 from cli.utils import get_logger
 from cli.validation_error import ValidationError
+from cli.validator_classifier import validate_classifier_contracts
 from cli.validator_latency import (
     validate_latency_aware_algorithm_config,
     validate_latency_compatibility,
@@ -624,6 +625,7 @@ def validate_user_config(config: UserConfig) -> List[ValidationError]:
 
     # Validate model references
     errors.extend(validate_model_references(config))
+    errors.extend(validate_classifier_contracts(config))
 
     # Validate plugin configurations
     errors.extend(validate_plugin_configurations(config))

@@ -3,7 +3,7 @@
 ## Overview
 
 `classifier` exposes reusable label scores from a local native sequence classifier
-or a configured external LLM. Decisions test a declared label with an optional
+or a configured external LLM. Decisions test a declared label with a required
 numeric predicate.
 
 Specialized domain, PII, jailbreak, fact-check, KB, and preference signals

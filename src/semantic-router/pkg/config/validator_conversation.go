@@ -67,17 +67,11 @@ func validateConversationPredicate(rule ConversationRule) error {
 	if rule.Predicate == nil {
 		return nil
 	}
-	if !numericPredicateIsFinite(rule.Predicate) {
-		return fmt.Errorf("predicate values must be finite")
+	if err := validateNumericPredicateContract(rule.Predicate); err != nil {
+		return err
 	}
 	if rule.Feature.Type == "exists" {
 		return fmt.Errorf("feature.type \"exists\" does not accept a predicate")
-	}
-	if rule.Predicate.GT != nil && rule.Predicate.GTE != nil {
-		return fmt.Errorf("predicate cannot set both gt and gte")
-	}
-	if rule.Predicate.LT != nil && rule.Predicate.LTE != nil {
-		return fmt.Errorf("predicate cannot set both lt and lte")
 	}
 	return nil
 }

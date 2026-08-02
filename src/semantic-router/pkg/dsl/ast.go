@@ -274,11 +274,12 @@ type BoolFactor struct {
 	SignalRef *rawSignalRefExpr `parser:"| @@"`
 }
 
-// rawSignalRefExpr: signal_type("signal_name") or signal_type(signal_name)
+// rawSignalRefExpr: signal_type("signal_name", optional: fields)
 type rawSignalRefExpr struct {
 	Pos        lexer.Position
-	SignalType string `parser:"@Ident"`
-	SignalName string `parser:"'(' @(String | Ident) ')'"`
+	SignalType string        `parser:"@Ident"`
+	SignalName string        `parser:"'(' @(String | Ident)"`
+	Fields     []*FieldEntry `parser:"@@* ')'"`
 }
 
 // ---------- Field / Value (parsed by participle) ----------
@@ -545,6 +546,7 @@ func (b *BoolNot) GetPos() Position { return b.Pos }
 type SignalRefExpr struct {
 	SignalType string
 	SignalName string
+	Fields     map[string]Value
 	Pos        Position
 }
 
