@@ -190,11 +190,13 @@ export interface RoutingModelCard {
 }
 
 export interface DecisionCondition {
-  type: string
-  name: string
+  type?: string
+  name?: string
   label?: string
   predicate?: NumericPredicate
   on_error?: 'no_match' | 'match'
+  operator?: 'AND' | 'OR' | 'NOT'
+  conditions?: DecisionCondition[]
 }
 
 export interface DecisionRuleSet {
@@ -775,6 +777,8 @@ export interface ConfigSignals {
   jailbreak?: JailbreakSignal[]
   pii?: PIISignal[]
   kb?: KBSignal[]
+  metadata?: MetadataSignal[]
+  classifiers?: ClassifierSignal[]
 }
 
 export interface ConfigProjections {
@@ -984,6 +988,28 @@ export interface EmbeddingSignal {
   aggregation_method: string
 }
 
+export interface MetadataSignal {
+  name: string
+  description?: string
+  key: string
+  predicate: {
+    equals?: string
+    in?: string[]
+    exists?: boolean
+  }
+}
+
+export interface ClassifierSignal {
+  name: string
+  description?: string
+  type: 'local' | 'llm'
+  model?: string
+  model_path?: string
+  labels: string[]
+  instructions?: string
+  use_cpu?: boolean
+}
+
 export interface DomainSignal {
   name: string
   description: string
@@ -1134,7 +1160,7 @@ export interface ComplexitySignal {
   description?: string
   composer?: {
     operator: 'AND' | 'OR' | 'NOT'
-    conditions: Array<{ type: string; name: string }>
+    conditions: DecisionCondition[]
   }
 }
 
@@ -1225,6 +1251,8 @@ export type SignalType =
   | 'Jailbreak'
   | 'PII'
   | 'KB'
+  | 'Metadata'
+  | 'Classifier'
 
 export interface DecisionFormState {
   name: string
@@ -1244,6 +1272,26 @@ export function mergeDecisionForSave(
     ...(existing || {}),
     ...update,
   }
+}
+
+export function decisionRulesForSave(
+  existing: DecisionRuleSet | undefined,
+  next: DecisionRuleSet,
+): DecisionRuleSet {
+  if (existing?.conditions.some(conditionHasNestedRules)) {
+    return JSON.parse(JSON.stringify(existing)) as DecisionRuleSet
+  }
+  return next
+}
+
+export function cloneDecisionConditions(
+  conditions: DecisionCondition[] | undefined,
+): DecisionCondition[] {
+  return JSON.parse(JSON.stringify(conditions || [])) as DecisionCondition[]
+}
+
+export function conditionHasNestedRules(condition: DecisionCondition): boolean {
+  return Boolean(condition.operator || condition.conditions?.length)
 }
 
 export interface AddSignalFormState {
@@ -1283,6 +1331,17 @@ export interface AddSignalFormState {
   target_kind?: 'label' | 'group'
   target_value?: string
   kb_match?: 'best' | 'threshold'
+  metadata_key?: string
+  metadata_predicate_type?: 'equals' | 'in' | 'exists'
+  metadata_equals?: string
+  metadata_in?: string[]
+  metadata_exists?: boolean
+  classifier_type?: 'local' | 'llm'
+  classifier_model?: string
+  classifier_model_path?: string
+  classifier_labels?: string[]
+  classifier_instructions?: string
+  classifier_use_cpu?: boolean
 }
 
 export const formatThreshold = (value: number): string => {

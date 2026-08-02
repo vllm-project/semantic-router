@@ -78,6 +78,10 @@ describe('DSL structured field schemas', () => {
     expect(requireField(getSignalFieldSchema('authz'), 'subjects').type).toBe('object[]')
     expect(requireField(getSignalFieldSchema('kb'), 'target').type).toBe('object')
 
+    const metadataPredicate = requireField(getSignalFieldSchema('metadata'), 'predicate')
+    expect(metadataPredicate.fields?.map((field) => field.key)).toEqual(['equals', 'in', 'exists'])
+    expect(requireField(getSignalFieldSchema('classifier'), 'labels').type).toBe('string[]')
+
     const headerMutation = getPluginFieldSchema('header_mutation')
     expect(requireField(headerMutation, 'add').type).toBe('object[]')
     expect(requireField(headerMutation, 'update').type).toBe('object[]')
