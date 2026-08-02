@@ -41,7 +41,20 @@ func rawToRecipe(raw *rawRecipeDecl) (*RecipeDecl, []error) {
 		Program: &Program{},
 		Pos:     posFromLexer(raw.Pos),
 	}
-	for _, opt := range raw.Opts {
+	applyRawRecipeOptions(decl, raw.Opts)
+
+	state := recipeParseState{decl: decl}
+	for _, entry := range raw.Body {
+		state.appendEntry(entry)
+	}
+	if state.hasDirectRoutes && state.treeCount > 0 {
+		state.errs = append(state.errs, fmt.Errorf("RECIPE %q: DECISION_TREE and ROUTE declarations cannot coexist", decl.Name))
+	}
+	return decl, state.errs
+}
+
+func applyRawRecipeOptions(decl *RecipeDecl, opts []*RouteOpt) {
+	for _, opt := range opts {
 		switch opt.Key {
 		case "description":
 			if opt.Value != nil && opt.Value.Str != nil {
@@ -55,36 +68,37 @@ func rawToRecipe(raw *rawRecipeDecl) (*RecipeDecl, []error) {
 			}
 		}
 	}
+}
 
-	var errs []error
-	hasDirectRoutes := false
-	treeCount := 0
-	for _, entry := range raw.Body {
-		switch {
-		case entry.Routing != nil:
-			errs = append(errs, applyRawRouting(decl.Program, entry.Routing)...)
-		case entry.Signal != nil:
-			decl.Program.Signals = append(decl.Program.Signals, rawToSignal(entry.Signal))
-		case entry.Projection != nil:
-			appendRawProjection(decl.Program, entry.Projection)
-		case entry.Route != nil:
-			hasDirectRoutes = true
-			decl.Program.Routes = append(decl.Program.Routes, rawToRoute(entry.Route))
-		case entry.DecisionTree != nil:
-			treeCount++
-			routes, treeErrs := rawDecisionTreeToRoutes(entry.DecisionTree, treeCount-1)
-			decl.Program.Routes = append(decl.Program.Routes, routes...)
-			errs = append(errs, treeErrs...)
-		case entry.Plugin != nil:
-			decl.Program.Plugins = append(decl.Program.Plugins, rawToPlugin(entry.Plugin))
-		case entry.TestBlock != nil:
-			decl.Program.TestBlocks = append(decl.Program.TestBlocks, rawToTestBlock(entry.TestBlock))
-		}
+type recipeParseState struct {
+	decl            *RecipeDecl
+	errs            []error
+	hasDirectRoutes bool
+	treeCount       int
+}
+
+func (state *recipeParseState) appendEntry(entry *rawRecipeEntry) {
+	prog := state.decl.Program
+	switch {
+	case entry.Routing != nil:
+		state.errs = append(state.errs, applyRawRouting(prog, entry.Routing)...)
+	case entry.Signal != nil:
+		prog.Signals = append(prog.Signals, rawToSignal(entry.Signal))
+	case entry.Projection != nil:
+		appendRawProjection(prog, entry.Projection)
+	case entry.Route != nil:
+		state.hasDirectRoutes = true
+		prog.Routes = append(prog.Routes, rawToRoute(entry.Route))
+	case entry.DecisionTree != nil:
+		routes, errs := rawDecisionTreeToRoutes(entry.DecisionTree, state.treeCount)
+		state.treeCount++
+		prog.Routes = append(prog.Routes, routes...)
+		state.errs = append(state.errs, errs...)
+	case entry.Plugin != nil:
+		prog.Plugins = append(prog.Plugins, rawToPlugin(entry.Plugin))
+	case entry.TestBlock != nil:
+		prog.TestBlocks = append(prog.TestBlocks, rawToTestBlock(entry.TestBlock))
 	}
-	if hasDirectRoutes && treeCount > 0 {
-		errs = append(errs, fmt.Errorf("RECIPE %q: DECISION_TREE and ROUTE declarations cannot coexist", decl.Name))
-	}
-	return decl, errs
 }
 
 func appendRawProjection(prog *Program, raw *rawProjectionDecl) {
