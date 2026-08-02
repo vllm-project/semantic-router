@@ -69,6 +69,7 @@ var maintainedValuesConfigAssets = []string{
 	repoRel("e2e", "profiles", "ml-model-selection", "values.yaml"),
 	repoRel("e2e", "profiles", "multi-endpoint", "values.yaml"),
 	repoRel("e2e", "profiles", "multimodal-routing", "values.yaml"),
+	repoRel("e2e", "profiles", "no-model", "values.yaml"),
 	repoRel("e2e", "profiles", "production-stack", "values.yaml"),
 	repoRel("e2e", "profiles", "rag-hybrid-search", "values.yaml"),
 	repoRel("e2e", "profiles", "response-api-redis-cluster", "values.yaml"),
