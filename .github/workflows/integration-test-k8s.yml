@@ -42,7 +42,7 @@ jobs:
              [[ "${{ needs.changes.outputs.agent_exec }}" == "true" ]] || \
              [[ "${{ github.event_name }}" == "schedule" ]] || \
              [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            profiles=("kubernetes" "dashboard" "remote-embedding")
+            profiles=("kubernetes" "dashboard" "remote-embedding" "no-model")
             printf -v json '"%s",' "${profiles[@]}"
             echo "profiles=[${json%,}]" >> $GITHUB_OUTPUT
             echo 'should_run=true' >> $GITHUB_OUTPUT
