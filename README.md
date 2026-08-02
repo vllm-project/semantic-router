@@ -2,7 +2,7 @@
 
 <img src="website/static/img/artworks/vllm-sr-logo.dark.png" alt="vLLM Semantic Router" width="50%"/>
 
-<p><strong>Building Mixture-of-Models: The Next-Generation Model Architecture for Heterogeneous LLM Inference</strong></p>
+<p><strong>Route every request to the right model, inference strategy, and compute target.</strong></p>
 
 <p>
   <a href="https://vllm-sr.ai">Documentation</a> |
@@ -18,9 +18,9 @@
 
 ## About
 
-**We believe Mixture-of-Models is the next-generation model architecture for heterogeneous LLM inference.**
+vLLM Semantic Router is a programmable routing layer for building Mixture-of-Models systems across heterogeneous LLM infrastructure. It evaluates request signals, user preferences, and application policies to select—or compose—the right model path for each request.
 
-**That is why we built vLLM Semantic Router**—to turn signals and preferences into executable model paths for every user, product, and workload.
+Use it to improve quality, cost, latency, privacy, and safety without hard-coding routing logic into applications.
 
 | Dimension | Fragmented today | With vLLM SR |
 | --- | --- | --- |
@@ -40,8 +40,6 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash
 ```
 
 For platform notes, detailed setup options, and troubleshooting, see the **[Installation Guide](https://vllm-sr.ai/docs/installation/)**.
-
-To evaluate the router — component performance regressions, routing quality across reasoning datasets, or backend comparisons — see the **[Benchmarking Guide](https://vllm-sr.ai/docs/benchmarking/overview)**.
 
 <details>
 <summary>Online playground credentials</summary>
