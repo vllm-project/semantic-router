@@ -67,14 +67,7 @@ func Parse(input string) (*Program, []error) {
 		}
 		parsedAny = true
 		resolved, lowerErrs := rawToProgram(r)
-		prog.Signals = append(prog.Signals, resolved.Signals...)
-		prog.ProjectionPartitions = append(prog.ProjectionPartitions, resolved.ProjectionPartitions...)
-		prog.ProjectionScores = append(prog.ProjectionScores, resolved.ProjectionScores...)
-		prog.ProjectionMappings = append(prog.ProjectionMappings, resolved.ProjectionMappings...)
-		prog.Routes = append(prog.Routes, resolved.Routes...)
-		prog.Models = append(prog.Models, resolved.Models...)
-		prog.Plugins = append(prog.Plugins, resolved.Plugins...)
-		prog.TestBlocks = append(prog.TestBlocks, resolved.TestBlocks...)
+		mergeProgram(prog, resolved)
 		allErrors = append(allErrors, lowerErrs...)
 	}
 
@@ -91,7 +84,10 @@ func splitTopLevelBlocks(input string) []string {
 	var blocks []string
 	depth := 0
 	start := 0
-	keywords := []string{"DECISION_TREE", "PROJECTION", "SIGNAL", "ROUTE", "MODEL", "PLUGIN", "TEST"}
+	keywords := []string{
+		"DECISION_TREE", "ENTRYPOINT", "PROJECTION", "ROUTING", "RECIPE",
+		"SIGNAL", "ROUTE", "MODEL", "PLUGIN", "TEST",
+	}
 
 	for i := 0; i < len(input); i++ {
 		ch := input[i]
@@ -156,6 +152,16 @@ func rawToProgram(raw *rawProgram) (*Program, []error) {
 	treeCount := 0
 	for _, entry := range raw.Entries {
 		switch {
+		case entry.Routing != nil:
+			errs = append(errs, applyRawRouting(prog, entry.Routing)...)
+		case entry.Entrypoint != nil:
+			decl, entryErrs := rawToEntrypoint(entry.Entrypoint)
+			prog.Entrypoints = append(prog.Entrypoints, decl)
+			errs = append(errs, entryErrs...)
+		case entry.Recipe != nil:
+			decl, recipeErrs := rawToRecipe(entry.Recipe)
+			prog.Recipes = append(prog.Recipes, decl)
+			errs = append(errs, recipeErrs...)
 		case entry.Signal != nil:
 			prog.Signals = append(prog.Signals, rawToSignal(entry.Signal))
 		case entry.Projection != nil:
@@ -187,6 +193,118 @@ func rawToProgram(raw *rawProgram) (*Program, []error) {
 		errs = append(errs, fmt.Errorf("DECISION_TREE and ROUTE declarations cannot coexist in the same program. Use only DECISION_TREE (for if/else conditional logic) or only ROUTE (for priority-based routing with WHEN clauses), not both"))
 	}
 	return prog, errs
+}
+
+func mergeProgram(dst, src *Program) {
+	if src.Strategy != "" {
+		dst.Strategy = src.Strategy
+	}
+	dst.Entrypoints = append(dst.Entrypoints, src.Entrypoints...)
+	dst.Recipes = append(dst.Recipes, src.Recipes...)
+	dst.Signals = append(dst.Signals, src.Signals...)
+	dst.ProjectionPartitions = append(dst.ProjectionPartitions, src.ProjectionPartitions...)
+	dst.ProjectionScores = append(dst.ProjectionScores, src.ProjectionScores...)
+	dst.ProjectionMappings = append(dst.ProjectionMappings, src.ProjectionMappings...)
+	dst.Routes = append(dst.Routes, src.Routes...)
+	dst.Models = append(dst.Models, src.Models...)
+	dst.Plugins = append(dst.Plugins, src.Plugins...)
+	dst.TestBlocks = append(dst.TestBlocks, src.TestBlocks...)
+}
+
+func applyRawRouting(prog *Program, raw *rawRoutingDecl) []error {
+	fields := entriesToMap(raw.Fields)
+	strategy, ok := getStringField(fields, "strategy")
+	if !ok {
+		return []error{fmt.Errorf("%s: ROUTING requires strategy", posFromLexer(raw.Pos))}
+	}
+	prog.Strategy = strategy
+	return nil
+}
+
+func rawToEntrypoint(raw *rawEntrypointDecl) (*EntrypointDecl, []error) {
+	decl := &EntrypointDecl{Pos: posFromLexer(raw.Pos)}
+	fields := entriesToMap(raw.Fields)
+	if recipe, ok := getStringField(fields, "recipe"); ok {
+		decl.Recipe = recipe
+	}
+	if modelNames, ok := fields["model_names"].(ArrayValue); ok {
+		for _, item := range modelNames.Items {
+			if name, ok := item.(StringValue); ok {
+				decl.ModelNames = append(decl.ModelNames, name.V)
+			}
+		}
+	}
+	var errs []error
+	if len(decl.ModelNames) == 0 {
+		errs = append(errs, fmt.Errorf("%s: ENTRYPOINT requires a non-empty model_names array", decl.Pos))
+	}
+	if decl.Recipe == "" {
+		errs = append(errs, fmt.Errorf("%s: ENTRYPOINT requires recipe", decl.Pos))
+	}
+	return decl, errs
+}
+
+func rawToRecipe(raw *rawRecipeDecl) (*RecipeDecl, []error) {
+	decl := &RecipeDecl{
+		Name:    unquoteIdent(raw.Name),
+		Program: &Program{},
+		Pos:     posFromLexer(raw.Pos),
+	}
+	for _, opt := range raw.Opts {
+		switch opt.Key {
+		case "description":
+			if opt.Value != nil && opt.Value.Str != nil {
+				decl.Description = unquote(*opt.Value.Str)
+			}
+		case "strategy":
+			if opt.Value != nil {
+				if value, ok := valToValue(opt.Value).(StringValue); ok {
+					decl.Program.Strategy = value.V
+				}
+			}
+		}
+	}
+
+	var errs []error
+	hasDirectRoutes := false
+	treeCount := 0
+	for _, entry := range raw.Body {
+		switch {
+		case entry.Routing != nil:
+			errs = append(errs, applyRawRouting(decl.Program, entry.Routing)...)
+		case entry.Signal != nil:
+			decl.Program.Signals = append(decl.Program.Signals, rawToSignal(entry.Signal))
+		case entry.Projection != nil:
+			appendRawProjection(decl.Program, entry.Projection)
+		case entry.Route != nil:
+			hasDirectRoutes = true
+			decl.Program.Routes = append(decl.Program.Routes, rawToRoute(entry.Route))
+		case entry.DecisionTree != nil:
+			treeCount++
+			routes, treeErrs := rawDecisionTreeToRoutes(entry.DecisionTree, treeCount-1)
+			decl.Program.Routes = append(decl.Program.Routes, routes...)
+			errs = append(errs, treeErrs...)
+		case entry.Plugin != nil:
+			decl.Program.Plugins = append(decl.Program.Plugins, rawToPlugin(entry.Plugin))
+		case entry.TestBlock != nil:
+			decl.Program.TestBlocks = append(decl.Program.TestBlocks, rawToTestBlock(entry.TestBlock))
+		}
+	}
+	if hasDirectRoutes && treeCount > 0 {
+		errs = append(errs, fmt.Errorf("RECIPE %q: DECISION_TREE and ROUTE declarations cannot coexist", decl.Name))
+	}
+	return decl, errs
+}
+
+func appendRawProjection(prog *Program, raw *rawProjectionDecl) {
+	switch raw.Kind {
+	case "partition":
+		prog.ProjectionPartitions = append(prog.ProjectionPartitions, rawToProjectionPartition(raw))
+	case "score":
+		prog.ProjectionScores = append(prog.ProjectionScores, rawToProjectionScore(raw))
+	case "mapping":
+		prog.ProjectionMappings = append(prog.ProjectionMappings, rawToProjectionMapping(raw))
+	}
 }
 
 func rawToProjectionPartition(r *rawProjectionDecl) *ProjectionPartitionDecl {

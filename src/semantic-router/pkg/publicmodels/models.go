@@ -26,9 +26,10 @@ const (
 // discovery. Display metadata and internal execution modes are not control
 // signals.
 type RoutingMetadata struct {
-	Resolution   ResolutionKind `json:"resolution"`
-	Selectable   bool           `json:"selectable"`
-	DefaultRoute bool           `json:"default_route,omitempty"`
+	Resolution   ResolutionKind    `json:"resolution"`
+	Selectable   bool              `json:"selectable"`
+	DefaultRoute bool              `json:"default_route,omitempty"`
+	Recipe       config.RecipeName `json:"recipe,omitempty"`
 }
 
 // OpenAIModel represents a single model in the OpenAI /v1/models response.
@@ -81,7 +82,7 @@ func (b *modelListBuilder) appendAutoAliases(cfg *config.RouterConfig) {
 		autoModelNames,
 		routerOwner,
 		autoModelDescription,
-		selectableVirtualRoute(true),
+		selectableVirtualRoute(config.DefaultRecipeName, true),
 	)
 }
 
@@ -91,7 +92,7 @@ func (b *modelListBuilder) appendEntrypointAliases(cfg *config.RouterConfig) {
 	}
 	for _, entrypoint := range cfg.Entrypoints {
 		description := cfg.EntrypointRecipeDescription(entrypoint.Recipe)
-		b.appendAll(entrypoint.ModelNames, routerOwner, description, selectableVirtualRoute(false))
+		b.appendAll(entrypoint.ModelNames, routerOwner, description, selectableVirtualRoute(entrypoint.Recipe, false))
 	}
 }
 
@@ -108,7 +109,7 @@ func (b *modelListBuilder) appendOrchestratedModels(cfg *config.RouterConfig) {
 			models,
 			routerOwner,
 			orchestratedModelDescription,
-			selectableVirtualRoute(false),
+			selectableVirtualRoute("", false),
 		)
 	}
 }
@@ -151,11 +152,12 @@ func (b *modelListBuilder) append(
 	})
 }
 
-func selectableVirtualRoute(defaultRoute bool) RoutingMetadata {
+func selectableVirtualRoute(recipe config.RecipeName, defaultRoute bool) RoutingMetadata {
 	return RoutingMetadata{
 		Resolution:   ResolutionVirtual,
 		Selectable:   true,
 		DefaultRoute: defaultRoute,
+		Recipe:       recipe,
 	}
 }
 

@@ -34,6 +34,7 @@ var (
 
 	routingProfileContractValidators = []configContractValidator{
 		validateRoutingLocalNames,
+		validateLanguageContracts,
 		validateRoutingStrategy,
 		validateDecisionSignalReferences,
 		validateDomainContracts,

@@ -126,6 +126,52 @@ func TestDefaultRecipeFallsBackToFlatRoutingProfile(t *testing.T) {
 	}
 }
 
+func TestConfigForRecipeKeepsOnlyReferencedKnowledgeBases(t *testing.T) {
+	cfg := &RouterConfig{
+		KnowledgeBases: []KnowledgeBaseConfig{
+			{Name: "privacy_kb"},
+			{Name: "mmlu_kb"},
+		},
+	}
+	recipe := &RoutingRecipe{
+		Name: "privacy",
+		Profile: RoutingProfile{
+			Signals: Signals{KBRules: []KBSignalRule{{KB: "privacy_kb"}}},
+		},
+	}
+
+	scoped := cfg.ConfigForRecipe(recipe)
+	if len(scoped.KnowledgeBases) != 1 || scoped.KnowledgeBases[0].Name != "privacy_kb" {
+		t.Fatalf("expected only the recipe-referenced KB, got %+v", scoped.KnowledgeBases)
+	}
+	if len(cfg.KnowledgeBases) != 2 {
+		t.Fatalf("scoping mutated the shared KB catalog: %+v", cfg.KnowledgeBases)
+	}
+}
+
+func TestConfigForRecipeKeepsKnowledgeBasesUsedByProjectionMetrics(t *testing.T) {
+	cfg := &RouterConfig{
+		KnowledgeBases: []KnowledgeBaseConfig{{Name: "quality_kb"}},
+	}
+	recipe := &RoutingRecipe{
+		Name: "quality",
+		Profile: RoutingProfile{
+			Projections: Projections{Scores: []ProjectionScore{{
+				Name: "quality_score",
+				Inputs: []ProjectionScoreInput{{
+					Type: ProjectionInputKBMetric,
+					KB:   "quality_kb",
+				}},
+			}}},
+		},
+	}
+
+	scoped := cfg.ConfigForRecipe(recipe)
+	if len(scoped.KnowledgeBases) != 1 || scoped.KnowledgeBases[0].Name != "quality_kb" {
+		t.Fatalf("expected the projection-referenced KB, got %+v", scoped.KnowledgeBases)
+	}
+}
+
 func TestRoutingNamespaceKeyIsCollisionSafe(t *testing.T) {
 	left := RoutingNamespaceKey("a::b", "c")
 	right := RoutingNamespaceKey("a", "b::c")

@@ -43,10 +43,15 @@ func (c *Classifier) evaluatePIISignal(results *SignalResults, mu *sync.Mutex, p
 
 	// Step 2: Run PII token classification exactly once per unique content piece.
 	// Entity types are returned as "LABEL_{class_id}" and translated by PIIMapping.
-	piiCache := make(map[string]cachedPIIResult, len(uniqueContents))
+	piiCache := make(map[string][]cachedPIIResult, len(uniqueContents))
 	for _, content := range uniqueContents {
-		tokenResult, err := c.piiInference.ClassifyTokens(content)
-		piiCache[content] = cachedPIIResult{tokenResult, err}
+		chunks := piiSignalChunks(content)
+		cached := make([]cachedPIIResult, 0, len(chunks))
+		for _, chunk := range chunks {
+			tokenResult, err := c.piiInference.ClassifyTokens(chunk)
+			cached = append(cached, cachedPIIResult{tokenResult, err})
+		}
+		piiCache[content] = cached
 	}
 
 	// Step 3: Evaluate each rule concurrently using the cached token results.
@@ -72,7 +77,7 @@ func (c *Classifier) evaluatePIISignal(results *SignalResults, mu *sync.Mutex, p
 	logging.Debugf("[Signal Computation] PII signal evaluation completed in %v", elapsed)
 }
 
-func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUserMessages []string, piiCache map[string]cachedPIIResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
+func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUserMessages []string, piiCache map[string][]cachedPIIResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
 	ruleContents := collectPIIRuleContents(piiText, nonUserMessages, rule.IncludeHistory)
 	if len(ruleContents) == 0 {
 		return

@@ -168,7 +168,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		forceEvaluateAll,
 		"",
 		nil,
-		classification.ConversationFacts{},
+		input.conversationFacts,
 		input.imageURL,
 	)
 

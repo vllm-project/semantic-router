@@ -123,8 +123,6 @@ jobs:
               - 'openvino-binding/**'
               - 'bench/**'
               - 'config/**'
-              - 'scripts/**'
-              - 'deploy/examples/**'
               - 'tools/**'
               - 'go.mod'
               - 'go.sum'
@@ -138,7 +136,6 @@ jobs:
             website:
               - 'website/**'
             docs:
-              - 'docs/**'
               - '**/*.md'
               - '**/*.mdx'
             helm:
@@ -175,7 +172,7 @@ jobs:
               - 'onnx-binding/**'
             agent_text:
               - 'AGENTS.md'
-              - 'docs/agent/**'
+              - 'tools/agent/docs/**'
               - 'tools/agent/skills/**'
               - 'src/fleet-sim/AGENTS.md'
               - 'src/fleet-sim/fleet_sim/optimizer/AGENTS.md'
@@ -260,7 +257,7 @@ jobs:
             e2e_multi_endpoint:
               - 'e2e/profiles/multi-endpoint/**'
               - 'e2e/config/config.multi-endpoint.yaml'
-              - 'scripts/multi-endpoint/**'
+              - 'tools/demos/multi-endpoint.sh'
             e2e_authz_rbac:
               - 'e2e/profiles/authz-rbac/**'
               - 'e2e/config/config.authz-rbac.yaml'

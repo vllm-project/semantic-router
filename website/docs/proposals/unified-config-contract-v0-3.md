@@ -61,12 +61,14 @@ global:
 
 ### DSL boundary
 
-DSL now owns only:
+DSL owns only routing semantics:
 
 - `routing.modelCards`
 - `routing.signals`
 - `routing.projections` for signal coordination and derived routing outputs
 - `routing.decisions`, including route-local `algorithm`, plugin references, emitted directives, and bounded candidate-iteration metadata used by DSL `FOR ... IN` authoring
+- optional `entrypoints` through `ENTRYPOINT` blocks
+- optional isolated `recipes[].routing` profiles through `RECIPE` blocks
 
 It no longer owns endpoints, API keys, listeners, or router-global runtime settings.
 
@@ -141,7 +143,11 @@ Remote onboarding import can fetch and apply a full canonical YAML file. That ke
 
 ### DSL import
 
-DSL import still accepts a full router config YAML, but it decompiles only the `routing` section into DSL. Static deployment and global runtime settings stay in YAML.
+CLI DSL import accepts a full router config YAML and decompiles the default
+`routing` profile together with `ENTRYPOINT` and isolated `RECIPE` scopes.
+Static deployment and global runtime settings stay in YAML. The Dashboard
+visual DSL editor remains scoped to the default routing profile; its Config
+page owns multi-recipe lifecycle changes.
 
 The router parser itself now accepts only canonical v0.3 YAML for steady-state runtime config. Legacy mixed layouts must go through explicit migration first.
 
@@ -156,7 +162,7 @@ The repo no longer ships large full-example trees under `config/intelligent-rout
 - `config/decision/` is organized by boolean rule shape (`single`, `and`, `or`, `not`, `composite`)
 - `config/algorithm/` is organized by routing policy family (`looper`, `selection`), with `fusion` as the looper fragment for panel-and-judge deliberation
 - latest `docs/tutorials/` source tree mirrors `signal/decision/algorithm/plugin/global`, and the older tutorial trees were removed from the active docs surface
-- runtime support examples such as `deploy/examples/runtime/semantic-cache/`, `deploy/examples/runtime/response-api/`, and `deploy/examples/runtime/tools/` stay separate because they are not part of the user-facing config contract
+- runtime support examples such as `config/runtime/semantic-cache/`, `config/runtime/response-api/`, and `config/runtime/tools/` stay separate because they are not part of the user-facing config contract
 - harness-only manifests live under `e2e/config/`
 - `go test ./pkg/config/...` and `make agent-lint` enforce that `config/config.yaml` stays exhaustive and aligned with the public config contract
 

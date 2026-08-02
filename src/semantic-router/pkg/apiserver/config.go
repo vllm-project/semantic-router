@@ -24,6 +24,10 @@ type ClassificationAPIServer struct {
 	memoryStore           memory.Store
 	knowledgeBaseMapCache *knowledgeBaseMapCache
 	startupStateLoader    func() *startupstatus.State
+	// The startup-status writer is created once during process bootstrap. Keep
+	// its storage contract stable across live config swaps so /ready does not
+	// start reading from a different backend after a successful reload.
+	startupStatusConfig *config.StartupStatusConfig
 }
 
 type (

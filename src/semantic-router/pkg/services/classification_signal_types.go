@@ -1,6 +1,8 @@
 package services
 
 import (
+	"encoding/json"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
@@ -8,10 +10,11 @@ import (
 
 // IntentRequest represents a request for intent classification.
 type IntentRequest struct {
-	Text     string          `json:"text"`
-	Messages []IntentMessage `json:"messages,omitempty"`
-	Model    string          `json:"model,omitempty"`
-	Options  *IntentOptions  `json:"options,omitempty"`
+	Text     string            `json:"text"`
+	Messages []IntentMessage   `json:"messages,omitempty"`
+	Tools    []json.RawMessage `json:"tools,omitempty"`
+	Model    string            `json:"model,omitempty"`
+	Options  *IntentOptions    `json:"options,omitempty"`
 }
 
 // IntentOptions contains options for intent classification.
@@ -56,6 +59,8 @@ type DecisionResult struct {
 // EvalDecisionResult represents the decision result for eval scenarios (without confidence).
 type EvalDecisionResult struct {
 	DecisionName     string          `json:"decision_name"`
+	Algorithm        string          `json:"algorithm"`
+	Plugins          []string        `json:"plugins,omitempty"`
 	UsedSignals      *MatchedSignals `json:"used_signals"`      // Signals used by this decision (from decision rules)
 	MatchedSignals   *MatchedSignals `json:"matched_signals"`   // Signals that matched
 	UnmatchedSignals *MatchedSignals `json:"unmatched_signals"` // Signals that didn't match

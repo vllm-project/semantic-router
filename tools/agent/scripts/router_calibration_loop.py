@@ -16,6 +16,7 @@ from router_calibration_support import (
     evaluate_probes,
     fetch_router_snapshot,
     run_validate,
+    wait_for_config_activation,
     wait_for_router_ready,
     write_json,
 )
@@ -49,6 +50,12 @@ def cmd_deploy(args: argparse.Namespace) -> int:
         Path(args.yaml),
         Path(args.dsl) if args.dsl else None,
     )
+    activation_state = wait_for_config_activation(
+        args.router_url,
+        str(response.get("runtime_hash") or ""),
+        timeout_seconds=args.ready_timeout,
+        interval_seconds=args.ready_interval,
+    )
     ready_state = wait_for_router_ready(
         args.router_url,
         timeout_seconds=args.ready_timeout,
@@ -59,6 +66,7 @@ def cmd_deploy(args: argparse.Namespace) -> int:
             Path(args.output),
             {
                 "deploy": response,
+                "activation": activation_state,
                 "ready": ready_state,
             },
         )
@@ -67,6 +75,7 @@ def cmd_deploy(args: argparse.Namespace) -> int:
             json.dumps(
                 {
                     "deploy": response,
+                    "activation": activation_state,
                     "ready": ready_state,
                 },
                 indent=2,
@@ -111,10 +120,18 @@ def cmd_run(args: argparse.Namespace) -> int:
         write_json(report_dir / "validate.json", validate_result)
 
     deploy_result = None
+    activation_result = None
     ready_result = None
     if yaml_path is not None:
         deploy_result = deploy_config(args.router_url, yaml_path, dsl_path)
         write_json(report_dir / "deploy.json", deploy_result)
+        activation_result = wait_for_config_activation(
+            args.router_url,
+            str(deploy_result.get("runtime_hash") or ""),
+            timeout_seconds=args.ready_timeout,
+            interval_seconds=args.ready_interval,
+        )
+        write_json(report_dir / "activation-after-deploy.json", activation_result)
         ready_result = wait_for_router_ready(
             args.router_url,
             timeout_seconds=args.ready_timeout,
@@ -201,7 +218,7 @@ def add_deploy_subparser(subparsers: argparse._SubParsersAction) -> None:
         "--ready-timeout",
         type=float,
         default=300.0,
-        help="Seconds to wait for GET /ready after deploy",
+        help="Seconds to wait for runtime activation and GET /ready after deploy",
     )
     deploy.add_argument(
         "--ready-interval",
@@ -251,7 +268,7 @@ def add_run_subparser(subparsers: argparse._SubParsersAction) -> None:
         "--ready-timeout",
         type=float,
         default=300.0,
-        help="Seconds to wait for GET /ready after deploy",
+        help="Seconds to wait for runtime activation and GET /ready after deploy",
     )
     run.add_argument(
         "--ready-interval",

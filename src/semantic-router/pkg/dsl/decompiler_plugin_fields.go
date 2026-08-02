@@ -60,6 +60,9 @@ func pluginFieldsSemanticCache(p *config.DecisionPlugin) map[string]Value {
 	if cfg.SimilarityThreshold != nil {
 		fields["similarity_threshold"] = FloatValue{V: float64(*cfg.SimilarityThreshold)}
 	}
+	if cfg.TTLSeconds != nil {
+		fields["ttl_seconds"] = IntValue{V: *cfg.TTLSeconds}
+	}
 	return fields
 }
 
@@ -83,6 +86,12 @@ func pluginFieldsRouterReplay(p *config.DecisionPlugin) map[string]Value {
 	}
 	if cfg.MaxBodyBytes != 0 {
 		fields["max_body_bytes"] = IntValue{V: cfg.MaxBodyBytes}
+	}
+	if cfg.MaxToolTraceBytes != 0 {
+		fields["max_tool_trace_bytes"] = IntValue{V: cfg.MaxToolTraceBytes}
+	}
+	if cfg.MaxToolTraceSteps != 0 {
+		fields["max_tool_trace_steps"] = IntValue{V: cfg.MaxToolTraceSteps}
 	}
 	return fields
 }
@@ -122,6 +131,12 @@ func pluginFieldsHallucination(p *config.DecisionPlugin) map[string]Value {
 	}
 	if cfg.HallucinationAction != "" {
 		fields["hallucination_action"] = StringValue{V: cfg.HallucinationAction}
+	}
+	if cfg.UnverifiedFactualAction != "" {
+		fields["unverified_factual_action"] = StringValue{V: cfg.UnverifiedFactualAction}
+	}
+	if cfg.IncludeHallucinationDetails {
+		fields["include_hallucination_details"] = BoolValue{V: true}
 	}
 	return fields
 }

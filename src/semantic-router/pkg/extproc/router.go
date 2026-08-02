@@ -212,6 +212,21 @@ func (r *OpenAIRouter) LoadToolsDatabase() error {
 	return nil
 }
 
+// PreloadKnowledgeBases moves lazy KB embedding work out of the first routed
+// request and into startup/reload readiness.
+func (r *OpenAIRouter) PreloadKnowledgeBases() error {
+	if r == nil {
+		return nil
+	}
+	if r.RecipeClassifiers != nil {
+		return r.RecipeClassifiers.PreloadKnowledgeBases()
+	}
+	if r.Classifier == nil {
+		return nil
+	}
+	return r.Classifier.PreloadKnowledgeBases()
+}
+
 func (r *OpenAIRouter) RegisterToolStrategy(name string, retriever tools.ToolRetriever) {
 	if r.ToolsRegistry == nil {
 		r.ToolsRegistry = tools.NewRegistry()

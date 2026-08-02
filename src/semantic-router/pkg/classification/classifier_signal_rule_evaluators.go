@@ -11,12 +11,17 @@ import (
 
 func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mutex, text string) {
 	start := time.Now()
-	category, keywords, err := c.keywordClassifier.ClassifyWithKeywords(text)
+	matches, err := c.keywordClassifier.MatchAll(text)
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 
-	// Record signal extraction metrics
-	c.recordSignalExtraction(config.SignalTypeKeyword, category, latencySeconds)
+	primaryCategory := ""
+	if len(matches) > 0 {
+		primaryCategory = matches[0].RuleName
+	}
+	// Extraction latency is measured once per classifier invocation. Match
+	// counters below still retain the individual rule labels.
+	c.recordSignalExtraction(config.SignalTypeKeyword, primaryCategory, latencySeconds)
 
 	// Record metrics (use microseconds for better precision)
 	results.Metrics.Keyword.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
@@ -25,14 +30,28 @@ func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mute
 	logging.Debugf("[Signal Computation] Keyword signal evaluation completed in %v", elapsed)
 	if err != nil {
 		logging.Errorf("keyword rule evaluation failed: %v", err)
-	} else if category != "" {
-		// Record signal match
-		c.recordSignalMatch(config.SignalTypeKeyword, category)
+		return
+	}
 
-		mu.Lock()
-		results.MatchedKeywordRules = append(results.MatchedKeywordRules, category)
-		results.MatchedKeywords = append(results.MatchedKeywords, keywords...)
-		mu.Unlock()
+	for _, match := range matches {
+		c.recordSignalMatch(config.SignalTypeKeyword, match.RuleName)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	seenKeywords := make(map[string]struct{}, len(results.MatchedKeywords))
+	for _, keyword := range results.MatchedKeywords {
+		seenKeywords[keyword] = struct{}{}
+	}
+	for _, match := range matches {
+		results.MatchedKeywordRules = append(results.MatchedKeywordRules, match.RuleName)
+		for _, keyword := range match.Keywords {
+			if _, seen := seenKeywords[keyword]; seen {
+				continue
+			}
+			seenKeywords[keyword] = struct{}{}
+			results.MatchedKeywords = append(results.MatchedKeywords, keyword)
+		}
 	}
 }
 

@@ -118,7 +118,7 @@ This makes review incremental — reviewers can follow the reasoning step by ste
 This repo has a full agent harness. For complex tasks:
 
 1. Read `AGENTS.md` for the entrypoint.
-2. Read `docs/agent/README.md` for the full system of record.
+2. Read `tools/agent/docs/README.md` for the full system of record.
 3. Run `make agent-report ENV=cpu CHANGED_FILES="..."` to get routed context.
 4. Validate with the canonical gates before marking work complete.
 

@@ -165,6 +165,12 @@ func (e *DecisionEngine) evaluateDecisionWithSignals(
 	decision *config.Decision,
 	signals *SignalMatches,
 ) (matched bool, confidence float64, matchedRules []string) {
+	// Omitting rules is the YAML equivalent of a DSL route without WHEN. Keep
+	// this root-only contract explicit instead of relying on the zero value to
+	// fall through to OR semantics.
+	if decision.Rules.IsEmpty() {
+		return true, 0, nil
+	}
 	return e.evalNode(decision.Rules, signals)
 }
 

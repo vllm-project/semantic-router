@@ -26,8 +26,8 @@ const (
 	// emits on every /v1/messages request belonging to the same chat thread.
 	// The router mirrors this into RequestContext.SessionID with priority
 	// below x-session-id (operator/SDK override) but above metadata.user_id
-	// and the message-fingerprint fallbacks. See docs/sessions.md for the
-	// full priority order.
+	// and the message-fingerprint fallbacks. See the session identification API
+	// documentation for the full priority order.
 	XClaudeCodeSessionID = "x-claude-code-session-id"
 
 	// DisableRouterMemory allows clients to opt-out of router-managed memory injection.

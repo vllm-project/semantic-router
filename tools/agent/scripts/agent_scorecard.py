@@ -38,7 +38,7 @@ PLAN_LINK_PATTERN = re.compile(r"\((pl-\d{4}-[a-z0-9-]+\.md)\)")
 
 
 def collect_current_execution_plan_paths() -> list[str]:
-    plan_readme = REPO_ROOT / "docs" / "agent" / "plans" / "README.md"
+    plan_readme = REPO_ROOT / "tools" / "agent" / "docs" / "plans" / "README.md"
     text = plan_readme.read_text(encoding="utf-8")
     lines = read_section_lines(text, "## Current Execution Plans")
     plans: list[str] = []
@@ -51,7 +51,7 @@ def collect_current_execution_plan_paths() -> list[str]:
 
 def collect_open_execution_plan_tasks() -> list[str]:
     tasks: list[str] = []
-    plan_dir = REPO_ROOT / "docs" / "agent" / "plans"
+    plan_dir = REPO_ROOT / "tools" / "agent" / "docs" / "plans"
     if not plan_dir.exists():
         return tasks
 

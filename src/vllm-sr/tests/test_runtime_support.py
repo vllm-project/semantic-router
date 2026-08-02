@@ -1,3 +1,5 @@
+import subprocess
+import sys
 from pathlib import Path
 
 import yaml
@@ -12,6 +14,21 @@ from cli.container_start import _build_dashboard_runtime_env
 from cli.runtime_stack import resolve_runtime_stack
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_runtime_support_import_does_not_load_optional_cli_dependencies():
+    script = """
+import sys
+
+import cli.commands.runtime_support
+
+assert "cli.commands.config" not in sys.modules
+assert "cli.commands.model" not in sys.modules
+assert "jinja2" not in sys.modules
+assert "requests" not in sys.modules
+"""
+
+    subprocess.run([sys.executable, "-c", script], check=True)
 
 
 def test_apply_runtime_mode_env_vars_sets_dashboard_readonly_when_requested():
@@ -414,7 +431,7 @@ def test_resolve_effective_config_path_keeps_bert_deprecated_with_amd_gpu_defaul
     monkeypatch.delenv("VLLM_SR_AMD_FORCE_GPU", raising=False)
     monkeypatch.delenv("VLLM_SR_AMD_PRESERVE_CPU", raising=False)
     config_path = tmp_path / "config.yaml"
-    balance_recipe = REPO_ROOT / "deploy" / "recipes" / "balance.yaml"
+    balance_recipe = REPO_ROOT / "config" / "recipes" / "balance" / "config.yaml"
     config_path.write_text(balance_recipe.read_text(encoding="utf-8"))
 
     effective_path = resolve_effective_config_path(

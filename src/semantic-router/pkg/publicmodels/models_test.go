@@ -38,14 +38,14 @@ func TestNewOpenAIModelListUsesSourceMetadata(t *testing.T) {
 		t,
 		modelsByID["router/custom"],
 		routerOwner,
-		selectableVirtualRoute(true),
+		selectableVirtualRoute(config.DefaultRecipeName, true),
 		autoModelDescription,
 	)
 	assertPublicModel(
 		t,
 		modelsByID["partner/balanced"],
 		routerOwner,
-		selectableVirtualRoute(false),
+		selectableVirtualRoute("balanced", false),
 		"Intelligent Router for Mixture-of-Models",
 	)
 	assertPublicModel(
@@ -63,7 +63,7 @@ func TestNewOpenAIModelListKeepsDefaultAliasesGeneric(t *testing.T) {
 		t.Fatalf("default model count = %d, want %d", len(modelList.Data), len(config.DefaultAutoModelNames()))
 	}
 	for _, model := range modelList.Data {
-		assertPublicModel(t, model, routerOwner, selectableVirtualRoute(true), autoModelDescription)
+		assertPublicModel(t, model, routerOwner, selectableVirtualRoute(config.DefaultRecipeName, true), autoModelDescription)
 	}
 }
 

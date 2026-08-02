@@ -2440,13 +2440,13 @@ func getMilvusConfigPath() string {
 	}
 
 	// Try relative from project root (when run via make)
-	configPath := "deploy/examples/runtime/semantic-cache/milvus.yaml"
+	configPath := "config/runtime/semantic-cache/milvus.yaml"
 	if _, err := os.Stat(configPath); err == nil {
 		return configPath
 	}
 
 	// Fallback to relative from test directory
-	return "../../../../../deploy/examples/runtime/semantic-cache/milvus.yaml"
+	return "../../../../../config/runtime/semantic-cache/milvus.yaml"
 }
 
 // BenchmarkHybridVsMilvus is the comprehensive benchmark comparing hybrid cache vs pure Milvus

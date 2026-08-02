@@ -28,6 +28,7 @@ export default function ChatComposerModelSelect({
     return (
       !normalized ||
       model.id.toLowerCase().includes(normalized) ||
+      model.recipe?.toLowerCase().includes(normalized) ||
       model.description.toLowerCase().includes(normalized)
     )
   })
@@ -154,6 +155,7 @@ export default function ChatComposerModelSelect({
                 >
                   <span className={styles.optionIdentity}>
                     <code>{model.id}</code>
+                    {model.recipe ? <small>recipe: {model.recipe}</small> : null}
                   </span>
                   {model.description ? (
                     <span className={styles.optionDescription}>{model.description}</span>

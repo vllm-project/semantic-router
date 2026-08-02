@@ -121,13 +121,7 @@ func ValidateWithSymbols(input string) ([]Diagnostic, *SymbolTable, []error) {
 		}
 	}
 
-	v := &Validator{
-		prog:        prog,
-		signalNames: make(map[string]map[string]bool),
-		modelNames:  make(map[string]bool),
-		modelLoRAs:  make(map[string]map[string]bool),
-		pluginNames: make(map[string]bool),
-	}
+	v := newValidator(prog)
 
 	// Level 1: Parser errors become Error diagnostics
 	for _, e := range parseErrors {
@@ -149,6 +143,7 @@ func ValidateWithSymbols(input string) ([]Diagnostic, *SymbolTable, []error) {
 
 	// Level 4: Conflict detection
 	v.checkConflicts()
+	v.checkRoutingScopes()
 
 	// Extract symbol table for editor completions
 	symbols := v.extractSymbolTable()
@@ -158,18 +153,98 @@ func ValidateWithSymbols(input string) ([]Diagnostic, *SymbolTable, []error) {
 
 // ValidateAST performs Level 2 and Level 3 validation on an existing AST.
 func ValidateAST(prog *Program) []Diagnostic {
-	v := &Validator{
+	v := newValidator(prog)
+	v.buildSymbolTable()
+	v.checkReferences()
+	v.checkConstraints()
+	v.checkConflicts()
+	v.checkRoutingScopes()
+	return v.diagnostics
+}
+
+func newValidator(prog *Program) *Validator {
+	return &Validator{
 		prog:        prog,
 		signalNames: make(map[string]map[string]bool),
 		modelNames:  make(map[string]bool),
 		modelLoRAs:  make(map[string]map[string]bool),
 		pluginNames: make(map[string]bool),
 	}
-	v.buildSymbolTable()
-	v.checkReferences()
-	v.checkConstraints()
-	v.checkConflicts()
-	return v.diagnostics
+}
+
+// checkRoutingScopes validates every recipe with an independent symbol table.
+// Only the model catalog is inherited from the parent program; signals,
+// projections, plugins, decisions, and tests stay recipe-local.
+func (v *Validator) checkRoutingScopes() {
+	if v.prog == nil {
+		return
+	}
+	v.checkStrategy(v.prog.Strategy, Position{})
+
+	recipeNames := map[string]Position{"default": {}}
+	for _, recipe := range v.prog.Recipes {
+		if recipe.Name == "" {
+			v.addDiag(DiagError, recipe.Pos, "RECIPE name cannot be empty", nil)
+			continue
+		}
+		if first, exists := recipeNames[recipe.Name]; exists {
+			v.addDiag(DiagError, recipe.Pos,
+				fmt.Sprintf("Recipe %q is declared more than once (first declaration at %s)", recipe.Name, first), nil)
+			continue
+		}
+		recipeNames[recipe.Name] = recipe.Pos
+
+		scoped := recipeProgramWithSharedModels(v.prog, recipe.Program)
+		child := newValidator(scoped)
+		child.buildSymbolTable()
+		child.checkReferences()
+		child.checkConstraints()
+		child.checkConflicts()
+		child.checkStrategy(scoped.Strategy, recipe.Pos)
+		for _, diag := range child.diagnostics {
+			diag.Message = fmt.Sprintf("RECIPE %q: %s", recipe.Name, diag.Message)
+			v.diagnostics = append(v.diagnostics, diag)
+		}
+	}
+
+	seenModels := make(map[string]Position)
+	for _, entrypoint := range v.prog.Entrypoints {
+		if _, exists := recipeNames[entrypoint.Recipe]; !exists {
+			v.addDiag(DiagWarning, entrypoint.Pos,
+				fmt.Sprintf("Entrypoint references unknown recipe %q", entrypoint.Recipe), nil)
+		}
+		for _, modelName := range entrypoint.ModelNames {
+			if first, exists := seenModels[modelName]; exists {
+				v.addDiag(DiagWarning, entrypoint.Pos,
+					fmt.Sprintf("Entrypoint model %q is already mapped at %s", modelName, first), nil)
+				continue
+			}
+			seenModels[modelName] = entrypoint.Pos
+		}
+	}
+}
+
+func recipeProgramWithSharedModels(parent, recipe *Program) *Program {
+	if recipe == nil {
+		return &Program{Models: parent.Models}
+	}
+	return &Program{
+		Strategy:             recipe.Strategy,
+		Signals:              recipe.Signals,
+		ProjectionPartitions: recipe.ProjectionPartitions,
+		ProjectionScores:     recipe.ProjectionScores,
+		ProjectionMappings:   recipe.ProjectionMappings,
+		Routes:               recipe.Routes,
+		Models:               parent.Models,
+		Plugins:              recipe.Plugins,
+		TestBlocks:           recipe.TestBlocks,
+	}
+}
+
+func (v *Validator) checkStrategy(strategy string, pos Position) {
+	if err := config.RoutingStrategy(strategy).Validate(); err != nil {
+		v.addDiag(DiagConstraint, pos, err.Error(), nil)
+	}
 }
 
 // ---------- Symbol Table ----------

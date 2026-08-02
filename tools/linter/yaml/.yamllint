@@ -5,6 +5,7 @@ ignore: |
   # the Install YAML in bin/
   .git
   .github
+  .agent-harness
   node_modules
   .crd-ref-docs.yaml
   deploy/helm

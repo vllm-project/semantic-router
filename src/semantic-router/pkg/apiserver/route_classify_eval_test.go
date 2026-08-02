@@ -79,6 +79,9 @@ func TestHandleEvalClassification_AcceptsMessagesArray(t *testing.T) {
 
 	reqBody := map[string]interface{}{
 		"model": "amd/rocm-v1-private",
+		"tools": []map[string]interface{}{
+			{"type": "function", "function": map[string]interface{}{"name": "search"}},
+		},
 		"messages": []map[string]interface{}{
 			{"role": "system", "content": "You are a careful tutor."},
 			{"role": "user", "content": "Explain inflation vs recession in plain English."},
@@ -105,6 +108,9 @@ func TestHandleEvalClassification_AcceptsMessagesArray(t *testing.T) {
 	}
 	if len(fakeSvc.lastEvalReq.Messages) != 4 {
 		t.Fatalf("expected 4 messages to be forwarded, got %d", len(fakeSvc.lastEvalReq.Messages))
+	}
+	if len(fakeSvc.lastEvalReq.Tools) != 1 {
+		t.Fatalf("expected one tool definition to be forwarded, got %d", len(fakeSvc.lastEvalReq.Tools))
 	}
 	if fakeSvc.lastEvalReq.Options == nil || !fakeSvc.lastEvalReq.Options.EvaluateAllSignals {
 		t.Fatalf("expected evaluate_all_signals=true, got %#v", fakeSvc.lastEvalReq.Options)

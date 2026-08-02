@@ -11,7 +11,7 @@ instructions: |
 
   ## Key Entry Points
   - AGENTS.md — agent harness entrypoint
-  - docs/agent/README.md — full agent documentation
+  - tools/agent/docs/README.md — full agent documentation
   - CONTRIBUTING.md — contributor guide
 
   ## Development

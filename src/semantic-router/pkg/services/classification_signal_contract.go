@@ -45,7 +45,7 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 		true,
 		"",
 		nil,
-		classification.ConversationFacts{},
+		input.conversationFacts,
 		input.imageURL,
 	)
 

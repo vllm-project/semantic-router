@@ -153,3 +153,41 @@ Configuration loading rejects:
   recipe
 
 The same local name in different recipes is intentionally allowed.
+
+## Lifecycle management
+
+Use the recipe endpoints when an operator needs to stage, replace, or retire a
+single policy without rewriting the rest of the canonical document. Reads
+return an `ETag`; every mutation requires the matching value in `If-Match`.
+That optimistic-concurrency contract prevents a stale dashboard tab or
+automation job from overwriting a newer config.
+
+```bash
+# Read the active collection and retain the ETag response header.
+curl -i http://localhost:8080/config/router/recipes
+
+# Validate the exact mutation without writing, backing up, or reloading.
+curl -X POST http://localhost:8080/config/router/recipes/validate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "privacy-first",
+    "routing": {"strategy": "priority", "decisions": []},
+    "entrypoints": ["vllm-sr/privacy"]
+  }'
+
+# Create or replace atomically. Replace <etag> with the current response value.
+curl -X PUT http://localhost:8080/config/router/recipes/privacy-first \
+  -H 'Content-Type: application/json' \
+  -H 'If-Match: <etag>' \
+  -d '{
+    "routing": {"strategy": "priority", "decisions": []},
+    "entrypoints": ["vllm-sr/privacy"]
+  }'
+```
+
+A successful mutation validates the complete document, creates a backup,
+writes atomically, reloads Router and Envoy, and publishes a new `ETag`. A
+missing precondition returns `428`; a stale `ETag` returns `412`. The API
+rejects deletion of `default` and deletion of any named recipe still referenced
+by an entrypoint. Detach the entrypoint in a guarded `PUT`, then issue the
+guarded `DELETE`.

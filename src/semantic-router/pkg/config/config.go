@@ -94,6 +94,10 @@ type RouterConfig struct {
 	// Runtime-only knowledge bases loaded from global.model_catalog.
 	KnowledgeBases []KnowledgeBaseConfig `yaml:"knowledge_bases,omitempty"`
 	ConfigBaseDir  string                `yaml:"-"`
+	// DocumentHash identifies the exact YAML document from which this immutable
+	// runtime snapshot was parsed. Management APIs use it to distinguish a
+	// persisted config from the config that has completed hot reload.
+	DocumentHash string `yaml:"-"`
 }
 
 // AuthzConfig configures how the router resolves per-user LLM API keys.

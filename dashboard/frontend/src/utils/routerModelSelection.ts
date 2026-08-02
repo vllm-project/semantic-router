@@ -11,6 +11,7 @@ interface RouterModelRoutingRecord {
   resolution?: unknown
   selectable?: unknown
   default_route?: unknown
+  recipe?: unknown
 }
 
 interface RouterModelsResponse {
@@ -20,6 +21,7 @@ interface RouterModelsResponse {
 export interface RouterModelOption {
   id: string
   description: string
+  recipe?: string
 }
 
 type RouterModelResolution = 'virtual' | 'passthrough'
@@ -28,6 +30,7 @@ interface RouterModelRoutingMetadata {
   resolution: RouterModelResolution
   selectable: boolean
   defaultRoute: boolean
+  recipe?: string
 }
 
 const LEGACY_AUTO_MODEL_IDS = new Set(['auto', CANONICAL_AUTO_MODEL])
@@ -60,18 +63,25 @@ function modelRoutingMetadata(entry: RouterModelRecord): RouterModelRoutingMetad
       resolution,
       selectable,
       default_route: defaultRoute,
+      recipe,
     } = entry.routing as RouterModelRoutingRecord
     if (
       (resolution !== 'virtual' && resolution !== 'passthrough') ||
       typeof selectable !== 'boolean' ||
-      (defaultRoute !== undefined && typeof defaultRoute !== 'boolean')
+      (defaultRoute !== undefined && typeof defaultRoute !== 'boolean') ||
+      (recipe !== undefined && (typeof recipe !== 'string' || !recipe.trim()))
     ) {
       return null
     }
 
     const isDefaultRoute = defaultRoute ?? false
     if (isDefaultRoute && (resolution !== 'virtual' || !selectable)) return null
-    return { resolution, selectable, defaultRoute: isDefaultRoute }
+    return {
+      resolution,
+      selectable,
+      defaultRoute: isDefaultRoute,
+      recipe: typeof recipe === 'string' ? recipe.trim() : undefined,
+    }
   }
 
   // Older routers do not emit routing metadata. Preserve only their standard
@@ -115,6 +125,7 @@ export function listRouterModels(payload: unknown): RouterModelOption[] {
       id: modelId(entry),
       description: typeof entry.description === 'string' ? entry.description.trim() : '',
       defaultRoute: modelRoutingMetadata(entry)?.defaultRoute ?? false,
+      recipe: modelRoutingMetadata(entry)?.recipe,
     }))
     .filter((model) => {
       if (seen.has(model.id)) return false
@@ -124,6 +135,7 @@ export function listRouterModels(payload: unknown): RouterModelOption[] {
   const toOption = (model: (typeof models)[number]): RouterModelOption => ({
     id: model.id,
     description: model.description,
+    ...(model.recipe ? { recipe: model.recipe } : {}),
   })
   const explicitModels = models.filter((model) => !model.defaultRoute)
   if (explicitModels.length > 0) return explicitModels.map(toOption)

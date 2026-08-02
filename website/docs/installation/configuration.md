@@ -31,7 +31,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
 
 ## Ownership by section
 
-- `routing` is the DSL-owned surface.
+- `routing`, `entrypoints`, and `recipes` are the DSL-owned routing-semantic surfaces.
   - `routing.modelCards`
   - `routing.modelCards[].loras`
   - `routing.signals`
@@ -282,15 +282,15 @@ Latest tutorials follow the same taxonomy:
 
 Repo-owned runtime and harness assets now live outside `config/`:
 
-- `deploy/examples/runtime/semantic-cache/`
-- `deploy/examples/runtime/response-api/`
-- `deploy/examples/runtime/tools/`
+- `config/runtime/semantic-cache/`
+- `config/runtime/response-api/`
+- `config/runtime/tools/`
 - `e2e/config/`
 - `deploy/local/envoy.yaml`
 
 Test-only ONNX binding assets now live under `e2e/config/onnx-binding/`.
 
-Those directories are support assets, not the main user-facing config contract. For hand-authored config, start from `config/config.yaml` or the fragment directories above. In this repository, the exhaustive reference config points `global.integrations.tools.tools_db_path` at `deploy/examples/runtime/tools/tools_db.json` for local development.
+Those directories are support assets, not the main user-facing config contract. For hand-authored config, start from `config/config.yaml` or the fragment directories above. In this repository, the exhaustive reference config points `global.integrations.tools.tools_db_path` at `config/runtime/tools/tools_db.json` for local development.
 
 `config/config.yaml` is not just a sample anymore. The repository enforces it as the exhaustive public-contract reference:
 
@@ -316,8 +316,8 @@ The dashboard mirrors the same contract:
 
 For a focused tutorial, read [Projections](../tutorials/projection/overview). For a maintained end-to-end example, use:
 
-- [`deploy/recipes/balance.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.yaml)
-- [`deploy/recipes/balance.dsl`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.dsl)
+- [`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)
+- [`config/recipes/balance/recipe.dsl`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/recipe.dsl)
 
 ## How to use it
 
@@ -356,8 +356,17 @@ Use the dashboard when you want to import or edit the full canonical YAML direct
 
 - onboarding remote import accepts a complete `version/listeners/providers/routing/global` file
 - the config page edits the same canonical contract
-- the DSL editor can import the same YAML, but it only decompiles `routing`
+  - the Dashboard DSL editor decompiles the default `routing` profile; use the
+    Config page for entrypoint and recipe lifecycle management
 - decision model refs can carry `lora_name`, and those names resolve against `routing.modelCards[].loras`
+
+The Dashboard deploy transport has two explicit update modes. `merge` is the
+backward-compatible mode for partial YAML fragments. The DSL builder uses
+`replace`: it atomically replaces the complete DSL-owned
+`routing`/`entrypoints`/`recipes` surface while preserving `listeners`,
+`providers`, `global`, setup state, and unknown future static fields. Preview
+and deploy use the same mode, so the reviewed diff is the document that is
+activated.
 
 ### Helm
 
@@ -401,11 +410,13 @@ See [Kubernetes Operator](./k8s/operator).
 
 ### DSL
 
-DSL only owns the `routing` surface.
+DSL owns routing semantics, including optional request-facing recipe scopes.
 
 - Author `MODEL`, `SIGNAL`, `PROJECTION`, and `ROUTE` blocks
+- Author `ENTRYPOINT` bindings and isolated `RECIPE` blocks for multi-profile configs
 - Put per-decision model-selection policy in `ROUTE ... ALGORITHM`
-- Compile to a routing fragment
+- Compile to a routing fragment containing `routing` and, when declared,
+  `entrypoints` and `recipes`
 - Keep `providers` and `global` in YAML
 
 The DSL compiler emits:
@@ -416,6 +427,8 @@ routing:
   signals:
   projections:
   decisions:
+entrypoints:
+recipes:
 ```
 
 It does not emit `listeners`, `providers`, or `global`.
@@ -428,12 +441,16 @@ The setup wizard can import a full canonical YAML file from a URL and apply the 
 
 ### DSL import
 
-The DSL editor can import:
+The CLI DSL decompiler can import:
 
 - a full router config YAML
 - a routing-only YAML fragment
 
-In both cases, only the `routing` section is decompiled into DSL.
+For a full config, it emits the default routing profile plus first-class
+`ENTRYPOINT` and `RECIPE` scopes. For a routing fragment, it emits the original
+routing-only form. The Dashboard visual DSL editor intentionally remains a
+default-profile editor; multi-recipe lifecycle changes belong to the Config
+page and management API so a visual edit cannot silently drop other recipes.
 
 ### Migrate old configs
 
@@ -522,7 +539,10 @@ Wire `POSTGRES_PASSWORD` from a Secret into the router Deployment environment, t
 
 ### DSL
 
-1. Use DSL for `routing.modelCards`, `routing.signals`, and `routing.decisions`.
-2. Importing a full YAML file still works, but only `routing` is decompiled into DSL.
+1. Use DSL for `routing.modelCards`, `routing.signals`, `routing.projections`,
+   and `routing.decisions`; add `ENTRYPOINT` and `RECIPE` scopes when the file
+   exposes multiple request-facing objectives.
+2. CLI import of a full YAML file preserves the default routing profile,
+   entrypoint mappings, and isolated recipes.
 3. Keep endpoints, API keys, listeners, and `global` in YAML.
 4. Reusable routing fragments now live under `config/signal/`, `config/decision/`, `config/algorithm/`, and `config/plugin/`.

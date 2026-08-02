@@ -5,7 +5,7 @@ This repository implements an intelligent LLM request router that sits as an Env
 ## Source of Truth
 
 1. `AGENTS.md` — short agent entrypoint
-2. `docs/agent/README.md` — full system of record
+2. `tools/agent/docs/README.md` — full system of record
 3. `tools/agent/` — executable rule layer (manifests, scripts, skills)
 4. `tools/make/agent.mk` — canonical Make targets
 5. Nearest local `AGENTS.md` for hotspot directories

@@ -108,7 +108,7 @@ describe('router model selection', () => {
         data: [
           {
             id: 'vllm-sr/mom-balanced-v1',
-            routing: routingMetadata.profile,
+            routing: { ...routingMetadata.profile, recipe: 'balanced' },
             description: 'Intelligent Router for Mixture-of-Models',
           },
           {
@@ -133,6 +133,7 @@ describe('router model selection', () => {
       {
         id: 'vllm-sr/mom-balanced-v1',
         description: 'Intelligent Router for Mixture-of-Models',
+        recipe: 'balanced',
       },
       {
         id: 'vllm-sr/mom-flash-v1',

@@ -105,6 +105,18 @@ def test_decision_accepts_typed_output_contract_spec():
     assert decision.output_contract_spec.choice_set.values == ["A", "B", "C", "D"]
 
 
+def test_decision_without_rules_is_a_match_all_fallback():
+    decision = Decision(
+        name="fallback",
+        description="terminal route",
+        priority=1,
+        modelRefs=[{"model": "model-a", "use_reasoning": False}],
+    )
+
+    assert decision.rules.operator == "AND"
+    assert decision.rules.conditions == []
+
+
 def test_decision_accepts_terminal_action_output_contract_spec():
     decision = Decision(
         name="terminal",

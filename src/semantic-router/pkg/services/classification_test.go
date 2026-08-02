@@ -328,6 +328,13 @@ func TestBuildEvalResponse_ProjectionSignalsIncludedInUsedMatchedAndUnmatched(t 
 			Decisions: []config.Decision{
 				{
 					Name: "reasoning_route",
+					Algorithm: &config.AlgorithmConfig{
+						Type: "remom",
+					},
+					Plugins: []config.DecisionPlugin{
+						{Type: "semantic_cache"},
+						{Type: "system_prompt"},
+					},
 					Rules: config.RuleCombination{
 						Operator: "AND",
 						Conditions: []config.RuleNode{{
@@ -362,6 +369,8 @@ func TestBuildEvalResponse_ProjectionSignalsIncludedInUsedMatchedAndUnmatched(t 
 	assert.Equal(t, []string{"balance_reasoning"}, response.DecisionResult.UsedSignals.Projection)
 	assert.Equal(t, []string{"balance_reasoning"}, response.DecisionResult.MatchedSignals.Projection)
 	assert.Equal(t, []string{"balance_medium"}, response.DecisionResult.UnmatchedSignals.Projection)
+	assert.Equal(t, "remom", response.DecisionResult.Algorithm)
+	assert.Equal(t, []string{"semantic-cache", "system_prompt"}, response.DecisionResult.Plugins)
 }
 
 func TestBuildEvalResponse_IncludesSignalValues(t *testing.T) {

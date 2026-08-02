@@ -84,7 +84,12 @@ impl NgramClassifier {
         arity: usize,
     ) {
         self.rules.push(NgramRule::new(
-            name, operator, keywords, threshold, case_sensitive, arity,
+            name,
+            operator,
+            keywords,
+            threshold,
+            case_sensitive,
+            arity,
         ));
     }
 
@@ -96,91 +101,98 @@ impl NgramClassifier {
             .collect()
     }
 
-    /// Classify text against all rules (first-match semantics).
-    pub fn classify(&self, text: &str) -> Option<NgramClassifyResult> {
-        for rule in &self.rules {
-            let input = if rule.case_sensitive {
-                text.to_string()
-            } else {
-                text.to_lowercase()
-            };
+    fn classify_rule(rule: &NgramRule, text: &str) -> Option<NgramClassifyResult> {
+        let input = if rule.case_sensitive {
+            text.to_string()
+        } else {
+            text.to_lowercase()
+        };
 
-            let words = Self::extract_words(&input);
+        let words = Self::extract_words(&input);
 
-            // For each keyword, check if any word in the text matches it
-            let mut matched_keywords = Vec::new();
-            let mut matched_similarities = Vec::new();
-            let mut matched_set = std::collections::HashSet::new();
+        // For each keyword, check if any word in the text matches it.
+        let mut matched_keywords = Vec::new();
+        let mut matched_similarities = Vec::new();
+        let mut matched_set = std::collections::HashSet::new();
 
-            for word in &words {
-                let results: Vec<SearchResult> =
-                    rule.corpus.search(word, rule.threshold, 10);
+        for word in &words {
+            let results: Vec<SearchResult> = rule.corpus.search(word, rule.threshold, 10);
 
-                for result in results {
-                    let matched_text = result.text.clone();
-                    for (idx, kw) in rule.keywords.iter().enumerate() {
-                        let kw_normalized = if rule.case_sensitive {
-                            kw.clone()
-                        } else {
-                            kw.to_lowercase()
-                        };
-                        if kw_normalized == matched_text && !matched_set.contains(&idx) {
-                            matched_set.insert(idx);
-                            matched_keywords.push(rule.keywords[idx].clone());
-                            matched_similarities.push(result.similarity);
-                        }
+            for result in results {
+                let matched_text = result.text.clone();
+                for (idx, kw) in rule.keywords.iter().enumerate() {
+                    let kw_normalized = if rule.case_sensitive {
+                        kw.clone()
+                    } else {
+                        kw.to_lowercase()
+                    };
+                    if kw_normalized == matched_text && !matched_set.contains(&idx) {
+                        matched_set.insert(idx);
+                        matched_keywords.push(rule.keywords[idx].clone());
+                        matched_similarities.push(result.similarity);
                     }
                 }
-            }
-
-            // Also try matching multi-word phrases against the full text
-            if matched_keywords.len() < rule.keywords.len() {
-                let results: Vec<SearchResult> =
-                    rule.corpus.search(&input, rule.threshold, 10);
-                for result in results {
-                    let matched_text = result.text.clone();
-                    for (idx, kw) in rule.keywords.iter().enumerate() {
-                        let kw_normalized = if rule.case_sensitive {
-                            kw.clone()
-                        } else {
-                            kw.to_lowercase()
-                        };
-                        if kw_normalized == matched_text && !matched_set.contains(&idx) {
-                            matched_set.insert(idx);
-                            matched_keywords.push(rule.keywords[idx].clone());
-                            matched_similarities.push(result.similarity);
-                        }
-                    }
-                }
-            }
-
-            let match_count = matched_keywords.len();
-
-            let matches = match rule.operator.as_str() {
-                "OR" => !matched_keywords.is_empty(),
-                "AND" => matched_keywords.len() == rule.keywords.len(),
-                "NOR" => matched_keywords.is_empty(),
-                _ => false,
-            };
-
-            if matches {
-                return Some(NgramClassifyResult {
-                    rule_name: rule.name.clone(),
-                    matched_keywords: if rule.operator == "NOR" {
-                        Vec::new()
-                    } else {
-                        matched_keywords
-                    },
-                    similarities: if rule.operator == "NOR" {
-                        Vec::new()
-                    } else {
-                        matched_similarities
-                    },
-                    match_count: if rule.operator == "NOR" { 0 } else { match_count },
-                    total_keywords: rule.keywords.len(),
-                });
             }
         }
-        None
+
+        // Also try matching multi-word phrases against the full text.
+        if matched_keywords.len() < rule.keywords.len() {
+            let results: Vec<SearchResult> = rule.corpus.search(&input, rule.threshold, 10);
+            for result in results {
+                let matched_text = result.text.clone();
+                for (idx, kw) in rule.keywords.iter().enumerate() {
+                    let kw_normalized = if rule.case_sensitive {
+                        kw.clone()
+                    } else {
+                        kw.to_lowercase()
+                    };
+                    if kw_normalized == matched_text && !matched_set.contains(&idx) {
+                        matched_set.insert(idx);
+                        matched_keywords.push(rule.keywords[idx].clone());
+                        matched_similarities.push(result.similarity);
+                    }
+                }
+            }
+        }
+
+        let match_count = matched_keywords.len();
+
+        let matches = match rule.operator.as_str() {
+            "OR" => !matched_keywords.is_empty(),
+            "AND" => matched_keywords.len() == rule.keywords.len(),
+            "NOR" => matched_keywords.is_empty(),
+            _ => false,
+        };
+        if !matches {
+            return None;
+        }
+
+        let is_nor = rule.operator == "NOR";
+        Some(NgramClassifyResult {
+            rule_name: rule.name.clone(),
+            matched_keywords: if is_nor { Vec::new() } else { matched_keywords },
+            similarities: if is_nor {
+                Vec::new()
+            } else {
+                matched_similarities
+            },
+            match_count: if is_nor { 0 } else { match_count },
+            total_keywords: rule.keywords.len(),
+        })
+    }
+
+    /// Classify text using the legacy first-match contract.
+    pub fn classify(&self, text: &str) -> Option<NgramClassifyResult> {
+        self.rules
+            .iter()
+            .find_map(|rule| Self::classify_rule(rule, text))
+    }
+
+    /// Return every matching rule in declaration order.
+    pub fn classify_all(&self, text: &str) -> Vec<NgramClassifyResult> {
+        self.rules
+            .iter()
+            .filter_map(|rule| Self::classify_rule(rule, text))
+            .collect()
     }
 }

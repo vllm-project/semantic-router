@@ -59,6 +59,34 @@ pub struct ClassifyResult {
     pub total_keywords: i32,
 }
 
+/// Ordered results from an all-match classification operation.
+#[repr(C)]
+pub struct ClassifyResults {
+    /// Contiguous array of results owned by Rust.
+    pub results: *mut ClassifyResult,
+    /// Number of elements in `results`.
+    pub count: i32,
+}
+
+impl ClassifyResults {
+    fn from_vec(mut results: Vec<ClassifyResult>) -> Self {
+        if results.is_empty() {
+            return Self {
+                results: ptr::null_mut(),
+                count: 0,
+            };
+        }
+
+        let count = results.len();
+        let ptr = results.as_mut_ptr();
+        std::mem::forget(results);
+        Self {
+            results: ptr,
+            count: count as i32,
+        }
+    }
+}
+
 impl ClassifyResult {
     fn empty() -> Self {
         ClassifyResult {
@@ -79,6 +107,50 @@ fn to_c_string(s: &str) -> *mut c_char {
     CString::new(s)
         .map(|cs| cs.into_raw())
         .unwrap_or(ptr::null_mut())
+}
+
+fn to_classify_result(
+    rule_name: &str,
+    matched_keywords: &[String],
+    scores: &[f32],
+    match_count: usize,
+    total_keywords: usize,
+) -> ClassifyResult {
+    let count = matched_keywords.len();
+    let keyword_ptrs: Vec<*mut c_char> = matched_keywords
+        .iter()
+        .map(|keyword| to_c_string(keyword))
+        .collect();
+
+    let keyword_array = if count == 0 {
+        ptr::null_mut()
+    } else {
+        let ptr =
+            unsafe { libc::malloc(count * std::mem::size_of::<*mut c_char>()) as *mut *mut c_char };
+        if !ptr.is_null() {
+            unsafe { std::ptr::copy_nonoverlapping(keyword_ptrs.as_ptr(), ptr, count) };
+        }
+        ptr
+    };
+
+    let scores_ptr = if count == 0 {
+        ptr::null_mut()
+    } else {
+        let ptr = unsafe { libc::malloc(count * std::mem::size_of::<f32>()) as *mut f32 };
+        if !ptr.is_null() {
+            unsafe { std::ptr::copy_nonoverlapping(scores.as_ptr(), ptr, count) };
+        }
+        ptr
+    };
+
+    ClassifyResult {
+        matched: true,
+        rule_name: to_c_string(rule_name),
+        matched_keywords: keyword_array,
+        scores: scores_ptr,
+        match_count: match_count as i32,
+        total_keywords: total_keywords as i32,
+    }
 }
 
 /// Convert a C string pointer to a Rust &str. Returns None on null or invalid UTF-8.
@@ -156,10 +228,7 @@ pub extern "C" fn bm25_classifier_add_rule(
 
 /// Classify text using a BM25 classifier.
 #[no_mangle]
-pub extern "C" fn bm25_classifier_classify(
-    handle: u64,
-    text: *const c_char,
-) -> ClassifyResult {
+pub extern "C" fn bm25_classifier_classify(handle: u64, text: *const c_char) -> ClassifyResult {
     let text = match unsafe { from_c_str(text) } {
         Some(s) => s,
         None => return ClassifyResult::empty(),
@@ -172,55 +241,48 @@ pub extern "C" fn bm25_classifier_classify(
     };
 
     match classifier.classify(text) {
-        Some(result) => {
-            let count = result.matched_keywords.len();
-
-            // Allocate keyword string array
-            let kw_ptrs: Vec<*mut c_char> = result
-                .matched_keywords
-                .iter()
-                .map(|kw| to_c_string(kw))
-                .collect();
-
-            let kw_array = if count > 0 {
-                let ptr = unsafe {
-                    libc::malloc(count * std::mem::size_of::<*mut c_char>()) as *mut *mut c_char
-                };
-                if !ptr.is_null() {
-                    unsafe {
-                        std::ptr::copy_nonoverlapping(kw_ptrs.as_ptr(), ptr, count);
-                    }
-                }
-                ptr
-            } else {
-                ptr::null_mut()
-            };
-
-            // Allocate scores array
-            let scores_ptr = if count > 0 {
-                let ptr =
-                    unsafe { libc::malloc(count * std::mem::size_of::<f32>()) as *mut f32 };
-                if !ptr.is_null() {
-                    unsafe {
-                        std::ptr::copy_nonoverlapping(result.scores.as_ptr(), ptr, count);
-                    }
-                }
-                ptr
-            } else {
-                ptr::null_mut()
-            };
-
-            ClassifyResult {
-                matched: true,
-                rule_name: to_c_string(&result.rule_name),
-                matched_keywords: kw_array,
-                scores: scores_ptr,
-                match_count: result.match_count as i32,
-                total_keywords: result.total_keywords as i32,
-            }
-        }
+        Some(result) => to_classify_result(
+            &result.rule_name,
+            &result.matched_keywords,
+            &result.scores,
+            result.match_count,
+            result.total_keywords,
+        ),
         None => ClassifyResult::empty(),
     }
+}
+
+/// Classify text and return every matching BM25 rule in declaration order.
+#[no_mangle]
+pub extern "C" fn bm25_classifier_classify_all(
+    handle: u64,
+    text: *const c_char,
+) -> ClassifyResults {
+    let text = match unsafe { from_c_str(text) } {
+        Some(s) => s,
+        None => return ClassifyResults::from_vec(Vec::new()),
+    };
+
+    let map = bm25_map().lock().unwrap();
+    let classifier = match map.get(&handle) {
+        Some(c) => c,
+        None => return ClassifyResults::from_vec(Vec::new()),
+    };
+    ClassifyResults::from_vec(
+        classifier
+            .classify_all(text)
+            .into_iter()
+            .map(|result| {
+                to_classify_result(
+                    &result.rule_name,
+                    &result.matched_keywords,
+                    &result.scores,
+                    result.match_count,
+                    result.total_keywords,
+                )
+            })
+            .collect(),
+    )
 }
 
 /// Destroy a BM25 classifier and free its resources.
@@ -305,10 +367,7 @@ pub extern "C" fn ngram_classifier_add_rule(
 
 /// Classify text using an N-gram classifier.
 #[no_mangle]
-pub extern "C" fn ngram_classifier_classify(
-    handle: u64,
-    text: *const c_char,
-) -> ClassifyResult {
+pub extern "C" fn ngram_classifier_classify(handle: u64, text: *const c_char) -> ClassifyResult {
     let text = match unsafe { from_c_str(text) } {
         Some(s) => s,
         None => return ClassifyResult::empty(),
@@ -321,57 +380,48 @@ pub extern "C" fn ngram_classifier_classify(
     };
 
     match classifier.classify(text) {
-        Some(result) => {
-            let count = result.matched_keywords.len();
-
-            let kw_ptrs: Vec<*mut c_char> = result
-                .matched_keywords
-                .iter()
-                .map(|kw| to_c_string(kw))
-                .collect();
-
-            let kw_array = if count > 0 {
-                let ptr = unsafe {
-                    libc::malloc(count * std::mem::size_of::<*mut c_char>()) as *mut *mut c_char
-                };
-                if !ptr.is_null() {
-                    unsafe {
-                        std::ptr::copy_nonoverlapping(kw_ptrs.as_ptr(), ptr, count);
-                    }
-                }
-                ptr
-            } else {
-                ptr::null_mut()
-            };
-
-            let scores_ptr = if count > 0 {
-                let ptr =
-                    unsafe { libc::malloc(count * std::mem::size_of::<f32>()) as *mut f32 };
-                if !ptr.is_null() {
-                    unsafe {
-                        std::ptr::copy_nonoverlapping(
-                            result.similarities.as_ptr(),
-                            ptr,
-                            count,
-                        );
-                    }
-                }
-                ptr
-            } else {
-                ptr::null_mut()
-            };
-
-            ClassifyResult {
-                matched: true,
-                rule_name: to_c_string(&result.rule_name),
-                matched_keywords: kw_array,
-                scores: scores_ptr,
-                match_count: result.match_count as i32,
-                total_keywords: result.total_keywords as i32,
-            }
-        }
+        Some(result) => to_classify_result(
+            &result.rule_name,
+            &result.matched_keywords,
+            &result.similarities,
+            result.match_count,
+            result.total_keywords,
+        ),
         None => ClassifyResult::empty(),
     }
+}
+
+/// Classify text and return every matching N-gram rule in declaration order.
+#[no_mangle]
+pub extern "C" fn ngram_classifier_classify_all(
+    handle: u64,
+    text: *const c_char,
+) -> ClassifyResults {
+    let text = match unsafe { from_c_str(text) } {
+        Some(s) => s,
+        None => return ClassifyResults::from_vec(Vec::new()),
+    };
+
+    let map = ngram_map().lock().unwrap();
+    let classifier = match map.get(&handle) {
+        Some(c) => c,
+        None => return ClassifyResults::from_vec(Vec::new()),
+    };
+    ClassifyResults::from_vec(
+        classifier
+            .classify_all(text)
+            .into_iter()
+            .map(|result| {
+                to_classify_result(
+                    &result.rule_name,
+                    &result.matched_keywords,
+                    &result.similarities,
+                    result.match_count,
+                    result.total_keywords,
+                )
+            })
+            .collect(),
+    )
 }
 
 /// Destroy an N-gram classifier and free its resources.
@@ -387,6 +437,10 @@ pub extern "C" fn ngram_classifier_free(handle: u64) {
 /// Free a ClassifyResult returned by `bm25_classifier_classify` or `ngram_classifier_classify`.
 #[no_mangle]
 pub extern "C" fn free_classify_result(result: ClassifyResult) {
+    free_classify_result_inner(result);
+}
+
+fn free_classify_result_inner(result: ClassifyResult) {
     unsafe {
         if !result.rule_name.is_null() {
             let _ = CString::from_raw(result.rule_name);
@@ -405,6 +459,24 @@ pub extern "C" fn free_classify_result(result: ClassifyResult) {
 
         if !result.scores.is_null() {
             libc::free(result.scores as *mut libc::c_void);
+        }
+    }
+}
+
+/// Free a ClassifyResults returned by an all-match operation.
+#[no_mangle]
+pub extern "C" fn free_classify_results(results: ClassifyResults) {
+    if results.results.is_null() || results.count <= 0 {
+        return;
+    }
+    unsafe {
+        let owned = Vec::from_raw_parts(
+            results.results,
+            results.count as usize,
+            results.count as usize,
+        );
+        for result in owned {
+            free_classify_result_inner(result);
         }
     }
 }

@@ -83,3 +83,17 @@ func (s *RecipeClassifiers) Default() *Classifier {
 	classifier, _ := s.ForRecipe(config.DefaultRecipeName)
 	return classifier
 }
+
+// PreloadKnowledgeBases prepares recipe-local KB classifiers without sharing
+// policy or symbol state across recipe boundaries.
+func (s *RecipeClassifiers) PreloadKnowledgeBases() error {
+	if s == nil {
+		return nil
+	}
+	for _, recipeName := range s.order {
+		if err := s.byRecipe[recipeName].PreloadKnowledgeBases(); err != nil {
+			return fmt.Errorf("preload routing recipe %q: %w", recipeName, err)
+		}
+	}
+	return nil
+}

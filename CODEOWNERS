@@ -17,20 +17,18 @@
 #   ./config/OWNER                 — Configuration
 #   ./dashboard/OWNER              — Dashboard UI
 #   ./deploy/OWNER                 — Deployment (Helm, K8s, operator)
-#   ./docs/OWNER                   — Top-level agent related docs
 #   ./e2e/OWNER                    — Integration tests
 #   ./ml-binding/OWNER             — Rust/ML binding
 #   ./nlp-binding/OWNER            — Rust/NLP binding
 #   ./onnx-binding/OWNER           — Rust/ONNX binding
 #   ./paper/OWNER                  — Research papers
 #   ./perf/OWNER                   — Performance tooling
-#   ./scripts/OWNER                — Shared scripts
 #   ./src/OWNER                    — Core source code
 #   ./src/fleet-sim/OWNER          — Fleet simulator
 #   ./src/semantic-router/OWNER    — Router runtime
 #   ./src/training/OWNER           — Training stack
 #   ./src/vllm-sr/OWNER            — Python CLI
-#   ./tools/OWNER                  — Build tooling & Makefiles
+#   ./tools/OWNER                  — Build, development, smoke, and agent tooling
 #   ./website/OWNER                — Website & Docusaurus
 #
 # To view ownership for a specific directory, read the OWNER file in that path.

@@ -485,7 +485,7 @@ class Rules(BaseModel):
     """
 
     operator: str = "AND"
-    conditions: List[Condition] = []
+    conditions: List[Condition] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -1044,7 +1044,9 @@ class Decision(BaseModel):
     name: str
     description: str
     priority: int
-    rules: Rules
+    # A decision without an explicit rule is the canonical match-all fallback.
+    # This mirrors the Go runtime and the DSL `ROUTE` form without `WHEN`.
+    rules: Rules = Field(default_factory=Rules)
     output_contract: Optional[str] = None
     output_contract_spec: Optional[OutputContractSpec] = None
     modelRefs: List[ModelRef] = Field(alias="modelRefs")

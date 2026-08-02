@@ -100,7 +100,7 @@ We host community meetings on the first and third Tuesday of each month to sync 
 
 If you want to contribute, start with **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
-For repository-native development workflow and validation commands, use **[AGENTS.md](AGENTS.md)** as the entrypoint and **[docs/agent/README.md](docs/agent/README.md)** as the canonical index.
+For repository-native development workflow and validation commands, use **[AGENTS.md](AGENTS.md)** as the entrypoint and **[tools/agent/docs/README.md](tools/agent/docs/README.md)** as the canonical index.
 
 ## Citation
 

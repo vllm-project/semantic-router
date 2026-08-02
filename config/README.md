@@ -7,6 +7,10 @@
 - `config/decision/`: reusable `routing.decisions` rule-shape fragments
 - `config/algorithm/`: reusable `decision.algorithm` snippets
 - `config/plugin/`: reusable route plugin snippets
+- `config/recipes/`: complete use-case deliveries with symmetric YAML, DSL,
+  Eval API probes, and documentation
+- `config/runtime/`: backend-specific runtime examples referenced by configs
+  and tests; these are support assets rather than schema fragments
 
 Inside canonical `config.yaml`:
 
@@ -22,7 +26,7 @@ Inside canonical `config.yaml`:
 - request-shape detectors such as `routing.signals.structure` stay in the signal layer as typed named facts; numeric thresholds live inside the detector config instead of turning decisions into a free-form expression language
 - `routing.signals.embeddings[].query_modality` declares which modality of incoming request payload the embedding rule's query is computed from. Defaults to `"text"`; `"image"` and `"audio"` require `global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal` so the query and candidate embeddings land in the same shared space. See `website/docs/tutorials/signal/learned/embedding.md` for the worked multimodal example.
 - structure `density` features now use built-in multilingual text-unit normalization; the contract no longer exposes a per-rule `normalize_by` switch
-- the dashboard and DSL builder now expose the same projection surface directly; see `website/docs/tutorials/projection/overview.md` and the maintained `deploy/recipes/balance.{yaml,dsl}` pair for end-to-end usage
+- the dashboard and DSL builder now expose the same projection surface directly; see `website/docs/tutorials/projection/overview.md` and the maintained `config/recipes/balance/` delivery for end-to-end usage
 - top-level `entrypoints` maps request-facing virtual model names onto named routing recipes; the names never reach a backend, they only select which routing profile evaluates the request
 - top-level `recipes` adds named routing profiles beside the `routing` block. The top-level `routing` profile is the `default` recipe; each `recipes[].routing` block carries the same profile shape (`signals`, `projections`, `decisions`, `strategy`) but never `modelCards`. Signal, projection, and decision names are local to one recipe, cross-recipe references are invalid, and PII/jailbreak/authz rules, algorithms, plugins, cache, replay, and learning state stay isolated. The model catalog, providers, model assets, and service/store infrastructure remain shared. See `website/docs/tutorials/global/entrypoints-and-recipes.md`
 - `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog` expose router-wide overrides explicitly
@@ -64,7 +68,11 @@ Each supported algorithm now has its own tutorial page under `website/docs/tutor
 
 Each supported plugin now has its own tutorial page under `website/docs/tutorials/plugin/`.
 
-The repository enforces this fragment catalog, the exhaustive reference config, the maintained deploy/E2E config assets, and the core public config docs in Go tests. When a supported signal, decision algorithm, plugin surface, or canonical contract term changes, both `go test ./pkg/config/...` and `make agent-lint` will fail until `config/`, maintained `deploy/` / `e2e/` config assets, and the core config docs are updated to match.
+The repository enforces this fragment catalog, the exhaustive reference config,
+the maintained recipes and E2E assets, and the core public config docs in Go
+tests. When a supported signal, decision algorithm, plugin surface, or canonical
+contract term changes, both `go test ./pkg/config/...` and `make agent-lint`
+fail until `config/`, `e2e/`, and the website docs agree.
 
 Latest official tutorials mirror the same top-level taxonomy:
 
@@ -77,10 +85,11 @@ Latest official tutorials mirror the same top-level taxonomy:
 - `tutorials/plugin/` with one page per plugin
 - `tutorials/global/`
 
-`config/` no longer carries runtime support files or test manifests.
+Runtime support files have explicit homes:
 
-- Runtime support examples moved to `deploy/examples/runtime/`
-- Local Envoy moved to `deploy/local/envoy.yaml`
-- Harness and smoke manifests moved to `e2e/config/`
+- backend configuration examples live in `config/runtime/`
+- complete routing scenarios live in `config/recipes/`
+- local Envoy lives in `deploy/local/envoy.yaml`
+- harness and smoke manifests live in `e2e/config/`
 
 The old full-example trees under `config/intelligent-routing/`, `config/memory-rag/`, `config/multi-modal/`, `config/observability/`, and `config/prompt-guard/` were retired in v0.3. Use `config/config.yaml` as the exhaustive contract reference, then copy or trim it into deployment-specific `config.yaml` files as needed.
