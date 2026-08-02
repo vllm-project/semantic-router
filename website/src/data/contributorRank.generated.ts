@@ -47,7 +47,7 @@ export interface NewContributorsSinceReleaseSnapshot {
   entries: ContributorRankEntry[]
 }
 
-export const contributorRankGeneratedAt = '2026-08-01'
+export const contributorRankGeneratedAt = '2026-08-02'
 
 export const newContributorsSinceRelease = {
   "tagName": "v0.2.0",
@@ -949,9 +949,9 @@ export const contributorRankData = {
   "v03ToNow": {
     "id": "v03ToNow",
     "label": "v0.3 -> Now",
-    "generatedAt": "2026-08-01",
+    "generatedAt": "2026-08-02",
     "startDate": "2026-06-05",
-    "endDate": "2026-08-01",
+    "endDate": "2026-08-02",
     "description": "Current non-merge commit activity after v0.3.0.",
     "totalCommits": 256,
     "totalReviews": 282,
@@ -1578,7 +1578,7 @@ export const contributorRankData = {
   "v02ToV03": {
     "id": "v02ToV03",
     "label": "v0.2 -> v0.3",
-    "generatedAt": "2026-08-01",
+    "generatedAt": "2026-08-02",
     "startDate": "2026-03-10",
     "endDate": "2026-06-05",
     "description": "Non-merge commit activity between v0.2.0 and v0.3.0.",
@@ -2639,7 +2639,7 @@ export const contributorRankData = {
   "v01ToV02": {
     "id": "v01ToV02",
     "label": "v0.1 -> v0.2",
-    "generatedAt": "2026-08-01",
+    "generatedAt": "2026-08-02",
     "startDate": "2026-01-05",
     "endDate": "2026-03-10",
     "description": "Non-merge commit activity between v0.1.0 and v0.2.0.",
@@ -3312,7 +3312,7 @@ export const contributorRankData = {
   "v0ToV01": {
     "id": "v0ToV01",
     "label": "v0 -> v0.1",
-    "generatedAt": "2026-08-01",
+    "generatedAt": "2026-08-02",
     "startDate": null,
     "endDate": "2026-01-05",
     "description": "Initial non-merge commit activity through v0.1.0.",
@@ -4121,9 +4121,9 @@ export const contributorRankData = {
   "all": {
     "id": "all",
     "label": "All time",
-    "generatedAt": "2026-08-01",
+    "generatedAt": "2026-08-02",
     "startDate": null,
-    "endDate": "2026-08-01",
+    "endDate": "2026-08-02",
     "description": "Full repository non-merge commit history.",
     "totalCommits": 1615,
     "totalReviews": 1370,
