@@ -671,7 +671,7 @@ config:
       recipe: default
   recipes:
     - name: entrypoint-probe
-      description: Deterministic keyword-gated recipe used by the entrypoint-recipe-routing E2E (issue #2331).
+      description: "Deterministic keyword-gated recipe used by the entrypoint-recipe-routing E2E (issue #2331)."
       routing:
         strategy: priority
         signals:
