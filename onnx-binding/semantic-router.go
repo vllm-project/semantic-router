@@ -330,6 +330,16 @@ func InitClassifier(modelPath string, _ int, useCPU bool) error {
 	return initClassifier("generic", modelPath, !useCPU)
 }
 
+// InitGenericClassifier matches the generic-classifier API exposed by the
+// Candle backend while preserving the ONNX implementation's named slot.
+func InitGenericClassifier(
+	modelPath string,
+	numClasses int,
+	useCPU bool,
+) error {
+	return InitClassifier(modelPath, numClasses, useCPU)
+}
+
 // InitMmBert32KPIIClassifier initializes the PII token classifier
 func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
 	return initTokenClassifier("pii", modelPath, !useCPU)
