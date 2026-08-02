@@ -85,6 +85,7 @@ func (p *Profile) GetTestCases() []string {
 		"keyword-routing",
 		"entropy-routing",
 		"routing-fallback",
+		"decision-scoped-multi-factor",
 	}
 }
 
