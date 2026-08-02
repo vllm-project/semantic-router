@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"sync"
@@ -14,6 +15,7 @@ import (
 // extraction. Trusted identity remains owned by the authz header path.
 type RequestFacts struct {
 	Metadata map[string]string
+	Context  context.Context
 }
 
 func (c *Classifier) evaluateMetadataSignal(

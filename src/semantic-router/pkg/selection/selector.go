@@ -253,6 +253,13 @@ type SelectionResult struct {
 	// AllScores maps each candidate model to its computed score
 	AllScores map[string]float64
 
+	// Prompt-helper telemetry is populated only by MethodPrompt.
+	HelperModel            string
+	HelperPromptTokens     int64
+	HelperCompletionTokens int64
+	HelperTotalTokens      int64
+	HelperLatencyMs        int64
+
 	// SessionPolicy records the session-aware stay/switch policy trace when
 	// Method is session_aware.
 	SessionPolicy *SessionPolicyTrace

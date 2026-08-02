@@ -78,6 +78,7 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 		return intentSignalInput{}, err
 	}
 	rawText := req.Text
+	text := strings.TrimSpace(rawText)
 
 	if input, ok := resolveIntentSignalInputFromMessages(req.Messages, len(req.Tools)); ok {
 		input = applyTopLevelTextFallback(input, rawText)
@@ -90,8 +91,8 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 	}
 
 	return intentSignalInput{
-		evaluationText:  rawText,
-		contextText:     rawText,
+		evaluationText:  text,
+		contextText:     text,
 		currentUserText: rawText,
 		conversationFacts: classification.ConversationFacts{
 			UserMessageCount:    1,
@@ -108,12 +109,13 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 // messages path was accepted solely because it carries an image, so image safety
 // cannot toggle whether the caller-supplied text is scored.
 func applyTopLevelTextFallback(input intentSignalInput, rawText string) intentSignalInput {
+	text := strings.TrimSpace(rawText)
 	if rawText == "" || strings.TrimSpace(input.evaluationText) != "" {
 		return input
 	}
-	input.evaluationText = rawText
+	input.evaluationText = text
 	if strings.TrimSpace(input.contextText) == "" {
-		input.contextText = rawText
+		input.contextText = text
 	}
 	if input.currentUserText == "" {
 		input.currentUserText = rawText
@@ -127,14 +129,10 @@ func resolveIntentSignalInputFromMessages(messages []IntentMessage, toolDefiniti
 	}
 
 	history := extractIntentConversationHistory(messages, toolDefinitionCount)
-	evaluationText := history.currentUserRawText
-	if evaluationText == "" {
-		evaluationText = history.currentUserMessage
-	}
 	input := intentSignalInput{
-		evaluationText:    evaluationText,
+		evaluationText:    history.currentUserMessage,
 		contextText:       strings.Join(history.nonUserMessages, " "),
-		currentUserText:   evaluationText,
+		currentUserText:   history.currentUserRawText,
 		priorUserMessages: append([]string(nil), history.priorUserMessages...),
 		nonUserMessages:   append([]string(nil), history.nonUserMessages...),
 		hasAssistantReply: history.hasAssistantReply,

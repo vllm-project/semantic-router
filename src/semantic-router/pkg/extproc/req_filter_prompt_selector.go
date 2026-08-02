@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/openai/openai-go"
@@ -28,7 +29,7 @@ func (r *OpenAIRouter) newDecisionPromptSelector(
 		model string,
 		systemPrompt string,
 		input string,
-	) (string, error) {
+	) (selection.PromptInvocationResult, error) {
 		timeout := cfg.TimeoutSeconds
 		if timeout <= 0 {
 			timeout = 5
@@ -48,6 +49,7 @@ func (r *OpenAIRouter) newDecisionPromptSelector(
 		request.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{
 			OfJSONObject: &jsonObjectFormat,
 		}
+		disablePromptHelperReasoning(request, model)
 		response, err := client.CallModel(
 			callCtx,
 			request,
@@ -58,9 +60,32 @@ func (r *OpenAIRouter) newDecisionPromptSelector(
 			"",
 		)
 		if err != nil {
-			return "", err
+			return selection.PromptInvocationResult{}, err
 		}
-		return response.Content, nil
+		return selection.PromptInvocationResult{
+			Content:          response.Content,
+			Model:            model,
+			PromptTokens:     response.Usage.PromptTokens,
+			CompletionTokens: response.Usage.CompletionTokens,
+			TotalTokens:      response.Usage.TotalTokens,
+			LatencyMs:        response.LatencyMs,
+		}, nil
 	}
 	return selection.NewPromptSelector(cfg, invoke, descriptions)
+}
+
+func disablePromptHelperReasoning(
+	request *openai.ChatCompletionNewParams,
+	model string,
+) {
+	normalized := strings.ToLower(model)
+	if !strings.Contains(normalized, "qwen") &&
+		!strings.Contains(normalized, "qwq") {
+		return
+	}
+	request.SetExtraFields(map[string]interface{}{
+		"chat_template_kwargs": map[string]interface{}{
+			"enable_thinking": false,
+		},
+	})
 }

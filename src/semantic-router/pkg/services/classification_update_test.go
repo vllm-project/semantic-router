@@ -1,8 +1,14 @@
 package services
 
 import (
+	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -119,6 +125,102 @@ func TestClassificationServiceConcurrentClassifyAndRefresh(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestUpdateConfigDoesNotWaitForRemoteClassification(t *testing.T) {
+	previousGlobal := config.Get()
+	t.Cleanup(func() {
+		if previousGlobal != nil {
+			config.Replace(previousGlobal)
+			return
+		}
+		config.Replace(&config.RouterConfig{})
+	})
+	started := make(chan struct{})
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, _ *http.Request) {
+			close(started)
+			<-release
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprint(w, `{
+				"id":"classification",
+				"choices":[{
+					"message":{
+						"content":"{\"label\":\"RISKY\",\"rationale\":\"test\"}"
+					}
+				}]
+			}`)
+		},
+	))
+	defer server.Close()
+	host, portString, err := net.SplitHostPort(
+		strings.TrimPrefix(server.URL, "http://"),
+	)
+	if err != nil {
+		t.Fatalf("split server address: %v", err)
+	}
+	var port int
+	if _, scanErr := fmt.Sscanf(portString, "%d", &port); scanErr != nil {
+		t.Fatalf("parse server port: %v", scanErr)
+	}
+	threshold := 0.5
+	cfg := &config.RouterConfig{
+		ExternalModels: []config.ExternalModelConfig{{
+			Name:      "judge",
+			ModelRole: config.ModelRoleClassification,
+			ModelName: "judge",
+			ModelEndpoint: config.ClassifierVLLMEndpoint{
+				Address: host, Port: port, Protocol: "http",
+			},
+			TimeoutSeconds: 5,
+		}},
+		IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{ClassifierRules: []config.ClassifierSignalRule{{
+				Name: "risk", Type: "llm", Model: "judge",
+				Labels: []string{"SAFE", "RISKY"}, Instructions: "Classify.",
+			}}},
+			Decisions: []config.Decision{{
+				Name: "risk-route",
+				Rules: config.RuleNode{
+					Type: "classifier", Name: "risk", Label: "RISKY",
+					Predicate: &config.NumericPredicate{GTE: &threshold},
+				},
+			}},
+		},
+	}
+	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("new classifier: %v", err)
+	}
+	service := NewClassificationService(classifier, cfg)
+	classifyDone := make(chan struct{})
+	go func() {
+		defer close(classifyDone)
+		_, _ = service.ClassifyIntent(IntentRequest{Text: "classify me"})
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("remote classifier did not start")
+	}
+
+	updateDone := make(chan struct{})
+	go func() {
+		service.UpdateConfig(&config.RouterConfig{})
+		close(updateDone)
+	}()
+	select {
+	case <-updateDone:
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("config update waited for remote classification")
+	}
+	close(release)
+	select {
+	case <-classifyDone:
+	case <-time.After(time.Second):
+		t.Fatal("classification did not complete")
+	}
 }
 
 func replaceGlobalConfigForServiceTest(newCfg *config.RouterConfig) func() {

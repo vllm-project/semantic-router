@@ -16,7 +16,19 @@ func (c *Classifier) buildPolicySignalDispatchers(
 	requestFacts RequestFacts,
 	usedSignals map[string]bool,
 ) []signalDispatch {
-	history := historyForHistoryAwareSignals(priorUserMessages, nonUserMessages)
+	var (
+		history     []string
+		historyOnce sync.Once
+	)
+	historyForSignals := func() []string {
+		historyOnce.Do(func() {
+			history = historyForHistoryAwareSignals(
+				priorUserMessages,
+				nonUserMessages,
+			)
+		})
+		return history
+	}
 	return []signalDispatch{
 		{
 			config.SignalTypeJailbreak, "Jailbreak",
@@ -25,7 +37,7 @@ func (c *Classifier) buildPolicySignalDispatchers(
 					results,
 					mu,
 					textForSignal(config.SignalTypeJailbreak),
-					history,
+					historyForSignals(),
 				)
 			},
 		},
@@ -36,7 +48,7 @@ func (c *Classifier) buildPolicySignalDispatchers(
 					results,
 					mu,
 					textForSignal(config.SignalTypePII),
-					history,
+					historyForSignals(),
 				)
 			},
 		},
@@ -71,6 +83,7 @@ func (c *Classifier) buildPolicySignalDispatchers(
 					mu,
 					textForSignal(config.SignalTypeClassifier),
 					usedSignals,
+					requestFacts.Context,
 				)
 			},
 		},

@@ -3,15 +3,19 @@ package extproc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/openai/openai-go"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
@@ -43,7 +47,8 @@ func TestDecisionPromptSelectorCallsConcreteHelperModel(t *testing.T) {
 					"content":"{\"selected_model\":\"reasoning-large\",\"rationale\":\"Hard task\"}"
 				},
 				"finish_reason":"stop"
-			}]
+			}],
+			"usage":{"prompt_tokens":10,"completion_tokens":4,"total_tokens":14}
 		}`))
 	}))
 	defer server.Close()
@@ -73,6 +78,11 @@ func TestDecisionPromptSelectorCallsConcreteHelperModel(t *testing.T) {
 	if result.SelectedModel != "reasoning-large" {
 		t.Fatalf("SelectedModel = %q", result.SelectedModel)
 	}
+	if result.HelperPromptTokens != 10 ||
+		result.HelperCompletionTokens != 4 ||
+		result.HelperTotalTokens != 14 {
+		t.Fatalf("helper usage = %#v", result)
+	}
 }
 
 func TestRecordSelectionFallbackPersistsBoundedReason(t *testing.T) {
@@ -90,7 +100,8 @@ func TestRecordSelectionFallbackPersistsBoundedReason(t *testing.T) {
 	)
 	before := testutil.ToFloat64(counter)
 
-	recordSelectionFallback(
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	router.recordSelectionFallback(
 		selection.MethodPrompt,
 		selectionFallbackError,
 		selectionContext,
@@ -149,5 +160,175 @@ func TestSelectionFallbackReasonClassifiesPromptFailures(t *testing.T) {
 		if got := selectionFallbackReasonForError(testCase.err); got != testCase.want {
 			t.Fatalf("reason = %q, want %q", got, testCase.want)
 		}
+	}
+}
+
+func TestFastResponseDecisionSkipsPromptHelper(t *testing.T) {
+	payload, err := config.NewStructuredPayload(
+		config.FastResponsePluginConfig{Message: "done"},
+	)
+	if err != nil {
+		t.Fatalf("create fast-response payload: %v", err)
+	}
+	useReasoning := false
+	result := &decision.DecisionResult{Decision: &config.Decision{
+		Name: "fast",
+		ModelRefs: []config.ModelRef{
+			{
+				Model: "model-a",
+				ModelReasoningControl: config.ModelReasoningControl{
+					UseReasoning: &useReasoning,
+				},
+			},
+			{
+				Model: "model-b",
+				ModelReasoningControl: config.ModelReasoningControl{
+					UseReasoning: &useReasoning,
+				},
+			},
+		},
+		Algorithm: &config.AlgorithmConfig{
+			Type: "prompt",
+			Prompt: &config.PromptSelectionConfig{
+				Model:        "unreachable-helper",
+				Instructions: "Choose.",
+			},
+		},
+		Plugins: []config.DecisionPlugin{{
+			Type:          config.DecisionPluginFastResponse,
+			Configuration: payload,
+		}},
+	}}
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	requestContext := &RequestContext{}
+
+	selected, _, err := router.selectDecisionRuntimeModel(
+		result,
+		"fast",
+		"query",
+		"",
+		1,
+		requestContext,
+	)
+	if err != nil {
+		t.Fatalf("selectDecisionRuntimeModel() error = %v", err)
+	}
+
+	if selected != "model-a" ||
+		requestContext.VSRSelectionMethod != "fast_response" {
+		t.Fatalf(
+			"selected=%q method=%q",
+			selected,
+			requestContext.VSRSelectionMethod,
+		)
+	}
+}
+
+func TestDecisionPromptSelectorCancelsHelperRequest(t *testing.T) {
+	started := make(chan struct{})
+	cancelled := make(chan struct{})
+	releaseHandler := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(
+		func(_ http.ResponseWriter, request *http.Request) {
+			close(started)
+			select {
+			case <-request.Context().Done():
+				close(cancelled)
+			case <-releaseHandler:
+			}
+		},
+	))
+	defer func() {
+		select {
+		case <-releaseHandler:
+		default:
+			close(releaseHandler)
+		}
+		server.Close()
+	}()
+	router := &OpenAIRouter{Config: &config.RouterConfig{
+		Looper: config.LooperConfig{Endpoint: server.URL},
+		BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
+			"model-a": {},
+			"model-b": {},
+		}},
+	}}
+	selector := router.newDecisionPromptSelector(
+		config.PromptSelectionConfig{
+			Model:          "helper",
+			Instructions:   "Choose.",
+			TimeoutSeconds: 30,
+		},
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error)
+	go func() {
+		_, err := selector.Select(ctx, &selection.SelectionContext{
+			Query: "cancel",
+			CandidateModels: []config.ModelRef{
+				{Model: "model-a"},
+				{Model: "model-b"},
+			},
+		})
+		done <- err
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("helper request did not start")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("selector error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("selector did not return after cancellation")
+	}
+	select {
+	case <-cancelled:
+	default:
+		close(releaseHandler)
+	}
+}
+
+func TestPromptHelperTelemetryPersistsInReplayDiagnostics(t *testing.T) {
+	ctx := &RequestContext{
+		VSRPromptHelperModel:            "helper",
+		VSRPromptHelperPromptTokens:     10,
+		VSRPromptHelperCompletionTokens: 4,
+		VSRPromptHelperTotalTokens:      14,
+		VSRPromptHelperLatencyMs:        25,
+	}
+
+	diagnostics := buildReplayRouteDiagnostics(
+		ctx,
+		"vllm-sr/auto",
+		"model-a",
+		"prompt-route",
+		0,
+		100,
+	)
+
+	if diagnostics.PromptHelperModel != "helper" ||
+		diagnostics.PromptHelperTotalTokens != 14 ||
+		diagnostics.PromptHelperLatencyMs != 25 {
+		t.Fatalf("prompt helper diagnostics = %#v", diagnostics)
+	}
+}
+
+func TestPromptHelperDisablesQwenThinking(t *testing.T) {
+	request := &openai.ChatCompletionNewParams{}
+	disablePromptHelperReasoning(request, "qwen3-8b")
+	body, err := json.Marshal(request)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	if !strings.Contains(
+		string(body),
+		`"chat_template_kwargs":{"enable_thinking":false}`,
+	) {
+		t.Fatalf("request body = %s", body)
 	}
 }

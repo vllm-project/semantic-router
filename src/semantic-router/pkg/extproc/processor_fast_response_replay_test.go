@@ -6,6 +6,8 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 func TestAddRouterReplayHeaderToImmediateResponse(t *testing.T) {
@@ -25,5 +27,33 @@ func TestAddRouterReplayHeaderToImmediateResponse(t *testing.T) {
 	if header.Key != headers.RouterReplayID ||
 		string(header.RawValue) != "replay-123" {
 		t.Fatalf("header = %#v", header)
+	}
+}
+
+func TestFastResponseReplayAttachesBody(t *testing.T) {
+	storage := store.NewMemoryStore(10, 0)
+	recorder := routerreplay.NewRecorder(storage)
+	recorder.SetCapturePolicy(false, true, 4096)
+	const replayID = "fast-replay"
+	if _, err := recorder.AddRecord(routerreplay.RoutingRecord{
+		ID: replayID,
+	}); err != nil {
+		t.Fatalf("add replay record: %v", err)
+	}
+	ctx := &RequestContext{
+		RouterReplayID:       replayID,
+		RouterReplayRecorder: recorder,
+	}
+	router := &OpenAIRouter{ReplayRecorder: recorder}
+	body := []byte(`{"choices":[{"message":{"content":"policy response"}}]}`)
+
+	router.attachRouterReplayResponse(ctx, body, true)
+
+	record, ok := recorder.GetRecord(replayID)
+	if !ok {
+		t.Fatal("replay record not found")
+	}
+	if record.ResponseBody != string(body) {
+		t.Fatalf("response body = %q", record.ResponseBody)
 	}
 }

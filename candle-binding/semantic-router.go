@@ -31,6 +31,7 @@ extern bool is_similarity_model_initialized();
 extern float calculate_similarity(const char* text1, const char* text2, int max_length);
 
 extern bool init_classifier(const char* model_id, int num_classes, bool use_cpu);
+extern bool init_generic_classifier(const char* model_id, int num_classes, bool use_cpu);
 
 extern bool init_pii_classifier(const char* model_id, int num_classes, bool use_cpu);
 
@@ -167,12 +168,14 @@ typedef struct {
 typedef struct {
     int class;
     float confidence;
+    char* label;
 } ClassificationResult;
 
 // Classification result with full probability distribution structure
 typedef struct {
-    int class;
     float confidence;
+    int class;
+    char* label;
     float* probabilities;
     int num_classes;
 } ClassificationResultWithProbs;
@@ -458,6 +461,8 @@ var (
 	modelInitialized                      bool
 	classifierInitMu                      sync.Mutex
 	classifierInitialized                 bool
+	genericClassifierInitMu               sync.Mutex
+	genericClassifierInitialized          bool
 	piiClassifierInitOnce                 sync.Once
 	piiClassifierInitErr                  error
 	jailbreakClassifierInitOnce           sync.Once
@@ -1946,6 +1951,40 @@ func InitClassifier(modelPath string, numClasses int, useCPU bool) error {
 		return fmt.Errorf("failed to initialize classifier model")
 	}
 	classifierInitialized = true
+	return nil
+}
+
+// InitGenericClassifier initializes the classifier consumed by
+// ClassifyTextWithProbabilities.
+func InitGenericClassifier(
+	modelPath string,
+	numClasses int,
+	useCPU bool,
+) error {
+	genericClassifierInitMu.Lock()
+	defer genericClassifierInitMu.Unlock()
+	if genericClassifierInitialized {
+		return nil
+	}
+	if modelPath == "" {
+		return fmt.Errorf("generic classifier model path cannot be empty")
+	}
+	if numClasses < 2 {
+		return fmt.Errorf(
+			"number of classes must be at least 2, got %d",
+			numClasses,
+		)
+	}
+	cModelID := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cModelID))
+	if !bool(C.init_generic_classifier(
+		cModelID,
+		C.int(numClasses),
+		C.bool(useCPU),
+	)) {
+		return fmt.Errorf("failed to initialize generic classifier model")
+	}
+	genericClassifierInitialized = true
 	return nil
 }
 

@@ -107,7 +107,8 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 		return
 	}
 
-	if _, parseErr := config.ParseYAMLBytes(backupData); parseErr != nil {
+	backupCfg, parseErr := config.ParseYAMLBytes(backupData)
+	if parseErr != nil {
 		s.writeErrorResponse(w, http.StatusBadRequest, "BACKUP_INVALID", fmt.Sprintf("Backup config is invalid: %v", parseErr))
 		return
 	}
@@ -116,6 +117,27 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 	if err != nil && !os.IsNotExist(err) {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("Failed to read current config: %v", err))
 		return
+	}
+	if len(existingData) > 0 {
+		currentCfg, parseErr := config.ParseYAMLBytes(existingData)
+		if parseErr != nil {
+			s.writeErrorResponse(
+				w,
+				http.StatusInternalServerError,
+				"CURRENT_CONFIG_INVALID",
+				fmt.Sprintf("Current config is invalid: %v", parseErr),
+			)
+			return
+		}
+		if reloadErr := config.ValidateLocalClassifierReload(currentCfg, backupCfg); reloadErr != nil {
+			s.writeErrorResponse(
+				w,
+				http.StatusConflict,
+				"RESTART_REQUIRED",
+				reloadErr.Error(),
+			)
+			return
+		}
 	}
 	if !checkConfigPrecondition(w, r, existingData, false) {
 		return

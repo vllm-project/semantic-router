@@ -99,13 +99,16 @@ func contains(slice []string, item string) bool {
 }
 
 // getUnmatchedSignals returns all configured signals that were not matched.
-func (s *ClassificationService) getUnmatchedSignals(signals *classification.SignalResults) *MatchedSignals {
+func getUnmatchedSignals(
+	signals *classification.SignalResults,
+	classifier *classification.Classifier,
+) *MatchedSignals {
 	unmatched := &MatchedSignals{}
 
-	if s.classifier == nil || s.config == nil {
+	if classifier == nil || classifier.Config == nil {
 		return unmatched
 	}
-	cfg := s.classifier.Config
+	cfg := classifier.Config
 	collectUnmatchedRuleNames(&unmatched.Keywords, cfg.KeywordRules, signals.MatchedKeywordRules, func(rule config.KeywordRule) string { return rule.Name })
 	collectUnmatchedRuleNames(&unmatched.Embeddings, cfg.EmbeddingRules, signals.MatchedEmbeddingRules, func(rule config.EmbeddingRule) string { return rule.Name })
 	collectUnmatchedRuleNames(&unmatched.Domains, cfg.Categories, signals.MatchedDomainRules, func(category config.Category) string { return category.Name })

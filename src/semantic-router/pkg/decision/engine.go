@@ -18,6 +18,7 @@ package decision
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -275,6 +276,9 @@ func numericPredicateMatches(value float64, predicate *config.NumericPredicate) 
 	if predicate == nil {
 		return true
 	}
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return false
+	}
 	if predicate.GT != nil && value <= *predicate.GT {
 		return false
 	}
@@ -423,12 +427,10 @@ func (e *DecisionEngine) evalOR(
 	var bestRules []string
 	for _, child := range children {
 		m, c, r := e.evalNode(child, signals)
-		if m {
+		if m && (!matched || c > bestConf) {
 			matched = true
-			if c > bestConf {
-				bestConf = c
-				bestRules = r
-			}
+			bestConf = c
+			bestRules = r
 		}
 	}
 	if matched {

@@ -48,7 +48,7 @@ func (s *ClassificationAPIServer) handleConfigValidate(
 		)
 		return
 	}
-	normalized, err = s.redactNormalizedConfigYAML(r, normalized)
+	normalized, err = redactNormalizedConfigYAML(normalized)
 	if err != nil {
 		s.writeErrorResponse(
 			w,
@@ -64,15 +64,17 @@ func (s *ClassificationAPIServer) handleConfigValidate(
 	})
 }
 
-func (s *ClassificationAPIServer) redactNormalizedConfigYAML(
-	r *http.Request,
+func redactNormalizedConfigYAML(
 	normalized []byte,
 ) ([]byte, error) {
 	var value interface{}
 	if err := yaml.Unmarshal(normalized, &value); err != nil {
 		return nil, fmt.Errorf("failed to decode normalized config: %w", err)
 	}
-	redacted := s.maybeRedactConfigView(r, value)
+	// Validation accepts caller-controlled api_key_env names. Never return
+	// resolved process credentials, even to principals that can view the active
+	// config's secrets.
+	redacted := redactSensitiveConfigValue(value)
 	result, err := yaml.Marshal(redacted)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode redacted config: %w", err)

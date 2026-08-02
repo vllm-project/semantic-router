@@ -154,12 +154,10 @@ func (e *DecisionEngine) evalORWithTrace(
 	for _, child := range children {
 		m, c, r, childTrace := e.evalNodeWithTrace(child, signals)
 		trace.Children = append(trace.Children, childTrace)
-		if m {
+		if m && (!anyMatched || c > bestConf) {
 			anyMatched = true
-			if c > bestConf {
-				bestConf = c
-				bestRules = r
-			}
+			bestConf = c
+			bestRules = r
 		}
 	}
 

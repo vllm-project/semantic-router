@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"context"
 	"encoding/json"
 	"net/http/httptest"
 	"strings"
@@ -63,6 +64,11 @@ routing:
 		"/config/router/validate",
 		strings.NewReader(string(body)),
 	)
+	request = request.WithContext(context.WithValue(
+		request.Context(),
+		managementPrincipalContextKey,
+		managementPrincipal{Role: "admin", AuthEnabled: true},
+	))
 	response := httptest.NewRecorder()
 
 	(&ClassificationAPIServer{}).handleConfigValidate(response, request)
@@ -76,8 +82,11 @@ routing:
 	if !strings.Contains(response.Body.String(), "${VALIDATE_SECRET_CANARY}") {
 		t.Fatalf("validation response did not preserve the environment reference: %s", response.Body.String())
 	}
-	if !strings.Contains(response.Body.String(), redactedConfigValue) {
-		t.Fatalf("validation response did not redact resolved API key: %s", response.Body.String())
+	if !strings.Contains(
+		response.Body.String(),
+		"api_key_env: VALIDATE_SECRET_CANARY",
+	) {
+		t.Fatalf("validation response did not preserve api_key_env: %s", response.Body.String())
 	}
 }
 

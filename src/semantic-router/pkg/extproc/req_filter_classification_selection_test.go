@@ -18,6 +18,7 @@ package extproc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -109,7 +110,7 @@ func TestSelectModelFromCandidatesUsesDefaultCandidateOnInvalidSelectionResult(t
 
 			router := &OpenAIRouter{ModelSelector: registry}
 			requestContext := &RequestContext{}
-			selected, method := router.selectModelFromCandidates(&selection.SelectionContext{
+			selected, method, _ := router.selectModelFromCandidates(&selection.SelectionContext{
 				CandidateModels: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
 			}, nil, requestContext)
 
@@ -133,7 +134,7 @@ func TestSelectModelFromCandidatesUsesDefaultCandidateOnInvalidSelectionResult(t
 func TestSelectModelFromCandidatesUsesFirstValidDefaultCandidateOnInvalidContext(t *testing.T) {
 	router := &OpenAIRouter{}
 	requestContext := &RequestContext{}
-	selected, method := router.selectModelFromCandidates(&selection.SelectionContext{
+	selected, method, _ := router.selectModelFromCandidates(&selection.SelectionContext{
 		CandidateModels: []config.ModelRef{{Model: " "}, {Model: "model-b"}},
 	}, nil, requestContext)
 
@@ -177,7 +178,7 @@ func TestSelectModelFromCandidatesPropagatesRequestCancellation(t *testing.T) {
 	requestContext := &RequestContext{TraceContext: cancelledContext}
 	router := &OpenAIRouter{ModelSelector: registry}
 
-	selected, _ := router.selectModelFromCandidates(
+	selected, _, err := router.selectModelFromCandidates(
 		&selection.SelectionContext{
 			DecisionName:    "cancelled",
 			CandidateModels: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
@@ -189,11 +190,14 @@ func TestSelectModelFromCandidatesPropagatesRequestCancellation(t *testing.T) {
 	if !cancelled {
 		t.Fatal("selector did not observe request cancellation")
 	}
-	if selected == nil || selected.Model != "model-a" {
-		t.Fatalf("selected = %#v, want fallback model-a", selected)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context cancellation", err)
 	}
-	if requestContext.VSRSelectionReasoning != selectionFallbackCancelled {
-		t.Fatalf("fallback reason = %q", requestContext.VSRSelectionReasoning)
+	if selected != nil {
+		t.Fatalf("cancelled selection returned fallback %#v", selected)
+	}
+	if requestContext.VSRSelectionReasoning != "" {
+		t.Fatalf("cancelled request mutated fallback diagnostics")
 	}
 }
 
@@ -203,7 +207,7 @@ func TestSelectModelFromCandidatesRecordsSingleCandidateInRouterMemory(t *testin
 
 	router := &OpenAIRouter{}
 	reqCtx := &RequestContext{SessionID: "single-candidate-session"}
-	selected, method := router.selectModelFromCandidates(&selection.SelectionContext{
+	selected, method, _ := router.selectModelFromCandidates(&selection.SelectionContext{
 		SessionID:       "single-candidate-session",
 		DecisionName:    "warmup",
 		CandidateModels: []config.ModelRef{{Model: "model-a"}},

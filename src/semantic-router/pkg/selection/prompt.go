@@ -23,7 +23,16 @@ type PromptInvoke func(
 	model string,
 	systemPrompt string,
 	input string,
-) (string, error)
+) (PromptInvocationResult, error)
+
+type PromptInvocationResult struct {
+	Content          string
+	Model            string
+	PromptTokens     int64
+	CompletionTokens int64
+	TotalTokens      int64
+	LatencyMs        int64
+}
 
 // PromptSelector uses a small concrete model to select one of the decision's
 // candidate ModelRefs. All output protocol details are runtime-owned.
@@ -49,7 +58,14 @@ func (s *PromptSelector) Method() SelectionMethod { return MethodPrompt }
 
 func (s *PromptSelector) Tier() AlgorithmTier { return TierExperimental }
 
-func (s *PromptSelector) ExternalDependencies() []Dependency { return nil }
+func (s *PromptSelector) ExternalDependencies() []Dependency {
+	return []Dependency{{
+		Name:        "Prompt helper model via looper",
+		Type:        DependencyExternalService,
+		Description: "Requires a reachable OpenAI-compatible helper model",
+		Required:    true,
+	}}
+}
 
 func (s *PromptSelector) UpdateFeedback(context.Context, *Feedback) error { return nil }
 
@@ -67,7 +83,7 @@ func (s *PromptSelector) Select(
 		return nil, fmt.Errorf("prompt selector model invoker is not configured")
 	}
 
-	reply, err := s.invoke(
+	invocation, err := s.invoke(
 		ctx,
 		s.config.Model,
 		s.systemPrompt(selCtx.CandidateModels),
@@ -77,18 +93,19 @@ func (s *PromptSelector) Select(
 		return nil, fmt.Errorf("%w: %w", ErrPromptInvocation, err)
 	}
 
-	choice, err := parsePromptChoice(reply)
+	choice, err := parsePromptChoice(invocation.Content)
 	if err != nil {
 		return nil, err
 	}
 	if candidate := promptCandidateByModel(selCtx.CandidateModels, choice.SelectedModel); candidate != nil {
-		return s.selectionResult(selCtx.CandidateModels, *candidate, choice.Rationale), nil
+		return s.selectionResult(
+			selCtx.CandidateModels,
+			*candidate,
+			choice.Rationale,
+			invocation,
+		), nil
 	}
-	return nil, fmt.Errorf(
-		"%w: model %q",
-		ErrPromptUndeclaredCandidate,
-		choice.SelectedModel,
-	)
+	return nil, ErrPromptUndeclaredCandidate
 }
 
 func validatePromptCandidateModels(candidates []config.ModelRef) error {
@@ -147,16 +164,22 @@ func (s *PromptSelector) selectionResult(
 	candidates []config.ModelRef,
 	selected config.ModelRef,
 	rationale string,
+	invocation PromptInvocationResult,
 ) *SelectionResult {
 	return &SelectionResult{
-		SelectedModel: selected.Model,
-		LoRAName:      selected.LoRAName,
-		Score:         1.0,
-		Confidence:    1.0,
-		Method:        MethodPrompt,
-		Tier:          s.Tier(),
-		Reasoning:     rationale,
-		AllScores:     promptSelectionScores(candidates, selected.Model),
+		SelectedModel:          selected.Model,
+		LoRAName:               selected.LoRAName,
+		Score:                  1.0,
+		Confidence:             1.0,
+		Method:                 MethodPrompt,
+		Tier:                   s.Tier(),
+		Reasoning:              rationale,
+		AllScores:              promptSelectionScores(candidates, selected.Model),
+		HelperModel:            invocation.Model,
+		HelperPromptTokens:     invocation.PromptTokens,
+		HelperCompletionTokens: invocation.CompletionTokens,
+		HelperTotalTokens:      invocation.TotalTokens,
+		HelperLatencyMs:        invocation.LatencyMs,
 	}
 }
 

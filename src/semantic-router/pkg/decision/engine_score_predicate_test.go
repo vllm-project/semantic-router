@@ -1,6 +1,7 @@
 package decision
 
 import (
+	"math"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -119,5 +120,45 @@ func TestScorePredicateCanMatchPublishedZeroValue(t *testing.T) {
 	}
 	if result == nil || result.Decision.Name != "empty" {
 		t.Fatalf("result = %#v, want zero-value decision", result)
+	}
+}
+
+func TestNumericPredicateRejectsNonFiniteSignalValue(t *testing.T) {
+	predicate := &config.NumericPredicate{GTE: float64Ptr(0)}
+	for _, value := range []float64{
+		math.NaN(),
+		math.Inf(1),
+		math.Inf(-1),
+	} {
+		if numericPredicateMatches(value, predicate) {
+			t.Fatalf("non-finite value %v matched predicate", value)
+		}
+	}
+}
+
+func TestORPreservesZeroConfidenceMatchedRule(t *testing.T) {
+	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{
+		Name: "zero-confidence",
+		Rules: config.RuleNode{
+			Operator: "OR",
+			Conditions: []config.RuleNode{
+				{Type: "keyword", Name: "zero"},
+				{Type: "keyword", Name: "missing"},
+			},
+		},
+	}}, "priority")
+	signals := &SignalMatches{
+		KeywordRules:      []string{"zero"},
+		SignalConfidences: map[string]float64{"keyword:zero": 0},
+	}
+
+	result, traces := engine.EvaluateDecisionsWithTrace(signals)
+	if result == nil || len(result.MatchedRules) != 1 ||
+		result.MatchedRules[0] != "keyword:zero" {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(traces) != 1 || traces[0].RootTrace == nil ||
+		!traces[0].RootTrace.Matched {
+		t.Fatalf("traces = %#v", traces)
 	}
 }

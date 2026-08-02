@@ -27,7 +27,11 @@ func newLocalLabelClassifier(rule config.ClassifierSignalRule) (labelClassifier,
 	defer localClassifierLifecycle.Unlock()
 	switch {
 	case localClassifierLifecycle.signature == "":
-		if err := candle_binding.InitClassifier(modelPath, len(rule.Labels), rule.UseCPU); err != nil {
+		if err := candle_binding.InitGenericClassifier(
+			modelPath,
+			len(rule.Labels),
+			rule.UseCPU,
+		); err != nil {
 			return nil, fmt.Errorf("initialize classifier %q: %w", rule.Name, err)
 		}
 		localClassifierLifecycle.signature = signature

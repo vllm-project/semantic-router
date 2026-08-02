@@ -52,6 +52,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 	}
 
 	signalInput := r.prepareSignalEvaluationInput(history)
+	signalInput.requestFacts.Context = ctx.TraceContext
 	ctx.VSRConversationFacts = signalInput.conversationFacts
 	if signalInput.evaluationText == "" && !hasEnvelopeRoutingFacts(history) {
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
@@ -68,13 +69,13 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 		return "", 0.0, entropy.ReasoningDecision{}, defaultModel, nil
 	}
 
-	decisionName, evaluationConfidence, reasoningDecision, selectedModel = r.finalizeDecisionEvaluation(
+	decisionName, evaluationConfidence, reasoningDecision, selectedModel, err := r.finalizeDecisionEvaluation(
 		result,
 		originalModel,
 		history.currentUserMessage,
 		ctx,
 	)
-	return decisionName, evaluationConfidence, reasoningDecision, selectedModel, nil
+	return decisionName, evaluationConfidence, reasoningDecision, selectedModel, err
 }
 
 func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMethod, algorithm *config.AlgorithmConfig, ctx *RequestContext) selection.Selector {

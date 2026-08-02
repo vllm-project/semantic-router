@@ -120,9 +120,17 @@ func (s *ClassificationService) HasClassifier() bool {
 }
 
 func (s *ClassificationService) classifierSnapshot() *classification.Classifier {
+	classifier, _ := s.runtimeSnapshot()
+	return classifier
+}
+
+func (s *ClassificationService) runtimeSnapshot() (
+	*classification.Classifier,
+	*config.RouterConfig,
+) {
 	s.configMutex.RLock()
 	defer s.configMutex.RUnlock()
-	return s.classifier
+	return s.classifier, s.config
 }
 
 // NewPlaceholderClassificationService creates a placeholder service for API-only mode
@@ -141,10 +149,9 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	if err != nil {
 		return nil, err
 	}
-	s.configMutex.RLock()
-	defer s.configMutex.RUnlock()
-
-	classifier, err := s.classifierForRequestModel(req.Model)
+	classifier, runtimeConfig, err := s.runtimeSnapshotForRequestModel(
+		req.Model,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -195,32 +202,36 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		}
 	}
 
-	// Get category classification (for backward compatibility and when no decision matches)
-	var category string
-	var confidence float64
-	if decisionResult != nil && decisionResult.Decision != nil {
-		// Use decision name as category
-		category = decisionResult.Decision.Name
-		confidence = decisionResult.Confidence
-	} else {
-		// Fallback to traditional classification
-		category, confidence, _, err = classifier.ClassifyCategoryWithEntropy(input.evaluationText)
-		if err != nil {
-			// Graceful fallback when classification fails
-			// When domain signal was skipped due to low confidence and no decision matches,
-			// fall back to "other" category instead of returning an error
-			logging.Warnf("Classification fallback failed: %v, using default 'other' category", err)
-			category = "other"
-			confidence = 0.0
-		}
-	}
+	category, confidence := resolveIntentCategory(
+		classifier,
+		decisionResult,
+		input.evaluationText,
+	)
 
 	processingTime := time.Since(start).Milliseconds()
 
 	// Build response from signals and decision
-	response := s.buildIntentResponseFromSignals(signals, decisionResult, category, confidence, processingTime, req)
+	response := s.buildIntentResponseFromSignals(
+		signals,
+		decisionResult,
+		category,
+		confidence,
+		processingTime,
+		req,
+		classifier,
+		runtimeConfig,
+	)
 
 	return response, nil
+}
+
+func (s *ClassificationService) runtimeSnapshotForRequestModel(
+	modelName string,
+) (*classification.Classifier, *config.RouterConfig, error) {
+	s.configMutex.RLock()
+	defer s.configMutex.RUnlock()
+	classifier, err := s.classifierForRequestModel(modelName)
+	return classifier, s.config, err
 }
 
 func (s *ClassificationService) classifierForRequestModel(modelName string) (*classification.Classifier, error) {

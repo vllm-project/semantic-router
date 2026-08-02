@@ -17,10 +17,8 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	if err != nil {
 		return nil, err
 	}
-	s.configMutex.RLock()
-	defer s.configMutex.RUnlock()
-
-	classifier, candidates, recipeName, err := s.evalRoutingScope(req.Model)
+	classifier, candidates, recipeName, err :=
+		s.evalRoutingScopeSnapshot(req.Model)
 	if err != nil {
 		return nil, err
 	}
@@ -53,17 +51,27 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	var decisionResult *decision.DecisionResult
 	var traces []decision.DecisionTrace
 	if len(candidates) > 0 {
-		decisionResult, traces = s.evaluateIntentDecision(classifier, signals, candidates, wantTrace)
+		decisionResult, traces = evaluateIntentDecision(
+			classifier,
+			signals,
+			candidates,
+			wantTrace,
+		)
 	}
 
-	resp := s.buildEvalResponse(input.evaluationText, signals, decisionResult)
+	resp := s.buildEvalResponse(
+		input.evaluationText,
+		signals,
+		decisionResult,
+		classifier,
+	)
 	resp.RequestedModel = strings.TrimSpace(req.Model)
 	resp.Recipe = recipeName
 	resp.EvalTrace = traces
 	return resp, nil
 }
 
-func (s *ClassificationService) evaluateIntentDecision(
+func evaluateIntentDecision(
 	classifier *classification.Classifier,
 	signals *classification.SignalResults,
 	candidates []config.Decision,
@@ -85,6 +93,19 @@ func (s *ClassificationService) evaluateIntentDecision(
 		logging.Warnf("Decision evaluation failed: %v", err)
 	}
 	return decisionResult, traces
+}
+
+func (s *ClassificationService) evalRoutingScopeSnapshot(
+	modelName string,
+) (
+	*classification.Classifier,
+	[]config.Decision,
+	config.RecipeName,
+	error,
+) {
+	s.configMutex.RLock()
+	defer s.configMutex.RUnlock()
+	return s.evalRoutingScope(modelName)
 }
 
 func (s *ClassificationService) evalRoutingScope(modelName string) (*classification.Classifier, []config.Decision, config.RecipeName, error) {
