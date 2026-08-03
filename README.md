@@ -2,7 +2,7 @@
 
 <img src="website/static/img/artworks/vllm-sr-logo.dark.png" alt="vLLM Semantic Router" width="50%"/>
 
-<p><strong>Route every request to the right model, inference strategy, and compute target.</strong></p>
+<p><strong>Make Your Mixture-of-Models Programmable.</strong></p>
 
 <p>
   <a href="https://vllm-sr.ai">Documentation</a> |
