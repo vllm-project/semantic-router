@@ -105,11 +105,17 @@ func TestJailbreakRiskScore(t *testing.T) {
 		IdxToLabel: map[string]string{"0": "benign", "1": "jailbreak"},
 	}
 
+	multiLabelMapping := &JailbreakMapping{
+		LabelToIdx: map[string]int{"benign": 0, "jailbreak": 1, "prompt_injection": 2},
+		IdxToLabel: map[string]string{"0": "benign", "1": "jailbreak", "2": "prompt_injection"},
+	}
+
 	tests := []struct {
-		name    string
-		mapping *JailbreakMapping
-		result  candle_binding.ClassResultWithProbs
-		want    float32
+		name           string
+		mapping        *JailbreakMapping
+		positiveLabels []string
+		result         candle_binding.ClassResultWithProbs
+		want           float32
 	}{
 		{
 			name:    "distribution present, argmax is jailbreak",
@@ -143,13 +149,82 @@ func TestJailbreakRiskScore(t *testing.T) {
 			result:  candle_binding.ClassResultWithProbs{Class: 0, Confidence: 0.9957, Probabilities: []float32{0.9957, 0.0043}},
 			want:    0.0043,
 		},
+		{
+			// Multiple positive_labels: risk is the SUM of every configured positive
+			// class's probability, not just one, since either counts as unsafe.
+			name:           "multiple positive_labels sum their probabilities",
+			mapping:        multiLabelMapping,
+			positiveLabels: []string{"jailbreak", "prompt_injection"},
+			result:         candle_binding.ClassResultWithProbs{Class: 1, Confidence: 0.5, Probabilities: []float32{0.1, 0.5, 0.4}},
+			want:           0.9,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := jailbreakRiskScore(tt.mapping, tt.result)
+			got := jailbreakRiskScore(tt.mapping, tt.positiveLabels, tt.result)
 			if math.Abs(float64(got-tt.want)) > 1e-6 {
 				t.Errorf("jailbreakRiskScore() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsPositiveJailbreakLabel(t *testing.T) {
+	tests := []struct {
+		name       string
+		configured []string
+		label      string
+		want       bool
+	}{
+		{name: "unset defaults to jailbreak label", configured: nil, label: "jailbreak", want: true},
+		{name: "unset does not match other labels", configured: nil, label: "benign", want: false},
+		{name: "configured list matches any entry", configured: []string{"jailbreak", "prompt_injection"}, label: "prompt_injection", want: true},
+		{name: "configured list rejects unlisted labels", configured: []string{"malicious"}, label: "jailbreak", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isPositiveJailbreakLabel(tt.configured, tt.label); got != tt.want {
+				t.Errorf("isPositiveJailbreakLabel(%v, %q) = %v, want %v", tt.configured, tt.label, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateJailbreakPositiveLabels(t *testing.T) {
+	mapping := &JailbreakMapping{
+		LabelToIdx: map[string]int{"benign": 0, "jailbreak": 1},
+		IdxToLabel: map[string]string{"0": "benign", "1": "jailbreak"},
+	}
+
+	tests := []struct {
+		name       string
+		configured []string
+		mapping    *JailbreakMapping
+		wantErr    bool
+	}{
+		{name: "unset positive_labels is a no-op", configured: nil, mapping: mapping, wantErr: false},
+		{name: "configured label matches the mapping", configured: []string{"jailbreak"}, mapping: mapping, wantErr: false},
+		{name: "at least one configured label matches", configured: []string{"malicious", "jailbreak"}, mapping: mapping, wantErr: false},
+		{
+			// #2587: a custom model's positive class named "malicious" instead of
+			// "jailbreak" must fail fast at startup, not silently classify as safe.
+			name:       "no configured label matches the mapping fails fast",
+			configured: []string{"malicious"},
+			mapping:    mapping,
+			wantErr:    true,
+		},
+		{name: "nil mapping is a no-op", configured: []string{"malicious"}, mapping: nil, wantErr: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateJailbreakPositiveLabels(tt.configured, tt.mapping)
+			if tt.wantErr && err == nil {
+				t.Error("expected an error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected no error, got: %v", err)
 			}
 		})
 	}

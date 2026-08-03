@@ -234,7 +234,7 @@ func defaultPromptGuardModule() CanonicalPromptGuardModule {
 			Enabled:              true,
 			Threshold:            0.7,
 			UseCPU:               true,
-			UseMmBERT32K:         true,
+			Backend:              PromptGuardBackendMmBERT32K,
 			JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
 		},
 	}

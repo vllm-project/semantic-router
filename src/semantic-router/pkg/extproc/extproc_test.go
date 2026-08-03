@@ -1016,7 +1016,6 @@ var _ = Describe("Security Checks", func() {
 			cfg.PromptGuard.Enabled = true
 			cfg.PromptGuard.ModelID = modelPath
 			cfg.PromptGuard.JailbreakMappingPath = "/path/to/jailbreak.json"
-			cfg.PromptGuard.UseModernBERT = true
 			cfg.PromptGuard.UseCPU = true
 
 			jailbreakMapping := &classification.JailbreakMapping{

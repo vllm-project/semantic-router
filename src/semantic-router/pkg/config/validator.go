@@ -95,6 +95,27 @@ func validateRoutingStrategy(cfg *RouterConfig) error {
 	return cfg.Strategy.Validate()
 }
 
+// validPromptGuardBackends is the set of recognized PromptGuardConfig.Backend values.
+var validPromptGuardBackends = map[string]bool{
+	"":                             true, // unset defaults to PromptGuardBackendCandle
+	PromptGuardBackendCandle:       true,
+	PromptGuardBackendMmBERT32K:    true,
+	PromptGuardBackendHTTPChat:     true,
+	PromptGuardBackendHTTPClassify: true,
+}
+
+// validatePromptGuardBackendConfig validates the prompt_guard backend selection.
+// external_models with model_role="guardrail" is required for the two HTTP
+// backends; that requirement is checked by IsPromptGuardEnabled/the main config
+// validation, not here.
+func validatePromptGuardBackendConfig(cfg *PromptGuardConfig) error {
+	if !validPromptGuardBackends[cfg.Backend] {
+		return fmt.Errorf("prompt_guard.backend: unrecognized value %q, must be one of: %s, %s, %s, %s",
+			cfg.Backend, PromptGuardBackendCandle, PromptGuardBackendMmBERT32K, PromptGuardBackendHTTPChat, PromptGuardBackendHTTPClassify)
+	}
+	return nil
+}
+
 // isValidIPv4 checks if the address is a valid IPv4 address
 func isValidIPv4(address string) bool {
 	ip := net.ParseIP(address)
@@ -156,6 +177,9 @@ func runConfigContractValidators(cfg *RouterConfig, validators []configContractV
 }
 
 func validateModelSelectionConfig(cfg *RouterConfig) error {
+	if err := validatePromptGuardBackendConfig(&cfg.PromptGuard); err != nil {
+		return err
+	}
 	if isSessionAwareSelectionConfigConfigured(cfg.ModelSelection.SessionAware) {
 		return fmt.Errorf("global.router.model_selection.session_aware is no longer supported; use global.router.learning.protection")
 	}

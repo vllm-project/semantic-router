@@ -7,33 +7,89 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// jailbreakPositiveLabel is the mapping label that denotes an actual jailbreak
-// attempt (as opposed to benign / other classes).
+// jailbreakPositiveLabel is the default mapping label that denotes an actual
+// jailbreak attempt (as opposed to benign / other classes), used when
+// prompt_guard.positive_labels is not configured.
 const jailbreakPositiveLabel = "jailbreak"
 
+// resolvePositiveLabels returns the configured positive_labels, or the
+// single-label legacy default when unset.
+func resolvePositiveLabels(configured []string) []string {
+	if len(configured) > 0 {
+		return configured
+	}
+	return []string{jailbreakPositiveLabel}
+}
+
+// isPositiveJailbreakLabel reports whether label counts as a positive (unsafe)
+// jailbreak classification, per the configured positive_labels (defaulting to
+// jailbreakPositiveLabel when unset).
+func isPositiveJailbreakLabel(configured []string, label string) bool {
+	for _, l := range resolvePositiveLabels(configured) {
+		if l == label {
+			return true
+		}
+	}
+	return false
+}
+
+// validateJailbreakPositiveLabels enforces a fail-fast contract: when
+// positive_labels is explicitly configured, at least one entry must exist in
+// the jailbreak mapping's actual label set, so a misconfigured label (e.g. a
+// custom model's positive class named "malicious" instead of "jailbreak")
+// can never silently mean "this model's positive class is never detected."
+// It is a no-op when positive_labels is unset, since the legacy default
+// ("jailbreak" missing from a mapping) is an existing, tolerated case handled
+// by jailbreakRiskScore's conservative fallback.
+func validateJailbreakPositiveLabels(configured []string, mapping *JailbreakMapping) error {
+	if len(configured) == 0 || mapping == nil {
+		return nil
+	}
+	for _, label := range configured {
+		if _, ok := mapping.GetIndexForJailbreakType(label); ok {
+			return nil
+		}
+	}
+	knownLabels := make([]string, 0, len(mapping.LabelToIdx))
+	for label := range mapping.LabelToIdx {
+		knownLabels = append(knownLabels, label)
+	}
+	return fmt.Errorf("prompt_guard.positive_labels %v: none match the jailbreak_mapping labels %v", configured, knownLabels)
+}
+
 // jailbreakRiskScore returns the probability that the input is a jailbreak — i.e.
-// the probability mass on the jailbreak class — independent of which class the
-// model actually predicts (argmax).
+// the probability mass on the positive_labels classes — independent of which
+// class the model actually predicts (argmax).
 //
-// When the full softmax distribution is available it returns the exact
-// P(jailbreak). Otherwise it derives a conservative estimate from the
+// When the full softmax distribution is available it returns the exact summed
+// P(positive_labels). Otherwise it derives a conservative estimate from the
 // predicted-class confidence: the confidence itself when the predicted class is
-// jailbreak, or 1-confidence otherwise (an upper bound on P(jailbreak) that is
-// exact for binary models and never under-reports risk).
+// one of positive_labels, or 1-confidence otherwise (an upper bound on risk that
+// is exact for binary models and never under-reports risk).
 //
 // This avoids the misleading case where a confident benign prediction reports a
 // high risk_score: the predicted-class confidence is P(benign), not P(jailbreak).
-func jailbreakRiskScore(mapping *JailbreakMapping, result candle_binding.ClassResultWithProbs) float32 {
+func jailbreakRiskScore(mapping *JailbreakMapping, positiveLabels []string, result candle_binding.ClassResultWithProbs) float32 {
+	labels := resolvePositiveLabels(positiveLabels)
+
 	if mapping != nil && len(result.Probabilities) > 0 {
-		if idx, ok := mapping.GetIndexForJailbreakType(jailbreakPositiveLabel); ok &&
-			idx >= 0 && idx < len(result.Probabilities) {
-			return result.Probabilities[idx]
+		var sum float32
+		matched := false
+		for _, label := range labels {
+			if idx, ok := mapping.GetIndexForJailbreakType(label); ok &&
+				idx >= 0 && idx < len(result.Probabilities) {
+				sum += result.Probabilities[idx]
+				matched = true
+			}
+		}
+		if matched {
+			return sum
 		}
 	}
 
 	if mapping != nil {
 		if predicted, ok := mapping.GetJailbreakTypeFromIndex(result.Class); ok &&
-			predicted == jailbreakPositiveLabel {
+			isPositiveJailbreakLabel(labels, predicted) {
 			return result.Confidence
 		}
 	}
@@ -67,8 +123,8 @@ func (c *Classifier) CheckForJailbreakWithRisk(text string) (bool, string, float
 		return false, "", 0.0, 0.0, fmt.Errorf("unknown jailbreak class index: %d", result.Class)
 	}
 
-	isJailbreak := result.Confidence >= threshold && jailbreakType == jailbreakPositiveLabel
-	riskScore := jailbreakRiskScore(c.JailbreakMapping, result)
+	isJailbreak := result.Confidence >= threshold && isPositiveJailbreakLabel(c.Config.PromptGuard.PositiveLabels, jailbreakType)
+	riskScore := jailbreakRiskScore(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, result)
 
 	if isJailbreak {
 		logging.Warnf("JAILBREAK DETECTED: '%s' (confidence: %.3f, risk: %.3f, threshold: %.3f)",

@@ -1050,3 +1050,43 @@ var _ = Describe("validateConfigStructure", func() {
 	registerValidateConfigStructureLoRASpecs()
 	registerValidateConfigStructureAlgorithmSpecs()
 })
+
+var _ = Describe("validatePromptGuardBackendConfig", func() {
+	It("accepts an unset backend (defaults to candle)", func() {
+		cfg := &PromptGuardConfig{}
+		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
+	})
+
+	It("accepts candle", func() {
+		cfg := &PromptGuardConfig{Backend: PromptGuardBackendCandle}
+		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
+	})
+
+	It("accepts mmbert32k", func() {
+		cfg := &PromptGuardConfig{Backend: PromptGuardBackendMmBERT32K}
+		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
+	})
+
+	It("accepts http_chat", func() {
+		cfg := &PromptGuardConfig{Backend: PromptGuardBackendHTTPChat}
+		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
+	})
+
+	It("accepts http_classify", func() {
+		cfg := &PromptGuardConfig{Backend: PromptGuardBackendHTTPClassify}
+		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
+	})
+
+	It("rejects an unrecognized backend", func() {
+		cfg := &PromptGuardConfig{Backend: "some_typo"}
+		err := validatePromptGuardBackendConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("some_typo"))
+	})
+
+	It("rejects a stale boolean-flag-era value", func() {
+		cfg := &PromptGuardConfig{Backend: "use_vllm"}
+		err := validatePromptGuardBackendConfig(cfg)
+		Expect(err).To(HaveOccurred())
+	})
+})

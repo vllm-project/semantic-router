@@ -35,18 +35,20 @@ func (b *classifierOptionBuilder) addMCPCategoryClassifier() {
 	b.options = append(b.options, withMCPCategory(mcpInit, mcpInf))
 }
 
-func buildJailbreakDependencies(cfg *config.RouterConfig) (JailbreakInitializer, SequenceClassifierBackend, error) {
-	jailbreakInference, err := createJailbreakInference(&cfg.PromptGuard, cfg)
+func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *JailbreakMapping) (JailbreakInitializer, SequenceClassifierBackend, error) {
+	jailbreakInference, err := createJailbreakInference(&cfg.PromptGuard, cfg, jailbreakMapping)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create jailbreak inference: %w", err)
 	}
-	if cfg.PromptGuard.UseVLLM {
+	switch cfg.PromptGuard.Backend {
+	case config.PromptGuardBackendHTTPChat, config.PromptGuardBackendHTTPClassify:
+		// External backends have no local model to initialize.
 		return nil, jailbreakInference, nil
-	}
-	if cfg.PromptGuard.UseMmBERT32K {
+	case config.PromptGuardBackendMmBERT32K:
 		return createMmBERT32KJailbreakInitializer(), jailbreakInference, nil
+	default:
+		return createJailbreakInitializer(), jailbreakInference, nil
 	}
-	return createJailbreakInitializer(), jailbreakInference, nil
 }
 
 func buildPIIDependencies(cfg *config.RouterConfig) (PIIInitializer, PIIInference) {

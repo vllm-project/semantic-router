@@ -98,6 +98,10 @@ func buildRoutingClassifierModels(
 
 	promptGuard := cfg.PromptGuard
 	if cfg.IsPromptGuardEnabled() {
+		backend := promptGuard.Backend
+		if backend == "" {
+			backend = routerconfig.PromptGuardBackendCandle
+		}
 		models = append(models, ModelInfo{
 			Name:      "jailbreak_classifier",
 			Type:      "security_detection",
@@ -106,7 +110,7 @@ func buildRoutingClassifierModels(
 			Metadata: map[string]string{
 				"enabled":                "true",
 				"jailbreak_mapping_path": promptGuard.JailbreakMappingPath,
-				"model_type":             resolveInlineModelType(promptGuard.UseMmBERT32K, promptGuard.UseModernBERT, false),
+				"model_type":             backend,
 			},
 		})
 	}

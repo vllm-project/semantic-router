@@ -65,7 +65,7 @@ func buildAuxiliaryModelsConfig() *config.RouterConfig {
 			PromptGuard: config.PromptGuardConfig{
 				Enabled:              true,
 				ModelID:              "models/mmbert32k-jailbreak-detector-merged",
-				UseMmBERT32K:         true,
+				Backend:              config.PromptGuardBackendMmBERT32K,
 				JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
 			},
 			HallucinationMitigation: config.HallucinationMitigationConfig{
