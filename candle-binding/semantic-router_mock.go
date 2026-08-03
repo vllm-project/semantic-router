@@ -331,6 +331,11 @@ func ClassifyJailbreakText(text string) (ClassResult, error) {
 	return ClassResult{}, ErrBackendUnavailable
 }
 
+// ClassifyJailbreakTextWithProbs classifies jailbreak with probs
+func ClassifyJailbreakTextWithProbs(text string) (ClassResultWithProbs, error) {
+	return ClassResultWithProbs{}, ErrBackendUnavailable
+}
+
 // InitModernBertClassifier initializes ModernBERT
 func InitModernBertClassifier(modelPath string, useCPU bool) error {
 	return ErrBackendUnavailable
@@ -369,6 +374,11 @@ func ClassifyModernBertPIIText(text string) (ClassResult, error) {
 // ClassifyModernBertJailbreakText classifies Jailbreak using ModernBERT
 func ClassifyModernBertJailbreakText(text string) (ClassResult, error) {
 	return ClassResult{}, ErrBackendUnavailable
+}
+
+// ClassifyModernBertJailbreakTextWithProbs classifies Jailbreak using ModernBERT with probs
+func ClassifyModernBertJailbreakTextWithProbs(text string) (ClassResultWithProbs, error) {
+	return ClassResultWithProbs{}, ErrBackendUnavailable
 }
 
 // InitDebertaJailbreakClassifier initializes DeBERTa
