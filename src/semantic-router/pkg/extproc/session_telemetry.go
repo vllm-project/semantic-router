@@ -4,6 +4,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelpricing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -43,7 +44,7 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 	if ctx == nil || usage.promptTokens+usage.completionTokens <= 0 {
 		return
 	}
-	sessiontelemetry.RecordLastModel(ctx.SessionID, ctx.RequestModel)
+	sessiontelemetry.RecordLastModel(routingSessionStateKey(ctx), ctx.RequestModel)
 	accounting := estimateRouterCacheAccounting(ctx, usage, pricing)
 
 	domain := consts.UnknownLabel
@@ -63,6 +64,8 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 		CacheAccountingSource:       accounting.source,
 		CacheAccountingConfidence:   accounting.confidence,
 		Pricing:                     pricing,
+		RoutingScope:                ctx.Routing.RecipeName(),
+		SkipRoutingState:            requestBypassesRouting(ctx),
 	}
 	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
 		if ctx.ResponseAPICtx.ConversationID == "" {
@@ -97,12 +100,12 @@ func recordRouterSessionUsageFromContext(
 	pricing sessiontelemetry.TurnPricing,
 	accounting routerCacheAccounting,
 ) {
-	if ctx == nil || ctx.SessionID == "" || ctx.RequestModel == "" {
+	if ctx == nil || ctx.SessionID == "" || ctx.RequestModel == "" || requestBypassesRouting(ctx) {
 		recordRouterLearningUsageFromContext(ctx, usage, pricing, accounting)
 		return
 	}
 	sessiontelemetry.RecordSessionUsage(sessiontelemetry.SessionUsageParams{
-		SessionID:                   ctx.SessionID,
+		SessionID:                   routingSessionStateKey(ctx),
 		Model:                       ctx.RequestModel,
 		PromptTokens:                usage.promptTokens,
 		CachedPromptTokens:          usage.cachedPromptTokens,
@@ -127,7 +130,7 @@ func recordRouterLearningUsageFromContext(
 		return
 	}
 	sessiontelemetry.RecordSessionUsage(sessiontelemetry.SessionUsageParams{
-		SessionID:                   ctx.VSRLearningSessionID,
+		SessionID:                   config.RoutingNamespaceKey(ctx.Routing.RecipeName(), ctx.VSRLearningSessionID),
 		Model:                       ctx.RequestModel,
 		PromptTokens:                usage.promptTokens,
 		CachedPromptTokens:          usage.cachedPromptTokens,

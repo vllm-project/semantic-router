@@ -183,7 +183,7 @@ test.describe("Setup wizard routing import", () => {
     page,
   }) => {
     const remoteURL =
-      "https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/recipes/balance.yaml";
+      "https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/balance/config.yaml";
 
     let importPayload: Record<string, unknown> | null = null;
     let validatePayload: Record<string, unknown> | null = null;

@@ -59,6 +59,7 @@ type GeneratedRouterFragment struct {
 
 // RoleBindingFragment is a router-config-compatible role_binding entry.
 type RoleBindingFragment struct {
+	Name     string    `json:"name" yaml:"name"`
 	Subjects []Subject `json:"subjects" yaml:"subjects"`
 	Role     string    `json:"role" yaml:"role"`
 }
@@ -115,6 +116,7 @@ func GenerateRouterFragment(policy *SecurityPolicyConfig) *GeneratedRouterFragme
 
 	for _, mapping := range policy.RoleMappings {
 		fragment.RoleBindings = append(fragment.RoleBindings, RoleBindingFragment{
+			Name:     mapping.Name,
 			Subjects: mapping.Subjects,
 			Role:     mapping.Role,
 		})
@@ -188,7 +190,7 @@ func toCanonicalYAML(fragment *GeneratedRouterFragment) ([]byte, error) {
 			subjects[i] = routerconfig.Subject{Kind: s.Kind, Name: s.Name}
 		}
 		doc.Routing.Signals.RoleBindings = append(doc.Routing.Signals.RoleBindings,
-			routerconfig.RoleBinding{Subjects: subjects, Role: rb.Role})
+			routerconfig.RoleBinding{Name: rb.Name, Subjects: subjects, Role: rb.Role})
 	}
 
 	for _, d := range fragment.Decisions {

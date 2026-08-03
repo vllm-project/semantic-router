@@ -4,12 +4,15 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
 type IntentMessage struct {
-	Role    string          `json:"role"`
-	Content json.RawMessage `json:"content"`
+	Role       string            `json:"role"`
+	Content    json.RawMessage   `json:"content"`
+	ToolCalls  []json.RawMessage `json:"tool_calls,omitempty"`
+	ToolCallID string            `json:"tool_call_id,omitempty"`
 }
 
 type intentSignalInput struct {
@@ -20,6 +23,7 @@ type intentSignalInput struct {
 	nonUserMessages   []string
 	hasAssistantReply bool
 	imageURL          string
+	conversationFacts classification.ConversationFacts
 }
 
 type intentConversationHistory struct {
@@ -28,6 +32,7 @@ type intentConversationHistory struct {
 	priorUserMessages   []string
 	nonUserMessages     []string
 	hasAssistantReply   bool
+	conversationFacts   classification.ConversationFacts
 }
 
 type intentMessageImageURL struct {
@@ -62,7 +67,7 @@ type intentMessageContentPart struct {
 func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 	text := strings.TrimSpace(req.Text)
 
-	if input, ok := resolveIntentSignalInputFromMessages(req.Messages); ok {
+	if input, ok := resolveIntentSignalInputFromMessages(req.Messages, len(req.Tools)); ok {
 		return applyTopLevelTextFallback(input, text), nil
 	}
 
@@ -74,6 +79,11 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 		evaluationText:  text,
 		contextText:     text,
 		currentUserText: text,
+		conversationFacts: classification.ConversationFacts{
+			UserMessageCount:    1,
+			ToolDefinitionCount: len(req.Tools),
+			LastMessageRole:     "user",
+		},
 	}, nil
 }
 
@@ -94,12 +104,12 @@ func applyTopLevelTextFallback(input intentSignalInput, text string) intentSigna
 	return input
 }
 
-func resolveIntentSignalInputFromMessages(messages []IntentMessage) (intentSignalInput, bool) {
+func resolveIntentSignalInputFromMessages(messages []IntentMessage, toolDefinitionCount int) (intentSignalInput, bool) {
 	if len(messages) == 0 {
 		return intentSignalInput{}, false
 	}
 
-	history := extractIntentConversationHistory(messages)
+	history := extractIntentConversationHistory(messages, toolDefinitionCount)
 	input := intentSignalInput{
 		evaluationText:    history.currentUserMessage,
 		contextText:       strings.Join(history.nonUserMessages, " "),
@@ -108,6 +118,7 @@ func resolveIntentSignalInputFromMessages(messages []IntentMessage) (intentSigna
 		nonUserMessages:   append([]string(nil), history.nonUserMessages...),
 		hasAssistantReply: history.hasAssistantReply,
 		imageURL:          history.currentUserImageURL,
+		conversationFacts: history.conversationFacts,
 	}
 
 	// Promote system/assistant text only with no user text AND no image; the
@@ -133,46 +144,95 @@ func resolveIntentSignalInputFromMessages(messages []IntentMessage) (intentSigna
 	return input, strings.TrimSpace(input.evaluationText) != "" || input.imageURL != ""
 }
 
-func extractIntentConversationHistory(messages []IntentMessage) intentConversationHistory {
-	var history intentConversationHistory
+func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCount int) intentConversationHistory {
+	history := intentConversationHistory{
+		conversationFacts: classification.ConversationFacts{
+			ToolDefinitionCount: toolDefinitionCount,
+		},
+	}
+	sawToolResult := false
 
 	for _, msg := range messages {
 		text := extractIntentMessageText(msg.Content)
 		role := strings.ToLower(strings.TrimSpace(msg.Role))
-
-		if role == "user" {
-			imageURL := extractIntentMessageImageURL(msg.Content)
-			if text == "" && imageURL == "" {
-				continue
-			}
-			// An image-only turn attaches its image without clobbering the most
-			// recent user text, which stays the best text to score.
-			if text == "" {
-				history.currentUserImageURL = imageURL
-				continue
-			}
-			if history.currentUserMessage != "" {
-				history.priorUserMessages = append(history.priorUserMessages, history.currentUserMessage)
-			}
-			history.currentUserMessage = text
-			history.currentUserImageURL = imageURL
+		sawToolResult = observeIntentConversationMessage(
+			&history.conversationFacts,
+			role,
+			len(msg.ToolCalls),
+			sawToolResult,
+		)
+		if recordIntentUserMessage(&history, role, text, msg.Content) {
 			continue
 		}
-
-		if text == "" {
-			continue
-		}
-
-		switch role {
-		case "system", "assistant":
-			history.nonUserMessages = append(history.nonUserMessages, text)
-			if role == "assistant" {
-				history.hasAssistantReply = true
-			}
-		}
+		recordIntentNonUserMessage(&history, role, text)
 	}
 
 	return history
+}
+
+func observeIntentConversationMessage(
+	facts *classification.ConversationFacts,
+	role string,
+	toolCallCount int,
+	sawToolResult bool,
+) bool {
+	if role == "" {
+		return sawToolResult
+	}
+	facts.LastMessageRole = role
+	facts.LastMessageToolResult = role == "tool"
+	switch role {
+	case "user":
+		facts.UserMessageCount++
+		facts.LastUserAfterToolResult = sawToolResult
+	case "assistant":
+		facts.AssistantMessageCount++
+		facts.AssistantToolCallCount += toolCallCount
+	case "system":
+		facts.SystemMessageCount++
+	case "developer":
+		facts.HasDeveloperMessage = true
+	case "tool":
+		facts.ToolMessageCount++
+		facts.ToolResultCount++
+		return true
+	}
+	return sawToolResult
+}
+
+func recordIntentUserMessage(
+	history *intentConversationHistory,
+	role string,
+	text string,
+	content json.RawMessage,
+) bool {
+	if role != "user" {
+		return false
+	}
+	imageURL := extractIntentMessageImageURL(content)
+	if text == "" && imageURL == "" {
+		return true
+	}
+	// An image-only turn attaches its image without clobbering the most recent
+	// user text, which stays the best text to score.
+	if text == "" {
+		history.currentUserImageURL = imageURL
+		return true
+	}
+	if history.currentUserMessage != "" {
+		history.priorUserMessages = append(history.priorUserMessages, history.currentUserMessage)
+	}
+	history.currentUserMessage = text
+	history.currentUserImageURL = imageURL
+	return true
+}
+
+func recordIntentNonUserMessage(history *intentConversationHistory, role, text string) {
+	if text == "" || (role != "system" && role != "developer" && role != "assistant") {
+		return
+	}
+	history.nonUserMessages = append(history.nonUserMessages, text)
+	history.hasAssistantReply = history.hasAssistantReply || role == "assistant"
 }
 
 // extractIntentMessageImageURL returns the first safe inline base64 image data

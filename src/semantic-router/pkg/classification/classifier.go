@@ -2,9 +2,29 @@ package classification
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
+
+// PreloadKnowledgeBases materializes every KB referenced by this classifier.
+// Stable ordering makes startup diagnostics deterministic.
+func (c *Classifier) PreloadKnowledgeBases() error {
+	if c == nil || len(c.kbClassifiers) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(c.kbClassifiers))
+	for name := range c.kbClassifiers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if err := c.kbClassifiers[name].Preload(); err != nil {
+			return fmt.Errorf("preload knowledge base %q: %w", name, err)
+		}
+	}
+	return nil
+}
 
 // Classifier handles text classification, model selection, and jailbreak detection functionality
 type Classifier struct {
@@ -24,10 +44,11 @@ type Classifier struct {
 	mcpCategoryInference   MCPCategoryInference
 
 	// Hallucination mitigation classifiers
-	factCheckClassifier   *FactCheckClassifier
-	hallucinationDetector *HallucinationDetector
-	feedbackDetector      *FeedbackDetector
-	reaskClassifier       *ReaskClassifier
+	factCheckClassifier           *FactCheckClassifier
+	hallucinationDetector         *HallucinationDetector
+	endpointHallucinationDetector *EndpointHallucinationDetector
+	feedbackDetector              *FeedbackDetector
+	reaskClassifier               *ReaskClassifier
 
 	// Preference classifier for route matching via external LLM
 	preferenceClassifier *PreferenceClassifier

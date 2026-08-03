@@ -34,6 +34,11 @@ typedef struct {
     int total_keywords;
 } ClassifyResult;
 
+typedef struct {
+    ClassifyResult* results;
+    int count;
+} ClassifyResults;
+
 // BM25 classifier FFI
 extern uint64_t bm25_classifier_new();
 extern bool bm25_classifier_add_rule(
@@ -46,6 +51,7 @@ extern bool bm25_classifier_add_rule(
     bool case_sensitive
 );
 extern ClassifyResult bm25_classifier_classify(uint64_t handle, const char* text);
+extern ClassifyResults bm25_classifier_classify_all(uint64_t handle, const char* text);
 extern void bm25_classifier_free(uint64_t handle);
 
 // N-gram classifier FFI
@@ -61,10 +67,12 @@ extern bool ngram_classifier_add_rule(
     int arity
 );
 extern ClassifyResult ngram_classifier_classify(uint64_t handle, const char* text);
+extern ClassifyResults ngram_classifier_classify_all(uint64_t handle, const char* text);
 extern void ngram_classifier_free(uint64_t handle);
 
 // Memory management
 extern void free_classify_result(ClassifyResult result);
+extern void free_classify_results(ClassifyResults results);
 */
 import "C"
 
@@ -146,6 +154,17 @@ func (c *BM25Classifier) Classify(text string) MatchResult {
 	return convertResult(result)
 }
 
+// ClassifyAll returns every matching BM25 rule in declaration order.
+func (c *BM25Classifier) ClassifyAll(text string) []MatchResult {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	results := C.bm25_classifier_classify_all(c.handle, cText)
+	defer C.free_classify_results(results)
+
+	return convertResults(results)
+}
+
 // Free releases the Rust-side resources for this classifier.
 func (c *BM25Classifier) Free() {
 	C.bm25_classifier_free(c.handle)
@@ -221,6 +240,17 @@ func (c *NgramClassifier) Classify(text string) MatchResult {
 	return convertResult(result)
 }
 
+// ClassifyAll returns every matching N-gram rule in declaration order.
+func (c *NgramClassifier) ClassifyAll(text string) []MatchResult {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	results := C.ngram_classifier_classify_all(c.handle, cText)
+	defer C.free_classify_results(results)
+
+	return convertResults(results)
+}
+
 // Free releases the Rust-side resources for this classifier.
 func (c *NgramClassifier) Free() {
 	C.ngram_classifier_free(c.handle)
@@ -265,4 +295,18 @@ func convertResult(result C.ClassifyResult) MatchResult {
 	}
 
 	return mr
+}
+
+func convertResults(results C.ClassifyResults) []MatchResult {
+	count := int(results.count)
+	if count <= 0 || results.results == nil {
+		return nil
+	}
+
+	cResults := unsafe.Slice(results.results, count)
+	matches := make([]MatchResult, count)
+	for i := range cResults {
+		matches[i] = convertResult(cResults[i])
+	}
+	return matches
 }

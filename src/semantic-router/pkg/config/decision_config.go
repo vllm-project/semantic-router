@@ -157,6 +157,13 @@ func (n *RuleNode) IsLeaf() bool {
 	return n.Type != ""
 }
 
+// IsEmpty reports whether a rule node was omitted entirely. At a decision
+// root, this is the canonical YAML representation of an unconditional
+// terminal decision. Evaluators must not infer that meaning for nested nodes.
+func (n *RuleNode) IsEmpty() bool {
+	return n.Type == "" && n.Name == "" && n.Operator == "" && len(n.Conditions) == 0
+}
+
 type (
 	RuleCombination = RuleNode
 	RuleCondition   = RuleNode

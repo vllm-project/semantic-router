@@ -230,20 +230,22 @@ func collectPIIRuleContents(piiText string, nonUserMessages []string, includeHis
 }
 
 // collectPIIEntityTypes extracts entity types from cached PII results that meet the threshold.
-func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName string, threshold float32, piiCache map[string]cachedPIIResult) map[string]bool {
+func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName string, threshold float32, piiCache map[string][]cachedPIIResult) map[string]bool {
 	entityTypes := make(map[string]bool)
 	for _, content := range ruleContents {
-		cached, ok := piiCache[content]
+		cachedResults, ok := piiCache[content]
 		if !ok {
 			continue
 		}
-		if cached.err != nil {
-			logging.Errorf("[Signal Computation] PII rule %q: inference error: %v", ruleName, cached.err)
-			continue
-		}
-		for _, entity := range cached.result.Entities {
-			if entity.Confidence >= threshold {
-				entityTypes[c.PIIMapping.TranslatePIIType(entity.EntityType)] = true
+		for _, cached := range cachedResults {
+			if cached.err != nil {
+				logging.Errorf("[Signal Computation] PII rule %q: inference error: %v", ruleName, cached.err)
+				continue
+			}
+			for _, entity := range cached.result.Entities {
+				if entity.Confidence >= threshold {
+					entityTypes[c.PIIMapping.TranslatePIIType(entity.EntityType)] = true
+				}
 			}
 		}
 	}

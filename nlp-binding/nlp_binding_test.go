@@ -119,6 +119,27 @@ func TestBM25MultipleRules(t *testing.T) {
 	t.Logf("BM25 multi-rule: rule=%s keywords=%v", result.RuleName, result.MatchedKeywords)
 }
 
+func TestBM25ClassifierAllMatchesPreservesOrder(t *testing.T) {
+	c := NewBM25Classifier()
+	defer c.Free()
+	for _, name := range []string{"first", "second"} {
+		if err := c.AddRule(name, "OR", []string{"observability"}, 0.1, false); err != nil {
+			t.Fatalf("AddRule(%q): %v", name, err)
+		}
+	}
+
+	matches := c.ClassifyAll("observability matters")
+	if len(matches) != 2 {
+		t.Fatalf("ClassifyAll() returned %d matches, want 2: %#v", len(matches), matches)
+	}
+	if matches[0].RuleName != "first" || matches[1].RuleName != "second" {
+		t.Fatalf("ClassifyAll() order = [%q, %q], want [first, second]", matches[0].RuleName, matches[1].RuleName)
+	}
+	if got := c.Classify("observability matters").RuleName; got != "first" {
+		t.Fatalf("legacy Classify() = %q, want first", got)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // N-gram Classifier Tests
 // ---------------------------------------------------------------------------
@@ -193,4 +214,25 @@ func TestNgramClassifierAND(t *testing.T) {
 		t.Fatal("Expected N-gram AND match")
 	}
 	t.Logf("N-gram AND match: rule=%s keywords=%v", result.RuleName, result.MatchedKeywords)
+}
+
+func TestNgramClassifierAllMatchesPreservesOrder(t *testing.T) {
+	c := NewNgramClassifier()
+	defer c.Free()
+	for _, name := range []string{"first", "second"} {
+		if err := c.AddRule(name, "OR", []string{"observability"}, 0.4, false, 3); err != nil {
+			t.Fatalf("AddRule(%q): %v", name, err)
+		}
+	}
+
+	matches := c.ClassifyAll("observability matters")
+	if len(matches) != 2 {
+		t.Fatalf("ClassifyAll() returned %d matches, want 2: %#v", len(matches), matches)
+	}
+	if matches[0].RuleName != "first" || matches[1].RuleName != "second" {
+		t.Fatalf("ClassifyAll() order = [%q, %q], want [first, second]", matches[0].RuleName, matches[1].RuleName)
+	}
+	if got := c.Classify("observability matters").RuleName; got != "first" {
+		t.Fatalf("legacy Classify() = %q, want first", got)
+	}
 }

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -21,9 +22,25 @@ var (
 // ClassificationService provides classification functionality
 type ClassificationService struct {
 	classifier        *classification.Classifier
+	recipeClassifiers *classification.RecipeClassifiers
 	unifiedClassifier *classification.UnifiedClassifier // New unified classifier
 	config            *config.RouterConfig
 	configMutex       sync.RWMutex // Protects config access
+}
+
+// NewRecipeClassificationService creates a model-aware service backed by
+// isolated recipe classifiers. The default classifier remains available for
+// callers that do not provide a routing model.
+func NewRecipeClassificationService(classifiers *classification.RecipeClassifiers, routerConfig *config.RouterConfig) *ClassificationService {
+	var defaultClassifier *classification.Classifier
+	if classifiers != nil {
+		defaultClassifier = classifiers.Default()
+	}
+	return &ClassificationService{
+		classifier:        defaultClassifier,
+		recipeClassifiers: classifiers,
+		config:            routerConfig,
+	}
 }
 
 // NewClassificationService creates a new classification service
@@ -119,8 +136,12 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		return nil, err
 	}
 
+	classifier, err := s.classifierForRequestModel(req.Model)
+	if err != nil {
+		return nil, err
+	}
 	// Check if classifier is available
-	if s.classifier == nil {
+	if classifier == nil {
 		// Return placeholder response
 		processingTime := time.Since(start).Milliseconds()
 		return &IntentResponse{
@@ -137,7 +158,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	// Use signal-driven architecture: evaluate all signals first
 	// Check if we should force evaluate all signals (for eval scenarios)
 	forceEvaluateAll := req.Options != nil && req.Options.EvaluateAllSignals
-	signals := s.classifier.EvaluateAllSignalsWithContext(
+	signals := classifier.EvaluateAllSignalsWithContext(
 		input.evaluationText,
 		input.contextText,
 		input.currentUserText,
@@ -147,15 +168,15 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		forceEvaluateAll,
 		"",
 		nil,
-		classification.ConversationFacts{},
+		input.conversationFacts,
 		input.imageURL,
 	)
 
 	// Evaluate decision with engine (if decisions are configured)
 	// Pass pre-computed signals to avoid re-evaluation
 	var decisionResult *decision.DecisionResult
-	if s.config != nil && len(s.config.Decisions) > 0 {
-		decisionResult, err = s.classifier.EvaluateDecisionWithEngine(signals)
+	if classifier.Config != nil && len(classifier.Config.Decisions) > 0 {
+		decisionResult, err = classifier.EvaluateDecisionWithEngine(signals)
 		if err != nil {
 			// Log error but continue with classification
 			// Note: "no decisions configured" error is expected when decisions list is empty
@@ -174,7 +195,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		confidence = decisionResult.Confidence
 	} else {
 		// Fallback to traditional classification
-		category, confidence, _, err = s.classifier.ClassifyCategoryWithEntropy(input.evaluationText)
+		category, confidence, _, err = classifier.ClassifyCategoryWithEntropy(input.evaluationText)
 		if err != nil {
 			// Graceful fallback when classification fails
 			// When domain signal was skipped due to low confidence and no decision matches,
@@ -191,6 +212,28 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	response := s.buildIntentResponseFromSignals(signals, decisionResult, category, confidence, processingTime, req)
 
 	return response, nil
+}
+
+func (s *ClassificationService) classifierForRequestModel(modelName string) (*classification.Classifier, error) {
+	if s == nil || s.recipeClassifiers == nil || s.config == nil {
+		if s == nil {
+			return nil, nil
+		}
+		return s.classifier, nil
+	}
+	trimmed := strings.TrimSpace(modelName)
+	if trimmed == "" {
+		trimmed = config.DefaultVSRAutoModelName
+	}
+	recipe, ok := s.config.RecipeForRoutingModel(trimmed)
+	if !ok {
+		return nil, fmt.Errorf("%w %q", ErrUnknownRoutingModel, trimmed)
+	}
+	classifier, ok := s.recipeClassifiers.ForRecipe(recipe.Name)
+	if !ok {
+		return nil, fmt.Errorf("classifier for routing recipe %q is unavailable", recipe.Name)
+	}
+	return classifier, nil
 }
 
 // NOTE: ClassifyIntentUnified removed - ClassifyIntent now always uses signal-driven architecture

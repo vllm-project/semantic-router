@@ -3786,7 +3786,7 @@ model_config:
 						},
 					},
 				}
-				err := validateConfigContracts(cfg, configValidationScopeFile)
+				err := validateConfigContracts(cfg)
 				Expect(err).To(MatchError(ContainSubstring("unknown prompt_compression.profile")))
 				Expect(err).To(MatchError(ContainSubstring("default, coding, medical, security, multi_turn")))
 			})
@@ -3801,7 +3801,7 @@ model_config:
 						},
 					},
 				}
-				Expect(validateConfigContracts(cfg, configValidationScopeFile)).To(Succeed())
+				Expect(validateConfigContracts(cfg)).To(Succeed())
 			})
 		})
 

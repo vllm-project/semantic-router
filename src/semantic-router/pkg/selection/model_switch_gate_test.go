@@ -91,6 +91,39 @@ func TestModelSwitchGateAllowsSwitchWhenAdvantageWins(t *testing.T) {
 	}
 }
 
+func TestModelSwitchGateUsesRecipeLocalHandoffPenalty(t *testing.T) {
+	lt := lookuptable.NewMemoryStorage()
+	mustSetLookupEntry(t, lt, lookuptable.ScopedHandoffPenaltyKey("privacy", "current", "candidate"), 0.4)
+	mustSetLookupEntry(t, lt, lookuptable.ScopedHandoffPenaltyKey("speed", "current", "candidate"), 0.01)
+
+	gate := NewModelSwitchGate(config.ModelSwitchGateConfig{
+		Enabled:            true,
+		Mode:               ModelSwitchGateModeShadow,
+		MinSwitchAdvantage: 0.1,
+	}, lt)
+	input := ModelSwitchGateInput{
+		SelectionContext: selectionContextForGate(),
+		SelectionResult: &SelectionResult{
+			SelectedModel: "candidate",
+			AllScores:     map[string]float64{"current": 0.5, "candidate": 0.8},
+		},
+		CurrentModel:   "current",
+		CandidateModel: "candidate",
+		CacheWarmthOK:  true,
+	}
+
+	input.SelectionContext.RecipeName = "privacy"
+	privacy := gate.Evaluate(input)
+	if privacy.WouldSwitch || privacy.HandoffPenalty != 0.4 {
+		t.Fatalf("privacy recipe used the wrong handoff evidence: %+v", privacy)
+	}
+	input.SelectionContext.RecipeName = "speed"
+	speed := gate.Evaluate(input)
+	if !speed.WouldSwitch || speed.HandoffPenalty != 0.01 {
+		t.Fatalf("speed recipe used the wrong handoff evidence: %+v", speed)
+	}
+}
+
 func TestModelSwitchGateMissingPreviousModelBlocks(t *testing.T) {
 	// previous_model is the only blocking session signal: if it is missing the
 	// gate cannot compare stay vs. switch and must stay in audit-only mode.

@@ -42,7 +42,8 @@ func (r *OpenAIRouter) performHallucinationDetection(ctx *RequestContext, respon
 	}
 
 	// Use basic hallucination detection
-	result, err := r.Classifier.DetectHallucination(
+	classifier := r.classifierForRequest(ctx)
+	result, err := classifier.DetectHallucination(
 		ctx.ToolResultsContext,
 		ctx.UserContent,
 		assistantContent,
@@ -67,10 +68,7 @@ func (r *OpenAIRouter) performHallucinationDetection(ctx *RequestContext, respon
 	ctx.HallucinationSpans = result.UnsupportedSpans
 	ctx.HallucinationConfidence = result.Confidence
 
-	decisionName := ""
-	if ctx.VSRSelectedDecision != nil {
-		decisionName = ctx.VSRSelectedDecision.Name
-	}
+	decisionName := requestDecisionStateKey(ctx)
 
 	if result.HallucinationDetected {
 		metrics.RecordPluginExecution("hallucination", decisionName, "detected", latency)
@@ -88,7 +86,8 @@ func (r *OpenAIRouter) performHallucinationDetection(ctx *RequestContext, respon
 func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext, assistantContent string) *ext_proc.ProcessingResponse {
 	start := time.Now()
 
-	result, err := r.Classifier.DetectHallucinationWithNLI(
+	classifier := r.classifierForRequest(ctx)
+	result, err := classifier.DetectHallucinationWithNLI(
 		ctx.ToolResultsContext,
 		ctx.UserContent,
 		assistantContent,
@@ -133,10 +132,7 @@ func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext,
 		}
 	}
 
-	decisionName := ""
-	if ctx.VSRSelectedDecision != nil {
-		decisionName = ctx.VSRSelectedDecision.Name
-	}
+	decisionName := requestDecisionStateKey(ctx)
 
 	if result.HallucinationDetected {
 		metrics.RecordPluginExecution("hallucination", decisionName, "detected_nli", latency)

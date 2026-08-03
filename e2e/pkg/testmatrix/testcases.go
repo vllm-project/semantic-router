@@ -31,6 +31,8 @@ var BaselineRouterContract = []string{
 	"retention-directive",
 	// Looper aggregate latency/token-usage response-header contract (issue #2694)
 	"looper-latency-token-headers",
+	// Entrypoint virtual names select routing recipes (issue #2331)
+	"entrypoint-recipe-routing",
 	// Session observability
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",

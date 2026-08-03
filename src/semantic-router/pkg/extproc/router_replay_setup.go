@@ -44,19 +44,21 @@ func initializeIsolatedReplayRecorders(
 ) map[string]*routerreplay.Recorder {
 	recorders := make(map[string]*routerreplay.Recorder)
 
-	for _, decision := range cfg.Decisions {
-		pluginCfg := cfg.EffectiveRouterReplayConfigForDecision(decision.Name)
+	for _, ref := range cfg.RoutingDecisionRefs() {
+		decision := ref.Decision
+		pluginCfg := cfg.EffectiveRouterReplayConfig(decision)
 		if pluginCfg == nil {
 			continue
 		}
+		key := config.RoutingDecisionKey(ref.Recipe, decision.Name)
 
-		recorder, err := createReplayRecorder(decision.Name, backend, pluginCfg, &cfg.RouterReplay)
+		recorder, err := createReplayRecorder(key, backend, pluginCfg, &cfg.RouterReplay)
 		if err != nil {
 			logging.Errorf("Failed to initialize replay recorder for decision %s: %v", decision.Name, err)
 			continue
 		}
 
-		recorders[decision.Name] = recorder
+		recorders[key] = recorder
 	}
 
 	return recorders
@@ -72,8 +74,9 @@ func initializeSharedReplayRecorders(
 		replayRecorder *routerreplay.Recorder
 	)
 
-	for _, decision := range cfg.Decisions {
-		pluginCfg := cfg.EffectiveRouterReplayConfigForDecision(decision.Name)
+	for _, ref := range cfg.RoutingDecisionRefs() {
+		decision := ref.Decision
+		pluginCfg := cfg.EffectiveRouterReplayConfig(decision)
 		if pluginCfg == nil {
 			continue
 		}
@@ -88,7 +91,7 @@ func initializeSharedReplayRecorders(
 		}
 
 		recorder := createSharedReplayRecorder(sharedStore, pluginCfg)
-		recorders[decision.Name] = recorder
+		recorders[config.RoutingDecisionKey(ref.Recipe, decision.Name)] = recorder
 		if replayRecorder == nil {
 			replayRecorder = recorder
 		}

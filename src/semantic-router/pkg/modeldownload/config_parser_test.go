@@ -601,7 +601,7 @@ func TestBuildModelSpecsIncludesAllAMDDeployModels(t *testing.T) {
 		t.Fatal("failed to resolve amd config path")
 	}
 
-	configPath := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../deploy/recipes/balance.yaml"))
+	configPath := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../config/recipes/balance/config.yaml"))
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("read %s: %v", configPath, err)

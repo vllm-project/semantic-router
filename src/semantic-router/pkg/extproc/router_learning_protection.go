@@ -230,10 +230,7 @@ func (r *OpenAIRouter) protectionRescueEvidence(
 	proposalResult *selection.SelectionResult,
 ) bool {
 	tier := decisionTier(ctx)
-	decision := ""
-	if learningCtx != nil {
-		decision = learningCtx.DecisionName
-	}
+	decision := selectionDecisionStateKey(learningCtx)
 	currentExp := r.routerLearningRuntimeState().experienceSnapshot(decision, tier, current)
 	proposalExp := r.routerLearningRuntimeState().experienceSnapshot(decision, tier, proposal)
 	currentWeak := currentExp.UnderpoweredCount >= 2 && currentExp.UnderpoweredCount > currentExp.GoodFitCount
@@ -530,7 +527,7 @@ func sessionScopeProtectionTrace(
 		IdleExpired:                 false,
 		HasNonPortableContext:       session.HasNonPortableContext,
 		NonPortableContextReason:    session.NonPortableContextReason,
-		DecisionDrift:               session.LastDecisionName != "" && session.LastDecisionName != learningCtx.DecisionName,
+		DecisionDrift:               session.LastDecisionName != "" && session.LastDecisionName != selectionDecisionStateKey(learningCtx),
 		DecisionReason:              "session_scope_protect",
 		CacheWarmth:                 session.CacheWarmth,
 		CacheWarmthOK:               session.CacheWarmthOK,
@@ -624,7 +621,7 @@ func rescueProtectionTrace(
 	trace.IdleExpired = sessionScopeIdleExpired(cfg, session)
 	trace.HasNonPortableContext = session.HasNonPortableContext
 	trace.NonPortableContextReason = session.NonPortableContextReason
-	trace.DecisionDrift = session.LastDecisionName != "" && session.LastDecisionName != learningCtx.DecisionName
+	trace.DecisionDrift = session.LastDecisionName != "" && session.LastDecisionName != selectionDecisionStateKey(learningCtx)
 	trace.CacheWarmth = session.CacheWarmth
 	trace.CacheWarmthOK = session.CacheWarmthOK
 	return trace

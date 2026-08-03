@@ -58,7 +58,7 @@ func (c *Classifier) buildSignalDispatchers(
 		},
 		{
 			config.SignalTypeReask, "Reask",
-			func() { c.evaluateReaskSignal(results, mu, currentUserText, priorUserMessages) },
+			func() { c.evaluateBoundedReaskSignal(results, mu, currentUserText, priorUserMessages) },
 		},
 		{
 			config.SignalTypePreference, "Preference",
@@ -111,6 +111,28 @@ func (c *Classifier) buildSignalDispatchers(
 			func() { c.evaluateEventSignal(results, mu, textForSignal(config.SignalTypeEvent)) },
 		},
 	}
+}
+
+func (c *Classifier) evaluateBoundedReaskSignal(
+	results *SignalResults,
+	mu *sync.Mutex,
+	currentUserText string,
+	priorUserMessages []string,
+) {
+	c.evaluateReaskSignal(
+		results,
+		mu,
+		textForRoutingSignal(config.SignalTypeReask, currentUserText),
+		boundedReaskMessages(priorUserMessages),
+	)
+}
+
+func boundedReaskMessages(messages []string) []string {
+	bounded := make([]string, len(messages))
+	for index, message := range messages {
+		bounded[index] = textForRoutingSignal(config.SignalTypeReask, message)
+	}
+	return bounded
 }
 
 func runSignalDispatchers(dispatchers []signalDispatch, usedSignals map[string]bool, ready map[string]bool, wg *sync.WaitGroup) {
