@@ -21,19 +21,31 @@ type reasoningRequestMutation struct {
 }
 
 func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled bool, categoryName string) ([]byte, error) {
-	return r.setReasoningModeToRequestBodyForProvider(requestBody, enabled, categoryName, nil)
+	return r.setReasoningModeToRequestBodyForProvider(requestBody, enabled, categoryName, nil, "")
 }
 
 // setReasoningModeToRequestBodyForProvider adds provider-compatible reasoning fields to the JSON request body.
+//
+// routingModelName is the selected router model (the one that carries
+// reasoning_family). It must be used for reasoning-family and reasoning-effort
+// resolution instead of the request body's model field, because by the time
+// this runs the body's model has already been rewritten to the upstream
+// provider_model_id — which generally differs from the router model name and
+// would otherwise cause the configured reasoning to be silently dropped. When
+// empty, the body's model field is used (callers without a routing context).
 func (r *OpenAIRouter) setReasoningModeToRequestBodyForProvider(
 	requestBody []byte,
 	enabled bool,
 	categoryName string,
 	profile *config.ProviderProfile,
+	routingModelName string,
 ) ([]byte, error) {
 	mutation, err := parseReasoningRequestMutation(requestBody)
 	if err != nil {
 		return nil, err
+	}
+	if routingModelName != "" {
+		mutation.model = routingModelName
 	}
 	familyConfig := r.getModelReasoningFamily(mutation.model)
 	dialect := resolveOpenAIBackendDialect(profile)
