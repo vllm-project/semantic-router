@@ -10,7 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// VLLMJailbreakInference implements JailbreakInference using vLLM REST API
+// VLLMJailbreakInference implements SequenceClassifierBackend using vLLM REST API
 type VLLMJailbreakInference struct {
 	client     *VLLMClient
 	modelName  string
@@ -64,8 +64,13 @@ func NewVLLMJailbreakInference(cfg *config.ExternalModelConfig, defaultThreshold
 	}, nil
 }
 
-// Classify implements the JailbreakInference interface
-func (v *VLLMJailbreakInference) Classify(text string) (candle_binding.ClassResult, error) {
+// Classify implements the SequenceClassifierBackend interface. Since this
+// backend is generative (a chat model asked to judge safety), it cannot
+// produce a calibrated softmax distribution; it derives a 2-class
+// (safe/jailbreak) distribution from the model's own confidence estimate, so
+// callers always get a full distribution regardless of which backend is
+// configured, consistent with candle-backed jailbreak backends.
+func (v *VLLMJailbreakInference) Classify(text string) (candle_binding.ClassResultWithProbs, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), v.timeout)
 	defer cancel()
 
@@ -80,11 +85,11 @@ func (v *VLLMJailbreakInference) Classify(text string) (candle_binding.ClassResu
 		Temperature: 0.0, // Deterministic for safety checks
 	})
 	if err != nil {
-		return candle_binding.ClassResult{}, fmt.Errorf("vLLM API call failed: %w", err)
+		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("vLLM API call failed: %w", err)
 	}
 
 	if len(resp.Choices) == 0 {
-		return candle_binding.ClassResult{}, fmt.Errorf("no choices in vLLM response")
+		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("no choices in vLLM response")
 	}
 
 	// Parse model output - flexible to support multiple formats
@@ -94,22 +99,20 @@ func (v *VLLMJailbreakInference) Classify(text string) (candle_binding.ClassResu
 	logging.Debugf("Parsed result: isJailbreak=%v, confidence=%.3f, categories=%v",
 		isJailbreak, confidence, categories)
 
-	// Map to ClassResult format
+	// Map to ClassResultWithProbs format
 	// Class: 0 = safe, 1 = jailbreak/unsafe
 	class := 0
+	probabilities := []float32{confidence, 1 - confidence}
 	if isJailbreak {
 		class = 1
+		probabilities = []float32{1 - confidence, confidence}
 	}
 
-	result := candle_binding.ClassResult{
-		Class:      class,
-		Confidence: confidence,
-	}
-
-	// Only populate categories when content is unsafe or controversial
-	// (empty slice for safe content or when categories not available)
-	if isJailbreak && len(categories) > 0 {
-		result.Categories = categories
+	result := candle_binding.ClassResultWithProbs{
+		Class:         class,
+		Confidence:    confidence,
+		Probabilities: probabilities,
+		NumClasses:    2,
 	}
 
 	return result, nil

@@ -35,7 +35,7 @@ func (b *classifierOptionBuilder) addMCPCategoryClassifier() {
 	b.options = append(b.options, withMCPCategory(mcpInit, mcpInf))
 }
 
-func buildJailbreakDependencies(cfg *config.RouterConfig) (JailbreakInitializer, JailbreakInference, error) {
+func buildJailbreakDependencies(cfg *config.RouterConfig) (JailbreakInitializer, SequenceClassifierBackend, error) {
 	jailbreakInference, err := createJailbreakInference(&cfg.PromptGuard, cfg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create jailbreak inference: %w", err)
