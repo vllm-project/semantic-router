@@ -8,6 +8,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 )
 
 func TestPrepareSignalEvaluationInput_CombinesMessagesWithoutCompression(t *testing.T) {
@@ -69,6 +70,10 @@ func TestApplySignalResultsToContext_PropagatesSignalState(t *testing.T) {
 		JailbreakConfidence:      0.91,
 		PIIDetected:              true,
 		PIIEntities:              []string{"EMAIL_ADDRESS"},
+		ExecutedSignalTypes: map[string]bool{
+			config.SignalTypeKeyword: true,
+			config.SignalTypeEvent:   true,
+		},
 	}
 
 	router.applySignalResultsToContext(ctx, signals)
@@ -95,9 +100,25 @@ func TestApplySignalResultsToContext_PropagatesSignalState(t *testing.T) {
 	assert.Equal(t, float32(0.91), ctx.JailbreakConfidence)
 	assert.True(t, ctx.PIIDetected)
 	assert.Equal(t, []string{"EMAIL_ADDRESS"}, ctx.PIIEntities)
+	assert.Equal(t, map[string]bool{
+		config.SignalTypeKeyword: true,
+		config.SignalTypeEvent:   true,
+	}, ctx.VSRExecutedSignalTypes)
 	assert.True(t, ctx.FactCheckNeeded)
 	require.NotNil(t, ctx.ModalityClassification)
 	assert.Equal(t, "AR", ctx.ModalityClassification.Modality)
+}
+
+func TestApplyDecisionResultToContextPropagatesMatchedRuleLabels(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	ctx := &RequestContext{}
+
+	router.applyDecisionResultToContext(&decision.DecisionResult{
+		Decision:     &config.Decision{Name: "selected"},
+		MatchedRules: []string{"keyword:urgent", "event:payment_failed"},
+	}, ctx)
+
+	assert.Equal(t, []string{"keyword:urgent", "event:payment_failed"}, ctx.VSRMatchedDecisionRules)
 }
 
 func TestEnsureContextTokenCount_FillsFallbackWhenContextSignalSkipped(t *testing.T) {

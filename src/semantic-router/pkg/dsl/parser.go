@@ -425,14 +425,15 @@ func rawToPluginRef(r *rawPluginRef) *PluginRef {
 // underscore form. Only known inline types are normalized; template names pass
 // through unchanged so "PLUGIN my-template system_prompt {}" keeps its name.
 var knownInlinePluginAliases = map[string]string{
-	"semantic-cache":     "semantic_cache",
-	"system-prompt":      "system_prompt",
-	"header-mutation":    "header_mutation",
-	"router-replay":      "router_replay",
-	"image-gen":          "image_gen",
-	"fast-response":      "fast_response",
-	"request-params":     "request_params",
-	"response-jailbreak": "response_jailbreak",
+	"semantic-cache":       "semantic_cache",
+	"system-prompt":        "system_prompt",
+	"header-mutation":      "header_mutation",
+	"router-replay":        "router_replay",
+	"decision-diagnostics": "decision_diagnostics",
+	"image-gen":            "image_gen",
+	"fast-response":        "fast_response",
+	"request-params":       "request_params",
+	"response-jailbreak":   "response_jailbreak",
 }
 
 // normalizePluginName converts known hyphenated plugin type aliases to their

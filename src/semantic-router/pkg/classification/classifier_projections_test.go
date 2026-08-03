@@ -73,6 +73,9 @@ func TestApplyProjectionsAddsDerivedOutputsAndScores(t *testing.T) {
 	if confidence <= 0 || confidence > 1 {
 		t.Fatalf("projection confidence = %.3f, want (0,1]", confidence)
 	}
+	if !got.ExecutedSignalTypes[config.SignalTypeProjection] {
+		t.Fatalf("projection execution was not recorded: %+v", got.ExecutedSignalTypes)
+	}
 	assertDifficultyProjectionTrace(t, got)
 }
 

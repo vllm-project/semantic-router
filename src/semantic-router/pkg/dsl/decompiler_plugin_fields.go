@@ -9,18 +9,43 @@ import (
 type pluginFieldsDecoder func(*config.DecisionPlugin) map[string]Value
 
 var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
-	"system_prompt":   pluginFieldsSystemPrompt,
-	"semantic-cache":  pluginFieldsSemanticCache,
-	"router_replay":   pluginFieldsRouterReplay,
-	"memory":          pluginFieldsMemory,
-	"hallucination":   pluginFieldsHallucination,
-	"image_gen":       pluginFieldsImageGen,
-	"fast_response":   pluginFieldsFastResponse,
-	"request_params":  pluginFieldsRequestParams,
-	"tool_selection":  pluginFieldsToolSelection,
-	"tools":           pluginFieldsTools,
-	"rag":             pluginFieldsRAG,
-	"header_mutation": pluginFieldsHeaderMutation,
+	"system_prompt":        pluginFieldsSystemPrompt,
+	"semantic-cache":       pluginFieldsSemanticCache,
+	"router_replay":        pluginFieldsRouterReplay,
+	"decision_diagnostics": pluginFieldsDecisionDiagnostics,
+	"memory":               pluginFieldsMemory,
+	"hallucination":        pluginFieldsHallucination,
+	"image_gen":            pluginFieldsImageGen,
+	"fast_response":        pluginFieldsFastResponse,
+	"request_params":       pluginFieldsRequestParams,
+	"tool_selection":       pluginFieldsToolSelection,
+	"tools":                pluginFieldsTools,
+	"rag":                  pluginFieldsRAG,
+	"header_mutation":      pluginFieldsHeaderMutation,
+}
+
+func pluginFieldsDecisionDiagnostics(p *config.DecisionPlugin) map[string]Value {
+	fields := make(map[string]Value)
+	cfg, ok := decodePluginConfig[config.DecisionDiagnosticsPluginConfig](p)
+	if !ok {
+		return fields
+	}
+	if cfg.Enabled {
+		fields["enabled"] = BoolValue{V: true}
+	}
+	if cfg.MaxSignals != 0 {
+		fields["max_signals"] = IntValue{V: cfg.MaxSignals}
+	}
+	if cfg.MaxProjections != 0 {
+		fields["max_projections"] = IntValue{V: cfg.MaxProjections}
+	}
+	if cfg.MaxTextRunes != 0 {
+		fields["max_text_runes"] = IntValue{V: cfg.MaxTextRunes}
+	}
+	if cfg.MaxPayloadBytes != 0 {
+		fields["max_payload_bytes"] = IntValue{V: cfg.MaxPayloadBytes}
+	}
+	return fields
 }
 
 func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {

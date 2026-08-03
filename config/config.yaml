@@ -697,6 +697,13 @@ routing:
       adaptations:
         mode: bypass
       plugins:
+        - type: decision_diagnostics
+          configuration:
+            enabled: true
+            max_signals: 32
+            max_projections: 16
+            max_text_runes: 128
+            max_payload_bytes: 16384
         - type: router_replay
           configuration:
             enabled: true

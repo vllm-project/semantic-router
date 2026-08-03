@@ -28,7 +28,11 @@ type requestDecisionState struct {
 // is parsed lazily — only when body mutations are actually needed (modality
 // routing, memory injection, model routing). Requests that hit fast_response,
 // rate limiting, or cache never pay the full parse cost.
-func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBody, ctx *RequestContext) (response *ext_proc.ProcessingResponse, err error) {
+	defer func() {
+		attachDecisionDiagnosticsOnSuccess(response, err, ctx)
+	}()
+
 	ctx.ProcessingStartTime = time.Now()
 	ctx.OriginalRequestBody = v.RequestBody.GetBody()
 

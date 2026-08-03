@@ -46,6 +46,7 @@ The plugin docs now mirror `config/plugin/` one page at a time.
 
 ### Response and Mutation
 
+- [Decision Diagnostics](./decision-diagnostics)
 - [Fast Response](./fast-response)
 - [Header Mutation](./header-mutation)
 - [Image Generation](./image-gen)

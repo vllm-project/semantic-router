@@ -1718,6 +1718,12 @@ func TestCompileAllPluginTypes(t *testing.T) {
 			verifyType: "router_replay",
 		},
 		{
+			name:       "decision_diagnostics",
+			pluginType: "decision_diagnostics",
+			body:       `enabled: true max_signals: 12 max_projections: 6 max_text_runes: 96 max_payload_bytes: 8192`,
+			verifyType: "decision_diagnostics",
+		},
+		{
 			name:       "image_gen",
 			pluginType: "image_gen",
 			body:       `enabled: true backend: "dall-e-3"`,

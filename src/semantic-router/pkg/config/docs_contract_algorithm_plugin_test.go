@@ -32,20 +32,21 @@ var retiredAlgorithmTutorialDocs = []string{
 }
 
 var pluginTutorialBuckets = map[string]string{
-	"content-safety":     "safety-and-generation",
-	"fast-response":      "response-and-mutation",
-	"hallucination":      "safety-and-generation",
-	"header-mutation":    "response-and-mutation",
-	"image-gen":          "response-and-mutation",
-	"memory":             "retrieval-and-memory",
-	"rag":                "retrieval-and-memory",
-	"request-params":     "response-and-mutation",
-	"response-jailbreak": "safety-and-generation",
-	"router-replay":      "retrieval-and-memory",
-	"semantic-cache":     "retrieval-and-memory",
-	"system-prompt":      "response-and-mutation",
-	"tool-selection":     "response-and-mutation",
-	"tools":              "response-and-mutation",
+	"content-safety":       "safety-and-generation",
+	"decision-diagnostics": "response-and-mutation",
+	"fast-response":        "response-and-mutation",
+	"hallucination":        "safety-and-generation",
+	"header-mutation":      "response-and-mutation",
+	"image-gen":            "response-and-mutation",
+	"memory":               "retrieval-and-memory",
+	"rag":                  "retrieval-and-memory",
+	"request-params":       "response-and-mutation",
+	"response-jailbreak":   "safety-and-generation",
+	"router-replay":        "retrieval-and-memory",
+	"semantic-cache":       "retrieval-and-memory",
+	"system-prompt":        "response-and-mutation",
+	"tool-selection":       "response-and-mutation",
+	"tools":                "response-and-mutation",
 }
 
 var retiredPluginTutorialDocs = []string{

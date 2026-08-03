@@ -66,9 +66,10 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	ready := c.signalReadiness()
 
 	results := &SignalResults{
-		Metrics:           &SignalMetricsCollection{},
-		SignalConfidences: make(map[string]float64),
-		SignalValues:      make(map[string]float64),
+		Metrics:             &SignalMetricsCollection{},
+		SignalConfidences:   make(map[string]float64),
+		SignalValues:        make(map[string]float64),
+		ExecutedSignalTypes: make(map[string]bool),
 	}
 
 	var wg sync.WaitGroup
@@ -87,7 +88,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	}
 
 	dispatchers := c.buildSignalDispatchers(results, &mu, textForSignal, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, imgArg, imgCache, convFacts)
-	runSignalDispatchers(dispatchers, usedSignals, ready, &wg)
+	runSignalDispatchers(dispatchers, usedSignals, ready, results.ExecutedSignalTypes, &wg)
 
 	wg.Wait()
 	results = c.applySignalGroups(results)
