@@ -42,7 +42,7 @@ jobs:
              [[ "${{ needs.changes.outputs.agent_exec }}" == "true" ]] || \
              [[ "${{ github.event_name }}" == "schedule" ]] || \
              [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            profiles=("kubernetes" "dashboard" "remote-embedding")
+            profiles=("kubernetes" "dashboard" "remote-embedding" "no-model")
             printf -v json '"%s",' "${profiles[@]}"
             echo "profiles=[${json%,}]" >> $GITHUB_OUTPUT
             echo 'should_run=true' >> $GITHUB_OUTPUT
@@ -66,6 +66,7 @@ jobs:
           [[ "${{ needs.changes.outputs.e2e_multi_endpoint }}" == "true" ]] && profiles+=("multi-endpoint")
           [[ "${{ needs.changes.outputs.e2e_authz_rbac }}" == "true" ]] && profiles+=("authz-rbac")
           [[ "${{ needs.changes.outputs.e2e_streaming }}" == "true" ]] && profiles+=("streaming")
+          [[ "${{ needs.changes.outputs.e2e_no_model }}" == "true" ]] && profiles+=("no-model")
 
           # Convert to JSON array
           if [ ${#profiles[@]} -eq 0 ]; then
