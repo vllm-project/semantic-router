@@ -77,14 +77,16 @@ func newTestPolicy() securityPolicyPayload {
 				Name:      "premium",
 				Subjects:  []subjectPayload{{Kind: "Group", Name: "paying-customers"}},
 				Role:      "premium_tier",
-				ModelRefs: []string{"gpt-4"},
+				// Use models that exist in e2e/profiles/dashboard/values.yaml so
+				// merged-config validation (canonical modelRefs) can succeed.
+				ModelRefs: []string{"base-model"},
 				Priority:  10,
 			},
 			{
 				Name:      "free",
 				Subjects:  []subjectPayload{{Kind: "Group", Name: "free-users"}},
 				Role:      "free_tier",
-				ModelRefs: []string{"gpt-3.5-turbo"},
+				ModelRefs: []string{"general-expert"},
 				Priority:  20,
 			},
 		},
@@ -308,15 +310,18 @@ func testSecurityPolicyApply(ctx context.Context, client *kubernetes.Clientset, 
 		return err
 	}
 
-	if applied {
-		if err := env.verifyConfigApplied(ctx); err != nil {
-			return err
-		}
+	// Dashboard e2e configures a writable router config path; a false applied
+	// flag means merge/validation failed (e.g. modelRefs not in the profile).
+	if !applied {
+		return fmt.Errorf("expected security policy to be applied to router config, but applied=false")
+	}
+	if err := env.verifyConfigApplied(ctx); err != nil {
+		return err
 	}
 
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
-			"applied":            applied,
+			"applied":            true,
 			"role_bindings":      2,
 			"rate_rules":         2,
 			"fragment_validated": true,
