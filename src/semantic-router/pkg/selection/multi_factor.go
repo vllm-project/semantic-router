@@ -219,11 +219,16 @@ func (s *MultiFactorSelector) gatherSignals(candidates []config.ModelRef) []sign
 	out := make([]signalSet, 0, len(candidates))
 	for _, c := range candidates {
 		sig := signalSet{model: c.Model}
-		if params, ok := s.modelParams[c.Model]; ok {
+		if c.QualityScore != nil {
+			sig.quality = *c.QualityScore
+			sig.hasQ = true
+		} else if params, ok := s.modelParams[c.Model]; ok {
 			if params.QualityScore > 0 {
 				sig.quality = params.QualityScore
 				sig.hasQ = true
 			}
+		}
+		if params, ok := s.modelParams[c.Model]; ok {
 			if params.Pricing.PromptPer1M > 0 {
 				sig.cost = params.Pricing.PromptPer1M
 				sig.hasCost = true

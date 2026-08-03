@@ -48,6 +48,72 @@ func candidates(names ...string) []config.ModelRef {
 	return out
 }
 
+func qualityScore(value float64) *float64 {
+	return &value
+}
+
+func TestMultiFactor_DecisionQualityOverridesGlobalQuality(t *testing.T) {
+	cfg := DefaultMultiFactorConfig()
+	cfg.Weights = MultiFactorWeights{Quality: 1.0}
+	params := map[string]config.ModelParams{
+		"globally-low":  {QualityScore: 0.1},
+		"globally-high": {QualityScore: 0.9},
+	}
+	s := buildMFSelector(cfg, params, nil, nil, nil)
+	refs := []config.ModelRef{
+		{Model: "globally-low", QualityScore: qualityScore(0.95)},
+		{Model: "globally-high", QualityScore: qualityScore(0.2)},
+	}
+
+	res, err := s.Select(context.Background(), &SelectionContext{CandidateModels: refs})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.SelectedModel != "globally-low" {
+		t.Fatalf("expected decision quality override to select globally-low, got %s; scores=%v", res.SelectedModel, res.AllScores)
+	}
+}
+
+func TestMultiFactor_DecisionQualityFallsBackToGlobalQuality(t *testing.T) {
+	cfg := DefaultMultiFactorConfig()
+	cfg.Weights = MultiFactorWeights{Quality: 1.0}
+	params := map[string]config.ModelParams{
+		"global-best": {QualityScore: 0.8},
+		"global-low":  {QualityScore: 0.2},
+	}
+	s := buildMFSelector(cfg, params, nil, nil, nil)
+
+	res, err := s.Select(context.Background(), &SelectionContext{CandidateModels: candidates("global-best", "global-low")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.SelectedModel != "global-best" {
+		t.Fatalf("expected omitted decision quality to use global quality, got %s; scores=%v", res.SelectedModel, res.AllScores)
+	}
+}
+
+func TestMultiFactor_ExplicitZeroDecisionQualityDoesNotFallBack(t *testing.T) {
+	cfg := DefaultMultiFactorConfig()
+	cfg.Weights = MultiFactorWeights{Quality: 1.0}
+	params := map[string]config.ModelParams{
+		"overridden-zero": {QualityScore: 0.9},
+		"positive":        {QualityScore: 0.2},
+	}
+	s := buildMFSelector(cfg, params, nil, nil, nil)
+	refs := []config.ModelRef{
+		{Model: "overridden-zero", QualityScore: qualityScore(0)},
+		{Model: "positive"},
+	}
+
+	res, err := s.Select(context.Background(), &SelectionContext{CandidateModels: refs})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.SelectedModel != "positive" {
+		t.Fatalf("expected explicit zero to override global quality, got %s; scores=%v", res.SelectedModel, res.AllScores)
+	}
+}
+
 func TestMultiFactor_PicksHighestQualityWhenQualityDominant(t *testing.T) {
 	cfg := DefaultMultiFactorConfig()
 	cfg.Weights = MultiFactorWeights{Quality: 1.0}

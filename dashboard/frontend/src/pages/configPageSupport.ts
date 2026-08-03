@@ -206,6 +206,7 @@ export interface DecisionModelRef {
   reasoning_effort?: string
   lora_name?: string
   weight?: number
+  quality_score?: number
 }
 
 export interface DecisionPluginConfig {

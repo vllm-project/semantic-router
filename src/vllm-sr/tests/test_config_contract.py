@@ -1,3 +1,4 @@
+from cli.algorithms import ModelRef
 from cli.config_contract import (
     LEGACY_SIGNAL_KEY_TO_CANONICAL,
     build_projection_reference_index,
@@ -96,6 +97,12 @@ def test_decision_accepts_typed_output_contract_spec():
     assert decision.output_contract_spec is not None
     assert decision.output_contract_spec.choice_set is not None
     assert decision.output_contract_spec.choice_set.values == ["A", "B", "C", "D"]
+
+
+def test_model_ref_preserves_optional_quality_score_and_explicit_zero():
+    assert ModelRef(model="model-a").quality_score is None
+    assert ModelRef(model="model-a", quality_score=0).quality_score == 0
+    assert ModelRef(model="model-a", quality_score=0.92).quality_score == 0.92
 
 
 def test_decision_accepts_terminal_action_output_contract_spec():

@@ -18,6 +18,7 @@ Inside canonical `config.yaml`:
 - `routing.projections.partitions` is the canonical runtime home for exclusive domain or embedding partitions; DSL authoring uses `PROJECTION partition`
 - `routing.projections.scores` and `routing.projections.mappings` let maintained configs turn learned and heuristic signals into named routing bands that decisions can reference with `type: projection`
 - `routing.decisions[].candidateIterations` carries bounded DSL `FOR ... IN` metadata for candidate-model authoring; it is declarative selection policy input, not a general scripting runtime
+- `routing.decisions[].modelRefs[].quality_score` optionally overrides the model-card quality score for that candidate in the owning decision; `multi_factor` falls back to the model-card value only when this field is omitted
 - `routing.decisions[].emits[]` carries typed side-effect directives from DSL `EMIT` blocks; the current supported kind is `retention`, where `drop: true` skips response-side semantic-cache writes and the remaining fields stay structured/auditable for follow-up runtime consumers such as turn-aware cache TTL, current-model affinity, prefix/KV-cache warmth, and session transition telemetry
 - request-shape detectors such as `routing.signals.structure` stay in the signal layer as typed named facts; numeric thresholds live inside the detector config instead of turning decisions into a free-form expression language
 - `routing.signals.embeddings[].query_modality` declares which modality of incoming request payload the embedding rule's query is computed from. Defaults to `"text"`; `"image"` and `"audio"` require `global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal` so the query and candidate embeddings land in the same shared space. See `website/docs/tutorials/signal/learned/embedding.md` for the worked multimodal example.
@@ -47,7 +48,7 @@ Inside canonical `config.yaml`:
 - `not/`: exclusion examples
 - `composite/`: nested AND/OR/NOT cases
 
-Decision fragments may reference `modelRefs[].lora_name`, but those adapter names must be declared in the base config's `routing.modelCards[].loras`.
+Decision fragments may reference `modelRefs[].lora_name`, but those adapter names must be declared in the base config's `routing.modelCards[].loras`. A `modelRefs[].quality_score` value is decision-scoped, must be between `0` and `1`, and preserves an explicit `0`.
 Candidate iteration fragments must stay bounded to `decision.candidates` or an explicit model list and feed existing decision outputs such as `MODEL <iterator>`.
 
 `config/algorithm/` is organized by routing policy:

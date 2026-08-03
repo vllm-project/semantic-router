@@ -15,7 +15,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("decision-scoped-multi-factor", pkgtestcases.TestCase{
-		Description: "Verify each matched decision uses its own multi-factor policy",
+		Description: "Verify decision-scoped multi-factor quality fallback and overrides",
 		Tags:        []string{"routing", "selection", "multi-factor", "regression"},
 		Fn:          testDecisionScopedMultiFactor,
 	})
@@ -41,6 +41,11 @@ func testDecisionScopedMultiFactor(
 			query:        "Apply the decision scoped quality policy",
 			wantDecision: "quality_policy_decision",
 			wantModel:    "premium-model",
+		},
+		{
+			query:        "Apply the decision scoped quality override policy",
+			wantDecision: "quality_override_policy_decision",
+			wantModel:    "economy-model",
 		},
 		{
 			query:        "Apply the decision scoped cost policy",

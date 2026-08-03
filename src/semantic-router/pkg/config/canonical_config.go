@@ -236,6 +236,15 @@ func validateCanonicalDecisions(decisions []Decision, modelsByName map[string]Ro
 		if err := validateCanonicalDecisionModelRefs(decision, modelsByName, modelCards); err != nil {
 			return err
 		}
+		for i, iteration := range decision.CandidateIterations {
+			if strings.TrimSpace(iteration.Source) != "models" {
+				continue
+			}
+			context := fmt.Sprintf("routing.decisions[%s].candidateIterations[%d]", decision.Name, i)
+			if err := validateDecisionCandidateIterationModels(iteration.Models, context); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -245,6 +254,9 @@ func validateCanonicalDecisionModelRefs(decision Decision, modelsByName map[stri
 	for _, modelRef := range decision.ModelRefs {
 		if modelRef.Model == "" {
 			continue
+		}
+		if err := validateModelRefQualityScore(modelRef, fmt.Sprintf("routing.decisions[%s].modelRefs[%s]", decision.Name, modelRef.Model)); err != nil {
+			return err
 		}
 		// Reject modelRefs that point at a model the config does not define.
 		// Previously this was only checked when a lora_name was also set, so a

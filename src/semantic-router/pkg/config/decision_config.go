@@ -139,9 +139,12 @@ type ModelReasoningControl struct {
 }
 
 type ModelRef struct {
-	Model                 string  `yaml:"model"`
-	LoRAName              string  `yaml:"lora_name,omitempty"`
-	Weight                float64 `yaml:"weight,omitempty"`
+	Model    string  `yaml:"model"`
+	LoRAName string  `yaml:"lora_name,omitempty"`
+	Weight   float64 `yaml:"weight,omitempty"`
+	// QualityScore optionally overrides the model-card quality score for this
+	// candidate in the owning decision. A pointer preserves explicit zero.
+	QualityScore          *float64 `yaml:"quality_score,omitempty" json:"quality_score,omitempty"`
 	ModelReasoningControl `yaml:",inline"`
 }
 
