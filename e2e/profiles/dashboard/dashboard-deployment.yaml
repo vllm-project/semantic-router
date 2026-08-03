@@ -14,6 +14,21 @@ spec:
       labels:
         app: semantic-router-dashboard
     spec:
+      # ConfigMap mounts are read-only. Seed a writable emptyDir so security-policy
+      # and config deploy APIs can update ROUTER_CONFIG_PATH in E2E.
+      initContainers:
+        - name: seed-router-config
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - cp -a /config-src/. /config-dst/ && chmod -R a+rw /config-dst
+          volumeMounts:
+            - name: router-config-src
+              mountPath: /config-src
+              readOnly: true
+            - name: router-config-rw
+              mountPath: /config-dst
       containers:
         - name: dashboard
           image: ghcr.io/vllm-project/semantic-router/dashboard:latest
@@ -89,15 +104,16 @@ spec:
             - name: http
               containerPort: 8700
           volumeMounts:
-            - name: router-config
+            - name: router-config-rw
               mountPath: /app/config
-              readOnly: true
             - name: dashboard-data
               mountPath: /tmp/vllm-sr-dashboard
       volumes:
-        - name: router-config
+        - name: router-config-src
           configMap:
             name: semantic-router-config
+        - name: router-config-rw
+          emptyDir: {}
         - name: dashboard-data
           persistentVolumeClaim:
             claimName: semantic-router-dashboard-e2e-data
