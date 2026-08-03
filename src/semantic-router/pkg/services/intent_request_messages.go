@@ -195,8 +195,7 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 			if rawText != "" {
 				history.currentUserRawText = rawText
 			}
-			history.conversationFacts.ImageContentCount +=
-				countIntentMessageImages(msg.Content)
+			history.conversationFacts.ImageContentCount += countIntentMessageImages(msg.Content)
 		}
 		sawToolResult = observeIntentConversationMessage(
 			&history.conversationFacts,

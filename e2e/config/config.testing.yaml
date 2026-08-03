@@ -62,6 +62,33 @@ routing:
           - other
   modelCards:
     - name: openai/gpt-oss-20b
+entrypoints:
+  - model_names:
+      - vllm-sr/metadata-policy
+    recipe: metadata-policy
+recipes:
+  - name: metadata-policy
+    description: Exercise recipe-local request metadata routing.
+    routing:
+      signals:
+        metadata:
+          - name: canary_cohort
+            description: Recipe-local canary cohort policy.
+            key: cohort
+            predicate:
+              equals: canary
+      decisions:
+        - name: metadata_recipe_decision
+          description: Route canary metadata inside the selected recipe.
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: metadata
+                name: canary_cohort
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
 global:
   router:
     strategy: priority

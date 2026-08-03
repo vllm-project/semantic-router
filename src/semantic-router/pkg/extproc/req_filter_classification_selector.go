@@ -237,6 +237,7 @@ func boundedSelectionReasoning(value string) string {
 	}
 	return value[:end]
 }
+
 func selectionReasoningForDiagnostics(
 	method selection.SelectionMethod,
 	reasoning string,

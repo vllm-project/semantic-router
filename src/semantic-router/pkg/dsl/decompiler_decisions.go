@@ -91,32 +91,7 @@ func decompileRuleNode(node *config.RuleCombination) string {
 
 	// Leaf node — signal reference
 	if node.Type != "" {
-		arguments := []string{fmt.Sprintf("%q", node.Name)}
-		if node.Label != "" {
-			arguments = append(
-				arguments,
-				fmt.Sprintf("label: %q", node.Label),
-			)
-		}
-		if node.Predicate != nil {
-			arguments = append(
-				arguments,
-				"predicate: "+formatPluginConfigValue(
-					structurePredicateToMap(node.Predicate),
-				),
-			)
-		}
-		if node.OnError != "" {
-			arguments = append(
-				arguments,
-				fmt.Sprintf("on_error: %q", node.OnError),
-			)
-		}
-		return fmt.Sprintf(
-			"%s(%s)",
-			node.Type,
-			strings.Join(arguments, ", "),
-		)
+		return decompileRuleLeaf(node)
 	}
 
 	switch node.Operator {
@@ -138,7 +113,29 @@ func decompileRuleNode(node *config.RuleCombination) string {
 		}
 	}
 
-	// Fallback: join with operator
+	return decompileRuleFallback(node)
+}
+
+func decompileRuleLeaf(node *config.RuleCombination) string {
+	arguments := []string{fmt.Sprintf("%q", node.Name)}
+	if node.Label != "" {
+		arguments = append(arguments, fmt.Sprintf("label: %q", node.Label))
+	}
+	if node.Predicate != nil {
+		arguments = append(
+			arguments,
+			"predicate: "+formatPluginConfigValue(
+				structurePredicateToMap(node.Predicate),
+			),
+		)
+	}
+	if node.OnError != "" {
+		arguments = append(arguments, fmt.Sprintf("on_error: %q", node.OnError))
+	}
+	return fmt.Sprintf("%s(%s)", node.Type, strings.Join(arguments, ", "))
+}
+
+func decompileRuleFallback(node *config.RuleCombination) string {
 	parts := make([]string, 0, len(node.Conditions))
 	for _, c := range node.Conditions {
 		parts = append(parts, decompileRuleNode(&c))

@@ -101,43 +101,21 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
 	backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
 
-	backupData, err := os.ReadFile(backupFile)
-	if err != nil {
-		s.writeErrorResponse(w, http.StatusNotFound, "VERSION_NOT_FOUND", fmt.Sprintf("Backup version %s not found", version))
+	backupData, backupCfg, ok := s.loadRollbackBackup(
+		w,
+		backupFile,
+		version,
+	)
+	if !ok {
 		return
 	}
-
-	backupCfg, parseErr := config.ParseYAMLBytes(backupData)
-	if parseErr != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "BACKUP_INVALID", fmt.Sprintf("Backup config is invalid: %v", parseErr))
+	existingData, ok := s.loadCompatibleRollbackSource(
+		w,
+		paths.sourcePath,
+		backupCfg,
+	)
+	if !ok {
 		return
-	}
-
-	existingData, err := os.ReadFile(paths.sourcePath)
-	if err != nil && !os.IsNotExist(err) {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("Failed to read current config: %v", err))
-		return
-	}
-	if len(existingData) > 0 {
-		currentCfg, parseErr := config.ParseYAMLBytes(existingData)
-		if parseErr != nil {
-			s.writeErrorResponse(
-				w,
-				http.StatusInternalServerError,
-				"CURRENT_CONFIG_INVALID",
-				fmt.Sprintf("Current config is invalid: %v", parseErr),
-			)
-			return
-		}
-		if reloadErr := config.ValidateLocalClassifierReload(currentCfg, backupCfg); reloadErr != nil {
-			s.writeErrorResponse(
-				w,
-				http.StatusConflict,
-				"RESTART_REQUIRED",
-				reloadErr.Error(),
-			)
-			return
-		}
 	}
 	if !checkConfigPrecondition(w, r, existingData, false) {
 		return
@@ -163,6 +141,77 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 	)
 
 	s.writeRollbackSuccess(w, version, backupData, paths.runtimePath, backupDir)
+}
+
+func (s *ClassificationAPIServer) loadRollbackBackup(
+	w http.ResponseWriter,
+	backupFile string,
+	version string,
+) ([]byte, *config.RouterConfig, bool) {
+	backupData, err := os.ReadFile(backupFile)
+	if err != nil {
+		s.writeErrorResponse(
+			w,
+			http.StatusNotFound,
+			"VERSION_NOT_FOUND",
+			fmt.Sprintf("Backup version %s not found", version),
+		)
+		return nil, nil, false
+	}
+	backupCfg, err := config.ParseYAMLBytes(backupData)
+	if err != nil {
+		s.writeErrorResponse(
+			w,
+			http.StatusBadRequest,
+			"BACKUP_INVALID",
+			fmt.Sprintf("Backup config is invalid: %v", err),
+		)
+		return nil, nil, false
+	}
+	return backupData, backupCfg, true
+}
+
+func (s *ClassificationAPIServer) loadCompatibleRollbackSource(
+	w http.ResponseWriter,
+	sourcePath string,
+	backupCfg *config.RouterConfig,
+) ([]byte, bool) {
+	existingData, err := os.ReadFile(sourcePath)
+	if err != nil && !os.IsNotExist(err) {
+		s.writeErrorResponse(
+			w,
+			http.StatusInternalServerError,
+			"READ_ERROR",
+			fmt.Sprintf("Failed to read current config: %v", err),
+		)
+		return nil, false
+	}
+	if len(existingData) == 0 {
+		return existingData, true
+	}
+	currentCfg, err := config.ParseYAMLBytes(existingData)
+	if err != nil {
+		s.writeErrorResponse(
+			w,
+			http.StatusInternalServerError,
+			"CURRENT_CONFIG_INVALID",
+			fmt.Sprintf("Current config is invalid: %v", err),
+		)
+		return nil, false
+	}
+	if err := config.ValidateLocalClassifierReload(
+		currentCfg,
+		backupCfg,
+	); err != nil {
+		s.writeErrorResponse(
+			w,
+			http.StatusConflict,
+			"RESTART_REQUIRED",
+			err.Error(),
+		)
+		return nil, false
+	}
+	return existingData, true
 }
 
 func (s *ClassificationAPIServer) writeRollbackSuccess(

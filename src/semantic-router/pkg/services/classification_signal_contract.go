@@ -17,8 +17,7 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	if err != nil {
 		return nil, err
 	}
-	classifier, candidates, recipeName, err :=
-		s.evalRoutingScopeSnapshot(req.Model)
+	classifier, candidates, recipeName, err := s.evalRoutingScopeSnapshot(req.Model)
 	if err != nil {
 		return nil, err
 	}

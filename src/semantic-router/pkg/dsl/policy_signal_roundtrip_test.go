@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -13,6 +14,7 @@ SIGNAL metadata "canary" {
   key: "cohort"
   predicate: { equals: "canary" }
 }
+
 
 SIGNAL classifier "risk" {
   type: "local"
@@ -45,6 +47,78 @@ ROUTE "policy-route" {
 		t,
 		roundTrip.Decisions[0].Rules.Conditions[1],
 	)
+}
+
+func TestPolicySignalsRoundTripInsideIsolatedRecipes(t *testing.T) {
+	input := `
+MODEL "model-a" {}
+
+RECIPE alpha {
+  SIGNAL metadata "cohort" {
+    key: "tenant"
+    predicate: { equals: "alpha" }
+  }
+  SIGNAL classifier "risk" {
+    type: "local"
+    model_path: "models/risk"
+    labels: ["SAFE", "RISKY"]
+    use_cpu: true
+  }
+  ROUTE "policy-route" {
+    PRIORITY 100
+    WHEN metadata("cohort") AND classifier(
+      "risk",
+      label: "RISKY",
+      predicate: { gte: 0.8 },
+      on_error: "no_match"
+    )
+    MODEL "model-a"
+  }
+}
+
+RECIPE beta {
+  SIGNAL metadata "cohort" {
+    key: "tenant"
+    predicate: { equals: "beta" }
+  }
+  SIGNAL classifier "risk" {
+    type: "local"
+    model_path: "models/risk"
+    labels: ["SAFE", "RISKY"]
+    use_cpu: true
+  }
+  ROUTE "policy-route" {
+    PRIORITY 100
+    WHEN metadata("cohort")
+    MODEL "model-a"
+  }
+}`
+	cfg := mustCompilePolicyDSL(t, input)
+	alpha, alphaOK := cfg.RecipeByName("alpha")
+	beta, betaOK := cfg.RecipeByName("beta")
+	if !alphaOK || !betaOK {
+		t.Fatalf("recipe scopes were not compiled: %#v", cfg.Recipes)
+	}
+	if got := *alpha.Profile.Signals.MetadataRules[0].Predicate.Equals; got != "alpha" {
+		t.Fatalf("alpha metadata predicate = %q", got)
+	}
+	if got := *beta.Profile.Signals.MetadataRules[0].Predicate.Equals; got != "beta" {
+		t.Fatalf("beta metadata predicate = %q", got)
+	}
+
+	source, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+	roundTrip := mustCompilePolicyDSL(t, source)
+	if !reflect.DeepEqual(cfg.Recipes, roundTrip.Recipes) {
+		t.Fatalf(
+			"recipe policy changed after round trip:\n%#v\n%#v\n%s",
+			cfg.Recipes,
+			roundTrip.Recipes,
+			source,
+		)
+	}
 }
 
 func mustCompilePolicyDSL(

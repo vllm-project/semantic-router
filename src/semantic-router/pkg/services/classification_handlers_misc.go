@@ -168,9 +168,12 @@ func (s *ClassificationService) ClassifyNLI(req NLIRequest) (*NLIResponse, error
 		return nil, fmt.Errorf("classification service not available")
 	}
 
-	det := classifier.GetHallucinationDetector()
-	if det == nil || !det.IsNLIInitialized() {
+	if !classifier.IsHallucinationExplainerReady() {
 		return nil, fmt.Errorf("NLI model not initialized — configure hallucination_mitigation.nli_model in your router config")
+	}
+	det := classifier.GetHallucinationDetector()
+	if det == nil {
+		return nil, fmt.Errorf("NLI model backend is unavailable")
 	}
 
 	result, err := det.ClassifyNLI(req.Premise, req.Hypothesis)
@@ -191,9 +194,5 @@ func (s *ClassificationService) ClassifyNLI(req NLIRequest) (*NLIResponse, error
 // IsNLIReady reports whether the NLI model is loaded and ready for inference.
 func (s *ClassificationService) IsNLIReady() bool {
 	classifier := s.classifierSnapshot()
-	if classifier == nil {
-		return false
-	}
-	det := classifier.GetHallucinationDetector()
-	return det != nil && det.IsNLIInitialized()
+	return classifier != nil && classifier.IsHallucinationExplainerReady()
 }

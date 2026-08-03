@@ -1,5 +1,6 @@
 """Cross-object classifier signal validation."""
 
+from cli.config_contract import iter_condition_leaves, iter_routing_profiles
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
 
@@ -11,21 +12,71 @@ def validate_classifier_contracts(
     config: UserConfig,
 ) -> list[ValidationError]:
     errors: list[ValidationError] = []
-    rules = _classifier_rules(config)
+    external_models = _external_models(config)
+    runtime_signature: tuple[str, bool, tuple[str, ...]] | None = None
+    for profile_name, routing in iter_routing_profiles(config):
+        profile_field = (
+            "routing"
+            if profile_name == "default"
+            else f"recipes.{profile_name}.routing"
+        )
+        rules = {rule.name: rule for rule in routing.signals.classifiers or []}
+        local_rules = [rule for rule in rules.values() if rule.type == "local"]
+        if local_rules:
+            signature = _local_classifier_signature(local_rules[0])
+            if runtime_signature is None:
+                runtime_signature = signature
+            elif runtime_signature != signature:
+                errors.append(
+                    ValidationError(
+                        "recipe-local classifiers must use identical model_path, labels, and use_cpu across the process",
+                        field=f"{profile_field}.signals.classifiers",
+                    )
+                )
+        errors.extend(
+            _validate_profile_classifier_rules(
+                rules,
+                external_models,
+                profile_field,
+            )
+        )
+        errors.extend(
+            _validate_profile_classifier_decisions(
+                routing.decisions,
+                rules,
+                profile_field,
+            )
+        )
+    return errors
+
+
+def _local_classifier_signature(rule) -> tuple[str, bool, tuple[str, ...]]:
+    return (
+        rule.model_path or "",
+        bool(rule.use_cpu),
+        tuple(rule.labels),
+    )
+
+
+def _validate_profile_classifier_rules(
+    rules: dict,
+    external_models: dict[str, dict],
+    profile_field: str,
+) -> list[ValidationError]:
+    errors: list[ValidationError] = []
     local_rules = [rule for rule in rules.values() if rule.type == "local"]
     if len(local_rules) > 1:
         errors.append(
             ValidationError(
-                "only one local classifier signal is supported per runtime",
-                field="routing.signals.classifiers",
+                "only one local classifier signal is supported per recipe",
+                field=f"{profile_field}.signals.classifiers",
             )
         )
-    external_models = _external_models(config)
     for rule in rules.values():
         if rule.type != "llm":
             continue
         external = external_models.get(rule.model or "")
-        field = f"routing.signals.classifiers.{rule.name}.model"
+        field = f"{profile_field}.signals.classifiers.{rule.name}.model"
         if external is None:
             errors.append(
                 ValidationError(
@@ -48,15 +99,23 @@ def validate_classifier_contracts(
                     field,
                 )
             )
+    return errors
 
-    for field_prefix, decision in _all_decisions(config):
-        for condition in _iter_conditions(decision.rules.conditions):
+
+def _validate_profile_classifier_decisions(
+    decisions,
+    rules: dict,
+    profile_field: str,
+) -> list[ValidationError]:
+    errors: list[ValidationError] = []
+    for decision in decisions:
+        for condition in iter_condition_leaves(decision.rules.conditions):
             if (condition.type or "").strip().lower() != "classifier":
                 continue
             rule = rules.get(condition.name or "")
             if rule is None:
                 continue
-            field = f"{field_prefix}.{decision.name}.rules.conditions"
+            field = f"{profile_field}.decisions.{decision.name}.rules.conditions"
             if condition.label not in rule.labels:
                 errors.append(
                     ValidationError(
@@ -74,15 +133,6 @@ def validate_classifier_contracts(
     return errors
 
 
-def _classifier_rules(config: UserConfig):
-    result = {}
-    profiles = [config.routing, *(recipe.routing for recipe in config.recipes)]
-    for routing in profiles:
-        for rule in routing.signals.classifiers or []:
-            result.setdefault(rule.name, rule)
-    return result
-
-
 def _external_models(config: UserConfig) -> dict[str, dict]:
     model_catalog = (config.global_ or {}).get("model_catalog") or {}
     external = model_catalog.get("external") or []
@@ -91,15 +141,6 @@ def _external_models(config: UserConfig) -> dict[str, dict]:
         for item in external
         if isinstance(item, dict) and item.get("name")
     }
-
-
-def _all_decisions(config: UserConfig):
-    for decision in config.routing.decisions:
-        yield "decisions", decision
-    for recipe in config.recipes:
-        prefix = f"recipes.{recipe.name}.decisions"
-        for decision in recipe.routing.decisions:
-            yield prefix, decision
 
 
 def _external_model_endpoint_errors(
@@ -134,12 +175,6 @@ def _external_model_endpoint_errors(
             )
         )
     return errors
-
-
-def _iter_conditions(conditions):
-    for condition in conditions or []:
-        yield condition
-        yield from _iter_conditions(condition.conditions)
 
 
 def _valid_local_predicate(predicate) -> bool:

@@ -13,6 +13,34 @@ func validateClassifierSignalContracts(cfg *RouterConfig) error {
 	return validateClassifierSignalRules(cfg)
 }
 
+// validateGlobalClassifierRuntimeContracts enforces the process-global native
+// classifier seam while allowing each recipe to declare its own local rule
+// name. Every local rule must use the same model, labels, and device.
+func validateGlobalClassifierRuntimeContracts(cfg *RouterConfig) error {
+	var (
+		signature *localClassifierSignature
+		owner     RecipeName
+	)
+	for _, ref := range localClassifierRuleRefs(cfg) {
+		next := newLocalClassifierSignature(ref.Rule)
+		if signature == nil {
+			signature = &next
+			owner = ref.Recipe
+			continue
+		}
+		if signature.Equal(next) {
+			continue
+		}
+		return fmt.Errorf(
+			"routing recipes %q and %q declare incompatible local classifiers; "+
+				"the process-global local classifier requires identical model_path, labels, and use_cpu",
+			owner,
+			ref.Recipe,
+		)
+	}
+	return nil
+}
+
 func validateExternalModelNames(models []ExternalModelConfig) error {
 	externalNames := make(map[string]struct{})
 	for _, external := range models {
@@ -211,15 +239,14 @@ func validateLLMClassifierExternalDependency(
 // ValidateLocalClassifierReload rejects mutations that cannot be applied
 // atomically by the process-global native classifier binding.
 func ValidateLocalClassifierReload(current *RouterConfig, next *RouterConfig) error {
-	currentRule := localClassifierRule(current)
-	if currentRule == nil {
+	currentSignature := firstLocalClassifierSignature(current)
+	nextSignature := firstLocalClassifierSignature(next)
+	if currentSignature == nil && nextSignature == nil {
 		return nil
 	}
-	nextRule := localClassifierRule(next)
-	if nextRule == nil ||
-		currentRule.ModelPath != nextRule.ModelPath ||
-		currentRule.UseCPU != nextRule.UseCPU ||
-		!slices.Equal(currentRule.Labels, nextRule.Labels) {
+	if currentSignature == nil ||
+		nextSignature == nil ||
+		!currentSignature.Equal(*nextSignature) {
 		return fmt.Errorf(
 			"local classifier model, labels, and device cannot change during hot reload; restart the router",
 		)
@@ -227,14 +254,69 @@ func ValidateLocalClassifierReload(current *RouterConfig, next *RouterConfig) er
 	return nil
 }
 
-func localClassifierRule(cfg *RouterConfig) *ClassifierSignalRule {
+type localClassifierRuleRef struct {
+	Recipe RecipeName
+	Rule   ClassifierSignalRule
+}
+
+type localClassifierSignature struct {
+	ModelPath string
+	UseCPU    bool
+	Labels    []string
+}
+
+func newLocalClassifierSignature(
+	rule ClassifierSignalRule,
+) localClassifierSignature {
+	return localClassifierSignature{
+		ModelPath: rule.ModelPath,
+		UseCPU:    rule.UseCPU,
+		Labels:    append([]string(nil), rule.Labels...),
+	}
+}
+
+func (s localClassifierSignature) Equal(other localClassifierSignature) bool {
+	return s.ModelPath == other.ModelPath &&
+		s.UseCPU == other.UseCPU &&
+		slices.Equal(s.Labels, other.Labels)
+}
+
+func firstLocalClassifierSignature(
+	cfg *RouterConfig,
+) *localClassifierSignature {
+	refs := localClassifierRuleRefs(cfg)
+	if len(refs) == 0 {
+		return nil
+	}
+	signature := newLocalClassifierSignature(refs[0].Rule)
+	return &signature
+}
+
+func localClassifierRuleRefs(cfg *RouterConfig) []localClassifierRuleRef {
 	if cfg == nil {
 		return nil
 	}
-	for i := range cfg.ClassifierRules {
-		if cfg.ClassifierRules[i].Type == "local" {
-			return &cfg.ClassifierRules[i]
+	refs := make([]localClassifierRuleRef, 0)
+	if len(cfg.Recipes) > 0 {
+		for _, recipe := range cfg.Recipes {
+			for _, rule := range recipe.Profile.Signals.ClassifierRules {
+				if rule.Type == "local" {
+					refs = append(refs, localClassifierRuleRef{
+						Recipe: recipe.Name,
+						Rule:   rule,
+					})
+				}
+			}
+		}
+		return refs
+	}
+	for _, rule := range cfg.ClassifierRules {
+		if rule.Type == "local" {
+			refs = append(refs, localClassifierRuleRef{
+				Recipe: DefaultRecipeName,
+				Rule:   rule,
+			})
 		}
 	}
-	return nil
+	return refs
 }

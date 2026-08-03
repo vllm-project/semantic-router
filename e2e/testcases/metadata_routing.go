@@ -33,7 +33,7 @@ func testMetadataRouting(
 	defer stopPortForward()
 
 	payload := map[string]interface{}{
-		"model": "MoM",
+		"model": "vllm-sr/metadata-policy",
 		"messages": []map[string]string{
 			{"role": "user", "content": "route this request"},
 		},
@@ -62,12 +62,16 @@ func testMetadataRouting(
 		responseBody, _ := io.ReadAll(response.Body)
 		return fmt.Errorf("metadata routing returned HTTP %d: %s", response.StatusCode, responseBody)
 	}
-	if decision := response.Header.Get("x-vsr-selected-decision"); decision != "metadata_decision" {
-		return fmt.Errorf("selected decision = %q, want metadata_decision", decision)
+	if decision := response.Header.Get("x-vsr-selected-decision"); decision != "metadata_recipe_decision" {
+		return fmt.Errorf("selected decision = %q, want metadata_recipe_decision", decision)
+	}
+	if recipe := response.Header.Get("x-vsr-selected-recipe"); recipe != "metadata-policy" {
+		return fmt.Errorf("selected recipe = %q, want metadata-policy", recipe)
 	}
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
-			"selected_decision": "metadata_decision",
+			"selected_decision": "metadata_recipe_decision",
+			"selected_recipe":   "metadata-policy",
 			"metadata_key":      "cohort",
 		})
 	}

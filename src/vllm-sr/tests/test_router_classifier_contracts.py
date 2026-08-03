@@ -102,6 +102,68 @@ def test_classifier_contract_rejects_multiple_local_rules():
     )
 
 
+def test_classifier_contract_allows_one_local_rule_per_recipe():
+    rule = {
+        "name": "risk",
+        "type": "local",
+        "model_path": "models/risk",
+        "labels": ["SAFE", "RISKY"],
+    }
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "recipes": [
+                {
+                    "name": "private",
+                    "routing": {"signals": {"classifiers": [rule]}},
+                },
+                {
+                    "name": "public",
+                    "routing": {"signals": {"classifiers": [rule]}},
+                },
+            ],
+        }
+    )
+
+    errors = validate_user_config(config)
+
+    assert not any("only one local classifier" in error.message for error in errors)
+
+
+def test_classifier_contract_rejects_incompatible_recipe_local_models():
+    def rule(path):
+        return {
+            "name": "risk",
+            "type": "local",
+            "model_path": path,
+            "labels": ["SAFE", "RISKY"],
+        }
+
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "recipes": [
+                {
+                    "name": "private",
+                    "routing": {
+                        "signals": {"classifiers": [rule("models/private-risk")]}
+                    },
+                },
+                {
+                    "name": "public",
+                    "routing": {
+                        "signals": {"classifiers": [rule("models/public-risk")]}
+                    },
+                },
+            ],
+        }
+    )
+
+    errors = validate_user_config(config)
+
+    assert any("identical model_path" in error.message for error in errors)
+
+
 @pytest.mark.parametrize(
     ("external", "expected"),
     [

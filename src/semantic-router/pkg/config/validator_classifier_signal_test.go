@@ -227,6 +227,45 @@ func TestValidateLocalClassifierReloadRequiresRestartForChanges(t *testing.T) {
 	if err := ValidateLocalClassifierReload(current, changed); err == nil {
 		t.Fatal("expected restart-required error for local classifier change")
 	}
+	if err := ValidateLocalClassifierReload(&RouterConfig{}, current); err == nil {
+		t.Fatal("expected restart-required error when adding a local classifier")
+	}
+	if err := ValidateLocalClassifierReload(current, &RouterConfig{}); err == nil {
+		t.Fatal("expected restart-required error when removing a local classifier")
+	}
+}
+
+func TestRecipeLocalClassifiersShareOneRuntimeSignature(t *testing.T) {
+	rule := func(path string) ClassifierSignalRule {
+		return ClassifierSignalRule{
+			Name:      "risk",
+			Type:      "local",
+			ModelPath: path,
+			Labels:    []string{"SAFE", "RISKY"},
+		}
+	}
+	cfg := &RouterConfig{Recipes: []RoutingRecipe{
+		{
+			Name: "private",
+			Profile: RoutingProfile{Signals: Signals{
+				ClassifierRules: []ClassifierSignalRule{rule("models/risk")},
+			}},
+		},
+		{
+			Name: "public",
+			Profile: RoutingProfile{Signals: Signals{
+				ClassifierRules: []ClassifierSignalRule{rule("models/risk")},
+			}},
+		},
+	}}
+	if err := validateGlobalClassifierRuntimeContracts(cfg); err != nil {
+		t.Fatalf("identical recipe-local classifiers rejected: %v", err)
+	}
+
+	cfg.Recipes[1].Profile.Signals.ClassifierRules[0].ModelPath = "models/other-risk"
+	if err := validateGlobalClassifierRuntimeContracts(cfg); err == nil {
+		t.Fatal("expected incompatible recipe-local classifier error")
+	}
 }
 
 func TestDecisionPredicateRejectsNonFiniteValues(t *testing.T) {

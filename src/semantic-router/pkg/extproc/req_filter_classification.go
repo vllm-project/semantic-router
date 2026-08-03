@@ -117,6 +117,7 @@ func (r *OpenAIRouter) newDecisionMultiFactorSelector(decisionCfg *config.MultiF
 	}
 	return selector
 }
+
 func (r *OpenAIRouter) newDecisionHybridSelector(decisionCfg *config.HybridSelectionConfig, ctx *RequestContext) selection.Selector {
 	var cfg *selection.HybridConfig
 	if r != nil && r.Config != nil {
