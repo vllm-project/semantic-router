@@ -61,10 +61,12 @@ jobs:
       - name: Pin trusted security allowlist
         if: github.event_name == 'pull_request_target'
         run: |
-          if [ -f base/.security-scan-allowlist ]; then
-            cp base/.security-scan-allowlist pr-code/.security-scan-allowlist
+          if [ -f base/tools/security/ast-scan-allowlist.txt ]; then
+            mkdir -p pr-code/tools/security
+            cp base/tools/security/ast-scan-allowlist.txt \
+              pr-code/tools/security/ast-scan-allowlist.txt
           else
-            rm -f pr-code/.security-scan-allowlist
+            rm -f pr-code/tools/security/ast-scan-allowlist.txt
           fi
 
       - name: Set up Python

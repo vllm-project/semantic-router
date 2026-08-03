@@ -99,6 +99,32 @@ func TestBuilder_HandoffPenalty(t *testing.T) {
 	}
 }
 
+func TestBuilder_HandoffPenaltyIsolatedByRecipe(t *testing.T) {
+	now := time.Now()
+	records := []store.Record{
+		{Recipe: "privacy", Decision: "route", SelectedModel: "small", ActualCost: ptr(0.01), Timestamp: now},
+		{Recipe: "privacy", Decision: "route", SelectedModel: "large", ActualCost: ptr(0.03), Timestamp: now.Add(time.Second)},
+		{Recipe: "speed", Decision: "route", SelectedModel: "small", ActualCost: ptr(0.01), Timestamp: now},
+		{Recipe: "speed", Decision: "route", SelectedModel: "large", ActualCost: ptr(0.08), Timestamp: now.Add(time.Second)},
+	}
+
+	m := lookuptable.NewMemoryStorage()
+	if err := lookuptable.NewBuilder(m).PopulateFromRecords(records); err != nil {
+		t.Fatalf("PopulateFromRecords: %v", err)
+	}
+	privacy, ok := m.Get(lookuptable.ScopedHandoffPenaltyKey("privacy", "small", "large"))
+	if !ok || math.Abs(privacy.Value-0.02) > 1e-9 {
+		t.Fatalf("privacy handoff penalty = %+v, found=%v", privacy, ok)
+	}
+	speed, ok := m.Get(lookuptable.ScopedHandoffPenaltyKey("speed", "small", "large"))
+	if !ok || math.Abs(speed.Value-0.07) > 1e-9 {
+		t.Fatalf("speed handoff penalty = %+v, found=%v", speed, ok)
+	}
+	if _, ok := m.HandoffPenalty("small", "large"); ok {
+		t.Fatal("named-recipe replay must not populate the default handoff key")
+	}
+}
+
 func TestBuilder_RemainingTurnPrior(t *testing.T) {
 	// Two sessions under the same Decision, separated by >30 min.
 	// Session A: 3 turns, Session B: 5 turns, both in "support".

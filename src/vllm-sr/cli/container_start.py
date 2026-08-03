@@ -381,6 +381,7 @@ def _build_dashboard_runtime_command(
         port_mappings=[(stack_layout.dashboard_port, 8700)],
         entrypoint="/app/start-dashboard.sh",
         command_args=["/app/config.yaml"],
+        inherited_env_keys={"DASHBOARD_ADMIN_PASSWORD"},
     )
 
 
@@ -391,6 +392,14 @@ def _build_dashboard_runtime_env(
     stack_layout: RuntimeStackLayout,
 ):
     dashboard_env = dict(common_env)
+    for name in (
+        "DASHBOARD_ADMIN_EMAIL",
+        "DASHBOARD_ADMIN_PASSWORD",
+        "DASHBOARD_ADMIN_NAME",
+    ):
+        value = os.getenv(name)
+        if value:
+            dashboard_env[name] = value
     dashboard_env.setdefault(
         "TARGET_ROUTER_API_URL", stack_layout.router_api_service_url
     )
@@ -560,6 +569,7 @@ def _build_service_run_command(
     enable_amd_gpu: bool = False,
     enable_nvidia_gpu: bool = False,
     start_immediately: bool = True,
+    inherited_env_keys: set[str] | None = None,
 ):
     cmd = build_base_run_command(
         runtime,
@@ -575,7 +585,7 @@ def _build_service_run_command(
     append_mount_specs(cmd, mount_specs)
     append_port_mappings(cmd, port_mappings)
     cmd.extend(["--entrypoint", entrypoint])
-    append_env_vars(cmd, env_vars)
+    append_env_vars(cmd, env_vars, inherited_env_keys)
     cmd.append(image)
     cmd.extend(command_args)
     return cmd

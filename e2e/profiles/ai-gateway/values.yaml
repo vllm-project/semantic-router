@@ -671,11 +671,15 @@ config:
       recipe: default
   recipes:
     - name: entrypoint-probe
-      description: Deterministic keyword-gated recipe used by the entrypoint-recipe-routing E2E (issue #2331).
+      description: "Deterministic keyword-gated recipe used by the entrypoint-recipe-routing E2E (issue #2331)."
       routing:
+        strategy: priority
         signals:
           keywords:
-            - name: entrypoint_probe_keywords
+            # Intentionally reuses a signal name from the default recipe with
+            # a different definition. Recipe-local namespaces must keep the
+            # two definitions isolated at validation and request time.
+            - name: retention_probe_keywords
               operator: OR
               keywords:
                 - __ENTRYPOINT_RECIPE_PROBE__
@@ -688,7 +692,7 @@ config:
               operator: OR
               conditions:
                 - type: keyword
-                  name: entrypoint_probe_keywords
+                  name: retention_probe_keywords
             modelRefs:
               - model: base-model
                 lora_name: general-expert

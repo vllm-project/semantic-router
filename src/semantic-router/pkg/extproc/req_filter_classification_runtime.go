@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -36,30 +37,24 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	signalStart := time.Now()
 	signalCtx, signalSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanSignalEvaluation)
 
-	// Authz enforcement is scoped to the decisions this request can actually
-	// select; the signal registry stays global for evaluation. Without the
-	// scope, one recipe with an authz condition would reject every request
-	// from profiles that never asked for identity enforcement.
-	authzScope := candidates
-	if authzScope == nil {
-		authzScope = r.Config.Decisions
+	classifier := r.classifierForRequest(ctx)
+	if classifier == nil {
+		return nil, fmt.Errorf("classifier for routing recipe %q is unavailable", ctx.Routing.RecipeName())
 	}
 
-	signals, authzErr := r.Classifier.EvaluateAllSignalsWithHeaders(
-		signalInput.compressedText,
-		signalInput.allMessagesText,
-		signalInput.currentUserText,
-		signalInput.priorUserMessages,
-		nonUserMessages,
-		signalInput.hasAssistantReply,
-		ctx.Headers,
-		false,
-		ctx.RequestImageURL,
-		signalInput.evaluationText,
-		signalInput.skipCompressionSignals,
-		signalInput.conversationFacts,
-		authzScope,
-	)
+	signals, authzErr := classifier.EvaluateAllSignalsWithHeaders(classification.SignalEvaluationInput{
+		Text:                   signalInput.compressedText,
+		ContextText:            signalInput.allMessagesText,
+		CurrentUserText:        signalInput.currentUserText,
+		PriorUserMessages:      signalInput.priorUserMessages,
+		NonUserMessages:        nonUserMessages,
+		HasPriorAssistantReply: signalInput.hasAssistantReply,
+		Headers:                ctx.Headers,
+		ImageURL:               ctx.RequestImageURL,
+		UncompressedText:       signalInput.evaluationText,
+		SkipCompressionSignals: signalInput.skipCompressionSignals,
+		ConversationFacts:      signalInput.conversationFacts,
+	})
 	if authzErr != nil {
 		signalSpan.End()
 		logging.ComponentErrorEvent("extproc", "signal_evaluation_failed", map[string]interface{}{
@@ -146,36 +141,47 @@ func (r *OpenAIRouter) runDecisionEngine(
 	// emitted by decision.DecisionEngine.EvaluateDecisionsWithSignals; do not
 	// emit them here or both metrics will be double-counted.
 	decisionCtx, decisionSpan := tracing.StartDecisionSpan(ctx.TraceContext, "decision_evaluation")
+	classifier := r.classifierForRequest(ctx)
+	if classifier == nil {
+		logging.ComponentErrorEvent("extproc", "recipe_classifier_unavailable", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"recipe":     ctx.Routing.RecipeName(),
+		})
+		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, "")
+		ctx.TraceContext = decisionCtx
+		return nil, r.defaultModelForUnmatchedDecision(originalModel)
+	}
+	strategy := classifier.Config.Strategy
 
 	var result *decision.DecisionResult
 	var err error
 	if candidates != nil {
 		if len(candidates) == 0 {
-			tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
+			tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy))
 			ctx.TraceContext = decisionCtx
 			return nil, r.defaultModelForUnmatchedDecision(originalModel)
 		}
-		result, err = r.Classifier.EvaluateDecisionWithEngineForDecisions(signals, candidates)
+		result, err = classifier.EvaluateDecisionWithEngineForDecisions(signals, candidates)
 	} else {
-		result, err = r.Classifier.EvaluateDecisionWithEngine(signals)
+		result, err = classifier.EvaluateDecisionWithEngine(signals)
 	}
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "decision_evaluation_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
-			"strategy":   r.Config.Strategy,
+			"strategy":   strategy,
 			"error":      err.Error(),
 		})
-		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
+		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy))
 		ctx.TraceContext = decisionCtx
 		return nil, r.defaultModelForUnmatchedDecision(originalModel)
 	}
 	if result == nil || result.Decision == nil {
-		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
+		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy))
 		ctx.TraceContext = decisionCtx
 		return nil, r.defaultModelForUnmatchedDecision(originalModel)
 	}
 
-	tracing.EndDecisionSpan(decisionSpan, result.Confidence, result.MatchedRules, r.Config.Strategy)
+	tracing.EndDecisionSpan(decisionSpan, result.Confidence, result.MatchedRules, string(strategy))
 	ctx.TraceContext = decisionCtx
 	return result, ""
 }
@@ -229,7 +235,7 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 
 func (r *OpenAIRouter) applyDecisionResultToContext(result *decision.DecisionResult, ctx *RequestContext) string {
 	ctx.VSRSelectedDecision = result.Decision
-	if pluginCfg := r.Config.EffectiveRouterReplayConfigForDecision(result.Decision.Name); pluginCfg != nil {
+	if pluginCfg := r.Config.EffectiveRouterReplayConfig(result.Decision); pluginCfg != nil {
 		ctx.RouterReplayPluginConfig = pluginCfg
 	}
 

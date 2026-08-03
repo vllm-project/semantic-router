@@ -248,7 +248,7 @@ config:
           operator: OR
           conditions:
             - type: keyword
-              rule_name: thinking
+              name: thinking
         modelRefs:
           - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
             use_reasoning: true
@@ -280,6 +280,14 @@ config:
               system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
               mode: replace
     signals:
+      keywords:
+        - name: thinking
+          operator: OR
+          keywords:
+            - think
+            - reason
+            - step by step
+          case_sensitive: false
       domains:
         - name: business
           description: Business, corporate strategy, management, finance, marketing

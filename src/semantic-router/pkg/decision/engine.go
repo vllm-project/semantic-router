@@ -34,7 +34,17 @@ type DecisionEngine struct {
 	embeddingRules []config.EmbeddingRule
 	categories     []config.Category
 	decisions      []config.Decision
-	strategy       string
+	strategy       config.RoutingStrategy
+	routingScope   config.RecipeName
+}
+
+// WithRoutingScope namespaces observability state for recipe-local decision
+// names. It does not alter matching or the public DecisionResult.
+func (e *DecisionEngine) WithRoutingScope(recipeName config.RecipeName) *DecisionEngine {
+	if e != nil {
+		e.routingScope = recipeName
+	}
+	return e
 }
 
 // NewDecisionEngine creates a new decision engine
@@ -43,10 +53,10 @@ func NewDecisionEngine(
 	embeddingRules []config.EmbeddingRule,
 	categories []config.Category,
 	decisions []config.Decision,
-	strategy string,
+	strategy config.RoutingStrategy,
 ) *DecisionEngine {
 	if strategy == "" {
-		strategy = "priority" // default strategy
+		strategy = config.RoutingStrategyPriority
 	}
 	return &DecisionEngine{
 		keywordRules:   keywordRules,
@@ -131,7 +141,7 @@ func (e *DecisionEngine) EvaluateDecisionsWithSignals(signals *SignalMatches) (*
 
 		if matched {
 			// Record decision match with confidence
-			metrics.RecordDecisionMatch(decision.Name, confidence)
+			metrics.RecordDecisionMatch(config.RoutingDecisionKey(e.routingScope, decision.Name), confidence)
 
 			results = append(results, DecisionResult{
 				Decision:     decision,
@@ -155,6 +165,12 @@ func (e *DecisionEngine) evaluateDecisionWithSignals(
 	decision *config.Decision,
 	signals *SignalMatches,
 ) (matched bool, confidence float64, matchedRules []string) {
+	// Omitting rules is the YAML equivalent of a DSL route without WHEN. Keep
+	// this root-only contract explicit instead of relying on the zero value to
+	// fall through to OR semantics.
+	if decision.Rules.IsEmpty() {
+		return true, 0, nil
+	}
 	return e.evalNode(decision.Rules, signals)
 }
 
@@ -381,7 +397,7 @@ func (e *DecisionEngine) decisionResultLess(
 		return left.Decision.Name < right.Decision.Name
 	}
 
-	if e.strategy == "confidence" {
+	if e.strategy == config.RoutingStrategyConfidence {
 		if left.Confidence != right.Confidence {
 			return left.Confidence > right.Confidence
 		}

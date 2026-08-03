@@ -441,9 +441,22 @@ func warmupRouterRuntime(server *extproc.Server, embeddingState modelruntime.Emb
 	if router == nil {
 		return
 	}
-	_, _ = modelruntime.WarmupToolsDatabase(context.Background(), embeddingState.ToolsReady, router.LoadToolsDatabase, modelruntime.WarmupToolsOptions{
+	_, _ = modelruntime.WarmupRouter(context.Background(), []modelruntime.RouterWarmupTask{
+		{
+			Name:       "tools_database",
+			Ready:      embeddingState.ToolsReady,
+			SkipReason: "embedding_runtime_not_ready_for_tools",
+			Load:       router.LoadToolsDatabase,
+		},
+		{
+			Name:       "knowledge_bases",
+			Ready:      embeddingState.AnyReady,
+			SkipReason: "embedding_runtime_not_ready_for_knowledge_bases",
+			Load:       router.PreloadKnowledgeBases,
+		},
+	}, modelruntime.WarmupRouterOptions{
 		Component:      "router",
-		MaxParallelism: 1,
+		MaxParallelism: 2,
 		OnEvent:        logRuntimeLifecycleEvent,
 	})
 }

@@ -34,8 +34,8 @@ const (
 // testEntrypointRecipeRouting asserts the request-path half of the entrypoint
 // contract deterministically: the probe entrypoint must route through its
 // recipe's decision, the default-recipe alias must not leak into another
-// recipe's decisions even though the probe signal is registered globally, and
-// both virtual names must be listed by /v1/models.
+// recipe even though both profiles define the same local signal name, and both
+// virtual names must be listed by /v1/models.
 func testEntrypointRecipeRouting(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
 		fmt.Println("[Test] Testing entrypoint recipe routing")
@@ -97,6 +97,10 @@ func assertEntrypointProbeSelectsRecipe(ctx context.Context, localPort string, v
 		return "", fmt.Errorf("expected x-vsr-selected-model=%s for model %s, got %q",
 			entrypointProbeAdapter, entrypointProbeModel, model)
 	}
+	if recipe := response.Headers.Get("x-vsr-selected-recipe"); recipe != "entrypoint-probe" {
+		return "", fmt.Errorf("expected x-vsr-selected-recipe=entrypoint-probe for model %s, got %q",
+			entrypointProbeModel, recipe)
+	}
 	if verbose {
 		fmt.Printf("[Test]   %s -> decision %s, model %s ✓\n", entrypointProbeModel, decision, entrypointProbeAdapter)
 	}
@@ -104,9 +108,9 @@ func assertEntrypointProbeSelectsRecipe(ctx context.Context, localPort string, v
 }
 
 // assertDefaultAliasStaysIsolated sends a sentinel-bearing query through the
-// default-recipe alias. The probe keyword signal lives in the global registry,
-// but only the selected recipe's decisions may consume it, so the probe
-// decision must never be selected here.
+// default-recipe alias. Both recipes intentionally define a signal named
+// retention_probe_keywords with different keywords; only the selected
+// recipe's definition and decisions may be evaluated.
 func assertDefaultAliasStaysIsolated(ctx context.Context, localPort string, verbose bool) (string, error) {
 	query := "Compliance check with token " + entrypointProbeKeyword + " on the shared profile."
 
@@ -127,6 +131,10 @@ func assertDefaultAliasStaysIsolated(ctx context.Context, localPort string, verb
 	if decision == entrypointProbeDecision {
 		return "", fmt.Errorf("default-recipe alias %s must not select another recipe's decision %s",
 			entrypointDefaultAlias, entrypointProbeDecision)
+	}
+	if recipe := response.Headers.Get("x-vsr-selected-recipe"); recipe != "default" {
+		return "", fmt.Errorf("expected x-vsr-selected-recipe=default for model %s, got %q",
+			entrypointDefaultAlias, recipe)
 	}
 	if verbose {
 		fmt.Printf("[Test]   %s -> decision %q (isolated from probe recipe) ✓\n", entrypointDefaultAlias, decision)

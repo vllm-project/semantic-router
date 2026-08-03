@@ -38,6 +38,8 @@ const (
 	AuditActionConfigPatch       RouteAuditAction = "config.patch"
 	AuditActionConfigPut         RouteAuditAction = "config.put"
 	AuditActionConfigRollback    RouteAuditAction = "config.rollback"
+	AuditActionRecipeSave        RouteAuditAction = "recipe.save"
+	AuditActionRecipeDelete      RouteAuditAction = "recipe.delete"
 	AuditActionKnowledgeBaseSave RouteAuditAction = "knowledge_base.save"
 	AuditActionKnowledgeBaseDel  RouteAuditAction = "knowledge_base.delete"
 	AuditActionOutcomeIngest     RouteAuditAction = "outcome.ingest"

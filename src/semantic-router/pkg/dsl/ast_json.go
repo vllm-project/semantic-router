@@ -10,6 +10,9 @@ import "encoding/json"
 
 // ProgramJSON is the JSON-serializable form of Program.
 type ProgramJSON struct {
+	Strategy             string                         `json:"strategy,omitempty"`
+	Entrypoints          []*EntrypointDeclJSON          `json:"entrypoints,omitempty"`
+	Recipes              []*RecipeDeclJSON              `json:"recipes,omitempty"`
 	Signals              []*SignalDeclJSON              `json:"signals"`
 	ProjectionPartitions []*ProjectionPartitionDeclJSON `json:"projectionPartitions,omitempty"`
 	ProjectionScores     []*ProjectionScoreDeclJSON     `json:"projectionScores,omitempty"`
@@ -18,6 +21,21 @@ type ProgramJSON struct {
 	Models               []*ModelDeclJSON               `json:"models"`
 	Plugins              []*PluginDeclJSON              `json:"plugins"`
 	TestBlocks           []*TestBlockDeclJSON           `json:"testBlocks,omitempty"`
+}
+
+// EntrypointDeclJSON is the JSON form of a request-facing recipe binding.
+type EntrypointDeclJSON struct {
+	ModelNames []string `json:"modelNames"`
+	Recipe     string   `json:"recipe"`
+	Pos        Position `json:"pos"`
+}
+
+// RecipeDeclJSON is the JSON form of one isolated recipe program.
+type RecipeDeclJSON struct {
+	Name        string       `json:"name"`
+	Description string       `json:"description,omitempty"`
+	Program     *ProgramJSON `json:"program"`
+	Pos         Position     `json:"pos"`
 }
 
 // ProjectionPartitionDeclJSON is the JSON form of ProjectionPartitionDecl.
@@ -218,10 +236,26 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 	}
 
 	result := &ProgramJSON{
-		Signals: make([]*SignalDeclJSON, 0, len(prog.Signals)),
-		Routes:  make([]*RouteDeclJSON, 0, len(prog.Routes)),
-		Models:  make([]*ModelDeclJSON, 0, len(prog.Models)),
-		Plugins: make([]*PluginDeclJSON, 0, len(prog.Plugins)),
+		Strategy: prog.Strategy,
+		Signals:  make([]*SignalDeclJSON, 0, len(prog.Signals)),
+		Routes:   make([]*RouteDeclJSON, 0, len(prog.Routes)),
+		Models:   make([]*ModelDeclJSON, 0, len(prog.Models)),
+		Plugins:  make([]*PluginDeclJSON, 0, len(prog.Plugins)),
+	}
+	for _, entrypoint := range prog.Entrypoints {
+		result.Entrypoints = append(result.Entrypoints, &EntrypointDeclJSON{
+			ModelNames: append([]string(nil), entrypoint.ModelNames...),
+			Recipe:     entrypoint.Recipe,
+			Pos:        entrypoint.Pos,
+		})
+	}
+	for _, recipe := range prog.Recipes {
+		result.Recipes = append(result.Recipes, &RecipeDeclJSON{
+			Name:        recipe.Name,
+			Description: recipe.Description,
+			Program:     ProgramToJSON(recipe.Program),
+			Pos:         recipe.Pos,
+		})
 	}
 	appendSignalDecls(result, prog.Signals)
 	appendProjectionPartitionDecls(result, prog.ProjectionPartitions)

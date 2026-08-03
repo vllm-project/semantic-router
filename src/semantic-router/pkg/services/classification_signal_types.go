@@ -1,15 +1,20 @@
 package services
 
 import (
+	"encoding/json"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 )
 
 // IntentRequest represents a request for intent classification.
 type IntentRequest struct {
-	Text     string          `json:"text"`
-	Messages []IntentMessage `json:"messages,omitempty"`
-	Options  *IntentOptions  `json:"options,omitempty"`
+	Text     string            `json:"text"`
+	Messages []IntentMessage   `json:"messages,omitempty"`
+	Tools    []json.RawMessage `json:"tools,omitempty"`
+	Model    string            `json:"model,omitempty"`
+	Options  *IntentOptions    `json:"options,omitempty"`
 }
 
 // IntentOptions contains options for intent classification.
@@ -54,6 +59,8 @@ type DecisionResult struct {
 // EvalDecisionResult represents the decision result for eval scenarios (without confidence).
 type EvalDecisionResult struct {
 	DecisionName     string          `json:"decision_name"`
+	Algorithm        string          `json:"algorithm"`
+	Plugins          []string        `json:"plugins,omitempty"`
 	UsedSignals      *MatchedSignals `json:"used_signals"`      // Signals used by this decision (from decision rules)
 	MatchedSignals   *MatchedSignals `json:"matched_signals"`   // Signals that matched
 	UnmatchedSignals *MatchedSignals `json:"unmatched_signals"` // Signals that didn't match
@@ -62,6 +69,8 @@ type EvalDecisionResult struct {
 // EvalResponse represents the eval classification response with comprehensive signal information.
 type EvalResponse struct {
 	OriginalText      string                                  `json:"original_text"` // The evaluated user turn or fallback query text
+	RequestedModel    string                                  `json:"requested_model,omitempty"`
+	Recipe            config.RecipeName                       `json:"recipe,omitempty"`
 	DecisionResult    *EvalDecisionResult                     `json:"decision_result,omitempty"`
 	EvalTrace         []decision.DecisionTrace                `json:"eval_trace,omitempty"`         // Per-decision evaluation trace (when ?trace=true)
 	RecommendedModels []string                                `json:"recommended_models,omitempty"` // All models from matched decision's modelRefs

@@ -23,8 +23,10 @@ type globalFragment struct {
 }
 
 type routingFragmentDocument struct {
-	Routing routerconfig.CanonicalRouting `yaml:"routing"`
-	Global  *globalFragment               `yaml:"global,omitempty"`
+	Routing     routerconfig.CanonicalRouting      `yaml:"routing"`
+	Entrypoints []routerconfig.CanonicalEntrypoint `yaml:"entrypoints,omitempty"`
+	Recipes     []routerconfig.CanonicalRecipe     `yaml:"recipes,omitempty"`
+	Global      *globalFragment                    `yaml:"global,omitempty"`
 }
 
 type setupModeConfig struct {

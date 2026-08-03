@@ -8,6 +8,26 @@ if str(PROJECT_ROOT) not in sys.path:
 from cli import container_run_command  # noqa: E402
 
 
+def test_append_env_vars_hides_inherited_secret_values():
+    cmd = []
+    container_run_command.append_env_vars(
+        cmd,
+        {
+            "DASHBOARD_ADMIN_EMAIL": "core@vllm-sr.ai",
+            "DASHBOARD_ADMIN_PASSWORD": "secret-value",
+        },
+        {"DASHBOARD_ADMIN_PASSWORD"},
+    )
+
+    assert cmd == [
+        "-e",
+        "DASHBOARD_ADMIN_EMAIL=core@vllm-sr.ai",
+        "-e",
+        "DASHBOARD_ADMIN_PASSWORD",
+    ]
+    assert "secret-value" not in " ".join(cmd)
+
+
 def test_append_custom_dns_noop_when_unset(monkeypatch):
     monkeypatch.delenv("VLLM_SR_DNS", raising=False)
     cmd = []

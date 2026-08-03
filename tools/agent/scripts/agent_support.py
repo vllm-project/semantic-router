@@ -19,9 +19,10 @@ from go_lint_support import (
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 AGENT_DIR = REPO_ROOT / "tools" / "agent"
-CHANGE_SURFACES_DOC = REPO_ROOT / "docs" / "agent" / "change-surfaces.md"
-AGENT_INDEX_DOC = REPO_ROOT / "docs" / "agent" / "README.md"
-AGENT_GOVERNANCE_DOC = REPO_ROOT / "docs" / "agent" / "governance.md"
+AGENT_DOCS_DIR = REPO_ROOT / "tools" / "agent" / "docs"
+CHANGE_SURFACES_DOC = AGENT_DOCS_DIR / "change-surfaces.md"
+AGENT_INDEX_DOC = AGENT_DOCS_DIR / "README.md"
+AGENT_GOVERNANCE_DOC = AGENT_DOCS_DIR / "governance.md"
 AGENTS_ENTRY_DOC = REPO_ROOT / "AGENTS.md"
 MAKEFILES = [
     REPO_ROOT / "Makefile",

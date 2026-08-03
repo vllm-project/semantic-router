@@ -101,6 +101,7 @@ export interface InsightsRecord {
   id: string
   timestamp: string
   request_id?: string
+  recipe?: string
   decision?: string
   decision_tier: number
   decision_priority: number
@@ -222,6 +223,7 @@ export interface InsightsAggregateResponse {
   signal_distribution: InsightsAggregateValue[]
   token_volume: InsightsAggregateTokenVolume
   token_breakdown: InsightsAggregateTokenBreakdown
+  available_recipes: string[]
   available_decisions: string[]
   available_models: string[]
 }

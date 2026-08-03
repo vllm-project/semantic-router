@@ -2,33 +2,61 @@
 
 ## Overview
 
-One router configuration can carry multiple named routing profiles. The top-level `routing` block is the `default` recipe; `recipes` adds named additional profiles, and `entrypoints` maps request-facing virtual model names onto them. A client selects a routing profile simply by setting the request `model` field to an entrypoint name.
+One router can expose several isolated routing policies. The top-level
+`routing` block is the `default` recipe, `recipes` adds named recipes, and
+`entrypoints` maps request-facing virtual model names to them. A client selects
+a recipe by setting the normal OpenAI-compatible `model` field.
+
+A recipe is the complete routing isolation boundary. It owns its signal and
+policy definitions, projection graph, decisions, routing strategy, decision
+algorithms, and route-local plugins. A request routed through recipe A never
+evaluates or mutates routing state owned by recipe B.
 
 ## Key Advantages
 
-- One deployment serves several routing policies without duplicating provider, model-catalog, or global system configuration.
-- Clients opt into a profile with nothing but the OpenAI-compatible `model` field; no extra headers or endpoints.
-- The default profile keeps working unchanged: `vllm-sr/auto`, `auto`, and concrete model names behave exactly as before.
+- one deployment can expose multiple policies without duplicating model and
+  provider infrastructure
+- clients select policy through the standard `model` field
+- policy definitions and runtime state cannot leak across recipe boundaries
+- existing single-profile configurations remain the default recipe
 
 ## What Problem Does It Solve?
 
-Before this layer, one router carried exactly one working routing profile. Serving a second policy — a privacy-first profile, a cost-saver profile, a team-specific profile — meant running a second router or overloading one decision graph with unrelated concerns.
-
-`entrypoints` and `recipes` split that cleanly: shared assets stay global, routing profiles become named and selectable per request.
+Without recipes, independent consumers either need separate router deployments
+or one decision graph containing unrelated policy. Recipes separate those
+graphs while keeping expensive infrastructure shared.
 
 ## When to Use
 
-Use entrypoints and recipes when:
+Use recipes when one deployment serves consumers with different policies, for
+example privacy-first, cost-optimized, or team-specific routing. They also let
+you stage a new policy beside the current default and move clients by changing
+only the requested model name.
 
-- different consumers of one router need different routing policies
-- a policy such as privacy handling or cost control should be opt-in per request rather than baked into the default decision graph
-- you want to stage a new routing profile next to the production default and switch clients over gradually
-
-Keep a single `routing` block when one profile serves all traffic — the layer is entirely optional.
+Keep a single top-level `routing` block when one policy serves all traffic.
+Existing single-profile configurations continue to work and are normalized as
+the `default` recipe.
 
 ## Configuration
 
 ```yaml
+routing:
+  strategy: priority
+  signals:
+    keywords:
+      - name: sensitive_input
+        operator: OR
+        keywords: ["internal ticket"]
+  decisions:
+    - name: protected_route
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: sensitive_input
+      modelRefs:
+        - model: qwen3-8b
+
 entrypoints:
   - model_names: ["vllm-sr/privacy"]
     recipe: privacy-first
@@ -37,41 +65,129 @@ recipes:
   - name: privacy-first
     description: Keep privacy-sensitive prompts on the local model.
     routing:
+      strategy: confidence
       signals:
         keywords:
-          - name: privacy_terms
+          # Local names may repeat across recipes. This definition is unrelated
+          # to routing.signals.keywords[sensitive_input] above.
+          - name: sensitive_input
             operator: OR
             keywords: ["ssn", "passport number"]
+        pii:
+          - name: restricted_pii
+            threshold: 0.5
       decisions:
-        - name: privacy_route
+        - name: protected_route
           rules:
-            operator: AND
+            operator: OR
             conditions:
               - type: keyword
-                name: privacy_terms
+                name: sensitive_input
+              - type: pii
+                name: restricted_pii
           modelRefs:
             - model: qwen3-8b
               use_reasoning: false
 ```
 
-### How requests resolve
+The two `sensitive_input` signals and two `protected_route` decisions are valid:
+their fully qualified identities are `(default, sensitive_input)` and
+`(privacy-first, sensitive_input)`, and likewise for the decisions. References
+remain local, so a decision in `privacy-first` cannot reference a signal or
+projection declared only by `default`.
 
-- A request model name that matches an entrypoint behaves like an auto-model alias: the router evaluates the selected recipe's decisions and rewrites the body to the concrete model the recipe chooses. The virtual name never reaches a backend.
-- If no decision in the recipe matches, the request falls back to `providers.defaults.default_model`, the same way `vllm-sr/auto` does.
-- Entrypoint names appear in `/v1/models` next to the auto aliases, using the recipe description as the listing description.
-- Request models that match no entrypoint keep the existing behavior: auto aliases run the default profile, concrete model names pass through.
+## Request resolution
 
-### Sharing rules
+| Requested model | Behavior |
+| --- | --- |
+| An `entrypoints[].model_names` value | Select that entrypoint's recipe, evaluate only that recipe, then rewrite the request to the selected backend model. |
+| `vllm-sr/auto`, `auto`, or another configured auto alias | Select the `default` recipe. |
+| A direct ReMoM, Fusion, or Flow virtual slug | Select the looper in the `default` recipe. |
+| A concrete backend model or LoRA name | Pass through directly. Do not evaluate recipe signals, decisions, route-local plugins, cache, learning, or session routing state. |
 
-- `recipes[].routing` carries `signals`, `projections`, and `decisions` — the same profile shape as the top-level `routing` block — but never `modelCards`. The model catalog and provider bindings stay shared.
-- Signal and projection names share one global registry across recipes. Every recipe may reference every registered signal; declaring the same name in two profiles fails validation.
-- A recipe named `default` is only valid when the top-level `routing` block carries no profile of its own, so existing single-profile configs cannot silently change meaning.
+If no decision in the selected recipe matches, the router uses
+`providers.defaults.default_model`. The virtual entrypoint name never reaches a
+backend.
 
-### Validation
+Entrypoints appear in `/v1/models` with stable routing metadata. Routed
+responses expose `x-vsr-selected-recipe`, and Router Replay/Insights can be
+filtered by recipe.
 
-Config load rejects:
+## Isolation and sharing
 
-- duplicate recipe names, and a `default` recipe conflicting with a non-empty top-level `routing` block
-- entrypoints referencing unknown recipes, entrypoints without model names, and the same model name claimed by two entrypoints
+Recipe-local:
+
+- signal definitions, including PII, jailbreak, and authorization role bindings
+- projection partitions, scores, mappings, and their dependency graph
+- decisions, priorities, `strategy`, decision algorithms, and route-local plugins
+- semantic-cache namespaces, replay identities, learning/session state,
+  handoff penalties, and routing metric labels
+
+Shared infrastructure:
+
+- `routing.modelCards` and `providers` model/backend bindings
+- model files, embedding/classifier runtimes, external services, and stores
+- transport/service configuration such as identity header extraction, replay
+  storage, and observability backends
+- router defaults inherited by a recipe when the recipe does not override a
+  supported field
+
+Shared infrastructure does not make policy global. For example,
+`global.services.authz` configures identity and credential resolution, while
+the authorization policy facts used for routing live in each recipe's
+`routing.signals.role_bindings`. PII and jailbreak model assets may be shared,
+but their rule declarations and thresholds are recipe-local.
+
+## Validation
+
+Configuration loading rejects:
+
+- duplicate recipe names or a `default` recipe conflicting with a non-empty
+  top-level routing profile
+- entrypoints referencing unknown recipes, empty entrypoints, duplicate virtual
+  model claims, or names colliding with concrete models, LoRAs, auto aliases, or
+  looper slugs
 - recipe-owned `modelCards`
-- signal or projection names declared by more than one profile
+- duplicate signal, projection, or decision names within one recipe
+- any decision or projection reference that cannot be resolved inside its own
+  recipe
+
+The same local name in different recipes is intentionally allowed.
+
+## Lifecycle management
+
+Use the recipe endpoints when an operator needs to stage, replace, or retire a
+single policy without rewriting the rest of the canonical document. Reads
+return an `ETag`; every mutation requires the matching value in `If-Match`.
+That optimistic-concurrency contract prevents a stale dashboard tab or
+automation job from overwriting a newer config.
+
+```bash
+# Read the active collection and retain the ETag response header.
+curl -i http://localhost:8080/config/router/recipes
+
+# Validate the exact mutation without writing, backing up, or reloading.
+curl -X POST http://localhost:8080/config/router/recipes/validate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "privacy-first",
+    "routing": {"strategy": "priority", "decisions": []},
+    "entrypoints": ["vllm-sr/privacy"]
+  }'
+
+# Create or replace atomically. Replace <etag> with the current response value.
+curl -X PUT http://localhost:8080/config/router/recipes/privacy-first \
+  -H 'Content-Type: application/json' \
+  -H 'If-Match: <etag>' \
+  -d '{
+    "routing": {"strategy": "priority", "decisions": []},
+    "entrypoints": ["vllm-sr/privacy"]
+  }'
+```
+
+A successful mutation validates the complete document, creates a backup,
+writes atomically, reloads Router and Envoy, and publishes a new `ETag`. A
+missing precondition returns `428`; a stale `ETag` returns `412`. The API
+rejects deletion of `default` and deletion of any named recipe still referenced
+by an entrypoint. Detach the entrypoint in a guarded `PUT`, then issue the
+guarded `DELETE`.

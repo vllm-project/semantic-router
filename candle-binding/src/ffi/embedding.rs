@@ -2424,9 +2424,9 @@ pub extern "C" fn multimodal_encode_text(
 /// Filter: `image::imageops::FilterType::CatmullRom` (cubic B-spline, B=0, C=0.5),
 /// applied via `image::imageops::resize` which is support-window-weighted -
 /// approximates PIL's `Image.BICUBIC` resampling with similar antialias
-/// behavior on downscale. Empirical equivalence against PIL bicubic+antialias=True
-/// is validated end-to-end in `docs/probe-2026-05-25-image-drift-isolation/`
-/// (cosine >= 0.999 vs PyTorch reference across a 20-image corpus).
+/// behavior on downscale. Keep preprocessing equivalence covered by the
+/// multimodal embedding regression tests instead of relying on generated
+/// one-off probe artifacts.
 ///
 /// Known limitations: RGBA inputs have alpha discarded via `to_rgb8` (not
 /// composited against any background; PIL's `convert("RGB")` composites against
@@ -2491,10 +2491,9 @@ fn decode_resize_to_chw_f32(
 /// Preferred entry point for image embedding from raw JPEG/PNG bytes. All
 /// preprocessing happens in Rust via `decode_resize_to_chw_f32`, which
 /// approximates PIL's `Image.BICUBIC` + `antialias=True` behavior used by
-/// `SiglipProcessor`. Validated end-to-end against the PyTorch reference in
-/// `docs/probe-2026-05-25-image-drift-isolation/`: cosine >= 0.999 across a
-/// 20-image corpus; the prior Go-side 4-tap bilinear path averaged cosine
-/// 0.99 on the same fixtures.
+/// `SiglipProcessor`. The multimodal embedding regression suite owns the
+/// cross-runtime equivalence contract; generated experiment reports are not a
+/// source dependency.
 ///
 /// See `decode_resize_to_chw_f32` for the resize-filter discussion, known
 /// limitations (RGBA alpha discard, no EXIF auto-apply), and rationale.

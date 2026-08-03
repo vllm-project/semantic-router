@@ -30,11 +30,13 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
 
     def _mock_statuses(self, statuses_by_name: dict[str, str]):
         def side_effect(command, *, timeout, **_kwargs):
-            if command[1:4] == ["ps", "-a", "--filter"]:
-                name = command[4].split("=", 1)[1]
-                status = statuses_by_name.get(name, "")
-                return _completed_process(stdout=status)
             if command[1] == "inspect":
+                if command[2:4] == ["--format", "{{.State.Status}}"]:
+                    name = command[-1]
+                    status = statuses_by_name.get(name)
+                    if status is None:
+                        return _completed_process(returncode=1)
+                    return _completed_process(stdout=status)
                 return _completed_process(stdout=command[-1])
             raise AssertionError(f"unexpected command: {command}")
 
@@ -44,9 +46,9 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
     def test_container_status_defaults_to_split_runtime(self, run_subprocess):
         run_subprocess.side_effect = self._mock_statuses(
             {
-                self.base.ROUTER_CONTAINER_NAME: "Up 5 seconds",
-                self.base.ENVOY_CONTAINER_NAME: "Up 5 seconds",
-                self.base.DASHBOARD_CONTAINER_NAME: "Up 5 seconds",
+                self.base.ROUTER_CONTAINER_NAME: "running",
+                self.base.ENVOY_CONTAINER_NAME: "running",
+                self.base.DASHBOARD_CONTAINER_NAME: "running",
             }
         )
 
@@ -56,9 +58,7 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
     def test_container_status_reports_split_runtime_exited(self, run_subprocess):
         run_subprocess.side_effect = self._mock_statuses(
             {
-                self.base.ROUTER_CONTAINER_NAME: "Exited (1) 5 seconds ago",
-                self.base.ENVOY_CONTAINER_NAME: "",
-                self.base.DASHBOARD_CONTAINER_NAME: "",
+                self.base.ROUTER_CONTAINER_NAME: "exited",
             }
         )
 
@@ -70,9 +70,9 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
     ):
         run_subprocess.side_effect = self._mock_statuses(
             {
-                self.base.ROUTER_CONTAINER_NAME: "Up 5 seconds",
-                self.base.ENVOY_CONTAINER_NAME: "Up 5 seconds",
-                self.base.DASHBOARD_CONTAINER_NAME: "Up 5 seconds",
+                self.base.ROUTER_CONTAINER_NAME: "running",
+                self.base.ENVOY_CONTAINER_NAME: "running",
+                self.base.DASHBOARD_CONTAINER_NAME: "running",
             }
         )
 
@@ -86,13 +86,7 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
     def test_inspect_defaults_to_router_container_when_runtime_absent(
         self, run_subprocess
     ):
-        run_subprocess.side_effect = self._mock_statuses(
-            {
-                self.base.ROUTER_CONTAINER_NAME: "",
-                self.base.ENVOY_CONTAINER_NAME: "",
-                self.base.DASHBOARD_CONTAINER_NAME: "",
-            }
-        )
+        run_subprocess.side_effect = self._mock_statuses({})
 
         return_code, stdout, stderr = self.base.inspect_container("{{.Name}}")
 

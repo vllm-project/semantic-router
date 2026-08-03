@@ -37,6 +37,26 @@ func TestScopeQueryToUserSeparatesDifferentUsers(t *testing.T) {
 	}
 }
 
+func TestScopeQueryToNamespaceSeparatesRecipesAndUsers(t *testing.T) {
+	query := "explain mitosis versus meiosis"
+	privacyAlice := ScopeQueryToNamespace(query, "recipe=privacy\x1fuser=alice")
+	privacyBob := ScopeQueryToNamespace(query, "recipe=privacy\x1fuser=bob")
+	defaultAlice := ScopeQueryToNamespace(query, "recipe=default\x1fuser=alice")
+
+	if SameCacheScope(privacyAlice, privacyBob) {
+		t.Fatal("different users in one recipe must not share a cache scope")
+	}
+	if SameCacheScope(privacyAlice, defaultAlice) {
+		t.Fatal("the same user in different recipes must not share a cache scope")
+	}
+	if !SameCacheScope(
+		privacyAlice,
+		ScopeQueryToNamespace(query, "recipe=privacy\x1fuser=alice"),
+	) {
+		t.Fatal("the same recipe and user must share a stable cache scope")
+	}
+}
+
 func TestScopeQueryToUserDoesNotExposeRawUserID(t *testing.T) {
 	query := "explain mitosis versus meiosis"
 	scoped := ScopeQueryToUser(query, "user-a")
