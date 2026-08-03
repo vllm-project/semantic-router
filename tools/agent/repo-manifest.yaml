@@ -95,6 +95,8 @@ subsystems:
   - .github/PULL_REQUEST_TEMPLATE.md
   - .github/ISSUE_TEMPLATE/**
   - .prowlabels.yaml
+  - .github/workflows/agent-memory-classifier.yml
+  - .github/workflows/agent-memory-review.yml
   entrypoints:
   - AGENTS.md
   - docs/agent/README.md
@@ -119,6 +121,8 @@ docs:
 - docs/agent/governance.md
 - docs/agent/context-management.md
 - docs/agent/plans/README.md
+- docs/agent/reviews/README.md
+- docs/agent/reviews/2026/2026-05-22-memory-assisted-review-bot.md
 - docs/agent/tech-debt-register.md
 - docs/agent/tech-debt/README.md
 - docs/agent/amd-local.md
@@ -224,6 +228,12 @@ doc_governance:
   - path: docs/agent/plans/README.md
     steward: agent-contract
     freshness: update when canonical execution plans are added, removed, or reorganized
+  - path: docs/agent/reviews/README.md
+    steward: agent-contract
+    freshness: update when review brief format, path, or memory-assisted review rules change
+  - path: docs/agent/reviews/2026/2026-05-22-memory-assisted-review-bot.md
+    steward: agent-contract
+    freshness: update when the memory-assisted review bot rollout changes
   - path: docs/agent/tech-debt-register.md
     steward: agent-contract
     freshness: update when debt workflow or landing-page guidance changes
@@ -328,6 +338,7 @@ skills:
 - tools/agent/skills/maintainer/release-ops/SKILL.md
 - tools/agent/skills/maintainer/routing-calibration/SKILL.md
 - tools/agent/skills/plugin-end-to-end/SKILL.md
+- tools/agent/skills/review-brief-authoring/SKILL.md
 - tools/agent/skills/router-service-platform-change/SKILL.md
 - tools/agent/skills/routing-policy-change/SKILL.md
 - tools/agent/skills/signal-end-to-end/SKILL.md

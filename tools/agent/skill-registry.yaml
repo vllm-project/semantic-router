@@ -273,6 +273,8 @@ surfaces:
     - .github/PULL_REQUEST_TEMPLATE.md
     - .github/ISSUE_TEMPLATE/**
     - .prowlabels.yaml
+    - .github/workflows/agent-memory-classifier.yml
+    - .github/workflows/agent-memory-review.yml
     task_rules:
     - repo-docs
     - agent_text
@@ -321,6 +323,8 @@ surfaces:
     description: CI fanout, workflow-driven integration suites, and standard profile-matrix execution for the merge gate.
     paths:
     - .github/workflows/ci-changes.yml
+    - .github/workflows/agent-memory-classifier.yml
+    - .github/workflows/agent-memory-review.yml
     - .github/workflows/integration-test-k8s.yml
     - .github/workflows/integration-test-memory.yml
     - .github/workflows/integration-test-vllm-sr-cli.yml
@@ -367,6 +371,8 @@ skills:
     - .github/ISSUE_TEMPLATE/**
     - .prowlabels.yaml
     - .github/workflows/ci-changes.yml
+    - .github/workflows/agent-memory-classifier.yml
+    - .github/workflows/agent-memory-review.yml
     - .github/workflows/integration-test-k8s.yml
     - .github/workflows/integration-test-vllm-sr-cli.yml
     - .github/workflows/pre-commit.yml
@@ -773,3 +779,13 @@ skills:
     description: Maintainer workflow for creating, updating, or deleting GitHub issues and PR metadata using repo labels, templates, and validation context.
     acceptance_criteria:
     - Issue or PR management requests use the canonical templates, label taxonomy, and repo validation context instead of ad hoc summaries.
+  - name: review-brief-authoring
+    path: tools/agent/skills/review-brief-authoring/SKILL.md
+    audience: contributor
+    description: Draft or update author-provided review briefs from PR diffs, changed files, PR body, and validation evidence.
+    owned_surfaces:
+    - harness_docs
+    - contributor_interface
+    acceptance_criteria:
+    - Review briefs follow the documented template and path convention.
+    - Unverified claims are marked `Not verified` or `Author stated`.

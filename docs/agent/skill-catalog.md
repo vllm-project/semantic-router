@@ -35,6 +35,7 @@ Maintainer:
 - `maintainer-release-ops`
 - `maintainer-issue-pr-management`
 - `routing-calibration-loop`
+- `review-brief-authoring`
 
 ## Source of Truth
 

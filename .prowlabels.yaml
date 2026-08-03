@@ -14,6 +14,11 @@ priority:
   - P1
   - P2
 
+agent-memory:
+  - agent-memory-present
+  - agent-memory-missing
+  - agent-memory-not-required
+
 lifecycle:
   - needs-triage
   - needs-info

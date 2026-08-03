@@ -7,6 +7,7 @@
 # codespell is installed into .venv-agent by tools/make/agent.mk (agent-venv-install).
 AGENT_VENV ?= $(CURDIR)/.venv-agent
 AGENT_CODESPELL ?= $(AGENT_VENV)/bin/codespell
+AGENT_YAMLLINT ?= $(AGENT_VENV)/bin/yamllint
 
 markdown-lint: ## Lint all markdown files in the project
 	@$(LOG_TARGET)
@@ -36,7 +37,7 @@ markdown-lint-fix: ## Auto-fix markdown lint issues
 
 yaml-lint: ## Lint all YAML files in the project
 	@$(LOG_TARGET)
-	yamllint --config-file=tools/linter/yaml/.yamllint .
+	"$(AGENT_YAMLLINT)" --config-file=tools/linter/yaml/.yamllint .
 
 codespell: CODESPELL_SKIP := $(shell cat tools/linter/codespell/.codespell.skip | tr \\n ',')
 codespell: ## Check for common misspellings in code and docs

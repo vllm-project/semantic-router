@@ -51,6 +51,8 @@ rules:
       - tools/agent/scripts/**
       - tools/make/agent.mk
       - .github/workflows/ci-changes.yml
+      - .github/workflows/agent-memory-classifier.yml
+      - .github/workflows/agent-memory-review.yml
       - .github/workflows/integration-test-k8s.yml
       - .github/workflows/integration-test-memory.yml
       - .github/workflows/integration-test-vllm-sr-cli.yml
