@@ -1,0 +1,110 @@
+# Canonical v0.3 config for the NVIDIA CUDA CPU-vs-GPU signal-extraction bench.
+# Companion to config-bench.yaml; adds the three mmBERT-32K classifier modules
+# (domain / jailbreak / PII) and declares all three signals so every classifier
+# is exercised per request. USE_CPU_PLACEHOLDER is substituted by
+# bench-cuda-long-context.sh (true for the CPU phase, false for the GPU phase).
+version: v0.3
+listeners: []
+providers:
+  defaults:
+    default_model: auto
+  models:
+    - name: auto
+      provider_model_id: auto
+      api_format: openai
+      backend_refs:
+        - name: local_backend
+          endpoint: 127.0.0.1:8091
+          protocol: http
+          type: chat
+          weight: 1
+routing:
+  modelCards:
+    - name: auto
+      description: Benchmark target for signal-extraction latency comparisons.
+      capabilities: [chat]
+      modality: ar
+  signals:
+    domains:
+      - name: other
+        description: General fallback traffic.
+        mmlu_categories: [other]
+      - name: math
+        description: Mathematics questions.
+        mmlu_categories: [math]
+    jailbreak:
+      - name: prompt_injection
+        method: hybrid
+        threshold: 0.8
+        description: Detect prompt-injection / jailbreak attempts.
+        jailbreak_patterns:
+          - ignore previous instructions
+        benign_patterns:
+          - explain the policy
+    pii:
+      - name: restricted_pii
+        threshold: 0.85
+        pii_types_allowed:
+          - EMAIL_ADDRESS
+        description: Sensitive prompts with restricted PII.
+  decisions:
+    - name: default
+      description: Keeps all three signals extracted for every request.
+      priority: 100
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: other
+          - type: domain
+            name: math
+          - type: jailbreak
+            name: prompt_injection
+          - type: pii
+            name: restricted_pii
+      modelRefs:
+        - model: auto
+          use_reasoning: false
+          weight: 100
+global:
+  router:
+    streamed_body:
+      enabled: true
+  stores:
+    semantic_cache:
+      enabled: false
+      embedding_model: mmbert
+    memory:
+      embedding_model: mmbert
+    vector_store:
+      embedding_model: mmbert
+  model_catalog:
+    system:
+      prompt_guard: models/mmbert32k-jailbreak-detector-merged
+      domain_classifier: models/mmbert32k-intent-classifier-merged
+      pii_classifier: models/mmbert32k-pii-detector-merged
+    modules:
+      prompt_guard:
+        enabled: true
+        model_ref: prompt_guard
+        model_id: models/mmbert32k-jailbreak-detector-merged
+        threshold: 0.5
+        use_cpu: USE_CPU_PLACEHOLDER
+        use_mmbert_32k: true
+        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
+      classifier:
+        domain:
+          model_ref: domain_classifier
+          model_id: models/mmbert32k-intent-classifier-merged
+          threshold: 0.5
+          use_cpu: USE_CPU_PLACEHOLDER
+          use_mmbert_32k: true
+          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
+          fallback_category: other
+        pii:
+          model_ref: pii_classifier
+          model_id: models/mmbert32k-pii-detector-merged
+          threshold: 0.5
+          use_cpu: USE_CPU_PLACEHOLDER
+          use_mmbert_32k: true
+          pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
