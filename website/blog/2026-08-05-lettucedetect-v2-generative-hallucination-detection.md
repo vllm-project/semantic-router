@@ -67,7 +67,16 @@ Evaluation is character-overlap span precision/recall/F1, example-level F1 (an a
 
 The code-agent column explains why the benchmark had to exist. Zero-shot judges — including 550B-class models — over-flag correct newly-written code as "unsupported" because it is not literally in the context: with a generic prompt, Nemotron-3-Ultra marks clean patch code as fabricated, and a task-aware prompt only lifts its precision from 0.11 to 0.13. Prior span detectors fare no better there (LettuceDetect-large reaches 0.17). Detecting structured-input hallucinations is a learned skill, not a bigger judge.
 
-Typed detection is harder than binary: the generative detector reaches 0.585 category-gated span-F1 (0.468 subcategory-gated) against its 0.689 binary score, and it beats the encoder-plus-taxonomy-head cascade end to end (0.585 vs 0.461 category-gated). On established natural-language benchmarks the 2B model stays competitive rather than specialized: **81.8 RAGTruth example-F1** (close to RAG-HAT's 83.9) and the best reported English PsiloQA IoU (**0.724**), with multilingual coverage from PsiloQA's 14 languages.
+Typed detection is harder than binary: the generative detector reaches 0.585 category-gated span-F1 (0.468 subcategory-gated) against its 0.689 binary score, and it beats the encoder-plus-taxonomy-head cascade end to end (0.585 vs 0.461 category-gated).
+
+Specializing on structured inputs did not cost the model its natural-language performance. On the established benchmarks:
+
+| Benchmark | Metric | LettuceDetect-Qwen-2B | Reference |
+|-----------|--------|-----------------------|-----------|
+| PsiloQA (English) | span IoU | **0.724** | best reported result |
+| RAGTruth | example-F1 | **81.8** | RAG-HAT: 83.9 |
+
+with multilingual coverage from PsiloQA's 14 languages carried through training.
 
 ## The integration: a detector that is just another vLLM model
 
