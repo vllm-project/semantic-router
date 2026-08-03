@@ -43,17 +43,18 @@ type DeploymentSummary struct {
 
 // DeploymentRecord is the full persisted deployment projection.
 type DeploymentRecord struct {
-	Version     string            `json:"version"`
-	Source      string            `json:"source"`
-	CreatedAt   time.Time         `json:"created_at"`
-	DSLSnapshot string            `json:"dsl_snapshot,omitempty"`
-	YAMLHash    string            `json:"yaml_hash"`
-	Validation  ValidationSummary `json:"validation"`
-	Models      json.RawMessage   `json:"models"`
-	Signals     json.RawMessage   `json:"signals"`
-	Decisions   json.RawMessage   `json:"decisions"`
-	Plugins     json.RawMessage   `json:"plugins"`
-	Projections json.RawMessage   `json:"projections"`
+	Version      string            `json:"version"`
+	Source       string            `json:"source"`
+	CreatedAt    time.Time         `json:"created_at"`
+	DSLSnapshot  string            `json:"dsl_snapshot,omitempty"`
+	YAMLSnapshot string            `json:"yaml_snapshot,omitempty"`
+	YAMLHash     string            `json:"yaml_hash"`
+	Validation   ValidationSummary `json:"validation"`
+	Models       json.RawMessage   `json:"models"`
+	Signals      json.RawMessage   `json:"signals"`
+	Decisions    json.RawMessage   `json:"decisions"`
+	Plugins      json.RawMessage   `json:"plugins"`
+	Projections  json.RawMessage   `json:"projections"`
 }
 
 // ActiveProjectionStatus exposes drift metadata for the active projection.

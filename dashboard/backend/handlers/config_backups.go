@@ -1,10 +1,8 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -87,16 +85,6 @@ func snapshotCurrentConfigBeforeRollback(configPath string, configDir string) []
 	}
 
 	return existingData
-}
-
-func versionsLocalList(w http.ResponseWriter, configPath string) {
-	versions, err := listConfigVersions(configPath)
-	if err != nil {
-		versions = []ConfigVersion{}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(versions)
 }
 
 func listConfigVersions(configPath string) ([]ConfigVersion, error) {

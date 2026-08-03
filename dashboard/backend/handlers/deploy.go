@@ -194,7 +194,15 @@ func ConfigVersionsHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		versionsLocalList(w, configPath)
+		versions, source, err := listConfigVersionsPreferProjection(configPath)
+		if err != nil {
+			versions = []ConfigVersion{}
+		}
+		if source == "projection" {
+			w.Header().Set("X-Config-Versions-Source", "projection")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(versions)
 	}
 }
 
@@ -275,7 +283,7 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 	cleanupBackups(configBackupDir(configDir))
 
 	refreshConfigProjection(configprojection.RefreshInput{
-		Version:     newActivationVersion(),
+		Version:     version,
 		Source:      configprojection.SourceDSL,
 		YAMLBytes:   yamlBytes,
 		DSLSnapshot: req.DSL,
@@ -437,8 +445,8 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 	}
 	defer deployMu.Unlock()
 
-	// Find backup file
-	backupData, err := readConfigBackup(configDir, version)
+	// Find rollback YAML from local backup or persisted projection snapshot.
+	backupData, err := readRollbackYAML(configDir, version)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)

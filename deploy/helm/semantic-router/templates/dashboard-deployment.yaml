@@ -79,6 +79,8 @@ spec:
           value: "{{ .Values.dashboard.persistence.mountPath }}/auth.db"
         - name: DASHBOARD_WORKFLOW_DB_PATH
           value: "{{ .Values.dashboard.persistence.mountPath }}/workflow.sqlite"
+        - name: DASHBOARD_CONFIG_PROJECTION_DB_PATH
+          value: "{{ .Values.dashboard.persistence.mountPath }}/config-projection.sqlite"
         {{- end }}
         {{- if .Values.dependencies.observability.prometheus.enabled }}
         - name: TARGET_PROMETHEUS_URL
