@@ -553,6 +553,19 @@ impl HighPerformanceBertClassifier {
 
     /// Single text classification (following old architecture pattern exactly)
     pub fn classify_text(&self, text: &str) -> Result<(usize, f32)> {
+        let (predicted_class, confidence, _) = self.classify_text_internal(text)?;
+        Ok((predicted_class, confidence))
+    }
+
+    /// Classify text and return the top-1 prediction together with the full
+    /// softmax probability distribution across all classes. This lets callers
+    /// read the probability of a specific class directly instead of only the
+    /// confidence of whichever class wins argmax.
+    pub fn classify_text_with_probabilities(&self, text: &str) -> Result<(usize, f32, Vec<f32>)> {
+        self.classify_text_internal(text)
+    }
+
+    fn classify_text_internal(&self, text: &str) -> Result<(usize, f32, Vec<f32>)> {
         // Tokenize following old architecture pattern
         let encoding = self.tokenizer.encode(text, true).map_err(E::msg)?;
         let token_ids = encoding.get_ids();
@@ -592,7 +605,7 @@ impl HighPerformanceBertClassifier {
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
             .unwrap();
 
-        Ok((predicted_class, confidence))
+        Ok((predicted_class, confidence, probabilities_vec))
     }
 
     /// Batch classification (following old architecture pattern exactly)
