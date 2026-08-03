@@ -17,9 +17,12 @@ providers:
     - name: "replace-with-your-model"
       backend_refs:
         - name: "primary"
-          endpoint: "host.docker.internal:8000"
+          runtime: "vllm"
           protocol: "http"
-          weight: 100
+          endpoints:
+            - name: "primary-a"
+              endpoint: "host.docker.internal:8000"
+              weight: 100
 
 routing:
   modelCards:

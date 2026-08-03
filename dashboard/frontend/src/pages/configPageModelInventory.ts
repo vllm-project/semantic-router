@@ -23,7 +23,7 @@ function searchableModelValues(model: NormalizedModel): string[] {
     ...(model.tags ?? []),
     ...(model.capabilities ?? []),
     ...(model.endpoints ?? []).flatMap((endpoint) => [endpoint.name, endpoint.protocol]),
-    ...(model.backend_refs ?? []).flatMap((backend) => [backend.name, backend.provider, backend.type]),
+    ...(model.backend_refs ?? []).flatMap((backend) => [backend.name, backend.runtime, backend.provider, backend.type, backend.discovery?.type]),
   ].filter((value): value is string => typeof value === 'string' && value.length > 0)
 }
 
@@ -195,11 +195,69 @@ export function validateModelStructuredFields(data: Record<string, unknown>): vo
       const backend = value as Record<string, unknown>
       const endpoint = typeof backend.endpoint === 'string' ? backend.endpoint.trim() : ''
       const baseUrl = typeof backend.base_url === 'string' ? backend.base_url.trim() : ''
-      if (!endpoint && !baseUrl) {
-        throw new Error(`Provider backend ${index + 1} requires an endpoint or base URL.`)
+      const staticEndpoints = Array.isArray(backend.endpoints) ? backend.endpoints : []
+      const discovery = backend.discovery && typeof backend.discovery === 'object' && !Array.isArray(backend.discovery)
+        ? backend.discovery as Record<string, unknown>
+        : undefined
+      if (endpoint && (staticEndpoints.length > 0 || discovery)) {
+        throw new Error(`Provider backend ${index + 1} cannot mix legacy endpoint with endpoints or discovery.`)
+      }
+      if (staticEndpoints.length > 0 && discovery) {
+        throw new Error(`Provider backend ${index + 1} cannot define both endpoints and discovery.`)
+      }
+      if ((staticEndpoints.length > 0 || discovery) && (typeof backend.runtime !== 'string' || !backend.runtime.trim())) {
+        throw new Error(`Provider backend ${index + 1} requires runtime when endpoints or discovery are configured.`)
+      }
+      if (!endpoint && !baseUrl && staticEndpoints.length === 0 && !discovery) {
+        throw new Error(`Provider backend ${index + 1} requires an endpoint, endpoints, discovery, or base URL.`)
       }
       if (backend.protocol !== undefined && backend.protocol !== 'http' && backend.protocol !== 'https') {
         throw new Error(`Provider backend ${index + 1} protocol must be HTTP or HTTPS.`)
+      }
+      staticEndpoints.forEach((member, memberIndex) => {
+        if (!member || typeof member !== 'object' || Array.isArray(member)) {
+          throw new Error(`Provider backend ${index + 1} endpoint ${memberIndex + 1} must be a structured object.`)
+        }
+        const staticEndpoint = member as Record<string, unknown>
+        if (typeof staticEndpoint.endpoint !== 'string' || !staticEndpoint.endpoint.trim()) {
+          throw new Error(`Provider backend ${index + 1} endpoint ${memberIndex + 1} requires an endpoint.`)
+        }
+        if (staticEndpoint.protocol !== undefined && staticEndpoint.protocol !== 'http' && staticEndpoint.protocol !== 'https') {
+          throw new Error(`Provider backend ${index + 1} endpoint ${memberIndex + 1} protocol must be HTTP or HTTPS.`)
+        }
+        if (staticEndpoint.weight !== undefined && (
+          typeof staticEndpoint.weight !== 'number'
+          || !Number.isFinite(staticEndpoint.weight)
+          || staticEndpoint.weight < 0
+        )) {
+          throw new Error(`Provider backend ${index + 1} endpoint ${memberIndex + 1} weight must be zero or greater.`)
+        }
+        if (staticEndpoint.labels !== undefined && (
+          !staticEndpoint.labels
+          || typeof staticEndpoint.labels !== 'object'
+          || Array.isArray(staticEndpoint.labels)
+          || Object.values(staticEndpoint.labels).some((labelValue) => typeof labelValue !== 'string')
+        )) {
+          throw new Error(`Provider backend ${index + 1} endpoint ${memberIndex + 1} labels must contain text key/value pairs.`)
+        }
+      })
+      if (discovery) {
+        if (typeof discovery.type !== 'string' || !discovery.type.trim()) {
+          throw new Error(`Provider backend ${index + 1} discovery requires a type.`)
+        }
+        if (discovery.type === 'kubernetes') {
+          const kubernetes = discovery.kubernetes && typeof discovery.kubernetes === 'object' && !Array.isArray(discovery.kubernetes)
+            ? discovery.kubernetes as Record<string, unknown>
+            : undefined
+          if (!kubernetes) {
+            throw new Error(`Provider backend ${index + 1} Kubernetes discovery requires kubernetes settings.`)
+          }
+          for (const field of ['service', 'namespace', 'endpoint_port']) {
+            if (typeof kubernetes[field] !== 'string' || !(kubernetes[field] as string).trim()) {
+              throw new Error(`Provider backend ${index + 1} Kubernetes discovery requires ${field}.`)
+            }
+          }
+        }
       }
       if (backend.weight !== undefined && (
         typeof backend.weight !== 'number'

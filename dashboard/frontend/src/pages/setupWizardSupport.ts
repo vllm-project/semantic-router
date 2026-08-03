@@ -53,7 +53,14 @@ interface BuiltModel {
   backend_refs: Array<{
     name: string;
     weight: number;
+    runtime?: string;
     endpoint?: string;
+    endpoints?: Array<{
+      name?: string;
+      endpoint: string;
+      protocol?: "http" | "https";
+      weight?: number;
+    }>;
     protocol: "http" | "https";
     base_url?: string;
     provider?: "openai" | "anthropic";
@@ -561,9 +568,16 @@ export function buildSetupConfig(
       model.providerKind === "vllm"
         ? {
             name: endpointName,
+            runtime: "vllm",
             weight: 100,
-            endpoint,
             protocol,
+            endpoints: [
+              {
+                name: "primary-a",
+                endpoint,
+                weight: 100,
+              },
+            ],
             api_key: apiKey,
           }
         : {

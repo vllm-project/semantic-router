@@ -78,7 +78,7 @@ Model semantics and deployment bindings are now separated explicitly:
 - `routing.modelCards[].loras` carries the canonical LoRA adapter catalog for each logical model
 - `providers.defaults` carries provider-wide defaults such as `default_model`, `reasoning_families`, and `default_reasoning_effort`
 - `providers.models` carries per-model access bindings directly
-- each `providers.models[].backend_refs[]` item carries its own transport and auth fields such as `endpoint`, `base_url`, `protocol`, `auth_header`, `auth_prefix`, `api_key`, and `api_key_env`
+- each `providers.models[].backend_refs[]` item names one runtime backend pool. It carries `runtime` plus one endpoint source: legacy singleton `endpoint`, static `endpoints[]`, typed dynamic `discovery`, or hosted-provider metadata such as `base_url`; transport and auth fields such as `protocol`, `auth_header`, `auth_prefix`, `api_key`, and `api_key_env` stay on the backend ref
 - `providers.models[].pricing` can price prompt, cached-input, cache-write, and completion tokens independently; an omitted cache-write rate inherits the prompt rate
 - `routing.decisions[].modelRefs[].lora_name` resolves against the matching `routing.modelCards[].loras` entry, so `lora_name` is now part of the supported routing contract instead of a runtime-only escape hatch
 - `routing.decisions[].candidateIterations` is bounded to `decision.candidates` or explicit model lists and remains declarative metadata for the selection layer, not a second policy interpreter

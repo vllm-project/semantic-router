@@ -10,8 +10,11 @@ export interface ListenerConfig {
 
 export interface VLLMEndpoint {
   name: string
+  backend_ref?: string
+  runtime?: string
   address: string
   port: number
+  metrics_endpoint?: string
   weight: number
   health_check_path: string
   protocol?: 'http' | 'https'
@@ -118,6 +121,7 @@ export interface ModelConfigEntry {
   model_id?: string
   reasoning_family?: string
   preferred_endpoints?: string[]
+  backend_refs?: BackendRefEntry[]
   access_key?: string
   pricing?: ModelPricing
   api_format?: string
@@ -132,9 +136,31 @@ export interface ModelConfigEntry {
   modality?: string
 }
 
-export interface BackendRefEntry {
+export interface BackendEndpointEntry {
   name?: string
   endpoint?: string
+  metrics_endpoint?: string
+  protocol?: 'http' | 'https'
+  weight?: number
+  labels?: Record<string, string>
+}
+
+export interface BackendDiscoveryEntry {
+  type?: string
+  kubernetes?: {
+    service?: string
+    namespace?: string
+    endpoint_port?: string
+    metrics_port?: string
+  }
+}
+
+export interface BackendRefEntry {
+  name?: string
+  runtime?: string
+  endpoint?: string
+  endpoints?: BackendEndpointEntry[]
+  discovery?: BackendDiscoveryEntry
   protocol?: 'http' | 'https'
   weight?: number
   type?: string
@@ -1283,12 +1309,31 @@ export const normalizeProviderModelEndpoints = (
   }
 ): Endpoint[] => {
   if (Array.isArray(model.backend_refs) && model.backend_refs.length > 0) {
-    return model.backend_refs.map((backend, index) => {
+    return model.backend_refs.flatMap((backend, index) => {
+      if (Array.isArray(backend.endpoints) && backend.endpoints.length > 0) {
+        return backend.endpoints.map((member, memberIndex) => normalizeEndpoint({
+          name: member.name || backend.name,
+          endpoint: member.endpoint || '',
+          protocol: member.protocol || backend.protocol,
+          weight: member.weight ?? backend.weight,
+        }, memberIndex))
+      }
+      if (backend.discovery?.type) {
+        return [normalizeEndpoint({
+          name: backend.name,
+          endpoint: `${backend.discovery.type} discovery`,
+          protocol: backend.protocol,
+          weight: backend.weight,
+        }, index)]
+      }
       const baseURL = typeof backend.base_url === 'string' ? backend.base_url.trim() : ''
       const endpoint =
         typeof backend.endpoint === 'string' && backend.endpoint.trim()
           ? backend.endpoint.trim()
           : baseURL
+      if (!endpoint) {
+        return []
+      }
       const protocol =
         backend.protocol ||
         (baseURL.startsWith('https://') ? 'https' : 'http')

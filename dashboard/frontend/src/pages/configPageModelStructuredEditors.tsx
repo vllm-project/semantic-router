@@ -15,6 +15,7 @@ interface StructuredModelFieldProps {
 
 const backendRefFields: ObjectEditorField<BackendRefEntry>[] = [
   { key: 'name', label: 'Reference name', placeholder: 'local-primary' },
+  { key: 'runtime', label: 'Runtime', placeholder: 'vllm' },
   { key: 'type', label: 'Backend type', placeholder: 'chat' },
   { key: 'endpoint', label: 'Endpoint', placeholder: '127.0.0.1:8000', fullWidth: true },
   {
@@ -103,17 +104,45 @@ function backendRefLabel(item: BackendRefEntry, index: number): string {
 }
 
 function backendRefDescription(item: BackendRefEntry): string | undefined {
+  if (Array.isArray(item.endpoints) && item.endpoints.length > 0) {
+    return `${item.endpoints.length} static endpoint${item.endpoints.length === 1 ? '' : 's'}`
+  }
+  if (item.discovery?.type) {
+    return `${item.discovery.type} discovery`
+  }
   return item.endpoint?.trim() || item.base_url?.trim() || 'Target required'
 }
 
 function validateBackendRef(item: BackendRefEntry): string[] {
   const errors: string[] = []
-  if (!item.endpoint?.trim() && !item.base_url?.trim()) {
-    errors.push('Provide an endpoint or base URL.')
+  const hasStaticEndpoints = Array.isArray(item.endpoints) && item.endpoints.length > 0
+  const hasDiscovery = Boolean(item.discovery?.type)
+  if (hasStaticEndpoints && hasDiscovery) {
+    errors.push('Use static endpoints or discovery, not both.')
+  }
+  if (item.endpoint?.trim() && (hasStaticEndpoints || hasDiscovery)) {
+    errors.push('Do not mix the legacy endpoint field with endpoints or discovery.')
+  }
+  if ((hasStaticEndpoints || hasDiscovery) && !item.runtime?.trim()) {
+    errors.push('Runtime is required for endpoints or discovery.')
+  }
+  if (!item.endpoint?.trim() && !item.base_url?.trim() && !hasStaticEndpoints && !hasDiscovery) {
+    errors.push('Provide an endpoint, static endpoints, discovery, or base URL.')
   }
   if (item.protocol && item.protocol !== 'http' && item.protocol !== 'https') {
     errors.push('Protocol must be HTTP or HTTPS.')
   }
+  item.endpoints?.forEach((endpoint, index) => {
+    if (!endpoint.endpoint?.trim()) {
+      errors.push(`Static endpoint ${index + 1} requires an endpoint.`)
+    }
+    if (endpoint.protocol && endpoint.protocol !== 'http' && endpoint.protocol !== 'https') {
+      errors.push(`Static endpoint ${index + 1} protocol must be HTTP or HTTPS.`)
+    }
+    if (endpoint.weight !== undefined && (!Number.isFinite(endpoint.weight) || endpoint.weight < 0)) {
+      errors.push(`Static endpoint ${index + 1} weight must be zero or greater.`)
+    }
+  })
   if (item.weight !== undefined && (!Number.isFinite(item.weight) || item.weight < 0)) {
     errors.push('Traffic weight must be zero or greater.')
   }

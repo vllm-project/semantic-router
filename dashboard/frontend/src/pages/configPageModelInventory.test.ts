@@ -109,9 +109,11 @@ describe('model inventory filtering', () => {
     expect(() => validateNewModelName('  local/model-001  ', models)).toThrow(/already exists/i)
     expect(validateNewModelName('  local/new-model  ', models)).toBe('local/new-model')
     expect(() => validateModelStructuredFields({ backend_refs: '{broken json' })).toThrow(/json array/i)
-    expect(() => validateModelStructuredFields({ backend_refs: [{}] })).toThrow(/endpoint or base url/i)
+    expect(() => validateModelStructuredFields({ backend_refs: [{}] })).toThrow(/endpoint, endpoints, discovery, or base url/i)
     expect(() => validateModelStructuredFields({ backend_refs: [{ endpoint: 'localhost:8000', protocol: 'grpc' }] })).toThrow(/http or https/i)
     expect(() => validateModelStructuredFields({ backend_refs: [{ endpoint: 'localhost:8000', extra_headers: { valid: 1 } }] })).toThrow(/text key\/value pairs/i)
+    expect(() => validateModelStructuredFields({ backend_refs: [{ runtime: 'vllm', endpoint: 'localhost:8000', endpoints: [{ endpoint: 'localhost:8001' }] }] })).toThrow(/cannot mix legacy endpoint/i)
+    expect(() => validateModelStructuredFields({ backend_refs: [{ endpoints: [{ endpoint: 'localhost:8001' }] }] })).toThrow(/requires runtime/i)
     expect(() => validateModelStructuredFields({ tags: 'premium,fast' })).toThrow(/list of text values/i)
     expect(() => validateModelStructuredFields({ capabilities: 'tools,vision' })).toThrow(/list of text values/i)
     expect(() => validateModelStructuredFields({ loras: [{ description: 'missing name' }] })).toThrow(/requires a name/i)
@@ -125,6 +127,23 @@ describe('model inventory filtering', () => {
       external_model_ids: { openai: 'gpt-4.1' },
       tags: ['premium', 'fast'],
       pricing: { currency: 'USD', prompt_per_1m: 0.5 },
+    })).not.toThrow()
+    expect(() => validateModelStructuredFields({
+      backend_refs: [{
+        name: 'local-vllm',
+        runtime: 'vllm',
+        endpoints: [{ name: 'primary-a', endpoint: 'localhost:8000', weight: 80 }],
+      }],
+    })).not.toThrow()
+    expect(() => validateModelStructuredFields({
+      backend_refs: [{
+        name: 'k8s-vllm',
+        runtime: 'vllm',
+        discovery: {
+          type: 'kubernetes',
+          kubernetes: { service: 'qwen3-vllm', namespace: 'inference', endpoint_port: 'http' },
+        },
+      }],
     })).not.toThrow()
   })
 })
