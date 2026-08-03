@@ -32,20 +32,15 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	nonUserMessages []string,
 	ctx *RequestContext,
 	candidates []config.Decision,
-) (*classification.SignalResults, error) {
+) (*classification.SignalResults, []config.Decision, error) {
 	signalStart := time.Now()
 	signalCtx, signalSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanSignalEvaluation)
 
-	// Authz enforcement is scoped to the decisions this request can actually
-	// select; the signal registry stays global for evaluation. Without the
-	// scope, one recipe with an authz condition would reject every request
-	// from profiles that never asked for identity enforcement.
 	authzScope := candidates
 	if authzScope == nil {
 		authzScope = r.Config.Decisions
 	}
-
-	signals, authzErr := r.Classifier.EvaluateAllSignalsWithHeaders(
+	signals, scopedCandidates, authzErr := r.Classifier.EvaluateAllSignalsWithHeadersForDecisions(
 		signalInput.compressedText,
 		signalInput.allMessagesText,
 		signalInput.currentUserText,
@@ -55,10 +50,10 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 		ctx.Headers,
 		false,
 		ctx.RequestImageURL,
+		authzScope,
 		signalInput.evaluationText,
 		signalInput.skipCompressionSignals,
 		signalInput.conversationFacts,
-		authzScope,
 	)
 	if authzErr != nil {
 		signalSpan.End()
@@ -67,7 +62,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 			"stage":      "authz",
 			"error":      authzErr.Error(),
 		})
-		return nil, authzErr
+		return nil, nil, authzErr
 	}
 
 	signalLatency := time.Since(signalStart).Milliseconds()
@@ -76,7 +71,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	logSignalEvaluationResults(ctx, signalLatency, signals)
 	tracing.EndSignalSpan(signalSpan, collectMatchedSignalRules(signals), 1.0, signalLatency)
 	ctx.TraceContext = signalCtx
-	return signals, nil
+	return signals, scopedCandidates, nil
 }
 
 func ensureContextTokenCount(ctx *RequestContext, signalInput signalEvaluationInput) {
