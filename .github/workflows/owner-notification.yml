@@ -191,20 +191,11 @@ jobs:
 
             commentBody += '---\n';
             commentBody += '<div align="center">\n';
-            // Theme-aware logo: repo.png carries a black wordmark that is
-            // unreadable on GitHub dark themes, so serve the white-wordmark
-            // variant to dark-mode viewers via <picture> (issue #2610).
-            const imgBase =
-              'https://raw.githubusercontent.com/' +
-              'vllm-project/semantic-router/main/website/static/img/';
-            commentBody += '<picture>\n';
             commentBody +=
-              '<source media="(prefers-color-scheme: dark)" ' +
-              'srcset="' + imgBase + 'vllm-sr-logo.white.png">\n';
-            commentBody +=
-              '<img src="' + imgBase + 'repo.png" ' +
-              'alt="vLLM Semantic Router" width="80%"/>\n';
-            commentBody += '</picture>\n';
+              '<img src="https://raw.githubusercontent.com/' +
+              'vllm-project/semantic-router/main/website/static/' +
+              'img/repo.png" ' +
+              'alt="vLLM" width="80%"/>';
             commentBody += '</div>\n\n';
             commentBody += '## 🎉 Thanks for your contributions!\n\n';
             commentBody +=

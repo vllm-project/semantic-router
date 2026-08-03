@@ -17,6 +17,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   HELM_VERSION: v3.14.0
 
@@ -27,12 +31,8 @@ jobs:
 
   test-and-build:
     needs: changes
-    # Skip WIP draft PRs, but always run for Mergify's merge-queue draft PRs
-    # (head ref mergify/merge-queue/*) so the .mergify.yml merge gate that
-    # requires test-and-build actually executes CI before the queue merges.
     if: >-
-      ${{ (!github.event.pull_request.draft
-          || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      ${{ !github.event.pull_request.draft
           && (github.event_name == 'schedule'
           || needs.changes.outputs.core == 'true'
           || needs.changes.outputs.helm == 'true'
