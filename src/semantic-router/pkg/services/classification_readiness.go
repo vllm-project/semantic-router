@@ -9,16 +9,12 @@ func (s *ClassificationService) HasFactCheckClassifier() bool {
 
 // HasHallucinationDetector returns true when the hallucination detector has been initialized.
 func (s *ClassificationService) HasHallucinationDetector() bool {
-	return s.classifier != nil &&
-		s.classifier.GetHallucinationDetector() != nil &&
-		s.classifier.GetHallucinationDetector().IsInitialized()
+	return s.classifier != nil && s.classifier.IsHallucinationDetectorReady()
 }
 
 // HasHallucinationExplainer returns true when the hallucination NLI explainer is initialized.
 func (s *ClassificationService) HasHallucinationExplainer() bool {
-	return s.classifier != nil &&
-		s.classifier.GetHallucinationDetector() != nil &&
-		s.classifier.GetHallucinationDetector().IsNLIInitialized()
+	return s.classifier != nil && s.classifier.IsHallucinationExplainerReady()
 }
 
 // HasFeedbackDetector returns true when the feedback detector has been initialized.
