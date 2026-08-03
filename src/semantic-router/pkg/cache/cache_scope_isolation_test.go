@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -75,8 +76,10 @@ func assertSearchEnforcesUserScope(t *testing.T, useHNSW bool) {
 	emb := []float32{1, 0, 0}
 	aliceResponse := []byte(`{"choices":[{"message":{"content":"alice-only"}}]}`)
 
-	aliceScope := CacheScopeNamespaceOf(ScopeQueryToUser(base, "alice"))
-	bobScope := CacheScopeNamespaceOf(ScopeQueryToUser(base, "bob"))
+	aliceQ := ScopeQueryToUser(base, "alice")
+	bobQ := ScopeQueryToUser(base, "bob")
+	aliceScope := CacheScopeNamespaceOf(aliceQ)
+	bobScope := CacheScopeNamespaceOf(bobQ)
 
 	c := NewInMemoryCache(InMemoryCacheOptions{
 		Enabled:             true,
@@ -103,25 +106,116 @@ func assertSearchEnforcesUserScope(t *testing.T, useHNSW bool) {
 	}
 
 	// Bob (different scope), IDENTICAL embedding → must NOT match Alice.
-	if idx, _, _, _, _ := c.runFindSimilarEmbeddingSearch(emb, model, bobScope); idx != -1 {
-		t.Fatalf("cross-tenant leak: bob matched alice's entry (idx=%d)", idx)
+	if search := c.runFindSimilarEmbeddingSearch(emb, model, bobQ, 0.8, bobScope); search.bestIndex != -1 {
+		t.Fatalf("cross-tenant leak: bob matched alice's entry (idx=%d)", search.bestIndex)
 	}
 
 	// Alice (same scope), same embedding → must match and return her response.
-	idx, entry, _, _, _ := c.runFindSimilarEmbeddingSearch(emb, model, aliceScope)
-	if idx != 0 {
-		t.Fatalf("same-user lookup must hit, got idx=%d", idx)
+	search := c.runFindSimilarEmbeddingSearch(emb, model, aliceQ, 0.8, aliceScope)
+	if search.bestIndex != 0 {
+		t.Fatalf("same-user lookup must hit, got idx=%d", search.bestIndex)
 	}
-	if string(entry.ResponseBody) != string(aliceResponse) {
-		t.Fatalf("same-user hit returned the wrong response body: %s", entry.ResponseBody)
+	if string(search.bestEntry.ResponseBody) != string(aliceResponse) {
+		t.Fatalf("same-user hit returned the wrong response body: %s", search.bestEntry.ResponseBody)
 	}
 
 	// Anonymous (unscoped) lookup → must NOT match a scoped entry.
-	if idx, _, _, _, _ := c.runFindSimilarEmbeddingSearch(emb, model, ""); idx != -1 {
-		t.Fatalf("unscoped lookup must not match a scoped entry, idx=%d", idx)
+	if search := c.runFindSimilarEmbeddingSearch(emb, model, base, 0.8, ""); search.bestIndex != -1 {
+		t.Fatalf("unscoped lookup must not match a scoped entry, idx=%d", search.bestIndex)
 	}
 
-	if idx, _, _, _, _ := c.runFindSimilarEmbeddingSearch(emb, "model-b", aliceScope); idx != -1 {
-		t.Fatalf("a different model partition must not match, idx=%d", idx)
+	// A different model partition must not match even in the same scope.
+	if search := c.runFindSimilarEmbeddingSearch(emb, "model-b", aliceQ, 0.8, aliceScope); search.bestIndex != -1 {
+		t.Fatalf("a different model partition must not match, idx=%d", search.bestIndex)
+	}
+}
+
+func TestSearchSkipsPolarityMismatchForLowerValidCandidate(t *testing.T) {
+	const threshold = float32(0.8)
+	incoming := "How do I turn off dark mode?"
+	queryEmbedding := []float32{1, 0}
+
+	for _, useHNSW := range []bool{false, true} {
+		path := "linear"
+		if useHNSW {
+			path = "hnsw"
+		}
+		t.Run(path, func(t *testing.T) {
+			c := NewInMemoryCache(InMemoryCacheOptions{
+				Enabled:             true,
+				SimilarityThreshold: threshold,
+				MaxEntries:          16,
+				TTLSeconds:          0,
+				UseHNSW:             useHNSW,
+				EmbeddingModel:      "mmbert",
+			})
+			defer c.Close()
+
+			c.entries = append(c.entries,
+				CacheEntry{
+					RequestID:    "wrong-high-score",
+					Query:        "How do I turn on dark mode?",
+					ResponseBody: []byte("ON-ANSWER"),
+					Embedding:    []float32{0.95, 0},
+				},
+				CacheEntry{
+					RequestID:    "valid-lower-score",
+					Query:        "How to turn off dark mode?",
+					ResponseBody: []byte("OFF-ANSWER"),
+					Embedding:    []float32{0.9, 0},
+				},
+			)
+			if useHNSW {
+				c.hnswNeedsRebuild = true
+			}
+
+			search := c.runFindSimilarEmbeddingSearch(queryEmbedding, "", incoming, threshold, "")
+			if search.bestIndex != 1 {
+				t.Fatalf("expected valid lower-ranked candidate, got index %d", search.bestIndex)
+			}
+			if string(search.bestEntry.ResponseBody) != "OFF-ANSWER" {
+				t.Fatalf("returned wrong cached response: %q", search.bestEntry.ResponseBody)
+			}
+			if !search.polarityRejected {
+				t.Fatal("expected higher-ranked polarity mismatch to be recorded")
+			}
+		})
+	}
+}
+
+func TestHNSWSearchFallsBackAfterPolarityRejections(t *testing.T) {
+	const threshold = float32(0.8)
+	incoming := "How do I turn off dark mode?"
+	queryEmbedding := []float32{1, 0}
+	c := NewInMemoryCache(InMemoryCacheOptions{
+		Enabled:             true,
+		SimilarityThreshold: threshold,
+		MaxEntries:          16,
+		TTLSeconds:          0,
+		UseHNSW:             true,
+		HNSWEfSearch:        10,
+		EmbeddingModel:      "mmbert",
+	})
+	defer c.Close()
+
+	for i := 0; i < 10; i++ {
+		c.entries = append(c.entries, CacheEntry{
+			RequestID:    fmt.Sprintf("wrong-%d", i),
+			Query:        "How do I turn on dark mode?",
+			ResponseBody: []byte("ON-ANSWER"),
+			Embedding:    []float32{0.99 - float32(i)*0.01, 0},
+		})
+	}
+	c.entries = append(c.entries, CacheEntry{
+		RequestID:    "valid-outside-hnsw-top-ten",
+		Query:        "How to turn off dark mode?",
+		ResponseBody: []byte("OFF-ANSWER"),
+		Embedding:    []float32{0.85, 0},
+	})
+	c.hnswNeedsRebuild = true
+
+	search := c.runFindSimilarEmbeddingSearch(queryEmbedding, "", incoming, threshold, "")
+	if search.bestIndex != 10 {
+		t.Fatalf("expected linear fallback to find valid candidate, got index %d", search.bestIndex)
 	}
 }
