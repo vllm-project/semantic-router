@@ -257,6 +257,7 @@ const sidebars: SidebarsConfig = {
         'proposals/hallucination-mitigation-milestone',
         'proposals/prompt-classification-routing',
         'proposals/nvidia-dynamo-integration',
+        'proposals/tensorrt-llm-backend-adapter',
         'proposals/production-stack-integration',
         'proposals/multi-protocol-adaptor',
         'proposals/agentic-rag',

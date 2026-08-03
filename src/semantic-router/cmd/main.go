@@ -40,6 +40,7 @@ func main() {
 	shutdownHooks := make([]func(), 0)
 	registerSignalHandler(&shutdownHooks)
 	startMetricsServerIfEnabled(cfg, opts.metricsPort)
+	initializeBackendTelemetryIfEnabled(cfg, &shutdownHooks)
 
 	embeddingRuntime := initializeRuntimeDependencies(cfg, startupWriter, &shutdownHooks, runtimeRegistry)
 	server := newExtProcServerOrFatal(opts, startupWriter, runtimeRegistry)
