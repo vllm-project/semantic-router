@@ -166,6 +166,19 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
         ):
             self.assertEqual(CLITestBase._detect_container_runtime(), "podman")
 
+    @mock.patch.dict(os.environ, {"RUN_INTEGRATION_TESTS": "false"}, clear=True)
+    def test_cli_test_base_uses_stub_runtime_for_unit_only_suite(self):
+        with mock.patch.object(cli_test_base.shutil, "which", return_value=None):
+            self.assertEqual(CLITestBase._detect_container_runtime(), "docker")
+
+    @mock.patch.dict(os.environ, {"RUN_INTEGRATION_TESTS": "true"}, clear=True)
+    def test_cli_test_base_requires_runtime_for_integration_suite(self):
+        with (
+            mock.patch.object(cli_test_base.shutil, "which", return_value=None),
+            self.assertRaisesRegex(RuntimeError, "Neither docker nor podman"),
+        ):
+            CLITestBase._detect_container_runtime()
+
     @mock.patch.object(CLITestBase, "_run_subprocess")
     def test_run_cli_preserves_partial_output_on_timeout(self, run_subprocess):
         run_subprocess.side_effect = subprocess.TimeoutExpired(

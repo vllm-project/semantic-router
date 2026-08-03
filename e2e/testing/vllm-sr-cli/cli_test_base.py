@@ -136,6 +136,12 @@ class CLITestBase(unittest.TestCase):
             return "docker"
         if shutil.which("podman"):
             return "podman"
+        if os.getenv("RUN_INTEGRATION_TESTS", "").lower() != "true":
+            # Unit-only suites mock container commands at their behavioral
+            # seams. Keep a deterministic command name so those tests can run
+            # inside the precommit image, which intentionally has no runtime
+            # client or daemon.
+            return "docker"
         raise RuntimeError("Neither docker nor podman was found in PATH")
 
     @staticmethod
