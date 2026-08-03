@@ -74,9 +74,9 @@ func newTestPolicy() securityPolicyPayload {
 	return securityPolicyPayload{
 		RoleMappings: []roleMappingPayload{
 			{
-				Name:      "premium",
-				Subjects:  []subjectPayload{{Kind: "Group", Name: "paying-customers"}},
-				Role:      "premium_tier",
+				Name:     "premium",
+				Subjects: []subjectPayload{{Kind: "Group", Name: "paying-customers"}},
+				Role:     "premium_tier",
 				// Use models that exist in e2e/profiles/dashboard/values.yaml so
 				// merged-config validation (canonical modelRefs) can succeed.
 				ModelRefs: []string{"base-model"},
