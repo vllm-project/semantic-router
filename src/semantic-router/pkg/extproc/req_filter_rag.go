@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -111,6 +112,7 @@ func handleRAGRetrievalError(
 	tracing.RecordError(ragSpan, err)
 	ragSpan.SetStatus(codes.Error, err.Error())
 	metrics.RecordRAGRetrieval(ragConfig.Backend, decisionName, "error", latency)
+	metrics.RecordRAGRetrievalError(ragConfig.Backend, decisionName, classifyRAGError(err))
 
 	switch ragFailureMode(ragConfig) {
 	case "block":
@@ -133,6 +135,39 @@ func ragFailureMode(ragConfig *config.RAGPluginConfig) string {
 	return "skip"
 }
 
+// classifyRAGError maps a retrieval error to a coarse, low-cardinality
+// error_type label for the rag_retrieval_errors_total metric. This is a
+// best-effort inspection of the error message for observability only; it never
+// drives control flow, so message wording changes can at worst reclassify a
+// bucket. Keep the returned set small and stable.
+func classifyRAGError(err error) string {
+	if err == nil {
+		return "none"
+	}
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "context deadline exceeded"), strings.Contains(msg, "timeout"):
+		return "timeout"
+	case strings.Contains(msg, "embedding"):
+		return "embedding"
+	case strings.Contains(msg, "no results"), strings.Contains(msg, "no content"),
+		strings.Contains(msg, "no matches"), strings.Contains(msg, "no hits"),
+		strings.Contains(msg, "no data"), strings.Contains(msg, "no document"):
+		return "no_results"
+	case strings.Contains(msg, "not available"), strings.Contains(msg, "not initialized"),
+		strings.Contains(msg, "connection"):
+		return "backend_unavailable"
+	case strings.Contains(msg, "config"), strings.Contains(msg, "is required"),
+		strings.Contains(msg, "invalid"):
+		return "config"
+	case strings.Contains(msg, "search failed"), strings.Contains(msg, "request failed"),
+		strings.Contains(msg, "returned status"), strings.Contains(msg, "failed"):
+		return "backend_error"
+	default:
+		return "other"
+	}
+}
+
 func (r *OpenAIRouter) finalizeRAGRetrieval(
 	ctx *RequestContext,
 	ragSpan trace.Span,
@@ -145,6 +180,9 @@ func (r *OpenAIRouter) finalizeRAGRetrieval(
 	if ctx.RAGSimilarityScore > 0 {
 		tracing.SetSpanAttributes(ragSpan, attribute.Float64("rag.similarity_score", float64(ctx.RAGSimilarityScore)))
 	}
+	if ctx.RAGResultCount > 0 {
+		tracing.SetSpanAttributes(ragSpan, attribute.Int("rag.result_count", ctx.RAGResultCount))
+	}
 
 	ragSpan.SetStatus(codes.Ok, "Retrieval successful")
 	metrics.RecordRAGRetrieval(ragConfig.Backend, decisionName, "success", latency)
@@ -152,8 +190,13 @@ func (r *OpenAIRouter) finalizeRAGRetrieval(
 	if ctx.RAGSimilarityScore > 0 {
 		metrics.RecordRAGSimilarityScore(ragConfig.Backend, decisionName, ctx.RAGSimilarityScore)
 	}
+	// Result count is only reported by vector backends (milvus/qdrant/vectorstore/openai);
+	// 0 means unreported (e.g. external_api/mcp, or a cache hit), so skip recording.
+	if ctx.RAGResultCount > 0 {
+		metrics.RecordRAGResultCount(ragConfig.Backend, decisionName, ctx.RAGResultCount)
+	}
 
-	if err := r.injectRAGContext(ctx, retrievedContext, ragConfig); err != nil {
+	if err := r.injectRAGContext(ctx, decisionName, retrievedContext, ragConfig); err != nil {
 		logging.Errorf("[RAG] Failed to inject context for decision '%s' (backend=%s): %v",
 			decisionName, ragConfig.Backend, err)
 		metrics.RecordPluginExecution("rag", decisionName, "injection_error", 0)
@@ -234,7 +277,7 @@ func (r *OpenAIRouter) cacheRetrievedRAGContext(
 }
 
 // injectRAGContext injects retrieved context into the request
-func (r *OpenAIRouter) injectRAGContext(ctx *RequestContext, retrievedContext string, ragConfig *config.RAGPluginConfig) error {
+func (r *OpenAIRouter) injectRAGContext(ctx *RequestContext, decisionName string, retrievedContext string, ragConfig *config.RAGPluginConfig) error {
 	if retrievedContext == "" {
 		return nil
 	}
@@ -270,6 +313,7 @@ func (r *OpenAIRouter) injectRAGContext(ctx *RequestContext, retrievedContext st
 	if len([]rune(retrievedContext)) > maxLength {
 		runes := []rune(retrievedContext)
 		retrievedContext = string(runes[:maxLength]) + "..."
+		metrics.RecordRAGContextTruncation(ragConfig.Backend, decisionName)
 		logging.Debugf("RAG context truncated to %d chars", maxLength)
 	}
 

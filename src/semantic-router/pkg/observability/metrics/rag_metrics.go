@@ -61,6 +61,34 @@ var (
 		},
 		[]string{"backend"},
 	)
+
+	// RAGResultCount tracks the number of documents returned per RAG retrieval
+	RAGResultCount = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "rag_retrieval_results_count",
+			Help:    "Number of documents returned per successful RAG retrieval",
+			Buckets: []float64{1, 2, 3, 5, 10, 20, 50, 100},
+		},
+		[]string{"backend", "decision"},
+	)
+
+	// RAGContextTruncations counts how often retrieved context was truncated
+	RAGContextTruncations = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rag_context_truncations_total",
+			Help: "Total number of times retrieved RAG context was truncated to max_context_length",
+		},
+		[]string{"backend", "decision"},
+	)
+
+	// RAGRetrievalErrors tracks RAG retrieval failures broken down by error type
+	RAGRetrievalErrors = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rag_retrieval_errors_total",
+			Help: "Total number of RAG retrieval errors by error type",
+		},
+		[]string{"backend", "decision", "error_type"},
+	)
 )
 
 // RecordRAGRetrieval records a RAG retrieval attempt
@@ -92,4 +120,19 @@ func RecordRAGCacheHit(backend string) {
 // RecordRAGCacheMiss records a RAG cache miss
 func RecordRAGCacheMiss(backend string) {
 	RAGCacheMisses.WithLabelValues(backend).Inc()
+}
+
+// RecordRAGResultCount records the number of documents returned by a retrieval
+func RecordRAGResultCount(backend string, decision string, count int) {
+	RAGResultCount.WithLabelValues(backend, decision).Observe(float64(count))
+}
+
+// RecordRAGContextTruncation records a single context-truncation event
+func RecordRAGContextTruncation(backend string, decision string) {
+	RAGContextTruncations.WithLabelValues(backend, decision).Inc()
+}
+
+// RecordRAGRetrievalError records a retrieval failure tagged with its error type
+func RecordRAGRetrievalError(backend string, decision string, errorType string) {
+	RAGRetrievalErrors.WithLabelValues(backend, decision, errorType).Inc()
 }
