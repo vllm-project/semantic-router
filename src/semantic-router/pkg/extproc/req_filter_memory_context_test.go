@@ -23,6 +23,22 @@ type receiptMemoryStore struct {
 	err     error
 }
 
+func TestConcreteModelBypassesMemoryPlugin(t *testing.T) {
+	router := &OpenAIRouter{
+		Config:      &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, Backend: "milvus"}},
+		MemoryStore: &receiptMemoryStore{err: errors.New("must not be called")},
+	}
+	ctx := &RequestContext{}
+	ctx.Routing.SelectPassthrough()
+	body := []byte(`{"messages":[{"role":"user","content":"hello"}]}`)
+
+	got, err := router.handleMemoryRetrieval(ctx, "hello", body, &openai.ChatCompletionNewParams{})
+
+	require.NoError(t, err)
+	assert.Equal(t, body, got)
+	assert.Empty(t, ctx.MemoryBackend)
+}
+
 func (s receiptMemoryStore) Retrieve(context.Context, memory.RetrieveOptions) ([]*memory.RetrieveResult, error) {
 	return s.results, s.err
 }

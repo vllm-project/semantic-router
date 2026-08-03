@@ -28,6 +28,17 @@ func TestEffectiveAutoModelNamesExplicitAllowList(t *testing.T) {
 	}
 }
 
+func TestEffectiveAutoModelNamesExplicitEmptyDisablesAliases(t *testing.T) {
+	cfg := &RouterConfig{
+		RouterOptions: RouterOptions{
+			AutoModelNames: []string{},
+		},
+	}
+	if got := cfg.EffectiveAutoModelNames(); len(got) != 0 {
+		t.Fatalf("expected no effective aliases, got %#v", got)
+	}
+}
+
 func TestIsAutoModelNameRecognizesNamespacedAutoAlias(t *testing.T) {
 	cfg := &RouterConfig{}
 	if !cfg.IsAutoModelName("vllm-sr/auto") {
@@ -96,5 +107,43 @@ global:
 	want := []string{"vllm-sr/auto", "auto", "custom-auto"}
 	if !slices.Equal(cfg.EffectiveAutoModelNames(), want) {
 		t.Fatalf("expected effective aliases %#v, got %#v", want, cfg.EffectiveAutoModelNames())
+	}
+}
+
+func TestCanonicalRoundTripPreservesExplicitEmptyAutoModelNames(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+routing:
+  modelCards:
+    - name: model-a
+providers:
+  defaults:
+    default_model: model-a
+  models:
+    - name: model-a
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+global:
+  router:
+    auto_model_names: []
+`)
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+	if cfg.AutoModelNames == nil || len(cfg.EffectiveAutoModelNames()) != 0 {
+		t.Fatalf("expected explicit empty aliases, got %#v", cfg.AutoModelNames)
+	}
+
+	exported, err := yaml.Marshal(CanonicalConfigFromRouterConfig(cfg))
+	if err != nil {
+		t.Fatalf("marshal canonical config: %v", err)
+	}
+	roundTripped, err := ParseYAMLBytes(exported)
+	if err != nil {
+		t.Fatalf("reparse canonical config: %v", err)
+	}
+	if roundTripped.AutoModelNames == nil || len(roundTripped.EffectiveAutoModelNames()) != 0 {
+		t.Fatalf("round-trip lost explicit empty aliases: %#v", roundTripped.AutoModelNames)
 	}
 }

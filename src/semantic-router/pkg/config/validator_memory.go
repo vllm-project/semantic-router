@@ -16,18 +16,27 @@ import "fmt"
 // cache and RAG plugins already enforce (validateSemanticCacheContracts /
 // validateRAGSimilarityThreshold).
 func validateMemoryContracts(cfg *RouterConfig) error {
+	if err := validateGlobalMemoryContracts(cfg); err != nil {
+		return err
+	}
+	return validateDecisionMemoryContracts(cfg)
+}
+
+func validateGlobalMemoryContracts(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
-
-	if err := validateMemorySimilarityThreshold(
+	return validateMemorySimilarityThreshold(
 		cfg.Memory.DefaultSimilarityThreshold,
 		"global memory default_similarity_threshold",
-	); err != nil {
-		return err
-	}
+	)
+}
 
-	decisions := cfg.AllRoutingDecisions()
+func validateDecisionMemoryContracts(cfg *RouterConfig) error {
+	if cfg == nil {
+		return nil
+	}
+	decisions := cfg.Decisions
 	for i := range decisions {
 		decision := &decisions[i]
 		pluginCfg := decision.GetMemoryConfig()

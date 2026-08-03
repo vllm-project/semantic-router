@@ -113,7 +113,7 @@ export const SETUP_STEP_LABELS: ReadonlyArray<[string, string]> = [
 ];
 
 export const DEFAULT_REMOTE_SETUP_CONFIG_URL =
-  "https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/recipes/balance.yaml";
+  "https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/balance/config.yaml";
 
 const DEFAULT_MODEL_NAME = "qwen/qwen3.5-rocm";
 const DEFAULT_VLLM_BASE_URL = "vllm:8000";

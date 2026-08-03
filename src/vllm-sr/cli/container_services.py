@@ -26,29 +26,21 @@ def container_status(container_name):
         result = subprocess.run(
             [
                 runtime,
-                "ps",
-                "-a",
-                "--filter",
-                f"name={container_name}",
+                "inspect",
                 "--format",
-                "{{.Status}}",
+                "{{.State.Status}}",
+                container_name,
             ],
             capture_output=True,
             text=True,
             check=False,
         )
-        status = result.stdout.strip()
-        if not status:
+        if result.returncode != 0:
             return "not found"
-        if "Up" in status:
-            return "running"
-        if "Created" in status:
-            return "created"
-        if "Exited" in status:
-            return "exited"
-        if "Paused" in status:
-            return "paused"
-        return "unknown"
+        status = result.stdout.strip().lower()
+        if status in {"running", "created", "exited", "paused"}:
+            return status
+        return status or "unknown"
     except Exception as exc:
         log.error(f"Failed to get container status: {exc}")
         return "error"

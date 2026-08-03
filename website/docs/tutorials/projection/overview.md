@@ -94,7 +94,7 @@ The current implementation supports:
 
 ## Balance Recipe Example
 
-The maintained [`deploy/recipes/balance.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.yaml) recipe shows the intended pattern:
+The maintained [`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml) recipe shows the intended pattern:
 
 - `balance_domain_partition` resolves one winning domain across the maintained routing domains
 - `balance_intent_partition` resolves one winning embedding intent lane
@@ -212,7 +212,9 @@ The dashboard exposes the same projection contract directly:
 - `Config -> Decisions` can reference mapping outputs with condition type `projection`
 - `DSL -> Visual` shows `Projection Partitions`, `Projection Scores`, and `Projection Mappings` as editable entities alongside signals, routes, models, and plugins
 
-For raw import/export, the DSL page still decompiles the current router YAML into routing-only DSL and recompiles the edited DSL back into canonical YAML.
+For raw import/export, the Dashboard DSL page edits the default routing profile.
+The CLI DSL decompiler additionally preserves `ENTRYPOINT` and isolated
+`RECIPE` scopes from a full multi-profile config.
 
 ## Next Steps
 

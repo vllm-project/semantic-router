@@ -163,25 +163,19 @@ class CLITestBase(unittest.TestCase):
             result = self._run_subprocess(
                 [
                     self.container_runtime,
-                    "ps",
-                    "-a",
-                    "--filter",
-                    f"name={container_name}",
+                    "inspect",
                     "--format",
-                    "{{.Status}}",
+                    "{{.State.Status}}",
+                    container_name,
                 ],
                 timeout=10,
             )
-            status = result.stdout.strip()
-            if not status:
+            if result.returncode != 0:
                 return "not found"
-            if "Up" in status:
-                return "running"
-            if "Exited" in status:
-                return "exited"
-            if "Paused" in status:
-                return "paused"
-            return "unknown"
+            status = result.stdout.strip().lower()
+            if status in {"running", "created", "exited", "paused"}:
+                return status
+            return status or "unknown"
         except Exception as e:
             print(f"Failed to get container status: {e}")
             return "error"

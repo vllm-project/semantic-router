@@ -12,7 +12,7 @@ const usage = `Usage: sr-dsl <command> [options]
 
 Commands:
   compile    Compile routing DSL to YAML/CRD
-  decompile  Convert YAML config to routing-only DSL
+  decompile  Convert YAML config to routing DSL
   validate   Validate a DSL file
   fmt        Format a DSL file
   generate   Generate DSL from natural language using an LLM

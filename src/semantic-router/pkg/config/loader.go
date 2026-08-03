@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -117,6 +119,8 @@ func parseYAMLBytesWithBaseDir(data []byte, baseDir string) (*RouterConfig, erro
 		return nil, err
 	}
 	cfg.ConfigBaseDir = baseDir
+	documentDigest := sha256.Sum256(data)
+	cfg.DocumentHash = hex.EncodeToString(documentDigest[:])
 	if err := finalizeParsedConfig(cfg); err != nil {
 		return nil, err
 	}

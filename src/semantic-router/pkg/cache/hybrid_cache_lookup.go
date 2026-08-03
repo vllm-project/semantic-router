@@ -59,8 +59,24 @@ func (h *HybridCache) findSimilar(
 	logging.Debugf("%s: HNSW returned %d candidates, %d above threshold",
 		logPrefix, totalCandidates, len(candidatesWithIDs))
 
-	responseBody, candidate, found := h.fetchResponseFromCandidates(logPrefix, candidatesWithIDs)
+	responseBody, candidate, found := h.fetchResponseFromCandidates(logPrefix, model, candidatesWithIDs)
 	if found {
+		h.StoreSimilarity(candidate.similarity)
+		h.recordLookupHit(start, metricOp, threshold, model, candidate)
+		return responseBody, true, nil
+	}
+
+	// The global HNSW graph may return a nearest neighbor from another model
+	// partition. Milvus owns the exact model filter, so fall back to its
+	// partitioned vector search instead of returning or silently accepting the
+	// wrong candidate.
+	responseBody, found, err = h.milvusCache.FindSimilarWithThreshold(model, query, threshold)
+	if err != nil {
+		metrics.RecordCacheOperation("hybrid", metricOp, "error", time.Since(start).Seconds())
+		return nil, false, err
+	}
+	if found {
+		candidate = candidateWithID{similarity: h.milvusCache.LastSimilarity()}
 		h.StoreSimilarity(candidate.similarity)
 		h.recordLookupHit(start, metricOp, threshold, model, candidate)
 		return responseBody, true, nil
@@ -99,6 +115,7 @@ func (h *HybridCache) candidatesAboveThresholdLocked(candidates []searchResult, 
 
 func (h *HybridCache) fetchResponseFromCandidates(
 	logPrefix string,
+	model string,
 	candidates []candidateWithID,
 ) ([]byte, candidateWithID, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -106,7 +123,7 @@ func (h *HybridCache) fetchResponseFromCandidates(
 
 	for _, candidate := range candidates {
 		fetchCtx, fetchCancel := context.WithTimeout(ctx, 2*time.Second)
-		responseBody, err := h.milvusCache.GetByID(fetchCtx, candidate.milvusID)
+		responseBody, err := h.milvusCache.GetByID(fetchCtx, candidate.milvusID, model)
 		fetchCancel()
 		if err != nil {
 			logging.Debugf("%s: Milvus GetByID failed for %s: %v", logPrefix, candidate.milvusID, err)

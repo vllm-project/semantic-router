@@ -493,9 +493,8 @@ func (c *ValkeyCache) FindSimilar(model string, query string) ([]byte, bool, err
 }
 
 // buildKNNSearchCmd constructs the FT.SEARCH command for a KNN vector similarity query.
-func (c *ValkeyCache) buildKNNSearchCmd(embeddingBytes []byte) []string {
-	knnQuery := fmt.Sprintf("*=>[KNN %d @%s $vec AS vector_distance]",
-		c.config.Search.TopK, c.config.Index.VectorField.Name)
+func (c *ValkeyCache) buildKNNSearchCmd(model string, embeddingBytes []byte) []string {
+	knnQuery := partitionedKNNQuery(model, c.config.Search.TopK, c.config.Index.VectorField.Name)
 
 	cmd := []string{
 		"FT.SEARCH", c.indexName, knnQuery,
@@ -529,7 +528,7 @@ func (c *ValkeyCache) FindSimilarWithThreshold(model string, query string, thres
 	ctx := context.Background()
 
 	embeddingBytes := floatsToBytes(queryEmbedding)
-	searchCmd := c.buildKNNSearchCmd(embeddingBytes)
+	searchCmd := c.buildKNNSearchCmd(model, embeddingBytes)
 
 	searchResult, err := c.client.CustomCommand(ctx, searchCmd)
 	if err != nil {

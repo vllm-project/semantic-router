@@ -144,7 +144,8 @@ global:
     authz: {}
     ratelimit: {}
     management_api: {}
-    router_replay: {}
+    router_replay:
+      enabled: false
     startup_status:
       store_backend: ""
   stores:

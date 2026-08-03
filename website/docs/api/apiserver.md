@@ -54,6 +54,11 @@ Use `/openapi.json` or `/docs` for the exact live request and response schema. T
 | `PUT` | `/config/router` | Replace the router config |
 | `GET` | `/config/router/versions` | List available router config backup versions |
 | `POST` | `/config/router/rollback` | Roll back to a previous router config version |
+| `GET` | `/config/router/recipes` | List the default and named recipes with their entrypoints |
+| `POST` | `/config/router/recipes/validate` | Validate a recipe mutation without changing active config |
+| `GET` | `/config/router/recipes/{name}` | Get one recipe and its entrypoints |
+| `PUT` | `/config/router/recipes/{name}` | Atomically create or replace one recipe; requires `If-Match` |
+| `DELETE` | `/config/router/recipes/{name}` | Delete an unreferenced named recipe; requires `If-Match` |
 
 ## Config Semantics
 
@@ -61,6 +66,11 @@ Use `/openapi.json` or `/docs` for the exact live request and response schema. T
 - `PATCH /config/router` uses merge semantics.
 - `PUT /config/router` uses replace semantics.
 - `PATCH` and `PUT` both validate, back up, write, and hot-reload before returning.
+- Successful config reads return an `ETag`. Send that value in `If-Match` for
+  recipe writes so concurrent editors cannot silently overwrite one another.
+- The `default` recipe is the top-level `routing` profile and cannot be
+  deleted. A named recipe must be detached from all entrypoints before it can
+  be deleted.
 
 ## Notes
 

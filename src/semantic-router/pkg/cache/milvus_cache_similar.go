@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -13,9 +14,15 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-func milvusActiveEntryFilterExpr() string {
+func milvusStringLiteral(value string) string {
+	escaped := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(value)
+	return `"` + escaped + `"`
+}
+
+func milvusActiveEntryFilterExpr(model string) string {
 	return fmt.Sprintf(
-		`response_body != "" && (expires_at == 0 || expires_at > %d)`,
+		`model == %s && response_body != "" && (expires_at == 0 || expires_at > %d)`,
+		milvusStringLiteral(model),
 		time.Now().Unix(),
 	)
 }
@@ -46,7 +53,11 @@ func milvusFirstVarCharBytes(hit *client.SearchResult, fieldIdx int) []byte {
 	return []byte(col.Data()[0])
 }
 
-func (c *MilvusCache) milvusSearchSimilarVectors(ctx context.Context, queryEmbedding []float32) ([]client.SearchResult, error) {
+func (c *MilvusCache) milvusSearchSimilarVectors(
+	ctx context.Context,
+	model string,
+	queryEmbedding []float32,
+) ([]client.SearchResult, error) {
 	searchParam, err := entity.NewIndexHNSWSearchParam(c.config.Search.Params.Ef)
 	if err != nil {
 		return nil, err
@@ -55,7 +66,7 @@ func (c *MilvusCache) milvusSearchSimilarVectors(ctx context.Context, queryEmbed
 		ctx,
 		c.collectionName,
 		[]string{},
-		milvusActiveEntryFilterExpr(),
+		milvusActiveEntryFilterExpr(model),
 		[]string{"response_body"},
 		[]entity.Vector{entity.FloatVector(queryEmbedding)},
 		c.config.Collection.VectorField.Name,
@@ -89,7 +100,7 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
-	searchResult, err := c.milvusSearchSimilarVectors(context.Background(), queryEmbedding)
+	searchResult, err := c.milvusSearchSimilarVectors(context.Background(), model, queryEmbedding)
 	if err != nil {
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: search failed: %v", err)
 		atomic.AddInt64(&c.missCount, 1)

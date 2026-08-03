@@ -36,13 +36,11 @@ func (r *OpenAIRouter) performResponseJailbreakDetection(ctx *RequestContext, re
 	}
 
 	start := time.Now()
-	isJailbreak, jailbreakType, confidence, err := r.Classifier.CheckForJailbreakWithThreshold(assistantContent, threshold)
+	classifier := r.classifierForRequest(ctx)
+	isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreakWithThreshold(assistantContent, threshold)
 	latency := time.Since(start).Seconds()
 
-	decisionName := ""
-	if ctx.VSRSelectedDecision != nil {
-		decisionName = ctx.VSRSelectedDecision.Name
-	}
+	decisionName := requestDecisionStateKey(ctx)
 
 	if err != nil {
 		logging.Errorf("Response jailbreak detection failed: %v", err)
@@ -75,7 +73,8 @@ func (r *OpenAIRouter) performResponseJailbreakDetection(ctx *RequestContext, re
 // shouldPerformResponseJailbreakDetection checks whether response-level
 // jailbreak detection should run for the current request.
 func (r *OpenAIRouter) shouldPerformResponseJailbreakDetection(ctx *RequestContext) bool {
-	if r.Classifier == nil || !r.Classifier.IsJailbreakEnabled() {
+	classifier := r.classifierForRequest(ctx)
+	if classifier == nil || !classifier.IsJailbreakEnabled() {
 		return false
 	}
 

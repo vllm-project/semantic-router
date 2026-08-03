@@ -139,7 +139,7 @@ func TestChatTemplateKwargsPreservedWhenTogglingReasoning(t *testing.T) {
 	}
 
 	t.Run("disable reasoning overrides enable_thinking but preserves other keys", func(t *testing.T) {
-		modified, err := router.setReasoningModeToRequestBody(makeBody(), false, "any")
+		modified, err := router.setReasoningModeToRequestBody(makeBody(), false, nil)
 		require.NoError(t, err)
 
 		out := unmarshalReasoningRequest(t, modified)
@@ -150,7 +150,7 @@ func TestChatTemplateKwargsPreservedWhenTogglingReasoning(t *testing.T) {
 	})
 
 	t.Run("enable reasoning sets enable_thinking true and preserves other keys", func(t *testing.T) {
-		modified, err := router.setReasoningModeToRequestBody(makeBody(), true, "any")
+		modified, err := router.setReasoningModeToRequestBody(makeBody(), true, nil)
 		require.NoError(t, err)
 
 		out := unmarshalReasoningRequest(t, modified)
@@ -211,7 +211,8 @@ func TestGetReasoningEffort(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			effort := router.getReasoningEffort(tt.categoryName, tt.modelName)
+			decision := router.Config.GetDecisionByName(tt.categoryName)
+			effort := router.getReasoningEffort(decision, tt.modelName)
 			assert.Equal(t, tt.expectedEffort, effort)
 		})
 	}
@@ -245,6 +246,39 @@ func TestGetModelReasoningFamily(t *testing.T) {
 			assert.Equal(t, tt.expectedType, family.Type)
 			assert.Equal(t, tt.expectedParam, family.Parameter)
 		})
+	}
+}
+
+func TestGetReasoningEffortUsesNamedRecipeDecision(t *testing.T) {
+	namedDecision := reasoningDecision(
+		"frontier-route",
+		"",
+		0,
+		"model-a",
+		boolPtr(true),
+		"high",
+	)
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				ReasoningConfig: config.ReasoningConfig{
+					DefaultReasoningEffort: "medium",
+				},
+				Decisions: []config.Decision{
+					reasoningDecision("frontier-route", "", 0, "model-a", boolPtr(true), "low"),
+				},
+			},
+			Recipes: []config.RoutingRecipe{
+				{
+					Name:    "accuracy-first",
+					Profile: config.RoutingProfile{Decisions: []config.Decision{namedDecision}},
+				},
+			},
+		},
+	}
+
+	if got := router.getReasoningEffort(&namedDecision, "model-a"); got != "high" {
+		t.Fatalf("named-recipe reasoning effort = %q, want high", got)
 	}
 }
 
@@ -318,10 +352,11 @@ func TestBuildReasoningRequestFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			decision := router.Config.GetDecisionByName(tt.categoryName)
 			fields, effort := router.buildReasoningRequestFieldsForProvider(
 				tt.model,
 				tt.useReasoning,
-				tt.categoryName,
+				decision,
 				tt.profile,
 			)
 			assertBuiltReasoningRequestFields(t, fields, effort, tt.expectNil, tt.expectEffortReturn, tt.verifyFunc)
@@ -334,25 +369,25 @@ func TestReasoningModeEdgeCases(t *testing.T) {
 	router := newDeepSeekReasoningRouter()
 
 	t.Run("Empty request body", func(t *testing.T) {
-		_, err := router.setReasoningModeToRequestBody([]byte("{}"), true, "test")
+		_, err := router.setReasoningModeToRequestBody([]byte("{}"), true, nil)
 		assert.NoError(t, err)
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
-		_, err := router.setReasoningModeToRequestBody([]byte("invalid json"), true, "test")
+		_, err := router.setReasoningModeToRequestBody([]byte("invalid json"), true, nil)
 		assert.Error(t, err)
 	})
 
 	t.Run("Large request body", func(t *testing.T) {
 		requestBytes, _ := json.Marshal(largeReasoningRequest())
-		modifiedBytes, err := router.setReasoningModeToRequestBody(requestBytes, true, "test")
+		modifiedBytes, err := router.setReasoningModeToRequestBody(requestBytes, true, nil)
 		assert.NoError(t, err)
 		assert.NotNil(t, modifiedBytes)
 	})
 
 	t.Run("Nil config", func(t *testing.T) {
 		nilRouter := &OpenAIRouter{Config: nil}
-		assert.Equal(t, "medium", nilRouter.getReasoningEffort("test", "model"))
+		assert.Equal(t, "medium", nilRouter.getReasoningEffort(nil, "model"))
 		assert.Nil(t, nilRouter.getModelReasoningFamily("model"))
 	})
 }
@@ -574,10 +609,11 @@ func setReasoningModeForProvider(
 ) map[string]interface{} {
 	t.Helper()
 	requestBytes := marshalReasoningRequest(t, model, initialReasoningEffort)
+	decision := router.Config.GetDecisionByName(categoryName)
 	modifiedBytes, err := router.setReasoningModeToRequestBodyForProvider(
 		requestBytes,
 		enableReasoning,
-		categoryName,
+		decision,
 		profile,
 	)
 	require.NoError(t, err)

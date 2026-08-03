@@ -6,7 +6,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 func (c *Classifier) evaluateStructureSignal(results *SignalResults, mu *sync.Mutex, text string) {
@@ -33,8 +32,8 @@ func (c *Classifier) evaluateStructureSignal(results *SignalResults, mu *sync.Mu
 		if match.Confidence > bestConfidence {
 			bestConfidence = match.Confidence
 		}
-		metrics.RecordSignalExtraction(config.SignalTypeStructure, match.RuleName, latencySeconds)
-		metrics.RecordSignalMatch(config.SignalTypeStructure, match.RuleName)
+		c.recordSignalExtraction(config.SignalTypeStructure, match.RuleName, latencySeconds)
+		c.recordSignalMatch(config.SignalTypeStructure, match.RuleName)
 		results.MatchedStructureRules = append(results.MatchedStructureRules, match.RuleName)
 		results.SignalConfidences[signalConfidenceKey(config.SignalTypeStructure, match.RuleName)] = match.Confidence
 		results.SignalValues[signalConfidenceKey(config.SignalTypeStructure, match.RuleName)] = match.Value

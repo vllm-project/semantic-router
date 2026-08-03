@@ -178,7 +178,7 @@ func buildProjectionScoreAdj(scores []ProjectionScore, outputToSource map[string
 				continue
 			}
 			vs := strings.ToLower(strings.TrimSpace(input.ValueSource))
-			if vs == "confidence" {
+			if vs == ProjectionValueSourceConfidence {
 				if src, ok := outputToSource[input.Name]; ok {
 					adj[score.Name] = append(adj[score.Name], src)
 				}
@@ -330,9 +330,9 @@ func validateProjectionInputProjectionRef(scoreName string, input ProjectionScor
 		)
 	}
 	switch strings.ToLower(strings.TrimSpace(input.ValueSource)) {
-	case "", "score":
+	case "", ProjectionValueSourceScore:
 		return nil
-	case "confidence":
+	case ProjectionValueSourceConfidence:
 		if _, ok := outputToSource[input.Name]; !ok {
 			return fmt.Errorf(
 				"routing.projections.scores[%q]: projection input %q with value_source \"confidence\" references undefined mapping output",
@@ -353,7 +353,7 @@ func validateProjectionInputProjectionRef(scoreName string, input ProjectionScor
 
 func validateProjectionInputValueSource(scoreName string, input ProjectionScoreInput) error {
 	switch input.ValueSource {
-	case "", "binary", "confidence", "raw":
+	case "", ProjectionValueSourceBinary, ProjectionValueSourceConfidence, ProjectionValueSourceRaw:
 		return nil
 	default:
 		return fmt.Errorf(
@@ -730,7 +730,7 @@ func validateKBMetricProjectionInput(
 		)
 	}
 	switch strings.ToLower(strings.TrimSpace(input.ValueSource)) {
-	case "", "score":
+	case "", ProjectionValueSourceScore:
 		return nil
 	default:
 		return fmt.Errorf(

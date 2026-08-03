@@ -54,7 +54,7 @@ At a high level, this deployment consists of:
 
 - One ROCm vLLM backend running `Qwen/Qwen3.5-122B-A10B-FP8`
 - One vLLM Semantic Router instance in front of that backend
-- One reference routing profile from `deploy/recipes/balance.yaml`
+- One reference routing profile from `config/recipes/balance/config.yaml`
 - One dashboard for onboarding, replay inspection, playground testing, and Insights
 
 The reference alias layout is:
@@ -186,7 +186,7 @@ Open the dashboard and complete onboarding.
 
 When prompted to load a routing profile (please skip the model configuration directly), import the reference YAML directly from:
 
-> `https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/recipes/balance.yaml`
+> `https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/balance/config.yaml`
 
 The remote import path applies the full YAML directly during onboarding. If you later inspect the same profile in the DSL editor, the routing surfaces decompile from `routing.modelCards`, `routing.signals`, `routing.projections`, and `routing.decisions`, while `providers` remains YAML-native.
 

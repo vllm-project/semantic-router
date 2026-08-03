@@ -121,13 +121,7 @@ func ValidateWithSymbols(input string) ([]Diagnostic, *SymbolTable, []error) {
 		}
 	}
 
-	v := &Validator{
-		prog:        prog,
-		signalNames: make(map[string]map[string]bool),
-		modelNames:  make(map[string]bool),
-		modelLoRAs:  make(map[string]map[string]bool),
-		pluginNames: make(map[string]bool),
-	}
+	v := newValidator(prog)
 
 	// Level 1: Parser errors become Error diagnostics
 	for _, e := range parseErrors {
@@ -149,6 +143,7 @@ func ValidateWithSymbols(input string) ([]Diagnostic, *SymbolTable, []error) {
 
 	// Level 4: Conflict detection
 	v.checkConflicts()
+	v.checkRoutingScopes()
 
 	// Extract symbol table for editor completions
 	symbols := v.extractSymbolTable()
@@ -158,18 +153,23 @@ func ValidateWithSymbols(input string) ([]Diagnostic, *SymbolTable, []error) {
 
 // ValidateAST performs Level 2 and Level 3 validation on an existing AST.
 func ValidateAST(prog *Program) []Diagnostic {
-	v := &Validator{
+	v := newValidator(prog)
+	v.buildSymbolTable()
+	v.checkReferences()
+	v.checkConstraints()
+	v.checkConflicts()
+	v.checkRoutingScopes()
+	return v.diagnostics
+}
+
+func newValidator(prog *Program) *Validator {
+	return &Validator{
 		prog:        prog,
 		signalNames: make(map[string]map[string]bool),
 		modelNames:  make(map[string]bool),
 		modelLoRAs:  make(map[string]map[string]bool),
 		pluginNames: make(map[string]bool),
 	}
-	v.buildSymbolTable()
-	v.checkReferences()
-	v.checkConstraints()
-	v.checkConflicts()
-	return v.diagnostics
 }
 
 // ---------- Symbol Table ----------

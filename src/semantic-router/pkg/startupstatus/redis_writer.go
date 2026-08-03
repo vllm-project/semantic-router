@@ -28,7 +28,10 @@ type RedisWriterConfig struct {
 	Address  string
 	Password string
 	DB       int
-	TTL      time.Duration
+	// TTL is optional. A zero value keeps the latest process state until the
+	// next startup overwrites it. A positive TTL is appropriate only when an
+	// external heartbeat refreshes the key before it expires.
+	TTL time.Duration
 }
 
 // NewRedisWriter creates a Redis-backed StatusWriter. It pings the server
@@ -48,15 +51,10 @@ func NewRedisWriter(cfg RedisWriterConfig) (*RedisWriter, error) {
 		return nil, fmt.Errorf("startup status redis ping failed: %w", err)
 	}
 
-	ttl := cfg.TTL
-	if ttl == 0 {
-		ttl = 5 * time.Minute
-	}
-
 	return &RedisWriter{
 		client: client,
 		key:    defaultStatusKey,
-		ttl:    ttl,
+		ttl:    cfg.TTL,
 	}, nil
 }
 

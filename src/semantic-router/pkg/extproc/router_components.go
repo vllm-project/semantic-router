@@ -164,23 +164,27 @@ func toolsEmbeddingProvider(cfg *config.RouterConfig) (embedding.Provider, error
 func createRouterClassifier(
 	cfg *config.RouterConfig,
 	mappings *classifierMappings,
-) (*classification.Classifier, *services.ClassificationService, error) {
-	classifier, err := classification.BuildClassifier(
+) (*classification.RecipeClassifiers, *classification.Classifier, *services.ClassificationService, error) {
+	classifiers, err := classification.BuildRecipeClassifiers(
 		cfg,
 		mappings.categoryMapping,
 		mappings.piiMapping,
 		mappings.jailbreakMapping,
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to build classifier: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to build recipe classifiers: %w", err)
 	}
 
-	if err := classifier.InitializeRuntime(); err != nil {
-		return nil, nil, fmt.Errorf("failed to initialize classifier runtime: %w", err)
+	if err := classifiers.InitializeRuntime(); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to initialize recipe classifiers: %w", err)
 	}
 
-	classificationService := services.NewClassificationService(classifier, cfg)
-	return classifier, classificationService, nil
+	defaultClassifier := classifiers.Default()
+	if defaultClassifier == nil {
+		return nil, nil, nil, fmt.Errorf("default routing recipe classifier is unavailable")
+	}
+	classificationService := services.NewRecipeClassificationService(classifiers, cfg)
+	return classifiers, defaultClassifier, classificationService, nil
 }
 
 func createResponseAPIFilter(cfg *config.RouterConfig) *ResponseAPIFilter {

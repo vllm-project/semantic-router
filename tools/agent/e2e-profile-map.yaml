@@ -135,7 +135,7 @@ profile_rules:
     paths:
       - e2e/profiles/multi-endpoint/**
       - e2e/config/config.multi-endpoint.yaml
-      - scripts/multi-endpoint/**
+      - tools/demos/multi-endpoint.sh
   authz-rbac:
     owner: e2e
     coverage_role: authz-and-rate-limit-contracts

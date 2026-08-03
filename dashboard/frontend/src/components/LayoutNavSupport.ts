@@ -7,6 +7,7 @@ export type LayoutConfigSection =
   | 'signals'
   | 'projections'
   | 'decisions'
+  | 'entrypoints-recipes'
   | 'global-config'
   | 'mcp'
 
@@ -78,6 +79,11 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
         items: [
           { kind: 'config', label: 'Decisions', configSection: 'decisions' },
           { kind: 'config', label: 'Models', configSection: 'models' },
+          {
+            kind: 'config',
+            label: 'Mixture-of-Models',
+            configSection: 'entrypoints-recipes',
+          },
         ],
       },
     ],

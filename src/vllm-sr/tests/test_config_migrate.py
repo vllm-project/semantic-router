@@ -13,6 +13,56 @@ from cli.main import main  # noqa: E402
 from cli.parser import ConfigParseError, parse_user_config  # noqa: E402
 
 
+def test_migrate_preserves_recipes_entrypoints_and_explicit_empty_auto_aliases():
+    source = {
+        "version": "v0.3",
+        "providers": {"defaults": {}, "models": []},
+        "routing": {"modelCards": []},
+        "entrypoints": [
+            {"model_names": ["amd/rocm-v1-balanced"], "recipe": "balanced"}
+        ],
+        "recipes": [
+            {"name": "balanced", "routing": {"decisions": []}},
+        ],
+        "global": {"router": {"auto_model_names": []}},
+    }
+
+    migrated = migrate_config_data(source)
+
+    assert migrated["entrypoints"] == source["entrypoints"]
+    assert migrated["recipes"] == source["recipes"]
+    assert migrated["global"]["router"]["auto_model_names"] == []
+
+
+def test_migrate_relocates_legacy_flat_empty_auto_aliases():
+    migrated = migrate_config_data(
+        {
+            "global": {
+                "auto_model_names": [],
+            },
+        }
+    )
+
+    assert migrated["global"]["router"]["auto_model_names"] == []
+    assert "auto_model_names" not in migrated["global"]
+
+
+def test_migrate_prefers_canonical_auto_aliases_over_legacy_flat_value():
+    migrated = migrate_config_data(
+        {
+            "global": {
+                "auto_model_names": [],
+                "router": {
+                    "auto_model_names": ["router/canonical"],
+                },
+            },
+        }
+    )
+
+    assert migrated["global"]["router"]["auto_model_names"] == ["router/canonical"]
+    assert "auto_model_names" not in migrated["global"]
+
+
 def test_migrate_config_data_splits_legacy_provider_models():
     legacy = {
         "version": "v0.1",
