@@ -37,6 +37,7 @@ Inside canonical `config.yaml`:
 - `global.router.skip_processing.enabled` opts the router into honoring the `x-vsr-skip-processing` request header; defaults to `false` so an arbitrary upstream caller cannot bypass router policy by injecting the header. Enable only when an authenticated upstream filter (ext_authz, etc.) is responsible for setting or stripping the header (see [#1808](https://github.com/vllm-project/semantic-router/issues/1808))
 - router-owned model-backed module config lives under `global.model_catalog.modules`
 - `global.model_catalog.modules.prompt_compression.profile` selects built-in signal-compression scoring defaults (`default`, `coding`, `medical`, `security`, or `multi_turn`); `multi-turn` is accepted as an alias, unknown names fail validation, and explicit weight/preserve fields override the profile.
+- `global.model_catalog.modules.hallucination_mitigation.detector.backend` selects the hallucination span detector: `candle` (default) runs the in-process token classifier, while `endpoint` calls a generative span detector behind an OpenAI-compatible server. The `endpoint` backend requires an absolute `http(s)` `detector.endpoint` and a `detector.model_id`; an unknown backend fails config validation.
 
 `config/decision/` is organized by boolean rule shape:
 
