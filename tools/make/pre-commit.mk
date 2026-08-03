@@ -60,5 +60,6 @@ precommit-local:
 	$$CONTAINER_CMD run --rm \
 	    -e AGENT_BASE_REF="$(AGENT_BASE_REF)" \
 	    -v $(shell pwd):/app \
+	    -v /app/.venv-agent \
 	    -w /app \
 	    ${PRECOMMIT_CONTAINER} bash -c 'make precommit-branch-gate'
