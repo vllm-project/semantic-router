@@ -66,6 +66,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
 - `global.model_catalog.classifiers[]` is the reusable registry for startup-loaded classifier packages such as taxonomy classifiers
 - `global.model_catalog.modules` groups capability modules such as `prompt_guard`, `classifier`, `complexity`, and `hallucination_mitigation`
 - `global.model_catalog.modules.prompt_compression.profile` provides built-in signal-compression scoring defaults for `default`, `coding`, `medical`, `security`, and `multi_turn` workloads. The `multi-turn` alias is normalized to `multi_turn`, unknown profile names fail config validation, and explicit weights/preserve counts override the selected profile.
+- `global.model_catalog.modules.hallucination_mitigation.detector.backend` selects the hallucination span detector backend. It defaults to `candle` (the in-process token classifier); set it to `endpoint` to call a generative span detector behind an OpenAI-compatible server, which then requires an absolute `http(s)` `detector.endpoint` plus a `detector.model_id`. Config validation rejects any other value.
 
 ## Canonical example
 

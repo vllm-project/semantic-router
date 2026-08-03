@@ -19,6 +19,9 @@ const (
 	NLINeutral = candle.NLINeutral
 	// NLIContradiction means the premise contradicts the hypothesis.
 	NLIContradiction = candle.NLIContradiction
+	// NLIUnknown means no NLI judgment is available (e.g. the endpoint backend,
+	// which does not produce NLI labels).
+	NLIUnknown = candle.NLIUnknown
 	// NLIError means an error occurred during classification.
 	NLIError = candle.NLIError
 )
