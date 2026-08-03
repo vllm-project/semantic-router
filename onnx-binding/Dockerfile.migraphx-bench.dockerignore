@@ -1,0 +1,16 @@
+# Keep the MIGraphX bench image build reproducible and small.
+target/
+.git/
+.github/
+
+# Model artifacts should be mounted at runtime, not baked into the image.
+models/
+mmbert-*/
+*.onnx
+*.safetensors
+
+# Local benchmark output and editor state.
+*.jsonl
+*.log
+*.md.tmp
+.DS_Store

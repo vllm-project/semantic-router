@@ -49,21 +49,13 @@ tempfile = "3.8"
 criterion = "0.5"
 
 [[example]]
-name = "test_gpu"
-path = "examples/test_gpu.rs"
-
-[[example]]
 name = "benchmark_cpu_vs_gpu"
 path = "examples/benchmark_cpu_vs_gpu.rs"
 
 [[example]]
-name = "benchmark_f16_openvino"
-path = "examples/benchmark_f16_openvino.rs"
-
-[[example]]
-name = "test_classifier"
-path = "examples/test_classifier.rs"
-
-[[example]]
 name = "benchmark_mmbert_latency"
 path = "examples/benchmark_mmbert_latency.rs"
+
+[[example]]
+name = "benchmark_mmbert_ort_providers"
+path = "examples/benchmark_mmbert_ort_providers.rs"

@@ -389,10 +389,7 @@ impl MmBertEmbeddingModel {
         let dir = model_path.as_ref();
         let onnx_subdir = dir.join("onnx");
 
-        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .is_some();
+        let has_fa = crate::core::ort_migraphx::ck_flash_attention_available();
         let candidates: &[&str] = if has_fa {
             &[
                 "model_fa_fp16.onnx",
@@ -475,63 +472,17 @@ impl MmBertEmbeddingModel {
                 .commit_from_file(onnx_path.as_ref())
                 .map_err(|e: ort::Error| errors::model_load(&onnx_path_str, &e.to_string()))?
         } else {
-            #[cfg(any(feature = "rocm", feature = "migraphx"))]
+            #[cfg(any(feature = "migraphx", feature = "rocm"))]
             {
-                use crate::core::gpu_memory;
-                use ort::execution_providers::{ArenaExtendStrategy, ROCmExecutionProvider};
-                let mem_limit = gpu_memory::get_gpu_mem_limit();
-                let ck_fa_lib = std::env::var("ORT_CK_FLASH_ATTN_LIB")
-                    .ok()
-                    .filter(|s| !s.is_empty());
-                if let Some(ref lib) = ck_fa_lib {
-                    println!("INFO: CK Flash Attention custom op library: {}", lib);
-                }
-                let maybe_register_custom_ops = |builder: ort::session::builder::SessionBuilder| -> Result<
-                    ort::session::builder::SessionBuilder,
-                    ort::Error,
-                > {
-                    if let Some(ref lib) = ck_fa_lib {
-                        builder.with_operator_library(lib)
-                    } else {
-                        Ok(builder)
-                    }
-                };
-                println!("INFO: Attempting ROCm execution provider...");
-                match Session::builder()
-                    .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                    .with_execution_providers([ROCmExecutionProvider::default()
-                        .with_mem_limit(mem_limit)
-                        .with_arena_extend_strategy(ArenaExtendStrategy::SameAsRequested)
-                        .build()
-                        .error_on_failure()])
-                    .and_then(|b| maybe_register_custom_ops(b))
-                    .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
-                {
-                    Ok(session) => {
-                        println!("INFO: Using ROCm execution provider (AMD GPU) — verified");
-                        return Ok(session);
-                    }
-                    Err(e) => println!("WARN: ROCm EP failed: {}", e),
-                }
-            }
-
-            #[cfg(feature = "migraphx")]
-            {
-                use ort::execution_providers::MIGraphXExecutionProvider;
-                println!("INFO: Attempting MIGraphX execution provider...");
-                match Session::builder()
-                    .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                    .with_execution_providers([MIGraphXExecutionProvider::default()
-                        .with_fp16(true)
-                        .build()
-                        .error_on_failure()])
-                    .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
-                {
-                    Ok(session) => {
-                        println!("INFO: Using MIGraphX execution provider (AMD GPU) — verified");
-                        return Ok(session);
-                    }
-                    Err(e) => println!("WARN: MIGraphX EP failed: {}", e),
+                let ck_fa_lib = crate::core::ort_migraphx::ck_flash_attention_library_for_model(
+                    onnx_path.as_ref(),
+                );
+                match crate::core::ort_migraphx::create_amd_session(
+                    onnx_path.as_ref(),
+                    ck_fa_lib.as_deref(),
+                ) {
+                    Ok(amd_session) => return Ok(amd_session.session),
+                    Err(e) => println!("WARN: AMD execution providers failed: {e}"),
                 }
             }
 
@@ -595,10 +546,7 @@ impl MmBertEmbeddingModel {
         let model_dir = model_path.as_ref();
         let onnx_dir = model_dir.join("onnx");
 
-        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .is_some();
+        let has_fa = crate::core::ort_migraphx::ck_flash_attention_available();
 
         for layer in layers {
             let layer_filename = format!("model_layer_{}.onnx", layer);

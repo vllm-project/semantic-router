@@ -175,48 +175,16 @@ impl MultiModalEmbeddingModel {
                 .map_err(|e| errors::model_load(&path_str, &e.to_string()));
         }
 
-        #[cfg(feature = "migraphx")]
+        #[cfg(any(feature = "migraphx", feature = "rocm"))]
         {
-            use ort::execution_providers::MIGraphXExecutionProvider;
-            match Session::builder()
-                .map_err(|e| errors::ort_error(&e.to_string()))
-                .and_then(|b| {
-                    b.with_execution_providers([MIGraphXExecutionProvider::default()
-                        .with_fp16(true)
-                        .build()
-                        .error_on_failure()])
-                        .map_err(|e| errors::ort_error(&e.to_string()))
-                })
-                .and_then(|b| {
-                    b.commit_from_file(onnx_path.as_ref())
-                        .map_err(|e| errors::model_load(&path_str, &e.to_string()))
-                }) {
-                Ok(s) => return Ok(s),
-                Err(e) => println!("WARN: MIGraphX EP failed: {}", e),
-            }
-        }
-
-        #[cfg(feature = "rocm")]
-        {
-            use crate::core::gpu_memory;
-            use ort::execution_providers::{ArenaExtendStrategy, ROCmExecutionProvider};
-            let mem_limit = gpu_memory::get_gpu_mem_limit();
-            match Session::builder()
-                .map_err(|e| errors::ort_error(&e.to_string()))
-                .and_then(|b| {
-                    b.with_execution_providers([ROCmExecutionProvider::default()
-                        .with_mem_limit(mem_limit)
-                        .with_arena_extend_strategy(ArenaExtendStrategy::SameAsRequested)
-                        .build()
-                        .error_on_failure()])
-                        .map_err(|e| errors::ort_error(&e.to_string()))
-                })
-                .and_then(|b| {
-                    b.commit_from_file(onnx_path.as_ref())
-                        .map_err(|e| errors::model_load(&path_str, &e.to_string()))
-                }) {
-                Ok(s) => return Ok(s),
-                Err(e) => println!("WARN: ROCm EP failed: {}", e),
+            let ck_fa_lib =
+                crate::core::ort_migraphx::ck_flash_attention_library_for_model(onnx_path.as_ref());
+            match crate::core::ort_migraphx::create_amd_session(
+                onnx_path.as_ref(),
+                ck_fa_lib.as_deref(),
+            ) {
+                Ok(amd_session) => return Ok(amd_session.session),
+                Err(e) => println!("WARN: AMD execution providers failed: {e}"),
             }
         }
 
