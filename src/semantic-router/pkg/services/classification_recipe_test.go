@@ -18,7 +18,7 @@ func TestEvalDecisionCandidatesSelectsEntrypointRecipe(t *testing.T) {
 			Decisions: []config.Decision{{Name: "balanced_route"}},
 		},
 		Entrypoints: []config.EntrypointMapping{
-			{ModelNames: []string{"amd/rocm-v1-flash"}, Recipe: speedRecipe},
+			{ModelNames: []string{"router/speed-flash"}, Recipe: speedRecipe},
 		},
 		Recipes: []config.RoutingRecipe{
 			{Name: config.DefaultRecipeName, Profile: config.RoutingProfile{Decisions: []config.Decision{{Name: "balanced_route"}}}},
@@ -27,25 +27,25 @@ func TestEvalDecisionCandidatesSelectsEntrypointRecipe(t *testing.T) {
 	}
 	service := &ClassificationService{config: routerConfig}
 
-	_, candidates, recipe, err := service.evalRoutingScope("amd/rocm-v1-flash")
+	_, candidates, recipe, err := service.evalRoutingScope("router/speed-flash")
 	require.NoError(t, err)
 	require.Len(t, candidates, 1)
 	assert.Equal(t, "flash_route", candidates[0].Name)
 	assert.Equal(t, speedRecipe, recipe)
 
-	_, _, _, err = service.evalRoutingScope("amd/rocm-v1-missing")
+	_, _, _, err = service.evalRoutingScope("router/missing")
 	require.ErrorIs(t, err, ErrUnknownRoutingModel)
 
 	response, err := service.ClassifyIntentForEval(IntentRequest{
 		Text:  "hello",
-		Model: "amd/rocm-v1-flash",
+		Model: "router/speed-flash",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, speedRecipe, response.Recipe)
 
 	_, err = service.ClassifyIntentForEval(IntentRequest{
 		Text:  "hello",
-		Model: "amd/rocm-v1-missing",
+		Model: "router/missing",
 	})
 	require.ErrorIs(t, err, ErrUnknownRoutingModel)
 }

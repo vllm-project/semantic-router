@@ -47,7 +47,7 @@ def test_container_create_network_does_not_match_namespaced_suffix(monkeypatch):
             return subprocess.CompletedProcess(
                 command,
                 0,
-                stdout="mom-amd-v1-vllm-sr-network\n",
+                stdout="isolated-v1-vllm-sr-network\n",
                 stderr="",
             )
         return subprocess.CompletedProcess(command, 0, stdout="network-id\n", stderr="")
