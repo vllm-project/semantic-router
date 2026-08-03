@@ -24,10 +24,11 @@ type Classifier struct {
 	mcpCategoryInference   MCPCategoryInference
 
 	// Hallucination mitigation classifiers
-	factCheckClassifier   *FactCheckClassifier
-	hallucinationDetector *HallucinationDetector
-	feedbackDetector      *FeedbackDetector
-	reaskClassifier       *ReaskClassifier
+	factCheckClassifier           *FactCheckClassifier
+	hallucinationDetector         *HallucinationDetector
+	endpointHallucinationDetector *EndpointHallucinationDetector
+	feedbackDetector              *FeedbackDetector
+	reaskClassifier               *ReaskClassifier
 
 	// Preference classifier for route matching via external LLM
 	preferenceClassifier *PreferenceClassifier
