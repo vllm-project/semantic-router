@@ -29,6 +29,7 @@ type routerComponents struct {
 	cfg                  *config.RouterConfig
 	categoryDescriptions []string
 	classifier           *classification.Classifier
+	recipeClassifiers    *classification.RecipeClassifiers
 	classificationSvc    *services.ClassificationService
 	semanticCache        cache.CacheBackend
 	toolsDatabase        *tools.ToolsDatabase
@@ -37,6 +38,7 @@ type routerComponents struct {
 	replayStoreShared    bool
 	replayRecorders      map[string]*routerreplay.Recorder
 	modelSelector        *selection.Registry
+	recipeModelSelectors map[config.RecipeName]*selection.Registry
 	lookupTable          lookuptable.LookupTable
 	memoryStore          memory.Store
 	memoryExtractor      *memory.MemoryExtractor
@@ -168,7 +170,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	if err != nil {
 		return nil, err
 	}
-	classifier, classificationSvc, err := createRouterClassifier(cfg, mappings)
+	recipeClassifiers, classifier, classificationSvc, err := createRouterClassifier(cfg, mappings)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +181,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	if replayRecorder != nil {
 		replayReaderForLookup = replayRecorder.Reader()
 	}
-	modelSelector, lookupTable, lookupTableCancel := createModelSelectorRegistry(cfg, replayReaderForLookup)
+	recipeModelSelectors, modelSelector, lookupTable, lookupTableCancel := createModelSelectorRegistries(cfg, replayReaderForLookup)
 	memoryStore, memoryExtractor := createMemoryRuntime(cfg)
 	credentialResolver := buildCredentialResolver(cfg)
 	rateLimiter := buildRateLimitResolver(cfg)
@@ -199,6 +201,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		cfg:                  cfg,
 		categoryDescriptions: categoryDescriptions,
 		classifier:           classifier,
+		recipeClassifiers:    recipeClassifiers,
 		classificationSvc:    classificationSvc,
 		semanticCache:        semanticCache,
 		toolsDatabase:        toolsDatabase,
@@ -207,6 +210,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		replayStoreShared:    replayStoreShared,
 		replayRecorders:      replayRecorders,
 		modelSelector:        modelSelector,
+		recipeModelSelectors: recipeModelSelectors,
 		lookupTable:          lookupTable,
 		memoryStore:          memoryStore,
 		memoryExtractor:      memoryExtractor,
@@ -221,6 +225,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		Config:                components.cfg,
 		CategoryDescriptions:  components.categoryDescriptions,
 		Classifier:            components.classifier,
+		RecipeClassifiers:     components.recipeClassifiers,
 		ClassificationService: components.classificationSvc,
 		Cache:                 components.semanticCache,
 		ToolsDatabase:         components.toolsDatabase,
@@ -228,6 +233,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ReplayRecorder:        components.replayRecorder,
 		ReplayStoreShared:     components.replayStoreShared,
 		ModelSelector:         components.modelSelector,
+		RecipeModelSelectors:  components.recipeModelSelectors,
 		LookupTable:           components.lookupTable,
 		ReplayRecorders:       components.replayRecorders,
 		MemoryStore:           components.memoryStore,

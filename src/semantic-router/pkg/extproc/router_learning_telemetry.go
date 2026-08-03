@@ -44,7 +44,7 @@ func (r *OpenAIRouter) observeRouterLearningUsageTelemetry(
 	}
 	inputCostMultiplier := r.learningInputCostMultiplier(ctx.RequestModel, usage)
 	r.routerLearningRuntimeState().recordModelTelemetry(
-		ctx.VSRSelectedDecisionName,
+		requestDecisionStateKey(ctx),
 		decisionTier(ctx),
 		ctx.RequestModel,
 		routerLearningTelemetryObservation{
@@ -67,7 +67,7 @@ func (r *OpenAIRouter) observeRouterLearningProviderStatus(ctx *RequestContext, 
 		return
 	}
 	r.routerLearningRuntimeState().recordModelTelemetry(
-		ctx.VSRSelectedDecisionName,
+		requestDecisionStateKey(ctx),
 		decisionTier(ctx),
 		ctx.RequestModel,
 		routerLearningTelemetryObservation{ProviderFailureObserved: true},

@@ -26,8 +26,8 @@ description: Modifies training-stack workflows, selector or embedding pipelines,
 
 ## Must Read
 
-- [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
-- [docs/agent/repo-map.md](../../../../docs/agent/repo-map.md)
+- [tools/agent/docs/change-surfaces.md](../../../../tools/agent/docs/change-surfaces.md)
+- [tools/agent/docs/repo-map.md](../../../../tools/agent/docs/repo-map.md)
 
 ## Standard Commands
 

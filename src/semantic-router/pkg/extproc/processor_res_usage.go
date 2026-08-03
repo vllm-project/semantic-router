@@ -134,7 +134,11 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 }
 
 func (r *OpenAIRouter) calibrateTokenEstimator(ctx *RequestContext, actualPromptTokens int) {
-	if r == nil || r.Classifier == nil || ctx == nil || actualPromptTokens <= 0 {
+	if r == nil || ctx == nil || actualPromptTokens <= 0 {
+		return
+	}
+	classifier := r.classifierForRequest(ctx)
+	if classifier == nil {
 		return
 	}
 	byteLen := tokenCalibrationByteLen(ctx)
@@ -142,9 +146,9 @@ func (r *OpenAIRouter) calibrateTokenEstimator(ctx *RequestContext, actualPrompt
 		return
 	}
 
-	r.Classifier.ObserveTokenUsage("", byteLen, actualPromptTokens)
+	classifier.ObserveTokenUsage("", byteLen, actualPromptTokens)
 	if category := tokenCalibrationCategory(ctx); category != "" {
-		r.Classifier.ObserveTokenUsage(category, byteLen, actualPromptTokens)
+		classifier.ObserveTokenUsage(category, byteLen, actualPromptTokens)
 	}
 }
 

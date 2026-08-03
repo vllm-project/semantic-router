@@ -1,12 +1,7 @@
 """Configuration validator for vLLM Semantic Router."""
 
 from typing import Any, List
-from cli.config_contract import (
-    build_projection_reference_index,
-    build_signal_reference_index,
-    is_signal_condition_type,
-    signal_reference_exists,
-)
+from cli.config_contract import iter_routing_profiles
 from cli.models import (
     UserConfig,
     PluginType,
@@ -31,10 +26,15 @@ from cli.validator_projection_embedding import (
     validate_embedding_modality_compatibility,
     validate_projection_score_dependencies,
 )
+from cli.validator_recipe_contracts import (
+    validate_domain_references,
+    validate_recipe_contracts,
+)
 from cli.validator_workflows import (
     validate_static_workflow_roles,
     validate_workflow_final_model,
 )
+from cli.validator_signal_references import validate_signal_references
 
 log = get_logger(__name__)
 
@@ -64,6 +64,12 @@ ALGORITHM_CONFIG_BLOCKS = (
     "multi_factor",
 )
 
+
+def _iter_profile_decisions(config: UserConfig):
+    for _, routing in iter_routing_profiles(config):
+        yield from routing.decisions
+
+
 MIGRATED_LEARNING_ALGORITHM_TARGETS = {
     "elo": "global.router.learning.adaptation",
     "rl_driven": "global.router.learning.adaptation",
@@ -71,22 +77,6 @@ MIGRATED_LEARNING_ALGORITHM_TARGETS = {
     "bandit": "global.router.learning.adaptation",
     "personalization": "global.router.learning.adaptation",
 }
-
-
-def _is_latency_condition(condition_type: str) -> bool:
-    if not condition_type:
-        return False
-    return condition_type.strip().lower() == "latency"
-
-
-def _iter_condition_nodes(conditions):
-    """Depth-first traversal over recursive condition trees."""
-    if not conditions:
-        return
-    for condition in conditions:
-        yield condition
-        if getattr(condition, "conditions", None):
-            yield from _iter_condition_nodes(condition.conditions)
 
 
 def _iter_merged_condition_nodes(conditions):
@@ -107,30 +97,11 @@ def _is_latency_aware_algorithm(decision) -> bool:
     return (decision.algorithm.type or "").strip().lower() == "latency_aware"
 
 
-def validate_latency_compatibility(config: UserConfig) -> List[ValidationError]:
-    errors = []
-    has_legacy_conditions = any(
-        _is_latency_condition(condition.type)
-        for decision in config.decisions
-        for condition in _iter_condition_nodes(decision.rules.conditions)
-    )
-
-    if has_legacy_conditions:
-        errors.append(
-            ValidationError(
-                "legacy latency config is no longer supported; use decision.algorithm.type=latency_aware and remove conditions.type=latency",
-                field="decisions.rules.conditions",
-            )
-        )
-
-    return errors
-
-
 def validate_latency_aware_algorithm_config(
     config: UserConfig,
 ) -> List[ValidationError]:
     errors = []
-    for decision in config.decisions:
+    for decision in _iter_profile_decisions(config):
         if not _is_latency_aware_algorithm(decision):
             continue
         latency_cfg = decision.algorithm.latency_aware
@@ -223,7 +194,7 @@ def validate_migrated_learning_blocks(decision) -> List[ValidationError]:
 def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
     errors = []
 
-    for decision in config.decisions:
+    for decision in _iter_profile_decisions(config):
         if decision.algorithm is None:
             continue
 
@@ -276,88 +247,6 @@ def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
     return errors
 
 
-def validate_signal_references(config: UserConfig) -> List[ValidationError]:
-    """
-    Validate that all signal references in decisions exist.
-
-    Args:
-        config: User configuration
-
-    Returns:
-        list: List of validation errors
-    """
-    errors = []
-
-    signal_names = build_signal_reference_index(config.signals)
-    projection_names = build_projection_reference_index(config.routing.projections)
-
-    # Check decision conditions
-    for decision in config.decisions:
-        for condition in _iter_condition_nodes(decision.rules.conditions):
-            if (condition.type or "").strip().lower() == "projection":
-                if condition.name in projection_names:
-                    continue
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' references unknown projection '{condition.name}'",
-                        field=f"decisions.{decision.name}.rules.conditions",
-                    )
-                )
-                continue
-            if not is_signal_condition_type(condition.type):
-                continue
-            if signal_reference_exists(signal_names, condition.type, condition.name):
-                continue
-            errors.append(
-                ValidationError(
-                    f"Decision '{decision.name}' references unknown signal '{condition.name}'",
-                    field=f"decisions.{decision.name}.rules.conditions",
-                )
-            )
-
-    return errors
-
-
-def validate_domain_references(config: UserConfig) -> List[ValidationError]:
-    """
-    Validate that all domain references in decisions exist.
-
-    Args:
-        config: User configuration
-
-    Returns:
-        list: List of validation errors
-    """
-    errors = []
-
-    # Build domain name index
-    domain_names = set()
-    if config.signals and config.signals.domains:
-        for domain in config.signals.domains:
-            domain_names.add(domain.name)
-
-    # If no domains defined, collect from decisions (will be auto-generated)
-    if not domain_names:
-        for decision in config.decisions:
-            for condition in _iter_condition_nodes(decision.rules.conditions):
-                if condition.type == "domain":
-                    domain_names.add(condition.name)
-
-    # Check decision conditions
-    for decision in config.decisions:
-        for condition in _iter_condition_nodes(decision.rules.conditions):
-            if condition.type == "domain":
-                if not domain_names:
-                    errors.append(
-                        ValidationError(
-                            f"Decision '{decision.name}' references domain '{condition.name}' but no domains are defined",
-                            field=f"decisions.{decision.name}.rules.conditions",
-                        )
-                    )
-
-    return errors
-
-
 def validate_model_references(config: UserConfig) -> List[ValidationError]:
     """
     Validate that all model references in decisions exist.
@@ -396,7 +285,7 @@ def validate_model_references(config: UserConfig) -> List[ValidationError]:
             )
 
     # Check decision model references
-    for decision in config.decisions:
+    for decision in _iter_profile_decisions(config):
         for model_ref in decision.modelRefs:
             if model_ref.model not in provider_model_names:
                 errors.append(
@@ -522,7 +411,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.TOOL_SELECTION.value: ToolSelectionPluginConfig,
     }
 
-    for decision in config.decisions:
+    for decision in _iter_profile_decisions(config):
         if not decision.plugins:
             continue
 
@@ -626,7 +515,7 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     }
     all_types = looper_types | selection_types
 
-    for decision in config.decisions:
+    for decision in _iter_profile_decisions(config):
         if not decision.algorithm:
             continue
 
@@ -675,6 +564,22 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
             if mode == "static":
                 errors.extend(validate_static_workflow_roles(decision, workflows_cfg))
 
+        remom_cfg = getattr(algo, "remom", None)
+        if (
+            algo_type == "remom"
+            and remom_cfg is not None
+            and remom_cfg.synthesis_model
+            and remom_cfg.synthesis_model
+            not in {model_ref.model for model_ref in decision.modelRefs}
+        ):
+            errors.append(
+                ValidationError(
+                    f"Decision '{decision.name}' ReMoM synthesis_model "
+                    f"'{remom_cfg.synthesis_model}' is not present in modelRefs",
+                    field=f"decisions.{decision.name}.algorithm.remom.synthesis_model",
+                )
+            )
+
     return errors
 
 
@@ -692,9 +597,10 @@ def validate_user_config(config: UserConfig) -> List[ValidationError]:
 
     errors = []
 
+    errors.extend(validate_recipe_contracts(config))
+
     # Validate signal references
     errors.extend(validate_signal_references(config))
-    errors.extend(validate_latency_compatibility(config))
     errors.extend(validate_algorithm_one_of(config))
     errors.extend(validate_latency_aware_algorithm_config(config))
 

@@ -1,0 +1,80 @@
+name: accuracy
+description: >
+  Backend-independent Eval API probes for accuracy-oriented orchestration.
+  The suite verifies that expensive fan-out is reserved for tasks with a clear
+  quality benefit, while long-context and ordinary traffic stay single-model.
+routing_assets:
+  yaml: config/recipes/accuracy/config.yaml
+  dsl: config/recipes/accuracy/recipe.dsl
+router_eval_endpoint: /api/v1/eval
+evaluation:
+  request_timeout_seconds: 300
+  concurrency: 4
+acceptance:
+  min_probe_pass_rate: 100.0
+  min_decision_pass_rate: 100.0
+decisions:
+  - id: accuracy_workflow
+    expected_decision: accuracy_workflow
+    expected_algorithm: workflows
+    expected_alias: opus48-worker
+    variants:
+      - id: evidence_workstreams_en
+        query: Research, compare, and synthesize the evidence, then break this into independent workstreams.
+        expected_signals:
+          keywords: [accuracy_workflow_request]
+        tags: [language:en, orchestration, accuracy]
+      - id: root_cause_zh
+        query: 请做根因分析并验证修复，把任务分解为独立工作流。
+        tags: [language:zh, orchestration, accuracy]
+      - id: tool_evidence
+        query: Use tools to gather evidence, investigate the incident, and produce an implementation plan.
+        tags: [language:en, tools, accuracy]
+
+  - id: accuracy_long_context_direct
+    expected_decision: accuracy_long_context_direct
+    expected_algorithm: static
+    expected_alias: gpt55-worker
+    variants:
+      - id: long_architecture_context
+        query: Background architecture context that must be summarized without multi-model fan-out.
+        repeat: 2600
+        expected_signals:
+          context: [accuracy_long_context]
+        tags: [stress:long-input, performance, single-model]
+      - id: long_multilingual_context
+        query: Contexte technique détaillé à résumer directement sans orchestration parallèle.
+        repeat: 2600
+        tags: [stress:long-input, language:fr, performance]
+
+  - id: accuracy_deliberation
+    expected_decision: accuracy_deliberation
+    expected_algorithm: fusion
+    expected_alias: opus48-worker
+    variants:
+      - id: competing_hypotheses
+        query: Compare competing hypotheses, request independent expert opinions, and reach a verdict.
+        expected_signals:
+          keywords: [accuracy_deliberation_request]
+        tags: [language:en, deliberation, accuracy]
+      - id: adversarial_review
+        query: Perform an adversarial review and challenge the proposed solution from both sides.
+        tags: [language:en, deliberation, accuracy]
+      - id: verdict_zh
+        query: 比较多个假设并得出结论，对方案进行对抗性审查。
+        tags: [language:zh, deliberation, accuracy]
+
+  - id: accuracy_direct
+    expected_decision: accuracy_direct
+    expected_algorithm: static
+    expected_alias: gpt55-worker
+    variants:
+      - id: direct_explanation
+        query: Explain how a mutex differs from a semaphore.
+        tags: [language:en, negative, single-model]
+      - id: direct_summary_es
+        query: Resume este párrafo técnico en tres frases.
+        tags: [language:es, negative, single-model]
+      - id: negated_fanout
+        query: Do not debate both sides or create workstreams; answer the question directly.
+        tags: [language:en, negation, single-model]

@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelpricing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -124,6 +125,10 @@ type TurnParams struct {
 	RequestID string
 	Model     string
 	Domain    string // VSR category; empty -> "unknown"
+	// RoutingScope namespaces internal cumulative/session state while the
+	// client-visible session identifier remains unchanged in logs.
+	RoutingScope     config.RecipeName
+	SkipRoutingState bool
 
 	PromptTokens                int
 	CachedPromptTokens          int
@@ -193,8 +198,12 @@ func RecordTurn(p TurnParams) {
 	costThisTurn := computeCost(p.PromptTokens, p.CachedPromptTokens, p.CacheWriteTokens, p.CompletionTokens, p.Pricing)
 
 	t := nowFn()
-	cumulative := recordTurnState(key, p, costThisTurn, t)
-	recordRouterSessionUsage(publicSessionID, model, p, costThisTurn, t)
+	stateKey := scopedTelemetrySessionID(p.RoutingScope, key)
+	stateSessionID := scopedTelemetrySessionID(p.RoutingScope, publicSessionID)
+	cumulative := recordTurnState(stateKey, p, costThisTurn, t)
+	if !p.SkipRoutingState {
+		recordRouterSessionUsage(stateSessionID, model, p, costThisTurn, t)
+	}
 
 	metrics.RecordSessionTurnTokens(model, domain, float64(p.PromptTokens), float64(p.CompletionTokens))
 	currency := pricingCurrency(p.Pricing)
@@ -202,6 +211,10 @@ func RecordTurn(p TurnParams) {
 		metrics.RecordSessionTurnCost(model, domain, currency, costThisTurn)
 	}
 	logSessionTurn(p, publicSessionID, turn, apiKind, model, domain, currency, costThisTurn, cumulative, t)
+}
+
+func scopedTelemetrySessionID(scope config.RecipeName, sessionID string) string {
+	return config.RoutingNamespaceKey(scope, sessionID)
 }
 
 func recordTurnState(key string, p TurnParams, costThisTurn float64, t time.Time) turnCumulativeState {

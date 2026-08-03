@@ -20,15 +20,6 @@ type looperBackendRoute struct {
 	found          bool
 }
 
-// findDecisionByName finds a decision by name in the router configuration,
-// including decisions living in non-default recipes.
-func (r *OpenAIRouter) findDecisionByName(name string) *config.Decision {
-	if r.Config == nil {
-		return nil
-	}
-	return r.Config.GetDecisionByName(name)
-}
-
 // getReasoningInfoFromDecision extracts reasoning configuration from a decision for a specific model.
 func (r *OpenAIRouter) getReasoningInfoFromDecision(
 	decision *config.Decision,
@@ -107,7 +98,7 @@ func (r *OpenAIRouter) modifyRequestBodyForLooper(
 	modifiedBody, err = r.setReasoningModeToRequestBody(
 		modifiedBody,
 		useReasoning,
-		decisionName,
+		ctx.VSRSelectedDecision,
 	)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "looper_reasoning_mode_apply_failed", map[string]interface{}{
@@ -351,7 +342,10 @@ func (r *OpenAIRouter) resolveLooperDecision(
 		"decision":   decisionName,
 	})
 
-	decision := r.findDecisionByName(decisionName)
+	decision := ctx.VSRSelectedDecision
+	if decision != nil && decision.Name != decisionName {
+		decision = nil
+	}
 	if decision != nil {
 		return decision, nil
 	}
@@ -377,7 +371,7 @@ func (r *OpenAIRouter) prepareLooperInternalContext(
 	ctx.VSRSelectedModel = modelName
 	ctx.RequestModel = modelName
 
-	if replayCfg := r.Config.EffectiveRouterReplayConfigForDecision(decisionName); replayCfg != nil {
+	if replayCfg := r.Config.EffectiveRouterReplayConfig(decision); replayCfg != nil {
 		cfgCopy := *replayCfg
 		ctx.RouterReplayPluginConfig = &cfgCopy
 		logging.ComponentDebugEvent("extproc", "looper_router_replay_enabled", map[string]interface{}{

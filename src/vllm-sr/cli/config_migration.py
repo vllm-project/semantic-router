@@ -47,6 +47,9 @@ def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
         "providers": providers,
         "routing": routing,
     }
+    for key in ("entrypoints", "recipes"):
+        if key in source:
+            canonical[key] = deepcopy(source[key])
     if global_config:
         canonical["global"] = global_config
     if "setup" in source:
@@ -265,6 +268,9 @@ def _move_legacy_global_blocks(
             or key in LEGACY_ROUTING_KEYS
             or key in LEGACY_PROVIDER_KEYS
         ):
+            continue
+        if key == "auto_model_names" and isinstance(value, list):
+            _ensure_dict(global_config, "router").setdefault(key, deepcopy(value))
             continue
         if value in (None, "", [], {}):
             continue
@@ -519,6 +525,10 @@ def _normalize_global_layout(global_config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _place_global_block(global_config: dict[str, Any], key: str, value: Any) -> None:
+    if key == "auto_model_names" and isinstance(value, list):
+        _ensure_dict(global_config, "router").setdefault(key, deepcopy(value))
+        global_config.pop(key, None)
+        return
     if value in (None, "", [], {}):
         return
 

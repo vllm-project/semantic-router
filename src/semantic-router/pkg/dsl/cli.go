@@ -64,7 +64,8 @@ func emitMergedConfig(cfg *config.RouterConfig, basePath string) ([]byte, error)
 	return MergeRoutingIntoBase(cfg, baseData)
 }
 
-// CLIDecompile reads a YAML config file and converts its routing surface to DSL text.
+// CLIDecompile reads a YAML config file and converts its default routing
+// profile plus entrypoint and recipe scopes to DSL text.
 func CLIDecompile(inputPath, outputPath string) error {
 	data, err := os.ReadFile(inputPath)
 	if err != nil {
@@ -79,7 +80,7 @@ func CLIDecompile(inputPath, outputPath string) error {
 		}
 	}
 
-	dslText, err := DecompileRouting(cfg)
+	dslText, err := Decompile(cfg)
 	if err != nil {
 		return fmt.Errorf("decompilation failed: %w", err)
 	}

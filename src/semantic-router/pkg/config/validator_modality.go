@@ -3,6 +3,16 @@ package config
 import "fmt"
 
 func validateModalityContracts(cfg *RouterConfig) error {
+	if err := validateGlobalModalityContracts(cfg); err != nil {
+		return err
+	}
+	return validateRoutingModalityContracts(cfg)
+}
+
+func validateGlobalModalityContracts(cfg *RouterConfig) error {
+	if cfg == nil {
+		return nil
+	}
 	if cfg.ModalityDetector.Enabled {
 		if err := cfg.ModalityDetector.Validate(); err != nil {
 			return fmt.Errorf("modality_detector: %w", err)
@@ -10,6 +20,13 @@ func validateModalityContracts(cfg *RouterConfig) error {
 	}
 	if err := validateImageGenBackends(cfg); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateRoutingModalityContracts(cfg *RouterConfig) error {
+	if cfg == nil {
+		return nil
 	}
 	if err := validateModalityDecisions(cfg); err != nil {
 		return err

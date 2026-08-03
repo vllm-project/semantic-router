@@ -69,6 +69,9 @@ func emitSemanticCachePluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	if cfg.SimilarityThreshold != nil {
 		fmt.Fprintf(sb, "    similarity_threshold: %v\n", *cfg.SimilarityThreshold)
 	}
+	if cfg.TTLSeconds != nil {
+		fmt.Fprintf(sb, "    ttl_seconds: %d\n", *cfg.TTLSeconds)
+	}
 }
 
 func emitRouterReplayPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
@@ -90,6 +93,12 @@ func emitRouterReplayPluginConfig(sb *strings.Builder, p *config.DecisionPlugin)
 	}
 	if cfg.MaxBodyBytes != 0 {
 		fmt.Fprintf(sb, "    max_body_bytes: %d\n", cfg.MaxBodyBytes)
+	}
+	if cfg.MaxToolTraceBytes != 0 {
+		fmt.Fprintf(sb, "    max_tool_trace_bytes: %d\n", cfg.MaxToolTraceBytes)
+	}
+	if cfg.MaxToolTraceSteps != 0 {
+		fmt.Fprintf(sb, "    max_tool_trace_steps: %d\n", cfg.MaxToolTraceSteps)
 	}
 }
 
@@ -125,6 +134,12 @@ func emitHallucinationPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	}
 	if cfg.HallucinationAction != "" {
 		fmt.Fprintf(sb, "    hallucination_action: %q\n", cfg.HallucinationAction)
+	}
+	if cfg.UnverifiedFactualAction != "" {
+		fmt.Fprintf(sb, "    unverified_factual_action: %q\n", cfg.UnverifiedFactualAction)
+	}
+	if cfg.IncludeHallucinationDetails {
+		fmt.Fprintf(sb, "    include_hallucination_details: true\n")
 	}
 }
 

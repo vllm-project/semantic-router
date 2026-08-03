@@ -38,6 +38,7 @@ func (r *OpenAIRouter) buildRequestParamsMutations(
 	decision *config.Decision,
 	requestBody []byte,
 	profile *config.ProviderProfile,
+	routingScope config.RecipeName,
 ) ([]byte, error) {
 	if decision == nil {
 		return requestBody, nil
@@ -49,6 +50,7 @@ func (r *OpenAIRouter) buildRequestParamsMutations(
 	}
 
 	logging.Debugf("Applying request params validation for decision %s", decision.Name)
+	metricDecisionName := config.RoutingDecisionKey(routingScope, decision.Name)
 
 	var body map[string]interface{}
 	if err := json.Unmarshal(requestBody, &body); err != nil {
@@ -56,10 +58,10 @@ func (r *OpenAIRouter) buildRequestParamsMutations(
 		return requestBody, nil
 	}
 
-	modified := applyBlockedParams(body, paramsConfig.BlockedParams, decision.Name)
-	modified = capIntField(body, "max_tokens", paramsConfig.MaxTokensLimit, decision.Name, metrics.RecordMaxTokensCapped) || modified
-	modified = capIntField(body, "n", paramsConfig.MaxN, decision.Name, metrics.RecordMaxNCapped) || modified
-	modified = stripUnknownFields(body, paramsConfig.StripUnknown, decision.Name, profile) || modified
+	modified := applyBlockedParams(body, paramsConfig.BlockedParams, metricDecisionName)
+	modified = capIntField(body, "max_tokens", paramsConfig.MaxTokensLimit, metricDecisionName, metrics.RecordMaxTokensCapped) || modified
+	modified = capIntField(body, "n", paramsConfig.MaxN, metricDecisionName, metrics.RecordMaxNCapped) || modified
+	modified = stripUnknownFields(body, paramsConfig.StripUnknown, metricDecisionName, profile) || modified
 
 	if !modified {
 		return requestBody, nil

@@ -63,7 +63,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 	ctx.RequestQuery = requestQuery
 	ctx.CacheQuery = cache.ScopeQueryToUser(requestQuery, cacheScopeUserID(ctx))
 
-	cacheEnabled := r.semanticCacheEnabledForScope(categoryName)
+	cacheEnabled := r.semanticCacheEnabledForRequest(ctx)
 
 	if response, shouldReturn := r.performCacheLookup(ctx, categoryName, requestModel, cacheEnabled); shouldReturn {
 		return response, true
@@ -88,9 +88,20 @@ func (r *OpenAIRouter) handleLooperCacheSkip(ctx *RequestContext, categoryName s
 	ctx.RequestQuery = requestQuery
 	ctx.CacheQuery = cache.ScopeQueryToUser(requestQuery, cacheScopeUserID(ctx))
 
-	cacheEnabled := r.semanticCacheEnabledForScope(categoryName)
+	cacheEnabled := r.semanticCacheEnabledForRequest(ctx)
 	r.storePendingCacheRequest(ctx, categoryName, requestModel, cacheEnabled)
 	return nil, false
+}
+
+// semanticCachePartition keeps recipe identity out of the text passed to the
+// embedding model. Cache backends treat model as an exact partition key, so
+// named recipes cannot read each other's entries while the default recipe
+// preserves the legacy model key and semantic similarity behavior.
+func semanticCachePartition(ctx *RequestContext, model string) string {
+	if ctx == nil {
+		return model
+	}
+	return config.RoutingNamespaceKey(ctx.Routing.RecipeName(), model)
 }
 
 // storePendingCacheRequest adds a pending cache request if caching is enabled for this decision.
@@ -99,8 +110,9 @@ func (r *OpenAIRouter) storePendingCacheRequest(ctx *RequestContext, categoryNam
 	if cacheQuery == "" || !r.Cache.IsEnabled() || !cacheEnabled {
 		return
 	}
-	ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
-	if err := r.Cache.AddPendingRequest(ctx.RequestID, requestModel, cacheQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
+	ttlSeconds := r.Config.GetCacheTTLSecondsForDecisionObject(ctx.VSRSelectedDecision)
+	partition := semanticCachePartition(ctx, requestModel)
+	if err := r.Cache.AddPendingRequest(ctx.RequestID, partition, cacheQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
 		logging.Errorf("Error adding pending request to cache: %v", err)
 	}
 }
@@ -116,8 +128,8 @@ func (r *OpenAIRouter) performCacheLookup(
 	}
 
 	threshold := r.Config.GetCacheSimilarityThreshold()
-	if categoryName != "" {
-		threshold = r.Config.GetCacheSimilarityThresholdForDecision(categoryName)
+	if ctx.VSRSelectedDecision != nil {
+		threshold = r.Config.GetCacheSimilarityThresholdForDecisionObject(ctx.VSRSelectedDecision)
 	}
 
 	logging.Infof("handleCaching: Performing cache lookup - model=%s, query=%s, threshold=%.2f",
@@ -126,7 +138,8 @@ func (r *OpenAIRouter) performCacheLookup(
 	spanCtx, span := tracing.StartPluginSpan(ctx.TraceContext, "semantic-cache", categoryName)
 
 	startTime := time.Now()
-	cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(requestModel, cacheQuery, threshold)
+	partition := semanticCachePartition(ctx, requestModel)
+	cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(partition, cacheQuery, threshold)
 	lookupTime := time.Since(startTime).Milliseconds()
 
 	logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)
@@ -150,7 +163,7 @@ func (r *OpenAIRouter) performCacheLookup(
 			ctx.VSRSelectedDecisionName = categoryName
 		}
 
-		metrics.RecordCachePluginHit(categoryName, "semantic-cache")
+		metrics.RecordCachePluginHit(requestDecisionStateKey(ctx), "semantic-cache")
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_hit")
 
 		r.startRouterReplay(ctx, requestModel, requestModel, categoryName)
@@ -171,7 +184,7 @@ func (r *OpenAIRouter) performCacheLookup(
 		return response, true
 	} else {
 		ctx.VSRCacheSimilarity = r.Cache.LastSimilarity()
-		metrics.RecordCachePluginMiss(categoryName, "semantic-cache")
+		metrics.RecordCachePluginMiss(requestDecisionStateKey(ctx), "semantic-cache")
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_miss")
 	}
 	ctx.TraceContext = spanCtx
@@ -195,19 +208,19 @@ func (r *OpenAIRouter) createCacheHitResponse(
 		matchedKeywords,
 		similarity,
 	)
-	if !isResponseAPIRequest(ctx) {
-		return response
+	if isResponseAPIRequest(ctx) {
+		if responseAPIResponse, ok := r.createResponseAPICacheHitResponse(
+			ctx,
+			cachedResponse,
+			category,
+			decisionName,
+			matchedKeywords,
+			similarity,
+		); ok {
+			response = responseAPIResponse
+		}
 	}
-	if responseAPIResponse, ok := r.createResponseAPICacheHitResponse(
-		ctx,
-		cachedResponse,
-		category,
-		decisionName,
-		matchedKeywords,
-		similarity,
-	); ok {
-		return responseAPIResponse
-	}
+	appendRecipeHeaderToImmediateResponse(response, ctx)
 	return response
 }
 

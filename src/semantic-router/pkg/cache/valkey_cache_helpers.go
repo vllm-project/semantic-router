@@ -174,6 +174,18 @@ func escapeTagValue(s string) string {
 	return b.String()
 }
 
+// partitionedKNNQuery combines an exact model TAG filter with vector search.
+// The model field is the cache partition key, so omitting this filter can
+// return another model or recipe's response even when its vector is nearest.
+func partitionedKNNQuery(model string, topK int, vectorField string) string {
+	return fmt.Sprintf(
+		"(@model:{%s})=>[KNN %d @%s $vec AS vector_distance]",
+		escapeTagValue(model),
+		topK,
+		vectorField,
+	)
+}
+
 // distanceToSimilarity converts a vector distance to a similarity score based on the metric type.
 func distanceToSimilarity(metricType string, distance float64) float32 {
 	switch metricType {

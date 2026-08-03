@@ -137,7 +137,6 @@ func (c *KnowledgeBaseClassifier) preloadEmbeddings() error {
 		"latency_ms":     time.Since(startTime).Milliseconds(),
 	})
 	c.rebuildLabelPrototypeBanks()
-	c.preloaded = true
 	return nil
 }
 

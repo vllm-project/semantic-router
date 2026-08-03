@@ -241,7 +241,7 @@ var configContractRequiredDocs = []docNeedles{
 		},
 	},
 	{
-		path: "deploy/addons/mcp-classifier-server/README.md",
+		path: "tools/mcp-classifier-server/README.md",
 		needles: []string{
 			"providers:\n  defaults:",
 			"routing:\n  modelCards:",
@@ -431,7 +431,7 @@ var configContractForbiddenDocs = []docNeedles{
 		},
 	},
 	{
-		path: "deploy/addons/mcp-classifier-server/README.md",
+		path: "tools/mcp-classifier-server/README.md",
 		needles: []string{
 			"\nclassifier:\n",
 			"categories: []",

@@ -2,6 +2,7 @@ package services
 
 import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 )
 
@@ -56,6 +57,8 @@ func (s *ClassificationService) buildEvalResponse(
 
 		response.DecisionResult = &EvalDecisionResult{
 			DecisionName:     decisionResult.Decision.Name,
+			Algorithm:        evalDecisionAlgorithm(decisionResult.Decision),
+			Plugins:          evalDecisionPlugins(decisionResult.Decision),
 			UsedSignals:      usedSignals,
 			MatchedSignals:   matchedSignals,
 			UnmatchedSignals: unmatchedSignals,
@@ -79,6 +82,24 @@ func (s *ClassificationService) buildEvalResponse(
 	}
 
 	return response
+}
+
+func evalDecisionAlgorithm(decision *config.Decision) string {
+	if decision == nil || decision.Algorithm == nil || decision.Algorithm.Type == "" {
+		return config.DecisionAlgorithmStatic
+	}
+	return decision.Algorithm.Type
+}
+
+func evalDecisionPlugins(decision *config.Decision) []string {
+	if decision == nil || len(decision.Plugins) == 0 {
+		return nil
+	}
+	plugins := make([]string, 0, len(decision.Plugins))
+	for _, plugin := range decision.Plugins {
+		plugins = append(plugins, config.NormalizeDecisionPluginType(plugin.Type))
+	}
+	return plugins
 }
 
 func populateIntentProbabilities(

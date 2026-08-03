@@ -158,6 +158,11 @@ type SelectionContext struct {
 	// DecisionName is the name of the matched decision for category-specific selection
 	DecisionName string
 
+	// RecipeName identifies the isolated routing profile that owns DecisionName.
+	// Selectors are instantiated per recipe; shared learning/lookup components
+	// use both fields as their state namespace.
+	RecipeName config.RecipeName
+
 	// CategoryName is the detected domain category (e.g., "physics", "math")
 	// Used by ML selectors to create feature vectors with category one-hot encoding
 	CategoryName string
@@ -198,6 +203,24 @@ type SelectionContext struct {
 
 	// CacheAffinityCtx carries request-time session signals for cache-affinity estimation.
 	CacheAffinityCtx *CacheAffinityContext
+}
+
+// ScopedRoutingName namespaces recipe-local task-family names for shared
+// lookup-table state while keeping default-recipe keys unscoped.
+func (c *SelectionContext) ScopedRoutingName(localName string) string {
+	if c == nil {
+		return ""
+	}
+	return config.RoutingNamespaceKey(c.RecipeName, localName)
+}
+
+// RoutingScope returns the lookup-table namespace for this recipe. The
+// default recipe keeps unscoped keys.
+func (c *SelectionContext) RoutingScope() string {
+	if c == nil {
+		return ""
+	}
+	return config.RoutingNamespaceScope(c.RecipeName)
 }
 
 // SelectionResult contains the result of a model selection decision

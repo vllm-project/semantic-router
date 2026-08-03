@@ -102,6 +102,9 @@ func decompileRuleNode(node *config.RuleCombination) string {
 	case "OR":
 		// Flatten nested ORs into a flat list: (a OR b OR c)
 		parts := flattenRuleNode(node, "OR")
+		if len(parts) == 1 {
+			return parts[0]
+		}
 		return "(" + strings.Join(parts, " OR ") + ")"
 	case "NOT":
 		if len(node.Conditions) == 1 {

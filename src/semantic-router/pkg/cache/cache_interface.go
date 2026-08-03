@@ -33,7 +33,9 @@ type CacheBackend interface {
 	// For local caches (in-memory), this may be a no-op
 	CheckConnection() error
 
-	// AddPendingRequest stores a request awaiting its response
+	// AddPendingRequest stores a request awaiting its response. Model is an
+	// exact cache partition key; entries from another model partition must
+	// never be considered by lookup.
 	AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error
 
 	// UpdateWithResponse completes a pending request with the received response
@@ -42,11 +44,13 @@ type CacheBackend interface {
 	// AddEntry stores a complete request-response pair in the cache
 	AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error
 
-	// FindSimilar searches for semantically similar cached requests
+	// FindSimilar searches for semantically similar cached requests inside the
+	// exact model partition.
 	// Returns the cached response, match status, and any error
 	FindSimilar(model string, query string) ([]byte, bool, error)
 
-	// FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
+	// FindSimilarWithThreshold searches inside the exact model partition using
+	// a specific threshold.
 	// This allows category-specific similarity thresholds
 	// Returns the cached response, match status, and any error
 	FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error)

@@ -162,7 +162,7 @@ func TestSelectorForDecisionMethodBuildsDecisionScopedHybridSelector(t *testing.
 			ExperienceWeight: 0.6,
 			RouterDCWeight:   0.4,
 		},
-	})
+	}, nil)
 
 	result, err := selector.Select(context.Background(), &selection.SelectionContext{
 		Query:           "need help with coding",
@@ -213,7 +213,7 @@ func TestSelectorForDecisionMethodBuildsDecisionScopedMultiFactorSelector(t *tes
 	router := &OpenAIRouter{Config: &cfg, ModelSelector: registry}
 	candidates := []config.ModelRef{{Model: "premium"}, {Model: "economy"}}
 
-	qualityResult, err := router.selectorForDecisionMethod(selection.MethodMultiFactor, qualityPolicy).
+	qualityResult, err := router.selectorForDecisionMethod(selection.MethodMultiFactor, qualityPolicy, nil).
 		Select(context.Background(), &selection.SelectionContext{DecisionName: "quality", CandidateModels: candidates})
 	if err != nil {
 		t.Fatalf("quality selector returned error: %v", err)
@@ -222,7 +222,7 @@ func TestSelectorForDecisionMethodBuildsDecisionScopedMultiFactorSelector(t *tes
 		t.Fatalf("quality decision selected %q, want premium", qualityResult.SelectedModel)
 	}
 
-	costResult, err := router.selectorForDecisionMethod(selection.MethodMultiFactor, costPolicy).
+	costResult, err := router.selectorForDecisionMethod(selection.MethodMultiFactor, costPolicy, nil).
 		Select(context.Background(), &selection.SelectionContext{DecisionName: "cost", CandidateModels: candidates})
 	if err != nil {
 		t.Fatalf("cost selector returned error: %v", err)

@@ -1,6 +1,22 @@
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestGlobalConfigContractsValidateHallucinationBackend(t *testing.T) {
+	cfg := &RouterConfig{}
+	cfg.HallucinationMitigation.HallucinationModel.Backend = "grpc"
+
+	err := runConfigContractValidators(cfg, globalConfigContractValidators)
+	if err == nil {
+		t.Fatal("expected global config validation to reject an unknown hallucination backend")
+	}
+	if !strings.Contains(err.Error(), "hallucination detector backend") {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+}
 
 func TestValidateHallucinationBackend_DefaultsToCandle(t *testing.T) {
 	cfg := &HallucinationModelConfig{ModelID: "models/mom-halugate-detector"}

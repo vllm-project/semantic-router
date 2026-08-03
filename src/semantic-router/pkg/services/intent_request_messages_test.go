@@ -55,6 +55,40 @@ func TestIntentRequestResolveSignalInput_UsesMessagesConversationHistory(t *test
 	)
 }
 
+func TestIntentRequestResolveSignalInput_ExtractsConversationAndToolFacts(t *testing.T) {
+	req := IntentRequest{
+		Tools: []json.RawMessage{
+			mustMessageContent(t, map[string]any{"type": "function", "name": "search"}),
+			mustMessageContent(t, map[string]any{"type": "function", "name": "edit"}),
+		},
+		Messages: []IntentMessage{
+			{Role: "developer", Content: mustMessageContent(t, "Use tools when needed.")},
+			{Role: "user", Content: mustMessageContent(t, "Investigate the failure.")},
+			{
+				Role:      "assistant",
+				Content:   mustMessageContent(t, ""),
+				ToolCalls: []json.RawMessage{mustMessageContent(t, map[string]any{"id": "call-1"})},
+			},
+			{Role: "tool", ToolCallID: "call-1", Content: mustMessageContent(t, "failure log")},
+			{Role: "user", Content: mustMessageContent(t, "Now implement the fix.")},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	facts := input.conversationFacts
+	assert.True(t, facts.HasDeveloperMessage)
+	assert.Equal(t, 2, facts.UserMessageCount)
+	assert.Equal(t, 1, facts.AssistantMessageCount)
+	assert.Equal(t, 1, facts.ToolMessageCount)
+	assert.Equal(t, 2, facts.ToolDefinitionCount)
+	assert.Equal(t, 1, facts.AssistantToolCallCount)
+	assert.Equal(t, 1, facts.ToolResultCount)
+	assert.Equal(t, "user", facts.LastMessageRole)
+	assert.True(t, facts.LastUserAfterToolResult)
+}
+
 func TestIntentRequestResolveSignalInput_FallsBackToText(t *testing.T) {
 	req := IntentRequest{Text: "Fallback single-turn request"}
 
