@@ -191,6 +191,22 @@ def evaluate_dependency_rules(path: str, text: str, rules: dict) -> list[Finding
     return findings
 
 
+def evaluate_root_placement(path: str, rules: dict) -> list[Finding]:
+    """Reject new root files that do not have a repository-wide contract."""
+    absolute_path = REPO_ROOT / path
+    if "/" in path or not absolute_path.is_file():
+        return []
+    if path in rules["root_files"]["allowed"]:
+        return []
+    return [
+        Finding(
+            level="ERROR",
+            file=path,
+            message="root file is not allowlisted; place it under its owning subtree",
+        )
+    ]
+
+
 def evaluate_file_line_count(
     path: str, line_count: int, rules: dict, base_ref: str | None
 ) -> list[Finding]:
@@ -543,6 +559,8 @@ def main() -> int:
             path = path[2:]
         if not path:
             continue
+        for finding in evaluate_root_placement(path, rules):
+            findings_by_file[finding.file].append(finding)
         for finding in evaluate_file(path, rules, parsers, args.base_ref):
             findings_by_file[finding.file].append(finding)
 

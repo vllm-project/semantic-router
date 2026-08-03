@@ -199,21 +199,11 @@ func TestObserveRetentionDirectiveOmitsUnsetFields(t *testing.T) {
 }
 
 func TestUpdateResponseCacheSkipsRetentionDrop(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	router := &OpenAIRouter{
-		Cache: mockCache,
-		Config: &config.RouterConfig{
-			SemanticCache: config.SemanticCache{Enabled: true},
-			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
-			},
-		},
-	}
-	ctx := &RequestContext{
-		RequestID:               "req-retention-drop",
-		VSRSelectedDecisionName: "cache-decision",
-		EmittedRetention:        &config.RetentionDirective{Drop: retBool(true)},
-	}
+	mockCache, router, decision := cacheRouterForDecision(retentionCacheDecision("cache-decision", true))
+	ctx := withSelectedDecision(&RequestContext{
+		RequestID:        "req-retention-drop",
+		EmittedRetention: &config.RetentionDirective{Drop: retBool(true)},
+	}, decision)
 
 	router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
 	if mockCache.updateCalled {
@@ -222,21 +212,11 @@ func TestUpdateResponseCacheSkipsRetentionDrop(t *testing.T) {
 }
 
 func TestUpdateResponseCacheWritesWhenRetentionDropFalse(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	router := &OpenAIRouter{
-		Cache: mockCache,
-		Config: &config.RouterConfig{
-			SemanticCache: config.SemanticCache{Enabled: true},
-			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
-			},
-		},
-	}
-	ctx := &RequestContext{
-		RequestID:               "req-retention-keep",
-		VSRSelectedDecisionName: "cache-decision",
-		EmittedRetention:        &config.RetentionDirective{Drop: retBool(false)},
-	}
+	mockCache, router, decision := cacheRouterForDecision(retentionCacheDecision("cache-decision", true))
+	ctx := withSelectedDecision(&RequestContext{
+		RequestID:        "req-retention-keep",
+		EmittedRetention: &config.RetentionDirective{Drop: retBool(false)},
+	}, decision)
 
 	router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
 	if !mockCache.updateCalled {
@@ -245,17 +225,8 @@ func TestUpdateResponseCacheWritesWhenRetentionDropFalse(t *testing.T) {
 }
 
 func TestCacheStreamingResponseSkipsRetentionDrop(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	router := &OpenAIRouter{
-		Cache: mockCache,
-		Config: &config.RouterConfig{
-			SemanticCache: config.SemanticCache{Enabled: true},
-			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
-			},
-		},
-	}
-	ctx := retentionStreamingContext("cache-decision")
+	mockCache, router, decision := cacheRouterForDecision(retentionCacheDecision("cache-decision", true))
+	ctx := withSelectedDecision(retentionStreamingContext(), decision)
 	ctx.EmittedRetention = &config.RetentionDirective{Drop: retBool(true)}
 
 	if err := router.cacheStreamingResponse(ctx); err != nil {
@@ -267,17 +238,8 @@ func TestCacheStreamingResponseSkipsRetentionDrop(t *testing.T) {
 }
 
 func TestCacheStreamingResponseChecksScopeBeforeRetentionDrop(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	router := &OpenAIRouter{
-		Cache: mockCache,
-		Config: &config.RouterConfig{
-			SemanticCache: config.SemanticCache{Enabled: true},
-			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{retentionCacheDecision("no-cache-decision", false)},
-			},
-		},
-	}
-	ctx := retentionStreamingContext("no-cache-decision")
+	mockCache, router, decision := cacheRouterForDecision(retentionCacheDecision("no-cache-decision", false))
+	ctx := withSelectedDecision(retentionStreamingContext(), decision)
 	ctx.EmittedRetention = &config.RetentionDirective{Drop: retBool(true)}
 
 	if err := router.cacheStreamingResponse(ctx); err != nil {
@@ -335,21 +297,11 @@ func TestApplyRetentionTTLOverride(t *testing.T) {
 }
 
 func TestUpdateResponseCacheAppliesRetentionTTL(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	router := &OpenAIRouter{
-		Cache: mockCache,
-		Config: &config.RouterConfig{
-			SemanticCache: config.SemanticCache{Enabled: true},
-			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
-			},
-		},
-	}
-	ctx := &RequestContext{
-		RequestID:               "req-retention-ttl",
-		VSRSelectedDecisionName: "cache-decision",
-		EmittedRetention:        &config.RetentionDirective{TTLTurns: intPtr(2)},
-	}
+	mockCache, router, decision := cacheRouterForDecision(retentionCacheDecision("cache-decision", true))
+	ctx := withSelectedDecision(&RequestContext{
+		RequestID:        "req-retention-ttl",
+		EmittedRetention: &config.RetentionDirective{TTLTurns: intPtr(2)},
+	}, decision)
 
 	router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
 	if !mockCache.updateCalled {
@@ -361,17 +313,8 @@ func TestUpdateResponseCacheAppliesRetentionTTL(t *testing.T) {
 }
 
 func TestCacheStreamingResponseAppliesRetentionTTL(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	router := &OpenAIRouter{
-		Cache: mockCache,
-		Config: &config.RouterConfig{
-			SemanticCache: config.SemanticCache{Enabled: true},
-			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
-			},
-		},
-	}
-	ctx := retentionStreamingContext("cache-decision")
+	mockCache, router, decision := cacheRouterForDecision(retentionCacheDecision("cache-decision", true))
+	ctx := withSelectedDecision(retentionStreamingContext(), decision)
 	ctx.EmittedRetention = &config.RetentionDirective{TTLTurns: intPtr(4)}
 
 	if err := router.cacheStreamingResponse(ctx); err != nil {
@@ -399,14 +342,13 @@ func retentionCacheDecision(name string, cacheEnabled bool) config.Decision {
 	return decision
 }
 
-func retentionStreamingContext(decisionName string) *RequestContext {
+func retentionStreamingContext() *RequestContext {
 	return &RequestContext{
-		RequestID:               "req-stream-retention",
-		RequestModel:            "test-model",
-		RequestQuery:            "hello",
-		VSRSelectedDecisionName: decisionName,
-		StreamingComplete:       true,
-		StreamingContent:        "hello",
+		RequestID:         "req-stream-retention",
+		RequestModel:      "test-model",
+		RequestQuery:      "hello",
+		StreamingComplete: true,
+		StreamingContent:  "hello",
 		StreamingMetadata: map[string]interface{}{
 			"id":      "chatcmpl-retention",
 			"model":   "test-model",

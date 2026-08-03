@@ -23,6 +23,10 @@ func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
 		return
 	}
+	if errors.Is(err, services.ErrUnknownRoutingModel) {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_ROUTING_MODEL", err.Error())
+		return
+	}
 	s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
 }
 

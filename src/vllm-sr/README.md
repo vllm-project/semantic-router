@@ -70,6 +70,13 @@ vllm-sr eval --prompt "Explain inflation vs recession in plain English."
 # Single prompt — full JSON payload
 vllm-sr eval --prompt "Explain inflation vs recession in plain English." --json
 
+# Evaluate one entrypoint's isolated recipe without calling its backend model
+# The response identifies the selected recipe, decision, algorithm, and plugins.
+vllm-sr eval \
+  --model vllm-sr/mom-balanced-v1 \
+  --prompt "Summarize this architecture plan." \
+  --json
+
 # Multi-turn messages array (OpenAI chat format) — readable summary
 vllm-sr eval --messages '[{"role":"system","content":"You are a careful tutor."},{"role":"user","content":"Explain inflation vs recession in plain English."}]'
 

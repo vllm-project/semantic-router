@@ -6,7 +6,6 @@ rules:
     loop_mode: lightweight
     execution_plan_policy: long_horizon
     paths:
-      - docs/**
       - website/**
       - README.md
       - CONTRIBUTING.md
@@ -19,7 +18,7 @@ rules:
     execution_plan_policy: long_horizon
     paths:
       - AGENTS.md
-      - docs/agent/**
+      - tools/agent/docs/**
       - tools/agent/skills/**
       - src/fleet-sim/AGENTS.md
       - src/fleet-sim/fleet_sim/optimizer/AGENTS.md
@@ -176,7 +175,7 @@ rules:
     paths:
       - src/training/**
       - tools/make/models.mk
-      - scripts/train-mmbert32k-gpu.sh
+      - tools/models/train-mmbert32k-gpu.sh
       - website/docs/training/**
     fast_tests: []
     feature_tests: []

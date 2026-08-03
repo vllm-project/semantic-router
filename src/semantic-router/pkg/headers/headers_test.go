@@ -83,6 +83,7 @@ func TestVSRRoutingHeadersAreDocumented(t *testing.T) {
 		VSRResponseWarnings,
 		RouterReplayID,
 		VSRSelectedCategory,
+		VSRSelectedRecipe,
 		VSRSelectedDecision,
 		VSRSelectedConfidence,
 		VSRSelectedReasoning,

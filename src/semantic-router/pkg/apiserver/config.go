@@ -8,6 +8,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelinventory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/publicmodels"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
@@ -23,6 +24,10 @@ type ClassificationAPIServer struct {
 	memoryStore           memory.Store
 	knowledgeBaseMapCache *knowledgeBaseMapCache
 	startupStateLoader    func() *startupstatus.State
+	// The startup-status writer is created once during process bootstrap. Keep
+	// its storage contract stable across live config swaps so /ready does not
+	// start reading from a different backend after a successful reload.
+	startupStatusConfig *config.StartupStatusConfig
 }
 
 type (
@@ -31,24 +36,9 @@ type (
 	ModelInfo          = modelinventory.ModelInfo
 	ModelRegistryInfo  = config.ModelRegistryInfo
 	SystemInfo         = modelinventory.SystemInfo
+	OpenAIModel        = publicmodels.OpenAIModel
+	OpenAIModelList    = publicmodels.OpenAIModelList
 )
-
-// OpenAIModel represents a single model in the OpenAI /v1/models response
-type OpenAIModel struct {
-	ID          string `json:"id"`
-	Object      string `json:"object"`
-	Created     int64  `json:"created"`
-	OwnedBy     string `json:"owned_by"`
-	Description string `json:"description,omitempty"` // Optional description for Chat UI
-	LogoURL     string `json:"logo_url,omitempty"`    // Optional logo URL for Chat UI
-	// Keeping the structure minimal; additional fields like permissions can be added later
-}
-
-// OpenAIModelList is the container for the models list response
-type OpenAIModelList struct {
-	Object string        `json:"object"`
-	Data   []OpenAIModel `json:"data"`
-}
 
 // BatchClassificationRequest represents a batch classification request
 type BatchClassificationRequest struct {

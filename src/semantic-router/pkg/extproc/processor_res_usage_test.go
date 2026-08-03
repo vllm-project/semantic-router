@@ -222,6 +222,7 @@ func TestCalibrateTokenEstimatorUsesContextTextBytes(t *testing.T) {
 		VSRMatchedContext:       []string{"long_context"},
 		VSRSelectedDecisionName: "fallback_decision",
 	}
+	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: config.DefaultRecipeName})
 
 	for i := 0; i < 20; i++ {
 		router.calibrateTokenEstimator(ctx, 1000)

@@ -14,7 +14,7 @@ ensuring community health.
 
 Ownership is distributed across the repository through per-directory `OWNER` files.
 Each file lists the reviewers responsible for that area. A full index of all
-`OWNER` file locations is maintained in [`CODEOWNERS`](./CODEOWNERS).
+`OWNER` file locations is maintained in [`.github/CODEOWNERS`](./.github/CODEOWNERS).
 
 ## How Decisions Are Made
 

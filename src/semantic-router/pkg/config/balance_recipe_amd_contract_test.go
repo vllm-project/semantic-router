@@ -17,7 +17,7 @@ var balanceAMDLocalAliases = []string{
 }
 
 func TestBalanceRecipePreservesAMDLocalAliasContract(t *testing.T) {
-	const asset = "deploy/recipes/balance.yaml"
+	const asset = "config/recipes/balance/config.yaml"
 
 	var recipe CanonicalConfig
 	if err := yamlv3.Unmarshal(mustReadRepoFile(t, asset), &recipe); err != nil {

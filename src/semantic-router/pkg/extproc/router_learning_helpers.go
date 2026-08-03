@@ -10,6 +10,34 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
+func selectionDecisionStateKey(selCtx *selection.SelectionContext) string {
+	if selCtx == nil {
+		return ""
+	}
+	return config.RoutingDecisionKey(selCtx.RecipeName, selCtx.DecisionName)
+}
+
+func requestDecisionStateKey(ctx *RequestContext) string {
+	if ctx == nil {
+		return ""
+	}
+	return config.RoutingDecisionKey(ctx.Routing.RecipeName(), ctx.VSRSelectedDecisionName)
+}
+
+func routingSessionStateKey(ctx *RequestContext) string {
+	if ctx == nil {
+		return ""
+	}
+	if ctx.Routing.IsPassthrough() {
+		return ""
+	}
+	return config.RoutingNamespaceKey(ctx.Routing.RecipeName(), ctx.SessionID)
+}
+
+func requestBypassesRouting(ctx *RequestContext) bool {
+	return ctx != nil && ctx.Routing.IsPassthrough()
+}
+
 func currentLearningModel(selCtx *selection.SelectionContext) string {
 	if selCtx == nil || selCtx.AgenticSession == nil {
 		return ""

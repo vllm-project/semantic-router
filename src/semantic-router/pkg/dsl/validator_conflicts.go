@@ -529,12 +529,12 @@ func (v *Validator) checkProjectionScoreInputProjectionRef(context string, pos P
 		return
 	}
 	switch input.ValueSource {
-	case "", "score":
+	case "", config.ProjectionValueSourceScore:
 		if !scoreNames[input.SignalName] {
 			v.addDiag(DiagWarning, pos,
 				fmt.Sprintf("%s: projection input %q references undeclared score", context, input.SignalName), nil)
 		}
-	case "confidence":
+	case config.ProjectionValueSourceConfidence:
 		if !v.isProjectionOutputDefined(input.SignalName) {
 			v.addDiag(DiagWarning, pos,
 				fmt.Sprintf("%s: projection input %q with value_source \"confidence\" references undeclared mapping output", context, input.SignalName), nil)
@@ -569,6 +569,10 @@ func (v *Validator) checkProjectionScoreInput(context string, pos Position, inpu
 		v.checkProjectionScoreInputProjectionRef(context, pos, input, scoreNames)
 		return
 	}
+	if strings.EqualFold(input.SignalType, config.ProjectionInputKBMetric) {
+		v.checkProjectionScoreKBMetricInput(context, pos, input)
+		return
+	}
 	if !v.isSignalDefined(input.SignalType, input.SignalName) {
 		v.addDiag(
 			DiagWarning,
@@ -578,7 +582,7 @@ func (v *Validator) checkProjectionScoreInput(context string, pos Position, inpu
 		)
 	}
 	switch input.ValueSource {
-	case "", "binary", "confidence", "raw":
+	case "", config.ProjectionValueSourceBinary, config.ProjectionValueSourceConfidence, config.ProjectionValueSourceRaw:
 	default:
 		v.addDiag(
 			DiagConstraint,
@@ -595,30 +599,41 @@ func (v *Validator) checkProjectionScoreInput(context string, pos Position, inpu
 	}
 }
 
-func isProjectionInputTypeSupported(signalType string) bool {
-	switch signalType {
-	case config.SignalTypeKeyword,
-		config.SignalTypeEmbedding,
-		config.SignalTypeDomain,
-		config.SignalTypeFactCheck,
-		config.SignalTypeUserFeedback,
-		config.SignalTypeReask,
-		config.SignalTypePreference,
-		config.SignalTypeLanguage,
-		config.SignalTypeContext,
-		config.SignalTypeStructure,
-		config.SignalTypeComplexity,
-		config.SignalTypeModality,
-		config.SignalTypeAuthz,
-		config.SignalTypeJailbreak,
-		config.SignalTypePII,
-		config.SignalTypeKB,
-		config.ProjectionInputKBMetric,
-		config.SignalTypeProjection:
-		return true
-	default:
-		return false
+// checkProjectionScoreKBMetricInput validates the part of a KB metric
+// reference that is owned by routing DSL. The DSL deliberately does not own
+// the shared knowledge-base catalog, so catalog membership and custom metric
+// names are validated after the compiled routing is merged into its base
+// config.
+func (v *Validator) checkProjectionScoreKBMetricInput(context string, pos Position, input *ProjectionScoreInputDecl) {
+	if strings.TrimSpace(input.KB) == "" {
+		v.addDiag(DiagConstraint, pos,
+			fmt.Sprintf("%s: kb_metric inputs require kb", context), nil)
 	}
+	if strings.TrimSpace(input.Metric) == "" {
+		v.addDiag(DiagConstraint, pos,
+			fmt.Sprintf("%s: kb_metric inputs require metric", context), nil)
+	}
+	switch strings.ToLower(strings.TrimSpace(input.ValueSource)) {
+	case "", config.ProjectionValueSourceScore:
+	default:
+		v.addDiag(
+			DiagConstraint,
+			pos,
+			fmt.Sprintf(
+				"%s: kb_metric input for kb %q has unsupported value_source %q (supported: score)",
+				context,
+				input.KB,
+				input.ValueSource,
+			),
+			nil,
+		)
+	}
+}
+
+func isProjectionInputTypeSupported(signalType string) bool {
+	return config.IsSupportedSignalType(signalType) ||
+		signalType == config.ProjectionInputKBMetric ||
+		signalType == config.SignalTypeProjection
 }
 
 func (v *Validator) checkProjectionMapping(mapping *ProjectionMappingDecl, scoreNames map[string]bool, outputNames map[string]bool) {

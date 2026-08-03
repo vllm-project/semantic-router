@@ -96,8 +96,8 @@ func (c *RouterConfig) EffectiveAutoModelNames() []string {
 	if c == nil {
 		return DefaultAutoModelNames()
 	}
-	if names := normalizeAutoModelNames(c.AutoModelNames); len(names) > 0 {
-		return names
+	if c.AutoModelNames != nil {
+		return normalizeAutoModelNames(c.AutoModelNames)
 	}
 	return normalizeAutoModelNames([]string{
 		DefaultVSRAutoModelName,
@@ -450,25 +450,13 @@ func (c *RouterConfig) GetCategoryByName(name string) *Category {
 	return nil
 }
 
-// GetDecisionByName returns a decision by name
+// GetDecisionByName returns a decision from the default routing profile. Names
+// are recipe-local; request-time callers should retain the selected Decision
+// object instead of performing a global bare-name lookup.
 func (c *RouterConfig) GetDecisionByName(name string) *Decision {
 	for i := range c.Decisions {
 		if c.Decisions[i].Name == name {
 			return &c.Decisions[i]
-		}
-	}
-	// Non-default recipe decisions live only on their recipe; the default
-	// recipe mirrors the flat Decisions field scanned above. Decision names
-	// are globally unique across recipes (validated at load), so the first
-	// match is the only match.
-	for i := range c.Recipes {
-		if c.Recipes[i].Name == DefaultRecipeName {
-			continue
-		}
-		for j := range c.Recipes[i].Decisions {
-			if c.Recipes[i].Decisions[j].Name == name {
-				return &c.Recipes[i].Decisions[j]
-			}
 		}
 	}
 	return nil
@@ -478,7 +466,11 @@ func (c *RouterConfig) GetDecisionByName(name string) *Decision {
 // Returns true only if the decision has an explicit semantic-cache plugin configured with enabled: true
 // This ensures per-decision scoping - decisions without semantic-cache plugin won't execute caching
 func (c *RouterConfig) IsCacheEnabledForDecision(decisionName string) bool {
-	decision := c.GetDecisionByName(decisionName)
+	return c.IsCacheEnabledForDecisionObject(c.GetDecisionByName(decisionName))
+}
+
+// IsCacheEnabled resolves semantic-cache policy from a scoped decision.
+func (c *RouterConfig) IsCacheEnabledForDecisionObject(decision *Decision) bool {
 	if decision != nil {
 		config := decision.GetSemanticCacheConfig()
 		if config != nil {
@@ -492,7 +484,11 @@ func (c *RouterConfig) IsCacheEnabledForDecision(decisionName string) bool {
 
 // GetCacheSimilarityThresholdForDecision returns the effective cache similarity threshold for a decision
 func (c *RouterConfig) GetCacheSimilarityThresholdForDecision(decisionName string) float32 {
-	decision := c.GetDecisionByName(decisionName)
+	return c.GetCacheSimilarityThresholdForDecisionObject(c.GetDecisionByName(decisionName))
+}
+
+// GetCacheSimilarityThreshold resolves the threshold from a scoped decision.
+func (c *RouterConfig) GetCacheSimilarityThresholdForDecisionObject(decision *Decision) float32 {
 	if decision != nil {
 		config := decision.GetSemanticCacheConfig()
 		if config != nil && config.SimilarityThreshold != nil {
@@ -507,7 +503,11 @@ func (c *RouterConfig) GetCacheSimilarityThresholdForDecision(decisionName strin
 // Returns 0 if caching should be skipped for this decision
 // Returns -1 to use the global default TTL when not specified at decision level
 func (c *RouterConfig) GetCacheTTLSecondsForDecision(decisionName string) int {
-	decision := c.GetDecisionByName(decisionName)
+	return c.GetCacheTTLSecondsForDecisionObject(c.GetDecisionByName(decisionName))
+}
+
+// GetCacheTTLSeconds resolves TTL from a scoped decision.
+func (c *RouterConfig) GetCacheTTLSecondsForDecisionObject(decision *Decision) int {
 	if decision != nil {
 		config := decision.GetSemanticCacheConfig()
 		if config != nil && config.TTLSeconds != nil {

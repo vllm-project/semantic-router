@@ -227,17 +227,6 @@ func cachePersonalizationConflictDescription(ragActive, memActive bool) string {
 	}
 }
 
-func hasLegacyLatencyRoutingConfig(cfg *RouterConfig) bool {
-	for _, decision := range cfg.AllRoutingDecisions() {
-		for _, condition := range decision.Rules.Conditions {
-			if condition.Type == "latency" {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, algorithm *AlgorithmConfig) error {
 	if algorithm == nil {
 		return nil

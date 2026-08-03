@@ -115,12 +115,21 @@ func syncRuntimeConfigForCurrentRuntime(sourceConfigPath string) (string, error)
 
 func detectPythonCLIRoot() string {
 	if configured := strings.TrimSpace(os.Getenv("VLLM_SR_CLI_PATH")); configured != "" {
-		return configured
+		if hasRuntimeSyncModule(configured) {
+			return configured
+		}
+		return ""
 	}
-	if info, err := os.Stat(defaultPythonCLIPath); err == nil && info.IsDir() {
+	if hasRuntimeSyncModule(defaultPythonCLIPath) {
 		return defaultPythonCLIPath
 	}
 	return ""
+}
+
+func hasRuntimeSyncModule(cliRoot string) bool {
+	modulePath := filepath.Join(cliRoot, "cli", "commands", "runtime_support.py")
+	info, err := os.Stat(modulePath)
+	return err == nil && !info.IsDir()
 }
 
 func runRuntimeSyncPython(timeout time.Duration, cliRoot string, configPath string, workDir string) (string, error) {

@@ -37,6 +37,16 @@ type ProjectionScoreInput struct {
 	Miss        float64 `yaml:"miss,omitempty"`
 }
 
+// Projection input value sources are shared by runtime validation, DSL
+// validation, and projection execution. Keeping the vocabulary here prevents
+// those surfaces from drifting as new signal types are introduced.
+const (
+	ProjectionValueSourceScore      = "score"
+	ProjectionValueSourceBinary     = "binary"
+	ProjectionValueSourceConfidence = "confidence"
+	ProjectionValueSourceRaw        = "raw"
+)
+
 // Projection mapping methods control how matching output bands are selected
 // when a score is projected into named outputs.
 const (

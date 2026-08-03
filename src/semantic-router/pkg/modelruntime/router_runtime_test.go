@@ -3,6 +3,7 @@ package modelruntime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +11,52 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
+
+func TestWarmupRouterRunsReadyTasksAndSkipsUnavailableTasks(t *testing.T) {
+	loaded := make([]string, 0, 2)
+	summary, err := WarmupRouter(context.Background(), []RouterWarmupTask{
+		{
+			Name:  "knowledge_bases",
+			Ready: true,
+			Load: func() error {
+				loaded = append(loaded, "knowledge_bases")
+				return nil
+			},
+		},
+		{
+			Name:       "tools_database",
+			Ready:      false,
+			SkipReason: "embedding runtime unavailable",
+			Load: func() error {
+				t.Fatal("unready warmup task must not run")
+				return nil
+			},
+		},
+	}, WarmupRouterOptions{Component: "test", MaxParallelism: 2})
+	if err != nil {
+		t.Fatalf("WarmupRouter() error = %v", err)
+	}
+	if len(loaded) != 1 || loaded[0] != "knowledge_bases" {
+		t.Fatalf("loaded tasks = %v, want knowledge_bases", loaded)
+	}
+	if result := summary.Results["router.warmup.knowledge_bases"]; result.Status != TaskSucceeded {
+		t.Fatalf("knowledge base warmup result = %+v, want success", result)
+	}
+}
+
+func TestWarmupRouterTreatsTaskFailureAsBestEffort(t *testing.T) {
+	summary, err := WarmupRouter(context.Background(), []RouterWarmupTask{{
+		Name:  "knowledge_bases",
+		Ready: true,
+		Load:  func() error { return errors.New("embedding failed") },
+	}}, WarmupRouterOptions{Component: "test", MaxParallelism: 1})
+	if err != nil {
+		t.Fatalf("WarmupRouter() best-effort error = %v", err)
+	}
+	if result := summary.Results["router.warmup.knowledge_bases"]; result.Status != TaskFailed {
+		t.Fatalf("knowledge base warmup result = %+v, want failure", result)
+	}
+}
 
 func TestEmbeddingRuntimeTasksUseOnlyRemoteProviderWhenConfigured(t *testing.T) {
 	cfg := remoteEmbeddingRuntimeConfig("http://embedding-service:8000/v1")

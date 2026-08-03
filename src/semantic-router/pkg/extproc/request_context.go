@@ -139,10 +139,9 @@ type RequestContext struct {
 	// HistoryTokenCount is zero (server-side conversation state).
 	PreviousResponseID string
 
-	// EntrypointRecipe is the routing recipe selected by the entrypoint table
-	// for this request's model name (issue #2331). nil means the model matched
-	// no entrypoint and the default routing behavior applies.
-	EntrypointRecipe *config.RoutingRecipe
+	// Routing is the single source of truth for entrypoint resolution. A
+	// resolved context with no recipe represents concrete-model passthrough.
+	Routing RequestRoutingContext
 
 	// VSR decision tracking
 	VSRSelectedCategory            string                                      // The category from domain classification (MMLU category)

@@ -26,9 +26,9 @@ description: Modifies router-side API, authz, memory, provider, storage, or runt
 
 ## Must Read
 
-- [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
-- [docs/agent/module-boundaries.md](../../../../docs/agent/module-boundaries.md)
-- [docs/agent/testing-strategy.md](../../../../docs/agent/testing-strategy.md)
+- [tools/agent/docs/change-surfaces.md](../../../../tools/agent/docs/change-surfaces.md)
+- [tools/agent/docs/module-boundaries.md](../../../../tools/agent/docs/module-boundaries.md)
+- [tools/agent/docs/testing-strategy.md](../../../../tools/agent/docs/testing-strategy.md)
 
 ## Standard Commands
 

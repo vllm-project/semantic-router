@@ -28,7 +28,6 @@ func (r *OpenAIRouter) handleAnthropicRouting(
 	accessKey, anthropicBody, errorResponse := r.prepareAnthropicRoutingRequest(
 		openAIRequest,
 		targetModel,
-		decisionName,
 		ctx,
 	)
 	if errorResponse != nil {
@@ -42,7 +41,6 @@ func (r *OpenAIRouter) handleAnthropicRouting(
 func (r *OpenAIRouter) prepareAnthropicRoutingRequest(
 	openAIRequest *openai.ChatCompletionNewParams,
 	targetModel string,
-	decisionName string,
 	ctx *RequestContext,
 ) (string, []byte, *ext_proc.ProcessingResponse) {
 	accessKey, err := r.CredentialResolver.KeyForProvider(authz.ProviderAnthropic, targetModel, ctx.Headers)
@@ -94,10 +92,6 @@ func (r *OpenAIRouter) prepareAnthropicRoutingRequest(
 	if streaming {
 		ctx.AnthropicStream = anthropic.NewStreamState()
 	}
-	if decisionName != "" {
-		ctx.VSRSelectedDecision = r.Config.GetDecisionByName(decisionName)
-	}
-
 	return accessKey, anthropicBody, nil
 }
 
