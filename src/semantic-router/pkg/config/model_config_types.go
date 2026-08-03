@@ -134,14 +134,13 @@ func (pc PromptCompressionConfig) SkipSignalsSet() map[string]bool {
 }
 
 type PromptGuardConfig struct {
-	Enabled              bool    `yaml:"enabled"`
-	ModelID              string  `yaml:"model_id"`
-	Threshold            float32 `yaml:"threshold"`
-	UseCPU               bool    `yaml:"use_cpu"`
-	UseModernBERT        bool    `yaml:"use_modernbert"`
-	UseMmBERT32K         bool    `yaml:"use_mmbert_32k"`
-	JailbreakMappingPath string  `yaml:"jailbreak_mapping_path"`
-	UseVLLM              bool    `yaml:"use_vllm,omitempty"`
+	Enabled              bool     `yaml:"enabled"`
+	ModelID              string   `yaml:"model_id"`
+	Threshold            float32  `yaml:"threshold"`
+	UseCPU               bool     `yaml:"use_cpu"`
+	Backend              string   `yaml:"backend,omitempty"`
+	JailbreakMappingPath string   `yaml:"jailbreak_mapping_path"`
+	PositiveLabels       []string `yaml:"positive_labels,omitempty"`
 }
 
 type FeedbackDetectorConfig struct {

@@ -139,45 +139,63 @@ func createMmBERT32KJailbreakInference() SequenceClassifierBackend {
 	return &MmBERT32KJailbreakInferenceImpl{}
 }
 
-// createJailbreakInference creates the appropriate jailbreak inference based on configuration.
-// Checks UseMmBERT32K and UseVLLM flags to decide between mmBERT-32K, vLLM, or Candle implementation.
-// When UseMmBERT32K is true, uses mmBERT-32K (32K context, YaRN RoPE, multilingual).
-// When UseVLLM is true, it will try to find external model config with role="guardrail".
-func createJailbreakInference(promptGuardCfg *config.PromptGuardConfig, routerCfg *config.RouterConfig) (SequenceClassifierBackend, error) {
-	// Check for mmBERT-32K first (takes precedence)
-	if promptGuardCfg.UseMmBERT32K {
+// createJailbreakInference creates the appropriate jailbreak inference based on
+// the configured prompt_guard.backend (candle, mmbert32k, http_chat, or
+// http_classify). An empty/unset backend defaults to candle.
+func createJailbreakInference(promptGuardCfg *config.PromptGuardConfig, routerCfg *config.RouterConfig, jailbreakMapping *JailbreakMapping) (SequenceClassifierBackend, error) {
+	switch promptGuardCfg.Backend {
+	case config.PromptGuardBackendMmBERT32K:
 		logging.ComponentEvent("classifier", "jailbreak_detector_backend_selected", map[string]interface{}{
-			"backend": "mmbert_32k",
+			"backend": config.PromptGuardBackendMmBERT32K,
 		})
 		return createMmBERT32KJailbreakInference(), nil
-	}
 
-	if promptGuardCfg.UseVLLM {
-		// Try to find external model configuration with role="guardrail"
-		externalCfg := routerCfg.FindExternalModelByRole(config.ModelRoleGuardrail)
-		if externalCfg == nil {
-			return nil, fmt.Errorf("external model with model_role='%s' is required when use_vllm=true", config.ModelRoleGuardrail)
+	case config.PromptGuardBackendHTTPChat:
+		externalCfg, err := findGuardrailExternalModel(routerCfg)
+		if err != nil {
+			return nil, err
 		}
-
-		// Validate required fields
-		if externalCfg.ModelEndpoint.Address == "" {
-			return nil, fmt.Errorf("external guardrail model endpoint address is required")
-		}
-		if externalCfg.ModelName == "" {
-			return nil, fmt.Errorf("external guardrail model name is required")
-		}
-
 		logging.ComponentEvent("classifier", "jailbreak_detector_backend_selected", map[string]interface{}{
-			"backend":  "external_guardrail",
+			"backend":  config.PromptGuardBackendHTTPChat,
 			"provider": externalCfg.Provider,
 		})
-
-		// Use vLLM-based inference with external config.
 		// Pass default threshold from PromptGuardConfig.
 		return NewVLLMJailbreakInference(externalCfg, promptGuardCfg.Threshold)
+
+	case config.PromptGuardBackendHTTPClassify:
+		externalCfg, err := findGuardrailExternalModel(routerCfg)
+		if err != nil {
+			return nil, err
+		}
+		logging.ComponentEvent("classifier", "jailbreak_detector_backend_selected", map[string]interface{}{
+			"backend":  config.PromptGuardBackendHTTPClassify,
+			"provider": externalCfg.Provider,
+		})
+		return NewHTTPClassifierJailbreakInference(externalCfg, jailbreakMapping)
+
+	default:
+		// Empty/unset or "candle": use Candle-based inference.
+		logging.ComponentEvent("classifier", "jailbreak_detector_backend_selected", map[string]interface{}{
+			"backend": config.PromptGuardBackendCandle,
+		})
+		return createJailbreakInferenceCandle(), nil
 	}
-	// Use Candle-based inference.
-	return createJailbreakInferenceCandle(), nil
+}
+
+// findGuardrailExternalModel looks up and validates the external model
+// configuration required by the http_chat/http_classify jailbreak backends.
+func findGuardrailExternalModel(routerCfg *config.RouterConfig) (*config.ExternalModelConfig, error) {
+	externalCfg := routerCfg.FindExternalModelByRole(config.ModelRoleGuardrail)
+	if externalCfg == nil {
+		return nil, fmt.Errorf("external model with model_role='%s' is required for this prompt_guard.backend", config.ModelRoleGuardrail)
+	}
+	if externalCfg.ModelEndpoint.Address == "" {
+		return nil, fmt.Errorf("external guardrail model endpoint address is required")
+	}
+	if externalCfg.ModelName == "" {
+		return nil, fmt.Errorf("external guardrail model name is required")
+	}
+	return externalCfg, nil
 }
 
 // JailbreakDetection represents the result of jailbreak analysis for a piece of content.

@@ -20,6 +20,24 @@ const (
 	ModelRoleMemoryExtraction = "memory_extraction"
 )
 
+// PromptGuardConfig.Backend values, selecting which jailbreak classifier
+// backend to use. An empty/unset value defaults to PromptGuardBackendCandle.
+const (
+	// PromptGuardBackendCandle runs the bundled Candle model locally
+	// (LoRA/BERT auto-detect, falling back to ModernBERT).
+	PromptGuardBackendCandle = "candle"
+	// PromptGuardBackendMmBERT32K runs the bundled mmBERT-32K model locally
+	// (32K context, YaRN RoPE, multilingual).
+	PromptGuardBackendMmBERT32K = "mmbert32k"
+	// PromptGuardBackendHTTPChat calls an external model with role="guardrail"
+	// through a generative chat-completion prompt (e.g. Qwen3Guard-style).
+	PromptGuardBackendHTTPChat = "http_chat"
+	// PromptGuardBackendHTTPClassify calls an external model with
+	// role="guardrail" through a lightweight sequence-classifier HTTP
+	// contract (text in, full label/score distribution out).
+	PromptGuardBackendHTTPClassify = "http_classify"
+)
+
 // Signal type constants for rule conditions.
 const (
 	SignalTypeKeyword      = "keyword"

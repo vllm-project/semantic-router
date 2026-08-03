@@ -221,7 +221,6 @@ prompt_guard:
   model_id: "test-jailbreak-model"
   threshold: 0.5
   use_cpu: false
-  use_modernbert: true
   jailbreak_mapping_path: "/path/to/jailbreak.json"
 
 vllm_endpoints:
@@ -290,7 +289,6 @@ tools:
 				// Verify prompt guard
 				Expect(cfg.PromptGuard.Enabled).To(BeTrue())
 				Expect(cfg.PromptGuard.ModelID).To(Equal("test-jailbreak-model"))
-				Expect(cfg.PromptGuard.UseModernBERT).To(BeTrue())
 
 				// Verify model config
 				Expect(cfg.ModelConfig).To(HaveKey("model-a"))

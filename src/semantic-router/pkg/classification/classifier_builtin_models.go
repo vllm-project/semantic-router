@@ -33,13 +33,20 @@ func (c *Classifier) initializeCategoryClassifier() error {
 	return c.categoryInitializer.Init(c.Config.CategoryModel.ModelID, c.Config.CategoryModel.UseCPU, numClasses)
 }
 
+// isExternalJailbreakBackend reports whether the configured prompt_guard
+// backend calls an external model (http_chat/http_classify) rather than
+// running a bundled Candle model locally.
+func isExternalJailbreakBackend(backend string) bool {
+	return backend == config.PromptGuardBackendHTTPChat || backend == config.PromptGuardBackendHTTPClassify
+}
+
 // IsJailbreakEnabled checks if jailbreak detection is enabled and properly configured.
 func (c *Classifier) IsJailbreakEnabled() bool {
 	if !c.Config.PromptGuard.Enabled || c.JailbreakMapping == nil {
 		return false
 	}
 
-	if c.Config.PromptGuard.UseVLLM {
+	if isExternalJailbreakBackend(c.Config.PromptGuard.Backend) {
 		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
 		hasExternalConfig := externalCfg != nil &&
 			externalCfg.ModelEndpoint.Address != "" &&
@@ -57,10 +64,14 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 		return fmt.Errorf("jailbreak detection is not properly configured")
 	}
 
-	if c.Config.PromptGuard.UseVLLM {
+	if err := validateJailbreakPositiveLabels(c.Config.PromptGuard.PositiveLabels, c.JailbreakMapping); err != nil {
+		return err
+	}
+
+	if isExternalJailbreakBackend(c.Config.PromptGuard.Backend) {
 		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
 		logging.ComponentEvent("classifier", "jailbreak_detector_init_started", map[string]interface{}{
-			"mode":      "vllm",
+			"mode":      c.Config.PromptGuard.Backend,
 			"model_ref": externalCfg.ModelName,
 		})
 		return nil
@@ -114,7 +125,7 @@ func (c *Classifier) CheckForJailbreakWithThreshold(text string, threshold float
 		return false, "", 0.0, fmt.Errorf("unknown jailbreak class index: %d", result.Class)
 	}
 
-	isJailbreak := result.Confidence >= threshold && jailbreakType == "jailbreak"
+	isJailbreak := result.Confidence >= threshold && isPositiveJailbreakLabel(c.Config.PromptGuard.PositiveLabels, jailbreakType)
 	if isJailbreak {
 		logging.Warnf("JAILBREAK DETECTED: '%s' (confidence: %.3f, threshold: %.3f)",
 			jailbreakType, result.Confidence, threshold)
