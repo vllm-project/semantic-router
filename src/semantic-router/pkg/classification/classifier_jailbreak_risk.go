@@ -57,7 +57,7 @@ func (c *Classifier) CheckForJailbreakWithRisk(text string) (bool, string, float
 		return false, "", 0.0, 0.0, nil
 	}
 
-	result, err := c.classifyJailbreakWithProbs(text)
+	result, err := c.jailbreakInference.Classify(text)
 	if err != nil {
 		return false, "", 0.0, 0.0, fmt.Errorf("jailbreak classification failed: %w", err)
 	}
@@ -76,19 +76,4 @@ func (c *Classifier) CheckForJailbreakWithRisk(text string) (bool, string, float
 	}
 
 	return isJailbreak, jailbreakType, result.Confidence, riskScore, nil
-}
-
-// classifyJailbreakWithProbs runs jailbreak inference, preferring the full
-// probability distribution when the configured backend supports it and otherwise
-// falling back to argmax-only classification.
-func (c *Classifier) classifyJailbreakWithProbs(text string) (candle_binding.ClassResultWithProbs, error) {
-	if probInf, ok := c.jailbreakInference.(JailbreakProbInference); ok {
-		return probInf.ClassifyWithProbs(text)
-	}
-
-	result, err := c.jailbreakInference.Classify(text)
-	if err != nil {
-		return candle_binding.ClassResultWithProbs{}, err
-	}
-	return candle_binding.ClassResultWithProbs{Class: result.Class, Confidence: result.Confidence}, nil
 }

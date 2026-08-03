@@ -11,7 +11,7 @@ import (
 
 // cachedJailbreakResult stores a cached jailbreak classification result.
 type cachedJailbreakResult struct {
-	result candle_binding.ClassResult
+	result candle_binding.ClassResultWithProbs
 	err    error
 }
 

@@ -100,7 +100,7 @@ func (c *Classifier) CheckForJailbreakWithThreshold(text string, threshold float
 		return false, "", 0.0, nil
 	}
 
-	var result candle_binding.ClassResult
+	var result candle_binding.ClassResultWithProbs
 	var err error
 
 	result, err = c.jailbreakInference.Classify(text)
