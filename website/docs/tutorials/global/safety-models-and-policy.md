@@ -38,7 +38,7 @@ global:
     modules:
       prompt_guard:
         model_ref: prompt_guard
-        use_mmbert_32k: true
+        backend: mmbert32k
       classifier:
         domain:
           model_ref: domain_classifier

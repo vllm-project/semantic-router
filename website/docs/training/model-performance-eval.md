@@ -386,7 +386,7 @@ global:
         model_id: models/mmbert32k-jailbreak-detector-merged
         threshold: 0.7
         use_cpu: true
-        use_mmbert_32k: true
+        backend: mmbert32k
         jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
       classifier:
         domain:
