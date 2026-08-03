@@ -82,9 +82,13 @@ test-semantic-router: build-router
 	export SKIP_LLAMA_STACK_TESTS=$${SKIP_LLAMA_STACK_TESTS:-true} && \
 	export SR_TEST_MODE=true && \
 		cd src/semantic-router && \
+		TEST_PACKAGES="$$(go list ./...)" && \
+		if [ "$${SKIP_MODEL_DEPENDENT_TESTS:-false}" = "true" ]; then \
+			TEST_PACKAGES="$$(printf '%s\n' "$$TEST_PACKAGES" | awk '!/\/pkg\/(memory|tools)$$/')"; \
+		fi && \
 		CGO_ENABLED=1 \
 		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
-		go test -v $$(go list ./...)
+		go test -v $$TEST_PACKAGES
 
 # Test the Rust library and the Go binding
 # In CI, split test-binding into two phases to save disk space:

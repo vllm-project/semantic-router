@@ -59,6 +59,7 @@ precommit-local:
 	echo "Using $$IMAGE_SOURCE: $$IMAGE_REF"; \
 	$$CONTAINER_CMD run --rm \
 	    -e AGENT_BASE_REF="$(AGENT_BASE_REF)" \
+	    -e SKIP_MODEL_DEPENDENT_TESTS=true \
 	    -v $(shell pwd):/app \
 	    -v /app/.venv-agent \
 	    -w /app \
