@@ -3,6 +3,7 @@ package extproc
 import (
 	"math"
 	"math/rand"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -60,6 +61,10 @@ func (r *OpenAIRouter) applyRoutingSamplingAdaptation(
 		return baseAdaptationDecision(input, adaptationPolicy(mode, routerLearningActionKeepBase, "candidate_set_empty", nil))
 	}
 
+	if llmDecision, ok := r.tryLLMRouterAdaptation(input, learningCtx, cfg, mode, candidateSet, strategy); ok {
+		return llmDecision
+	}
+
 	usedSampling := adaptationSamplingAllowed(mode, preflight)
 	seed := int64(0)
 	if usedSampling {
@@ -92,6 +97,110 @@ func (r *OpenAIRouter) applyRoutingSamplingAdaptation(
 		changesModel:     learningChangesModel(input.baseResult, result),
 		policy:           policy,
 	}
+}
+
+func (r *OpenAIRouter) tryLLMRouterAdaptation(
+	input routerLearningInput,
+	learningCtx *selection.SelectionContext,
+	cfg config.RouterLearningAdaptationConfig,
+	mode string,
+	candidateSet string,
+	strategy string,
+) (routerLearningDecision, bool) {
+	if !cfg.EnableLLMRouting || strings.TrimSpace(cfg.LLMRouterServerURL) == "" {
+		return routerLearningDecision{}, false
+	}
+
+	renderer, err := newRouterLearningLLMRouterPromptRenderer(r, cfg)
+	if err != nil {
+		logRouterLearningLLMRouterWarning("router_learning_llm_router_template_unavailable", err, cfg.LLMRouterServerURL, learningCtx.DecisionName, nil)
+		return routerLearningDecision{}, false
+	}
+
+	query, err := renderer.Render(learningCtx)
+	if err != nil {
+		logRouterLearningLLMRouterWarning("router_learning_llm_router_render_failed", err, cfg.LLMRouterServerURL, learningCtx.DecisionName, nil)
+		return routerLearningDecision{}, false
+	}
+
+	response, err := routeRouterLearningLLMRouterQuery(input, cfg.LLMRouterServerURL, query)
+	if err != nil {
+		logRouterLearningLLMRouterWarning("router_learning_llm_router_call_failed", err, cfg.LLMRouterServerURL, learningCtx.DecisionName, nil)
+		return routerLearningDecision{}, false
+	}
+
+	ref := modelRefForName(learningCtx.CandidateModels, response.SelectedModel)
+	if ref == nil {
+		logRouterLearningLLMRouterWarning("router_learning_llm_router_selected_invalid_model", nil, cfg.LLMRouterServerURL, learningCtx.DecisionName, map[string]interface{}{
+			"selected_model": response.SelectedModel,
+		})
+		return routerLearningDecision{}, false
+	}
+
+	baseResult := input.baseResult
+	result := newRouterLearningLLMRouterSelectionResult(baseResult, ref)
+	policy := routerLearningLLMRouterPolicy(mode, candidateSet, input, learningCtx, result.SelectedModel)
+	if mode == config.DecisionAdaptationModeObserve || result.SelectedModel == selectedModelName(baseResult) {
+		return baseAdaptationDecision(input, observeLLMRouterAdaptationPolicy(policy)), true
+	}
+
+	return routerLearningDecision{
+		selectionContext: learningCtx,
+		selectionResult:  result,
+		selectedModelRef: ref,
+		changesModel:     learningChangesModel(baseResult, result),
+		policy:           policy,
+	}, true
+}
+
+func newRouterLearningLLMRouterPromptRenderer(
+	r *OpenAIRouter,
+	cfg config.RouterLearningAdaptationConfig,
+) (*selection.LLMRouterPromptRenderer, error) {
+	rendererCfg := &selection.RLDrivenConfig{
+		EnableLLMRouting:           true,
+		LLMRouterServerURL:         strings.TrimSpace(cfg.LLMRouterServerURL),
+		LLMRouterQueryTemplate:     cfg.LLMRouterQueryTemplate,
+		LLMRouterQueryTemplateFile: resolveRouterLearningTemplatePath(r, cfg.LLMRouterQueryTemplateFile),
+	}
+	return selection.NewLLMRouterPromptRenderer(rendererCfg)
+}
+
+func resolveRouterLearningTemplatePath(r *OpenAIRouter, templatePath string) string {
+	trimmed := strings.TrimSpace(templatePath)
+	if trimmed == "" {
+		return ""
+	}
+	if filepath.IsAbs(trimmed) {
+		return trimmed
+	}
+	if r == nil || r.Config == nil || strings.TrimSpace(r.Config.ConfigBaseDir) == "" {
+		return trimmed
+	}
+	return filepath.Clean(filepath.Join(r.Config.ConfigBaseDir, trimmed))
+}
+
+func cloneSelectionResult(result *selection.SelectionResult) *selection.SelectionResult {
+	if result == nil {
+		return nil
+	}
+	clone := *result
+	clone.AllScores = cloneSelectionScores(result.AllScores)
+	return &clone
+}
+
+func baseSelectionMethod(result *selection.SelectionResult) selection.SelectionMethod {
+	if result == nil {
+		return selection.MethodStatic
+	}
+	return result.Method
+}
+
+func baseSelectionTier(result *selection.SelectionResult) selection.AlgorithmTier {
+	if result == nil {
+		return selection.TierSupported
+	}
+	return result.Tier
 }
 
 func baseAdaptationDecision(input routerLearningInput, policy routerLearningPolicy) routerLearningDecision {

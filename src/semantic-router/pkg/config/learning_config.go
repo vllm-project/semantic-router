@@ -46,6 +46,11 @@ type RouterLearningAdaptationConfig struct {
 	Enabled      *bool  `yaml:"enabled,omitempty"`
 	CandidateSet string `yaml:"candidate_set,omitempty"`
 	Strategy     string `yaml:"strategy,omitempty"`
+
+	EnableLLMRouting           bool   `yaml:"enable_llm_routing,omitempty"`
+	LLMRouterServerURL         string `yaml:"llm_router_server_url,omitempty"`
+	LLMRouterQueryTemplate     string `yaml:"llm_router_query_template,omitempty"`
+	LLMRouterQueryTemplateFile string `yaml:"llm_router_query_template_file,omitempty"`
 }
 
 // RouterLearningProtectionConfig configures online stability protection.

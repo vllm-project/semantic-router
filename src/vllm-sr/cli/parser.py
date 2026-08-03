@@ -175,7 +175,15 @@ def _unsupported_router_learning_fields(data: Dict[str, Any]) -> list[str]:
     fields.extend(
         _unknown_fields(
             adaptation,
-            {"enabled", "candidate_set", "strategy"},
+            {
+                "enabled",
+                "candidate_set",
+                "strategy",
+                "enable_llm_routing",
+                "llm_router_server_url",
+                "llm_router_query_template",
+                "llm_router_query_template_file",
+            },
             "global.router.learning.adaptation",
         )
     )

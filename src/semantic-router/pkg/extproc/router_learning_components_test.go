@@ -17,6 +17,7 @@ limitations under the License.
 package extproc
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -221,6 +222,20 @@ func TestRouterLearningProtectionObserveDoesNotSuppressAdaptationSampling(t *tes
 	preflight := ctx.VSRLearningProtectionPreflight
 	if preflight == nil || preflight.Action != string(routerLearningActionObserve) {
 		t.Fatalf("expected protection preflight to be diagnostic observe-only, got %#v", preflight)
+	}
+}
+
+func TestResolveRouterLearningTemplatePathUsesConfigBaseDir(t *testing.T) {
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			ConfigBaseDir: "/workspace/config",
+		},
+	}
+
+	got := resolveRouterLearningTemplatePath(router, "templates/router-query.tmpl")
+	want := filepath.Clean("/workspace/config/templates/router-query.tmpl")
+	if got != want {
+		t.Fatalf("resolveRouterLearningTemplatePath() = %q, want %q", got, want)
 	}
 }
 

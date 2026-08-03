@@ -266,7 +266,9 @@ type RLDrivenSelectionConfig struct {
 	CostRewardAlpha             float64 `yaml:"cost_reward_alpha,omitempty"`
 	FormatRewardPenalty         float64 `yaml:"format_reward_penalty,omitempty"`
 	EnableLLMRouting            bool    `yaml:"enable_llm_routing,omitempty"`
-	RouterR1ServerURL           string  `yaml:"router_r1_server_url,omitempty"`
+	LLMRouterServerURL          string  `yaml:"llm_router_server_url,omitempty"`
+	LLMRouterQueryTemplate      string  `yaml:"llm_router_query_template,omitempty"`
+	LLMRouterQueryTemplateFile  string  `yaml:"llm_router_query_template_file,omitempty"`
 	LLMRoutingFallback          string  `yaml:"llm_routing_fallback,omitempty"`
 	EnableMultiRoundAggregation bool    `yaml:"enable_multi_round_aggregation,omitempty"`
 	MaxAggregationRounds        int     `yaml:"max_aggregation_rounds,omitempty"`

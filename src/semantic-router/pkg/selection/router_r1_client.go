@@ -28,24 +28,24 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// RouterR1Client is a client for the Router-R1 LLM-as-Router server
+// LLMRouterClient is a client for the LLM router decision server.
 // This implements the think/route pattern from arXiv:2506.09033
-// Requires external server: src/training/rl_model_selection/router_r1_server.py
-type RouterR1Client struct {
+// Requires external server: src/training/model_selection/rl_model_selection/router_r1_server.py
+type LLMRouterClient struct {
 	serverURL  string
 	httpClient *http.Client
 }
 
-// RouterR1Response is the response from the Router-R1 server
-type RouterR1Response struct {
+// LLMRouterResponse is the response from the router server.
+type LLMRouterResponse struct {
 	SelectedModel string `json:"selected_model"`
 	Thinking      string `json:"thinking"`
 	FullResponse  string `json:"full_response"`
 }
 
-// NewRouterR1Client creates a new Router-R1 client
-func NewRouterR1Client(serverURL string) *RouterR1Client {
-	return &RouterR1Client{
+// NewLLMRouterClient creates a new LLM router client.
+func NewLLMRouterClient(serverURL string) *LLMRouterClient {
+	return &LLMRouterClient{
 		serverURL: serverURL,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
@@ -53,8 +53,8 @@ func NewRouterR1Client(serverURL string) *RouterR1Client {
 	}
 }
 
-// Route sends a query to the Router-R1 server for routing decision
-func (c *RouterR1Client) Route(ctx context.Context, query string) (*RouterR1Response, error) {
+// Route sends a query to the router server for a routing decision.
+func (c *LLMRouterClient) Route(ctx context.Context, query string) (*LLMRouterResponse, error) {
 	reqBody := map[string]string{
 		"query": query,
 	}
@@ -81,17 +81,17 @@ func (c *RouterR1Client) Route(ctx context.Context, query string) (*RouterR1Resp
 		return nil, fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var result RouterR1Response
+	var result LLMRouterResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	logging.Debugf("[RouterR1Client] Routed query to %s: %s", result.SelectedModel, result.Thinking)
+	logging.Debugf("[LLMRouterClient] Routed query to %s: %s", result.SelectedModel, result.Thinking)
 	return &result, nil
 }
 
-// HealthCheck checks if the Router-R1 server is healthy
-func (c *RouterR1Client) HealthCheck(ctx context.Context) error {
+// HealthCheck checks if the router server is healthy.
+func (c *LLMRouterClient) HealthCheck(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", c.serverURL+"/health", nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)

@@ -158,9 +158,24 @@ type SelectionContext struct {
 	// DecisionName is the name of the matched decision for category-specific selection
 	DecisionName string
 
+	// DecisionDescription describes the matched decision for routing context.
+	DecisionDescription string
+
 	// CategoryName is the detected domain category (e.g., "physics", "math")
 	// Used by ML selectors to create feature vectors with category one-hot encoding
 	CategoryName string
+
+	// MatchedDomains captures domain signals that contributed to the request context.
+	MatchedDomains []string
+
+	// MatchedKeywords captures keyword signals that contributed to the request context.
+	MatchedKeywords []string
+
+	// Labels captures normalized routing labels derived from request signals.
+	Labels []string
+
+	// Tags is an alias-friendly list of normalized routing tags derived from request signals.
+	Tags []string
 
 	// CandidateModels is the list of models to select from
 	CandidateModels []config.ModelRef
@@ -180,6 +195,9 @@ type SelectionContext struct {
 	// UserID identifies the user for personalized selection (optional)
 	// When set, enables per-user preference learning in RL-driven selection
 	UserID string
+
+	// RequestID identifies the request for template rendering and observability.
+	RequestID string
 
 	// SessionID identifies the conversation session for multi-turn context (optional)
 	// Used to track within-session model performance

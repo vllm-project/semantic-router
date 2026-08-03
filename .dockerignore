@@ -19,6 +19,17 @@ __pycache__/
 .venv/
 .venv-agent/
 .agent-harness/
+.vllm-sr
+**/.vllm-sr/
+**/.vllm-sr/**
+config/algorithm/selection/.vllm-sr
+deploy/examples/runtime/model-selection/.vllm-sr
+deploy/kubernetes/istio/.vllm-sr
+deploy/recipes/.vllm-sr
+e2e/config/.vllm-sr
+examples/test_random/.vllm-sr
+test/.vllm-sr
+test/test/.vllm-sr
 venv/
 env/
 ENV/

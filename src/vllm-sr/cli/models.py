@@ -876,6 +876,10 @@ class RouterLearningAdaptationConfig(BaseModel):
     enabled: Optional[StrictBool] = None
     strategy: Optional[Literal["routing_sampling"]] = None
     candidate_set: Optional[Literal["decision", "tier", "global"]] = None
+    enable_llm_routing: Optional[StrictBool] = None
+    llm_router_server_url: Optional[StrictStr] = None
+    llm_router_query_template: Optional[StrictStr] = None
+    llm_router_query_template_file: Optional[StrictStr] = None
 
 
 class RouterLearningIdentityHeadersConfig(BaseModel):

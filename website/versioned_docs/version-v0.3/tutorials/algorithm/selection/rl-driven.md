@@ -151,7 +151,17 @@ algorithm:
 
     # LLM-as-Router
     enable_llm_routing: false          # Enable LLM-based routing
-    router_r1_server_url: ""           # Router-R1 server URL
+    llm_router_server_url: ""          # LLM router decision server URL
+    llm_router_query_template: |
+      Decision name: {{.decision_name}}
+      {{- if .decision_description }}
+      Decision description: {{.decision_description}}
+      {{- end }}
+      Query: {{.query}}
+      Available models:
+      {{- range .available_models }}
+      - {{.name}}{{if .lora_name}} (LoRA: {{.lora_name}}){{end}}{{if .reasoning_description}} - {{.reasoning_description}}{{end}}
+      {{- end }}
     llm_routing_fallback: thompson     # Fallback when LLM routing fails
 
     # Multi-round
@@ -177,7 +187,9 @@ algorithm:
 | `cost_reward_alpha` | float | `0.3` | Performance-cost tradeoff (0=outcome, 1=cost) |
 | `format_reward_penalty` | float | `-1.0` | Penalty applied when response format is incorrect |
 | `enable_llm_routing` | bool | `false` | Enable LLM-as-router mode |
-| `router_r1_server_url` | string | — | URL of Router-R1 LLM server |
+| `llm_router_server_url` | string | — | URL of the LLM router decision server |
+| `llm_router_query_template` | string | — | Go template used to build the query sent to the LLM router |
+| `llm_router_query_template_file` | string | — | Optional file path for the query template |
 | `llm_routing_fallback` | string | `thompson` | Fallback when LLM routing fails |
 | `storage_path` | string | — | Persist RL state to file |
 | `auto_save_interval` | string | `30s` | Auto-save interval |
