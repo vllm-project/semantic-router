@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -28,7 +30,20 @@ type DeployRequest struct {
 	// BaseYAML is the full canonical config imported into the builder, if any.
 	// Routing-only fragments are ignored as merge bases.
 	BaseYAML string `json:"baseYaml,omitempty"`
+	// Mode controls how the DSL-owned config surface is applied. Merge is the
+	// backward-compatible default for partial API fragments. Replace atomically
+	// replaces routing, entrypoints, and recipes while preserving the static
+	// deployment config outside that surface.
+	Mode DeployMode `json:"mode,omitempty"`
 }
+
+// DeployMode defines the update semantics for a compiled routing fragment.
+type DeployMode string
+
+const (
+	DeployModeMerge   DeployMode = "merge"
+	DeployModeReplace DeployMode = "replace"
+)
 
 // DeployResponse is the JSON response for a deploy operation
 type DeployResponse struct {
@@ -298,80 +313,115 @@ func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
 	if len(baseData) == 0 {
 		return fragmentBytes, nil
 	}
+	if req.Mode != "" && req.Mode != DeployModeMerge && req.Mode != DeployModeReplace {
+		return nil, fmt.Errorf("unsupported deploy mode %q", req.Mode)
+	}
 
-	baseConfig, err := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](baseData)
+	baseDoc, err := parseYAMLDocument(baseData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse deploy base config: %w", err)
+	}
+	baseRoot, err := documentMappingNode(baseDoc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse deploy base config: %w", err)
 	}
 
+	fragmentDoc, err := parseYAMLDocument(fragmentBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse compiled routing fragment: %w", err)
+	}
+	fragmentRoot, err := documentMappingNode(fragmentDoc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse compiled routing fragment: %w", err)
+	}
 	fragmentConfig, err := decodeYAMLTaggedBytes[routingFragmentDocument](fragmentBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse compiled routing fragment: %w", err)
 	}
 
-	baseConfig.Routing = mergeCanonicalRouting(baseConfig.Routing, fragmentConfig.Routing)
-	mergeFragmentGlobal(&baseConfig, fragmentConfig.Global)
-	mergedYAML, err := marshalYAMLBytes(baseConfig)
+	if mergeErr := mergeDSLOwnedNodes(baseRoot, fragmentRoot, req.Mode); mergeErr != nil {
+		return nil, mergeErr
+	}
+	if mergeErr := mergeFragmentGlobalNode(baseRoot, fragmentConfig.Global); mergeErr != nil {
+		return nil, mergeErr
+	}
+
+	mergedYAML, err := marshalYAMLDocument(baseDoc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal merged config: %w", err)
 	}
 	return mergedYAML, nil
 }
 
-func mergeCanonicalRouting(base, patch routerconfig.CanonicalRouting) routerconfig.CanonicalRouting {
-	merged := base
-	if len(patch.ModelCards) > 0 {
-		merged.ModelCards = patch.ModelCards
+// mergeDSLOwnedNodes applies only the configuration surface owned by the DSL.
+// Node-level merging makes the transport forward-compatible: a new signal or
+// projection is carried without adding another field-by-field merge branch.
+func mergeDSLOwnedNodes(baseRoot, fragmentRoot *yaml.Node, mode DeployMode) error {
+	fragmentRouting := mappingValueNode(fragmentRoot, "routing")
+	if fragmentRouting == nil {
+		return fmt.Errorf("compiled routing fragment must contain routing")
 	}
-	merged.Signals = mergeCanonicalSignals(base.Signals, patch.Signals)
-	if len(patch.Decisions) > 0 {
-		merged.Decisions = patch.Decisions
+
+	if mode == DeployModeReplace {
+		setMappingValueNode(baseRoot, "routing", fragmentRouting)
+		for _, section := range []string{"entrypoints", "recipes"} {
+			if value := mappingValueNode(fragmentRoot, section); value != nil {
+				setMappingValueNode(baseRoot, section, value)
+			} else {
+				deleteMappingValueNode(baseRoot, section)
+			}
+		}
+		return nil
 	}
-	return merged
+
+	baseRouting := mappingValueNode(baseRoot, "routing")
+	if baseRouting == nil {
+		setMappingValueNode(baseRoot, "routing", fragmentRouting)
+	} else if err := mergeMappingNodes(baseRouting, fragmentRouting); err != nil {
+		return fmt.Errorf("failed to merge routing fragment: %w", err)
+	}
+
+	// Scoped lists have identity and ordering semantics, so a supplied list is
+	// replaced as one unit. An omitted list remains untouched in merge mode.
+	for _, section := range []string{"entrypoints", "recipes"} {
+		if value := mappingValueNode(fragmentRoot, section); value != nil {
+			setMappingValueNode(baseRoot, section, value)
+		}
+	}
+	return nil
 }
 
-func mergeCanonicalSignals(base, patch routerconfig.CanonicalSignals) routerconfig.CanonicalSignals {
-	merged := base
-	if len(patch.Keywords) > 0 {
-		merged.Keywords = patch.Keywords
+func mergeFragmentGlobalNode(baseRoot *yaml.Node, fragment *globalFragment) error {
+	if fragment == nil || fragment.Services == nil || fragment.Services.RateLimit == nil {
+		return nil
 	}
-	if len(patch.Embeddings) > 0 {
-		merged.Embeddings = patch.Embeddings
+
+	global, err := ensureMappingNode(baseRoot, "global")
+	if err != nil {
+		return err
 	}
-	if len(patch.Domains) > 0 {
-		merged.Domains = patch.Domains
+	services, err := ensureMappingNode(global, "services")
+	if err != nil {
+		return err
 	}
-	if len(patch.FactCheck) > 0 {
-		merged.FactCheck = patch.FactCheck
+	rateLimit := &yaml.Node{}
+	if err := rateLimit.Encode(fragment.Services.RateLimit); err != nil {
+		return fmt.Errorf("failed to encode global.services.ratelimit: %w", err)
 	}
-	if len(patch.UserFeedbacks) > 0 {
-		merged.UserFeedbacks = patch.UserFeedbacks
+	setMappingValueNode(services, "ratelimit", rateLimit)
+	return nil
+}
+
+func ensureMappingNode(parent *yaml.Node, key string) (*yaml.Node, error) {
+	value := mappingValueNode(parent, key)
+	if value == nil {
+		setMappingValueNode(parent, key, &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"})
+		value = mappingValueNode(parent, key)
 	}
-	if len(patch.Preferences) > 0 {
-		merged.Preferences = patch.Preferences
+	if value.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("config %s block must be a YAML mapping", key)
 	}
-	if len(patch.Language) > 0 {
-		merged.Language = patch.Language
-	}
-	if len(patch.Context) > 0 {
-		merged.Context = patch.Context
-	}
-	if len(patch.Complexity) > 0 {
-		merged.Complexity = patch.Complexity
-	}
-	if len(patch.Modality) > 0 {
-		merged.Modality = patch.Modality
-	}
-	if len(patch.RoleBindings) > 0 {
-		merged.RoleBindings = patch.RoleBindings
-	}
-	if len(patch.Jailbreak) > 0 {
-		merged.Jailbreak = patch.Jailbreak
-	}
-	if len(patch.PII) > 0 {
-		merged.PII = patch.PII
-	}
-	return merged
+	return value, nil
 }
 
 func mergeFragmentGlobal(base *routerconfig.CanonicalConfig, frag *globalFragment) {

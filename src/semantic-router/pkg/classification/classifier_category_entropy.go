@@ -152,7 +152,7 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 			result.Confidence, c.Config.CategoryModel.Threshold, fallbackCategory)
 
 		// Record the fallback category as a signal match
-		metrics.RecordSignalMatch(config.SignalTypeKeyword, fallbackCategory)
+		c.recordSignalMatch(config.SignalTypeKeyword, fallbackCategory)
 
 		// Return fallback category instead of empty string to enable proper decision routing
 		return fallbackCategory, float64(result.Confidence), reasoningDecision, nil
@@ -168,13 +168,13 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 		}
 
 		logging.Warnf("Class index %d not found in category mapping, falling back to: %s", result.Class, fallbackCategory)
-		metrics.RecordSignalMatch(config.SignalTypeKeyword, fallbackCategory)
+		c.recordSignalMatch(config.SignalTypeKeyword, fallbackCategory)
 		return fallbackCategory, float64(result.Confidence), reasoningDecision, nil
 	}
 	genericCategory := c.translateMMLUToGeneric(categoryName)
 
 	// Record the category as a signal match
-	metrics.RecordSignalMatch(config.SignalTypeKeyword, genericCategory)
+	c.recordSignalMatch(config.SignalTypeKeyword, genericCategory)
 
 	logging.Debugf("Classified as category: %s (mmlu=%s), reasoning_decision: use=%t, confidence=%.3f, reason=%s",
 		genericCategory, categoryName, reasoningDecision.UseReasoning, reasoningDecision.Confidence, reasoningDecision.DecisionReason)

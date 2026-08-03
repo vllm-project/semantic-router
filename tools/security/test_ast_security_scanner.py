@@ -2,6 +2,7 @@
 
 import importlib.util
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -15,6 +16,18 @@ SPEC.loader.exec_module(SCANNER)
 
 
 class ASTSecurityScannerTests(unittest.TestCase):
+    def test_project_allowlist_is_loaded_from_security_tool_directory(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            allowlist_path = (
+                Path(temp_dir) / "tools" / "security" / "ast-scan-allowlist.txt"
+            )
+            allowlist_path.parent.mkdir(parents=True)
+            allowlist_path.write_text("custom.example\n", encoding="utf-8")
+
+            SCANNER._load_url_allowlist(Path(temp_dir))
+
+        self.assertIn("custom.example", SCANNER._url_allowlist)
+
     def test_own_source_detection_handles_mirrored_checkout(self):
         self.assertTrue(SCANNER._is_own_source(str(SCANNER_PATH)))
         self.assertTrue(

@@ -421,7 +421,7 @@ demo-hallucination-auto: build-router download-models
 test-image-gen: ## Test image generation via vLLM-Omni (requires vLLM-Omni on localhost:8001)
 test-image-gen:
 	@echo "Testing image generation with vLLM-Omni..."
-	@./scripts/test-image-gen.sh
+	@./tools/smoke/test-image-gen.sh
 
 # Run image generation integration tests (Go)
 test-image-gen-integration: ## Run Go integration tests for image generation

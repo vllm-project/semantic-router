@@ -9,14 +9,10 @@ function chatStreamChunk(delta: Record<string, unknown>): string {
 function chatStreamBody(content: string, reasoning = ''): string {
   const initialLine = chatStreamChunk({ role: 'assistant', content: '' });
   const reasoningLines = reasoning
-    ? reasoning.split('').map((char) =>
-        chatStreamChunk({ reasoning: char })
-      )
+    ? reasoning.split('').map((char) => chatStreamChunk({ reasoning: char }))
     : [];
 
-  const contentLines = content.split('').map((char) =>
-    chatStreamChunk({ content: char })
-  );
+  const contentLines = content.split('').map((char) => chatStreamChunk({ content: char }));
 
   return initialLine + [...reasoningLines, ...contentLines].join('') + 'data: [DONE]\n\n';
 }
@@ -70,45 +66,48 @@ async function mockStreamingChatFetch(
   chunks: string[],
   delayMs = 250,
 ): Promise<void> {
-  await page.evaluate(async ({ chunks: streamChunks, delayMs: streamDelayMs }) => {
-    const originalFetch = window.fetch.bind(window);
-    const encoder = new TextEncoder();
+  await page.evaluate(
+    async ({ chunks: streamChunks, delayMs: streamDelayMs }) => {
+      const originalFetch = window.fetch.bind(window);
+      const encoder = new TextEncoder();
 
-    window.fetch = async (input, init) => {
-      const url = typeof input === 'string'
-        ? input
-        : input instanceof Request
-          ? input.url
-          : String(input);
+      window.fetch = async (input, init) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
 
-      if (!url.includes('/api/router/v1/chat/completions')) {
-        return originalFetch(input, init);
-      }
+        if (!url.includes('/api/router/v1/chat/completions')) {
+          return originalFetch(input, init);
+        }
 
-      let chunkIndex = 0;
-      return new Response(new ReadableStream({
-        start(controller) {
-          const pushChunk = () => {
-            if (chunkIndex >= streamChunks.length) {
-              controller.close();
-              return;
-            }
+        let chunkIndex = 0;
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              const pushChunk = () => {
+                if (chunkIndex >= streamChunks.length) {
+                  controller.close();
+                  return;
+                }
 
-            controller.enqueue(encoder.encode(streamChunks[chunkIndex]));
-            chunkIndex += 1;
-            window.setTimeout(pushChunk, streamDelayMs);
-          };
+                controller.enqueue(encoder.encode(streamChunks[chunkIndex]));
+                chunkIndex += 1;
+                window.setTimeout(pushChunk, streamDelayMs);
+              };
 
-          pushChunk();
-        },
-      }), {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-        },
-      });
-    };
-  }, { chunks, delayMs });
+              pushChunk();
+            },
+          }),
+          {
+            headers: {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+            },
+          },
+        );
+      };
+    },
+    { chunks, delayMs },
+  );
 }
 
 async function mockPlaygroundBootstrap(page: import('@playwright/test').Page): Promise<void> {
@@ -125,6 +124,7 @@ async function mockPlaygroundBootstrap(page: import('@playwright/test').Page): P
             object: 'model',
             owned_by: 'vllm-semantic-router',
             description: 'Intelligent Router for Mixture-of-Models',
+            routing: { resolution: 'virtual', selectable: true, default_route: true },
           },
         ],
       }),
@@ -140,8 +140,8 @@ async function readStoredQueuePrompts(page: import('@playwright/test').Page): Pr
     }
 
     const parsed = JSON.parse(raw) as Record<string, Array<{ prompt?: string }>>;
-    return Object.values(parsed).flatMap(tasks =>
-      Array.isArray(tasks) ? tasks.map(task => task.prompt || '').filter(Boolean) : []
+    return Object.values(parsed).flatMap((tasks) =>
+      Array.isArray(tasks) ? tasks.map((task) => task.prompt || '').filter(Boolean) : [],
     );
   });
 }
@@ -158,9 +158,13 @@ test.describe('Playground Chat Component', () => {
 
     await expect(hireClawToggle).toBeVisible();
     await expect(hireClawToggle).toHaveAttribute('aria-checked', 'false');
-    await expect(menu.getByRole('menuitemcheckbox', { name: /Open ClawRoom view|Exit ClawRoom view/i })).toHaveCount(0);
+    await expect(
+      menu.getByRole('menuitemcheckbox', { name: /Open ClawRoom view|Exit ClawRoom view/i }),
+    ).toHaveCount(0);
 
-    const storedValue = await page.evaluate(() => window.localStorage.getItem('sr:playground:claw-mode'));
+    const storedValue = await page.evaluate(() =>
+      window.localStorage.getItem('sr:playground:claw-mode'),
+    );
     expect(storedValue).toBe('false');
   });
 
@@ -175,6 +179,66 @@ test.describe('Playground Chat Component', () => {
     await expect(motionBackground).toBeVisible();
     await expect(motionBackground).toHaveCSS('pointer-events', 'none');
     await expect(motionBackground).toHaveAttribute('data-motion', 'animated');
+  });
+
+  test('uses explicit routing metadata and keeps the model selector vendor-neutral', async ({
+    page,
+  }) => {
+    await page.unroute('**/api/router/v1/models*');
+    await page.route('**/api/router/v1/models*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          object: 'list',
+          data: [
+            {
+              id: 'vllm-sr/mom-balanced-v1',
+              object: 'model',
+              owned_by: 'vllm-semantic-router',
+              description: 'Intelligent Router for Mixture-of-Models',
+              routing: { resolution: 'virtual', selectable: true },
+            },
+            {
+              id: 'vllm-sr/mom-flash-v1',
+              object: 'model',
+              owned_by: 'vllm-semantic-router',
+              description: 'Latency-first routing profile',
+              routing: {
+                resolution: 'virtual',
+                selectable: true,
+                mode: 'future-orchestrator',
+              },
+            },
+            {
+              id: 'vllm-sr/auto',
+              object: 'model',
+              owned_by: 'vllm-semantic-router',
+              description: 'Automatic model routing',
+              routing: { resolution: 'virtual', selectable: true, default_route: true },
+            },
+            {
+              id: 'partner/backend',
+              object: 'model',
+              owned_by: 'upstream-endpoint',
+              routing: { resolution: 'passthrough', selectable: false },
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const selector = page.getByTestId('playground-composer-model-select');
+    await expect(selector).toContainText('vllm-sr/mom-balanced-v1');
+    await expect(selector).toContainText('MoM');
+    await selector.click();
+
+    await expect(page.getByText('Mixture-of-Models', { exact: true })).toBeVisible();
+    await expect(page.getByText('AMD Mixture-of-Models', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('option')).toHaveCount(2);
+    await page.getByRole('option', { name: /vllm-sr\/mom-flash-v1/ }).click();
+    await expect(selector).toContainText('vllm-sr/mom-flash-v1');
   });
 
   test('consolidates composer tools into an accessible mobile add menu', async ({ page }) => {
@@ -216,7 +280,9 @@ test.describe('Playground Chat Component', () => {
 
     const togglesMenu = await openComposerAddMenu(page);
     await togglesMenu.getByRole('menuitemcheckbox', { name: 'Disable Web Search' }).click();
-    await expect(togglesMenu.getByRole('menuitemcheckbox', { name: 'Enable Web Search' })).toHaveAttribute('aria-checked', 'false');
+    await expect(
+      togglesMenu.getByRole('menuitemcheckbox', { name: 'Enable Web Search' }),
+    ).toHaveAttribute('aria-checked', 'false');
     await page.mouse.click(380, 100);
     await expect(page.getByRole('menu', { name: 'Add to prompt' })).toHaveCount(0);
 
@@ -265,10 +331,12 @@ test.describe('Playground Chat Component', () => {
     const guideBox = await page.getByRole('button', { name: 'Guide' }).boundingBox();
     expect(composerBox).not.toBeNull();
     expect(guideBox).not.toBeNull();
-    expect((guideBox?.y ?? 0) + (guideBox?.height ?? 0)).toBeLessThanOrEqual((composerBox?.y ?? 0) + 1);
+    expect((guideBox?.y ?? 0) + (guideBox?.height ?? 0)).toBeLessThanOrEqual(
+      (composerBox?.y ?? 0) + 1,
+    );
   });
 
-  test('uses the live auto alias and rebinds a restored legacy MoM task', async ({ page }) => {
+  test('uses the live alias and blocks a restored task with a retired model', async ({ page }) => {
     await page.unroute('**/api/router/v1/models*');
     await page.route('**/api/router/v1/models*', async (route) => {
       await route.fulfill({
@@ -276,12 +344,15 @@ test.describe('Playground Chat Component', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           object: 'list',
-          data: [{
-            id: 'router/production',
-            object: 'model',
-            owned_by: 'vllm-semantic-router',
-            description: 'Intelligent Router for Mixture-of-Models',
-          }],
+          data: [
+            {
+              id: 'router/production',
+              object: 'model',
+              owned_by: 'vllm-semantic-router',
+              description: 'Intelligent Router for Mixture-of-Models',
+              routing: { resolution: 'virtual', selectable: true, default_route: true },
+            },
+          ],
         }),
       });
     });
@@ -305,24 +376,29 @@ test.describe('Playground Chat Component', () => {
 
     await page.evaluate(() => {
       const conversationId = 'restored-legacy-conversation';
-      window.localStorage.setItem('sr:playground:queue', JSON.stringify({
-        [conversationId]: [{
-          id: 'restored-legacy-task',
-          conversationId,
-          prompt: 'Restore this legacy task',
-          createdAt: Date.now(),
-          requestOptions: {
-            enableClawMode: false,
-            enableWebSearch: false,
-            model: 'MoM',
-          },
-        }],
-      }));
+      window.localStorage.setItem(
+        'sr:playground:queue',
+        JSON.stringify({
+          [conversationId]: [
+            {
+              id: 'restored-legacy-task',
+              conversationId,
+              prompt: 'Restore this legacy task',
+              createdAt: Date.now(),
+              requestOptions: {
+                enableClawMode: false,
+                enableWebSearch: false,
+                model: 'MoM',
+              },
+            },
+          ],
+        }),
+      );
     });
 
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect.poll(() => requestModels.length).toBe(2);
-    expect(requestModels).toEqual(['router/production', 'router/production']);
+    await expect(page.getByText(/Queued model "MoM" is no longer available/)).toBeVisible();
+    expect(requestModels).toEqual(['router/production']);
   });
 
   test('blocks sending and offers retry when model discovery fails', async ({ page }) => {
@@ -353,6 +429,7 @@ test.describe('Playground Chat Component', () => {
               object: 'model',
               owned_by: 'vllm-semantic-router',
               description: 'Intelligent Router for Mixture-of-Models',
+              routing: { resolution: 'virtual', selectable: true, default_route: true },
             },
           ],
         }),
@@ -416,7 +493,9 @@ test.describe('Playground Chat Component', () => {
 
     await expect(shell).toBeVisible();
     await expect(accountButton).toBeVisible();
-    await expect(page.getByRole('button', { name: /Open account menu for Admin User/i })).toHaveCount(1);
+    await expect(
+      page.getByRole('button', { name: /Open account menu for Admin User/i }),
+    ).toHaveCount(1);
 
     await accountButton.click();
 
@@ -451,7 +530,7 @@ test.describe('Playground Chat Component', () => {
     await page.getByRole('button', { name: 'Resume guide' }).click();
     await expect(page.getByText('Step 2 of 5')).toBeVisible();
 
-    while (await page.getByRole('button', { name: 'Finish' }).count() === 0) {
+    while ((await page.getByRole('button', { name: 'Finish' }).count()) === 0) {
       await page.getByRole('button', { name: 'Next' }).click();
     }
 
@@ -502,7 +581,7 @@ test.describe('Playground Chat Component', () => {
   });
 
   test('shows a copy button for user messages and copies their content', async ({ page }) => {
-    await page.route('**/api/router/v1/chat/completions', async route => {
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
       await route.fulfill({
         status: 200,
         headers: {
@@ -540,9 +619,14 @@ test.describe('Playground Chat Component', () => {
 
     await userMessage.getByRole('button', { name: 'Copy' }).click();
 
-    await expect.poll(() =>
-      page.evaluate(() => (window as typeof window & { __copiedUserMessage?: string }).__copiedUserMessage ?? '')
-    ).toBe('Copy my user message');
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as typeof window & { __copiedUserMessage?: string }).__copiedUserMessage ?? '',
+        ),
+      )
+      .toBe('Copy my user message');
   });
 
   test('preserves markdown list formatting when citations are present', async ({ page }) => {
@@ -572,8 +656,16 @@ test.describe('Playground Chat Component', () => {
                     callId: 'search-call-1',
                     name: 'search_web',
                     content: [
-                      { title: 'Source One', url: 'https://example.com/source-one', snippet: 'One' },
-                      { title: 'Source Two', url: 'https://example.com/source-two', snippet: 'Two' },
+                      {
+                        title: 'Source One',
+                        url: 'https://example.com/source-one',
+                        snippet: 'One',
+                      },
+                      {
+                        title: 'Source Two',
+                        url: 'https://example.com/source-two',
+                        snippet: 'Two',
+                      },
                     ],
                   },
                 ],
@@ -589,31 +681,43 @@ test.describe('Playground Chat Component', () => {
     const assistantMessage = page.locator('[data-message-role="assistant"]').last();
     await expect(assistantMessage.getByRole('heading', { name: 'Summary' })).toBeVisible();
     await expect(assistantMessage.locator('li')).toHaveCount(2);
-    await expect(assistantMessage.getByRole('link', { name: '[1]' })).toHaveAttribute('href', 'https://example.com/source-one');
-    await expect(assistantMessage.getByRole('link', { name: '[2]' })).toHaveAttribute('href', 'https://example.com/source-two');
+    await expect(assistantMessage.getByRole('link', { name: '[1]' })).toHaveAttribute(
+      'href',
+      'https://example.com/source-one',
+    );
+    await expect(assistantMessage.getByRole('link', { name: '[2]' })).toHaveAttribute(
+      'href',
+      'https://example.com/source-two',
+    );
   });
 
   test('renders markdown while the response is still streaming', async ({ page }) => {
-    await mockStreamingChatFetch(page, [
-      chatStreamChunk({ role: 'assistant', content: '' }),
-      chatStreamChunk({ content: '# Live heading\n' }),
-      chatStreamChunk({ content: '\n\nStreaming body text keeps arriving.' }),
-      chatStreamChunk({ content: '\n\nMore markdown-friendly content follows.' }),
-      'data: [DONE]\n\n',
-    ], 500);
+    await mockStreamingChatFetch(
+      page,
+      [
+        chatStreamChunk({ role: 'assistant', content: '' }),
+        chatStreamChunk({ content: '# Live heading\n' }),
+        chatStreamChunk({ content: '\n\nStreaming body text keeps arriving.' }),
+        chatStreamChunk({ content: '\n\nMore markdown-friendly content follows.' }),
+        'data: [DONE]\n\n',
+      ],
+      500,
+    );
 
     await page.getByPlaceholder('Ask me anything...').fill('Stream markdown formatting');
     await page.getByRole('button', { name: 'Send message' }).click();
 
     const assistantMessage = page.locator('[data-message-role="assistant"]').last();
 
-    await expect(assistantMessage.getByRole('heading', { name: 'Live heading' })).toBeVisible({ timeout: 5000 });
+    await expect(assistantMessage.getByRole('heading', { name: 'Live heading' })).toBeVisible({
+      timeout: 5000,
+    });
     await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible();
   });
 
   test('does not send on Enter while IME composition is active', async ({ page }) => {
     let requestCount = 0;
-    await page.route('**/api/router/v1/chat/completions', async route => {
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
       requestCount += 1;
       await route.fulfill({
         status: 200,
@@ -644,10 +748,10 @@ test.describe('Playground Chat Component', () => {
     const sendButton = page.getByRole('button', { name: 'Send message' });
     // Button should be disabled when input is empty
     await expect(sendButton).toBeDisabled();
-    
+
     // Type something
     await page.getByPlaceholder('Ask me anything...').fill('test');
-    
+
     // Button should be enabled
     await expect(sendButton).toBeEnabled();
   });
@@ -666,22 +770,32 @@ test.describe('Playground Chat Component', () => {
 
     await page.getByPlaceholder('Ask me anything...').fill('Clear me');
     await page.getByRole('button', { name: 'Send message' }).click();
-    await expect(page.locator('[data-message-role="user"]').last()).toContainText('Clear me', { timeout: 10000 });
+    await expect(page.locator('[data-message-role="user"]').last()).toContainText('Clear me', {
+      timeout: 10000,
+    });
 
     await page.getByRole('button', { name: 'New conversation' }).click();
 
-    await expect(page.locator('[data-message-role="user"]').filter({ hasText: 'Clear me' })).toHaveCount(0);
+    await expect(
+      page.locator('[data-message-role="user"]').filter({ hasText: 'Clear me' }),
+    ).toHaveCount(0);
     await expect(page.getByRole('heading', { name: /Understand every request/i })).toBeVisible();
   });
 
-  test('keeps streaming in the original session after switching away and shows progress when switching back', async ({ page }) => {
-    await mockStreamingChatFetch(page, [
-      chatStreamChunk({ role: 'assistant', content: '' }),
-      chatStreamChunk({ content: 'First visible chunk. ' }),
-      chatStreamChunk({ content: 'Continues while hidden. ' }),
-      chatStreamChunk({ content: 'Final background chunk.' }),
-      'data: [DONE]\n\n',
-    ], 250);
+  test('keeps streaming in the original session after switching away and shows progress when switching back', async ({
+    page,
+  }) => {
+    await mockStreamingChatFetch(
+      page,
+      [
+        chatStreamChunk({ role: 'assistant', content: '' }),
+        chatStreamChunk({ content: 'First visible chunk. ' }),
+        chatStreamChunk({ content: 'Continues while hidden. ' }),
+        chatStreamChunk({ content: 'Final background chunk.' }),
+        'data: [DONE]\n\n',
+      ],
+      250,
+    );
 
     const input = page.getByPlaceholder('Ask me anything...');
     const sessionAPrompt = 'Keep session A streaming';
@@ -701,7 +815,13 @@ test.describe('Playground Chat Component', () => {
 
     const sidebarShell = page.getByTestId('playground-sidebar-shell');
     const sessionAButton = sidebarShell.getByRole('button', { name: sessionAPrompt });
-    if (await sessionAButton.count() === 0 || !(await sessionAButton.first().isVisible().catch(() => false))) {
+    if (
+      (await sessionAButton.count()) === 0 ||
+      !(await sessionAButton
+        .first()
+        .isVisible()
+        .catch(() => false))
+    ) {
       await page.getByRole('button', { name: 'Open sidebar' }).click();
     }
 
@@ -712,7 +832,9 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByText('Final background chunk.')).toBeVisible({ timeout: 5000 });
   });
 
-  test('switching back to a saved session snaps the transcript to the latest messages', async ({ page }) => {
+  test('switching back to a saved session snaps the transcript to the latest messages', async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1280, height: 560 });
 
     await page.evaluate(() => {
@@ -732,7 +854,7 @@ test.describe('Playground Chat Component', () => {
             content: Array.from(
               { length: 8 },
               (_, paragraphIndex) =>
-                `Long history answer ${index + 1}, paragraph ${paragraphIndex + 1}: the transcript should reopen near the latest content.`
+                `Long history answer ${index + 1}, paragraph ${paragraphIndex + 1}: the transcript should reopen near the latest content.`,
             ).join('\n\n'),
             timestamp: new Date(now - 4_000_000 + offset + 15_000).toISOString(),
           },
@@ -769,7 +891,7 @@ test.describe('Playground Chat Component', () => {
             updatedAt: now - 20_000,
             payload: longHistory,
           },
-        ])
+        ]),
       );
     });
 
@@ -778,20 +900,35 @@ test.describe('Playground Chat Component', () => {
 
     const sidebarShell = page.getByTestId('playground-sidebar-shell');
     const longHistoryButton = sidebarShell.getByRole('button', { name: 'Long history session' });
-    if (await longHistoryButton.count() === 0 || !(await longHistoryButton.first().isVisible().catch(() => false))) {
+    if (
+      (await longHistoryButton.count()) === 0 ||
+      !(await longHistoryButton
+        .first()
+        .isVisible()
+        .catch(() => false))
+    ) {
       await page.getByRole('button', { name: 'Open sidebar' }).click();
     }
 
     await longHistoryButton.click();
-    await expect(page.getByText('Long history answer 12, paragraph 8: the transcript should reopen near the latest content.')).toBeVisible();
+    await expect(
+      page.getByText(
+        'Long history answer 12, paragraph 8: the transcript should reopen near the latest content.',
+      ),
+    ).toBeVisible();
 
     const transcript = page.getByTestId('chat-transcript');
-    await expect.poll(async () => {
-      return transcript.evaluate(node => {
-        const container = node as HTMLDivElement;
-        return container.scrollHeight - container.scrollTop - container.clientHeight;
-      });
-    }, { timeout: 5000 }).toBeLessThan(24);
+    await expect
+      .poll(
+        async () => {
+          return transcript.evaluate((node) => {
+            const container = node as HTMLDivElement;
+            return container.scrollHeight - container.scrollTop - container.clientHeight;
+          });
+        },
+        { timeout: 5000 },
+      )
+      .toBeLessThan(24);
   });
 
   test('sends message and receives response (mocked API)', async ({ page }) => {
@@ -799,15 +936,15 @@ test.describe('Playground Chat Component', () => {
     await page.route('**/api/router/v1/chat/completions', async (route) => {
       const request = route.request();
       const postData = request.postDataJSON();
-      
+
       // Verify request structure
       expect(postData).toHaveProperty('messages');
       expect(postData).toHaveProperty('model', 'vllm-sr/auto');
       expect(postData).toHaveProperty('stream');
-      
+
       // Return mock streaming response
       const responseText = 'Hello! This is a mock response.';
-      
+
       await route.fulfill({
         status: 200,
         headers: {
@@ -821,16 +958,18 @@ test.describe('Playground Chat Component', () => {
     // Type a message
     const input = page.getByPlaceholder('Ask me anything...');
     await input.fill('Hello, how are you?');
-    
+
     // Send the message
     await page.getByRole('button', { name: 'Send message' }).click();
-    
+
     // User message should appear
-    await expect(page.getByTestId('chat-transcript').getByText('Hello, how are you?')).toBeVisible();
-    
+    await expect(
+      page.getByTestId('chat-transcript').getByText('Hello, how are you?'),
+    ).toBeVisible();
+
     // Wait for response to appear (the mocked response)
     await expect(page.getByText('Hello! This is a mock response.')).toBeVisible({ timeout: 10000 });
-    
+
     // Input should be cleared after sending
     await expect(input).toHaveValue('');
   });
@@ -862,20 +1001,23 @@ test.describe('Playground Chat Component', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: chatRequestCount === 1
-          ? chatToolCallBody('open_web', {
-              url: 'https://example.com/article',
-              format: 'markdown',
-              max_length: 15000,
-            })
-          : chatJsonBody('The page was fetched through the backend proxy.'),
+        body:
+          chatRequestCount === 1
+            ? chatToolCallBody('open_web', {
+                url: 'https://example.com/article',
+                format: 'markdown',
+                max_length: 15000,
+              })
+            : chatJsonBody('The page was fetched through the backend proxy.'),
       });
     });
 
     await page.getByPlaceholder('Ask me anything...').fill('Open an article for me');
     await page.getByRole('button', { name: 'Send message' }).click();
 
-    await expect(page.getByText('The page was fetched through the backend proxy.')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('The page was fetched through the backend proxy.')).toBeVisible({
+      timeout: 10000,
+    });
     await expect(page.getByText('Example Article')).toBeVisible({ timeout: 10000 });
 
     expect(openWebRequestBody).toMatchObject({
@@ -895,26 +1037,27 @@ test.describe('Playground Chat Component', () => {
       const encoder = new TextEncoder();
       let completionRequestCount = 0;
 
-      const streamResponse = (chunks: string[]) => new Response(new ReadableStream({
-        start(controller) {
-          for (const chunk of chunks) {
-            controller.enqueue(encoder.encode(chunk));
-          }
-          controller.close();
-        },
-      }), {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-        },
-      });
+      const streamResponse = (chunks: string[]) =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              for (const chunk of chunks) {
+                controller.enqueue(encoder.encode(chunk));
+              }
+              controller.close();
+            },
+          }),
+          {
+            headers: {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+            },
+          },
+        );
 
       window.fetch = async (input, init) => {
-        const url = typeof input === 'string'
-          ? input
-          : input instanceof Request
-            ? input.url
-            : String(input);
+        const url =
+          typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
 
         if (url.includes('/api/router/v1/chat/completions')) {
           completionRequestCount += 1;
@@ -929,7 +1072,8 @@ test.describe('Playground Chat Component', () => {
 
           if (completionRequestCount === 2) {
             const requestBody = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
-            (window as typeof window & { __lastFollowUpRequest?: unknown }).__lastFollowUpRequest = requestBody;
+            (window as typeof window & { __lastFollowUpRequest?: unknown }).__lastFollowUpRequest =
+              requestBody;
 
             return streamResponse([
               'data: {"choices":[{"index":0,"delta":{"content":"Follow',
@@ -953,58 +1097,85 @@ test.describe('Playground Chat Component', () => {
     await page.getByPlaceholder('Ask me anything...').fill('Trigger a tool failure');
     await page.getByRole('button', { name: 'Send message' }).click();
 
-    await expect.poll(async () => {
-      return await page.evaluate(() =>
-        (window as typeof window & { __lastFollowUpRequest?: unknown }).__lastFollowUpRequest ? 1 : 0
-      );
-    }, { timeout: 10000 }).toBe(1);
+    await expect
+      .poll(
+        async () => {
+          return await page.evaluate(() =>
+            (window as typeof window & { __lastFollowUpRequest?: unknown }).__lastFollowUpRequest
+              ? 1
+              : 0,
+          );
+        },
+        { timeout: 10000 },
+      )
+      .toBe(1);
 
-    await expect.poll(async () => {
-      const request = await page.evaluate(() =>
-        (window as typeof window & { __lastFollowUpRequest?: { messages?: Array<Record<string, unknown>> } }).__lastFollowUpRequest
-      );
-      return request?.messages?.find((message) => message.role === 'tool')?.content ?? null;
-    }, { timeout: 10000 }).not.toBeNull();
+    await expect
+      .poll(
+        async () => {
+          const request = await page.evaluate(
+            () =>
+              (
+                window as typeof window & {
+                  __lastFollowUpRequest?: { messages?: Array<Record<string, unknown>> };
+                }
+              ).__lastFollowUpRequest,
+          );
+          return request?.messages?.find((message) => message.role === 'tool')?.content ?? null;
+        },
+        { timeout: 10000 },
+      )
+      .not.toBeNull();
 
-    const refreshedFollowUpRequest = await page.evaluate(() =>
-      (window as typeof window & {
-        __lastFollowUpRequest?: { messages?: Array<Record<string, unknown>>; model?: string }
-      }).__lastFollowUpRequest
+    const refreshedFollowUpRequest = await page.evaluate(
+      () =>
+        (
+          window as typeof window & {
+            __lastFollowUpRequest?: { messages?: Array<Record<string, unknown>>; model?: string };
+          }
+        ).__lastFollowUpRequest,
     );
 
     expect(refreshedFollowUpRequest?.model).toBe('vllm-sr/auto');
-    expect(refreshedFollowUpRequest?.messages?.some((message) => message.role === 'tool')).toBeTruthy();
-    const resolvedToolMessage = refreshedFollowUpRequest?.messages?.find((message) => message.role === 'tool');
+    expect(
+      refreshedFollowUpRequest?.messages?.some((message) => message.role === 'tool'),
+    ).toBeTruthy();
+    const resolvedToolMessage = refreshedFollowUpRequest?.messages?.find(
+      (message) => message.role === 'tool',
+    );
     expect(resolvedToolMessage?.content).toContain('Tool execution failed:');
     expect(resolvedToolMessage?.content).not.toBe('null');
   });
 
-  test('executes the built-in calculate tool and forwards the structured result', async ({ page }) => {
+  test('executes the built-in calculate tool and forwards the structured result', async ({
+    page,
+  }) => {
     await page.evaluate(async () => {
       const originalFetch = window.fetch.bind(window);
       const encoder = new TextEncoder();
       let completionRequestCount = 0;
 
-      const streamResponse = (chunks: string[]) => new Response(new ReadableStream({
-        start(controller) {
-          for (const chunk of chunks) {
-            controller.enqueue(encoder.encode(chunk));
-          }
-          controller.close();
-        },
-      }), {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-        },
-      });
+      const streamResponse = (chunks: string[]) =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              for (const chunk of chunks) {
+                controller.enqueue(encoder.encode(chunk));
+              }
+              controller.close();
+            },
+          }),
+          {
+            headers: {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+            },
+          },
+        );
 
       window.fetch = async (input, init) => {
-        const url = typeof input === 'string'
-          ? input
-          : input instanceof Request
-            ? input.url
-            : String(input);
+        const url =
+          typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
 
         if (url.includes('/api/router/v1/chat/completions')) {
           completionRequestCount += 1;
@@ -1019,7 +1190,9 @@ test.describe('Playground Chat Component', () => {
 
           if (completionRequestCount === 2) {
             const requestBody = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
-            (window as typeof window & { __lastCalculateFollowUp?: unknown }).__lastCalculateFollowUp = requestBody;
+            (
+              window as typeof window & { __lastCalculateFollowUp?: unknown }
+            ).__lastCalculateFollowUp = requestBody;
 
             return streamResponse([
               'data: {"choices":[{"index":0,"delta":{"content":"The answer is 8."}}]}\n\n',
@@ -1037,8 +1210,13 @@ test.describe('Playground Chat Component', () => {
 
     await expect(page.getByText('The answer is 8.')).toBeVisible({ timeout: 10000 });
 
-    const followUpRequest = await page.evaluate(() =>
-      (window as typeof window & { __lastCalculateFollowUp?: { messages?: Array<Record<string, unknown>> } }).__lastCalculateFollowUp
+    const followUpRequest = await page.evaluate(
+      () =>
+        (
+          window as typeof window & {
+            __lastCalculateFollowUp?: { messages?: Array<Record<string, unknown>> };
+          }
+        ).__lastCalculateFollowUp,
     );
 
     const toolMessage = followUpRequest?.messages?.find((message) => message.role === 'tool');
@@ -1060,10 +1238,12 @@ test.describe('Playground Chat Component', () => {
     // Type and send a message
     await page.getByPlaceholder('Ask me anything...').fill('Test error handling');
     await page.getByRole('button', { name: 'Send message' }).click();
-    
+
     // User message should still appear
-    await expect(page.getByTestId('chat-transcript').getByText('Test error handling')).toBeVisible();
-    
+    await expect(
+      page.getByTestId('chat-transcript').getByText('Test error handling'),
+    ).toBeVisible();
+
     // Error should be displayed (specific API error message)
     await expect(page.getByText('API error:')).toBeVisible({ timeout: 5000 });
   });
@@ -1072,7 +1252,7 @@ test.describe('Playground Chat Component', () => {
     // Mock a slow streaming response
     await page.route('**/api/router/v1/chat/completions', async (route) => {
       // Delay response to allow stop button to appear
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'text/event-stream' },
@@ -1083,16 +1263,20 @@ test.describe('Playground Chat Component', () => {
     // Send a message
     await page.getByPlaceholder('Ask me anything...').fill('Test streaming');
     await page.getByRole('button', { name: 'Send message' }).click();
-    
+
     // Stop button should appear (look for it quickly before response completes)
-    await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible({
+      timeout: 5000,
+    });
   });
 
-  test('queues prompts during streaming, restores them after reload, and lets queued tasks be removed', async ({ page }) => {
+  test('queues prompts during streaming, restores them after reload, and lets queued tasks be removed', async ({
+    page,
+  }) => {
     let requestCount = 0;
-    await page.route('**/api/router/v1/chat/completions', async route => {
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
       requestCount += 1;
-      await new Promise(resolve => setTimeout(resolve, 6000));
+      await new Promise((resolve) => setTimeout(resolve, 6000));
       await route.fulfill({
         status: 200,
         headers: {
@@ -1117,7 +1301,9 @@ test.describe('Playground Chat Component', () => {
     await expect(queue).toContainText('Second queued task');
     await expect(queue).toContainText('Third queued task');
     await expect(queue).not.toContainText('First queued task');
-    await expect.poll(() => readStoredQueuePrompts(page)).toEqual(['Second queued task', 'Third queued task']);
+    await expect
+      .poll(() => readStoredQueuePrompts(page))
+      .toEqual(['Second queued task', 'Third queued task']);
 
     await page.reload({ waitUntil: 'domcontentloaded' });
 
@@ -1127,25 +1313,31 @@ test.describe('Playground Chat Component', () => {
     await expect(restoredQueue).toContainText('Third queued task');
     await expect.poll(() => readStoredQueuePrompts(page)).toEqual(['Third queued task']);
 
-    const thirdQueuedTask = restoredQueue.locator('[data-testid^="playground-task-queue-item-"]').filter({ hasText: 'Third queued task' }).first();
+    const thirdQueuedTask = restoredQueue
+      .locator('[data-testid^="playground-task-queue-item-"]')
+      .filter({ hasText: 'Third queued task' })
+      .first();
     await thirdQueuedTask.getByRole('button', { name: /Remove queued task:/ }).click();
 
     await expect(restoredQueue).toHaveCount(0);
     await expect.poll(() => readStoredQueuePrompts(page)).toEqual([]);
   });
 
-  test('isolates queued work per conversation so a new conversation can run immediately', async ({ page }) => {
+  test('isolates queued work per conversation so a new conversation can run immediately', async ({
+    page,
+  }) => {
     let requestCount = 0;
-    await page.route('**/api/router/v1/chat/completions', async route => {
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
       requestCount += 1;
-      const body = route.request().postDataJSON() as { messages?: Array<{ role?: string; content?: string }> };
-      const prompt = [...(body.messages ?? [])]
-        .reverse()
-        .find(message => message.role === 'user')
-        ?.content ?? `Request ${requestCount}`;
+      const body = route.request().postDataJSON() as {
+        messages?: Array<{ role?: string; content?: string }>;
+      };
+      const prompt =
+        [...(body.messages ?? [])].reverse().find((message) => message.role === 'user')?.content ??
+        `Request ${requestCount}`;
 
       const delayMs = prompt === 'A first task' ? 6000 : 600;
-      await new Promise(resolve => setTimeout(resolve, delayMs));
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
       await route.fulfill({
         status: 200,
         headers: {
@@ -1179,9 +1371,9 @@ test.describe('Playground Chat Component', () => {
 
   test('allows queued prompts to be edited from the overflow menu', async ({ page }) => {
     let requestCount = 0;
-    await page.route('**/api/router/v1/chat/completions', async route => {
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
       requestCount += 1;
-      await new Promise(resolve => setTimeout(resolve, 6000));
+      await new Promise((resolve) => setTimeout(resolve, 6000));
       await route.fulfill({
         status: 200,
         headers: {
@@ -1201,7 +1393,10 @@ test.describe('Playground Chat Component', () => {
     await page.getByRole('button', { name: 'Send message' }).click();
 
     const queue = page.getByTestId('playground-task-queue');
-    const queuedTask = queue.locator('[data-testid^="playground-task-queue-item-"]').filter({ hasText: 'Editable queued task' }).first();
+    const queuedTask = queue
+      .locator('[data-testid^="playground-task-queue-item-"]')
+      .filter({ hasText: 'Editable queued task' })
+      .first();
 
     await queuedTask.getByRole('button', { name: /More actions for queued task:/ }).click();
     await page.getByRole('menuitem', { name: 'Edit prompt' }).click();
@@ -1213,9 +1408,9 @@ test.describe('Playground Chat Component', () => {
 
   test('allows queued tasks to be reordered by dragging', async ({ page }) => {
     let requestCount = 0;
-    await page.route('**/api/router/v1/chat/completions', async route => {
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
       requestCount += 1;
-      await new Promise(resolve => setTimeout(resolve, 6000));
+      await new Promise((resolve) => setTimeout(resolve, 6000));
       await route.fulfill({
         status: 200,
         headers: {
@@ -1240,15 +1435,25 @@ test.describe('Playground Chat Component', () => {
     await expect(queue).toContainText('Second queued task');
     await expect(queue).toContainText('Third queued task');
     await expect(queue).not.toContainText('First queued task');
-    const secondQueuedTask = queue.locator('[data-testid^="playground-task-queue-item-"]').filter({ hasText: 'Second queued task' }).first();
-    const thirdQueuedTask = queue.locator('[data-testid^="playground-task-queue-item-"]').filter({ hasText: 'Third queued task' }).first();
+    const secondQueuedTask = queue
+      .locator('[data-testid^="playground-task-queue-item-"]')
+      .filter({ hasText: 'Second queued task' })
+      .first();
+    const thirdQueuedTask = queue
+      .locator('[data-testid^="playground-task-queue-item-"]')
+      .filter({ hasText: 'Third queued task' })
+      .first();
 
     await thirdQueuedTask.dragTo(secondQueuedTask);
 
-    await expect.poll(() => readStoredQueuePrompts(page)).toEqual(['Third queued task', 'Second queued task']);
+    await expect
+      .poll(() => readStoredQueuePrompts(page))
+      .toEqual(['Third queued task', 'Second queued task']);
   });
 
-  test('anchors the current user turn near the top and respects manual scrolling during streaming', async ({ page }) => {
+  test('anchors the current user turn near the top and respects manual scrolling during streaming', async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1280, height: 560 });
 
     await page.evaluate(() => {
@@ -1268,7 +1473,7 @@ test.describe('Playground Chat Component', () => {
             content: Array.from(
               { length: 8 },
               (_, paragraphIndex) =>
-                `Earlier answer ${index + 1}, paragraph ${paragraphIndex + 1}: seeded history keeps the transcript tall.`
+                `Earlier answer ${index + 1}, paragraph ${paragraphIndex + 1}: seeded history keeps the transcript tall.`,
             ).join('\n\n'),
             timestamp: new Date(now - offset + 15_000).toISOString(),
           },
@@ -1284,7 +1489,7 @@ test.describe('Playground Chat Component', () => {
             updatedAt: now,
             payload: history,
           },
-        ])
+        ]),
       );
     });
     await page.goto('/playground', { waitUntil: 'domcontentloaded' });
@@ -1292,7 +1497,7 @@ test.describe('Playground Chat Component', () => {
     const chunks = [
       chatStreamChunk({ role: 'assistant', content: '' }),
       ...Array.from({ length: 140 }, (_, index) =>
-        chatStreamChunk({ content: `Paragraph ${index + 1}: streaming output keeps growing.\n\n` })
+        chatStreamChunk({ content: `Paragraph ${index + 1}: streaming output keeps growing.\n\n` }),
       ),
       'data: [DONE]\n\n',
     ];
@@ -1302,27 +1507,42 @@ test.describe('Playground Chat Component', () => {
     await page.getByPlaceholder('Ask me anything...').fill('Show a long streamed answer');
     await page.getByRole('button', { name: 'Send message' }).click();
 
-    await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible({
+      timeout: 5000,
+    });
     const currentAssistant = page.locator('[data-message-role="assistant"]').last();
-    await expect(currentAssistant).toContainText('Paragraph 40: streaming output keeps growing.', { timeout: 10000 });
+    await expect(currentAssistant).toContainText('Paragraph 40: streaming output keeps growing.', {
+      timeout: 10000,
+    });
 
     const transcript = page.locator('[data-testid="chat-transcript"]');
-    await expect.poll(async () => {
-      return transcript.evaluate(node => {
-        const container = node as HTMLDivElement;
-        const userMessages = container.querySelectorAll<HTMLElement>('[data-message-role="user"]');
-        const currentQuestion = userMessages[userMessages.length - 1];
+    await expect
+      .poll(
+        async () => {
+          return transcript.evaluate((node) => {
+            const container = node as HTMLDivElement;
+            const userMessages = container.querySelectorAll<HTMLElement>(
+              '[data-message-role="user"]',
+            );
+            const currentQuestion = userMessages[userMessages.length - 1];
 
-        if (!currentQuestion) {
-          return Number.POSITIVE_INFINITY;
-        }
+            if (!currentQuestion) {
+              return Number.POSITIVE_INFINITY;
+            }
 
-        return currentQuestion.getBoundingClientRect().top - container.getBoundingClientRect().top;
-      });
-    }, { timeout: 5000 }).toBeLessThan(120);
+            return (
+              currentQuestion.getBoundingClientRect().top - container.getBoundingClientRect().top
+            );
+          });
+        },
+        { timeout: 5000 },
+      )
+      .toBeLessThan(120);
 
-    const scrollTopBeforeManualScroll = await transcript.evaluate(node => (node as HTMLDivElement).scrollTop);
-    const manualScrollTop = await transcript.evaluate(node => {
+    const scrollTopBeforeManualScroll = await transcript.evaluate(
+      (node) => (node as HTMLDivElement).scrollTop,
+    );
+    const manualScrollTop = await transcript.evaluate((node) => {
       const container = node as HTMLDivElement;
       container.style.scrollBehavior = 'auto';
       const target = Math.max(0, container.scrollTop - container.clientHeight * 1.5);
@@ -1332,28 +1552,40 @@ test.describe('Playground Chat Component', () => {
     });
     expect(manualScrollTop).toBeLessThan(scrollTopBeforeManualScroll - 300);
 
-    await expect(currentAssistant).toContainText('Paragraph 140: streaming output keeps growing.', { timeout: 10000 });
+    await expect(currentAssistant).toContainText('Paragraph 140: streaming output keeps growing.', {
+      timeout: 10000,
+    });
   });
 
-  test('keeps the assistant rail centered and stable during streaming and after completion', async ({ page }) => {
+  test('keeps the assistant rail centered and stable during streaming and after completion', async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
 
-    await mockStreamingChatFetch(page, [
-      chatStreamChunk({ role: 'assistant', content: '' }),
-      chatStreamChunk({ content: 'This starts the streamed response. ' }),
-      chatStreamChunk({ content: 'More text arrives while the layout stays stable. ' }),
-      chatStreamChunk({ content: 'The final chunk lands without the message suddenly widening.' }),
-      'data: [DONE]\n\n',
-    ], 220);
+    await mockStreamingChatFetch(
+      page,
+      [
+        chatStreamChunk({ role: 'assistant', content: '' }),
+        chatStreamChunk({ content: 'This starts the streamed response. ' }),
+        chatStreamChunk({ content: 'More text arrives while the layout stays stable. ' }),
+        chatStreamChunk({
+          content: 'The final chunk lands without the message suddenly widening.',
+        }),
+        'data: [DONE]\n\n',
+      ],
+      220,
+    );
 
     await page.getByPlaceholder('Ask me anything...').fill('Check the assistant layout rail');
     await page.getByRole('button', { name: 'Send message' }).click();
 
-    const assistantContent = page.locator('[data-message-role="assistant"] [data-message-content]').last();
+    const assistantContent = page
+      .locator('[data-message-role="assistant"] [data-message-content]')
+      .last();
 
     await expect(assistantContent).toBeVisible({ timeout: 5000 });
 
-    const boxWhileStreaming = await assistantContent.evaluate(node => {
+    const boxWhileStreaming = await assistantContent.evaluate((node) => {
       const rect = node.getBoundingClientRect();
       return {
         center: rect.left + rect.width / 2,
@@ -1364,11 +1596,13 @@ test.describe('Playground Chat Component', () => {
     expect(boxWhileStreaming.width).toBeLessThan(900);
     expect(Math.abs(boxWhileStreaming.center - 640)).toBeLessThan(120);
 
-    await expect(page.getByText('The final chunk lands without the message suddenly widening.')).toBeVisible({
+    await expect(
+      page.getByText('The final chunk lands without the message suddenly widening.'),
+    ).toBeVisible({
       timeout: 10000,
     });
 
-    const boxAfterCompletion = await assistantContent.evaluate(node => {
+    const boxAfterCompletion = await assistantContent.evaluate((node) => {
       const rect = node.getBoundingClientRect();
       return {
         center: rect.left + rect.width / 2,
@@ -1385,16 +1619,17 @@ test.describe('Playground Chat Component', () => {
     await page.setViewportSize({ width: 1280, height: 900 });
 
     let requestCount = 0;
-    await page.route('**/api/router/v1/chat/completions', async route => {
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
       requestCount += 1;
-      const body = requestCount === 1
-        ? chatStreamBody('First answer closes out the opening turn.')
-        : chatStreamBody(
-            Array.from(
-              { length: 28 },
-              (_, index) => `Second-turn paragraph ${index + 1} keeps the response growing.`
-            ).join('\n\n')
-          );
+      const body =
+        requestCount === 1
+          ? chatStreamBody('First answer closes out the opening turn.')
+          : chatStreamBody(
+              Array.from(
+                { length: 28 },
+                (_, index) => `Second-turn paragraph ${index + 1} keeps the response growing.`,
+              ).join('\n\n'),
+            );
 
       await route.fulfill({
         status: 200,
@@ -1411,11 +1646,15 @@ test.describe('Playground Chat Component', () => {
 
     await input.fill('Start the first turn');
     await page.getByRole('button', { name: 'Send message' }).click();
-    await expect(page.getByText('First answer closes out the opening turn.')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('First answer closes out the opening turn.')).toBeVisible({
+      timeout: 10000,
+    });
 
     await input.fill('Start the second turn');
     await page.getByRole('button', { name: 'Send message' }).click();
-    await expect(page.getByText('Second-turn paragraph 16 keeps the response growing.')).toBeVisible({ timeout: 10000 });
+    await expect(
+      page.getByText('Second-turn paragraph 16 keeps the response growing.'),
+    ).toBeVisible({ timeout: 10000 });
 
     const composerBox = await composer.boundingBox();
     expect(composerBox).not.toBeNull();
@@ -1466,21 +1705,27 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByText('Selecting route')).toHaveCount(0);
     await expect(page.getByText('Preparing response')).toHaveCount(0);
     await expect(page.getByText('Thinking Process:')).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('pre').filter({ hasText: 'The answer' })).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('pre').filter({ hasText: 'The answer' })).toBeVisible({
+      timeout: 5000,
+    });
     await expect(page.getByText('Done.')).toBeVisible({ timeout: 10000 });
   });
 
   test('keeps the restored thinking matrix static with reduced motion', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await mockStreamingChatFetch(page, [
-      chatStreamChunk({ role: 'assistant', content: '' }),
-      chatStreamChunk({ reasoning: 'Inspecting' }),
-      chatStreamChunk({ reasoning: ' route' }),
-      chatStreamChunk({ reasoning: ' state' }),
-      chatStreamChunk({ content: 'Reduced motion complete.' }),
-      'data: [DONE]\n\n',
-    ], 300);
+    await mockStreamingChatFetch(
+      page,
+      [
+        chatStreamChunk({ role: 'assistant', content: '' }),
+        chatStreamChunk({ reasoning: 'Inspecting' }),
+        chatStreamChunk({ reasoning: ' route' }),
+        chatStreamChunk({ reasoning: ' state' }),
+        chatStreamChunk({ content: 'Reduced motion complete.' }),
+        'data: [DONE]\n\n',
+      ],
+      300,
+    );
 
     await page.getByPlaceholder('Ask me anything...').fill('Respect reduced motion');
     await page.getByRole('button', { name: 'Send message' }).click();
@@ -1525,7 +1770,9 @@ test.describe('Playground Chat Component', () => {
     await page.getByRole('button', { name: 'Send message' }).click();
 
     await expect(page.getByText('Final JSON answer.')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Step 1: parse message.reasoning.')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Step 1: parse message.reasoning.')).toBeVisible({
+      timeout: 10000,
+    });
     await expect(page.getByText('My Thoughts')).toBeVisible({ timeout: 10000 });
   });
 });

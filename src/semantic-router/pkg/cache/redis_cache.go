@@ -649,9 +649,7 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	ctx := context.Background()
 	embeddingBytes := floatsToBytes(queryEmbedding)
 
-	// "*=>" prefix required by Redis DIALECT 2 (without it: "Syntax error at offset 0").
-	knnQuery := fmt.Sprintf("*=>[KNN %d @%s $vec AS vector_distance]",
-		c.config.Search.TopK, c.config.Index.VectorField.Name)
+	knnQuery := partitionedKNNQuery(model, c.config.Search.TopK, c.config.Index.VectorField.Name)
 
 	searchResult, err := c.client.FTSearchWithArgs(ctx,
 		c.indexName,

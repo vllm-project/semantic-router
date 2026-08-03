@@ -6,7 +6,7 @@ This page documents the public `x-vsr-*` headers emitted by vLLM Semantic Router
 
 The router splits headers across two surfaces:
 
-- **Default surface** — rides on every non-cache-hit response: the keystone headers (`x-vsr-schema-version`, `x-vsr-response-path`), the final routing facts (`x-vsr-selected-decision`, `x-vsr-selected-confidence`, `x-vsr-selected-algorithm`, `x-vsr-selected-model`) and the `x-vsr-replay-id` entry point. The client/upstream protocol markers ride here only on cross-protocol handling, and `x-vsr-protocol-warnings` only when warnings exist.
+- **Default surface** — rides on every non-cache-hit response: the keystone headers (`x-vsr-schema-version`, `x-vsr-response-path`), the final routing facts (`x-vsr-selected-recipe`, `x-vsr-selected-decision`, `x-vsr-selected-confidence`, `x-vsr-selected-algorithm`, `x-vsr-selected-model`) and the `x-vsr-replay-id` entry point. The selected recipe also rides on recipe-scoped immediate responses such as cache hits. The client/upstream protocol markers ride here only on cross-protocol handling, and `x-vsr-protocol-warnings` only when warnings exist.
 - **Debug surface** — the intermediate decision/classification details, the matched-signal headers, the tool-selection observability headers and the retention directive headers (`x-vsr-retention-*`) are demoted off the default surface (#2205). They are emitted inline only when the request sets `x-vsr-debug: true`, and remain recoverable from the replay record via `x-vsr-replay-id`. The retention directive's runtime effects (cache write skip, TTL override, model-switch stay) are applied internally and unaffected by the header demotion.
 
 Decision and matched-signal headers additionally require all of the following:
@@ -49,6 +49,7 @@ The final routing facts ride on the default surface; the intermediate details (i
 
 | Header | Surface | Description | Example |
 | ------ | ------- | ----------- | ------- |
+| `x-vsr-selected-recipe` | default | Routing isolation scope selected by an entrypoint or auto/looper alias. Omitted for concrete backend passthrough. | `privacy-first` |
 | `x-vsr-selected-decision` | default | Final decision selected by the decision engine. | `formal_math_proof` |
 | `x-vsr-selected-confidence` | default | Confidence score for the selected decision. | `0.9100` |
 | `x-vsr-selected-algorithm` | default | Model-selection algorithm used after the decision matched. | `router_dc` |
@@ -125,6 +126,7 @@ HTTP/1.1 200 OK
 Content-Type: application/json
 x-vsr-schema-version: 2
 x-vsr-response-path: upstream
+x-vsr-selected-recipe: default
 x-vsr-selected-decision: critical_event_tool_session_route
 x-vsr-selected-confidence: 1.0000
 x-vsr-selected-algorithm: static
@@ -139,6 +141,7 @@ HTTP/1.1 200 OK
 Content-Type: application/json
 x-vsr-schema-version: 2
 x-vsr-response-path: upstream
+x-vsr-selected-recipe: default
 x-vsr-selected-decision: critical_event_tool_session_route
 x-vsr-selected-confidence: 1.0000
 x-vsr-selected-algorithm: static
@@ -153,5 +156,6 @@ x-vsr-replay-id: replay_01J...
 ## Notes
 
 - `x-vsr-matched-projections` is the v0.3 projection header. The old singular form is not part of the public v0.3 contract.
+- Recipe names scope local signal, projection, decision, cache, replay, metric, and learning/session identities. Use `x-vsr-selected-recipe` together with the local decision/signal names when correlating a response with Insights or metrics.
 - `event` is the public signal type used by decisions and DSL. Canonical YAML stores event rules under `routing.signals.events`, matching other plural signal containers.
 - Router Learning uses router-owned online state internally. Users enable online model-choice learning through `global.router.learning.adaptation`, enable stability protection through `global.router.learning.protection`, pass stable identity headers, and optionally set `routing.decisions[].adaptations.mode`, component modes, or `adaptations.adaptation.candidate_set`. `scope: conversation` protects one `x-conversation-id`; `scope: session` protects the broader `x-session-id`. The old `routing.decisions[].algorithm.session_aware` shape is not part of the public contract.

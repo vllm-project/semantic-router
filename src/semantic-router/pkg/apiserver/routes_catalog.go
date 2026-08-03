@@ -151,6 +151,42 @@ func apiInfoRoutes() []apiRoute {
 }
 
 func apiConfigRoutes() []apiRoute {
+	return append(apiRecipeRoutes(), apiNonRecipeConfigRoutes()...)
+}
+
+func apiRecipeRoutes() []apiRoute {
+	return []apiRoute{
+		managedRoute(
+			EndpointMetadata{Path: "/config/router/recipes", Method: "GET", Description: "List the default and named routing recipes with their entrypoints"},
+			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivitySecretView},
+			(*ClassificationAPIServer).handleListRecipes,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/config/router/recipes/validate", Method: "POST", Description: "Validate a recipe mutation without writing or reloading config"},
+			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionRecipeSave},
+			(*ClassificationAPIServer).handleValidateRecipe,
+			jsonBody(),
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/config/router/recipes/{name}", Method: "GET", Description: "Read one routing recipe and its entrypoints"},
+			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivitySecretView},
+			(*ClassificationAPIServer).handleGetRecipe,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/config/router/recipes/{name}", Method: "PUT", Description: "Atomically create or replace one routing recipe; requires If-Match"},
+			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionRecipeSave},
+			(*ClassificationAPIServer).handlePutRecipe,
+			jsonBody(),
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/config/router/recipes/{name}", Method: "DELETE", Description: "Delete an unreferenced named routing recipe; requires If-Match"},
+			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionRecipeDelete},
+			(*ClassificationAPIServer).handleDeleteRecipe,
+		),
+	}
+}
+
+func apiNonRecipeConfigRoutes() []apiRoute {
 	return []apiRoute{
 		managedRoute(
 			EndpointMetadata{Path: "/config/kbs", Method: "GET", Description: "List configured knowledge bases"},
@@ -218,7 +254,7 @@ func apiConfigRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleConfigVersions,
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/config/hash", Method: "GET", Description: "Get the active router config hash"},
+			EndpointMetadata{Path: "/config/hash", Method: "GET", Description: "Compare persisted source, generated runtime, and active router config hashes"},
 			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleConfigHash,
 		),

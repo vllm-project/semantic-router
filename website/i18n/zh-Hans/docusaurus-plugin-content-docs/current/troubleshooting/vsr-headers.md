@@ -23,6 +23,10 @@ translation:
 
 ## 添加的 Header
 
+### `x-vsr-selected-recipe`
+
+表示由 entrypoint 或 auto/looper alias 选中的 recipe 隔离域，例如 `privacy-first`。同名 signal、projection 和 decision 必须结合该 Header 才能确定完整身份；直接指定具体 backend model 时不会设置该 Header。
+
 ### `x-vsr-selected-category`
 
 **描述**：VSR 在分类期间选择的类别。

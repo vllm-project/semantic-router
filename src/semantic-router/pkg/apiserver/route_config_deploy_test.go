@@ -5,16 +5,20 @@ package apiserver
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
 
 func TestHandleConfigPatchMergesExistingConfig(t *testing.T) {
@@ -51,6 +55,88 @@ func TestHandleConfigPutReplacesExistingConfig(t *testing.T) {
 	requireFirstDecisionName(t, routing, "new_route")
 	if projections, ok := routing["projections"].(map[string]any); ok && len(projections) > 0 {
 		t.Fatalf("expected replace deploy to drop omitted routing.projections, got %#v", projections)
+	}
+}
+
+func TestHandleConfigPutPreservesDisabledRouterReplay(t *testing.T) {
+	configPath := writeDeployTestBaseConfig(t)
+	payloadCfg := minimalDeployTestConfig("new_route")
+	payloadCfg.RouterReplay = config.RouterReplayConfig{
+		Enabled:      false,
+		StoreBackend: "memory",
+		TTLSeconds:   600,
+	}
+	payloadYAML := mustMarshalCanonicalConfigYAML(t, payloadCfg)
+	body, err := json.Marshal(RouterConfigUpdateRequest{YAML: string(payloadYAML)})
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+
+	apiServer := &ClassificationAPIServer{configPath: configPath}
+	req := httptest.NewRequest(http.MethodPut, "/config/router", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	apiServer.handleConfigPut(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d: %s", rr.Code, rr.Body.String())
+	}
+	reloaded, err := config.Parse(configPath)
+	if err != nil {
+		t.Fatalf("parse deployed config: %v", err)
+	}
+	if reloaded.RouterReplay.Enabled {
+		t.Fatal("expected router_replay.enabled=false to survive canonical PUT normalization")
+	}
+}
+
+func TestHandleConfigPutPreservesCanonicalUserDocument(t *testing.T) {
+	configPath := writeDeployTestBaseConfig(t)
+	payloadYAML := mustMarshalCanonicalConfigYAML(t, minimalDeployTestConfig("new_route"))
+	var expected map[string]any
+	if err := yaml.Unmarshal(payloadYAML, &expected); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+
+	providers := expected["providers"].(map[string]any)
+	models := providers["models"].([]any)
+	model := models[0].(map[string]any)
+	backendRefs := model["backend_refs"].([]any)
+	backendRefs[0].(map[string]any)["name"] = "vllm_primary"
+
+	routing := expected["routing"].(map[string]any)
+	decisions := routing["decisions"].([]any)
+	rules := decisions[0].(map[string]any)["rules"].(map[string]any)
+	rules["conditions"] = []any{}
+
+	payloadYAML, err := yaml.Marshal(expected)
+	if err != nil {
+		t.Fatalf("encode payload: %v", err)
+	}
+	body, err := json.Marshal(RouterConfigUpdateRequest{YAML: string(payloadYAML)})
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+
+	apiServer := &ClassificationAPIServer{configPath: configPath}
+	req := httptest.NewRequest(http.MethodPut, "/config/router", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	apiServer.handleConfigPut(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	persistedYAML, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read persisted config: %v", err)
+	}
+	var persisted map[string]any
+	if err := yaml.Unmarshal(persistedYAML, &persisted); err != nil {
+		t.Fatalf("decode persisted config: %v", err)
+	}
+	if !reflect.DeepEqual(persisted, expected) {
+		t.Fatalf("management PUT rewrote canonical user intent:\nexpected: %#v\nactual: %#v", expected, persisted)
 	}
 }
 
@@ -348,9 +434,49 @@ func TestHandleConfigRollbackAcceptsWellFormedVersion(t *testing.T) {
 	}
 }
 
+func TestHandleConfigRollbackAcceptsCollisionSuffixedVersion(t *testing.T) {
+	configPath := writeDeployTestBaseConfig(t)
+
+	rr := postRollback(t, configPath, "20240101-000000-001")
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for well-formed missing suffixed version, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if code := rollbackErrorCode(t, rr.Body.Bytes()); code != "VERSION_NOT_FOUND" {
+		t.Fatalf("expected error code VERSION_NOT_FOUND, got %q", code)
+	}
+}
+
+func TestNextConfigVersionAvoidsSameSecondBackupCollisions(t *testing.T) {
+	backupDir := t.TempDir()
+	now := time.Date(2026, time.August, 2, 10, 11, 12, 0, time.UTC)
+	base := nextConfigVersion(backupDir, now)
+	if base != "20260802-101112" {
+		t.Fatalf("base version = %q", base)
+	}
+	if err := os.WriteFile(filepath.Join(backupDir, "config."+base+".yaml"), []byte("first"), 0o644); err != nil {
+		t.Fatalf("write first backup: %v", err)
+	}
+
+	second := nextConfigVersion(backupDir, now)
+	if second != "20260802-101112-001" {
+		t.Fatalf("second version = %q", second)
+	}
+	if err := os.WriteFile(filepath.Join(backupDir, "config."+second+".yaml"), []byte("second"), 0o644); err != nil {
+		t.Fatalf("write second backup: %v", err)
+	}
+	if third := nextConfigVersion(backupDir, now); third != "20260802-101112-002" {
+		t.Fatalf("third version = %q", third)
+	}
+}
+
 func TestHandleConfigHashReturnsHashAndNoPath(t *testing.T) {
 	configPath := writeDeployTestBaseConfig(t)
-	apiServer := &ClassificationAPIServer{configPath: configPath}
+	activeCfg, err := config.Parse(configPath)
+	if err != nil {
+		t.Fatalf("parse active config: %v", err)
+	}
+	apiServer := &ClassificationAPIServer{configPath: configPath, config: activeCfg}
 
 	req := httptest.NewRequest(http.MethodGet, "/config/hash", nil)
 	rr := httptest.NewRecorder()
@@ -360,16 +486,22 @@ func TestHandleConfigHashReturnsHashAndNoPath(t *testing.T) {
 		t.Fatalf("expected 200 OK, got %d: %s", rr.Code, rr.Body.String())
 	}
 
-	var resp map[string]string
+	var resp configHashResponse
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("json.Unmarshal response: %v", err)
 	}
 
-	hash, ok := resp["hash"]
-	if !ok || len(hash) != 64 {
-		t.Fatalf("expected 64-char hex hash, got %q", hash)
+	if len(resp.Hash) != 64 || len(resp.RuntimeHash) != 64 {
+		t.Fatalf("expected source and runtime hashes, got %+v", resp)
 	}
-	if _, hasPath := resp["path"]; hasPath {
+	if resp.Status != "active" {
+		t.Fatalf("expected active status, got %+v", resp)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("json.Unmarshal raw response: %v", err)
+	}
+	if _, hasPath := raw["path"]; hasPath {
 		t.Error("response should not expose filesystem path")
 	}
 }
@@ -396,14 +528,96 @@ func TestHandleConfigHashStableForSameContent(t *testing.T) {
 		rr := httptest.NewRecorder()
 		apiServer.handleConfigHash(rr, req)
 
-		var resp map[string]string
+		var resp configHashResponse
 		if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 			t.Fatalf("json.Unmarshal: %v", err)
 		}
-		hashes[i] = resp["hash"]
+		hashes[i] = resp.Hash
 	}
 
 	if hashes[0] != hashes[1] {
 		t.Fatalf("expected identical hashes for unchanged config, got %q vs %q", hashes[0], hashes[1])
+	}
+}
+
+func TestHandleConfigHashReportsPendingRuntime(t *testing.T) {
+	configPath := writeDeployTestBaseConfig(t)
+	registry := routerruntime.NewRegistry(&config.RouterConfig{DocumentHash: "previous-runtime"})
+	apiServer := &ClassificationAPIServer{configPath: configPath, runtimeRegistry: registry}
+
+	req := httptest.NewRequest(http.MethodGet, "/config/hash", nil)
+	rr := httptest.NewRecorder()
+	apiServer.handleConfigHash(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp configHashResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("json.Unmarshal response: %v", err)
+	}
+	if resp.Status != "pending" || resp.ActiveHash != "previous-runtime" {
+		t.Fatalf("expected pending runtime status, got %+v", resp)
+	}
+}
+
+func TestWaitForRuntimeConfigActivationRecognizesPublishedDocument(t *testing.T) {
+	configPath := writeDeployTestBaseConfig(t)
+	activeCfg, err := config.Parse(configPath)
+	if err != nil {
+		t.Fatalf("parse active config: %v", err)
+	}
+	registry := routerruntime.NewRegistry(activeCfg)
+	apiServer := &ClassificationAPIServer{configPath: configPath, runtimeRegistry: registry}
+
+	runtimeHash, status := apiServer.waitForRuntimeConfigActivation(configPath)
+	if status != "active" || runtimeHash != activeCfg.DocumentHash {
+		t.Fatalf("activation result = (%q, %q), want (%q, active)", runtimeHash, status, activeCfg.DocumentHash)
+	}
+}
+
+func TestConfigVersionSourceMetadataDistinguishesMutationOrigins(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yaml")
+	server := &ClassificationAPIServer{}
+
+	apiVersion, backupDir := server.recordRouterConfigArtifacts(
+		configPath, []byte("version: v0.3\n"), "",
+	)
+	if got := readConfigVersionSource(backupDir, apiVersion); got != configVersionSourceAPI {
+		t.Fatalf("API backup source = %q, want %q", got, configVersionSourceAPI)
+	}
+
+	dslVersion, _ := server.recordRouterConfigArtifacts(
+		configPath, []byte("version: v0.3\n"), "ROUTE default {}",
+	)
+	if got := readConfigVersionSource(backupDir, dslVersion); got != configVersionSourceDSL {
+		t.Fatalf("DSL backup source = %q, want %q", got, configVersionSourceDSL)
+	}
+
+	legacyVersion := "20260802-120000"
+	if got := readConfigVersionSource(backupDir, legacyVersion); got != configVersionSourceLegacy {
+		t.Fatalf("backup without metadata source = %q, want %q", got, configVersionSourceLegacy)
+	}
+}
+
+func TestConfigCleanupBackupsRemovesSourceSidecar(t *testing.T) {
+	backupDir := t.TempDir()
+	for i := 0; i <= maxBackups; i++ {
+		version := fmt.Sprintf("20260802-1200%02d", i)
+		if err := os.WriteFile(
+			filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version)),
+			[]byte("version: v0.3\n"),
+			0o644,
+		); err != nil {
+			t.Fatalf("write backup: %v", err)
+		}
+		writeConfigVersionSource(backupDir, version, configVersionSourceAPI)
+	}
+
+	configCleanupBackups(backupDir)
+	oldest := "20260802-120000"
+	if _, err := os.Stat(configVersionSourcePath(backupDir, oldest)); !os.IsNotExist(err) {
+		t.Fatalf("oldest source sidecar should be removed, stat err=%v", err)
 	}
 }

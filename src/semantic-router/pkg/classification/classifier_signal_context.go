@@ -35,10 +35,11 @@ func (c *Classifier) signalReadiness() map[string]bool {
 // using uncompressed text for signals that must not receive compressed input.
 func textForSignalFunc(text, uncompressedText string, skipCompressionSignals map[string]bool) func(string) string {
 	return func(signalType string) string {
+		resolved := text
 		if uncompressedText != "" && skipCompressionSignals[signalType] {
-			return uncompressedText
+			resolved = uncompressedText
 		}
-		return text
+		return textForRoutingSignal(signalType, resolved)
 	}
 }
 

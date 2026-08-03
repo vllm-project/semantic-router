@@ -139,6 +139,10 @@ type RequestContext struct {
 	// HistoryTokenCount is zero (server-side conversation state).
 	PreviousResponseID string
 
+	// Routing is the single source of truth for entrypoint resolution. A
+	// resolved context with no recipe represents concrete-model passthrough.
+	Routing RequestRoutingContext
+
 	// VSR decision tracking
 	VSRSelectedCategory            string                                      // The category from domain classification (MMLU category)
 	VSRSelectedDecisionName        string                                      // The decision name from DecisionEngine evaluation

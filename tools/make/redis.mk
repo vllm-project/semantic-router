@@ -72,7 +72,7 @@ run-redis-example: start-redis rust ## Run the Redis cache example
 	@echo "Running Redis cache example..."
 	@cd src/semantic-router && \
 		export LD_LIBRARY_PATH=$${PWD}/../../candle-binding/target/release:$${PWD}/../../nlp-binding/target/release && \
-		go run ../../deploy/addons/redis/redis-cache.go
+		go run ../../tools/redis/redis-cache.go
 	@echo ""
 	@echo "Example complete! Check Redis using:"
 	@echo "  • redis-cli (command line)"
@@ -147,28 +147,40 @@ benchmark-redis: rust start-redis ## Run Redis cache performance benchmark
 		export USE_CPU=$${USE_CPU:-false} && \
 		export SR_BENCHMARK_MODE=true && \
 		cd src/semantic-router/pkg/cache && \
+		out=../../../../benchmark_results/redis/results.txt && \
 		CGO_ENABLED=1 go test -v -timeout 30m \
 		-run='^$$' -bench=BenchmarkRedisCache \
-		-benchtime=100x -benchmem . | tee ../../../../benchmark_results/redis/results.txt
+		-benchtime=100x -benchmem . > "$$out" 2>&1; status=$$?; \
+		cat "$$out"; \
+		[ $$status -eq 0 ] || exit $$status; \
+		grep -q 'ns/op' "$$out" || { echo "ERROR: -bench=BenchmarkRedisCache matched no benchmark (silent-pass guard tripped)"; exit 1; }
 	@echo ""
 	@echo "Benchmark complete! Results in: benchmark_results/redis/results.txt"
 
-# Compare Redis vs Milvus vs In-Memory
-benchmark-cache-comparison: rust start-redis start-milvus ## Compare all cache backends
+# Compare In-Memory vs Redis vs Valkey
+benchmark-cache-comparison: rust start-redis start-valkey ## Compare all cache backends
 	@$(LOG_TARGET)
 	@echo "═══════════════════════════════════════════════════════════"
 	@echo "  Cache Backend Comparison Benchmark"
-	@echo "  Testing: In-Memory, Redis, Milvus"
+	@echo "  Testing: In-Memory, Redis, Valkey"
 	@echo "═══════════════════════════════════════════════════════════"
 	@echo ""
 	@mkdir -p benchmark_results/comparison
 	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release:$${PWD}/nlp-binding/target/release && \
 		export USE_CPU=$${USE_CPU:-false} && \
 		export SR_BENCHMARK_MODE=true && \
+		export VALKEY_HOST=localhost && \
+		export VALKEY_PORT=6380 && \
 		cd src/semantic-router/pkg/cache && \
-		CGO_ENABLED=1 go test -v -timeout 60m -tags=milvus \
+		out=../../../../benchmark_results/comparison/results.txt && \
+		CGO_ENABLED=1 go test -v -timeout 60m \
 		-run='^$$' -bench='BenchmarkCacheComparison' \
-		-benchtime=50x -benchmem . | tee ../../../../benchmark_results/comparison/results.txt
+		-benchtime=50x -benchmem . > "$$out" 2>&1; status=$$?; \
+		cat "$$out"; \
+		[ $$status -eq 0 ] || exit $$status; \
+		for be in InMemory Redis Valkey; do \
+			grep -q "$$be/CacheSize.*ns/op" "$$out" || { echo "ERROR: BenchmarkCacheComparison produced no result for $$be (silent-pass guard tripped)"; exit 1; }; \
+		done
 	@echo ""
 	@echo "Comparison complete! Results in: benchmark_results/comparison/results.txt"
 	@echo ""

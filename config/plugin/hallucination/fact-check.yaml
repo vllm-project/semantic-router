@@ -3,6 +3,6 @@ plugin:
   configuration:
     enabled: true
     use_nli: true
-    hallucination_action: annotate
-    unverified_factual_action: warn
+    hallucination_action: header
+    unverified_factual_action: header
     include_hallucination_details: true

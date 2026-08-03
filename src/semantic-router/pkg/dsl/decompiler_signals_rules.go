@@ -139,6 +139,9 @@ func (d *decompiler) decompileLanguageSignals() {
 func (d *decompiler) decompileContextSignals() {
 	for _, ctx := range d.cfg.ContextRules {
 		d.write("SIGNAL context %s {\n", quoteName(ctx.Name))
+		if ctx.Description != "" {
+			d.write("  description: %q\n", ctx.Description)
+		}
 		if ctx.MinTokens != "" {
 			d.write("  min_tokens: %q\n", string(ctx.MinTokens))
 		}

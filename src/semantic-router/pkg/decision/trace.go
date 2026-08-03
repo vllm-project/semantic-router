@@ -41,7 +41,7 @@ func (e *DecisionEngine) EvaluateDecisionsWithTrace(
 
 	for i := range e.decisions {
 		decision := &e.decisions[i]
-		matched, confidence, matchedRules, trace := e.evalNodeWithTrace(decision.Rules, signals)
+		matched, confidence, matchedRules, trace := e.evalDecisionWithTrace(decision, signals)
 
 		dt := DecisionTrace{
 			DecisionName: decision.Name,
@@ -65,6 +65,19 @@ func (e *DecisionEngine) EvaluateDecisionsWithTrace(
 		best = e.selectBestDecision(results)
 	}
 	return best, traces
+}
+
+func (e *DecisionEngine) evalDecisionWithTrace(
+	decision *config.Decision,
+	signals *SignalMatches,
+) (bool, float64, []string, *TraceNode) {
+	if decision.Rules.IsEmpty() {
+		return true, 0, nil, &TraceNode{
+			NodeType: "fallback",
+			Matched:  true,
+		}
+	}
+	return e.evalNodeWithTrace(decision.Rules, signals)
 }
 
 // evalNodeWithTrace mirrors evalNode but also builds a TraceNode tree.

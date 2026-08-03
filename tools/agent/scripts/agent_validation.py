@@ -173,7 +173,7 @@ def validate_discovery_bridge(errors: list[str]) -> None:
     bridge_text = bridge_path.read_text(encoding="utf-8")
     required_refs = [
         "AGENTS.md",
-        "docs/agent/README.md",
+        "tools/agent/docs/README.md",
         "make agent-report",
         "tools/agent/skills/",
     ]
