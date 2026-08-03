@@ -12,6 +12,7 @@ pub mod utils;
 
 // C FFI interface
 pub mod ffi;
+pub mod registry;
 
 // Test fixtures and utilities (only available in test builds)
 #[cfg(test)]
