@@ -15,9 +15,7 @@ type BertModel struct {
 }
 
 type CategoryModel struct {
-	// Enabled turns category classification on or off explicitly. Nil keeps the
-	// historical behaviour of running whenever a model is configured.
-	Enabled             *bool   `yaml:"enabled,omitempty"`
+	Enabled             bool    `yaml:"enabled"`
 	ModelID             string  `yaml:"model_id"`
 	Threshold           float32 `yaml:"threshold"`
 	UseCPU              bool    `yaml:"use_cpu"`
@@ -28,9 +26,7 @@ type CategoryModel struct {
 }
 
 type PIIModel struct {
-	// Enabled turns PII classification on or off explicitly. Nil keeps the
-	// historical behaviour of running whenever a model is configured.
-	Enabled        *bool   `yaml:"enabled,omitempty"`
+	Enabled        bool    `yaml:"enabled"`
 	ModelID        string  `yaml:"model_id"`
 	Threshold      float32 `yaml:"threshold"`
 	UseCPU         bool    `yaml:"use_cpu"`
@@ -391,13 +387,3 @@ func (cfg *RouterConfig) FindExternalModelByName(name string) *ExternalModelConf
 	}
 	return nil
 }
-
-// moduleActive resolves an explicit enabled flag. Nil means the module was not
-// configured either way, so the caller's configuration checks decide.
-func moduleActive(enabled *bool) bool { return enabled == nil || *enabled }
-
-// Active reports whether category classification was explicitly disabled.
-func (m CategoryModel) Active() bool { return moduleActive(m.Enabled) }
-
-// Active reports whether PII classification was explicitly disabled.
-func (m PIIModel) Active() bool { return moduleActive(m.Enabled) }

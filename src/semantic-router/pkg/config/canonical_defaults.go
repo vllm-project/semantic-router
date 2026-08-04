@@ -245,6 +245,7 @@ func defaultClassifierModule() CanonicalClassifierModule {
 		Domain: CanonicalCategoryModule{
 			ModelRef: "domain_classifier",
 			CategoryModel: CategoryModel{
+				Enabled:             true,
 				Threshold:           0.5,
 				UseCPU:              true,
 				UseMmBERT32K:        true,
@@ -254,6 +255,7 @@ func defaultClassifierModule() CanonicalClassifierModule {
 		PII: CanonicalPIIModule{
 			ModelRef: "pii_classifier",
 			PIIModel: PIIModel{
+				Enabled:        true,
 				Threshold:      0.9,
 				UseCPU:         true,
 				UseMmBERT32K:   true,

@@ -7,10 +7,12 @@ func newRoutingSignalUsageTestConfig() *RouterConfig {
 		InlineModels: InlineModels{
 			Classifier: Classifier{
 				CategoryModel: CategoryModel{
+					Enabled:             true,
 					ModelID:             "models/mmbert32k-intent-classifier-merged",
 					CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
 				},
 				PIIModel: PIIModel{
+					Enabled:        true,
 					ModelID:        "models/mmbert32k-pii-detector-merged",
 					PIIMappingPath: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
 				},
