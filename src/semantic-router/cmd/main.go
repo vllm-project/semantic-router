@@ -16,6 +16,13 @@ import (
 )
 
 func main() {
+	// Install the signal handler before anything else. Shutdown is a
+	// process-level concern, and everything below — model downloads, runtime
+	// init, warmup — can take minutes, so a SIGTERM arriving mid-startup must
+	// find a handler already in place and release whatever exists by then.
+	shutdownHooks := newShutdownRegistry()
+	registerSignalHandler(shutdownHooks)
+
 	logo.PrintVLLMLogo()
 	opts := parseRuntimeOptions()
 	initializeRuntimeLogger()
@@ -37,17 +44,24 @@ func main() {
 	defer initializeTracing(cfg)()
 	initializeWindowedMetricsIfEnabled(cfg)
 
-	shutdownHooks := make([]func(), 0)
 	startMetricsServerIfEnabled(cfg, opts.metricsPort)
 
-	embeddingRuntime := initializeRuntimeDependencies(cfg, startupWriter, &shutdownHooks, runtimeRegistry)
-	server := newExtProcServerOrFatal(opts, startupWriter, runtimeRegistry, shutdownHooks)
+	embeddingRuntime := initializeRuntimeDependencies(cfg, startupWriter, shutdownHooks, runtimeRegistry)
+	server := newExtProcServerOrFatal(opts, startupWriter, runtimeRegistry)
+	// Registered last so it runs first: hooks run in reverse order, and the
+	// in-flight requests server.Stop drains still use the resources the
+	// earlier hooks release.
+	shutdownHooks.register(server.Stop)
 
 	warmupRouterRuntime(server, embeddingRuntime)
 	markRouterReady(startupWriter, startupEmbeddingProviderStatus(embeddingRuntime))
 	logStartupSummary(cfg, opts, embeddingRuntime.AnyReady)
 	startKubernetesControllerIfNeeded(cfg, opts.kubeconfig, opts.namespace)
 	startExtProcServerOrFatal(server, startupWriter)
+	// Start returns as soon as its own drain finishes, but that drain is only
+	// the first shutdown hook — returning from main here would end the process
+	// while the handler is still releasing everything registered before it.
+	shutdownHooks.awaitShutdownExit()
 }
 
 var (
