@@ -5,8 +5,8 @@ import os
 import sys
 import time
 from http import HTTPStatus
+from importlib import import_module
 
-import requests
 import yaml
 
 from cli.consts import DEFAULT_ENVOY_PORT
@@ -72,6 +72,7 @@ def health_check_endpoint(url, timeout=5):
         True if healthy, False otherwise
     """
     try:
+        requests = import_module("requests")
         response = requests.get(url, timeout=timeout)
         return response.status_code == HTTPStatus.OK
     except Exception:

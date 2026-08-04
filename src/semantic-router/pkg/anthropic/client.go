@@ -158,7 +158,7 @@ func ToOpenAIResponseBodyWithExt(anthropicResponse []byte, model string, ext *ir
 // stop_reason, cache usage, and server-tool counts survive the
 // flattening that the OpenAI envelope cannot represent.
 func toOpenAIResponseBody(anthropicResponse []byte, model string, ext *ir.IRExtensions) ([]byte, error) {
-	logging.Debugf("Raw Anthropic response (%d bytes): %s", len(anthropicResponse), string(anthropicResponse))
+	logging.Debugf("Raw Anthropic response: %s", logging.ContentDescriptorBytes(anthropicResponse))
 
 	var resp anthropic.Message
 	if err := json.Unmarshal(anthropicResponse, &resp); err != nil {

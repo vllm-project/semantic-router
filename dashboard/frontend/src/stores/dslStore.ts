@@ -463,7 +463,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     fetch('/api/router/config/deploy/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ yaml, baseYaml: baseConfigYaml }),
+      body: JSON.stringify({ yaml, dsl: dslSource, baseYaml: baseConfigYaml, mode: 'replace' }),
     })
       .then(async (resp) => {
         if (!resp.ok) {
@@ -504,7 +504,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       const resp = await fetch('/api/router/config/deploy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ yaml: yamlOutput, dsl: dslSource, baseYaml: baseConfigYaml }),
+        body: JSON.stringify({ yaml: yamlOutput, dsl: dslSource, baseYaml: baseConfigYaml, mode: 'replace' }),
       })
 
       const responseText = await resp.text()

@@ -265,7 +265,7 @@ The demo system combines multiple signals with priority-based decisions:
 
 Want to run vLLM-SR on your own AMD hardware? Here's a quick start guide.
 
-📖 **Full deployment guide**: [deploy/amd/README.md](https://github.com/vllm-project/semantic-router/blob/main/deploy/amd/README.md)
+📖 **Full deployment guide**: [website/docs/installation/amd-rocm.md](https://github.com/vllm-project/semantic-router/blob/main/website/docs/installation/amd-rocm.md)
 
 ### Step 1: Install vLLM-SR
 

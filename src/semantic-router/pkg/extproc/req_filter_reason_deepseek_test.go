@@ -17,7 +17,7 @@ func TestDeepSeekOfficialBuildReasoningRequestFields(t *testing.T) {
 		fields, effort := router.buildReasoningRequestFieldsForProvider(
 			"deepseek-v4-pro",
 			true,
-			"test",
+			router.Config.GetDecisionByName("test"),
 			deepSeekOfficialProviderProfile(),
 		)
 		assertDeepSeekOfficialReasoningFields(t, fields, "enabled", "max")
@@ -28,7 +28,7 @@ func TestDeepSeekOfficialBuildReasoningRequestFields(t *testing.T) {
 		fields, effort := router.buildReasoningRequestFieldsForProvider(
 			"deepseek-v4-pro",
 			true,
-			"test",
+			router.Config.GetDecisionByName("test"),
 			localVLLMProviderProfile(),
 		)
 		assertReasoningRequestField(t, fields, "thinking", true)
@@ -96,7 +96,7 @@ func TestDeepSeekOfficialRemovesChatTemplateKwargs(t *testing.T) {
 	modifiedBytes, err := router.setReasoningModeToRequestBodyForProvider(
 		requestBytes,
 		false,
-		"low-effort-task",
+		router.Config.GetDecisionByName("low-effort-task"),
 		deepSeekOfficialProviderProfile(),
 	)
 	require.NoError(t, err)

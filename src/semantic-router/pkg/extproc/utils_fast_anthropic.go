@@ -32,6 +32,9 @@ func extractContentFastAnthropic(body []byte) (*FastExtractResult, error) {
 	if err := extractModelAndStreamFast(body, r); err != nil {
 		return nil, err
 	}
+	if err := extractMetadataFast(body, r); err != nil {
+		return nil, err
+	}
 
 	if system := gjson.GetBytes(body, "system"); system.Exists() {
 		consumeFastExtractAnthropicSystem(system, r)
@@ -118,6 +121,7 @@ func consumeFastExtractAnthropicMessage(msg gjson.Result, result *FastExtractRes
 }
 
 func recordAnthropicUserMessage(result *FastExtractResult, text string, content gjson.Result) {
+	result.ImageContentCount += countAnthropicImageBlocks(content)
 	if result.FirstImageURL == "" {
 		result.FirstImageURL = extractAnthropicImageURLFromContent(content)
 	}
@@ -128,6 +132,20 @@ func recordAnthropicUserMessage(result *FastExtractResult, text string, content 
 		result.PriorUserMessages = append(result.PriorUserMessages, result.UserContent)
 	}
 	result.UserContent = text
+}
+
+func countAnthropicImageBlocks(content gjson.Result) int {
+	if !content.IsArray() {
+		return 0
+	}
+	count := 0
+	content.ForEach(func(_, block gjson.Result) bool {
+		if block.Get("type").String() == "image" {
+			count++
+		}
+		return true
+	})
+	return count
 }
 
 func countAnthropicAssistantToolUses(content gjson.Result, result *FastExtractResult) {

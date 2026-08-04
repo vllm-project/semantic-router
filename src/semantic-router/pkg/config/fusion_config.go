@@ -158,7 +158,7 @@ func (c *RouterConfig) HasFusionDecision() bool {
 		return false
 	}
 	for _, decision := range c.Decisions {
-		if decision.Algorithm != nil && decision.Algorithm.Type == "fusion" {
+		if decision.Algorithm != nil && decision.Algorithm.Type == DecisionAlgorithmFusion {
 			return true
 		}
 	}

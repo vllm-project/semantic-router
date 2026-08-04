@@ -12,8 +12,9 @@ func (d *Decision) HasSignalType(signalType string) bool {
 	return len(collectSignalNames(&d.Rules, normalizedType)) > 0
 }
 
-// UsesSignalTypeInRouting returns true when any routing decision uses the given
-// signal type directly or indirectly via projection outputs.
+// UsesSignalTypeInRouting returns true when any routing decision in any
+// recipe uses the given signal type directly or indirectly via projection
+// outputs.
 func (c *RouterConfig) UsesSignalTypeInRouting(signalType string) bool {
 	if c == nil {
 		return false
@@ -24,10 +25,30 @@ func (c *RouterConfig) UsesSignalTypeInRouting(signalType string) bool {
 		return false
 	}
 
+	if len(c.Recipes) > 0 {
+		for i := range c.Recipes {
+			if recipeUsesSignalType(&c.Recipes[i], normalizedType) {
+				return true
+			}
+		}
+		return false
+	}
+
+	return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
+}
+
+func recipeUsesSignalType(recipe *RoutingRecipe, signalType string) bool {
+	if recipe == nil {
+		return false
+	}
+	return decisionsUseSignalType(recipe.Profile.Decisions, recipe.Profile.Projections, signalType)
+}
+
+func decisionsUseSignalType(decisions []Decision, projections Projections, signalType string) bool {
 	projectionOutputs := make(map[string]struct{})
-	for i := range c.Decisions {
-		decision := &c.Decisions[i]
-		if decision.HasSignalType(normalizedType) {
+	for i := range decisions {
+		decision := &decisions[i]
+		if decision.HasSignalType(signalType) {
 			return true
 		}
 		for _, name := range collectSignalNames(&decision.Rules, SignalTypeProjection) {
@@ -38,7 +59,7 @@ func (c *RouterConfig) UsesSignalTypeInRouting(signalType string) bool {
 		}
 	}
 
-	return projectionsReferenceSignalType(c.Projections, projectionOutputs, normalizedType)
+	return projectionsReferenceSignalType(projections, projectionOutputs, signalType)
 }
 
 // NeedsCategoryMappingForRouting returns true when routing actually depends on

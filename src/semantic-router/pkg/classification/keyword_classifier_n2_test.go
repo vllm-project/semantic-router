@@ -2,7 +2,9 @@ package classification
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -89,6 +91,57 @@ func TestBM25_FirstMatchPriorityPreserved(t *testing.T) {
 	}
 	if got != "a_first" {
 		t.Fatalf("expected a_first to win by config order, got %q", got)
+	}
+}
+
+func TestKeywordMatchAllPreservesRuleOrderAndLegacyTopOne(t *testing.T) {
+	rules := []config.KeywordRule{
+		{Name: "deliberation", Operator: "OR", Method: "regex", Keywords: []string{"compare"}},
+		{Name: "direct", Operator: "OR", Method: "regex", Keywords: []string{"brief"}},
+	}
+	kc, err := NewKeywordClassifier(rules)
+	if err != nil {
+		t.Fatalf("NewKeywordClassifier: %v", err)
+	}
+	defer kc.Free()
+
+	matches, err := kc.MatchAll("compare the options briefly")
+	if err != nil {
+		t.Fatalf("MatchAll: %v", err)
+	}
+	got := make([]string, len(matches))
+	for i, match := range matches {
+		got[i] = match.RuleName
+	}
+	if want := []string{"deliberation", "direct"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("MatchAll rules = %v, want %v", got, want)
+	}
+
+	category, _, err := kc.ClassifyWithKeywords("compare the options briefly")
+	if err != nil {
+		t.Fatalf("ClassifyWithKeywords: %v", err)
+	}
+	if category != "deliberation" {
+		t.Fatalf("legacy category = %q, want deliberation", category)
+	}
+}
+
+func TestEvaluateKeywordSignalEmitsEveryMatchedRule(t *testing.T) {
+	kc, err := NewKeywordClassifier([]config.KeywordRule{
+		{Name: "deliberation", Operator: "OR", Method: "regex", Keywords: []string{"compare"}},
+		{Name: "direct", Operator: "OR", Method: "regex", Keywords: []string{"brief"}},
+	})
+	if err != nil {
+		t.Fatalf("NewKeywordClassifier: %v", err)
+	}
+	defer kc.Free()
+
+	classifier := &Classifier{keywordClassifier: kc}
+	results := &SignalResults{Metrics: &SignalMetricsCollection{}}
+	classifier.evaluateKeywordSignal(results, &sync.Mutex{}, "compare the options briefly")
+
+	if want := []string{"deliberation", "direct"}; !reflect.DeepEqual(results.MatchedKeywordRules, want) {
+		t.Fatalf("MatchedKeywordRules = %v, want %v", results.MatchedKeywordRules, want)
 	}
 }
 

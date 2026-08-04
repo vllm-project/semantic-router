@@ -28,9 +28,12 @@ import (
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests.
 type OpenAIRouter struct {
-	Config                *config.RouterConfig
-	CategoryDescriptions  []string
-	Classifier            *classification.Classifier
+	Config               *config.RouterConfig
+	CategoryDescriptions []string
+	Classifier           *classification.Classifier
+	// RecipeClassifiers selects the isolated classifier graph for each routing
+	// request. Classifier is the default-recipe accessor.
+	RecipeClassifiers     *classification.RecipeClassifiers
 	ClassificationService *services.ClassificationService
 	Cache                 cache.CacheBackend
 	ToolsDatabase         *tools.ToolsDatabase
@@ -42,11 +45,14 @@ type OpenAIRouter struct {
 	ReplayStoreShared     bool
 	// ModelSelector is the registry of advanced model selection algorithms
 	// initialized from config.IntelligentRouting.ModelSelection.
-	ModelSelector   *selection.Registry
-	LookupTable     lookuptable.LookupTable
-	ReplayRecorders map[string]*routerreplay.Recorder
-	MemoryStore     memory.Store
-	MemoryExtractor *memory.MemoryExtractor
+	ModelSelector *selection.Registry
+	// RecipeModelSelectors keeps mutable algorithm state (Elo, RL, ML adapters,
+	// and similar selectors) isolated even when recipes reuse decision names.
+	RecipeModelSelectors map[config.RecipeName]*selection.Registry
+	LookupTable          lookuptable.LookupTable
+	ReplayRecorders      map[string]*routerreplay.Recorder
+	MemoryStore          memory.Store
+	MemoryExtractor      *memory.MemoryExtractor
 
 	// CredentialResolver resolves per-user LLM API keys from multiple sources
 	// (ext_authz injected headers -> static config fallback).
@@ -213,6 +219,21 @@ func (r *OpenAIRouter) LoadToolsDatabase() error {
 	r.ToolsRegistry = tools.NewDefaultRegistry(r.ToolsDatabase)
 
 	return nil
+}
+
+// PreloadKnowledgeBases moves lazy KB embedding work out of the first routed
+// request and into startup/reload readiness.
+func (r *OpenAIRouter) PreloadKnowledgeBases() error {
+	if r == nil {
+		return nil
+	}
+	if r.RecipeClassifiers != nil {
+		return r.RecipeClassifiers.PreloadKnowledgeBases()
+	}
+	if r.Classifier == nil {
+		return nil
+	}
+	return r.Classifier.PreloadKnowledgeBases()
 }
 
 func (r *OpenAIRouter) RegisterToolStrategy(name string, retriever tools.ToolRetriever) {

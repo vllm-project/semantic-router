@@ -118,7 +118,8 @@ func extractToolResultsFromMessages(messages []interface{}) []string {
 // on the response based on decision plugin configuration, fact-check classification and tool presence
 func (r *OpenAIRouter) shouldPerformHallucinationDetection(ctx *RequestContext) bool {
 	// Must have hallucination detection models available
-	if r.Classifier == nil || !r.Classifier.IsHallucinationDetectionEnabled() {
+	classifier := r.classifierForRequest(ctx)
+	if classifier == nil || !classifier.IsHallucinationDetectionEnabled() {
 		return false
 	}
 

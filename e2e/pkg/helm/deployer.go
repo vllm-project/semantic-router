@@ -119,12 +119,7 @@ func (d *Deployer) prepareLocalChartWithDeps(ctx context.Context, chartRef strin
 	}
 
 	// Build dependencies for local chart (creates charts/ and Chart.lock in temp copy).
-	cmd := exec.CommandContext(ctx, "helm", "dependency", "build", tmpChart)
-	if d.Verbose {
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-	}
-	if err := cmd.Run(); err != nil {
+	if err := d.runHelmWithRetry(ctx, "dependency", "build", tmpChart); err != nil {
 		cleanup()
 		return "", nil, fmt.Errorf("failed to build chart dependencies: %w", err)
 	}
@@ -142,12 +137,7 @@ var requiredHelmRepos = []struct{ name, url string }{
 
 func (d *Deployer) ensureHelmRepos(ctx context.Context) error {
 	for _, repo := range requiredHelmRepos {
-		cmd := exec.CommandContext(ctx, "helm", "repo", "add", repo.name, repo.url, "--force-update")
-		if d.Verbose {
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-		}
-		if err := cmd.Run(); err != nil {
+		if err := d.runHelmWithRetry(ctx, "repo", "add", repo.name, repo.url, "--force-update"); err != nil {
 			return fmt.Errorf("failed to add helm repo %s: %w", repo.name, err)
 		}
 	}
@@ -161,6 +151,50 @@ func (d *Deployer) ensureHelmRepos(ctx context.Context) error {
 		d.log("Warning: helm repo update failed: %v", err)
 	}
 	return nil
+}
+
+const (
+	helmNetworkAttempts = 4
+	helmRetryDelay      = time.Second
+)
+
+// runHelmWithRetry retries idempotent chart setup commands.
+func (d *Deployer) runHelmWithRetry(ctx context.Context, args ...string) error {
+	return runWithRetry(ctx, helmNetworkAttempts, helmRetryDelay, func() error {
+		cmd := exec.CommandContext(ctx, "helm", args...)
+		if d.Verbose {
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+		}
+		return cmd.Run()
+	})
+}
+
+func runWithRetry(ctx context.Context, attempts int, delay time.Duration, operation func() error) error {
+	if attempts < 1 {
+		return fmt.Errorf("retry attempts must be positive")
+	}
+
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		if err := operation(); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+
+		if attempt == attempts {
+			break
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return errors.Join(ctx.Err(), lastErr)
+		case <-timer.C:
+		}
+	}
+	return lastErr
 }
 
 func copyDir(src, dst string) error {

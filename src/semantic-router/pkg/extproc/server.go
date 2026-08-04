@@ -45,9 +45,22 @@ var (
 		if router == nil {
 			return nil
 		}
-		_, err := modelruntime.WarmupToolsDatabase(context.Background(), state.ToolsReady, router.LoadToolsDatabase, modelruntime.WarmupToolsOptions{
+		_, err := modelruntime.WarmupRouter(context.Background(), []modelruntime.RouterWarmupTask{
+			{
+				Name:       "tools_database",
+				Ready:      state.ToolsReady,
+				SkipReason: "embedding_runtime_not_ready_for_tools",
+				Load:       router.LoadToolsDatabase,
+			},
+			{
+				Name:       "knowledge_bases",
+				Ready:      state.AnyReady,
+				SkipReason: "embedding_runtime_not_ready_for_knowledge_bases",
+				Load:       router.PreloadKnowledgeBases,
+			},
+		}, modelruntime.WarmupRouterOptions{
 			Component:      "extproc",
-			MaxParallelism: 1,
+			MaxParallelism: 2,
 			OnEvent:        logReloadRuntimeLifecycleEvent,
 		})
 		return err

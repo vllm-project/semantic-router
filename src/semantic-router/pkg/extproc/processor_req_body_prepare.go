@@ -1,6 +1,8 @@
 package extproc
 
 import (
+	"context"
+	"errors"
 	"fmt"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -101,16 +103,21 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	fast *FastExtractResult,
 	ctx *RequestContext,
 ) (requestDecisionState, *ext_proc.ProcessingResponse) {
+	r.resolveEntrypointForRequest(originalModel, ctx)
 	populatePinnedSessionFromHeaders(ctx)
 	history := signalConversationHistoryFromFastExtract(fast)
-	decisionName, _, reasoningDecision, selectedModel, authzErr := r.performDecisionEvaluation(
+	decisionName, _, reasoningDecision, selectedModel, decisionErr := r.performDecisionEvaluation(
 		originalModel,
 		history,
 		ctx,
 	)
-	if authzErr != nil {
-		logging.Errorf("[Request Body] Authz evaluation failed: %v", authzErr)
-		return requestDecisionState{}, r.createErrorResponse(403, authzErr.Error())
+	if decisionErr != nil {
+		if errors.Is(decisionErr, context.Canceled) ||
+			errors.Is(decisionErr, context.DeadlineExceeded) {
+			return requestDecisionState{}, r.createErrorResponse(499, "request canceled")
+		}
+		logging.Errorf("[Request Body] Authz evaluation failed: %v", decisionErr)
+		return requestDecisionState{}, r.createErrorResponse(403, decisionErr.Error())
 	}
 
 	metrics.RecordModelRequest(selectedModel)
@@ -120,6 +127,12 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		ctx.InflightToken = 0
 		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
 		r.updateRouterReplayStatus(ctx, 200, false)
+		r.attachRouterReplayResponse(
+			ctx,
+			resp.GetImmediateResponse().GetBody(),
+			true,
+		)
+		addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
 		return requestDecisionState{}, resp
 	}
 	if resp := r.applyRateLimitAndCacheChecks(ctx, selectedModel, decisionName); resp != nil {

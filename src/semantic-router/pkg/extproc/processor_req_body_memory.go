@@ -27,6 +27,9 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	requestBody []byte,
 	openAIRequest *openai.ChatCompletionNewParams,
 ) ([]byte, error) {
+	if requestBypassesRouting(ctx) {
+		return requestBody, nil
+	}
 	ctx.MemoryBackend = r.Config.Memory.Backend
 	if ctx.MemoryBackend == "" {
 		ctx.MemoryBackend = "milvus"
@@ -259,7 +262,7 @@ func recordMemoryOutcome(ctx *RequestContext, status, reason string, failOpen bo
 	if failOpen {
 		ctx.MemoryFallbackReason = reason
 	}
-	metrics.RecordPluginExecution("memory", ctx.VSRSelectedDecisionName, status, 0)
+	metrics.RecordPluginExecution("memory", requestDecisionStateKey(ctx), status, 0)
 }
 
 func (r *OpenAIRouter) getMemoryStore() memory.Store {
@@ -352,15 +355,31 @@ func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName stri
 	}
 
 	logging.Infof("[FastResponse] Decision '%s' has fast_response plugin, returning immediate response", decisionName)
-	metrics.RecordPluginExecution("fast_response", decisionName, "executed", 0)
+	metrics.RecordPluginExecution("fast_response", requestDecisionStateKey(ctx), "executed", 0)
 
 	if isResponseAPIRequest(ctx) {
 		if response, ok := r.createResponseAPIFastResponse(ctx, fastCfg.Message, decisionName); ok {
+			appendRecipeHeaderToImmediateResponse(response, ctx)
 			return response
 		}
 	}
+	if ctx.ClientProtocol == config.ClientProtocolAnthropic {
+		response := createAnthropicFastResponse(
+			ctx,
+			fastCfg.Message,
+			decisionName,
+		)
+		appendRecipeHeaderToImmediateResponse(response, ctx)
+		return response
+	}
 
-	return httputil.CreateFastResponse(fastCfg.Message, ctx.ExpectStreamingResponse, decisionName)
+	response := httputil.CreateFastResponse(
+		fastCfg.Message,
+		ctx.ExpectStreamingResponse,
+		decisionName,
+	)
+	appendRecipeHeaderToImmediateResponse(response, ctx)
+	return response
 }
 
 // isMemoryDisabledForRoute checks if memory is disabled for the given route path.

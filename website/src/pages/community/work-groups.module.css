@@ -1,24 +1,3 @@
-.container {
-  width: min(100% - 2.5rem, var(--site-grid-max));
-  margin: 0 auto;
-  padding: 2rem 0 4rem;
-}
-
-.header {
-  display: grid;
-  gap: 1rem;
-  margin-bottom: 2rem;
-  padding-top: 0.5rem;
-}
-
-.header h1 {
-  margin: 0;
-  font-size: clamp(2.8rem, 8vw, 5rem);
-  line-height: 0.92;
-  font-weight: 400;
-  letter-spacing: -0.05em;
-}
-
 .main {
   display: grid;
   gap: 2rem;
@@ -157,11 +136,6 @@
 }
 
 @media (max-width: 768px) {
-  .container {
-    width: min(100% - 1.4rem, var(--site-grid-max));
-    padding-top: 1.5rem;
-  }
-
   .workGroupsGrid {
     grid-template-columns: 1fr;
   }

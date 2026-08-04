@@ -14,6 +14,7 @@ type TraceNode struct {
 	NodeType   string       `json:"node_type"`             // "leaf", "AND", "OR", "NOT"
 	SignalType string       `json:"signal_type,omitempty"` // populated for leaf nodes
 	SignalName string       `json:"signal_name,omitempty"` // populated for leaf nodes
+	Label      string       `json:"label,omitempty"`       // optional classifier label
 	Matched    bool         `json:"matched"`
 	Confidence float64      `json:"confidence"`
 	Children   []*TraceNode `json:"children,omitempty"`
@@ -41,7 +42,7 @@ func (e *DecisionEngine) EvaluateDecisionsWithTrace(
 
 	for i := range e.decisions {
 		decision := &e.decisions[i]
-		matched, confidence, matchedRules, trace := e.evalNodeWithTrace(decision.Rules, signals)
+		matched, confidence, matchedRules, trace := e.evalDecisionWithTrace(decision, signals)
 
 		dt := DecisionTrace{
 			DecisionName: decision.Name,
@@ -67,17 +68,31 @@ func (e *DecisionEngine) EvaluateDecisionsWithTrace(
 	return best, traces
 }
 
+func (e *DecisionEngine) evalDecisionWithTrace(
+	decision *config.Decision,
+	signals *SignalMatches,
+) (bool, float64, []string, *TraceNode) {
+	if decision.Rules.IsEmpty() {
+		return true, 0, nil, &TraceNode{
+			NodeType: "fallback",
+			Matched:  true,
+		}
+	}
+	return e.evalNodeWithTrace(decision.Rules, signals)
+}
+
 // evalNodeWithTrace mirrors evalNode but also builds a TraceNode tree.
 func (e *DecisionEngine) evalNodeWithTrace(
 	node config.RuleNode,
 	signals *SignalMatches,
 ) (matched bool, confidence float64, matchedRules []string, trace *TraceNode) {
 	if node.IsLeaf() {
-		m, c, r := e.evalLeaf(node.Type, node.Name, signals)
+		m, c, r := e.evalLeaf(node, signals)
 		return m, c, r, &TraceNode{
 			NodeType:   "leaf",
 			SignalType: node.Type,
 			SignalName: node.Name,
+			Label:      node.Label,
 			Matched:    m,
 			Confidence: c,
 		}
@@ -139,12 +154,10 @@ func (e *DecisionEngine) evalORWithTrace(
 	for _, child := range children {
 		m, c, r, childTrace := e.evalNodeWithTrace(child, signals)
 		trace.Children = append(trace.Children, childTrace)
-		if m {
+		if m && (!anyMatched || c > bestConf) {
 			anyMatched = true
-			if c > bestConf {
-				bestConf = c
-				bestRules = r
-			}
+			bestConf = c
+			bestRules = r
 		}
 	}
 

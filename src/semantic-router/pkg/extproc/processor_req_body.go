@@ -111,7 +111,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		},
 	}
 
-	isAutoModel := r.Config != nil && r.Config.IsAutoModelName(originalModel)
+	isAutoModel := r.requestModelActsAsAuto(originalModel)
 
 	targetModel := originalModel
 	if isAutoModel && selectedModel != "" {
@@ -137,6 +137,11 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 			"decision":   ctx.VSRSelectedDecision.Name,
 			"algorithm":  ctx.VSRSelectedDecision.Algorithm.Type,
 		})
+		// Track VSR decision information the same way handleAutoModelRouting's
+		// trackVSRDecision does for non-looper decisions, and the direct
+		// fusion/remom/workflows dispatchers already do for their algorithm
+		// types; otherwise x-vsr-selected-decision comes back empty.
+		ctx.VSRSelectedDecisionName = ctx.VSRSelectedDecision.Name
 		return r.handleLooperExecution(ctx.TraceContext, openAIRequest, ctx.VSRSelectedDecision, ctx)
 	case selectedModel != "":
 		return r.handleAutoModelRouting(openAIRequest, originalModel, decisionName, reasoningDecision, selectedModel, ctx, response)
@@ -281,12 +286,11 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 		return r.createErrorResponse(http.StatusBadRequest, fmt.Sprintf("model %q is not available", originalModel)), nil
 	}
 
-	// Track VSR decision information for non-auto models
+	// Concrete backend models bypass every recipe-local signal, decision, and
+	// plugin. They still use shared provider/backend infrastructure.
 	ctx.VSRSelectedDecisionName = decisionName
 	ctx.VSRSelectedModel = originalModel
 	ctx.VSRReasoningMode = "off" // Non-auto models don't use reasoning mode by default
-	// Security checks (jailbreak/PII) are handled at the signal level via fast_response plugin
-	// Memory injection already happened in handleMemoryRetrieval (before routing diverged)
 
 	// Resolve backend metadata for provider-specific request shaping. This is
 	// not an endpoint routing decision; Envoy owns endpoint load balancing.

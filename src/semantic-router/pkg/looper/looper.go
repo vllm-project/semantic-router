@@ -100,6 +100,13 @@ type Response struct {
 	// this execution. It mirrors the usage block embedded in Body so callers
 	// (extproc, dashboard, metrics) can read totals without re-parsing the body.
 	Usage TokenUsage `json:"usage,omitempty"`
+
+	// LatencyMs is the wall-clock latency, in milliseconds, of the full
+	// looper execution (all model calls plus algorithm overhead). It is set
+	// by ExecuteWithLatency rather than by individual Looper implementations,
+	// so it reflects real elapsed time regardless of whether the algorithm
+	// dispatches its model calls sequentially or concurrently.
+	LatencyMs int64 `json:"latency_ms,omitempty"`
 }
 
 // Looper defines the interface for multi-model execution strategies

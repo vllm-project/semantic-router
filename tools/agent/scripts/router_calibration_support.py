@@ -7,6 +7,8 @@ import subprocess
 import tempfile
 import time
 from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,6 +18,7 @@ from router_calibration_manifest import (
     Probe,
     resolve_acceptance,
     summarize_decision_results,
+    summarize_tag_results,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -23,6 +26,16 @@ SEMANTIC_ROUTER_MODULE_ROOT = REPO_ROOT / "src" / "semantic-router"
 DEFAULT_REPORT_ROOT = REPO_ROOT / ".augment" / "router-loop"
 HTTP_OK_MIN = 200
 HTTP_REDIRECT_MIN = 300
+DEFAULT_EVAL_REQUEST_TIMEOUT_SECONDS = 60.0
+MAX_EVAL_REQUEST_TIMEOUT_SECONDS = 1200.0
+DEFAULT_EVAL_CONCURRENCY = 1
+MAX_EVAL_CONCURRENCY = 64
+
+
+@dataclass(frozen=True)
+class EvaluationSettings:
+    request_timeout_seconds: float
+    concurrency: int
 
 
 def resolve_repo_path(path: Path | None) -> Path | None:
@@ -36,13 +49,15 @@ def resolve_repo_path(path: Path | None) -> Path | None:
 def normalize_router_url(router_url: str) -> str:
     normalized = router_url.strip().rstrip("/")
     eval_suffix = "/api/v1/eval"
-    if normalized.endswith(eval_suffix):
-        normalized = normalized[: -len(eval_suffix)]
+    normalized = normalized.removesuffix(eval_suffix)
     return normalized
 
 
 def http_json(
-    method: str, url: str, payload: dict[str, Any] | None = None
+    method: str,
+    url: str,
+    payload: dict[str, Any] | None = None,
+    timeout_seconds: float = 60.0,
 ) -> tuple[int, dict[str, Any] | list[Any] | str]:
     body = None
     headers = {"Accept": "application/json"}
@@ -52,7 +67,7 @@ def http_json(
 
     req = request.Request(url=url, method=method.upper(), data=body, headers=headers)
     try:
-        with request.urlopen(req, timeout=60) as response:
+        with request.urlopen(req, timeout=timeout_seconds) as response:
             status = response.getcode()
             raw = response.read().decode("utf-8")
     except error.HTTPError as exc:
@@ -62,7 +77,7 @@ def http_json(
         except json.JSONDecodeError:
             parsed = raw
         return exc.code, parsed
-    except error.URLError as exc:
+    except (error.URLError, TimeoutError) as exc:
         raise RuntimeError(f"request to {url} failed: {exc}") from exc
 
     try:
@@ -133,16 +148,73 @@ def wait_for_router_ready(
     )
 
 
-def evaluate_probe(router_url: str, probe: Probe) -> dict[str, Any]:
+def wait_for_config_activation(
+    router_url: str,
+    expected_runtime_hash: str,
+    timeout_seconds: float = 300.0,
+    interval_seconds: float = 5.0,
+) -> dict[str, Any]:
+    """Wait until the immutable runtime matching a deploy is published.
+
+    `/ready` remains true while a replacement router is prepared off-path, so
+    readiness alone cannot close the management API's read-after-write gap.
+    `/config/hash` identifies the exact runtime document that was atomically
+    published and also detects a later deploy superseding this one.
+    """
+    base = normalize_router_url(router_url)
+    expected = expected_runtime_hash.strip()
+    if not expected:
+        raise ValueError("deploy response did not include runtime_hash")
+
+    deadline = time.monotonic() + timeout_seconds
+    last_status = 0
+    last_payload: Any = {"status": "unknown"}
+    while time.monotonic() < deadline:
+        status, payload = http_json("GET", f"{base}/config/hash")
+        last_status = status
+        last_payload = payload
+        if HTTP_OK_MIN <= status < HTTP_REDIRECT_MIN and isinstance(payload, dict):
+            runtime_hash = str(payload.get("runtime_hash") or "").strip()
+            active_hash = str(payload.get("active_hash") or "").strip()
+            activation_status = str(payload.get("status") or "").strip()
+            if runtime_hash and runtime_hash != expected:
+                raise RuntimeError(
+                    "config deploy was superseded before activation: "
+                    f"expected runtime_hash={expected}, current runtime_hash={runtime_hash}"
+                )
+            if activation_status == "active" and active_hash == expected:
+                return {
+                    "router_url": base,
+                    "checked_at": utc_now(),
+                    "status_code": status,
+                    "payload": payload,
+                }
+        time.sleep(max(interval_seconds, 0.1))
+
+    raise RuntimeError(
+        "router config did not become active after deploy: "
+        f"expected_runtime_hash={expected}, status={last_status}, "
+        f"payload={json.dumps(last_payload, ensure_ascii=False)}"
+    )
+
+
+def evaluate_probe(
+    router_url: str, probe: Probe, request_timeout_seconds: float = 60.0
+) -> dict[str, Any]:
     request_payload: dict[str, Any]
     if probe.messages:
         request_payload = {"messages": list(probe.messages)}
     else:
-        request_payload = {"text": probe.query}
+        request_payload = {"text": materialize_probe_text(probe)}
+    if probe.model:
+        request_payload["model"] = probe.model
+    if probe.tools:
+        request_payload["tools"] = list(probe.tools)
     status, payload = http_json(
         "POST",
         f"{normalize_router_url(router_url)}/api/v1/eval",
         request_payload,
+        timeout_seconds=request_timeout_seconds,
     )
     data = ensure_success(status, payload, "POST /api/v1/eval")
     if not isinstance(data, dict):
@@ -156,25 +228,124 @@ def evaluate_probe(router_url: str, probe: Probe) -> dict[str, Any]:
         or str(decision_result.get("decision_name") or "").strip()
     )
     actual_models = data.get("recommended_models") or []
-    matched = actual_decision == probe.expected_decision
+    actual_model = str(data.get("requested_model") or "").strip()
+    actual_recipe = str(data.get("recipe") or "").strip()
+    actual_algorithm = str(decision_result.get("algorithm") or "").strip()
+    actual_plugins = tuple(
+        str(plugin).strip()
+        for plugin in decision_result.get("plugins") or []
+        if str(plugin).strip()
+    )
+    matched_signals = decision_result.get("matched_signals") or {}
+    missing_expected_signals = find_missing_expected_signals(
+        probe.expected_signals, matched_signals
+    )
+    model_matched = probe.model is None or actual_model == probe.model
+    recipe_matched = (
+        probe.expected_recipe is None or actual_recipe == probe.expected_recipe
+    )
+    algorithm_matched = (
+        probe.expected_algorithm is None or actual_algorithm == probe.expected_algorithm
+    )
+    plugins_matched = set(probe.expected_plugins).issubset(actual_plugins)
+    signals_matched = not missing_expected_signals
+    matched = (
+        actual_decision == probe.expected_decision
+        and model_matched
+        and recipe_matched
+        and algorithm_matched
+        and plugins_matched
+        and signals_matched
+    )
     return {
         "id": probe.probe_id,
         "decision_id": probe.decision_id,
         "variant_id": probe.variant_id,
         "expected_decision": probe.expected_decision,
+        "model": probe.model,
+        "actual_model": actual_model,
+        "expected_recipe": probe.expected_recipe,
+        "actual_recipe": actual_recipe,
+        "expected_algorithm": probe.expected_algorithm,
+        "actual_algorithm": actual_algorithm,
+        "expected_plugins": list(probe.expected_plugins),
+        "actual_plugins": list(actual_plugins),
+        "expected_signals": expected_signals_by_type(probe.expected_signals),
+        "missing_expected_signals": missing_expected_signals,
         "expected_alias": probe.expected_alias,
         "query": probe.query or summarize_probe_messages(probe.messages),
+        "repeat": probe.repeat,
+        "padding": probe_padding_metadata(probe),
         "messages": list(probe.messages),
+        "tools": list(probe.tools),
         "notes": probe.notes,
         "tags": list(probe.tags),
         "actual_decision": actual_decision,
         "matched": matched,
+        "model_matched": model_matched,
+        "recipe_matched": recipe_matched,
+        "algorithm_matched": algorithm_matched,
+        "plugins_matched": plugins_matched,
+        "signals_matched": signals_matched,
         "recommended_models": actual_models,
         "used_signals": decision_result.get("used_signals") or {},
-        "matched_signals": decision_result.get("matched_signals") or {},
+        "matched_signals": matched_signals,
         "unmatched_signals": decision_result.get("unmatched_signals") or {},
         "signal_confidences": data.get("signal_confidences") or {},
         "metrics": data.get("metrics") or {},
+    }
+
+
+def find_missing_expected_signals(
+    expected: tuple[tuple[str, str], ...], actual: Any
+) -> list[str]:
+    if not isinstance(actual, dict):
+        actual = {}
+    actual_by_type = {
+        str(signal_type): {str(name) for name in names}
+        for signal_type, names in actual.items()
+        if isinstance(names, list)
+    }
+    return [
+        f"{signal_type}:{name}"
+        for signal_type, name in expected
+        if name not in actual_by_type.get(signal_type, set())
+    ]
+
+
+def expected_signals_by_type(
+    expected: tuple[tuple[str, str], ...],
+) -> dict[str, list[str]]:
+    result: dict[str, list[str]] = {}
+    for signal_type, name in expected:
+        result.setdefault(signal_type, []).append(name)
+    return result
+
+
+def materialize_probe_text(probe: Probe) -> str:
+    """Build adversarial long inputs without duplicating the trigger itself."""
+    query = "\n".join([probe.query or ""] * probe.repeat)
+    if probe.padding is None:
+        return query
+
+    padding_lines = [probe.padding.text] * probe.padding.repeat
+    if probe.padding.placement == "before":
+        parts = [*padding_lines, query]
+    elif probe.padding.placement == "after":
+        parts = [query, *padding_lines]
+    else:
+        midpoint = len(padding_lines) // 2
+        parts = [*padding_lines[:midpoint], query, *padding_lines[midpoint:]]
+    return "\n".join(part for part in parts if part)
+
+
+def probe_padding_metadata(probe: Probe) -> dict[str, Any] | None:
+    if probe.padding is None:
+        return None
+    return {
+        "text": probe.padding.text,
+        "repeat": probe.padding.repeat,
+        "placement": probe.padding.placement,
     }
 
 
@@ -211,15 +382,38 @@ def summarize_message_content(content: Any) -> str:
 def evaluate_probes(
     router_url: str, probes: Iterable[Probe], manifest: dict[str, Any] | None = None
 ) -> dict[str, Any]:
-    results = [evaluate_probe(router_url, probe) for probe in probes]
-    decision_summaries = summarize_decision_results(results, manifest or {})
+    manifest = manifest or {}
+    settings = resolve_evaluation_settings(manifest)
+    probe_list = list(probes)
+    started = time.perf_counter()
+
+    def evaluate_one(probe: Probe) -> dict[str, Any]:
+        probe_started = time.perf_counter()
+        try:
+            result = evaluate_probe(router_url, probe, settings.request_timeout_seconds)
+        except RuntimeError as exc:
+            result = failed_probe_result(probe, exc)
+        result["latency_ms"] = round((time.perf_counter() - probe_started) * 1000, 3)
+        return result
+
+    if settings.concurrency == 1:
+        results = [evaluate_one(probe) for probe in probe_list]
+    else:
+        with ThreadPoolExecutor(max_workers=settings.concurrency) as executor:
+            # executor.map preserves manifest order, so result IDs and failure
+            # reports remain deterministic even when requests finish out of order.
+            results = list(executor.map(evaluate_one, probe_list))
+
+    wall_time_seconds = time.perf_counter() - started
+    decision_summaries = summarize_decision_results(results, manifest)
+    tag_summaries = summarize_tag_results(results)
     matched = sum(1 for result in results if result["matched"])
     total = len(results)
     matched_decisions = sum(
         1 for summary in decision_summaries if bool(summary.get("passed"))
     )
     total_decisions = len(decision_summaries)
-    acceptance = resolve_acceptance(manifest or {})
+    acceptance = resolve_acceptance(manifest)
     probe_success_rate = round((matched / total) * 100, 1) if total else 0.0
     decision_success_rate = (
         round((matched_decisions / total_decisions) * 100, 1)
@@ -229,6 +423,10 @@ def evaluate_probes(
     return {
         "router_url": normalize_router_url(router_url),
         "evaluated_at": utc_now(),
+        "request_timeout_seconds": settings.request_timeout_seconds,
+        "performance": summarize_performance(
+            results, settings.concurrency, wall_time_seconds
+        ),
         "matched": matched,
         "total": total,
         "success_rate": probe_success_rate,
@@ -241,7 +439,123 @@ def evaluate_probes(
             and all(summary["passed"] for summary in decision_summaries)
         ),
         "decisions": decision_summaries,
+        "tags": tag_summaries,
         "results": results,
+    }
+
+
+def summarize_performance(
+    results: list[dict[str, Any]], concurrency: int, wall_time_seconds: float
+) -> dict[str, Any]:
+    latencies = sorted(float(result.get("latency_ms") or 0.0) for result in results)
+    request_count = len(results)
+    return {
+        "concurrency": concurrency,
+        "requests": request_count,
+        "errors": sum(1 for result in results if result.get("error")),
+        "wall_time_seconds": round(wall_time_seconds, 3),
+        "throughput_rps": round(
+            request_count / wall_time_seconds if wall_time_seconds > 0 else 0.0, 3
+        ),
+        "latency_ms": {
+            "min": round(latencies[0], 3) if latencies else 0.0,
+            "p50": round(percentile(latencies, 50), 3),
+            "p95": round(percentile(latencies, 95), 3),
+            "p99": round(percentile(latencies, 99), 3),
+            "max": round(latencies[-1], 3) if latencies else 0.0,
+        },
+    }
+
+
+def percentile(sorted_values: list[float], percent: float) -> float:
+    if not sorted_values:
+        return 0.0
+    if len(sorted_values) == 1:
+        return sorted_values[0]
+    position = (len(sorted_values) - 1) * percent / 100
+    lower = int(position)
+    upper = min(lower + 1, len(sorted_values) - 1)
+    fraction = position - lower
+    return (
+        sorted_values[lower] + (sorted_values[upper] - sorted_values[lower]) * fraction
+    )
+
+
+def resolve_evaluation_settings(manifest: dict[str, Any]) -> EvaluationSettings:
+    evaluation = manifest.get("evaluation")
+    if not isinstance(evaluation, dict):
+        evaluation = {}
+    raw_timeout = evaluation.get(
+        "request_timeout_seconds", DEFAULT_EVAL_REQUEST_TIMEOUT_SECONDS
+    )
+    try:
+        timeout = float(raw_timeout)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("evaluation.request_timeout_seconds must be numeric") from exc
+    if timeout < 1 or timeout > MAX_EVAL_REQUEST_TIMEOUT_SECONDS:
+        raise ValueError(
+            "evaluation.request_timeout_seconds must be between "
+            f"1 and {MAX_EVAL_REQUEST_TIMEOUT_SECONDS:g}"
+        )
+
+    raw_concurrency = evaluation.get("concurrency", DEFAULT_EVAL_CONCURRENCY)
+    if isinstance(raw_concurrency, bool):
+        raise TypeError("evaluation.concurrency must be an integer")
+    try:
+        concurrency = int(raw_concurrency)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("evaluation.concurrency must be an integer") from exc
+    if concurrency < 1 or concurrency > MAX_EVAL_CONCURRENCY:
+        raise ValueError(
+            f"evaluation.concurrency must be between 1 and {MAX_EVAL_CONCURRENCY}"
+        )
+    return EvaluationSettings(timeout, concurrency)
+
+
+def resolve_eval_request_timeout(manifest: dict[str, Any]) -> float:
+    return resolve_evaluation_settings(manifest).request_timeout_seconds
+
+
+def failed_probe_result(probe: Probe, exc: RuntimeError) -> dict[str, Any]:
+    return {
+        "id": probe.probe_id,
+        "decision_id": probe.decision_id,
+        "variant_id": probe.variant_id,
+        "expected_decision": probe.expected_decision,
+        "model": probe.model,
+        "actual_model": "",
+        "expected_recipe": probe.expected_recipe,
+        "actual_recipe": "",
+        "expected_algorithm": probe.expected_algorithm,
+        "actual_algorithm": "",
+        "expected_plugins": list(probe.expected_plugins),
+        "actual_plugins": [],
+        "expected_signals": expected_signals_by_type(probe.expected_signals),
+        "missing_expected_signals": [
+            f"{signal_type}:{name}" for signal_type, name in probe.expected_signals
+        ],
+        "expected_alias": probe.expected_alias,
+        "query": probe.query or summarize_probe_messages(probe.messages),
+        "repeat": probe.repeat,
+        "padding": probe_padding_metadata(probe),
+        "messages": list(probe.messages),
+        "tools": list(probe.tools),
+        "notes": probe.notes,
+        "tags": list(probe.tags),
+        "actual_decision": "",
+        "matched": False,
+        "model_matched": False,
+        "recipe_matched": False,
+        "algorithm_matched": False,
+        "plugins_matched": False,
+        "signals_matched": False,
+        "recommended_models": [],
+        "used_signals": {},
+        "matched_signals": {},
+        "unmatched_signals": {},
+        "signal_confidences": {},
+        "metrics": {},
+        "error": str(exc),
     }
 
 
@@ -335,6 +649,7 @@ def deploy_config(
 
 
 def write_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=False) + "\n",
         encoding="utf-8",
@@ -346,5 +661,5 @@ def utc_now() -> str:
 
 
 def default_report_dir() -> Path:
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     return DEFAULT_REPORT_ROOT / stamp

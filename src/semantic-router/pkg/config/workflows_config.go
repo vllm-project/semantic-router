@@ -158,7 +158,7 @@ func (c *RouterConfig) HasFlowDecision() bool {
 		return false
 	}
 	for _, decision := range c.Decisions {
-		if decision.Algorithm != nil && decision.Algorithm.Type == "workflows" {
+		if decision.Algorithm != nil && decision.Algorithm.Type == DecisionAlgorithmWorkflows {
 			return true
 		}
 	}

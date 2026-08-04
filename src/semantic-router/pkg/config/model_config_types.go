@@ -185,6 +185,7 @@ func (c ComplexityModelConfig) WithDefaults() ComplexityModelConfig {
 }
 
 type ExternalModelConfig struct {
+	Name           string                 `yaml:"name,omitempty"`
 	Provider       string                 `yaml:"llm_provider"`
 	ModelRole      string                 `yaml:"model_role"`
 	ModelEndpoint  ClassifierVLLMEndpoint `yaml:"llm_endpoint,omitempty"`
@@ -255,6 +256,9 @@ type FactCheckModelConfig struct {
 }
 
 type HallucinationModelConfig struct {
+	Backend                string  `yaml:"backend,omitempty"`
+	Endpoint               string  `yaml:"endpoint,omitempty"`
+	IncludeExplanation     bool    `yaml:"include_explanation,omitempty"`
 	ModelID                string  `yaml:"model_id"`
 	Threshold              float32 `yaml:"threshold"`
 	UseCPU                 bool    `yaml:"use_cpu"`
@@ -367,6 +371,15 @@ const (
 func (cfg *RouterConfig) FindExternalModelByRole(role string) *ExternalModelConfig {
 	for i := range cfg.ExternalModels {
 		if cfg.ExternalModels[i].ModelRole == role {
+			return &cfg.ExternalModels[i]
+		}
+	}
+	return nil
+}
+
+func (cfg *RouterConfig) FindExternalModelByName(name string) *ExternalModelConfig {
+	for i := range cfg.ExternalModels {
+		if cfg.ExternalModels[i].Name == name {
 			return &cfg.ExternalModels[i]
 		}
 	}

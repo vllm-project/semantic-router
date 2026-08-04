@@ -82,9 +82,13 @@ test-semantic-router: build-router
 	export SKIP_LLAMA_STACK_TESTS=$${SKIP_LLAMA_STACK_TESTS:-true} && \
 	export SR_TEST_MODE=true && \
 		cd src/semantic-router && \
+		TEST_PACKAGES="$$(go list ./...)" && \
+		if [ "$${SKIP_MODEL_DEPENDENT_TESTS:-false}" = "true" ]; then \
+			TEST_PACKAGES="$$(printf '%s\n' "$$TEST_PACKAGES" | awk '!/\/pkg\/(memory|tools)$$/')"; \
+		fi && \
 		CGO_ENABLED=1 \
 		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
-		go test -v $$(go list ./...)
+		go test -v $$TEST_PACKAGES
 
 # Test the Rust library and the Go binding
 # In CI, split test-binding into two phases to save disk space:
@@ -421,7 +425,7 @@ demo-hallucination-auto: build-router download-models
 test-image-gen: ## Test image generation via vLLM-Omni (requires vLLM-Omni on localhost:8001)
 test-image-gen:
 	@echo "Testing image generation with vLLM-Omni..."
-	@./scripts/test-image-gen.sh
+	@./tools/smoke/test-image-gen.sh
 
 # Run image generation integration tests (Go)
 test-image-gen-integration: ## Run Go integration tests for image generation

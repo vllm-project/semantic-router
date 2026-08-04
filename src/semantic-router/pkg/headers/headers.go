@@ -26,8 +26,8 @@ const (
 	// emits on every /v1/messages request belonging to the same chat thread.
 	// The router mirrors this into RequestContext.SessionID with priority
 	// below x-session-id (operator/SDK override) but above metadata.user_id
-	// and the message-fingerprint fallbacks. See docs/sessions.md for the
-	// full priority order.
+	// and the message-fingerprint fallbacks. See the session identification API
+	// documentation for the full priority order.
 	XClaudeCodeSessionID = "x-claude-code-session-id"
 
 	// DisableRouterMemory allows clients to opt-out of router-managed memory injection.
@@ -62,6 +62,10 @@ const (
 	// This comes from the domain classifier (MMLU categories).
 	// Example values: "math", "business", "biology", "computer science"
 	VSRSelectedCategory = "x-vsr-selected-category"
+
+	// VSRSelectedRecipe identifies the isolated routing profile selected by the
+	// inbound virtual model. Concrete backend model requests omit this header.
+	VSRSelectedRecipe = "x-vsr-selected-recipe"
 
 	// VSRSelectedDecision indicates the decision selected by VSR during decision evaluation.
 	// This is the final routing decision made by the DecisionEngine.
@@ -388,4 +392,27 @@ const (
 	// VSRLooperAlgorithm indicates the algorithm used by the looper.
 	// Value: "confidence", "ratings", "cost-aware"
 	VSRLooperAlgorithm = "x-vsr-looper-algorithm"
+
+	// VSRLooperLatencyMs indicates the wall-clock latency, in milliseconds,
+	// of the full looper execution (all model calls plus algorithm overhead).
+	// Value: "842" (example)
+	VSRLooperLatencyMs = "x-vsr-looper-latency-ms"
+
+	// VSRLooperPromptTokens indicates the aggregate prompt token count
+	// across all model calls made during looper execution.
+	// Value: "512" (example)
+	//nolint:gosec
+	VSRLooperPromptTokens = "x-vsr-looper-prompt-tokens"
+
+	// VSRLooperCompletionTokens indicates the aggregate completion token
+	// count across all model calls made during looper execution.
+	// Value: "256" (example)
+	//nolint:gosec
+	VSRLooperCompletionTokens = "x-vsr-looper-completion-tokens"
+
+	// VSRLooperTotalTokens indicates the aggregate total token count across
+	// all model calls made during looper execution.
+	// Value: "768" (example)
+	//nolint:gosec
+	VSRLooperTotalTokens = "x-vsr-looper-total-tokens"
 )

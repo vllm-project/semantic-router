@@ -2,6 +2,7 @@ package services
 
 import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 )
 
@@ -13,6 +14,8 @@ func (s *ClassificationService) buildIntentResponseFromSignals(
 	confidence float64,
 	processingTime int64,
 	req IntentRequest,
+	classifier *classification.Classifier,
+	runtimeConfig *config.RouterConfig,
 ) *IntentResponse {
 	response := &IntentResponse{
 		Classification: Classification{
@@ -23,10 +26,16 @@ func (s *ClassificationService) buildIntentResponseFromSignals(
 	}
 
 	populateIntentProbabilities(response, category, confidence, req.Options)
-	response.RecommendedModel = s.resolveRecommendedModel(decisionResult, category, confidence)
+	response.RecommendedModel = resolveRecommendedModel(
+		decisionResult,
+		category,
+		classifier,
+		runtimeConfig,
+	)
 	response.RoutingDecision = s.resolveRoutingDecision(decisionResult, confidence, req.Options)
 	if signals != nil {
 		response.MatchedSignals = buildMatchedSignals(signals)
+		response.SignalErrors = signals.SignalErrors
 	}
 	if decisionPayload := buildDecisionResultPayload(decisionResult); decisionPayload != nil {
 		response.DecisionResult = decisionPayload
@@ -40,22 +49,26 @@ func (s *ClassificationService) buildEvalResponse(
 	text string,
 	signals *classification.SignalResults,
 	decisionResult *decision.DecisionResult,
+	classifier *classification.Classifier,
 ) *EvalResponse {
 	response := &EvalResponse{
 		OriginalText:      text,
 		Metrics:           signals.Metrics,
 		SignalConfidences: signals.SignalConfidences,
 		SignalValues:      signals.SignalValues,
+		SignalErrors:      signals.SignalErrors,
 	}
 
 	matchedSignals := buildMatchedSignals(signals)
-	unmatchedSignals := s.getUnmatchedSignals(signals)
+	unmatchedSignals := getUnmatchedSignals(signals, classifier)
 
 	if decisionResult != nil && decisionResult.Decision != nil {
 		usedSignals := s.extractUsedSignalsFromDecision(decisionResult.Decision)
 
 		response.DecisionResult = &EvalDecisionResult{
 			DecisionName:     decisionResult.Decision.Name,
+			Algorithm:        evalDecisionAlgorithm(decisionResult.Decision),
+			Plugins:          evalDecisionPlugins(decisionResult.Decision),
 			UsedSignals:      usedSignals,
 			MatchedSignals:   matchedSignals,
 			UnmatchedSignals: unmatchedSignals,
@@ -81,6 +94,24 @@ func (s *ClassificationService) buildEvalResponse(
 	return response
 }
 
+func evalDecisionAlgorithm(decision *config.Decision) string {
+	if decision == nil || decision.Algorithm == nil || decision.Algorithm.Type == "" {
+		return config.DecisionAlgorithmStatic
+	}
+	return decision.Algorithm.Type
+}
+
+func evalDecisionPlugins(decision *config.Decision) []string {
+	if decision == nil || len(decision.Plugins) == 0 {
+		return nil
+	}
+	plugins := make([]string, 0, len(decision.Plugins))
+	for _, plugin := range decision.Plugins {
+		plugins = append(plugins, config.NormalizeDecisionPluginType(plugin.Type))
+	}
+	return plugins
+}
+
 func populateIntentProbabilities(
 	response *IntentResponse,
 	category string,
@@ -93,10 +124,11 @@ func populateIntentProbabilities(
 	response.Probabilities = map[string]float64{category: confidence}
 }
 
-func (s *ClassificationService) resolveRecommendedModel(
+func resolveRecommendedModel(
 	decisionResult *decision.DecisionResult,
 	category string,
-	confidence float64,
+	classifier *classification.Classifier,
+	runtimeConfig *config.RouterConfig,
 ) string {
 	if decisionResult != nil && decisionResult.Decision != nil && len(decisionResult.Decision.ModelRefs) > 0 {
 		modelRef := decisionResult.Decision.ModelRefs[0]
@@ -105,7 +137,7 @@ func (s *ClassificationService) resolveRecommendedModel(
 		}
 		return modelRef.Model
 	}
-	return s.getRecommendedModel(category, confidence)
+	return recommendedModelFromRuntime(classifier, runtimeConfig, category)
 }
 
 func (s *ClassificationService) resolveRoutingDecision(

@@ -3,13 +3,14 @@ import styles from './ConfigNav.module.css'
 
 // New navigation structure aligned with Python CLI config format
 export type ConfigSection =
-  | 'signals'        // config.yaml: signals (keywords, embeddings, domains, etc.)
-  | 'projections'    // config.yaml: routing.projections (partitions, scores, mappings)
-  | 'decisions'      // config.yaml: decisions (routing rules)
-  | 'models'         // config.yaml: providers.models
-  | 'global-config'  // config.yaml: global runtime overrides (cache, prompt guard, tools, etc.)
-  | 'mcp'            // MCP servers configuration
-  | 'topology'       // Separate page for visualization
+  | 'signals' // config.yaml: signals (keywords, embeddings, domains, etc.)
+  | 'projections' // config.yaml: routing.projections (partitions, scores, mappings)
+  | 'decisions' // config.yaml: decisions (routing rules)
+  | 'models' // config.yaml: providers.models
+  | 'entrypoints-recipes' // config.yaml: top-level entrypoints + recipes
+  | 'global-config' // config.yaml: global runtime overrides (cache, prompt guard, tools, etc.)
+  | 'mcp' // MCP servers configuration
+  | 'topology' // Separate page for visualization
 
 interface ConfigNavProps {
   activeSection: ConfigSection
@@ -22,44 +23,50 @@ const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange })
       id: 'global-config' as ConfigSection,
       icon: 'GC',
       title: 'Global Config',
-      description: 'Global runtime overrides, services, stores & model catalog'
-    },
-    {
-      id: 'models' as ConfigSection,
-      icon: 'ML',
-      title: 'Models',
-      description: 'Provider models and endpoints'
+      description: 'Global runtime overrides, services, stores & model catalog',
     },
     {
       id: 'decisions' as ConfigSection,
       icon: 'DC',
       title: 'Decisions',
-      description: 'Routing rules with priorities & plugins'
+      description: 'Routing rules with priorities & plugins',
+    },
+    {
+      id: 'models' as ConfigSection,
+      icon: 'ML',
+      title: 'Models',
+      description: 'Provider models and endpoints',
+    },
+    {
+      id: 'entrypoints-recipes' as ConfigSection,
+      icon: 'MM',
+      title: 'Mixture-of-Models',
+      description: 'Public MoM models and isolated routing profiles',
     },
     {
       id: 'signals' as ConfigSection,
       icon: 'SG',
       title: 'Signals',
-      description: 'Keywords, embeddings, domains & preferences'
+      description: 'Keywords, embeddings, domains & preferences',
     },
     {
       id: 'projections' as ConfigSection,
       icon: 'PJ',
       title: 'Projections',
-      description: 'Partitions, scores & derived routing bands'
+      description: 'Partitions, scores & derived routing bands',
     },
     {
       id: 'mcp' as ConfigSection,
       icon: 'MP',
       title: 'MCP Servers & Tools',
-      description: 'MCP servers and all available tools'
+      description: 'MCP servers and all available tools',
     },
     {
       id: 'topology' as ConfigSection,
       icon: 'TP',
       title: 'Topology',
-      description: 'Visualize signal-driven routing flow'
-    }
+      description: 'Visualize signal-driven routing flow',
+    },
   ]
 
   return (
