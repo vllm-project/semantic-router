@@ -61,7 +61,7 @@ fn test_bert_lora_lora_bert_classifier_task_configs(
     for task in &tasks {
         assert!(task_configs.contains_key(task));
         let num_classes = task_configs[task];
-        assert!(num_classes >= 2 && num_classes <= 10);
+        assert!((2..=10).contains(&num_classes));
     }
 
     println!(
