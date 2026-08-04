@@ -268,6 +268,10 @@ func TestBuildModelSpecsIncludesFactCheckClassifierWhenSignalConfigured(t *testi
 					{Name: "needs_fact_check"},
 				},
 			},
+			Decisions: []config.Decision{{
+				Name:  "verified-route",
+				Rules: config.RuleNode{Type: config.SignalTypeFactCheck, Name: "needs_fact_check"},
+			}},
 		},
 		InlineModels: config.InlineModels{
 			HallucinationMitigation: config.HallucinationMitigationConfig{

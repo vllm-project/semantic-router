@@ -8,12 +8,19 @@ import (
 
 // IsFeedbackDetectorEnabled checks if feedback detection is enabled and properly configured.
 func (c *Classifier) IsFeedbackDetectorEnabled() bool {
-	return c.Config.IsFeedbackDetectorEnabled()
+	return c.ownsDefaultAPIConsumer() && c.Config.NeedsFeedbackModelForAPI()
+}
+
+func (c *Classifier) needsFeedbackModelForRuntime() bool {
+	return c != nil &&
+		c.Config != nil &&
+		(c.Config.NeedsFeedbackModelForRouting() ||
+			(c.ownsDefaultAPIConsumer() && c.Config.NeedsFeedbackModelForAPI()))
 }
 
 // initializeFeedbackDetector initializes the feedback detection model.
 func (c *Classifier) initializeFeedbackDetector() error {
-	if !c.IsFeedbackDetectorEnabled() {
+	if !c.needsFeedbackModelForRuntime() {
 		return nil
 	}
 
