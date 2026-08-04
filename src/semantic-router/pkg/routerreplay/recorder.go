@@ -142,14 +142,27 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 		rec.Timestamp = time.Now().UTC()
 	}
 
-	if policy.captureRequestBody && len(rec.RequestBody) > policy.maxBodyBytes {
-		rec.RequestBody = rec.RequestBody[:policy.maxBodyBytes]
-		rec.RequestBodyTruncated = true
+	// The capture switches decide whether a body may reach storage at all,
+	// not just whether it is truncated. When capture is off the body must be
+	// dropped here — truncation alone only bounds a leak (see #2748).
+	if policy.captureRequestBody {
+		if len(rec.RequestBody) > policy.maxBodyBytes {
+			rec.RequestBody = rec.RequestBody[:policy.maxBodyBytes]
+			rec.RequestBodyTruncated = true
+		}
+	} else {
+		rec.RequestBody = ""
+		rec.RequestBodyTruncated = false
 	}
 
-	if policy.captureResponseBody && len(rec.ResponseBody) > policy.maxBodyBytes {
-		rec.ResponseBody = rec.ResponseBody[:policy.maxBodyBytes]
-		rec.ResponseBodyTruncated = true
+	if policy.captureResponseBody {
+		if len(rec.ResponseBody) > policy.maxBodyBytes {
+			rec.ResponseBody = rec.ResponseBody[:policy.maxBodyBytes]
+			rec.ResponseBodyTruncated = true
+		}
+	} else {
+		rec.ResponseBody = ""
+		rec.ResponseBodyTruncated = false
 	}
 
 	// Apply MaxToolTraceBytes to structured tool-trace fields.
