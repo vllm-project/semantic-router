@@ -81,52 +81,77 @@ func (h *HTTPClassifierJailbreakInference) Classify(text string) (candle_binding
 	ctx, cancel := context.WithTimeout(context.Background(), h.timeout)
 	defer cancel()
 
+	httpReq, err := h.buildClassifyRequest(ctx, text)
+	if err != nil {
+		return candle_binding.ClassResultWithProbs{}, err
+	}
+
+	scores, err := h.doClassifyRequest(httpReq)
+	if err != nil {
+		return candle_binding.ClassResultWithProbs{}, err
+	}
+
+	return alignScoresToMapping(h.mapping, scores)
+}
+
+// buildClassifyRequest builds the outgoing http_classify HTTP request.
+func (h *HTTPClassifierJailbreakInference) buildClassifyRequest(ctx context.Context, text string) (*http.Request, error) {
 	reqBody, err := json.Marshal(httpClassifyRequest{Inputs: text})
 	if err != nil {
-		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("failed to marshal http_classify request: %w", err)
+		return nil, fmt.Errorf("failed to marshal http_classify request: %w", err)
 	}
 
 	url := fmt.Sprintf("%s/classify", h.baseURL)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(reqBody))
 	if err != nil {
-		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("failed to create http_classify request: %w", err)
+		return nil, fmt.Errorf("failed to create http_classify request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
 	if h.accessKey != "" {
 		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", h.accessKey))
 	}
+	return httpReq, nil
+}
 
+// doClassifyRequest sends the request and parses the label/score list from a
+// successful response.
+func (h *HTTPClassifierJailbreakInference) doClassifyRequest(httpReq *http.Request) ([]httpClassifyLabelScore, error) {
 	resp, err := h.httpClient.Do(httpReq)
 	if err != nil {
-		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("http_classify request failed: %w", err)
+		return nil, fmt.Errorf("http_classify request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("failed to read http_classify response: %w", err)
+		return nil, fmt.Errorf("failed to read http_classify response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("http_classify endpoint returned status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("http_classify endpoint returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var scores []httpClassifyLabelScore
 	if err := json.Unmarshal(body, &scores); err != nil {
-		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("failed to parse http_classify response: %w", err)
+		return nil, fmt.Errorf("failed to parse http_classify response: %w", err)
 	}
 	if len(scores) == 0 {
-		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("http_classify response contained no labels")
+		return nil, fmt.Errorf("http_classify response contained no labels")
 	}
+	return scores, nil
+}
 
-	numClasses := h.mapping.GetJailbreakTypeCount()
+// alignScoresToMapping matches response labels against the jailbreak_mapping
+// by name (not by array position) and builds the full-distribution result.
+func alignScoresToMapping(mapping *JailbreakMapping, scores []httpClassifyLabelScore) (candle_binding.ClassResultWithProbs, error) {
+	numClasses := mapping.GetJailbreakTypeCount()
 	probabilities := make([]float32, numClasses)
 	bestIdx := -1
 	var bestScore float32
 	var seenLabels []string
 	for _, s := range scores {
 		seenLabels = append(seenLabels, s.Label)
-		idx, ok := h.mapping.GetIndexForJailbreakType(s.Label)
+		idx, ok := mapping.GetIndexForJailbreakType(s.Label)
 		if !ok || idx < 0 || idx >= numClasses {
 			continue
 		}
@@ -144,6 +169,5 @@ func (h *HTTPClassifierJailbreakInference) Classify(text string) (candle_binding
 		Class:         bestIdx,
 		Confidence:    bestScore,
 		Probabilities: probabilities,
-		NumClasses:    numClasses,
 	}, nil
 }
