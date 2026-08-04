@@ -6,13 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
-	"os/signal"
 	"path/filepath"
-	"slices"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -74,7 +70,6 @@ var (
 type Server struct {
 	configPath string
 	service    *RouterService
-	server     *grpc.Server
 	port       int
 	secure     bool
 	certPath   string
@@ -83,26 +78,23 @@ type Server struct {
 	// mu guards the shutdown state below, which Start writes and Stop reads
 	// — possibly from different goroutines.
 	mu sync.Mutex
-	// shutdownHooks run, in registration order, after the gRPC server has
-	// gracefully stopped. Server is the sole SIGINT/SIGTERM owner (see
-	// Start), so this is the single coordinated place process-wide cleanup
-	// (e.g. vector store shutdown) runs — instead of racing it against
-	// Start's graceful drain via a second, independent signal.Notify.
-	shutdownHooks []func()
+	// server is the running gRPC server, published by Start once it is ready
+	// to serve. Stop may run concurrently with (or entirely before) Start, so
+	// it is only ever read under mu.
+	server *grpc.Server
+	// stopped records that Stop has already run, so a Start racing it never
+	// begins serving a socket that shutdown can no longer close.
+	stopped bool
 	// watcherCancel stops the config-reload watcher Start launched. Stop
 	// calls it before draining so a reload cannot land mid-shutdown.
 	watcherCancel context.CancelFunc
-}
-
-// RegisterShutdownHook registers a hook to run during Stop, after the gRPC
-// server has finished its graceful drain. Hooks run in registration order.
-func (s *Server) RegisterShutdownHook(hook func()) {
-	if hook == nil {
-		return
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.shutdownHooks = append(s.shutdownHooks, hook)
+	// stopOnce makes Stop idempotent. Both the process signal handler (which
+	// lives in cmd, the only SIGINT/SIGTERM owner) and Start's own path after
+	// serving ends call Stop, so the two can overlap; Once also blocks the
+	// second caller until the first drain finishes, which is exactly the
+	// contract the signal handler needs before tearing down the rest of the
+	// process.
+	stopOnce sync.Once
 }
 
 // NewServer creates a new ExtProc gRPC server
@@ -188,13 +180,33 @@ func (s *Server) Start() error {
 		"secure":     s.secure,
 		"max_msg_mb": maxMsgSize / (1024 * 1024),
 	})
-	s.server = grpc.NewServer(serverOpts...)
-	ext_proc.RegisterExternalProcessorServer(s.server, s.service)
+	grpcServer := grpc.NewServer(serverOpts...)
+	ext_proc.RegisterExternalProcessorServer(grpcServer, s.service)
+
+	// Publish the gRPC server and the config watcher's cancel under one lock,
+	// and give up if Stop already ran. The signal handler owns Stop and can
+	// fire at any point during startup — including after NewServer but before
+	// Start — so without this check a late Start would serve traffic that
+	// shutdown has already finished draining and can no longer stop.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	s.mu.Lock()
+	if s.stopped {
+		s.mu.Unlock()
+		_ = lis.Close()
+		logging.ComponentEvent("extproc", "server_start_aborted_after_stop", map[string]interface{}{
+			"port": s.port,
+		})
+		return nil
+	}
+	s.server = grpcServer
+	s.watcherCancel = cancel
+	s.mu.Unlock()
 
 	// Run the server in a separate goroutine
 	serverErrCh := make(chan error, 1)
 	go func() {
-		if err := s.server.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+		if err := grpcServer.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			serverErrCh <- err
 		} else {
 			serverErrCh <- nil
@@ -202,31 +214,19 @@ func (s *Server) Start() error {
 	}()
 
 	// Start config file watcher in background
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	s.mu.Lock()
-	s.watcherCancel = cancel
-	s.mu.Unlock()
 	go s.watchConfigAndReload(ctx)
 
-	// Wait for interrupt signal to gracefully shut down the server
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
-
-	// Wait for either server error or shutdown signal
-	select {
-	case err := <-serverErrCh:
-		if err != nil {
-			logging.ComponentErrorEvent("extproc", "server_stopped_with_error", map[string]interface{}{
-				"port":  s.port,
-				"error": err.Error(),
-			})
-			return err
-		}
-	case <-signalChan:
-		logging.ComponentEvent("extproc", "server_shutdown_requested", map[string]interface{}{
-			"port": s.port,
+	// Serve until the server fails or Stop is called. Process signals are not
+	// watched here: SIGINT/SIGTERM can arrive long before the server exists
+	// (model init, classifier construction and warmup all run first), so the
+	// handler belongs in cmd where it is live from the first line of main.
+	// Stop is what ends this wait — it makes Serve return grpc.ErrServerStopped.
+	if err := <-serverErrCh; err != nil {
+		logging.ComponentErrorEvent("extproc", "server_stopped_with_error", map[string]interface{}{
+			"port":  s.port,
+			"error": err.Error(),
 		})
+		return err
 	}
 
 	s.Stop()
@@ -234,19 +234,33 @@ func (s *Server) Start() error {
 }
 
 // Stop gracefully stops the gRPC server, draining in-flight requests, then
-// runs every registered shutdown hook. Hooks run only after the drain
-// completes, so process-wide cleanup (e.g. releasing the vector store) never
-// races an in-flight request against resources it still needs.
+// releases the resources the server owns. It runs at most once and is safe to
+// call concurrently: a second caller blocks until the first Stop has finished,
+// so a caller that tears down shared process resources afterwards (the signal
+// handler in cmd) can never do so while requests are still draining.
 func (s *Server) Stop() {
-	// Stop config reloads first. The watcher outlives Stop otherwise (Start
-	// only cancels it once Start itself returns), and a reload landing
-	// mid-shutdown would Swap a fresh router into an already-retired
-	// service — leaking that router and republishing runtime state for a
-	// process that is going away.
+	s.stopOnce.Do(s.stop)
+}
+
+func (s *Server) stop() {
+	// Flag the shutdown before reading anything Start publishes. Ordered the
+	// other way, a Stop that beats Start reads a nil watcherCancel, skips the
+	// cancel, and only then flags — leaving Start free to publish and launch
+	// a watcher nothing ever stops. Flagging first makes the two outcomes
+	// exhaustive: either Start aborts and no watcher exists, or Start won the
+	// lock and published server and watcherCancel together, so both are
+	// visible here.
+	grpcServer := s.markStopped()
+
+	// Stop config reloads before draining. The watcher outlives Stop
+	// otherwise (Start only cancels it once Start itself returns), and a
+	// reload landing mid-shutdown would Swap a fresh router into an
+	// already-retired service — leaking that router and republishing runtime
+	// state for a process that is going away.
 	s.stopConfigWatcher()
 
-	if s.server != nil {
-		s.gracefulStopWithin(defaultRouterDrainTimeout)
+	if grpcServer != nil {
+		s.gracefulStopWithin(grpcServer, defaultRouterDrainTimeout)
 		logging.ComponentEvent("extproc", "server_stopped", map[string]interface{}{
 			"port": s.port,
 		})
@@ -257,9 +271,6 @@ func (s *Server) Stop() {
 				"error": err.Error(),
 			})
 		}
-	}
-	for _, hook := range s.snapshotShutdownHooks() {
-		hook()
 	}
 }
 
@@ -272,21 +283,27 @@ func (s *Server) stopConfigWatcher() {
 	}
 }
 
-func (s *Server) snapshotShutdownHooks() []func() {
+// markStopped records that shutdown has run and returns the running gRPC
+// server, or nil if Start never got as far as publishing one. Flagging and
+// reading under a single lock is what lets a Stop that beats Start guarantee
+// Start never starts serving afterwards.
+func (s *Server) markStopped() *grpc.Server {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return slices.Clone(s.shutdownHooks)
+	s.stopped = true
+	return s.server
 }
 
 // gracefulStopWithin drains the gRPC server's in-flight streams, falling
 // back to a hard Stop once timeout elapses. GracefulStop on its own is
 // unbounded: ExtProc serves bidirectional streams, so a single stream that
 // never ends would block shutdown until the orchestrator SIGKILLs the
-// process — losing the shutdown hooks and router teardown that run after it.
-func (s *Server) gracefulStopWithin(timeout time.Duration) {
+// process — losing the router teardown that follows it here, and the
+// process-wide cleanup the signal handler runs after Stop returns.
+func (s *Server) gracefulStopWithin(grpcServer *grpc.Server, timeout time.Duration) {
 	stopped := make(chan struct{})
 	go func() {
-		s.server.GracefulStop()
+		grpcServer.GracefulStop()
 		close(stopped)
 	}()
 
@@ -297,7 +314,7 @@ func (s *Server) gracefulStopWithin(timeout time.Duration) {
 			"port":            s.port,
 			"timeout_seconds": timeout.Seconds(),
 		})
-		s.server.Stop()
+		grpcServer.Stop()
 		<-stopped
 	}
 }

@@ -1,113 +1,158 @@
 package extproc
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"net"
-	"os"
-	"os/exec"
-	"runtime"
-	"strconv"
-	"syscall"
+	"sync"
 	"testing"
 	"time"
 )
 
-const (
-	sigtermDrainChildEnv    = "SR_SIGTERM_DRAIN_CHILD"
-	sigtermDrainChildPort   = "SR_SIGTERM_DRAIN_CHILD_PORT"
-	sigtermDrainReadyMarker = "SIGTERM_DRAIN_CHILD_READY"
-	sigtermDrainMarker      = "SIGTERM_DRAIN_COMPLETE"
-	sigtermDrainSlowHookDur = 1500 * time.Millisecond
-)
+// TestServerStopWaitsForInFlightRequestBeforeReturning pins the guarantee the
+// process-level signal handler (cmd/runtime_bootstrap.go) is built on: it runs
+// Stop first and only then releases shared resources such as the vector store,
+// which is only safe because Stop does not return while a request is still
+// using them.
+func TestServerStopWaitsForInFlightRequestBeforeReturning(t *testing.T) {
+	server, startErrCh := startTestServer(t)
 
-// TestServerStopRunsShutdownHooksAfterGracefulDrainBeforeProcessExits spawns
-// a child process (self-exec of the test binary) that runs a real Server
-// with a slow shutdown hook registered, sends SIGTERM, and asserts the
-// process only exits once that hook has completed.
-//
-// This is issue #2470 finding #6: cmd/runtime_bootstrap.go used to register
-// its own independent signal.Notify + unconditional os.Exit(0), racing
-// Server's own signal.Notify + GracefulStop() — the hard exit had no reason
-// to lose that race, so it could kill the process mid-drain. Server is now
-// the sole SIGINT/SIGTERM owner (see Start): no other signal.Notify for
-// these signals exists in the shutdown path, and nothing calls os.Exit —
-// the process only terminates once Start() returns, which only happens
-// after Stop()'s graceful drain and every registered shutdown hook finish.
-func TestServerStopRunsShutdownHooksAfterGracefulDrainBeforeProcessExits(t *testing.T) {
-	if os.Getenv(sigtermDrainChildEnv) == "1" {
-		runSigtermDrainChild()
-		return
+	// Stands in for an in-flight Process call: RouterService.Process holds
+	// exactly this lease for the duration of the call.
+	lease, err := server.service.acquireCurrentLease()
+	if err != nil {
+		t.Fatalf("acquireCurrentLease() error = %v", err)
 	}
 
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX signal test")
+	stopped := make(chan struct{})
+	go func() {
+		server.Stop()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+		t.Fatal("Stop() returned while a request was still in flight")
+	case <-time.After(100 * time.Millisecond):
 	}
+
+	lease.release()
+
+	select {
+	case <-stopped:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Stop() did not return after the in-flight request finished")
+	}
+
+	// Start owns no signal handler anymore; Stop is the only thing that ends
+	// it, so Start returning is the proof that contract holds.
+	select {
+	case err := <-startErrCh:
+		if err != nil {
+			t.Fatalf("Start() error = %v, want nil after Stop()", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Start() did not return after Stop()")
+	}
+}
+
+// TestServerStopIsIdempotentAndBlocksLateCallers covers the two callers the
+// new ownership split creates: the signal handler's hook and Start's own
+// post-serve path. A second call must neither re-run the teardown nor return
+// before the first one has finished, since the signal handler treats Stop
+// returning as "the drain is complete" before releasing shared resources.
+func TestServerStopIsIdempotentAndBlocksLateCallers(t *testing.T) {
+	server, startErrCh := startTestServer(t)
+
+	lease, err := server.service.acquireCurrentLease()
+	if err != nil {
+		t.Fatalf("acquireCurrentLease() error = %v", err)
+	}
+
+	var wg sync.WaitGroup
+	returned := make(chan int, 3)
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			server.Stop()
+			returned <- id
+		}(i)
+	}
+
+	select {
+	case id := <-returned:
+		t.Fatalf("Stop() call %d returned while a request was still in flight", id)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	lease.release()
+
+	allReturned := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(allReturned)
+	}()
+	select {
+	case <-allReturned:
+	case <-time.After(10 * time.Second):
+		t.Fatal("concurrent Stop() callers did not all return after the drain finished")
+	}
+
+	// A further sequential Stop must be a no-op rather than a second teardown
+	// of an already-retired router.
+	server.Stop()
+
+	select {
+	case err := <-startErrCh:
+		if err != nil {
+			t.Fatalf("Start() error = %v, want nil after Stop()", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Start() did not return after Stop()")
+	}
+}
+
+// TestServerStartDoesNotServeAfterStop covers the startup-window ordering the
+// signal handler makes reachable: Stop can land between NewServer and Start,
+// since warmup sits between them in main. Start must then decline to serve
+// rather than open a socket shutdown has already finished with.
+func TestServerStartDoesNotServeAfterStop(t *testing.T) {
+	port, err := freeTCPPort()
+	if err != nil {
+		t.Fatalf("failed to allocate a free port: %v", err)
+	}
+	server := &Server{service: NewRouterService(&OpenAIRouter{}), port: port}
+
+	server.Stop()
+
+	if err := server.Start(); err != nil {
+		t.Fatalf("Start() error = %v, want nil after a completed Stop()", err)
+	}
+	if portListening(port) {
+		t.Fatal("Start() began serving after Stop() had already completed")
+	}
+}
+
+// startTestServer runs a real gRPC ExtProc server on a free port and returns
+// once it is accepting connections, along with the channel carrying Start's
+// eventual return value.
+func startTestServer(t *testing.T) (*Server, <-chan error) {
+	t.Helper()
 
 	port, err := freeTCPPort()
 	if err != nil {
 		t.Fatalf("failed to allocate a free port: %v", err)
 	}
 
-	// #nosec G204 -- os.Args[0] is this test binary, re-executed with a fixed
-	// -test.run filter; there is no external input in either argument.
-	cmd := exec.Command(os.Args[0], "-test.run=^TestServerStopRunsShutdownHooksAfterGracefulDrainBeforeProcessExits$")
-	cmd.Env = append(os.Environ(),
-		sigtermDrainChildEnv+"=1",
-		sigtermDrainChildPort+"="+strconv.Itoa(port),
-	)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		t.Fatalf("StdoutPipe() error = %v", err)
-	}
-	if startErr := cmd.Start(); startErr != nil {
-		t.Fatalf("Start() error = %v", startErr)
-	}
+	server := &Server{service: NewRouterService(&OpenAIRouter{}), port: port}
+	startErrCh := make(chan error, 1)
+	go func() { startErrCh <- server.Start() }()
+	t.Cleanup(server.Stop)
 
-	// Drain stdout continuously for the life of the test instead of reading
-	// after cmd.Wait() returns: Wait documents that it closes the pipe once
-	// the child exits, discarding any output not already read by then, so a
-	// post-Wait ReadAll can silently lose the drain marker.
-	lines := make(chan string, 16)
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			lines <- scanner.Text()
-		}
-		close(lines)
-	}()
-
-	readyLine, err := readLineWithTimeout(lines, 10*time.Second)
-	if err != nil {
-		_ = cmd.Process.Kill()
-		t.Fatalf("waiting for child readiness marker: %v", err)
+	if !waitForPortListening(port, 10*time.Second) {
+		t.Fatalf("server did not start listening on port %d", port)
 	}
-	if readyLine != sigtermDrainReadyMarker {
-		_ = cmd.Process.Kill()
-		t.Fatalf("unexpected child readiness line = %q", readyLine)
-	}
-
-	sigSentAt := time.Now()
-	if signalErr := cmd.Process.Signal(syscall.SIGTERM); signalErr != nil {
-		t.Fatalf("Signal(SIGTERM) error = %v", signalErr)
-	}
-
-	drainLine, err := readLineWithTimeout(lines, sigtermDrainSlowHookDur+10*time.Second)
-	elapsed := time.Since(sigSentAt)
-	sawDrainMarker := err == nil && drainLine == sigtermDrainMarker
-	if !sawDrainMarker || elapsed < sigtermDrainSlowHookDur {
-		_ = cmd.Process.Kill()
-		t.Fatalf(
-			"child did not complete its shutdown hook %s after SIGTERM (drain marker seen = %v, read error = %v); "+
-				"a SIGTERM must not terminate the process before Server.Stop's registered shutdown hooks finish",
-			elapsed, sawDrainMarker, err,
-		)
-	}
-
-	if err := cmd.Wait(); err != nil {
-		t.Fatalf("child process exited with error after completing its shutdown hook: %v", err)
-	}
+	return server, startErrCh
 }
 
 func freeTCPPort() (int, error) {
@@ -119,60 +164,24 @@ func freeTCPPort() (int, error) {
 	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
-func readLineWithTimeout(lines <-chan string, timeout time.Duration) (string, error) {
-	select {
-	case line, ok := <-lines:
-		if !ok {
-			return "", io.EOF
-		}
-		return line, nil
-	case <-time.After(timeout):
-		return "", os.ErrDeadlineExceeded
-	}
-}
-
-// runSigtermDrainChild runs only inside the self-exec'd child process. It
-// starts a real Server on the port the parent chose, with a slow shutdown
-// hook registered, then blocks in Start(). The process should only end once
-// Start() returns — which only happens after SIGTERM triggers Stop()'s
-// graceful drain and hook.
-func runSigtermDrainChild() {
-	port, err := strconv.Atoi(os.Getenv(sigtermDrainChildPort))
-	if err != nil {
-		_, _ = os.Stderr.WriteString("invalid " + sigtermDrainChildPort + ": " + err.Error() + "\n")
-		os.Exit(2)
-	}
-
-	server := &Server{
-		service: NewRouterService(&OpenAIRouter{}),
-		port:    port,
-	}
-	server.RegisterShutdownHook(func() {
-		time.Sleep(sigtermDrainSlowHookDur)
-		_, _ = os.Stdout.WriteString(sigtermDrainMarker + "\n")
-	})
-
-	go func() {
-		waitForPortListening(port, 5*time.Second)
-		_, _ = os.Stdout.WriteString(sigtermDrainReadyMarker + "\n")
-	}()
-
-	_ = server.Start()
-}
-
-// waitForPortListening polls a real, observable condition (the port
-// accepting connections) instead of sleeping a guessed duration, so the
-// readiness signal to the parent is never sent before Server.Start has
-// actually registered its signal handler and started serving.
-func waitForPortListening(port int, timeout time.Duration) {
+// waitForPortListening polls a real, observable condition (the port accepting
+// connections) instead of sleeping a guessed duration.
+func waitForPortListening(port int, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
-		if err == nil {
-			_ = conn.Close()
-			return
+		if portListening(port) {
+			return true
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+	return false
+}
+
+func portListening(port int) bool {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
 }
