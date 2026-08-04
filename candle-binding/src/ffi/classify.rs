@@ -55,6 +55,10 @@ const SECURITY_THREAT_CLASS_STR: &str = "1";
 /// Keywords used to identify security threats in category names
 const SECURITY_THREAT_KEYWORDS: &[&str] = &["jailbreak", "unsafe", "threat"];
 
+static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+
 /// Load id2label mapping from model config.json file
 /// Returns HashMap mapping class index (as string) to label name
 pub fn load_id2label_from_config(
@@ -66,11 +70,33 @@ pub fn load_id2label_from_config(
     config_loader::load_id2label_from_config(config_path)
 }
 
-// Legacy classifiers for backward compatibility using OnceLock pattern
-// These are kept for old API paths but new code should use the dual-path architecture
-static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+/// Initialize the generic classifier used by classify_text.
+///
+/// # Safety
+/// - `model_id` must be a valid null-terminated C string
+#[no_mangle]
+pub extern "C" fn init_generic_classifier(
+    model_id: *const c_char,
+    num_classes: i32,
+    use_cpu: bool,
+) -> bool {
+    let model_id = unsafe {
+        match CStr::from_ptr(model_id).to_str() {
+            Ok(value) => value,
+            Err(_) => return false,
+        }
+    };
+    if num_classes < 2 {
+        return false;
+    }
+    match BertClassifier::new(model_id, num_classes as usize, use_cpu) {
+        Ok(classifier) => BERT_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
+        Err(error) => {
+            eprintln!("Failed to initialize generic classifier: {error}");
+            false
+        }
+    }
+}
 
 /// Classify text using basic classifier
 ///

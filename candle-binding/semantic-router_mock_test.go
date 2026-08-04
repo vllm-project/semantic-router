@@ -27,6 +27,7 @@ func wantUnavailable(t *testing.T, name string, err error) {
 func TestStubInitFailsClosed(t *testing.T) {
 	wantUnavailable(t, "InitModel", InitModel("any-model", true))
 	wantUnavailable(t, "InitClassifier", InitClassifier("path", 2, true))
+	wantUnavailable(t, "InitGenericClassifier", InitGenericClassifier("path", 2, true))
 	wantUnavailable(t, "InitPIIClassifier", InitPIIClassifier("path", 2, true))
 	wantUnavailable(t, "InitJailbreakClassifier", InitJailbreakClassifier("path", 2, true))
 	wantUnavailable(t, "InitLoRAUnifiedClassifier", InitLoRAUnifiedClassifier("i", "p", "s", "arch", true))

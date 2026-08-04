@@ -226,6 +226,7 @@ type BoolExprJSON struct {
 	Expr       *BoolExprJSON `json:"expr,omitempty"`
 	SignalType string        `json:"signalType,omitempty"`
 	SignalName string        `json:"signalName,omitempty"`
+	Fields     *JSONObject   `json:"fields,omitempty"`
 	Pos        Position      `json:"pos"`
 }
 
@@ -570,9 +571,20 @@ func marshalBoolExpr(expr BoolExpr) *BoolExprJSON {
 			Type:       "signal_ref",
 			SignalType: e.SignalType,
 			SignalName: e.SignalName,
+			Fields:     marshalOptionalObjectFields(e.Fields),
 			Pos:        e.Pos,
 		}
 	default:
 		return nil
 	}
+}
+
+func marshalOptionalObjectFields(
+	fields map[string]Value,
+) *JSONObject {
+	if len(fields) == 0 {
+		return nil
+	}
+	result := marshalObjectFields(fields)
+	return &result
 }

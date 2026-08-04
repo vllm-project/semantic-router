@@ -78,6 +78,9 @@ const (
 type RouterConfig struct {
 	ConfigSource ConfigSource      `yaml:"config_source,omitempty"`
 	MoMRegistry  map[string]string `yaml:"mom_registry,omitempty"`
+	// SkipExternalAssetValidation is set only for untrusted read-only
+	// validation requests, which must never trigger filesystem reads.
+	SkipExternalAssetValidation bool `yaml:"-" json:"-"`
 
 	// Static global configuration.
 	InlineModels     `yaml:",inline"`

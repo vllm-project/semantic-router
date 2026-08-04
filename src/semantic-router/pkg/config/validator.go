@@ -24,6 +24,7 @@ var (
 		validateEmbeddingModelContracts,
 		validateGlobalModalityContracts,
 		validateModelSelectionConfig,
+		validateGlobalClassifierRuntimeContracts,
 		validateGlobalRouterLearningConfig,
 		validateReMoMContracts,
 		validateFusionContracts,

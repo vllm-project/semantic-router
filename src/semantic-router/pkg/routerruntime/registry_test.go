@@ -3,8 +3,10 @@ package routerruntime
 import (
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
 func TestRegistryPublishRouterRuntime(t *testing.T) {
@@ -22,6 +24,25 @@ func TestRegistryPublishRouterRuntime(t *testing.T) {
 
 	if registry.CurrentConfig() != next {
 		t.Fatalf("CurrentConfig() = %p, want %p", registry.CurrentConfig(), next)
+	}
+}
+
+func TestRegistryRejectsPartialClassifierRefresh(t *testing.T) {
+	initial := &config.RouterConfig{}
+	service := services.NewClassificationService(
+		&classification.Classifier{Config: initial},
+		initial,
+	)
+	registry := NewRegistry(initial)
+	registry.PublishRouterRuntime(initial, service, nil)
+
+	registry.RefreshRuntimeConfig(nil)
+
+	if registry.CurrentConfig() != initial {
+		t.Fatal("registry published config after classifier rebuild failure")
+	}
+	if service.GetConfig() != initial {
+		t.Fatal("classification service published partial config")
 	}
 }
 

@@ -11,10 +11,13 @@ use candle_core::Result;
 use std::path::Path;
 use std::time::Instant;
 
-/// Classifier backend enum to avoid Box<dyn Trait>
+/// Classifier backend enum to avoid Box<dyn Trait>. Both variants are boxed
+/// since an unboxed enum is sized for its largest variant regardless of which
+/// one is active, and HighPerformanceBertClassifier/TraditionalModernBertClassifier
+/// are both large structs.
 enum ClassifierBackend {
-    Bert(HighPerformanceBertClassifier),
-    ModernBert(TraditionalModernBertClassifier),
+    Bert(Box<HighPerformanceBertClassifier>),
+    ModernBert(Box<TraditionalModernBertClassifier>),
 }
 
 /// Security detector with real model inference (merged LoRA models)
@@ -63,7 +66,7 @@ impl SecurityLoRAClassifier {
                 );
                 candle_core::Error::from(unified_err)
             })?;
-            ClassifierBackend::ModernBert(classifier)
+            ClassifierBackend::ModernBert(Box::new(classifier))
         } else {
             // Use standard BERT classifier
             let classifier = HighPerformanceBertClassifier::new(model_path, num_classes, use_cpu)
@@ -76,7 +79,7 @@ impl SecurityLoRAClassifier {
                 );
                 candle_core::Error::from(unified_err)
             })?;
-            ClassifierBackend::Bert(classifier)
+            ClassifierBackend::Bert(Box::new(classifier))
         };
 
         // Load threshold from global config

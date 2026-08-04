@@ -12,6 +12,21 @@ func TestExtractContentFastAnthropic_MissingModel(t *testing.T) {
 	}
 }
 
+func TestExtractContentFastAnthropic_Metadata(t *testing.T) {
+	body := []byte(`{
+		"model": "claude-opus-4-7",
+		"metadata": {"user_id": "tenant-42"},
+		"messages": []
+	}`)
+	got, err := extractContentFastAnthropic(body)
+	if err != nil {
+		t.Fatalf("extractContentFastAnthropic() error = %v", err)
+	}
+	if got.Metadata["user_id"] != "tenant-42" {
+		t.Fatalf("metadata = %v, want user_id", got.Metadata)
+	}
+}
+
 func TestExtractContentFastAnthropic_StringContentAndSystem(t *testing.T) {
 	body := []byte(`{
 		"model": "claude-opus-4-7",

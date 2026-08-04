@@ -95,4 +95,30 @@ describe('signal form support', () => {
     expect(getSignalReferenceCount(config, 'Domain', 'finance')).toBe(3)
     expect(getSignalReferenceCount(config, 'Domain', 'legal')).toBe(0)
   })
+
+  it('counts recipe-only references before deleting shared signals', () => {
+    const config: ConfigData = {
+      recipes: [
+        {
+          name: 'private',
+          routing: {
+            decisions: [
+              {
+                name: 'private-route',
+                description: '',
+                priority: 1,
+                rules: {
+                  operator: 'AND',
+                  conditions: [{ type: 'metadata', name: 'private-cohort' }],
+                },
+                modelRefs: [],
+              },
+            ],
+          },
+        },
+      ],
+    }
+
+    expect(getSignalReferenceCount(config, 'Metadata', 'private-cohort')).toBe(1)
+  })
 })
