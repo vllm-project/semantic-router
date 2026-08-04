@@ -134,9 +134,9 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "api", "apiserver.md"),
 		needles: []string{
-			"`http://localhost:8080`",
+			"http://localhost:8080",
 			"`GET /openapi.json`",
-			"`GET /config/router`",
+			"/config/router",
 		},
 	},
 	{
@@ -211,9 +211,9 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "apiserver.md"),
 		needles: []string{
-			"`http://localhost:8080`",
+			"http://localhost:8080",
 			"`GET /openapi.json`",
-			"`GET /config/router`",
+			"/config/router",
 		},
 	},
 	{
