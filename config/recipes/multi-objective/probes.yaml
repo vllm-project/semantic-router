@@ -45,7 +45,7 @@ decisions:
       - id: chinese_concise
         query: 请保持回答简洁直接：用一句话说明什么是进程。
         expected_signals:
-          preference: [unified_balance_terse_preference]
+          preferences: [unified_balance_terse_preference]
           projection: [unified_balance_standard]
         tags: [recipe:balanced, language:zh, class:negative, signal:preference, direct]
       - id: french_concise
@@ -53,7 +53,7 @@ decisions:
           Réponds de manière brève et directe en une phrase : qu'est-ce qu'un
           processus ?
         expected_signals:
-          preference: [unified_balance_terse_preference]
+          preferences: [unified_balance_terse_preference]
           projection: [unified_balance_standard]
         tags: [recipe:balanced, language:fr, class:negative, signal:preference, direct]
       - id: negated_deliberation
@@ -70,42 +70,42 @@ decisions:
         query: Keep the answer concise and direct, but analyze the tradeoffs and root cause of this distributed failure.
         expected_signals:
           keywords: [unified_balance_reasoning_markers]
-          preference: [unified_balance_terse_preference]
+          preferences: [unified_balance_terse_preference]
           projection: [unified_balance_deliberate]
         tags: [recipe:balanced, language:en, stress:preference-conflict, projection]
       - id: first_principles
         query: 请保持回答简洁直接，但要从第一性原理逐步推理，并分析这几个架构方案的取舍。
         expected_signals:
           keywords: [unified_balance_reasoning_markers]
-          preference: [unified_balance_terse_preference]
+          preferences: [unified_balance_terse_preference]
           projection: [unified_balance_deliberate]
         tags: [recipe:balanced, language:zh, stress:preference-conflict, projection]
       - id: tradeoffs_es
         query: Responde de forma breve y directa, pero analiza las ventajas y desventajas y la causa raíz paso a paso.
         expected_signals:
           keywords: [unified_balance_reasoning_markers]
-          preference: [unified_balance_terse_preference]
+          preferences: [unified_balance_terse_preference]
           projection: [unified_balance_deliberate]
         tags: [recipe:balanced, language:es, signal:keyword, stress:preference-conflict, projection]
       - id: tradeoffs_fr
         query: Réponds de manière brève et directe, mais analyse les compromis et la cause racine de cette panne.
         expected_signals:
           keywords: [unified_balance_reasoning_markers]
-          preference: [unified_balance_terse_preference]
+          preferences: [unified_balance_terse_preference]
           projection: [unified_balance_deliberate]
         tags: [recipe:balanced, language:fr, signal:keyword, stress:preference-conflict, projection]
       - id: root_cause_ja
         query: 簡潔で直接的に答えてください。ただし、この障害の根本原因を分析し、段階的に推論してください。
         expected_signals:
           keywords: [unified_balance_reasoning_markers]
-          preference: [unified_balance_terse_preference]
+          preferences: [unified_balance_terse_preference]
           projection: [unified_balance_deliberate]
         tags: [recipe:balanced, language:ja, signal:keyword, stress:preference-conflict, projection]
       - id: tradeoffs_de
         query: Bitte kurz und direkt antworten, aber die Kompromisse analysieren und die Ursache schrittweise erklären.
         expected_signals:
           keywords: [unified_balance_reasoning_markers]
-          preference: [unified_balance_terse_preference]
+          preferences: [unified_balance_terse_preference]
           projection: [unified_balance_deliberate]
         tags: [recipe:balanced, language:de, signal:keyword, stress:preference-conflict, projection]
       - id: long_context_reasoning
