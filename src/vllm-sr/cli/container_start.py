@@ -400,6 +400,16 @@ def _build_dashboard_runtime_env(
         value = os.getenv(name)
         if value:
             dashboard_env[name] = value
+
+    bootstrap_policy_env = "DASHBOARD_ALLOW_OPEN_BOOTSTRAP"
+    if bootstrap_policy_env in os.environ:
+        dashboard_env[bootstrap_policy_env] = os.environ[bootstrap_policy_env]
+    elif bootstrap_policy_env not in dashboard_env:
+        bootstrap_email = dashboard_env.get("DASHBOARD_ADMIN_EMAIL", "").strip()
+        bootstrap_password = dashboard_env.get("DASHBOARD_ADMIN_PASSWORD", "").strip()
+        if not (bootstrap_email and bootstrap_password):
+            dashboard_env[bootstrap_policy_env] = "true"
+
     dashboard_env.setdefault(
         "TARGET_ROUTER_API_URL", stack_layout.router_api_service_url
     )

@@ -261,6 +261,10 @@ bindings that affect routing remain recipe-local.
 
 For `routing.signals.structure`, `feature.type: density` now uses built-in multilingual text-unit normalization. The router counts each CJK character as one unit, counts contiguous runs of other letters and digits as one unit, and ignores punctuation, so the same density rule shape behaves consistently across English, Chinese, and mixed-script prompts without a separate `normalize_by` field.
 
+For the local split runtime, the generated effective config points a missing or
+loopback `global.integrations.looper.endpoint` at the stack-scoped Envoy
+listener. Explicit external endpoints and the source config remain unchanged.
+
 ## Repository config assets
 
 The repository now separates the exhaustive canonical reference config from reusable routing fragments:
@@ -273,6 +277,7 @@ The repository now separates the exhaustive canonical reference config from reus
 
 `config/decision/` is organized by boolean case shape: `single/`, `and/`, `or/`, `not/`, and `composite/`.
 `config/algorithm/` is organized by routing policy family: `looper/` and `selection/`; looper fragments include `confidence`, `ratings`, `remom`, and `fusion`.
+The ReMoM algorithm accepts an optional `max_completion_tokens` budget for each internal model call.
 `config/plugin/` is organized one plugin or reusable bundle per directory.
 The repository enforces this fragment catalog in `go test ./pkg/config/...`, so routing-surface changes must update the `config/` tree in the same change.
 
