@@ -69,6 +69,11 @@ func (c *Compiler) compileAlgorithm(spec *AlgoSpec) *config.AlgorithmConfig {
 	algo := &config.AlgorithmConfig{Type: spec.AlgoType}
 	c.populateAlgorithmSubConfig(algo, spec)
 	c.setAlgorithmTopLevelOnError(algo, spec.Fields)
+	if algo.ReMoM != nil {
+		if err := config.ValidateReMoMAlgorithmConfig(algo.ReMoM); err != nil {
+			c.addError(spec.Pos, "invalid remom algorithm: %v", err)
+		}
+	}
 	return algo
 }
 
@@ -186,6 +191,9 @@ func fillReMoMRuntimeFields(cfg *config.ReMoMAlgorithmConfig, fields map[string]
 	}
 	if v, ok := getIntField(fields, "max_concurrent"); ok {
 		cfg.MaxConcurrent = v
+	}
+	if v, ok := getIntField(fields, "max_completion_tokens"); ok {
+		cfg.MaxCompletionTokens = &v
 	}
 	if v, ok := getIntField(fields, "round_timeout_seconds"); ok {
 		cfg.RoundTimeoutSeconds = v
