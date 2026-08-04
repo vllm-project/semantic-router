@@ -12,7 +12,7 @@ func TestMultiObjectiveRecipeDefinesObjectiveProfiles(t *testing.T) {
 	}
 
 	assertMultiObjectiveMappings(t, cfg)
-	assertMultiObjectiveReasoningFamilies(t, cfg)
+	assertMultiObjectiveSharedBackendReasoningCapability(t, cfg)
 	assertMultiObjectiveRecipes(t, cfg)
 }
 
@@ -38,6 +38,9 @@ func assertMultiObjectiveMappings(t *testing.T, cfg *RouterConfig) {
 		t.Fatalf("expected entrypoint-only public catalog, got auto aliases %#v", cfg.EffectiveAutoModelNames())
 	}
 	for modelName, recipeName := range expectedEntrypoints {
+		if _, exists := cfg.ModelConfig[modelName]; exists {
+			t.Fatalf("entrypoint alias %q must not acquire provider capability metadata", modelName)
+		}
 		recipe, ok := cfg.RecipeForRequestModel(modelName)
 		if !ok {
 			t.Fatalf("entrypoint %q did not resolve", modelName)
@@ -51,23 +54,21 @@ func assertMultiObjectiveMappings(t *testing.T, cfg *RouterConfig) {
 	}
 }
 
-func assertMultiObjectiveReasoningFamilies(t *testing.T, cfg *RouterConfig) {
+func assertMultiObjectiveSharedBackendReasoningCapability(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
-	if got := cfg.ModelConfig["qwen/qwen3.5-rocm"].ReasoningFamily; got != "qwen3" {
-		t.Fatalf("qwen reasoning family = %q, want qwen3", got)
-	}
 	for _, modelName := range []string{
+		"qwen/qwen3.5-rocm",
 		"google/gemini-2.5-flash-lite",
 		"google/gemini-3.1-pro",
 		"openai/gpt5.4",
 		"anthropic/claude-opus-4.6",
 	} {
-		if got := cfg.ModelConfig[modelName].ReasoningFamily; got != "reasoning-effort" {
-			t.Fatalf("%s reasoning family = %q, want reasoning-effort", modelName, got)
+		if got := cfg.ModelConfig[modelName].ReasoningFamily; got != "qwen3" {
+			t.Fatalf("%s shared-backend reasoning family = %q, want qwen3", modelName, got)
 		}
 	}
-	if family := cfg.ReasoningFamilies["reasoning-effort"]; family.Type != "reasoning_effort" {
-		t.Fatalf("reasoning-effort family lost effort encoding: %+v", family)
+	if family := cfg.ReasoningFamilies["qwen3"]; family.Type != "chat_template_kwargs" {
+		t.Fatalf("shared qwen3 backend lost chat-template reasoning capability: %+v", family)
 	}
 }
 
@@ -135,6 +136,14 @@ func assertMultiObjectiveAccuracyRecipe(t *testing.T, cfg *RouterConfig) {
 		algorithm := multiObjectiveDecision(t, accuracy, decisionName).Algorithm
 		if algorithm == nil || algorithm.Type != algorithmType {
 			t.Fatalf("accuracy-first decision %q algorithm = %+v, want %q", decisionName, algorithm, algorithmType)
+		}
+	}
+	for _, decision := range accuracy.Profile.Decisions {
+		if decision.HasPlugin(DecisionPluginHallucination) {
+			t.Fatalf(
+				"accuracy-first decision %q must not advertise an unavailable hallucination plugin",
+				decision.Name,
+			)
 		}
 	}
 	assertMultiObjectiveLanguageCodes(t, accuracy, []string{"zh", "es", "fr", "ja", "de"})

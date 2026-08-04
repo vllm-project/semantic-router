@@ -11,13 +11,10 @@ providers:
       qwen3:
         type: chat_template_kwargs
         parameter: enable_thinking
-      reasoning-effort:
-        type: reasoning_effort
-        parameter: reasoning_effort
     default_reasoning_effort: low
   models:
   - name: anthropic/claude-opus-4.6
-    reasoning_family: reasoning-effort
+    reasoning_family: qwen3
     provider_model_id: anthropic/claude-opus-4.6
     backend_refs:
     - name: anthropic/claude-opus-4.6_vllm_primary
@@ -33,7 +30,7 @@ providers:
     external_model_ids:
       vllm: anthropic/claude-opus-4.6
   - name: google/gemini-2.5-flash-lite
-    reasoning_family: reasoning-effort
+    reasoning_family: qwen3
     provider_model_id: google/gemini-2.5-flash-lite
     backend_refs:
     - name: google/gemini-2.5-flash-lite_vllm_primary
@@ -49,7 +46,7 @@ providers:
     external_model_ids:
       vllm: google/gemini-2.5-flash-lite
   - name: google/gemini-3.1-pro
-    reasoning_family: reasoning-effort
+    reasoning_family: qwen3
     provider_model_id: google/gemini-3.1-pro
     backend_refs:
     - name: google/gemini-3.1-pro_vllm_primary
@@ -65,7 +62,7 @@ providers:
     external_model_ids:
       vllm: google/gemini-3.1-pro
   - name: openai/gpt5.4
-    reasoning_family: reasoning-effort
+    reasoning_family: qwen3
     provider_model_id: openai/gpt5.4
     backend_refs:
     - name: openai/gpt5.4_vllm_primary
@@ -351,11 +348,11 @@ recipes:
           value_source: confidence
         - type: preference
           name: unified_balance_terse_preference
-          weight: -0.25
+          weight: -0.1
           value_source: confidence
         - type: keyword
           name: unified_balance_reasoning_markers
-          weight: 0.34
+          weight: 0.46
           value_source: confidence
         - type: keyword
           name: unified_balance_verification_markers
@@ -1151,14 +1148,6 @@ recipes:
           include_intermediate_responses: false
           on_error: skip
           judge_prompt_version: fusion-v1
-      plugins:
-      - type: hallucination
-        configuration:
-          enabled: true
-          use_nli: true
-          hallucination_action: header
-          unverified_factual_action: header
-          include_hallucination_details: true
     - name: unified_frontier_verified_answer
       description: Escalate evidence-sensitive factual answers from an efficient model to frontier models only when confidence is insufficient.
       priority: 325
@@ -1189,14 +1178,6 @@ recipes:
           threshold: 0.72
           escalation_order: small_to_large
           on_error: skip
-      plugins:
-      - type: hallucination
-        configuration:
-          enabled: true
-          use_nli: true
-          hallucination_action: header
-          unverified_factual_action: header
-          include_hallucination_details: true
     - name: unified_frontier_remom
       description: Use bounded multi-round search and synthesis for deep reasoning tasks.
       priority: 300
