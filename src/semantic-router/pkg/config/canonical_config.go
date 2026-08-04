@@ -176,6 +176,10 @@ func mergeCanonicalProviderModelParams(modelConfig map[string]ModelParams, model
 }
 
 func validateCanonicalContract(canonical *CanonicalConfig) error {
+	if err := validateCanonicalVersion(canonical.Version); err != nil {
+		return err
+	}
+
 	modelCards := canonicalRoutingModels(canonical.Routing)
 	modelsByName := make(map[string]RoutingModel, len(modelCards))
 	for _, model := range modelCards {
