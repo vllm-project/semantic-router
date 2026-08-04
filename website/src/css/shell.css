@@ -5,6 +5,7 @@
   right: 0;
   height: var(--site-header-height);
   min-height: var(--site-header-height);
+  padding-inline: 0;
   border-bottom: 1px solid #27272a;
   background: rgba(5, 5, 5, 0.97);
   backdrop-filter: blur(14px);
@@ -16,7 +17,7 @@
 }
 
 .navbar__inner {
-  width: min(100% - 2rem, var(--site-grid-max));
+  width: var(--site-page-width);
   margin: 0 auto;
   display: flex;
   align-items: center;
@@ -218,6 +219,11 @@ html[data-route-kind="blog"] .nav-docs-only {
   background: #050505;
 }
 
+.footer .container {
+  width: var(--site-page-width);
+  max-width: none;
+}
+
 .footer__links {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -288,7 +294,7 @@ html[data-route-kind="blog"] .nav-docs-only {
   }
 
   .navbar__inner {
-    width: min(100% - 1.4rem, var(--site-grid-max));
+    width: var(--site-page-width);
   }
 
   .navbar__items {

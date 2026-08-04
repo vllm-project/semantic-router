@@ -78,12 +78,6 @@ img {
 }
 
 .site-shell-container {
-  width: min(100% - 2.5rem, var(--site-grid-max));
+  width: var(--site-page-width);
   margin: 0 auto;
-}
-
-@media (max-width: 768px) {
-  .site-shell-container {
-    width: min(100% - 1.4rem, var(--site-grid-max));
-  }
 }
