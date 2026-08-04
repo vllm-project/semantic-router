@@ -18,6 +18,7 @@ func TestBuildEvalResponseDefaultsExecutionAlgorithmToStatic(t *testing.T) {
 		"hello",
 		&classification.SignalResults{Metrics: &classification.SignalMetricsCollection{}},
 		decisionResult,
+		nil,
 	)
 
 	require.NotNil(t, response.DecisionResult)

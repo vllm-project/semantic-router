@@ -54,6 +54,10 @@ def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
         canonical["global"] = global_config
     if "setup" in source:
         canonical["setup"] = deepcopy(source["setup"])
+    if "entrypoints" in source:
+        canonical["entrypoints"] = deepcopy(source["entrypoints"])
+    if "recipes" in source:
+        canonical["recipes"] = deepcopy(source["recipes"])
 
     return canonical
 

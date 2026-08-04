@@ -78,8 +78,8 @@ type Classifier struct {
 	authzClassifier *AuthzClassifier
 
 	// Knowledge-base classifiers keyed by configured KB name.
-	kbClassifiers map[string]*KnowledgeBaseClassifier
-
+	kbClassifiers      map[string]*KnowledgeBaseClassifier
+	genericClassifiers map[string]labelClassifier
 	// Identity header names resolved from authz.identity config (or defaults).
 	// Used by EvaluateAllSignalsWithHeaders to read user identity from requests.
 	authzUserIDHeader     string

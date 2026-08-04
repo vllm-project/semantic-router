@@ -78,10 +78,25 @@ func Parse(configPath string) (*RouterConfig, error) {
 
 // ParseYAMLBytes parses config YAML content without touching the filesystem.
 func ParseYAMLBytes(data []byte) (*RouterConfig, error) {
-	return parseYAMLBytesWithBaseDir(data, "")
+	return parseYAMLBytesWithOptions(data, "", true)
 }
 
 func parseYAMLBytesWithBaseDir(data []byte, baseDir string) (*RouterConfig, error) {
+	return parseYAMLBytesWithOptions(data, baseDir, true)
+}
+
+// ParseYAMLBytesWithoutEnvExpansion validates in-memory YAML while preserving
+// ${VAR} references verbatim. It is intended for read-only validation APIs
+// that must not expose process environment values in normalized output.
+func ParseYAMLBytesWithoutEnvExpansion(data []byte) (*RouterConfig, error) {
+	return parseYAMLBytesWithOptions(data, "", false)
+}
+
+func parseYAMLBytesWithOptions(
+	data []byte,
+	baseDir string,
+	expandEnvironment bool,
+) (*RouterConfig, error) {
 	raw, err := parseRawConfigMap(data)
 	if err != nil {
 		return nil, err
@@ -105,10 +120,12 @@ func parseYAMLBytesWithBaseDir(data []byte, baseDir string) (*RouterConfig, erro
 		return nil, rejectErr
 	}
 
-	expandEnvSubstitutionsInMap(raw)
+	if expandEnvironment {
+		expandEnvSubstitutionsInMap(raw)
+	}
 	expandedData, marshalErr := yaml.Marshal(raw)
 	if marshalErr != nil {
-		return nil, fmt.Errorf("failed to marshal config after environment expansion: %w", marshalErr)
+		return nil, fmt.Errorf("failed to marshal normalized config input: %w", marshalErr)
 	}
 
 	// Warn about unknown YAML fields (typos) before parsing into typed structs.
@@ -121,6 +138,7 @@ func parseYAMLBytesWithBaseDir(data []byte, baseDir string) (*RouterConfig, erro
 	cfg.ConfigBaseDir = baseDir
 	documentDigest := sha256.Sum256(data)
 	cfg.DocumentHash = hex.EncodeToString(documentDigest[:])
+	cfg.SkipExternalAssetValidation = !expandEnvironment
 	if err := finalizeParsedConfig(cfg); err != nil {
 		return nil, err
 	}

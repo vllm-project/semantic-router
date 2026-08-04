@@ -130,7 +130,10 @@ def container_create_network(network_name):
     ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        if network_name in result.stdout:
+        existing_networks = {
+            line.strip() for line in result.stdout.splitlines() if line.strip()
+        }
+        if network_name in existing_networks:
             log.debug(f"Network {network_name} already exists")
             return (0, "", "")
     except subprocess.CalledProcessError:
