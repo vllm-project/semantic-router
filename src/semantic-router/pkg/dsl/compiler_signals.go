@@ -189,6 +189,38 @@ func (c *Compiler) compileStructureSignal(s *SignalDecl) {
 	c.config.StructureRules = append(c.config.StructureRules, rule)
 }
 
+func (c *Compiler) compileMetadataSignal(s *SignalDecl) {
+	payload := fieldsToMap(s.Fields)
+	payload["name"] = s.Name
+	raw, err := yaml.Marshal(payload)
+	if err != nil {
+		c.addError(s.Pos, "failed to encode metadata signal %q: %v", s.Name, err)
+		return
+	}
+	var rule config.MetadataRule
+	if err := yaml.Unmarshal(raw, &rule); err != nil {
+		c.addError(s.Pos, "failed to decode metadata signal %q: %v", s.Name, err)
+		return
+	}
+	c.config.MetadataRules = append(c.config.MetadataRules, rule)
+}
+
+func (c *Compiler) compileClassifierSignal(s *SignalDecl) {
+	payload := fieldsToMap(s.Fields)
+	payload["name"] = s.Name
+	raw, err := yaml.Marshal(payload)
+	if err != nil {
+		c.addError(s.Pos, "failed to encode classifier signal %q: %v", s.Name, err)
+		return
+	}
+	var rule config.ClassifierSignalRule
+	if err := yaml.Unmarshal(raw, &rule); err != nil {
+		c.addError(s.Pos, "failed to decode classifier signal %q: %v", s.Name, err)
+		return
+	}
+	c.config.ClassifierRules = append(c.config.ClassifierRules, rule)
+}
+
 func (c *Compiler) compileComplexitySignal(s *SignalDecl) {
 	rule := config.ComplexityRule{Name: s.Name}
 	if v, ok := getFloat32Field(s.Fields, "threshold"); ok {

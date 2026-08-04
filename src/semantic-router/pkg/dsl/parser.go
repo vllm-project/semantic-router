@@ -554,6 +554,7 @@ func toFactorExpr(f *BoolFactor) BoolExpr {
 		return &SignalRefExpr{
 			SignalType: f.SignalRef.SignalType,
 			SignalName: unquote(f.SignalRef.SignalName),
+			Fields:     entriesToMap(f.SignalRef.Fields),
 			Pos:        pos,
 		}
 	}

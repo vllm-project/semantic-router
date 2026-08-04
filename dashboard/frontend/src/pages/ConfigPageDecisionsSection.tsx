@@ -16,7 +16,13 @@ import type {
   DecisionPluginConfiguration,
   NormalizedModel,
 } from './configPageSupport'
-import { TABLE_COLUMN_WIDTH } from './configPageSupport'
+import {
+  cloneDecisionConditions,
+  conditionHasNestedRules,
+  decisionRulesForSave,
+  mergeDecisionForSave,
+  TABLE_COLUMN_WIDTH,
+} from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 import ConfigPageDecisionPluginsEditor from './ConfigPageDecisionPluginsEditor'
@@ -344,10 +350,7 @@ export default function ConfigPageDecisionsSection({
             description: decision.description || '',
             priority: decision.priority ?? 1,
             operator: decision.rules?.operator || 'AND',
-            conditions: (decision.rules?.conditions || []).map((cond) => ({
-              type: cond.type,
-              name: cond.name,
-            })),
+            conditions: cloneDecisionConditions(decision.rules?.conditions),
             modelRefs: (decision.modelRefs || []).map((ref) => ({
               model: ref.model,
               use_reasoning: !!ref.use_reasoning,
@@ -370,6 +373,13 @@ export default function ConfigPageDecisionsSection({
       const rows = (Array.isArray(value) ? value : []).length
         ? value
         : [{ type: 'keyword', name: '' }]
+      if (rows.some(conditionHasNestedRules)) {
+        return (
+          <p className={decisionStyles.editorHelp} role="note">
+            Nested boolean rules are preserved unchanged. Use DSL mode to edit this rule tree.
+          </p>
+        )
+      }
 
       const updateItem = (index: number, key: 'type' | 'name', val: string) => {
         const next = rows.map((item, idx) => {
@@ -704,7 +714,13 @@ export default function ConfigPageDecisionsSection({
         if (!type || !conditionName) {
           throw new Error(`Condition #${idx + 1} needs both type and name.`)
         }
-        return { type, name: conditionName }
+        return {
+          type,
+          name: conditionName,
+          ...(condition.label ? { label: condition.label } : {}),
+          ...(condition.predicate ? { predicate: condition.predicate } : {}),
+          ...(condition.on_error ? { on_error: condition.on_error } : {}),
+        }
       })
 
       const normalizedModelRefs = (formData.modelRefs || []).filter((m) => (m?.model || '').trim())
@@ -766,17 +782,17 @@ export default function ConfigPageDecisionsSection({
         return { type, configuration }
       })
 
-      const newDecision: DecisionConfig = {
+      const newDecision = mergeDecisionForSave(mode === 'edit' ? decision : undefined, {
         name,
         description: formData.description,
         priority: priority || 0,
-        rules: {
+        rules: decisionRulesForSave(decision?.rules, {
           operator: formData.operator,
           conditions,
-        },
+        }),
         modelRefs,
         plugins,
-      }
+      })
 
       const newConfig: ConfigData = cloneConfigData(config)
       newConfig.decisions = [...(newConfig.decisions || [])]

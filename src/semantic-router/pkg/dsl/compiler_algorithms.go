@@ -35,11 +35,34 @@ var algorithmSubConfigCompilers = map[string]algorithmSubConfigCompiler{
 	"multi_factor": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
 		algo.MultiFactor = c.compileMultiFactorAlgo(fields)
 	},
+	"prompt": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
+		algo.Prompt = c.compilePromptAlgo(fields)
+	},
 	"static": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 	"knn":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 	"kmeans": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 	"mlp":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 	"svm":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
+}
+
+func (c *Compiler) compilePromptAlgo(
+	fields map[string]Value,
+) *config.PromptSelectionConfig {
+	cfg := &config.PromptSelectionConfig{}
+	prompt, ok := fields["prompt"].(ObjectValue)
+	if !ok {
+		return cfg
+	}
+	if value, ok := getStringField(prompt.Fields, "model"); ok {
+		cfg.Model = value
+	}
+	if value, ok := getStringField(prompt.Fields, "instructions"); ok {
+		cfg.Instructions = value
+	}
+	if value, ok := getIntField(prompt.Fields, "timeout_seconds"); ok {
+		cfg.TimeoutSeconds = value
+	}
+	return cfg
 }
 
 func (c *Compiler) compileAlgorithm(spec *AlgoSpec) *config.AlgorithmConfig {

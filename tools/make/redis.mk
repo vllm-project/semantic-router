@@ -45,7 +45,7 @@ redis-status: ## Show status of Redis container
 clean-redis: stop-redis ## Clean up Redis data
 	@$(LOG_TARGET)
 	@echo "Cleaning up Redis data..."
-	@sudo rm -rf /tmp/redis-data || rm -rf /tmp/redis-data
+	@rm -rf /tmp/redis-data 2>/dev/null || sudo -n rm -rf /tmp/redis-data
 	@echo "Redis data directory cleaned"
 
 # Test semantic cache with Redis backend

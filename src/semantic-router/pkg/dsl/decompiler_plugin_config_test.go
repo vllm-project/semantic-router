@@ -55,6 +55,48 @@ routing:
 	assertRouterReplayPluginRoundTrip(t, compiled.Decisions[0])
 }
 
+func TestDecompileRoutingRoundTripsHeaderAndResponsePlugins(t *testing.T) {
+	headerPayload := config.MustStructuredPayload(
+		config.HeaderMutationPluginConfig{
+			Add:    []config.HeaderPair{{Name: "x-policy", Value: "strict"}},
+			Delete: []string{"x-remove"},
+		},
+	)
+	responsePayload := config.MustStructuredPayload(
+		config.ResponseJailbreakPluginConfig{
+			Enabled:   true,
+			Threshold: 0.7,
+			Action:    "block",
+		},
+	)
+	cfg := &config.RouterConfig{IntelligentRouting: config.IntelligentRouting{
+		Decisions: []config.Decision{{
+			Name:      "plugins",
+			ModelRefs: []config.ModelRef{{Model: "model-a"}},
+			Plugins: []config.DecisionPlugin{
+				{Type: config.DecisionPluginHeaderMutation, Configuration: headerPayload},
+				{Type: config.DecisionPluginResponseJailbreak, Configuration: responsePayload},
+			},
+		}},
+	}}
+
+	source := mustDecompileRoutingPluginConfigTest(t, cfg)
+	compiled := mustCompileRoutingPluginConfigTest(t, source)
+	decision := compiled.Decisions[0]
+	header := decision.GetHeaderMutationConfig()
+	if header == nil || len(header.Add) != 1 ||
+		header.Add[0].Name != "x-policy" ||
+		len(header.Delete) != 1 {
+		t.Fatalf("header mutation round trip = %#v", header)
+	}
+	response := decision.GetResponseJailbreakConfig()
+	if response == nil || !response.Enabled ||
+		response.Threshold != 0.7 ||
+		response.Action != "block" {
+		t.Fatalf("response jailbreak round trip = %#v", response)
+	}
+}
+
 func TestDecompileRoutingRoundTripsToolsDynamicRetrievalPluginConfig(t *testing.T) {
 	cfg := mustParseRoutingPluginConfigTest(t, `
 version: v0.3
