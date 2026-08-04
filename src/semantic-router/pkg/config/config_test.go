@@ -710,7 +710,6 @@ default_model: "fallback-model"
 				configContent := `
 classifier:
   pii_model:
-    enabled: true
     model_id: "pii-model"
     pii_mapping_path: "/path/to/pii.json"
 `
@@ -759,7 +758,6 @@ classifier:
 				configContent := `
 classifier:
   category_model:
-    enabled: true
     model_id: "category-model"
     category_mapping_path: "/path/to/category.json"
 `
