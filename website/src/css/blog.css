@@ -498,7 +498,7 @@ html[data-route-kind='blog'] body,
 }
 
 .site-blog-post__header h1 {
-  max-width: 62rem;
+  max-width: none;
   margin: 0;
   color: #040817;
   font-size: clamp(2.65rem, 4.6vw, 3.7rem);
@@ -584,7 +584,7 @@ html[data-route-kind='blog'] body,
 }
 
 .site-blog-post__content {
-  max-width: 64rem;
+  max-width: none;
   margin-top: 3.25rem;
   color: #101827;
   font-size: 1.14rem;
