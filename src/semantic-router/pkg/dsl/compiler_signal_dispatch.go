@@ -21,4 +21,6 @@ var signalCompilerByType = map[string]func(*Compiler, *SignalDecl){
 	"kb":            (*Compiler).compileKBSignal,
 	"conversation":  (*Compiler).compileConversationSignal,
 	"event":         (*Compiler).compileEventSignal,
+	"metadata":      (*Compiler).compileMetadataSignal,
+	"classifier":    (*Compiler).compileClassifierSignal,
 }

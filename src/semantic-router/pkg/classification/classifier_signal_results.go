@@ -32,6 +32,8 @@ type SignalResults struct {
 	KBMetricValues           map[string]float64
 	MatchedConversationRules []string
 	MatchedEventRules        []string // Matched event rule names (event type, severity, temporal, action codes)
+	MatchedMetadataRules     []string // Matched untrusted request metadata rules
+	MatchedClassifierRules   []string // Matched generic classifier label names
 	MatchedProjectionRules   []string // Matched derived routing outputs from routing.projections.mappings
 	ProjectionScores         map[string]float64
 	ProjectionTrace          *projectiontrace.Trace // Explainability payload for projections (replay / dashboard)
@@ -47,6 +49,7 @@ type SignalResults struct {
 
 	SignalConfidences map[string]float64 // Real confidence scores per signal, e.g. "embedding:ai" → 0.88
 	SignalValues      map[string]float64 // Raw signal values per signal when the evaluator exposes them, e.g. "structure:many_questions" → 4
+	SignalErrors      map[string]string  // Signal evaluation errors keyed by "type:name"
 
 	// Signal metrics (only populated in eval mode)
 	Metrics *SignalMetricsCollection
@@ -72,4 +75,6 @@ type SignalMetricsCollection struct {
 	KB           SignalMetrics `json:"kb"`
 	Conversation SignalMetrics `json:"conversation"`
 	Event        SignalMetrics `json:"event"`
+	Metadata     SignalMetrics `json:"metadata"`
+	Classifier   SignalMetrics `json:"classifier"`
 }

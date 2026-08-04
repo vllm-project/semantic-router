@@ -122,7 +122,8 @@ class TestServeIntegration(CLITestBase):
     def _check_health_endpoint(self):
         """Check health endpoint (informational, doesn't fail test)."""
         try:
-            url = "http://localhost:8888/health"
+            listener_port = 8888 + self.runtime_stack.port_offset
+            url = f"http://localhost:{listener_port}/health"
             with urllib_request.urlopen(url, timeout=10) as response:
                 print(f"  ✓ Health check: {response.status}")
         except urllib_error.HTTPError as e:
@@ -241,12 +242,15 @@ class TestServeIntegration(CLITestBase):
             if return_code != 0:
                 self.fail(f"router container inspect failed: {stderr}")
             self.assertIn(
-                "TARGET_FLEET_SIM_URL=http://vllm-sr-sim-container:8000",
+                (
+                    "TARGET_FLEET_SIM_URL=http://"
+                    f"{self.runtime_stack.fleet_sim_container_name}:8000"
+                ),
                 stdout,
             )
 
             with urllib_request.urlopen(
-                "http://localhost:8810/healthz", timeout=10
+                f"{self.runtime_stack.fleet_sim_url}/healthz", timeout=10
             ) as response:
                 body = response.read().decode("utf-8")
                 self.assertEqual(response.status, 200)
@@ -254,7 +258,10 @@ class TestServeIntegration(CLITestBase):
 
             print("  ✓ Simulator sidecar is running")
             print("  ✓ Router container received TARGET_FLEET_SIM_URL")
-            print("  ✓ Simulator health endpoint responded on localhost:8810")
+            print(
+                "  ✓ Simulator health endpoint responded on "
+                f"localhost:{self.runtime_stack.fleet_sim_port}"
+            )
 
         self.print_test_result(True, "Fleet simulator sidecar contracts verified")
 

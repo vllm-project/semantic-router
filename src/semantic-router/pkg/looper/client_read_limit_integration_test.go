@@ -104,7 +104,8 @@ func TestCallModel_RejectsOversizedStreamingBody(t *testing.T) {
 // huge body still surfaces the status code, is bounded (not fully buffered),
 // and is marked as truncated for diagnostics.
 func TestCallModel_TruncatesOversizedErrorBody(t *testing.T) {
-	hugeErr := strings.Repeat("E", 64*1024) // 64 KiB, far over the 8 KiB error cap
+	const canary = "sensitive-provider-error"
+	hugeErr := strings.Repeat(canary, 4096)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(hugeErr))
@@ -123,6 +124,9 @@ func TestCallModel_TruncatesOversizedErrorBody(t *testing.T) {
 	}
 	if !strings.Contains(msg, "truncated") {
 		t.Errorf("oversized error body should be marked truncated, got %q", msg)
+	}
+	if strings.Contains(msg, canary) {
+		t.Fatal("provider error body leaked into returned error")
 	}
 	if len(msg) > 16*1024 {
 		t.Errorf("error message not bounded: %d bytes (error body was not truncated)", len(msg))

@@ -160,6 +160,7 @@ describe('entrypoints and recipes support', () => {
         name: 'frontier-v2',
         description: 'updated',
         strategy: 'confidence',
+        signals: config.recipes?.[0].routing.signals ?? {},
         decisions: [
           {
             name: 'frontier_route',
@@ -190,6 +191,63 @@ describe('entrypoints and recipes support', () => {
       reasoning_effort: 'high',
       weight: 0.8,
     })
+  })
+
+  it('authors metadata and classifier policy inside one recipe', () => {
+    const config = baseConfig()
+    const updated = validateRecipeForm(
+      {
+        name: 'frontier',
+        description: 'policy',
+        strategy: 'priority',
+        signals: {
+          metadata: [
+            {
+              name: 'premium',
+              key: 'tier',
+              predicate: { in: ['gold', 'platinum'] },
+            },
+          ],
+          classifiers: [
+            {
+              name: 'risk',
+              type: 'local',
+              model_path: 'models/risk',
+              labels: ['SAFE', 'RISKY'],
+              use_cpu: true,
+            },
+          ],
+        },
+        decisions: [
+          {
+            name: 'frontier_route',
+            description: 'frontier',
+            priority: 100,
+            rules: {
+              operator: 'AND',
+              conditions: [
+                { type: 'metadata', name: 'premium' },
+                {
+                  type: 'classifier',
+                  name: 'risk',
+                  label: 'RISKY',
+                  predicate: { gte: 0.5 },
+                  on_error: 'no_match',
+                },
+              ],
+            },
+            modelRefs: [{ model: models[1].name, use_reasoning: true }],
+          },
+        ],
+      },
+      config,
+      models,
+      'frontier',
+    )
+
+    expect(updated.routing.signals?.metadata?.[0].name).toBe('premium')
+    expect(updated.routing.signals?.classifiers?.[0].name).toBe('risk')
+    expect(updated.routing.decisions?.[0].rules.conditions).toHaveLength(2)
   })
 
   it('collects physical targets and blocks deletion of referenced recipes', () => {
@@ -232,6 +290,7 @@ describe('entrypoints and recipes support', () => {
           name: 'default',
           description: 'Updated default',
           strategy: 'priority',
+          signals: explicitDefault.routing.signals ?? {},
           decisions: explicitDefault.routing.decisions ?? [],
         },
         config,
@@ -245,6 +304,7 @@ describe('entrypoints and recipes support', () => {
           name: 'renamed-default',
           description: 'Invalid rename',
           strategy: 'priority',
+          signals: explicitDefault.routing.signals ?? {},
           decisions: explicitDefault.routing.decisions ?? [],
         },
         config,
@@ -271,6 +331,7 @@ describe('entrypoints and recipes support', () => {
           name: 'frontier',
           description: 'updated',
           strategy: 'priority',
+          signals: config.recipes?.[0].routing.signals ?? {},
           decisions: [sharedDecision],
         },
         config,
@@ -285,6 +346,7 @@ describe('entrypoints and recipes support', () => {
           name: 'frontier',
           description: 'updated',
           strategy: 'priority',
+          signals: config.recipes?.[0].routing.signals ?? {},
           decisions: [sharedDecision, sharedDecision],
         },
         config,

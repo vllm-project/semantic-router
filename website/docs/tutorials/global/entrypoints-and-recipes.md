@@ -138,6 +138,46 @@ the authorization policy facts used for routing live in each recipe's
 `routing.signals.role_bindings`. PII and jailbreak model assets may be shared,
 but their rule declarations and thresholds are recipe-local.
 
+Metadata and learned classifier declarations follow the same isolation rule:
+
+```yaml
+recipes:
+  - name: risk-aware
+    routing:
+      signals:
+        metadata:
+          - name: premium_tenant
+            key: tier
+            predicate:
+              in: [gold, platinum]
+        classifiers:
+          - name: request_risk
+            type: local
+            model_path: models/request-risk
+            labels: [SAFE, RISKY]
+            use_cpu: true
+      decisions:
+        - name: guarded_route
+          description: Route risky premium traffic to the guarded backend.
+          priority: 50
+          rules:
+            operator: AND
+            conditions:
+              - type: metadata
+                name: premium_tenant
+              - type: classifier
+                name: request_risk
+                label: RISKY
+                predicate:
+                  gte: 0.5
+                on_error: no_match
+          modelRefs:
+            - model: qwen3-8b
+```
+
+Another recipe may reuse `premium_tenant` or `request_risk` with a different
+definition; references resolve only within the owning recipe.
+
 ## Validation
 
 Configuration loading rejects:
