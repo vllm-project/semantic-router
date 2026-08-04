@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"context"
 	"strings"
 	"time"
 
@@ -27,7 +26,8 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 	var selectedModel string
 
 	// Check if there's content to evaluate
-	if len(history.nonUserMessages) == 0 && history.currentUserMessage == "" {
+	if len(history.nonUserMessages) == 0 && history.currentUserMessage == "" &&
+		!hasEnvelopeRoutingFacts(history) {
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
@@ -52,8 +52,9 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 	}
 
 	signalInput := r.prepareSignalEvaluationInput(history)
+	signalInput.requestFacts.Context = ctx.TraceContext
 	ctx.VSRConversationFacts = signalInput.conversationFacts
-	if signalInput.evaluationText == "" {
+	if signalInput.evaluationText == "" && !hasEnvelopeRoutingFacts(history) {
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
@@ -68,96 +69,13 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 		return "", 0.0, entropy.ReasoningDecision{}, defaultModel, nil
 	}
 
-	decisionName, evaluationConfidence, reasoningDecision, selectedModel = r.finalizeDecisionEvaluation(
+	decisionName, evaluationConfidence, reasoningDecision, selectedModel, err := r.finalizeDecisionEvaluation(
 		result,
 		originalModel,
 		history.currentUserMessage,
 		ctx,
 	)
-	return decisionName, evaluationConfidence, reasoningDecision, selectedModel, nil
-}
-
-// selectModelFromCandidates uses the configured selection algorithm to choose the best model
-// from the decision's candidate models. If selection cannot produce a valid
-// candidate, the first valid configured candidate is used as the default.
-// The algorithm parameter allows per-decision algorithm override (aligned with looper pattern).
-// The selCtx parameter carries the pre-built SelectionContext, including request-time
-// inputs such as query text, candidate models, and cache-affinity signals.
-// Returns the selected model and the method name used for logging.
-func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionContext, algorithm *config.AlgorithmConfig, ctx *RequestContext) (*config.ModelRef, string) {
-	defaultCandidateModelRef := firstValidCandidateModelRef(selCtx)
-	if defaultCandidateModelRef == nil {
-		return nil, ""
-	}
-	if err := selection.ValidateSelectionContext(selCtx); err != nil {
-		logging.Warnf("[ModelSelection] Invalid selection context: %v, using default candidate", err)
-		recordAgenticSessionDecision(selCtx, nil, defaultCandidateModelRef, ctx)
-		return defaultCandidateModelRef, ""
-	}
-
-	// If only one model, no need for selection algorithm
-	if len(selCtx.CandidateModels) == 1 {
-		return r.selectSingleCandidateModel(selCtx, defaultCandidateModelRef, ctx)
-	}
-
-	// Determine selection method: per-decision algorithm takes precedence over global config
-	method := r.getSelectionMethod(algorithm)
-
-	// Get selector from registry
-	selector := r.selectorForDecisionMethod(method, algorithm, ctx)
-
-	// Use the configured default candidate if no selector is available.
-	if selector == nil {
-		logging.Warnf("[ModelSelection] No selector available for method %s, using default candidate", method)
-		recordAgenticSessionDecision(selCtx, nil, defaultCandidateModelRef, ctx)
-		return defaultCandidateModelRef, string(method)
-	}
-
-	// Perform selection
-	result, err := selector.Select(context.Background(), selCtx)
-	if err != nil {
-		logging.Warnf("[ModelSelection] Selection failed: %v, using default candidate", err)
-		recordAgenticSessionDecision(selCtx, nil, defaultCandidateModelRef, ctx)
-		return defaultCandidateModelRef, string(method)
-	}
-	if err := selection.ValidateSelectionResult(selCtx, result); err != nil {
-		logging.Warnf("[ModelSelection] Invalid selection result: %v, using default candidate", err)
-		recordAgenticSessionDecision(selCtx, result, defaultCandidateModelRef, ctx)
-		return defaultCandidateModelRef, string(method)
-	}
-
-	selectedModelRef := selectedModelRefFromResult(selCtx, result)
-	if selectedModelRef == nil {
-		logging.Warnf("[ModelSelection] Selected model %s not found in candidates, using default candidate", result.SelectedModel)
-		recordAgenticSessionDecision(selCtx, result, defaultCandidateModelRef, ctx)
-		return defaultCandidateModelRef, string(method)
-	}
-	recordSelCtx, result, selectedModelRef, learningApplied := r.applyRouterLearning(selCtx, result, selectedModelRef, ctx)
-	logSelectionResult(method, result, selectedModelRef, learningApplied)
-	selection.RecordSelection(string(method), selectionDecisionStateKey(selCtx), selectedModelRef.Model, result.Tier, result.Score)
-	recordAgenticSessionDecision(recordSelCtx, result, selectedModelRef, ctx)
-	return selectedModelRef, string(method)
-}
-
-func (r *OpenAIRouter) selectSingleCandidateModel(
-	selCtx *selection.SelectionContext,
-	defaultCandidateModelRef *config.ModelRef,
-	ctx *RequestContext,
-) (*config.ModelRef, string) {
-	result := &selection.SelectionResult{
-		SelectedModel: defaultCandidateModelRef.Model,
-		LoRAName:      defaultCandidateModelRef.LoRAName,
-		Score:         1.0,
-		Confidence:    1.0,
-		Method:        selection.MethodStatic,
-		Tier:          selection.TierSupported,
-		Reasoning:     "single candidate",
-		AllScores:     map[string]float64{defaultCandidateModelRef.Model: 1.0},
-	}
-	recordSelCtx, result, selectedModelRef, learningApplied := r.applyRouterLearning(selCtx, result, defaultCandidateModelRef, ctx)
-	logSelectionResult(selection.MethodStatic, result, selectedModelRef, learningApplied)
-	recordAgenticSessionDecision(recordSelCtx, result, selectedModelRef, ctx)
-	return selectedModelRef, "single"
+	return decisionName, evaluationConfidence, reasoningDecision, selectedModel, err
 }
 
 func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMethod, algorithm *config.AlgorithmConfig, ctx *RequestContext) selection.Selector {
@@ -166,6 +84,10 @@ func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMetho
 	}
 	if method == selection.MethodMultiFactor && algorithm != nil {
 		return r.newDecisionMultiFactorSelector(algorithm.MultiFactor)
+	}
+	if method == selection.MethodPrompt && algorithm != nil &&
+		algorithm.Prompt != nil {
+		return r.newDecisionPromptSelector(*algorithm.Prompt)
 	}
 	registry := r.modelSelectorForRequest(ctx)
 	if registry == nil {
@@ -249,7 +171,10 @@ func (r *OpenAIRouter) applyHybridModelCosts(selector *selection.HybridSelector)
 
 func selectedModelRefFromResult(selCtx *selection.SelectionContext, result *selection.SelectionResult) *config.ModelRef {
 	for i := range selCtx.CandidateModels {
-		if selCtx.CandidateModels[i].Model == result.SelectedModel ||
+		if selCtx.CandidateModels[i].Model == result.SelectedModel {
+			return &selCtx.CandidateModels[i]
+		}
+		if result.Method != selection.MethodPrompt &&
 			selCtx.CandidateModels[i].LoRAName == result.SelectedModel {
 			return &selCtx.CandidateModels[i]
 		}
@@ -259,12 +184,22 @@ func selectedModelRefFromResult(selCtx *selection.SelectionContext, result *sele
 
 func logSelectionResult(method selection.SelectionMethod, result *selection.SelectionResult, selected *config.ModelRef, learningApplied bool) {
 	if learningApplied {
-		logging.Infof("[ModelSelection] Router Learning adjusted selection to %s (base_method=%s, score=%.4f, confidence=%.2f): %s",
-			selected.Model, method, result.Score, result.Confidence, result.Reasoning)
+		logging.Infof(
+			"[ModelSelection] Router Learning adjusted selection to %s (base_method=%s, score=%.4f, confidence=%.2f)",
+			selected.Model,
+			method,
+			result.Score,
+			result.Confidence,
+		)
 		return
 	}
-	logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f): %s",
-		selected.Model, method, result.Score, result.Confidence, result.Reasoning)
+	logging.Infof(
+		"[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f)",
+		selected.Model,
+		method,
+		result.Score,
+		result.Confidence,
+	)
 }
 
 func firstValidCandidateModelRef(selCtx *selection.SelectionContext) *config.ModelRef {

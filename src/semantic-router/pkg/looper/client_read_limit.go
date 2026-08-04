@@ -53,17 +53,19 @@ func readLimitedBody(r io.Reader, maxBytes int64) ([]byte, error) {
 }
 
 // readResponseBody reads and bounds the body of a model-call HTTP response.
-// A non-2xx response yields an error carrying a small, truncation-marked
-// diagnostic prefix; a success body is read in full up to the configured
-// ceiling and errors (rather than silently truncating) when oversized.
+// A non-2xx response yields content-free size/truncation diagnostics; a
+// success body is read in full up to the configured ceiling and errors
+// (rather than silently truncating) when oversized.
 func (c *Client) readResponseBody(resp *http.Response) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes+1))
-		msg := string(errBody)
-		if int64(len(errBody)) > maxErrorBodyBytes {
-			msg = string(errBody[:maxErrorBodyBytes]) + "...(truncated)"
-		}
-		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, msg)
+		truncated := int64(len(errBody)) > maxErrorBodyBytes
+		return nil, fmt.Errorf(
+			"request failed with status %d (error_body_bytes=%d, truncated=%t)",
+			resp.StatusCode,
+			min(len(errBody), int(maxErrorBodyBytes)),
+			truncated,
+		)
 	}
 
 	respBody, err := readLimitedBody(resp.Body, c.maxResponseBytes)

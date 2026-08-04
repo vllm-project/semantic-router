@@ -305,6 +305,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       case 'KB':
         cfg.signals.kb = (cfg.signals.kb || []).filter((s) => s.name !== targetName)
         break
+      case 'Metadata':
+        cfg.signals.metadata = (cfg.signals.metadata || []).filter(s => s.name !== targetName)
+        break
+      case 'Classifier':
+        cfg.signals.classifiers = (cfg.signals.classifiers || []).filter(s => s.name !== targetName)
+        break
       default:
         break
     }

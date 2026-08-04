@@ -1,4 +1,5 @@
 import type {
+  ConfigSignals,
   ConfigData,
   DecisionConfig,
   EntrypointConfig,
@@ -19,6 +20,7 @@ export interface RecipeFormState {
   name: string
   description: string
   strategy: RoutingStrategy
+  signals: ConfigSignals
   decisions: DecisionConfig[]
 }
 
@@ -232,6 +234,7 @@ export function validateRecipeForm(
   const existingRouting = (config.recipes ?? []).find(
     (recipe) => recipe.name === originalName,
   )?.routing
+  const signals = validateRecipeSignals(form.signals)
 
   return {
     name,
@@ -239,9 +242,62 @@ export function validateRecipeForm(
     routing: {
       ...existingRouting,
       strategy: form.strategy,
+      signals,
       decisions,
     },
   }
+}
+
+function validateRecipeSignals(signals: ConfigSignals): ConfigSignals {
+  const metadataNames = new Set<string>()
+  for (const [index, signal] of (signals.metadata ?? []).entries()) {
+    const name = signal.name.trim()
+    const key = signal.key.trim()
+    if (!name || !key) {
+      throw new Error(`Metadata signal #${index + 1} needs both a name and key.`)
+    }
+    const normalizedName = name.toLowerCase()
+    if (metadataNames.has(normalizedName)) {
+      throw new Error(`Metadata signal name "${name}" is duplicated within this recipe.`)
+    }
+    metadataNames.add(normalizedName)
+    const predicateCount = [
+      signal.predicate.equals !== undefined,
+      signal.predicate.in !== undefined,
+      signal.predicate.exists !== undefined,
+    ].filter(Boolean).length
+    if (predicateCount !== 1) {
+      throw new Error(`Metadata signal "${name}" needs exactly one predicate.`)
+    }
+    if (signal.predicate.in !== undefined && signal.predicate.in.length === 0) {
+      throw new Error(`Metadata signal "${name}" needs at least one value.`)
+    }
+  }
+
+  const classifierNames = new Set<string>()
+  for (const [index, signal] of (signals.classifiers ?? []).entries()) {
+    const name = signal.name.trim()
+    if (!name) throw new Error(`Classifier signal #${index + 1} needs a name.`)
+    const normalizedName = name.toLowerCase()
+    if (classifierNames.has(normalizedName)) {
+      throw new Error(`Classifier signal name "${name}" is duplicated within this recipe.`)
+    }
+    classifierNames.add(normalizedName)
+    if (signal.labels.length === 0) {
+      throw new Error(`Classifier signal "${name}" needs at least one label.`)
+    }
+    if (signal.type === 'local') {
+      if (!signal.model_path?.trim()) {
+        throw new Error(`Local classifier signal "${name}" needs a model path.`)
+      }
+      if (signal.labels.length !== 2) {
+        throw new Error(`Local classifier signal "${name}" needs exactly two labels.`)
+      }
+    } else if (!signal.model?.trim() || !signal.instructions?.trim()) {
+      throw new Error(`LLM classifier signal "${name}" needs a model and instructions.`)
+    }
+  }
+  return signals
 }
 
 export function getRecipeDeleteBlocker(config: ConfigData, recipeName: string): string | null {

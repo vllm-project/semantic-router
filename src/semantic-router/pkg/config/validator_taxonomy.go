@@ -96,40 +96,63 @@ func knowledgeBaseDefinitions(cfg *RouterConfig, referenced map[string]struct{})
 		if _, exists := kbs[kb.Name]; exists {
 			return nil, nil, fmt.Errorf("global.model_catalog.kbs[%q]: duplicate kb name", kb.Name)
 		}
-		if kb.Source.Path == "" {
-			return nil, nil, fmt.Errorf("global.model_catalog.kbs[%q]: source.path cannot be empty", kb.Name)
-		}
-		if kb.Threshold < 0 || kb.Threshold > 1 {
-			return nil, nil, fmt.Errorf("global.model_catalog.kbs[%q]: threshold must be between 0 and 1", kb.Name)
-		}
-		if cfg.ConfigBaseDir == "" && !filepath.IsAbs(kb.Source.Path) {
-			kbs[kb.Name] = kb
-			continue
-		}
-
-		// #1829: defaults like privacy_kb and mmlu_kb get merged into every router
-		// config via canonical defaults. Stock Helm/operator deployments without
-		// bundled KB assets shouldn't fatal at startup just because nobody asked
-		// the router to use those KBs. Only load the on-disk labels manifest for
-		// KBs that a routing.signals.kb[] rule actually references; unreferenced
-		// KBs keep the basic config validation above (name, source.path,
-		// threshold) but skip the manifest read.
-		if _, isReferenced := referenced[kb.Name]; !isReferenced {
-			kbs[kb.Name] = kb
-			continue
-		}
-
-		definition, err := LoadKnowledgeBaseDefinition(cfg.ConfigBaseDir, kb.Source)
+		definition, err := loadKnowledgeBaseDefinitionForValidation(
+			cfg,
+			kb,
+			referenced,
+		)
 		if err != nil {
-			return nil, nil, fmt.Errorf("global.model_catalog.kbs[%q]: failed to load labels manifest: %w", kb.Name, err)
-		}
-		if err := validateKnowledgeBaseDefinition(kb, definition); err != nil {
 			return nil, nil, err
 		}
 		kbs[kb.Name] = kb
-		definitions[kb.Name] = definition
+		if definition != nil {
+			definitions[kb.Name] = *definition
+		}
 	}
 	return kbs, definitions, nil
+}
+
+func loadKnowledgeBaseDefinitionForValidation(
+	cfg *RouterConfig,
+	kb KnowledgeBaseConfig,
+	referenced map[string]struct{},
+) (*KnowledgeBaseDefinition, error) {
+	if kb.Source.Path == "" {
+		return nil, fmt.Errorf("global.model_catalog.kbs[%q]: source.path cannot be empty", kb.Name)
+	}
+	if kb.Threshold < 0 || kb.Threshold > 1 {
+		return nil, fmt.Errorf("global.model_catalog.kbs[%q]: threshold must be between 0 and 1", kb.Name)
+	}
+	if cfg.SkipExternalAssetValidation {
+		if filepath.IsAbs(kb.Source.Path) {
+			return nil, fmt.Errorf(
+				"global.model_catalog.kbs[%q]: absolute source.path is not allowed in read-only validation",
+				kb.Name,
+			)
+		}
+		return nil, nil
+	}
+	if cfg.ConfigBaseDir == "" && !filepath.IsAbs(kb.Source.Path) {
+		return nil, nil
+	}
+	if _, isReferenced := referenced[kb.Name]; !isReferenced {
+		return nil, nil
+	}
+	definition, err := LoadKnowledgeBaseDefinition(
+		cfg.ConfigBaseDir,
+		kb.Source,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"global.model_catalog.kbs[%q]: failed to load labels manifest: %w",
+			kb.Name,
+			err,
+		)
+	}
+	if err := validateKnowledgeBaseDefinition(kb, definition); err != nil {
+		return nil, err
+	}
+	return &definition, nil
 }
 
 func validateKnowledgeBaseDefinition(kb KnowledgeBaseConfig, definition KnowledgeBaseDefinition) error {

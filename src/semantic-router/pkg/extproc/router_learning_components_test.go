@@ -148,7 +148,7 @@ func TestRouterLearningProtectionOnlyCanGuardWhenAdaptationDisabled(t *testing.T
 	ctx.VSRSelectedDecision = &config.Decision{Name: "simple-followup"}
 	ctx.VSRConversationFacts = classification.ConversationFacts{LastMessageToolResult: true}
 
-	selected, _ := router.selectModelFromCandidates(&selection.SelectionContext{
+	selected, _, _ := router.selectModelFromCandidates(&selection.SelectionContext{
 		SessionID:       "session-a",
 		DecisionName:    "simple-followup",
 		CandidateModels: []config.ModelRef{{Model: "cheap"}},

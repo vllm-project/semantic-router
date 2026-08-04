@@ -51,7 +51,7 @@ valkey-status: ## Show status of Valkey container
 clean-valkey: stop-valkey ## Clean up Valkey data
 	@$(LOG_TARGET)
 	@echo "Cleaning up Valkey data..."
-	@sudo rm -rf /tmp/valkey-data || rm -rf /tmp/valkey-data
+	@rm -rf /tmp/valkey-data 2>/dev/null || sudo -n rm -rf /tmp/valkey-data
 	@echo "Valkey data directory cleaned"
 
 # ---------------------------------------------------------------------------

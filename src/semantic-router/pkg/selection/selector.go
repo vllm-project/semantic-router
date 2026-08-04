@@ -93,6 +93,10 @@ const (
 	// weighted score with optional SLO ceilings. Issue #37.
 	MethodMultiFactor SelectionMethod = "multi_factor"
 
+	// MethodPrompt uses a concrete helper LLM to choose one declared candidate
+	// through a runtime-owned structured output contract.
+	MethodPrompt SelectionMethod = "prompt"
+
 	// MethodSessionAware wraps a base selector with agentic session policy:
 	// it keeps tool loops and hot multi-turn continuations on the current model
 	// unless the switch benefit clears the explicit handoff and prefix-cache cost.
@@ -248,6 +252,13 @@ type SelectionResult struct {
 
 	// AllScores maps each candidate model to its computed score
 	AllScores map[string]float64
+
+	// Prompt-helper telemetry is populated only by MethodPrompt.
+	HelperModel            string
+	HelperPromptTokens     int64
+	HelperCompletionTokens int64
+	HelperTotalTokens      int64
+	HelperLatencyMs        int64
 
 	// SessionPolicy records the session-aware stay/switch policy trace when
 	// Method is session_aware.

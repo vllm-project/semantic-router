@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/shared"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -50,12 +51,13 @@ func NewVLLMClientWithAuth(endpoint *config.ClassifierVLLMEndpoint, accessKey st
 // vllmChatCompletionRequest extends openai.ChatCompletionNewParams with
 // the vLLM-specific extra_body field for guided decoding, LoRA adapters, etc.
 type vllmChatCompletionRequest struct {
-	Model       string                                   `json:"model"`
-	Messages    []openai.ChatCompletionMessageParamUnion `json:"messages"`
-	MaxTokens   int                                      `json:"max_tokens,omitempty"`
-	Temperature float64                                  `json:"temperature,omitempty"`
-	Stream      bool                                     `json:"stream,omitempty"`
-	ExtraBody   map[string]interface{}                   `json:"extra_body,omitempty"`
+	Model          string                                             `json:"model"`
+	Messages       []openai.ChatCompletionMessageParamUnion           `json:"messages"`
+	MaxTokens      int                                                `json:"max_tokens,omitempty"`
+	Temperature    float64                                            `json:"temperature,omitempty"`
+	Stream         bool                                               `json:"stream,omitempty"`
+	ExtraBody      map[string]interface{}                             `json:"extra_body,omitempty"`
+	ResponseFormat *openai.ChatCompletionNewParamsResponseFormatUnion `json:"response_format,omitempty"`
 }
 
 // GenerationOptions contains options for vLLM generation
@@ -64,6 +66,7 @@ type GenerationOptions struct {
 	Temperature float64
 	Stream      bool
 	ExtraBody   map[string]interface{}
+	JSONMode    bool
 }
 
 func (c *VLLMClient) buildMessages(prompt string) []openai.ChatCompletionMessageParamUnion {
@@ -97,9 +100,39 @@ func (c *VLLMClient) buildMessages(prompt string) []openai.ChatCompletionMessage
 
 // Generate sends a chat completion request to vLLM
 func (c *VLLMClient) Generate(ctx context.Context, modelName string, prompt string, options *GenerationOptions) (*openai.ChatCompletion, error) {
+	return c.generateWithMessages(ctx, modelName, c.buildMessages(prompt), options)
+}
+
+// GenerateWithSystemPrompt sends an explicit system/user pair. It is used by
+// generic classifiers whose policy prompt must not inherit a domain-specific
+// built-in system message.
+func (c *VLLMClient) GenerateWithSystemPrompt(
+	ctx context.Context,
+	modelName string,
+	systemPrompt string,
+	userContent string,
+	options *GenerationOptions,
+) (*openai.ChatCompletion, error) {
+	return c.generateWithMessages(
+		ctx,
+		modelName,
+		[]openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(systemPrompt),
+			openai.UserMessage(userContent),
+		},
+		options,
+	)
+}
+
+func (c *VLLMClient) generateWithMessages(
+	ctx context.Context,
+	modelName string,
+	messages []openai.ChatCompletionMessageParamUnion,
+	options *GenerationOptions,
+) (*openai.ChatCompletion, error) {
 	req := vllmChatCompletionRequest{
 		Model:    modelName,
-		Messages: c.buildMessages(prompt),
+		Messages: messages,
 	}
 
 	if options != nil {
@@ -107,6 +140,13 @@ func (c *VLLMClient) Generate(ctx context.Context, modelName string, prompt stri
 		req.Temperature = options.Temperature
 		req.Stream = options.Stream
 		req.ExtraBody = options.ExtraBody
+		if options.JSONMode {
+			jsonObjectFormat := shared.NewResponseFormatJSONObjectParam()
+			responseFormat := openai.ChatCompletionNewParamsResponseFormatUnion{
+				OfJSONObject: &jsonObjectFormat,
+			}
+			req.ResponseFormat = &responseFormat
+		}
 	}
 
 	if req.MaxTokens == 0 {

@@ -82,6 +82,7 @@ func TestHandleEvalClassification_AcceptsMessagesArray(t *testing.T) {
 		"tools": []map[string]interface{}{
 			{"type": "function", "function": map[string]interface{}{"name": "search"}},
 		},
+		"metadata": map[string]string{"cohort": "canary"},
 		"messages": []map[string]interface{}{
 			{"role": "system", "content": "You are a careful tutor."},
 			{"role": "user", "content": "Explain inflation vs recession in plain English."},
@@ -117,6 +118,9 @@ func TestHandleEvalClassification_AcceptsMessagesArray(t *testing.T) {
 	}
 	if fakeSvc.lastEvalReq.Model != "amd/rocm-v1-private" {
 		t.Fatalf("expected model to be forwarded, got %q", fakeSvc.lastEvalReq.Model)
+	}
+	if fakeSvc.lastEvalReq.Metadata["cohort"] != "canary" {
+		t.Fatalf("expected metadata to be forwarded, got %#v", fakeSvc.lastEvalReq.Metadata)
 	}
 
 	var resp services.EvalResponse
