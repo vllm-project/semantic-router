@@ -2,6 +2,7 @@ package routerreplay
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
@@ -46,6 +47,7 @@ type (
 type Recorder struct {
 	storage store.Storage
 
+	policyMu          sync.RWMutex
 	maxBodyBytes      int
 	maxToolTraceBytes int // 0 = no limit
 	maxToolTraceSteps int // 0 = no limit
@@ -65,6 +67,8 @@ func NewRecorder(storage store.Storage) *Recorder {
 }
 
 func (r *Recorder) SetCapturePolicy(captureRequest, captureResponse bool, maxBodyBytes int) {
+	r.policyMu.Lock()
+	defer r.policyMu.Unlock()
 	r.captureRequestBody = captureRequest
 	r.captureResponseBody = captureResponse
 
@@ -79,6 +83,8 @@ func (r *Recorder) SetCapturePolicy(captureRequest, captureResponse bool, maxBod
 // fields (Prompt, ToolDefinitions, ToolTraceStep.Arguments, ToolTraceStep.Output).
 // A value of 0 disables truncation for those fields.
 func (r *Recorder) SetMaxToolTraceBytes(max int) {
+	r.policyMu.Lock()
+	defer r.policyMu.Unlock()
 	if max >= 0 {
 		r.maxToolTraceBytes = max
 	}
@@ -89,17 +95,39 @@ func (r *Recorder) SetMaxToolTraceBytes(max int) {
 // the most recent timeline) and ToolTrace.StepsTruncated is set. A value of
 // 0 disables step-count truncation. Negative values are ignored.
 func (r *Recorder) SetMaxToolTraceSteps(max int) {
+	r.policyMu.Lock()
+	defer r.policyMu.Unlock()
 	if max >= 0 {
 		r.maxToolTraceSteps = max
 	}
 }
 
 func (r *Recorder) ShouldCaptureRequest() bool {
-	return r.captureRequestBody
+	return r.policySnapshot().captureRequestBody
 }
 
 func (r *Recorder) ShouldCaptureResponse() bool {
-	return r.captureResponseBody
+	return r.policySnapshot().captureResponseBody
+}
+
+type recorderPolicy struct {
+	maxBodyBytes        int
+	maxToolTraceBytes   int
+	maxToolTraceSteps   int
+	captureRequestBody  bool
+	captureResponseBody bool
+}
+
+func (r *Recorder) policySnapshot() recorderPolicy {
+	r.policyMu.RLock()
+	defer r.policyMu.RUnlock()
+	return recorderPolicy{
+		maxBodyBytes:        r.maxBodyBytes,
+		maxToolTraceBytes:   r.maxToolTraceBytes,
+		maxToolTraceSteps:   r.maxToolTraceSteps,
+		captureRequestBody:  r.captureRequestBody,
+		captureResponseBody: r.captureResponseBody,
+	}
 }
 
 func (r *Recorder) SetMaxRecords(max int) {
@@ -109,28 +137,42 @@ func (r *Recorder) SetMaxRecords(max int) {
 }
 
 func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
+	policy := r.policySnapshot()
 	if rec.Timestamp.IsZero() {
 		rec.Timestamp = time.Now().UTC()
 	}
 
-	if r.captureRequestBody && len(rec.RequestBody) > r.maxBodyBytes {
-		rec.RequestBody = rec.RequestBody[:r.maxBodyBytes]
-		rec.RequestBodyTruncated = true
+	// The capture switches decide whether a body may reach storage at all,
+	// not just whether it is truncated. When capture is off the body must be
+	// dropped here — truncation alone only bounds a leak (see #2748).
+	if policy.captureRequestBody {
+		if len(rec.RequestBody) > policy.maxBodyBytes {
+			rec.RequestBody = rec.RequestBody[:policy.maxBodyBytes]
+			rec.RequestBodyTruncated = true
+		}
+	} else {
+		rec.RequestBody = ""
+		rec.RequestBodyTruncated = false
 	}
 
-	if r.captureResponseBody && len(rec.ResponseBody) > r.maxBodyBytes {
-		rec.ResponseBody = rec.ResponseBody[:r.maxBodyBytes]
-		rec.ResponseBodyTruncated = true
+	if policy.captureResponseBody {
+		if len(rec.ResponseBody) > policy.maxBodyBytes {
+			rec.ResponseBody = rec.ResponseBody[:policy.maxBodyBytes]
+			rec.ResponseBodyTruncated = true
+		}
+	} else {
+		rec.ResponseBody = ""
+		rec.ResponseBodyTruncated = false
 	}
 
 	// Apply MaxToolTraceBytes to structured tool-trace fields.
 	// These are truncated independently of the raw body fields so that
 	// callers can keep MaxBodyBytes small without losing structured data.
-	applyMaxToolTraceBytes(&rec, r.maxToolTraceBytes)
+	applyMaxToolTraceBytes(&rec, policy.maxToolTraceBytes)
 	// MaxToolTraceSteps is enforced separately so that an unbounded agent
 	// session that produces hundreds of steps per record can't keep growing
 	// the slice and OOM the router (see issue #1835).
-	capToolTraceStepCount(rec.ToolTrace, r.maxToolTraceSteps)
+	capToolTraceStepCount(rec.ToolTrace, policy.maxToolTraceSteps)
 
 	ctx := context.Background()
 	return r.storage.Add(ctx, rec)
@@ -210,21 +252,23 @@ func (r *Recorder) UpdateStatus(id string, status int, fromCache bool, streaming
 }
 
 func (r *Recorder) AttachRequest(id string, requestBody []byte) error {
-	if !r.captureRequestBody {
+	policy := r.policySnapshot()
+	if !policy.captureRequestBody {
 		return nil
 	}
 
-	body, truncated := truncateBody(requestBody, r.maxBodyBytes)
+	body, truncated := truncateBody(requestBody, policy.maxBodyBytes)
 	ctx := context.Background()
 	return r.storage.AttachRequest(ctx, id, body, truncated)
 }
 
 func (r *Recorder) AttachResponse(id string, responseBody []byte) error {
-	if !r.captureResponseBody {
+	policy := r.policySnapshot()
+	if !policy.captureResponseBody {
 		return nil
 	}
 
-	body, truncated := truncateBody(responseBody, r.maxBodyBytes)
+	body, truncated := truncateBody(responseBody, policy.maxBodyBytes)
 	ctx := context.Background()
 	return r.storage.AttachResponse(ctx, id, body, truncated)
 }
@@ -246,14 +290,15 @@ func (r *Recorder) UpdateUsageCost(id string, usage UsageCost) error {
 }
 
 func (r *Recorder) UpdateToolTrace(id string, trace ToolTrace) error {
+	policy := r.policySnapshot()
 	// Apply MaxToolTraceBytes here too: response-side traces are attached via
 	// this update path (see extproc.attachRouterReplayResponse) and therefore
 	// bypass the AddRecord truncation unless we cap them again. The same
 	// reasoning applies to MaxToolTraceSteps — a long agent session updates
 	// the trace through this method, so without a cap here the OOM scenario
 	// from #1835 can still happen even when AddRecord truncates correctly.
-	truncateToolTraceSteps(&trace, r.maxToolTraceBytes)
-	capToolTraceStepCount(&trace, r.maxToolTraceSteps)
+	truncateToolTraceSteps(&trace, policy.maxToolTraceBytes)
+	capToolTraceStepCount(&trace, policy.maxToolTraceSteps)
 	ctx := context.Background()
 	return r.storage.UpdateToolTrace(ctx, id, trace)
 }

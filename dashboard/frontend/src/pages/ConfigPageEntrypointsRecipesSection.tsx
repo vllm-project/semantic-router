@@ -5,6 +5,7 @@ import type { FieldConfig } from '../components/EditModal'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import ConfigPageMoMTopologyDialog from './ConfigPageMoMTopologyDialog'
 import ConfigPageRecipeDecisionsEditor from './ConfigPageRecipeDecisionsEditor'
+import ConfigPageRecipePolicyEditor from './ConfigPageRecipePolicyEditor'
 import pageStyles from './ConfigPageEntrypointsRecipesSection.module.css'
 import { cloneConfigData } from './configPageCanonicalization'
 import {
@@ -45,6 +46,9 @@ interface PendingEntrypointDelete {
 
 const cloneDecisions = (recipe: RecipeConfig): NonNullable<RecipeConfig['routing']['decisions']> =>
   JSON.parse(JSON.stringify(recipe.routing.decisions ?? []))
+
+const cloneSignals = (recipe?: RecipeConfig): NonNullable<RecipeConfig['routing']['signals']> =>
+  JSON.parse(JSON.stringify(recipe?.routing.signals ?? {}))
 
 export default function ConfigPageEntrypointsRecipesSection({
   config,
@@ -141,6 +145,7 @@ export default function ConfigPageEntrypointsRecipesSection({
       strategy: normalizeRecipeStrategy(
         recipe?.routing.strategy ?? config.global?.router?.strategy,
       ),
+      signals: cloneSignals(recipe),
       decisions: recipe ? cloneDecisions(recipe) : [],
     }
     const fields: FieldConfig<RecipeFormState>[] = [
@@ -165,6 +170,18 @@ export default function ConfigPageEntrypointsRecipesSection({
         required: true,
         options: [...ROUTING_STRATEGIES],
         description: 'How this recipe chooses among matching decisions.',
+      },
+      {
+        name: 'signals',
+        label: 'Recipe policy signals',
+        type: 'custom',
+        description: 'Author metadata and classifier signals inside this isolated recipe.',
+        customRender: (value, onChange) => (
+          <ConfigPageRecipePolicyEditor
+            value={value && typeof value === 'object' ? value : {}}
+            onChange={(nextValue) => onChange(nextValue)}
+          />
+        ),
       },
       {
         name: 'decisions',

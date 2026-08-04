@@ -17,12 +17,14 @@ export const SIGNAL_TYPES = [
   'kb',
   'conversation',
   'event',
+  'metadata',
+  'classifier',
 ] as const
 
 export type SignalType = (typeof SIGNAL_TYPES)[number]
 
 export const PLUGIN_TYPES = [
-  'semantic_cache',
+  'semantic-cache',
   'memory',
   'system_prompt',
   'header_mutation',
@@ -38,7 +40,7 @@ export const PLUGIN_TYPES = [
 ] as const
 
 export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
-  semantic_cache: 'Cache semantically similar queries to reduce latency and cost',
+  'semantic-cache': 'Cache semantically similar queries to reduce latency and cost',
   memory: 'Persistent conversation memory with vector retrieval',
   system_prompt: 'Inject or replace system prompts for the model',
   header_mutation: 'Add, update, or remove HTTP headers on requests/responses',

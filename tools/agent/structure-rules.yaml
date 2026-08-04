@@ -71,6 +71,7 @@ structure_exceptions:
       - src/semantic-router/pkg/config/config.go
       - src/semantic-router/pkg/config/rag_plugin.go
       - src/semantic-router/pkg/config/validator.go
+      - candle-binding/src/model_architectures/lora/bert_lora.rs
   - paths:
       - dashboard/frontend/src/pages/ConfigPage.tsx
     file_checks: relaxed

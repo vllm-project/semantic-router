@@ -38,6 +38,7 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 		b.buildAuthzClassifierOption,
 		b.buildKBClassifiersOption,
 		b.buildEventClassifierOption,
+		b.buildGenericClassifiersOption,
 	}
 	parallelOptions, err := b.buildParallelOptions(steps)
 	if err != nil {

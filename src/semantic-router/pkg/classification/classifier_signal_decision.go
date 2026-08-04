@@ -81,7 +81,11 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		KBRules:           signals.MatchedKBRules,
 		ConversationRules: signals.MatchedConversationRules,
 		EventRules:        signals.MatchedEventRules,
+		MetadataRules:     signals.MatchedMetadataRules,
+		ClassifierRules:   signals.MatchedClassifierRules,
 		ProjectionRules:   signals.MatchedProjectionRules,
+		SignalValues:      signals.SignalValues,
+		SignalErrors:      signals.SignalErrors,
 	}
 
 	var result *decision.DecisionResult

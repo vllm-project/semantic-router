@@ -157,6 +157,8 @@ func TestHandleRouterReplayTrajectoryCoalescesConsecutiveToolCalls(t *testing.T)
 
 func TestHandleRouterReplayTrajectoryFallsBackToBodyParsing(t *testing.T) {
 	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	// Body-based trajectory fallback presumes the bodies were captured.
+	recorder.SetCapturePolicy(true, true, 4096)
 	sessionID := "sess-fallback"
 
 	requestBody := `{"messages":[{"role":"user","content":"hello"},{"role":"assistant","tool_calls":[{"id":"call-x","type":"function","function":{"name":"my_tool","arguments":"{}"}}]},{"role":"tool","content":"tool result","tool_call_id":"call-x"}]}`

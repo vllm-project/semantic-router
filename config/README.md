@@ -24,6 +24,9 @@ Inside canonical `config.yaml`:
 - `routing.decisions[].candidateIterations` carries bounded DSL `FOR ... IN` metadata for candidate-model authoring; it is declarative selection policy input, not a general scripting runtime
 - `routing.decisions[].emits[]` carries typed side-effect directives from DSL `EMIT` blocks; the current supported kind is `retention`, where `drop: true` skips response-side semantic-cache writes and the remaining fields stay structured/auditable for follow-up runtime consumers such as turn-aware cache TTL, current-model affinity, prefix/KV-cache warmth, and session transition telemetry
 - request-shape detectors such as `routing.signals.structure` stay in the signal layer as typed named facts; numeric thresholds live inside the detector config instead of turning decisions into a free-form expression language
+- `routing.signals.metadata` matches bounded, untrusted caller hints; authenticated identity remains owned by `authz`
+- `routing.signals.classifiers` exposes generic native or constrained-LLM label scores; decisions select a declared label and apply a numeric predicate
+- decision leaves may add `predicate` and `on_error` when they need to gate an exposed signal value rather than only boolean membership
 - `routing.signals.embeddings[].query_modality` declares which modality of incoming request payload the embedding rule's query is computed from. Defaults to `"text"`; `"image"` and `"audio"` require `global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal` so the query and candidate embeddings land in the same shared space. See `website/docs/tutorials/signal/learned/embedding.md` for the worked multimodal example.
 - structure `density` features now use built-in multilingual text-unit normalization; the contract no longer exposes a per-rule `normalize_by` switch
 - the dashboard and DSL builder now expose the same projection surface directly; see `website/docs/tutorials/projection/overview.md` and the maintained `config/recipes/balance/` delivery for end-to-end usage
@@ -57,7 +60,7 @@ Candidate iteration fragments must stay bounded to `decision.candidates` or an e
 `config/algorithm/` is organized by routing policy:
 
 - `looper/`: multi-model execution policies such as `confidence`, `ratings`, `remom`, and `fusion`
-- `selection/`: request-time candidate-selection policies such as `router_dc`, `automix`, `hybrid`, `multi_factor`, and `latency_aware`
+- `selection/`: request-time candidate-selection policies such as `router_dc`, `automix`, `hybrid`, `multi_factor`, `latency_aware`, and `prompt`
 
 Each supported algorithm now has its own tutorial page under `website/docs/tutorials/algorithm/`.
 
