@@ -205,7 +205,7 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
 
   PROJECTION score unified_balance_effort_score {
     method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: -0.35, name: "unified_balance_simple_markers", value_source: "confidence" }, { type: "preference", weight: -0.25, name: "unified_balance_terse_preference", value_source: "confidence" }, { type: "keyword", weight: 0.34, name: "unified_balance_reasoning_markers", value_source: "confidence" }, { type: "keyword", weight: 0.32, name: "unified_balance_verification_markers", value_source: "confidence" }, { type: "fact_check", weight: 0.35, name: "unified_balance_needs_fact_check" }, { type: "user_feedback", weight: 0.35, name: "unified_balance_wrong_answer" }, { type: "keyword", weight: 0.35, name: "unified_balance_correction_markers", value_source: "confidence" }, { type: "reask", weight: 0.25, name: "unified_balance_reask", value_source: "confidence" }, { type: "context", weight: 0.18, name: "unified_balance_long_context" }, { type: "structure", weight: 0.12, name: "unified_balance_constraint_dense" }, { type: "complexity", weight: 0.3, name: "unified_balance_difficulty:hard" }, { type: "complexity", weight: -0.2, name: "unified_balance_difficulty:easy" }, { type: "conversation", weight: 0.08, name: "unified_balance_multi_turn" }, { type: "language", weight: 0.06, name: "zh" }, { type: "language", weight: 0.06, name: "es" }, { type: "language", weight: 0.06, name: "fr" }, { type: "language", weight: 0.06, name: "ja" }, { type: "language", weight: 0.06, name: "de" }]
+    inputs: [{ type: "keyword", weight: -0.35, name: "unified_balance_simple_markers", value_source: "confidence" }, { type: "preference", weight: -0.1, name: "unified_balance_terse_preference", value_source: "confidence" }, { type: "keyword", weight: 0.46, name: "unified_balance_reasoning_markers", value_source: "confidence" }, { type: "keyword", weight: 0.32, name: "unified_balance_verification_markers", value_source: "confidence" }, { type: "fact_check", weight: 0.35, name: "unified_balance_needs_fact_check" }, { type: "user_feedback", weight: 0.35, name: "unified_balance_wrong_answer" }, { type: "keyword", weight: 0.35, name: "unified_balance_correction_markers", value_source: "confidence" }, { type: "reask", weight: 0.25, name: "unified_balance_reask", value_source: "confidence" }, { type: "context", weight: 0.18, name: "unified_balance_long_context" }, { type: "structure", weight: 0.12, name: "unified_balance_constraint_dense" }, { type: "complexity", weight: 0.3, name: "unified_balance_difficulty:hard" }, { type: "complexity", weight: -0.2, name: "unified_balance_difficulty:easy" }, { type: "conversation", weight: 0.08, name: "unified_balance_multi_turn" }, { type: "language", weight: 0.06, name: "zh" }, { type: "language", weight: 0.06, name: "es" }, { type: "language", weight: 0.06, name: "fr" }, { type: "language", weight: 0.06, name: "ja" }, { type: "language", weight: 0.06, name: "de" }]
   }
 
   PROJECTION mapping unified_balance_effort_band {
@@ -588,12 +588,6 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
   }
 
   # =============================================================================
-  # PLUGINS
-  # =============================================================================
-
-  PLUGIN hallucination hallucination {}
-
-  # =============================================================================
   # ROUTES
   # =============================================================================
 
@@ -638,13 +632,6 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
       round_timeout_seconds: 300
       temperature: 0.2
     }
-    PLUGIN hallucination {
-      enabled: true
-      use_nli: true
-      hallucination_action: "header"
-      unverified_factual_action: "header"
-      include_hallucination_details: true
-    }
   }
 
   ROUTE unified_frontier_verified_answer (description = "Escalate evidence-sensitive factual answers from an efficient model to frontier models only when confidence is insufficient.") {
@@ -660,13 +647,6 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
       escalation_order: "small_to_large"
       on_error: "skip"
       threshold: 0.72
-    }
-    PLUGIN hallucination {
-      enabled: true
-      use_nli: true
-      hallucination_action: "header"
-      unverified_factual_action: "header"
-      include_hallucination_details: true
     }
   }
 
