@@ -70,6 +70,11 @@ DSL owns only routing semantics:
 - optional `entrypoints` through `ENTRYPOINT` blocks
 - optional isolated `recipes[].routing` profiles through `RECIPE` blocks
 
+The signal surface includes deterministic metadata hints and reusable generic
+classifier labels. Decision leaves may apply bounded numeric predicates to
+signal values, and prompt-driven model choice remains a route-local algorithm
+over the decision's declared `modelRefs`.
+
 It no longer owns endpoints, API keys, listeners, or router-global runtime settings.
 
 ### Deployment binding split
@@ -129,7 +134,7 @@ Router-global defaults are now owned by the router itself, not by a second user-
 - `global.stores` groups storage-backed services
 - `global.integrations` groups helper runtime integrations, including looper-owned ReMoM direct model slug registration for `vllm-sr/remom`, Fusion direct model slug registration for `vllm-sr/fusion`, and Router Flow direct model slug registration for `vllm-sr/flow`. Compatibility aliases such as `openrouter/fusion` are opt-in through `global.integrations.looper.*.model_names`; breadth, judge, panel, workflow planning, worker policy, and output contracts remain on `routing.decisions[]`.
 - `routing.decisions[].algorithm.remom.max_completion_tokens` optionally bounds every internal ReMoM completion while leaving request-facing model aliases separate from backend capability metadata.
-- `global.model_catalog` groups router-owned model assets under `embeddings`, `system`, `external`, `classifiers`, `kbs`, and `modules`, including embedding fallback knobs such as `embedding_config.top_k`, shared prototype-aware scoring controls such as `prototype_scoring`, and built-in knowledge-base source paths such as `knowledge_bases/privacy/`
+- `global.model_catalog` groups router-owned model assets under `embeddings`, `system`, `external`, `kbs`, and `modules`, including embedding fallback knobs such as `embedding_config.top_k`, shared prototype-aware scoring controls such as `prototype_scoring`, and built-in knowledge-base source paths such as `knowledge_bases/privacy/`
 - `global.model_catalog.modules` is the home for router-owned module settings such as `prompt_compression`, `prompt_guard`, `classifier`, `complexity`, `hallucination_mitigation`, `feedback_detector`, and `modality_detector`
 - `global.model_catalog.modules.prompt_compression.profile` keeps prompt-compression presets in the signal-evaluation layer as a validated enum (`default`, `coding`, `medical`, `security`, `multi_turn`, with `multi-turn` accepted as an alias). It does not rewrite the upstream model request body; post-decision request mutation belongs under decision/plugin surfaces.
 - `global.model_catalog.modules.hallucination_mitigation.detector.backend` is a validated enum selecting the hallucination span detector: `candle` (default) runs the in-process token classifier, while `endpoint` delegates to a generative span detector behind an OpenAI-compatible server and requires an absolute `http(s)` `detector.endpoint` plus a `detector.model_id`. An unknown backend fails config validation instead of silently falling back to `candle`.

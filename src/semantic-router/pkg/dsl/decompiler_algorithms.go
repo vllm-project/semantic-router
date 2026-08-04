@@ -35,6 +35,23 @@ var algorithmFieldExporters = map[string]algorithmFieldExporter{
 	"multi_factor": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		multiFactorAlgorithmToFields(algo.MultiFactor, fields)
 	},
+	"prompt": func(algo *config.AlgorithmConfig, fields map[string]Value) {
+		promptAlgorithmToFields(algo.Prompt, fields)
+	},
+}
+
+func promptAlgorithmToFields(
+	prompt *config.PromptSelectionConfig,
+	fields map[string]Value,
+) {
+	if prompt == nil {
+		return
+	}
+	promptFields := map[string]Value{}
+	setStringValue(promptFields, "model", prompt.Model)
+	setStringValue(promptFields, "instructions", prompt.Instructions)
+	setIntValue(promptFields, "timeout_seconds", prompt.TimeoutSeconds)
+	fields["prompt"] = ObjectValue{Fields: promptFields}
 }
 
 func (d *decompiler) algorithmToFields(algo *config.AlgorithmConfig) map[string]Value {

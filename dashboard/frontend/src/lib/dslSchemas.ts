@@ -1,3 +1,5 @@
+import { getPolicySignalFieldSchema } from './dslPolicySignalSchemas'
+
 export interface FieldSchema {
   key: string
   label: string
@@ -28,6 +30,8 @@ export interface FieldSchema {
 }
 
 export function getSignalFieldSchema(signalType: string): FieldSchema[] {
+  const policyFields = getPolicySignalFieldSchema(signalType)
+  if (policyFields) return policyFields
   switch (signalType) {
     case 'keyword':
       return [
@@ -468,6 +472,7 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
 export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
   switch (pluginType) {
     case 'semantic_cache':
+    case 'semantic-cache':
       return [
         { key: 'enabled', label: 'Enabled', type: 'boolean' },
         {

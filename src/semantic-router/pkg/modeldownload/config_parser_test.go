@@ -158,6 +158,23 @@ func TestExtractModelPathsSkipsRootLevelModelFiles(t *testing.T) {
 	}
 }
 
+func TestExtractModelPathsIncludesLocalClassifierSignals(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{ClassifierRules: []config.ClassifierSignalRule{{
+				Name:      "risk",
+				Type:      "local",
+				ModelPath: "models/risk-classifier",
+				Labels:    []string{"SAFE", "RISKY"},
+			}}},
+		},
+	}
+
+	if got := ExtractModelPaths(cfg); !slices.Contains(got, "models/risk-classifier") {
+		t.Fatalf("ExtractModelPaths() = %v, want local classifier model path", got)
+	}
+}
+
 func TestExtractRequiredFilesByModel(t *testing.T) {
 	cfg := &config.RouterConfig{
 		InlineModels: config.InlineModels{

@@ -62,7 +62,10 @@ func startRequestHeaderSpan(
 	v *ext_proc.ProcessingRequest_RequestHeaders,
 	ctx *RequestContext,
 ) trace.Span {
-	baseCtx := context.Background()
+	baseCtx := ctx.TraceContext
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
 	headerMap := make(map[string]string, len(v.RequestHeaders.Headers.Headers))
 	for _, header := range v.RequestHeaders.Headers.Headers {
 		headerMap[header.Key] = extractHeaderValue(header)

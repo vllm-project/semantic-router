@@ -311,6 +311,15 @@ entrypoints:
 `,
 		wantErr: "already mapped by another entrypoint",
 	},
+	{
+		name: "recipe name with surrounding whitespace",
+		extra: `
+recipes:
+  - name: " privacy "
+    routing: {}
+`,
+		wantErr: "must not contain surrounding whitespace",
+	},
 }
 
 func TestCanonicalRecipeValidationErrors(t *testing.T) {
@@ -324,5 +333,23 @@ func TestCanonicalRecipeValidationErrors(t *testing.T) {
 				t.Fatalf("expected error containing %q, got: %v", testCase.wantErr, err)
 			}
 		})
+	}
+}
+
+func TestDuplicateIdenticalSignalWithinRecipeRejected(t *testing.T) {
+	needle := `      - name: urgent_keywords
+        operator: OR
+        keywords: ["urgent"]`
+	yamlConfig := strings.Replace(
+		recipeTestBaseYAML,
+		needle,
+		needle+"\n"+needle,
+		1,
+	) + recipeTestPrivacyBlockYAML
+
+	_, err := ParseYAMLBytes([]byte(yamlConfig))
+	if err == nil ||
+		!strings.Contains(err.Error(), "duplicate local name") {
+		t.Fatalf("expected same-profile duplicate signal error, got %v", err)
 	}
 }

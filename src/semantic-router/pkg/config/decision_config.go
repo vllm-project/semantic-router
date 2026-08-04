@@ -18,6 +18,9 @@ type Decision struct {
 	// inside the matching decision branch. The slice preserves DSL declaration
 	// order so round-trip decompilation stays stable.
 	Emits []EmitDirective `yaml:"emits,omitempty" json:"emits,omitempty"`
+	// Annotations carries bounded, non-executable decision metadata for replay
+	// and transport projections. Executable behavior belongs in Emits or Plugins.
+	Annotations map[string]interface{} `yaml:"annotations,omitempty" json:"annotations,omitempty"`
 }
 
 // EmitDirective is a tagged-union wrapper for declarative directives emitted
@@ -77,8 +80,18 @@ type AlgorithmConfig struct {
 	GMTRouter    *GMTRouterSelectionConfig    `yaml:"-"`
 	LatencyAware *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
 	MultiFactor  *MultiFactorSelectionConfig  `yaml:"multi_factor,omitempty"`
+	Prompt       *PromptSelectionConfig       `yaml:"prompt,omitempty"`
 	SessionAware *SessionAwareSelectionConfig `yaml:"-"`
 	OnError      string                       `yaml:"on_error,omitempty"`
+}
+
+// PromptSelectionConfig configures deterministic, prompt-driven selection
+// among a decision's ModelRefs. The runtime owns the structured output schema,
+// temperature, token bound, candidate descriptions, and fallback behavior.
+type PromptSelectionConfig struct {
+	Model          string `yaml:"model"`
+	Instructions   string `yaml:"instructions"`
+	TimeoutSeconds int    `yaml:"timeout_seconds,omitempty"`
 }
 
 type ConfidenceAlgorithmConfig struct {
@@ -148,10 +161,13 @@ type ModelRef struct {
 
 // RuleNode is a recursive boolean expression tree over signal references.
 type RuleNode struct {
-	Type       string     `yaml:"type,omitempty" json:"type,omitempty"`
-	Name       string     `yaml:"name,omitempty" json:"name,omitempty"`
-	Operator   string     `yaml:"operator,omitempty" json:"operator,omitempty"`
-	Conditions []RuleNode `yaml:"conditions,omitempty" json:"conditions,omitempty"`
+	Type       string            `yaml:"type,omitempty" json:"type,omitempty"`
+	Name       string            `yaml:"name,omitempty" json:"name,omitempty"`
+	Label      string            `yaml:"label,omitempty" json:"label,omitempty"`
+	Predicate  *NumericPredicate `yaml:"predicate,omitempty" json:"predicate,omitempty"`
+	OnError    string            `yaml:"on_error,omitempty" json:"on_error,omitempty"`
+	Operator   string            `yaml:"operator,omitempty" json:"operator,omitempty"`
+	Conditions []RuleNode        `yaml:"conditions,omitempty" json:"conditions,omitempty"`
 }
 
 func (n *RuleNode) IsLeaf() bool {

@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"slices"
 	"testing"
@@ -14,6 +15,20 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/internalauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 )
+
+func TestStartRequestHeaderSpanPreservesStreamCancellation(t *testing.T) {
+	streamContext, cancel := context.WithCancel(context.Background())
+	requestContext := &RequestContext{TraceContext: streamContext}
+	span := startRequestHeaderSpan(newRequestHeaders("POST", "/v1/chat/completions"), requestContext)
+	defer span.End()
+
+	cancel()
+	select {
+	case <-requestContext.TraceContext.Done():
+	default:
+		t.Fatal("derived trace context did not preserve stream cancellation")
+	}
+}
 
 type requestHeaderTestCase struct {
 	name                  string

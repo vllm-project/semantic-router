@@ -16,6 +16,7 @@ export const ALGORITHM_TYPES = [
   'svm',
   'mlp',
   'multi_factor',
+  'prompt',
 ] as const
 
 export type AlgorithmType = (typeof ALGORITHM_TYPES)[number]
@@ -36,6 +37,7 @@ export const ALGORITHM_DESCRIPTIONS: Record<string, string> = {
   svm: 'Support Vector Machine for model classification (no extra fields)',
   mlp: 'Neural model-selection classifier using shared ML settings (no extra fields)',
   multi_factor: 'Combine quality, latency, cost, and load into one SLO-aware score',
+  prompt: 'Use a concrete helper model to select one declared candidate',
 }
 
 export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
@@ -477,6 +479,41 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
           label: 'No Candidates Policy',
           type: 'select',
           options: ['', 'cheapest', 'first', 'fail'],
+        },
+      ]
+    case 'prompt':
+      return [
+        {
+          key: 'prompt',
+          label: 'Prompt Selector',
+          type: 'object',
+          required: true,
+          fields: [
+            {
+              key: 'model',
+              label: 'Helper Model',
+              type: 'string',
+              required: true,
+            },
+            {
+              key: 'instructions',
+              label: 'Instructions',
+              type: 'string',
+              required: true,
+            },
+            {
+              key: 'timeout_seconds',
+              label: 'Timeout Seconds',
+              type: 'number',
+              placeholder: '5',
+            },
+          ],
+        },
+        {
+          key: 'on_error',
+          label: 'On Error',
+          type: 'select',
+          options: ['', 'fallback'],
         },
       ]
     default:

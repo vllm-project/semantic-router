@@ -358,11 +358,10 @@ func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
 // projection is carried without adding another field-by-field merge branch.
 func mergeDSLOwnedNodes(baseRoot, fragmentRoot *yaml.Node, mode DeployMode) error {
 	fragmentRouting := mappingValueNode(fragmentRoot, "routing")
-	if fragmentRouting == nil {
-		return fmt.Errorf("compiled routing fragment must contain routing")
-	}
-
 	if mode == DeployModeReplace {
+		if fragmentRouting == nil {
+			return fmt.Errorf("compiled routing fragment must contain routing")
+		}
 		setMappingValueNode(baseRoot, "routing", fragmentRouting)
 		for _, section := range []string{"entrypoints", "recipes"} {
 			if value := mappingValueNode(fragmentRoot, section); value != nil {
@@ -374,11 +373,13 @@ func mergeDSLOwnedNodes(baseRoot, fragmentRoot *yaml.Node, mode DeployMode) erro
 		return nil
 	}
 
-	baseRouting := mappingValueNode(baseRoot, "routing")
-	if baseRouting == nil {
-		setMappingValueNode(baseRoot, "routing", fragmentRouting)
-	} else if err := mergeMappingNodes(baseRouting, fragmentRouting); err != nil {
-		return fmt.Errorf("failed to merge routing fragment: %w", err)
+	if fragmentRouting != nil {
+		baseRouting := mappingValueNode(baseRoot, "routing")
+		if baseRouting == nil {
+			setMappingValueNode(baseRoot, "routing", fragmentRouting)
+		} else if err := mergeMappingNodes(baseRouting, fragmentRouting); err != nil {
+			return fmt.Errorf("failed to merge routing fragment: %w", err)
+		}
 	}
 
 	// Scoped lists have identity and ordering semantics, so a supplied list is

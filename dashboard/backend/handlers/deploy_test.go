@@ -947,6 +947,42 @@ func TestMergeDeployPayloadRejectsUnknownMode(t *testing.T) {
 	}
 }
 
+func TestDeployPreviewHandler_AllowsPartialFragmentWithoutRouting(t *testing.T) {
+	configPath := createValidTestConfig(t, t.TempDir())
+	body, err := json.Marshal(DeployRequest{YAML: "default_model: \"MoM\"\n"})
+	if err != nil {
+		t.Fatalf("marshal preview request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/deploy/preview", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	DeployPreviewHandler(configPath)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for a partial fragment without routing, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var response DeployPreviewResponse
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("decode preview response: %v", err)
+	}
+	if !strings.Contains(response.Preview, "routing:") {
+		t.Fatalf("preview lost existing routing:\n%s", response.Preview)
+	}
+}
+
+func TestMergeDeployPayloadReplaceRejectsFragmentWithoutRouting(t *testing.T) {
+	_, err := mergeDeployPayload(
+		[]byte("routing: {}\n"),
+		DeployRequest{YAML: "default_model: \"MoM\"\n", Mode: DeployModeReplace},
+	)
+	if err == nil || !strings.Contains(err.Error(), "compiled routing fragment must contain routing") {
+		t.Fatalf("expected missing-routing error, got %v", err)
+	}
+}
+
 func TestDeployHandler_NoDSLSource(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)

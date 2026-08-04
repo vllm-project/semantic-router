@@ -92,6 +92,12 @@ func validateCanonicalRecipes(canonical *CanonicalConfig) error {
 		if name == "" {
 			return fmt.Errorf("recipes[].name cannot be empty")
 		}
+		if string(name) != recipe.Name {
+			return fmt.Errorf(
+				"recipes[%s].name must not contain surrounding whitespace",
+				name,
+			)
+		}
 		if _, exists := seen[name]; exists {
 			return fmt.Errorf("recipes[%s]: duplicate recipe name", name)
 		}

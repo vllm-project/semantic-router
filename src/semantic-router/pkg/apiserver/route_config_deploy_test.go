@@ -470,6 +470,44 @@ func TestNextConfigVersionAvoidsSameSecondBackupCollisions(t *testing.T) {
 	}
 }
 
+func TestHandleConfigRollbackRejectsIncompatibleLocalClassifier(t *testing.T) {
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "config.yaml")
+	current := []byte(localClassifierReloadConfig("models/risk-v1"))
+	if err := os.WriteFile(configPath, current, 0o600); err != nil {
+		t.Fatalf("write current config: %v", err)
+	}
+	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
+	if err := os.MkdirAll(backupDir, 0o700); err != nil {
+		t.Fatalf("create backup dir: %v", err)
+	}
+	version := "20240101-000000"
+	backupPath := filepath.Join(backupDir, "config."+version+".yaml")
+	if err := os.WriteFile(
+		backupPath,
+		[]byte(localClassifierReloadConfig("models/risk-v2")),
+		0o600,
+	); err != nil {
+		t.Fatalf("write backup config: %v", err)
+	}
+
+	response := postRollback(t, configPath, version)
+
+	if response.Code != http.StatusConflict {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if code := rollbackErrorCode(t, response.Body.Bytes()); code != "RESTART_REQUIRED" {
+		t.Fatalf("error code = %q, want RESTART_REQUIRED", code)
+	}
+	after, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read current config: %v", err)
+	}
+	if !bytes.Equal(after, current) {
+		t.Fatal("incompatible rollback mutated the active config")
+	}
+}
+
 func TestHandleConfigHashReturnsHashAndNoPath(t *testing.T) {
 	configPath := writeDeployTestBaseConfig(t)
 	activeCfg, err := config.Parse(configPath)

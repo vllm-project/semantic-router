@@ -111,8 +111,9 @@ type RouterReplayPluginConfig struct {
 
 // GetPlugin returns the plugin entry for a specific plugin type.
 func (d *Decision) GetPlugin(pluginType string) *DecisionPlugin {
+	normalizedTarget := NormalizeDecisionPluginType(pluginType)
 	for i := range d.Plugins {
-		if d.Plugins[i].Type == pluginType {
+		if NormalizeDecisionPluginType(d.Plugins[i].Type) == normalizedTarget {
 			return &d.Plugins[i]
 		}
 	}

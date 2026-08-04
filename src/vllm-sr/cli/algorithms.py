@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ModelRef(BaseModel):
@@ -349,6 +349,24 @@ class MultiFactorSelectionConfig(BaseModel):
     on_no_candidates: str | None = "cheapest"
 
 
+class PromptSelectionConfig(BaseModel):
+    """Configuration for prompt-driven candidate selection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model: str
+    instructions: str
+    timeout_seconds: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_required_text(self):
+        if not self.model.strip():
+            raise ValueError("model is required")
+        if not self.instructions.strip():
+            raise ValueError("instructions are required")
+        return self
+
+
 class AlgorithmConfig(BaseModel):
     """Algorithm configuration for multi-model decisions.
 
@@ -397,6 +415,7 @@ class AlgorithmConfig(BaseModel):
         "mlp",
         "multi_factor",
         "latency_aware",
+        "prompt",
     ]
 
     # Looper algorithm configurations
@@ -412,5 +431,19 @@ class AlgorithmConfig(BaseModel):
     automix: AutoMixSelectionConfig | None = None
     hybrid: HybridSelectionConfig | None = None
     multi_factor: MultiFactorSelectionConfig | None = None
+    prompt: PromptSelectionConfig | None = None
     # Behavior on algorithm failure: "skip" or "fail"
     on_error: str | None = "skip"
+
+    @model_validator(mode="after")
+    def normalize_prompt_fallback(self):
+        if self.type == "prompt":
+            if self.prompt is None:
+                raise ValueError("algorithm.type=prompt requires prompt configuration")
+            if self.on_error == "skip":
+                self.on_error = "fallback"
+            if self.on_error not in (None, "", "fallback"):
+                raise ValueError("prompt on_error must be fallback")
+        elif self.prompt is not None:
+            raise ValueError("prompt configuration requires algorithm.type=prompt")
+        return self

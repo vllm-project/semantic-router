@@ -20,6 +20,7 @@ from cli.algorithms import (  # noqa: E402
     FusionAlgorithmConfig,
     HybridSelectionConfig,
     MultiFactorSelectionConfig,
+    PromptSelectionConfig,
     RatingsAlgorithmConfig,
     ReMoMAlgorithmConfig,
     RouterDCSelectionConfig,
@@ -69,6 +70,51 @@ class TestAlgorithmConfigTypes:
         """Test that on_error can be set to 'fail'."""
         config = AlgorithmConfig(type="static", on_error="fail")
         assert config.on_error == "fail"
+
+
+class TestPromptSelectionConfig:
+    """Test prompt-driven selection configuration."""
+
+    def test_minimal_config(self):
+        prompt = PromptSelectionConfig(
+            model="router-small",
+            instructions="Choose the best candidate.",
+        )
+        config = AlgorithmConfig(type="prompt", prompt=prompt)
+        assert config.prompt.model == "router-small"
+        assert config.prompt.timeout_seconds is None
+        assert config.on_error == "fallback"
+
+    def test_zero_timeout_uses_runtime_default(self):
+        prompt = PromptSelectionConfig(
+            model="router-small",
+            instructions="Choose.",
+            timeout_seconds=0,
+        )
+        assert prompt.timeout_seconds == 0
+
+    def test_timeout_cannot_be_negative(self):
+        with pytest.raises(PydanticValidationError):
+            PromptSelectionConfig(
+                model="router-small",
+                instructions="Choose.",
+                timeout_seconds=-1,
+            )
+
+    def test_prompt_block_is_required(self):
+        with pytest.raises(PydanticValidationError):
+            AlgorithmConfig(type="prompt")
+
+    def test_prompt_rejects_unsupported_error_policy(self):
+        with pytest.raises(PydanticValidationError):
+            AlgorithmConfig(
+                type="prompt",
+                prompt=PromptSelectionConfig(
+                    model="router-small",
+                    instructions="Choose.",
+                ),
+                on_error="fail",
+            )
 
 
 class TestRouterDCSelectionConfig:

@@ -116,7 +116,21 @@ func GetGlobalClassificationService() *ClassificationService {
 
 // HasClassifier returns true if the service has a real classifier (not placeholder)
 func (s *ClassificationService) HasClassifier() bool {
-	return s.classifier != nil
+	return s.classifierSnapshot() != nil
+}
+
+func (s *ClassificationService) classifierSnapshot() *classification.Classifier {
+	classifier, _ := s.runtimeSnapshot()
+	return classifier
+}
+
+func (s *ClassificationService) runtimeSnapshot() (
+	*classification.Classifier,
+	*config.RouterConfig,
+) {
+	s.configMutex.RLock()
+	defer s.configMutex.RUnlock()
+	return s.classifier, s.config
 }
 
 // NewPlaceholderClassificationService creates a placeholder service for API-only mode
@@ -135,8 +149,9 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	if err != nil {
 		return nil, err
 	}
-
-	classifier, err := s.classifierForRequestModel(req.Model)
+	classifier, runtimeConfig, err := s.runtimeSnapshotForRequestModel(
+		req.Model,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +173,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	// Use signal-driven architecture: evaluate all signals first
 	// Check if we should force evaluate all signals (for eval scenarios)
 	forceEvaluateAll := req.Options != nil && req.Options.EvaluateAllSignals
-	signals := classifier.EvaluateAllSignalsWithContext(
+	signals := classifier.EvaluateAllSignalsWithRequestFacts(
 		input.evaluationText,
 		input.contextText,
 		input.currentUserText,
@@ -170,6 +185,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		nil,
 		input.conversationFacts,
 		input.imageURL,
+		input.requestFacts,
 	)
 
 	// Evaluate decision with engine (if decisions are configured)
@@ -186,32 +202,36 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		}
 	}
 
-	// Get category classification (for backward compatibility and when no decision matches)
-	var category string
-	var confidence float64
-	if decisionResult != nil && decisionResult.Decision != nil {
-		// Use decision name as category
-		category = decisionResult.Decision.Name
-		confidence = decisionResult.Confidence
-	} else {
-		// Fallback to traditional classification
-		category, confidence, _, err = classifier.ClassifyCategoryWithEntropy(input.evaluationText)
-		if err != nil {
-			// Graceful fallback when classification fails
-			// When domain signal was skipped due to low confidence and no decision matches,
-			// fall back to "other" category instead of returning an error
-			logging.Warnf("Classification fallback failed: %v, using default 'other' category", err)
-			category = "other"
-			confidence = 0.0
-		}
-	}
+	category, confidence := resolveIntentCategory(
+		classifier,
+		decisionResult,
+		input.evaluationText,
+	)
 
 	processingTime := time.Since(start).Milliseconds()
 
 	// Build response from signals and decision
-	response := s.buildIntentResponseFromSignals(signals, decisionResult, category, confidence, processingTime, req)
+	response := s.buildIntentResponseFromSignals(
+		signals,
+		decisionResult,
+		category,
+		confidence,
+		processingTime,
+		req,
+		classifier,
+		runtimeConfig,
+	)
 
 	return response, nil
+}
+
+func (s *ClassificationService) runtimeSnapshotForRequestModel(
+	modelName string,
+) (*classification.Classifier, *config.RouterConfig, error) {
+	s.configMutex.RLock()
+	defer s.configMutex.RUnlock()
+	classifier, err := s.classifierForRequestModel(modelName)
+	return classifier, s.config, err
 }
 
 func (s *ClassificationService) classifierForRequestModel(modelName string) (*classification.Classifier, error) {
@@ -241,7 +261,7 @@ func (s *ClassificationService) classifierForRequestModel(modelName string) (*cl
 
 // GetClassifier returns the classifier instance (for signal-driven methods)
 func (s *ClassificationService) GetClassifier() *classification.Classifier {
-	return s.classifier
+	return s.classifierSnapshot()
 }
 
 // GetConfig returns the current configuration
