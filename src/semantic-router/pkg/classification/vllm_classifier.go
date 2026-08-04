@@ -112,7 +112,6 @@ func (v *VLLMJailbreakInference) Classify(text string) (candle_binding.ClassResu
 		Class:         class,
 		Confidence:    confidence,
 		Probabilities: probabilities,
-		NumClasses:    2,
 	}
 
 	return result, nil
