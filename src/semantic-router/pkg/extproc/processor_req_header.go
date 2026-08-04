@@ -38,7 +38,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// also short-circuit in the no-op path.
 	if ctx.SkipProcessing {
 		detectStreamingExpectation(ctx)
-		return newContinueRequestHeadersResponse(), nil
+		return newContinueRequestHeadersResponse(buildLooperInternalHeaderRemovalMutation()), nil
 	}
 
 	if replayResp := r.handleRouterReplayAPI(method, path); replayResp != nil {
@@ -88,15 +88,13 @@ func captureRequestHeaders(
 		headerValue := extractHeaderValue(header)
 		ctx.Headers[header.Key] = headerValue
 
-		// HTTP/2 lowercases header names, but we accept either case for both the
-		// internal looper marker and the external skip-processing opt-out so
-		// upstream filters do not have to worry about casing.
+		// HTTP/2 lowercases header names, but we accept either case for the
+		// external skip-processing opt-out so upstream filters do not have to
+		// worry about casing. Internal request authentication runs after all
+		// headers have been captured so header order cannot affect validation.
 		lowerKey := strings.ToLower(header.Key)
 		if lowerKey == headers.RequestID {
 			ctx.RequestID = headerValue
-		}
-		if lowerKey == headers.VSRLooperRequest && headerValue == "true" {
-			ctx.LooperRequest = true
 		}
 		// The x-vsr-skip-processing opt-out is gated by the deployment-level
 		// global.router.skip_processing.enabled flag. When disabled (the
@@ -108,6 +106,7 @@ func captureRequestHeaders(
 			ctx.SkipProcessing = true
 		}
 	}
+	authenticateLooperRequestContext(ctx)
 
 	method := ctx.Headers[":method"]
 	path := ctx.Headers[":path"]
@@ -178,6 +177,7 @@ func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
 				Value: "identity",
 			},
 		}},
+		RemoveHeaders: looperInternalHeadersForRemoval(),
 	}
 }
 

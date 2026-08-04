@@ -31,6 +31,9 @@ ReMoM orchestrates multiple rounds of parallel model calls:
 3. **Round 2**: Launch `breadth_schedule[1]` calls, feeding compacted responses as context.
 4. **Final Synthesis**: One final call synthesizes all intermediate results into a coherent answer.
 
+ReMoM backend subrequests are non-streaming so each round receives complete
+outputs. A streaming client response is emitted only after final synthesis.
+
 The breadth schedule controls how many calls happen per round. For example `[32, 4]` means 32 calls in round 1, 4 in round 2, then 1 final synthesis call.
 
 ## Execution Flow
@@ -148,6 +151,7 @@ algorithm:
     compaction_tokens: 1000              # Tokens to keep for last_n_tokens
     synthesis_template: ""               # Custom synthesis template (optional)
     max_concurrent: 3                    # Max concurrent calls per round
+    max_completion_tokens: 1024          # Completion limit for each subrequest
     round_timeout_seconds: 120           # Optional round-level wait cap
     min_successful_responses: 2          # Optional early-success quorum
     shuffle_seed: 42                     # Seed for response shuffling
@@ -168,6 +172,7 @@ algorithm:
 | `compaction_tokens` | int | `1000` | Tokens to keep for `last_n_tokens` compaction |
 | `synthesis_template` | string | — | Custom synthesis prompt template |
 | `max_concurrent` | int | — | Maximum concurrent model calls per round |
+| `max_completion_tokens` | int | request default | Maximum completion tokens applied to every ReMoM subrequest |
 | `round_timeout_seconds` | int | — | Maximum seconds to wait for a round before using partial responses when `on_error: skip` |
 | `min_successful_responses` | int | — | Return from a parallel round after this many successful responses |
 | `shuffle_seed` | int | `42` | Random seed for response shuffling |

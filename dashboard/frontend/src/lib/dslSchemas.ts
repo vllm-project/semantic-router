@@ -17,6 +17,7 @@ export interface FieldSchema {
   required?: boolean
   placeholder?: string
   description?: string
+  min?: number
   fields?: FieldSchema[]
   addLabel?: string
   emptyLabel?: string

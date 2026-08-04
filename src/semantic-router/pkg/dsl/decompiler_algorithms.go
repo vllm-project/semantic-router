@@ -101,6 +101,9 @@ func remomAlgorithmToFields(r *config.ReMoMAlgorithmConfig, fields map[string]Va
 	setStringValue(fields, "synthesis_template", r.SynthesisTemplate)
 	setStringValue(fields, "synthesis_model", r.SynthesisModel)
 	setIntValue(fields, "max_concurrent", r.MaxConcurrent)
+	if r.MaxCompletionTokens != nil {
+		setIntValue(fields, "max_completion_tokens", *r.MaxCompletionTokens)
+	}
 	setIntValue(fields, "round_timeout_seconds", r.RoundTimeoutSeconds)
 	setIntValue(fields, "min_successful_responses", r.MinSuccessfulResponses)
 	setStringValue(fields, "on_error", r.OnError)

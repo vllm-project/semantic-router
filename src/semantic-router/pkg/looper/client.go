@@ -202,18 +202,7 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 		httpReq.Header.Set("Authorization", "Bearer "+accessKey)
 	}
 
-	// Add looper identification headers
-	// These allow extproc to identify looper requests and lookup decision configuration
-	httpReq.Header.Set("x-vsr-looper-request", "true")
-	httpReq.Header.Set("x-vsr-looper-iteration", fmt.Sprintf("%d", iteration))
-	if c.fusionDepth > 0 {
-		httpReq.Header.Set("x-vsr-fusion-depth", fmt.Sprintf("%d", c.fusionDepth))
-	}
-
-	// Add decision name header for extproc to lookup decision configuration
-	if c.decisionName != "" {
-		httpReq.Header.Set("x-vsr-looper-decision", c.decisionName)
-	}
+	c.setInternalRequestHeaders(httpReq, ctx, iteration)
 
 	// Execute request
 	start := time.Now()
@@ -300,57 +289,75 @@ func (c *Client) parseStreamingResponse(body []byte, modelName string) (*ModelRe
 		IsStreaming: true,
 	}
 
-	// Parse SSE chunks to extract content and usage
-	content, chunks := parseSSEContent(body)
+	// Parse SSE chunks to extract content, reasoning, and usage.
+	content, reasoning, chunks := parseSSEContent(body)
+	result.ReasoningContent = reasoning
 	result.Content = content
 	result.StreamingChunks = chunks
 	result.Usage = parseStreamingUsage(body)
 
 	logging.ComponentDebugEvent("looper", "model_call_completed", map[string]interface{}{
-		"decision":     c.decisionName,
-		"model_ref":    modelName,
-		"content_len":  len(content),
-		"total_tokens": result.Usage.TotalTokens,
-		"streaming":    true,
+		"decision":      c.decisionName,
+		"model_ref":     modelName,
+		"content_len":   len(result.Content),
+		"reasoning_len": len(result.ReasoningContent),
+		"total_tokens":  result.Usage.TotalTokens,
+		"streaming":     true,
 	})
 
 	return result, nil
 }
 
-// parseSSEContent extracts content from SSE formatted response
-func parseSSEContent(body []byte) (string, []string) {
+// parseSSEContent extracts answer and reasoning text from an SSE response.
+func parseSSEContent(body []byte) (string, string, []string) {
 	var content string
+	var reasoning string
 	var chunks []string
 
 	lines := bytes.Split(body, []byte("\n"))
 	for _, line := range lines {
-		lineStr := string(line)
-		if len(lineStr) > 6 && lineStr[:6] == "data: " {
-			data := lineStr[6:]
-			chunks = append(chunks, data)
+		lineStr := strings.TrimSuffix(string(line), "\r")
+		if !strings.HasPrefix(lineStr, "data:") {
+			continue
+		}
+		data := strings.TrimPrefix(lineStr, "data:")
+		data = strings.TrimPrefix(data, " ")
+		chunks = append(chunks, data)
 
-			if data == "[DONE]" {
-				continue
-			}
+		if data == "[DONE]" {
+			continue
+		}
 
-			var chunk map[string]interface{}
-			if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-				continue
-			}
+		var chunk map[string]interface{}
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			continue
+		}
 
-			if choices, ok := chunk["choices"].([]interface{}); ok && len(choices) > 0 {
-				if choice, ok := choices[0].(map[string]interface{}); ok {
-					if delta, ok := choice["delta"].(map[string]interface{}); ok {
-						if c, ok := delta["content"].(string); ok {
-							content += c
-						}
-					}
-				}
-			}
+		choices, ok := chunk["choices"].([]interface{})
+		if !ok || len(choices) == 0 {
+			continue
+		}
+		choice, ok := choices[0].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		textFields := choice
+		if delta, ok := choice["delta"].(map[string]interface{}); ok {
+			textFields = delta
+		} else if message, ok := choice["message"].(map[string]interface{}); ok {
+			textFields = message
+		}
+		if text, ok := textFields["content"].(string); ok {
+			content += text
+		}
+		if text := reasoningTextFromMap(textFields); text != "" {
+			reasoning += text
+		} else if text := reasoningTextFromMap(choice); text != "" {
+			reasoning += text
 		}
 	}
 
-	return content, chunks
+	return content, reasoning, chunks
 }
 
 // LogprobAnalysis contains analyzed logprob data from a response
@@ -703,27 +710,23 @@ func extractReasoningFromRaw(rawBody []byte) string {
 		return ""
 	}
 
-	// Try choice-level fields first
-	if reasoning, reasoningOk := choice["reasoning"].(string); reasoningOk {
+	if message, ok := choice["message"].(map[string]interface{}); ok {
+		if reasoning := reasoningTextFromMap(message); reasoning != "" {
+			return reasoning
+		}
+	}
+	if reasoning := reasoningTextFromMap(choice); reasoning != "" {
 		return reasoning
 	}
-	if reasoning, reasoningOk := choice["reasoning_content"].(string); reasoningOk {
-		return reasoning
-	}
+	return ""
+}
 
-	// Try message-level fields
-	message, ok := choice["message"].(map[string]interface{})
-	if !ok {
-		return ""
+func reasoningTextFromMap(fields map[string]interface{}) string {
+	for _, key := range []string{"reasoning_content", "reasoning"} {
+		if value, ok := fields[key].(string); ok && strings.TrimSpace(value) != "" {
+			return value
+		}
 	}
-
-	if reasoning, ok := message["reasoning"].(string); ok {
-		return reasoning
-	}
-	if reasoning, ok := message["reasoning_content"].(string); ok {
-		return reasoning
-	}
-
 	return ""
 }
 

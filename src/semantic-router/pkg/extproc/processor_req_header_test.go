@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -9,6 +10,8 @@ import (
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/internalauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 )
 
@@ -157,7 +160,8 @@ func TestHandleRequestHeadersSetsLooperAndStreamingFlags(t *testing.T) {
 					{Key: ":method", Value: "POST"},
 					{Key: ":path", Value: "/v1/chat/completions"},
 					{Key: "accept", Value: "text/event-stream"},
-					{Key: "x-vsr-looper-request", Value: "true"},
+					{Key: headers.VSRLooperRequest, Value: "true"},
+					{Key: headers.VSRInternalAuth, Value: internalauth.Token()},
 					{Key: "x-request-id", Value: "req-123"},
 				},
 			},
@@ -176,10 +180,68 @@ func TestHandleRequestHeadersSetsLooperAndStreamingFlags(t *testing.T) {
 		t.Fatal("expected streaming expectation to be detected")
 	}
 	if !ctx.LooperRequest {
-		t.Fatal("expected looper request to be detected")
+		t.Fatal("expected authenticated looper request to be detected")
 	}
 	if ctx.RequestID != "req-123" {
 		t.Fatalf("expected request ID to be captured, got %q", ctx.RequestID)
+	}
+	if got := headerValueCI(ctx, headers.VSRInternalAuth); got != "" {
+		t.Fatal("internal token remained in captured request context")
+	}
+	removed := response.GetRequestHeaders().Response.GetHeaderMutation().RemoveHeaders
+	for _, internalHeader := range looperInternalContextHeaders {
+		if !slices.Contains(removed, internalHeader) {
+			t.Fatalf("request header mutation did not remove %q", internalHeader)
+		}
+	}
+}
+
+func TestHandleRequestHeadersTreatsSpoofedLooperContextAsExternal(t *testing.T) {
+	tests := []struct {
+		name  string
+		token string
+	}{
+		{name: "missing token"},
+		{name: "incorrect token", token: "caller-supplied-token"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assertSpoofedLooperContextTreatedAsExternal(t, test.token)
+		})
+	}
+}
+
+func assertSpoofedLooperContextTreatedAsExternal(t *testing.T, token string) {
+	t.Helper()
+	requestHeaders := newRequestHeaders("POST", "/v1/chat/completions")
+	requestHeaders.RequestHeaders.Headers.Headers = append(
+		requestHeaders.RequestHeaders.Headers.Headers,
+		&core.HeaderValue{Key: headers.VSRLooperRequest, Value: "true"},
+		&core.HeaderValue{Key: headers.VSRSelectedRecipe, Value: "recipe-b"},
+		&core.HeaderValue{Key: headers.VSRLooperDecision, Value: "shared-route"},
+		&core.HeaderValue{Key: headers.VSRInternalAuth, Value: token},
+	)
+
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	response, err := (&OpenAIRouter{}).handleRequestHeaders(requestHeaders, ctx)
+	if err != nil {
+		t.Fatalf("handleRequestHeaders failed: %v", err)
+	}
+	if ctx.LooperRequest {
+		t.Fatal("spoofed context was accepted as an internal request")
+	}
+	for _, internalHeader := range looperInternalContextHeaders {
+		if got := headerValueCI(ctx, internalHeader); got != "" {
+			t.Fatalf("unauthenticated internal header %q remained in request context", internalHeader)
+		}
+	}
+
+	removed := response.GetRequestHeaders().Response.GetHeaderMutation().RemoveHeaders
+	for _, internalHeader := range looperInternalContextHeaders {
+		if !slices.Contains(removed, internalHeader) {
+			t.Fatalf("request header mutation did not remove %q", internalHeader)
+		}
 	}
 }
 

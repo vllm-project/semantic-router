@@ -762,6 +762,7 @@ routing:
           synthesis_template: Fuse the strongest technical findings into a final answer.
           synthesis_model: qwen3-32b
           max_concurrent: 3
+          max_completion_tokens: 1024
           round_timeout_seconds: 120
           min_successful_responses: 2
           on_error: skip

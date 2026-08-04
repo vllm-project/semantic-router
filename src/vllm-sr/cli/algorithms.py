@@ -96,6 +96,9 @@ class ReMoMAlgorithmConfig(BaseModel):
     # Maximum concurrent model calls per round
     max_concurrent: int | None = None
 
+    # Maximum completion tokens applied to every ReMoM model call
+    max_completion_tokens: int | None = Field(default=None, ge=1)
+
     # Maximum wall-clock time to wait for a ReMoM round before using partial
     # responses when on_error="skip".
     round_timeout_seconds: int | None = Field(default=None, ge=1)

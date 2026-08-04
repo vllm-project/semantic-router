@@ -146,6 +146,14 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
           placeholder: '0 (no limit)',
         },
         {
+          key: 'max_completion_tokens',
+          label: 'Max Completion Tokens',
+          type: 'number',
+          min: 1,
+          placeholder: '1024',
+          description: 'Apply a completion limit to every ReMoM subrequest',
+        },
+        {
           key: 'round_timeout_seconds',
           label: 'Round Timeout',
           type: 'number',
@@ -328,7 +336,8 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
           label: 'Round Timeout',
           type: 'number',
           placeholder: '0 (wait for all)',
-          description: 'Stop waiting for a workflow step or final synthesis after this many seconds',
+          description:
+            'Stop waiting for a workflow step or final synthesis after this many seconds',
         },
         {
           key: 'min_successful_responses',
@@ -389,7 +398,12 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
       ]
     case 'hybrid':
       return [
-        { key: 'experience_weight', label: 'Experience Weight', type: 'number', placeholder: '0.3' },
+        {
+          key: 'experience_weight',
+          label: 'Experience Weight',
+          type: 'number',
+          placeholder: '0.3',
+        },
         { key: 'router_dc_weight', label: 'RouterDC Weight', type: 'number', placeholder: '0.3' },
         { key: 'automix_weight', label: 'AutoMix Weight', type: 'number', placeholder: '0.2' },
         { key: 'cost_weight', label: 'Cost Weight', type: 'number', placeholder: '0.2' },

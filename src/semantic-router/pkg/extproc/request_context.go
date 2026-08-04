@@ -246,7 +246,7 @@ type RequestContext struct {
 	RouterReplayRecorder     *routerreplay.Recorder           // The recorder instance for this decision
 
 	// Looper context
-	LooperRequest   bool // True if this request is from looper (internal request, skip plugins)
+	LooperRequest   bool // True only for token-authenticated in-process looper requests
 	LooperIteration int  // The iteration number if this is a looper request
 
 	// SkipProcessing indicates the client (or an upstream filter such as Envoy AI

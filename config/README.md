@@ -59,6 +59,9 @@ Candidate iteration fragments must stay bounded to `decision.candidates` or an e
 - `looper/`: multi-model execution policies such as `confidence`, `ratings`, `remom`, and `fusion`
 - `selection/`: request-time candidate-selection policies such as `router_dc`, `automix`, `hybrid`, `multi_factor`, and `latency_aware`
 
+The ReMoM looper fragment includes `max_completion_tokens` as an optional
+per-subrequest completion budget.
+
 Each supported algorithm now has its own tutorial page under `website/docs/tutorials/algorithm/`.
 
 `config/plugin/` is organized by route-local plugin or reusable plugin bundle:

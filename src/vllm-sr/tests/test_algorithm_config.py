@@ -205,12 +205,20 @@ class TestReMoMAlgorithmConfig:
         config = ReMoMAlgorithmConfig(
             breadth_schedule=[3],
             synthesis_model="model-b",
+            max_completion_tokens=768,
             round_timeout_seconds=120,
             min_successful_responses=2,
         )
         assert config.synthesis_model == "model-b"
+        assert config.max_completion_tokens == 768
         assert config.round_timeout_seconds == 120
         assert config.min_successful_responses == 2
+
+        with pytest.raises(PydanticValidationError):
+            ReMoMAlgorithmConfig(
+                breadth_schedule=[3],
+                max_completion_tokens=0,
+            )
 
         with pytest.raises(PydanticValidationError):
             ReMoMAlgorithmConfig(
