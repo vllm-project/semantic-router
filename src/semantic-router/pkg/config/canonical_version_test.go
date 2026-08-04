@@ -33,6 +33,25 @@ func TestValidateCanonicalVersion(t *testing.T) {
 	}
 }
 
+// A release that bumps the written contract lists the outgoing one in
+// acceptedCanonicalVersions, so configs written for it keep loading.
+func TestValidateCanonicalVersionAcceptsRetainedContracts(t *testing.T) {
+	restore := acceptedCanonicalVersions
+	t.Cleanup(func() { acceptedCanonicalVersions = restore })
+	acceptedCanonicalVersions = []string{"v0.4", "v0.3"}
+
+	for _, v := range acceptedCanonicalVersions {
+		if err := validateCanonicalVersion(v); err != nil {
+			t.Errorf("validateCanonicalVersion(%q) = %v, want accepted", v, err)
+		}
+	}
+	if err := validateCanonicalVersion("v0.2"); err == nil {
+		t.Error("validateCanonicalVersion(\"v0.2\") accepted a dropped contract")
+	} else if !strings.Contains(err.Error(), "v0.4, v0.3") {
+		t.Errorf("error does not name what this build reads: %v", err)
+	}
+}
+
 // TestCanonicalContractRejectsUnsupportedVersion covers the boundary rather than the
 // helper: an unsupported version must fail before the document is interpreted.
 func TestCanonicalContractRejectsUnsupportedVersion(t *testing.T) {
