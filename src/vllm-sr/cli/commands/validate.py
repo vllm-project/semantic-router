@@ -28,6 +28,8 @@ _SIGNAL_SUMMARY_FIELDS = (
     ("Knowledge-base signals", "kb"),
     ("Conversation signals", "conversation"),
     ("Event signals", "events"),
+    ("Metadata signals", "metadata"),
+    ("Classifier signals", "classifiers"),
 )
 
 

@@ -11,6 +11,7 @@ type signalConversationHistory struct {
 	priorUserMessages  []string
 	nonUserMessages    []string
 	hasAssistantReply  bool
+	metadata           map[string]string
 
 	// Conversation-shape facts for the conversation signal family.
 	hasDeveloperMessage     bool
@@ -21,6 +22,7 @@ type signalConversationHistory struct {
 	toolDefinitionCount     int
 	assistantToolCallCount  int
 	toolResultCount         int
+	imageContentCount       int
 	assistantToolNames      []string
 	lastMessageRole         string
 	lastMessageToolResult   bool
@@ -36,6 +38,7 @@ func signalConversationHistoryFromFastExtract(result *FastExtractResult) signalC
 		priorUserMessages:       append([]string(nil), result.PriorUserMessages...),
 		nonUserMessages:         append([]string(nil), result.NonUserMessages...),
 		hasAssistantReply:       result.HasAssistantReply,
+		metadata:                cloneRoutingMetadata(result.Metadata),
 		hasDeveloperMessage:     result.HasDeveloperMessage,
 		userMessageCount:        result.UserMessageCount,
 		assistantMessageCount:   result.AssistantMessageCount,
@@ -44,11 +47,23 @@ func signalConversationHistoryFromFastExtract(result *FastExtractResult) signalC
 		toolDefinitionCount:     result.ToolDefinitionCount,
 		assistantToolCallCount:  result.AssistantToolCallCount,
 		toolResultCount:         result.ToolResultCount,
+		imageContentCount:       result.ImageContentCount,
 		assistantToolNames:      append([]string(nil), result.AssistantToolNames...),
 		lastMessageRole:         result.LastMessageRole,
 		lastMessageToolResult:   result.LastMessageToolResult,
 		lastUserAfterToolResult: result.LastUserAfterToolResult,
 	}
+}
+
+func cloneRoutingMetadata(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func extractToolTransitionContextFromRequest(req *openai.ChatCompletionNewParams, historyWindow int, ctx *RequestContext) tools.ToolTransitionContext {

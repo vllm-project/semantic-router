@@ -8,9 +8,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-func (c *Classifier) evaluateStructureSignal(results *SignalResults, mu *sync.Mutex, text string) {
+func (c *Classifier) evaluateStructureSignal(results *SignalResults, mu *sync.Mutex, text string, uncompressedText ...string) {
 	start := time.Now()
-	matchedRules, err := c.structureClassifier.Classify(text)
+	evaluatedRules, err := c.structureClassifier.EvaluateAll(text, uncompressedText...)
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 
@@ -21,22 +21,26 @@ func (c *Classifier) evaluateStructureSignal(results *SignalResults, mu *sync.Mu
 		logging.Errorf("structure rule evaluation failed: %v", err)
 		return
 	}
-	if len(matchedRules) == 0 {
+	if len(evaluatedRules) == 0 {
 		return
 	}
 
 	bestConfidence := 0.0
 	mu.Lock()
 	defer mu.Unlock()
-	for _, match := range matchedRules {
+	for _, match := range evaluatedRules {
+		key := signalConfidenceKey(config.SignalTypeStructure, match.RuleName)
+		results.SignalValues[key] = match.Value
+		results.SignalConfidences[key] = match.Confidence
+		c.recordSignalExtraction(config.SignalTypeStructure, match.RuleName, latencySeconds)
+		if !match.Matched {
+			continue
+		}
 		if match.Confidence > bestConfidence {
 			bestConfidence = match.Confidence
 		}
-		c.recordSignalExtraction(config.SignalTypeStructure, match.RuleName, latencySeconds)
 		c.recordSignalMatch(config.SignalTypeStructure, match.RuleName)
 		results.MatchedStructureRules = append(results.MatchedStructureRules, match.RuleName)
-		results.SignalConfidences[signalConfidenceKey(config.SignalTypeStructure, match.RuleName)] = match.Confidence
-		results.SignalValues[signalConfidenceKey(config.SignalTypeStructure, match.RuleName)] = match.Value
 	}
 	results.Metrics.Structure.Confidence = bestConfidence
 }

@@ -10,18 +10,19 @@ import (
 type typedPluginConfigEmitter func(*strings.Builder, *config.DecisionPlugin)
 
 var typedPluginConfigEmitters = map[string]typedPluginConfigEmitter{
-	"system_prompt":   emitSystemPromptPluginConfig,
-	"semantic-cache":  emitSemanticCachePluginConfig,
-	"router_replay":   emitRouterReplayPluginConfig,
-	"memory":          emitMemoryPluginConfig,
-	"hallucination":   emitHallucinationPluginConfig,
-	"image_gen":       emitImageGenPluginConfig,
-	"fast_response":   emitFastResponsePluginConfig,
-	"request_params":  emitRequestParamsPluginConfig,
-	"tool_selection":  emitToolSelectionPluginConfig,
-	"tools":           emitToolsPluginConfig,
-	"rag":             emitRAGPluginConfig,
-	"header_mutation": emitHeaderMutationPluginConfig,
+	"system_prompt":      emitSystemPromptPluginConfig,
+	"semantic-cache":     emitSemanticCachePluginConfig,
+	"router_replay":      emitRouterReplayPluginConfig,
+	"memory":             emitMemoryPluginConfig,
+	"hallucination":      emitHallucinationPluginConfig,
+	"image_gen":          emitImageGenPluginConfig,
+	"fast_response":      emitFastResponsePluginConfig,
+	"request_params":     emitRequestParamsPluginConfig,
+	"tool_selection":     emitToolSelectionPluginConfig,
+	"tools":              emitToolsPluginConfig,
+	"rag":                emitRAGPluginConfig,
+	"header_mutation":    emitHeaderMutationPluginConfig,
+	"response_jailbreak": emitResponseJailbreakPluginConfig,
 }
 
 func decompilePluginConfig(p *config.DecisionPlugin) string {
@@ -326,5 +327,22 @@ func emitHeaderMutationPluginConfig(sb *strings.Builder, p *config.DecisionPlugi
 	}
 	if len(cfg.Delete) > 0 {
 		fmt.Fprintf(sb, "    delete: %s\n", formatStringArray(cfg.Delete))
+	}
+}
+
+func emitResponseJailbreakPluginConfig(
+	sb *strings.Builder,
+	p *config.DecisionPlugin,
+) {
+	cfg, ok := decodePluginConfig[config.ResponseJailbreakPluginConfig](p)
+	if !ok {
+		return
+	}
+	fmt.Fprintf(sb, "    enabled: %t\n", cfg.Enabled)
+	if cfg.Threshold != 0 {
+		fmt.Fprintf(sb, "    threshold: %g\n", cfg.Threshold)
+	}
+	if cfg.Action != "" {
+		fmt.Fprintf(sb, "    action: %q\n", cfg.Action)
 	}
 }

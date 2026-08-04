@@ -19,12 +19,14 @@ import type {
   KeywordSignal,
   LanguageSignal,
   ModalitySignal,
+  MetadataSignal,
   PIISignal,
   PreferenceSignal,
   ReaskSignal,
   RoleBindingSignal,
   SignalType,
   StructureSignal,
+  ClassifierSignal,
   UserFeedbackSignal,
 } from './configPageSupport'
 import { formatThreshold } from './configPageSupport'
@@ -79,7 +81,9 @@ type UnifiedSignalData = Partial<
     RoleBindingSignal &
     JailbreakSignal &
     PIISignal &
-    KBSignal
+    KBSignal &
+    MetadataSignal &
+    ClassifierSignal
 >
 
 interface UnifiedSignal {
@@ -292,6 +296,24 @@ export default function ConfigPageSignalsSection({
       type: 'KB',
       summary: `${kbSignal.kb} • ${kbSignal.target.kind}:${kbSignal.target.value} • ${match}`,
       rawData: kbSignal,
+    })
+  })
+
+  effectiveSignals?.metadata?.forEach((metadata) => {
+    allSignals.push({
+      name: metadata.name,
+      type: 'Metadata',
+      summary: `Key: ${metadata.key}`,
+      rawData: metadata,
+    })
+  })
+
+  effectiveSignals?.classifiers?.forEach((classifier) => {
+    allSignals.push({
+      name: classifier.name,
+      type: 'Classifier',
+      summary: `${classifier.type}, ${classifier.labels.length} labels`,
+      rawData: classifier,
     })
   })
 
@@ -733,6 +755,34 @@ export default function ConfigPageSignalsSection({
           { label: 'Match', value: signal.rawData.match || 'best' },
         ],
       })
+    } else if (signal.type === 'Metadata') {
+      sections.push({
+        title: 'Metadata Signal',
+        fields: [
+          { label: 'Key', value: signal.rawData.key || 'N/A' },
+          {
+            label: 'Predicate',
+            value: JSON.stringify(signal.rawData.predicate || {}),
+            fullWidth: true,
+          },
+        ],
+      })
+    } else if (signal.type === 'Classifier') {
+      sections.push({
+        title: 'Classifier Signal',
+        fields: [
+          { label: 'Backend', value: signal.rawData.type || 'N/A' },
+          {
+            label: 'Model',
+            value: signal.rawData.model || signal.rawData.model_path || 'N/A',
+          },
+          {
+            label: 'Labels',
+            value: (signal.rawData.labels || []).join(', '),
+            fullWidth: true,
+          },
+        ],
+      })
     } else {
       sections.push({
         title: 'Details',
@@ -782,6 +832,17 @@ export default function ConfigPageSignalsSection({
       target_kind: 'group',
       target_value: '',
       kb_match: 'best',
+      metadata_key: '',
+      metadata_predicate_type: 'equals',
+      metadata_equals: '',
+      metadata_in: [],
+      metadata_exists: true,
+      classifier_type: 'local',
+      classifier_model: '',
+      classifier_model_path: '',
+      classifier_labels: [],
+      classifier_instructions: '',
+      classifier_use_cpu: false,
     }
 
     const initialData: AddSignalFormState =
@@ -827,6 +888,31 @@ export default function ConfigPageSignalsSection({
             target_kind: signal.type === 'KB' ? signal.rawData.target?.kind || 'group' : 'group',
             target_value: signal.type === 'KB' ? signal.rawData.target?.value || '' : '',
             kb_match: signal.type === 'KB' ? signal.rawData.match || 'best' : 'best',
+            metadata_key: signal.type === 'Metadata' ? signal.rawData.key || '' : '',
+            metadata_predicate_type:
+              signal.type === 'Metadata'
+                ? signal.rawData.predicate?.equals !== undefined
+                  ? 'equals'
+                  : signal.rawData.predicate?.in !== undefined
+                    ? 'in'
+                    : 'exists'
+                : 'equals',
+            metadata_equals:
+              signal.type === 'Metadata' ? signal.rawData.predicate?.equals || '' : '',
+            metadata_in:
+              signal.type === 'Metadata' ? [...(signal.rawData.predicate?.in || [])] : [],
+            metadata_exists:
+              signal.type === 'Metadata' ? signal.rawData.predicate?.exists !== false : true,
+            classifier_type:
+              signal.type === 'Classifier' ? signal.rawData.type || 'local' : 'local',
+            classifier_model: signal.type === 'Classifier' ? signal.rawData.model || '' : '',
+            classifier_model_path:
+              signal.type === 'Classifier' ? signal.rawData.model_path || '' : '',
+            classifier_labels:
+              signal.type === 'Classifier' ? [...(signal.rawData.labels || [])] : [],
+            classifier_instructions:
+              signal.type === 'Classifier' ? signal.rawData.instructions || '' : '',
+            classifier_use_cpu: signal.type === 'Classifier' ? !!signal.rawData.use_cpu : false,
           }
         : defaultForm
 
@@ -1137,6 +1223,57 @@ export default function ConfigPageSignalsSection({
               match,
             },
           ]
+          break
+        }
+        case 'Metadata': {
+          const key = (formData.metadata_key || '').trim()
+          if (!key) throw new Error('Metadata key is required.')
+          const predicateType = formData.metadata_predicate_type || 'equals'
+          const predicate: MetadataSignal['predicate'] = {}
+          if (predicateType === 'equals') {
+            predicate.equals = (formData.metadata_equals || '').trim()
+          } else if (predicateType === 'in') {
+            const values = normalizeStringList(formData.metadata_in, 'Metadata values')
+            if (values.length === 0) throw new Error('Metadata values are required.')
+            predicate.in = values
+          } else {
+            predicate.exists = formData.metadata_exists !== false
+          }
+          newConfig.signals.metadata = [
+            ...(newConfig.signals.metadata || []),
+            {
+              name,
+              description: formData.description || undefined,
+              key,
+              predicate,
+            },
+          ]
+          break
+        }
+        case 'Classifier': {
+          const classifierType = formData.classifier_type || 'local'
+          const labels = normalizeStringList(formData.classifier_labels, 'Classifier labels')
+          if (labels.length === 0) throw new Error('Classifier labels are required.')
+          const classifier: ClassifierSignal = {
+            name,
+            description: formData.description || undefined,
+            type: classifierType,
+            labels,
+          }
+          if (classifierType === 'local') {
+            if (labels.length !== 2) {
+              throw new Error('Local classifiers require exactly two labels.')
+            }
+            classifier.model_path = (formData.classifier_model_path || '').trim()
+            if (!classifier.model_path) throw new Error('Local model path is required.')
+            classifier.use_cpu = !!formData.classifier_use_cpu
+          } else {
+            classifier.model = (formData.classifier_model || '').trim()
+            classifier.instructions = (formData.classifier_instructions || '').trim()
+            if (!classifier.model) throw new Error('External classifier model is required.')
+            if (!classifier.instructions) throw new Error('Classifier instructions are required.')
+          }
+          newConfig.signals.classifiers = [...(newConfig.signals.classifiers || []), classifier]
           break
         }
         default:

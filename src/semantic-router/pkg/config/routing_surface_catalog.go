@@ -18,6 +18,7 @@ const (
 	DecisionAlgorithmStatic       = "static"
 	DecisionAlgorithmSVM          = "svm"
 	DecisionAlgorithmWorkflows    = "workflows"
+	DecisionAlgorithmPrompt       = "prompt"
 
 	DecisionPluginSemanticCache     = "semantic-cache"
 	DecisionPluginSystemPrompt      = "system_prompt"
@@ -52,6 +53,8 @@ var supportedSignalTypes = []string{
 	SignalTypeKB,
 	SignalTypeUserFeedback,
 	SignalTypeEvent,
+	SignalTypeMetadata,
+	SignalTypeClassifier,
 }
 
 var supportedDecisionPluginTypes = []string{
@@ -92,6 +95,7 @@ var decisionAlgorithmCatalog = []AlgorithmCatalogEntry{
 	{Type: DecisionAlgorithmStatic, Tier: "supported"},
 	{Type: DecisionAlgorithmSVM, Tier: "experimental"},
 	{Type: DecisionAlgorithmWorkflows, Tier: "experimental"},
+	{Type: DecisionAlgorithmPrompt, Tier: "experimental"},
 }
 
 // supportedDecisionAlgorithmTypes is derived from the catalog for backwards compatibility

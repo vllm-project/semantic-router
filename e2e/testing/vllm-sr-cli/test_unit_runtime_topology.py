@@ -118,6 +118,36 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
         ):
             self.assertIn(container_name, removed_container_names)
 
+    @mock.patch.dict(
+        os.environ,
+        {
+            "VLLM_SR_STACK_NAME": "isolated-test",
+            "VLLM_SR_PORT_OFFSET": "4200",
+        },
+        clear=False,
+    )
+    @mock.patch.object(CLITestBase, "_cleanup_container")
+    @mock.patch.object(CLITestBase, "_detect_container_runtime", return_value="docker")
+    def test_set_up_class_scopes_container_names(
+        self,
+        _detect_runtime,
+        _cleanup_container,
+    ):
+        class IsolatedCLITestBase(CLITestBase):
+            pass
+
+        IsolatedCLITestBase.setUpClass()
+
+        self.assertEqual(
+            IsolatedCLITestBase.ROUTER_CONTAINER_NAME,
+            "isolated-test-vllm-sr-router-container",
+        )
+        self.assertEqual(
+            IsolatedCLITestBase.SIM_CONTAINER_NAME,
+            "isolated-test-vllm-sr-sim",
+        )
+        self.assertEqual(IsolatedCLITestBase.runtime_stack.port_offset, 4200)
+
     @mock.patch.dict(os.environ, {"CONTAINER_RUNTIME": "podman"}, clear=False)
     def test_cli_test_base_accepts_podman_env_override(self):
         with mock.patch.object(
@@ -135,6 +165,19 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
             side_effect=lambda name: "/usr/bin/podman" if name == "podman" else None,
         ):
             self.assertEqual(CLITestBase._detect_container_runtime(), "podman")
+
+    @mock.patch.dict(os.environ, {"RUN_INTEGRATION_TESTS": "false"}, clear=True)
+    def test_cli_test_base_uses_stub_runtime_for_unit_only_suite(self):
+        with mock.patch.object(cli_test_base.shutil, "which", return_value=None):
+            self.assertEqual(CLITestBase._detect_container_runtime(), "docker")
+
+    @mock.patch.dict(os.environ, {"RUN_INTEGRATION_TESTS": "true"}, clear=True)
+    def test_cli_test_base_requires_runtime_for_integration_suite(self):
+        with (
+            mock.patch.object(cli_test_base.shutil, "which", return_value=None),
+            self.assertRaisesRegex(RuntimeError, "Neither docker nor podman"),
+        ):
+            CLITestBase._detect_container_runtime()
 
     @mock.patch.object(CLITestBase, "_run_subprocess")
     def test_run_cli_preserves_partial_output_on_timeout(self, run_subprocess):

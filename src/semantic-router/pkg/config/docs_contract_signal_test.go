@@ -27,6 +27,8 @@ var signalTutorialBuckets = map[string]string{
 	"kb":            "learned",
 	"user-feedback": "learned",
 	"event":         "heuristic",
+	"metadata":      "heuristic",
+	"classifier":    "learned",
 }
 
 var retiredSignalTutorialDocs = []string{

@@ -38,7 +38,8 @@ func (s *ClassificationService) CheckSecurity(req SecurityRequest) (*SecurityRes
 		return nil, ErrEmptyText
 	}
 
-	if s.classifier == nil {
+	classifier := s.classifierSnapshot()
+	if classifier == nil {
 		processingTime := time.Since(start).Milliseconds()
 		return &SecurityResponse{
 			IsJailbreak:      false,
@@ -51,7 +52,7 @@ func (s *ClassificationService) CheckSecurity(req SecurityRequest) (*SecurityRes
 		}, nil
 	}
 
-	isJailbreak, jailbreakType, confidence, riskScore, err := s.classifier.CheckForJailbreakWithRisk(req.Text)
+	isJailbreak, jailbreakType, confidence, riskScore, err := classifier.CheckForJailbreakWithRisk(req.Text)
 	if err != nil {
 		return nil, fmt.Errorf("security detection failed: %w", err)
 	}

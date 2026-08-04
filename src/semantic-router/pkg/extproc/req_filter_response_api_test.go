@@ -51,4 +51,24 @@ var _ = Describe("Response API Stream Flag Injection", func() {
 		Expect(chatReq).NotTo(HaveKey("stream"))
 		Expect(chatReq).NotTo(HaveKey("stream_options"))
 	})
+
+	It("should preserve bounded metadata for routing", func() {
+		responseAPIReq := `{
+			"model": "gpt-4",
+			"input": "Hello",
+			"metadata": {"cohort": "canary"}
+		}`
+
+		_, translatedBody, err := filter.TranslateRequest(
+			context.Background(),
+			[]byte(responseAPIReq),
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		var chatReq map[string]interface{}
+		Expect(json.Unmarshal(translatedBody, &chatReq)).To(Succeed())
+		Expect(chatReq["metadata"]).To(Equal(
+			map[string]interface{}{"cohort": "canary"},
+		))
+	})
 })

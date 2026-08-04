@@ -117,6 +117,7 @@ func createReplayRecorder(
 	recorder := routerreplay.NewRecorder(storage)
 	recorder.SetCapturePolicy(pluginCfg.CaptureRequestBody, pluginCfg.CaptureResponseBody, maxBodyBytes)
 	recorder.SetMaxToolTraceBytes(pluginCfg.MaxToolTraceBytes)
+	recorder.SetMaxToolTraceSteps(pluginCfg.MaxToolTraceSteps)
 	return recorder, nil
 }
 
@@ -131,6 +132,7 @@ func createSharedReplayRecorder(
 		resolveReplayMaxBodyBytes(pluginCfg.MaxBodyBytes),
 	)
 	recorder.SetMaxToolTraceBytes(pluginCfg.MaxToolTraceBytes)
+	recorder.SetMaxToolTraceSteps(pluginCfg.MaxToolTraceSteps)
 	return recorder
 }
 

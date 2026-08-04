@@ -129,6 +129,17 @@ func (s *ClassificationAPIServer) prepareRouterConfigMutationPayload(
 		s.writeErrorResponse(w, http.StatusBadRequest, "CONFIG_VALIDATION_ERROR", err.Error())
 		return nil, nil, false
 	}
+	if len(existingData) > 0 {
+		if err := validateHotReloadCompatibility(existingData, yamlBytes); err != nil {
+			s.writeErrorResponse(
+				w,
+				http.StatusConflict,
+				"RESTART_REQUIRED",
+				scrubSecretsInErrorMessage(err.Error()),
+			)
+			return nil, nil, false
+		}
+	}
 
 	if len(existingData) == 0 {
 		logging.Infof("[RouterConfig] No existing config at path=%s, writing %s document", sourceConfigPath, mode)
@@ -145,12 +156,42 @@ func (s *ClassificationAPIServer) prepareRouterConfigMutationPayload(
 }
 
 func validateAndEncodeRouterConfigDocument(doc map[string]any) ([]byte, error) {
+	return normalizeRouterConfigDocument(doc)
+}
+
+func validateHotReloadCompatibility(currentYAML []byte, nextYAML []byte) error {
+	currentCfg, err := config.ParseYAMLBytes(currentYAML)
+	if err != nil {
+		return fmt.Errorf("failed to parse current config for reload validation: %w", err)
+	}
+	nextCfg, err := config.ParseYAMLBytes(nextYAML)
+	if err != nil {
+		return fmt.Errorf("failed to parse next config for reload validation: %w", err)
+	}
+	return config.ValidateLocalClassifierReload(currentCfg, nextCfg)
+}
+
+func normalizeRouterConfigDocument(doc map[string]any) ([]byte, error) {
+	return normalizeRouterConfigDocumentWithParser(doc, config.ParseYAMLBytes)
+}
+
+func normalizeRouterConfigDocumentWithoutEnv(doc map[string]any) ([]byte, error) {
+	return normalizeRouterConfigDocumentWithParser(
+		doc,
+		config.ParseYAMLBytesWithoutEnvExpansion,
+	)
+}
+
+func normalizeRouterConfigDocumentWithParser(
+	doc map[string]any,
+	parse func([]byte) (*config.RouterConfig, error),
+) ([]byte, error) {
 	rawYAML, err := yaml.Marshal(doc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode router config update: %w", err)
 	}
 
-	if _, err := config.ParseYAMLBytes(rawYAML); err != nil {
+	if _, err := parse(rawYAML); err != nil {
 		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
 	// The submitted document is already canonical v0.3 because ParseYAMLBytes

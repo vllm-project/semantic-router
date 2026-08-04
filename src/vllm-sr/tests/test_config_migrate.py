@@ -63,6 +63,35 @@ def test_migrate_prefers_canonical_auto_aliases_over_legacy_flat_value():
     assert "auto_model_names" not in migrated["global"]
 
 
+def test_migrate_config_preserves_entrypoints_and_recipes():
+    config = {
+        "version": "v0.3",
+        "routing": {},
+        "entrypoints": [{"model_names": ["vllm-sr/private"], "recipe": "private"}],
+        "recipes": [
+            {
+                "name": "private",
+                "routing": {
+                    "signals": {
+                        "metadata": [
+                            {
+                                "name": "private",
+                                "key": "cohort",
+                                "predicate": {"equals": "private"},
+                            }
+                        ]
+                    }
+                },
+            }
+        ],
+    }
+
+    migrated = migrate_config_data(config)
+
+    assert migrated["entrypoints"] == config["entrypoints"]
+    assert migrated["recipes"] == config["recipes"]
+
+
 def test_migrate_config_data_splits_legacy_provider_models():
     legacy = {
         "version": "v0.1",

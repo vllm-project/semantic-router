@@ -51,7 +51,7 @@ func validateModalityRules(rules []ModalityRule) error {
 // validateModalityDecisions validates that decisions using modality signals have correct modelRefs.
 // Specifically, a BOTH decision must reference both an AR and a diffusion model, OR a single omni model.
 func validateModalityDecisions(cfg *RouterConfig) error {
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		for _, cond := range decision.Rules.Conditions {
 			if cond.Type != SignalTypeModality || cond.Name != "BOTH" {
 				continue
