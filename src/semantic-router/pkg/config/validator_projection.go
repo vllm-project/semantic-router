@@ -21,7 +21,7 @@ func validateProjectionContracts(cfg *RouterConfig) error {
 	if err != nil {
 		return err
 	}
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		if err := validateDecisionProjectionReferences(decision.Name, &decision.Rules, outputNames); err != nil {
 			return err
 		}
@@ -414,6 +414,8 @@ func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{}
 		SignalTypeKB:           collectKBRuleNames(cfg.KBRules),
 		SignalTypeConversation: collectConversationRuleNames(cfg.ConversationRules),
 		SignalTypeEvent:        collectEventRuleNames(cfg.EventRules),
+		SignalTypeMetadata:     collectMetadataRuleNames(cfg.MetadataRules),
+		SignalTypeClassifier:   collectClassifierRuleNames(cfg.ClassifierRules),
 	}
 	return declared
 }
@@ -689,6 +691,24 @@ func collectConversationRuleNames(rules []ConversationRule) map[string]struct{} 
 }
 
 func collectEventRuleNames(rules []EventRule) map[string]struct{} {
+	names := make(map[string]struct{}, len(rules))
+	for _, rule := range rules {
+		names[rule.Name] = struct{}{}
+	}
+	return names
+}
+
+func collectMetadataRuleNames(rules []MetadataRule) map[string]struct{} {
+	names := make(map[string]struct{}, len(rules))
+	for _, rule := range rules {
+		names[rule.Name] = struct{}{}
+	}
+	return names
+}
+
+func collectClassifierRuleNames(
+	rules []ClassifierSignalRule,
+) map[string]struct{} {
 	names := make(map[string]struct{}, len(rules))
 	for _, rule := range rules {
 		names[rule.Name] = struct{}{}

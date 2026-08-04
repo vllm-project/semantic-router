@@ -24,6 +24,7 @@ var algorithmTutorialBuckets = map[string]string{
 	"static":        "selection",
 	"svm":           "selection",
 	"workflows":     "looper",
+	"prompt":        "selection",
 }
 
 var retiredAlgorithmTutorialDocs = []string{

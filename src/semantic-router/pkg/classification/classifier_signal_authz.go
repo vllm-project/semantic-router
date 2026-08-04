@@ -24,13 +24,14 @@ type SignalEvaluationInput struct {
 	UncompressedText       string
 	SkipCompressionSignals map[string]bool
 	ConversationFacts      ConversationFacts
+	RequestFacts           RequestFacts
 }
 
 // EvaluateAllSignalsWithHeaders evaluates the selected recipe's signals,
 // including authz role bindings. Authz errors are returned to the caller so a
 // missing identity cannot silently bypass policy.
 func (c *Classifier) EvaluateAllSignalsWithHeaders(input SignalEvaluationInput) (*SignalResults, error) {
-	results := c.EvaluateAllSignalsWithContext(
+	results := c.evaluateAllSignalsWithContext(
 		input.Text,
 		input.ContextText,
 		input.CurrentUserText,
@@ -42,6 +43,9 @@ func (c *Classifier) EvaluateAllSignalsWithHeaders(input SignalEvaluationInput) 
 		input.SkipCompressionSignals,
 		input.ConversationFacts,
 		input.ImageURL,
+		input.RequestFacts,
+		nil,
+		false,
 	)
 	if err := c.appendAuthzFromHeaders(results, input.Headers, input.ForceEvaluateAll); err != nil {
 		return nil, err

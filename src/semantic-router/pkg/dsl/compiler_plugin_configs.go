@@ -1,6 +1,10 @@
 package dsl
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+import (
+	"gopkg.in/yaml.v2"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
 
 func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Value) *config.DecisionPlugin {
 	if pluginType == "semantic_cache" {
@@ -50,6 +54,10 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 	},
 	"header_mutation": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileHeaderMutationPluginConfig(fields), true
+	},
+	"response_jailbreak": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
+		cfg := &config.ResponseJailbreakPluginConfig{}
+		return compilePluginFields(c, fields, cfg)
 	},
 	"router_replay": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileRouterReplayPluginConfig(fields), true
@@ -111,6 +119,23 @@ func stringArrayValue(value Value) []string {
 		}
 	}
 	return result
+}
+
+func compilePluginFields(
+	c *Compiler,
+	fields map[string]Value,
+	target interface{},
+) (interface{}, bool) {
+	raw, err := yaml.Marshal(fieldsToMap(fields))
+	if err != nil {
+		c.addError(Position{}, "failed to encode plugin fields: %v", err)
+		return nil, false
+	}
+	if err := yaml.Unmarshal(raw, target); err != nil {
+		c.addError(Position{}, "failed to decode plugin fields: %v", err)
+		return nil, false
+	}
+	return target, true
 }
 
 func (c *Compiler) buildPluginConfigValue(pluginType string, fields map[string]Value) (interface{}, bool) {

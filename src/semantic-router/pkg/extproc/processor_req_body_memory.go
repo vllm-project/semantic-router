@@ -363,7 +363,21 @@ func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName stri
 			return response
 		}
 	}
-	response := httputil.CreateFastResponse(fastCfg.Message, ctx.ExpectStreamingResponse, decisionName)
+	if ctx.ClientProtocol == config.ClientProtocolAnthropic {
+		response := createAnthropicFastResponse(
+			ctx,
+			fastCfg.Message,
+			decisionName,
+		)
+		appendRecipeHeaderToImmediateResponse(response, ctx)
+		return response
+	}
+
+	response := httputil.CreateFastResponse(
+		fastCfg.Message,
+		ctx.ExpectStreamingResponse,
+		decisionName,
+	)
 	appendRecipeHeaderToImmediateResponse(response, ctx)
 	return response
 }
