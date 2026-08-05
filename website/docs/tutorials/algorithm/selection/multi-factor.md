@@ -6,7 +6,7 @@
 
 The configuration belongs to the decision that declares it. If multiple decisions use `multi_factor`, each matched decision is evaluated with its own weights, SLOs, percentile, and no-candidate policy.
 
-It aligns to `config/algorithm/selection/multi-factor.yaml` and addresses issue [#37](https://github.com/vllm-project/semantic-router/issues/37).
+It aligns to `config/fragments/algorithm/selection/multi-factor.yaml` and addresses issue [#37](https://github.com/vllm-project/semantic-router/issues/37).
 
 ## Key Advantages
 

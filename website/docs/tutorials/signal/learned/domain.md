@@ -2,7 +2,7 @@
 
 ## Overview
 
-`domain` classifies the request topic family. It maps to `config/signal/domain/` and is declared under `routing.signals.domains`.
+`domain` classifies the request topic family. It maps to `config/fragments/signal/domain/` and is declared under `routing.signals.domains`.
 
 This family is learned: the router uses the domain-classification path under `global.model_catalog.modules.classifier` and the stable domain system model bindings in `global.model_catalog.system`.
 
@@ -30,7 +30,7 @@ Use `domain` when:
 
 ## Configuration
 
-Source fragment family: `config/signal/domain/`
+Source fragment family: `config/fragments/signal/domain/`
 
 ```yaml
 routing:

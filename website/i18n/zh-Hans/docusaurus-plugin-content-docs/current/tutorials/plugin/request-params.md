@@ -11,7 +11,7 @@ translation:
 
 `request_params` 是一个路由局部插件，用于在 OpenAI Chat Completions 请求体转发到后端之前对其进行校验和裁剪。
 
-它对应 `config/plugin/request-params/budget-tier.yaml`。
+它对应 `config/fragments/plugin/request-params/budget-tier.yaml`。
 
 ## 主要优势
 

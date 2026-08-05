@@ -13,7 +13,7 @@ translation:
 
 配置归属于声明它的决策，并且各决策的配置相互隔离。如果多个决策使用 `multi_factor`，则每个匹配到的决策都会使用各自的权重、SLO、分位数和无候选项策略进行评估。
 
-它与 `config/algorithm/selection/multi-factor.yaml` 保持一致，并解决了议题 [#37](https://github.com/vllm-project/semantic-router/issues/37)。
+它与 `config/fragments/algorithm/selection/multi-factor.yaml` 保持一致，并解决了议题 [#37](https://github.com/vllm-project/semantic-router/issues/37)。
 
 ## 主要优势
 

@@ -11,7 +11,7 @@ translation:
 
 `fast_response` 是路由局部插件：立即返回确定性回退消息。
 
-对应 `config/plugin/fast-response/busy.yaml`。
+对应 `config/fragments/plugin/fast-response/busy.yaml`。
 
 ## 主要优势
 
