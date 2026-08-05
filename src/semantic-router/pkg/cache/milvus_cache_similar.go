@@ -116,16 +116,25 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 	}
 
 	hit := &searchResult[0]
-	bestScore := hit.Scores[0]
-	c.StoreSimilarity(bestScore)
-	if bestScore < threshold {
+	// The SDK may return results with Err set and Fields nil but Scores populated.
+	if hit.Err != nil {
+		logging.Debugf("MilvusCache.FindSimilarWithThreshold: search result error: %v", hit.Err)
 		atomic.AddInt64(&c.missCount, 1)
-		logging.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f",
-			bestScore, threshold)
+		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
+		return nil, false, nil
+	}
+	metricType := c.config.Collection.VectorField.MetricType
+	bestSimilarity := milvusScoreToSimilarity(metricType, hit.Scores[0])
+	c.StoreSimilarity(bestSimilarity)
+	if bestSimilarity < threshold {
+		atomic.AddInt64(&c.missCount, 1)
+		logging.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f (metric=%s)",
+			bestSimilarity, threshold, metricType)
 		logging.LogEvent("cache_miss", map[string]interface{}{
 			"backend":         "milvus",
-			"best_similarity": bestScore,
+			"best_similarity": bestSimilarity,
 			"threshold":       threshold,
+			"metric":          metricType,
 			"model":           model,
 			"collection":      c.collectionName,
 		})
@@ -143,12 +152,13 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 	}
 
 	atomic.AddInt64(&c.hitCount, 1)
-	logging.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
-		bestScore, threshold, len(responseBody))
+	logging.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE HIT - similarity=%.4f >= threshold=%.4f (metric=%s), response_size=%d bytes",
+		bestSimilarity, threshold, metricType, len(responseBody))
 	logging.LogEvent("cache_hit", map[string]interface{}{
 		"backend":    "milvus",
-		"similarity": bestScore,
+		"similarity": bestSimilarity,
 		"threshold":  threshold,
+		"metric":     metricType,
 		"model":      model,
 		"collection": c.collectionName,
 	})

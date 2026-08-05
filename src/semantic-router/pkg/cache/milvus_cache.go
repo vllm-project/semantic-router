@@ -69,6 +69,11 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	} else {
 		milvusConfig = options.Config
 	}
+	// Normalize once: the raw string feeds index creation, searches, and score conversion.
+	milvusConfig.Collection.VectorField.MetricType = normalizeMilvusMetricType(milvusConfig.Collection.VectorField.MetricType)
+	if m := milvusConfig.Collection.VectorField.MetricType; m != "IP" && m != "COSINE" && m != "L2" {
+		logging.Warnf("MilvusCache: unrecognized metric_type %q; scores will be compared as similarities without conversion", m)
+	}
 	logging.Debugf("MilvusCache: config loaded - host=%s:%d, collection=%s, dimension=%d",
 		milvusConfig.Connection.Host, milvusConfig.Connection.Port, milvusConfig.Collection.Name,
 		semanticCacheEmbeddingDimension(milvusConfig.Collection.VectorField.Dimension, options.EmbeddingModel))
