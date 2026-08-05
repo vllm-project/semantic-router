@@ -99,6 +99,7 @@ var (
 	_ CacheBackend = (*InMemoryCache)(nil)
 	_ CacheBackend = (*HybridCache)(nil)
 	_ CacheBackend = (*MilvusCache)(nil)
+	_ CacheBackend = (*QdrantCache)(nil)
 	_ CacheBackend = (*RedisCache)(nil)
 	_ CacheBackend = (*ValkeyCache)(nil)
 )
