@@ -12,7 +12,17 @@ import (
 )
 
 func TestRouterLearningRuntimeUpdateOutcomeUsesTargetRefAndTier(t *testing.T) {
-	rt := newRouterLearningRuntime(nil, nil, nil)
+	storage := store.NewMemoryStore(10, 0)
+	recorder := routerreplay.NewRecorder(storage)
+	rt := newRouterLearningRuntime(nil, recorder, nil)
+	if _, err := recorder.AddRecord(routerreplay.RoutingRecord{
+		ID:            "replay-1",
+		Decision:      "domain_code",
+		DecisionTier:  4,
+		SelectedModel: "model-a",
+	}); err != nil {
+		t.Fatalf("add replay record: %v", err)
+	}
 
 	result := rt.UpdateOutcome(context.Background(), &routerruntime.RouterOutcome{
 		ReplayID:  "replay-1",
@@ -45,7 +55,16 @@ func TestRouterLearningRuntimeUpdateOutcomeUsesTargetRefAndTier(t *testing.T) {
 }
 
 func TestRouterLearningRuntimeIgnoresNonModelOutcomes(t *testing.T) {
-	rt := newRouterLearningRuntime(nil, nil, nil)
+	storage := store.NewMemoryStore(10, 0)
+	recorder := routerreplay.NewRecorder(storage)
+	rt := newRouterLearningRuntime(nil, recorder, nil)
+	if _, err := recorder.AddRecord(routerreplay.RoutingRecord{
+		ID:            "replay-1",
+		Decision:      "domain_code",
+		SelectedModel: "model-a",
+	}); err != nil {
+		t.Fatalf("add replay record: %v", err)
+	}
 
 	result := rt.UpdateOutcome(context.Background(), &routerruntime.RouterOutcome{
 		ReplayID:  "replay-1",
@@ -54,8 +73,89 @@ func TestRouterLearningRuntimeIgnoresNonModelOutcomes(t *testing.T) {
 		TargetRef: "domain_code",
 		Verdict:   routerruntime.RouterOutcomeVerdictUnderpowered,
 	})
-	if result.Updated != 0 {
-		t.Fatalf("expected route outcome to skip online model update, got %#v", result)
+	if result.Updated != 0 || !result.Recorded {
+		t.Fatalf("expected route outcome to skip online model update but still record, got %#v", result)
+	}
+}
+
+func TestRouterLearningRuntimeRejectsMissingReplay(t *testing.T) {
+	rt := newRouterLearningRuntime(nil, nil, nil)
+	result := rt.UpdateOutcome(context.Background(), &routerruntime.RouterOutcome{
+		ReplayID:  "missing",
+		Source:    routerruntime.RouterOutcomeSourceOperator,
+		Target:    routerruntime.RouterOutcomeTargetModel,
+		TargetRef: "model-a",
+		Verdict:   routerruntime.RouterOutcomeVerdictGoodFit,
+	})
+	if result.Code != routerruntime.RouterOutcomeCodeReplayNotFound || result.Updated != 0 {
+		t.Fatalf("expected replay_not_found, got %#v", result)
+	}
+}
+
+func TestRouterLearningRuntimeRejectsOwnershipMismatch(t *testing.T) {
+	storage := store.NewMemoryStore(10, 0)
+	recorder := routerreplay.NewRecorder(storage)
+	rt := newRouterLearningRuntime(nil, recorder, nil)
+	if _, err := recorder.AddRecord(routerreplay.RoutingRecord{
+		ID:            "replay-1",
+		SelectedModel: "model-a",
+	}); err != nil {
+		t.Fatalf("add replay record: %v", err)
+	}
+
+	result := rt.UpdateOutcome(context.Background(), &routerruntime.RouterOutcome{
+		ReplayID:  "replay-1",
+		Source:    routerruntime.RouterOutcomeSourceOperator,
+		Target:    routerruntime.RouterOutcomeTargetModel,
+		TargetRef: "model-b",
+		Verdict:   routerruntime.RouterOutcomeVerdictGoodFit,
+	})
+	if result.Code != routerruntime.RouterOutcomeCodeOwnershipMismatch || result.Updated != 0 {
+		t.Fatalf("expected ownership_mismatch, got %#v", result)
+	}
+	if exact := rt.experienceSnapshot("", 0, "model-b"); exact.GoodFitCount != 0 {
+		t.Fatalf("mismatched ownership must not update experience, got %#v", exact)
+	}
+}
+
+func TestRouterLearningRuntimeDedupsIdempotencyKey(t *testing.T) {
+	storage := store.NewMemoryStore(10, 0)
+	recorder := routerreplay.NewRecorder(storage)
+	rt := newRouterLearningRuntime(nil, recorder, nil)
+	if _, err := recorder.AddRecord(routerreplay.RoutingRecord{
+		ID:            "replay-1",
+		SelectedModel: "model-a",
+		Decision:      "domain_code",
+		DecisionTier:  4,
+	}); err != nil {
+		t.Fatalf("add replay record: %v", err)
+	}
+
+	first := rt.UpdateOutcome(context.Background(), &routerruntime.RouterOutcome{
+		ReplayID:       "replay-1",
+		Source:         routerruntime.RouterOutcomeSourceOperator,
+		Target:         routerruntime.RouterOutcomeTargetModel,
+		Verdict:        routerruntime.RouterOutcomeVerdictGoodFit,
+		Score:          1,
+		IdempotencyKey: "idem-1",
+	})
+	if first.Updated != 1 || !first.Recorded {
+		t.Fatalf("expected first ingest to succeed, got %#v", first)
+	}
+	second := rt.UpdateOutcome(context.Background(), &routerruntime.RouterOutcome{
+		ReplayID:       "replay-1",
+		Source:         routerruntime.RouterOutcomeSourceOperator,
+		Target:         routerruntime.RouterOutcomeTargetModel,
+		Verdict:        routerruntime.RouterOutcomeVerdictGoodFit,
+		Score:          1,
+		IdempotencyKey: "idem-1",
+	})
+	if second.Code != routerruntime.RouterOutcomeCodeDuplicate || second.Updated != 0 {
+		t.Fatalf("expected duplicate, got %#v", second)
+	}
+	exact := rt.experienceSnapshot("domain_code", 4, "model-a")
+	if exact.GoodFitCount != 1 {
+		t.Fatalf("duplicate must not double-count experience, got %#v", exact)
 	}
 }
 

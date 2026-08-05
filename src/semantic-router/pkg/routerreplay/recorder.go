@@ -146,11 +146,10 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 	// The capture switches decide whether a body may reach storage at all,
 	// not just whether it is truncated. When capture is off the body must be
 	// dropped here — truncation alone only bounds a leak (see #2748).
-	rec.RequestBody, rec.RequestBodyTruncated = applyCapturePolicy(
-		policy.captureRequestBody, rec.RequestBody, policy.maxBodyBytes)
-
-	rec.ResponseBody, rec.ResponseBodyTruncated = applyCapturePolicy(
-		policy.captureResponseBody, rec.ResponseBody, policy.maxBodyBytes)
+	rec.RequestBody, rec.RequestBodyTruncated = applyBodyCapturePolicy(
+		rec.RequestBody, rec.RequestBodyTruncated, policy.captureRequestBody, policy.maxBodyBytes)
+	rec.ResponseBody, rec.ResponseBodyTruncated = applyBodyCapturePolicy(
+		rec.ResponseBody, rec.ResponseBodyTruncated, policy.captureResponseBody, policy.maxBodyBytes)
 
 	// Apply MaxToolTraceBytes to structured tool-trace fields.
 	// These are truncated independently of the raw body fields so that
@@ -313,6 +312,21 @@ func (r *Recorder) Close() error {
 	return r.storage.Close()
 }
 
+// applyBodyCapturePolicy enforces one capture switch on one body field. The
+// switch decides whether a body may reach storage at all, not just whether it
+// is truncated: when capture is off the body must be dropped entirely —
+// truncation alone only bounds a leak (see #2748). Within the limit the
+// caller's truncated flag is preserved.
+func applyBodyCapturePolicy(body string, truncated, capture bool, maxBytes int) (string, bool) {
+	if !capture {
+		return "", false
+	}
+	if len(body) > maxBytes {
+		return strings.Clone(body[:maxBytes]), true
+	}
+	return body, truncated
+}
+
 func truncateBody(body []byte, maxBytes int) (string, bool) {
 	if maxBytes <= 0 || len(body) <= maxBytes {
 		return string(body), false
@@ -327,12 +341,6 @@ func truncateString(s string, maxBytes int) (string, bool) {
 	return strings.Clone(s[:maxBytes]), true
 }
 
-func applyCapturePolicy(capture bool, s string, maxBytes int) (string, bool) {
-	if !capture {
-		return "", false
-	}
-	return truncateString(s, maxBytes)
-}
 
 func logSignalFields(signals Signal) map[string]interface{} {
 	return map[string]interface{}{
