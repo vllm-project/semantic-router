@@ -27,6 +27,7 @@ from cli.commands.runtime_paths import (
 )
 from cli.consts import (
     CONTAINER_RUNTIME_ENV,
+    PUBLISH_MANAGEMENT_API_ENV,
     SUPPORTED_CONTAINER_RUNTIMES,
 )
 from cli.runtime_stack import resolve_runtime_stack
@@ -185,8 +186,6 @@ def apply_management_api_publish_env(
     ``VLLM_SR_PUBLISH_MANAGEMENT_API=true``) when host tools need
     ``localhost:8080`` (#2463 Phase 4).
     """
-    from cli.consts import PUBLISH_MANAGEMENT_API_ENV
-
     if publish_management_api:
         env_vars[PUBLISH_MANAGEMENT_API_ENV] = "true"
         log.info(

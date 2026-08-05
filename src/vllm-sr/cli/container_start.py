@@ -9,6 +9,7 @@ from cli.consts import (
     MIN_NOFILE_LIMIT,
     PLATFORM_AMD,
     PLATFORM_NVIDIA,
+    PUBLISH_MANAGEMENT_API_ENV,
 )
 from cli.container_images import (
     _normalize_platform,
@@ -267,8 +268,6 @@ def _runtime_container_specs(
 
 
 def _publish_management_api_enabled(common_env: dict[str, str]) -> bool:
-    from cli.consts import PUBLISH_MANAGEMENT_API_ENV
-
     raw = str(common_env.get(PUBLISH_MANAGEMENT_API_ENV, "")).strip().lower()
     if raw:
         return raw in {"1", "true", "yes", "on"}
