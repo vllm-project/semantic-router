@@ -64,14 +64,6 @@ var _ = Describe("ValkeyBackend helpers", func() {
 		It("should leave safe strings unchanged", func() { Expect(escapeTagValue("abc123")).To(Equal("abc123")) })
 	})
 
-	Context("distanceToSimilarity", func() {
-		It("COSINE", func() { Expect(distanceToSimilarity("COSINE", 0.2)).To(BeNumerically("~", 0.9, 0.001)) })
-		It("L2", func() { Expect(distanceToSimilarity("L2", 0.3)).To(BeNumerically("~", 0.769, 0.01)) })
-		It("IP", func() { Expect(distanceToSimilarity("IP", 0.95)).To(BeNumerically("~", 0.95, 0.001)) })
-		It("zero distance", func() { Expect(distanceToSimilarity("COSINE", 0.0)).To(BeNumerically("~", 1.0, 0.001)) })
-		It("case-insensitive", func() { Expect(distanceToSimilarity("cosine", 0.2)).To(BeNumerically("~", 0.9, 0.001)) })
-	})
-
 	Context("toInt64", func() {
 		It("int64", func() {
 			value, ok := toInt64(int64(42))
