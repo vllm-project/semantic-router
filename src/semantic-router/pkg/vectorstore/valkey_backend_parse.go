@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	valkeyutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/valkey"
 )
 
 // float32SliceToBytes converts a float32 slice to a little-endian byte slice
@@ -184,7 +186,7 @@ func parseScoreFromMap(fields map[string]interface{}, key string, metricType str
 	if !ok {
 		return 0, false
 	}
-	score := distanceToSimilarity(metricType, distance)
+	score := valkeyutil.DistanceToSimilarity(metricType, distance)
 	if math.IsNaN(score) || math.IsInf(score, 0) {
 		return 0, false
 	}
@@ -231,21 +233,6 @@ func parseValkeyInt(raw interface{}) (int, bool) {
 		return 0, false
 	}
 	return int(value), true
-}
-
-// distanceToSimilarity converts a vector distance to a similarity score based on the metric type.
-// Follows the same conversion as the Valkey cache backend (PR #1540).
-func distanceToSimilarity(metricType string, distance float64) float64 {
-	switch strings.ToUpper(metricType) {
-	case "COSINE":
-		return 1.0 - distance/2.0
-	case "L2":
-		return 1.0 / (1.0 + distance)
-	case "IP":
-		return distance
-	default:
-		return 1.0 - distance
-	}
 }
 
 // toInt64 converts an interface{} to int64, handling both int64 and string representations.

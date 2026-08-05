@@ -142,28 +142,10 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 		rec.Timestamp = time.Now().UTC()
 	}
 
-	// The capture switches decide whether a body may reach storage at all,
-	// not just whether it is truncated. When capture is off the body must be
-	// dropped here — truncation alone only bounds a leak (see #2748).
-	if policy.captureRequestBody {
-		if len(rec.RequestBody) > policy.maxBodyBytes {
-			rec.RequestBody = rec.RequestBody[:policy.maxBodyBytes]
-			rec.RequestBodyTruncated = true
-		}
-	} else {
-		rec.RequestBody = ""
-		rec.RequestBodyTruncated = false
-	}
-
-	if policy.captureResponseBody {
-		if len(rec.ResponseBody) > policy.maxBodyBytes {
-			rec.ResponseBody = rec.ResponseBody[:policy.maxBodyBytes]
-			rec.ResponseBodyTruncated = true
-		}
-	} else {
-		rec.ResponseBody = ""
-		rec.ResponseBodyTruncated = false
-	}
+	rec.RequestBody, rec.RequestBodyTruncated = applyBodyCapturePolicy(
+		rec.RequestBody, rec.RequestBodyTruncated, policy.captureRequestBody, policy.maxBodyBytes)
+	rec.ResponseBody, rec.ResponseBodyTruncated = applyBodyCapturePolicy(
+		rec.ResponseBody, rec.ResponseBodyTruncated, policy.captureResponseBody, policy.maxBodyBytes)
 
 	// Apply MaxToolTraceBytes to structured tool-trace fields.
 	// These are truncated independently of the raw body fields so that
@@ -331,6 +313,21 @@ func (r *Recorder) ListAllRecords() []RoutingRecord {
 // Releases resources held by the storage backend.
 func (r *Recorder) Close() error {
 	return r.storage.Close()
+}
+
+// applyBodyCapturePolicy enforces one capture switch on one body field. The
+// switch decides whether a body may reach storage at all, not just whether it
+// is truncated: when capture is off the body must be dropped entirely —
+// truncation alone only bounds a leak (see #2748). Within the limit the
+// caller's truncated flag is preserved.
+func applyBodyCapturePolicy(body string, truncated, capture bool, maxBytes int) (string, bool) {
+	if !capture {
+		return "", false
+	}
+	if len(body) > maxBytes {
+		return body[:maxBytes], true
+	}
+	return body, truncated
 }
 
 func truncateBody(body []byte, maxBytes int) (string, bool) {
