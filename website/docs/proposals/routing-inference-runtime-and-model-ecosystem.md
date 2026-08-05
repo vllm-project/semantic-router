@@ -315,19 +315,19 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
 
 <ZoomableMermaid title="Routing Inference Runtime" defaultZoom={4.5}>
 {`flowchart LR
-    Config[Canonical config and model manifests] --> Resolver[Deployment resolver]
-    Resolver --> Artifacts[Content-addressed artifact store]
-    Resolver --> Drivers[Driver registry and capability negotiation]
+    Config["Canonical config and model manifests"] --> Resolver["Deployment resolver"]
+    Resolver --> Artifacts["Content-addressed artifact store"]
+    Resolver --> Drivers["Driver registry and capability negotiation"]
 
-    Drivers --> Native[sr_native]
-    Drivers --> ORT[ONNX Runtime]
-    Drivers --> OV[OpenVINO]
-    Drivers --> VLLM[vLLM companion driver]
-    Drivers --> TEI[TEI driver]
-    Drivers --> HF[Isolated HF reference driver]
-    Drivers --> SGLang[Optional SGLang driver]
+    Drivers --> Native["sr_native"]
+    Drivers --> ORT["ONNX Runtime"]
+    Drivers --> OV["OpenVINO"]
+    Drivers --> VLLM["vLLM companion driver"]
+    Drivers --> TEI["TEI driver"]
+    Drivers --> HF["Isolated HF reference driver"]
+    Drivers --> SGLang["Optional SGLang driver"]
 
-    Native --> Sessions[Typed model sessions]
+    Native --> Sessions["Typed model sessions"]
     ORT --> Sessions
     OV --> Sessions
     VLLM --> Sessions
@@ -335,12 +335,12 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     HF --> Sessions
     SGLang --> Sessions
 
-    Sessions --> Snapshot[Immutable runtime snapshot]
-    Snapshot --> Bindings[Recipe-local bindings]
-    Bindings --> Signals[Signals, plugins, retrieval, and model selection]
+    Sessions --> Snapshot["Immutable runtime snapshot"]
+    Snapshot --> Bindings["Recipe-local bindings"]
+    Bindings --> Signals["Signals, plugins, retrieval, and model selection"]
 
-    Receipts[Conformance and performance receipts] --> Resolver
-    Vendors[Vendor Day-0 intake] --> Manifests[Reviewed manifests and golden cases]
+    Receipts["Conformance and performance receipts"] --> Resolver
+    Vendors["Vendor Day-0 intake"] --> Manifests["Reviewed manifests and golden cases"]
     Manifests --> Config
 
     style Resolver fill:#dbeafe
