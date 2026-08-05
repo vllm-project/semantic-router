@@ -7,9 +7,8 @@ top-level ``external_api`` backend, mirroring the Go-side
 """
 
 import pytest
-from pydantic import ValidationError
-
 from cli.models import RAGPluginConfig
+from pydantic import ValidationError
 
 
 def _external_api_cfg(request_format: str = "pinecone") -> dict:
