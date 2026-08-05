@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`preference` 从示例与分类器设置推断用户响应风格偏好。映射到 `config/signal/preference/`，在 `routing.signals.preferences` 中声明。
+`preference` 从示例与分类器设置推断用户响应风格偏好。映射到 `config/fragments/signal/preference/`，在 `routing.signals.preferences` 中声明。
 
 该族为学习型：使用 `global.model_catalog.modules.classifier.preference` 下的偏好分类路径。
 
@@ -39,7 +39,7 @@ translation:
 
 ## 配置
 
-源片段族：`config/signal/preference/`
+源片段族：`config/fragments/signal/preference/`
 
 ```yaml
 routing:

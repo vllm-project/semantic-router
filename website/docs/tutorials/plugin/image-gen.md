@@ -4,7 +4,7 @@
 
 `image_gen` is a route-local plugin for handing a matched route off to an image-generation backend.
 
-It aligns to `config/plugin/image-gen/basic.yaml`.
+It aligns to `config/fragments/plugin/image-gen/basic.yaml`.
 
 ## Key Advantages
 
