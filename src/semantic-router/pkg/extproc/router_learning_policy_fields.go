@@ -30,6 +30,10 @@ const (
 	learningPolicyFieldDecision          routerLearningPolicyField = "decision"
 	learningPolicyFieldDecisionTier      routerLearningPolicyField = "decision_tier"
 	learningPolicyFieldRescue            routerLearningPolicyField = "rescue"
+	learningPolicyFieldDim               routerLearningPolicyField = "dim"
+	learningPolicyFieldAlpha             routerLearningPolicyField = "alpha"
+	learningPolicyFieldLambda            routerLearningPolicyField = "lambda"
+	learningPolicyFieldSigma             routerLearningPolicyField = "sigma"
 )
 
 type routerLearningPolicyField string

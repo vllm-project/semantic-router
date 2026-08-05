@@ -52,6 +52,8 @@ func (r routerLearningAdaptationStrategyRegistry) Strategy(
 
 var routerLearningAdaptationStrategies = newRouterLearningAdaptationStrategyRegistry(
 	routingSamplingAdaptationStrategy{},
+	linUCBAdaptationStrategy{},
+	linearThompsonAdaptationStrategy{},
 )
 
 type routingSamplingAdaptationStrategy struct{}
