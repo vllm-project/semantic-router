@@ -96,6 +96,7 @@ providers:
           weight: 100
 
 routing:
+  strategy: priority
   modelCards:
     - name: qwen3-8b
       param_size: 8B
@@ -338,6 +339,14 @@ routing:
             pattern: '[?？]'
         predicate:
           lt: 0.05
+      - name: long_current_turn_bytes
+        description: Current user turn is at least four thousand UTF-8 bytes.
+        feature:
+          type: count
+          source:
+            type: text_bytes
+        predicate:
+          gte: 4000
 
     complexity:
       - name: needs_reasoning
@@ -476,6 +485,12 @@ routing:
         predicate:
           gt: 5
           lte: 99
+      - name: has_images
+        description: Request contains at least one image content part.
+        feature:
+          type: exists
+          source:
+            type: image_content
 
     events:
       - name: critical_payment_event
@@ -489,6 +504,29 @@ routing:
         action_codes:
           - TXN_DECLINE
         temporal: true
+
+    metadata:
+      - name: consent_denied
+        description: Caller explicitly denied remote processing consent.
+        key: consent
+        predicate:
+          equals: denied
+
+    classifiers:
+      - name: generic-safety-score
+        description: Generic binary safety classification head.
+        type: local
+        model_path: models/mmbert32k-jailbreak-detector-merged
+        labels: [SAFE, JAILBREAK]
+        use_cpu: true
+      - name: tool-risk
+        description: Prompted tool execution risk labeler.
+        type: llm
+        model: external-classifier
+        labels: [SAFE, RISKY]
+        instructions: >-
+          Choose RISKY only for destructive, privileged, or irreversible tool
+          operations.
 
   projections:
     partitions:
@@ -555,6 +593,9 @@ routing:
       priority: 200
       tier: 2
       output_contract: Preserve any explicit user-requested output format exactly.
+      annotations:
+        policy_class: business
+        owner: routing-platform
       rules:
         operator: AND
         conditions:
@@ -1125,6 +1166,45 @@ routing:
 
     # multi_factor example: composes quality/latency/cost/load into one
     # weighted score with optional SLO ceilings. Issue #37.
+    - name: prompt_selected_route
+      description: Prompt-driven selection among bounded decision candidates.
+      priority: 126
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: other
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
+        - model: qwen3-32b
+          use_reasoning: true
+      algorithm:
+        type: prompt
+        on_error: fallback
+        prompt:
+          model: qwen3-8b
+          instructions: >-
+            Choose qwen3-8b for ordinary requests and qwen3-32b for hard
+            reasoning, coding, or multi-step analysis.
+          timeout_seconds: 5
+
+    - name: classifier_band_route
+      description: Route a bounded generic classifier score to a local model.
+      priority: 125
+      rules:
+        operator: AND
+        conditions:
+          - type: classifier
+            name: generic-safety-score
+            label: JAILBREAK
+            predicate:
+              gte: 0.5
+            on_error: no_match
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
+
     - name: multi_factor_route
       description: Compose quality, latency, cost, and load signals into a single weighted score.
       priority: 124
@@ -1371,6 +1451,7 @@ recipes:
   - name: privacy-first
     description: Keeps privacy-sensitive traffic on the local default-tier model.
     routing:
+      strategy: confidence
       signals:
         keywords:
           - name: privacy_recipe_keywords
@@ -1954,7 +2035,7 @@ global:
       enabled: true
       top_k: 5
       similarity_threshold: 0.35
-      tools_db_path: deploy/examples/runtime/tools/tools_db.json
+      tools_db_path: config/runtime/tools/tools_db.json
       fallback_to_empty: true
       advanced_filtering:
         enabled: true
@@ -2053,7 +2134,8 @@ global:
       hallucination_explainer: models/mom-halugate-explainer
       feedback_detector: models/mmbert32k-feedback-detector-merged
     external:
-      - llm_provider: openai
+      - name: external-guardrail
+        llm_provider: openai
         model_role: guardrail
         llm_endpoint:
           address: openai-proxy
@@ -2069,6 +2151,22 @@ global:
         access_key: external-guardrail-key
         max_tokens: 2048
         temperature: 0.2
+      - name: external-classifier
+        llm_provider: openai
+        model_role: classification
+        llm_endpoint:
+          address: openai-proxy
+          port: 443
+          protocol: https
+          name: openai-classifier
+          use_chat_template: true
+          prompt_template: "{{ .Prompt }}"
+        llm_model_name: gpt-4.1-mini
+        llm_timeout_seconds: 15
+        parser_type: json
+        access_key: external-classifier-key
+        max_tokens: 128
+        temperature: 0
     kbs:
       - name: privacy_kb
         source:
@@ -2242,6 +2340,9 @@ global:
           use_cpu: true
           use_mmbert_32k: true
         detector:
+          backend: candle
+          endpoint: ""
+          include_explanation: false
           model_ref: hallucination_detector
           model_id: models/mom-halugate-detector
           threshold: 0.82

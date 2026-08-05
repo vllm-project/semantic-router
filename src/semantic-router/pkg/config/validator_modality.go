@@ -3,6 +3,16 @@ package config
 import "fmt"
 
 func validateModalityContracts(cfg *RouterConfig) error {
+	if err := validateGlobalModalityContracts(cfg); err != nil {
+		return err
+	}
+	return validateRoutingModalityContracts(cfg)
+}
+
+func validateGlobalModalityContracts(cfg *RouterConfig) error {
+	if cfg == nil {
+		return nil
+	}
 	if cfg.ModalityDetector.Enabled {
 		if err := cfg.ModalityDetector.Validate(); err != nil {
 			return fmt.Errorf("modality_detector: %w", err)
@@ -10,6 +20,13 @@ func validateModalityContracts(cfg *RouterConfig) error {
 	}
 	if err := validateImageGenBackends(cfg); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateRoutingModalityContracts(cfg *RouterConfig) error {
+	if cfg == nil {
+		return nil
 	}
 	if err := validateModalityDecisions(cfg); err != nil {
 		return err
@@ -34,7 +51,7 @@ func validateModalityRules(rules []ModalityRule) error {
 // validateModalityDecisions validates that decisions using modality signals have correct modelRefs.
 // Specifically, a BOTH decision must reference both an AR and a diffusion model, OR a single omni model.
 func validateModalityDecisions(cfg *RouterConfig) error {
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		for _, cond := range decision.Rules.Conditions {
 			if cond.Type != SignalTypeModality || cond.Name != "BOTH" {
 				continue

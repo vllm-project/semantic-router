@@ -373,6 +373,7 @@ func (c *QdrantCache) FindSimilarWithThreshold(model, query string, threshold fl
 	now := time.Now().Unix()
 	filter := &qdrant.Filter{
 		Must: []*qdrant.Condition{
+			qdrant.NewMatchKeyword("model", model),
 			{
 				ConditionOneOf: &qdrant.Condition_Filter{
 					Filter: &qdrant.Filter{

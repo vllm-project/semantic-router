@@ -76,6 +76,7 @@ routing:
 | `assistant_tool_call` | — | Counts `tool_calls` across all assistant messages. |
 | `assistant_tool_cycle` | — | Counts `tool` role messages (completed tool results). |
 | `active_tool_loop` | — | Returns 1 when the latest request is actively continuing a tool loop: the last message is a tool result, the latest user turn directly follows a tool result, or assistant tool calls exceed returned tool results. Historical completed tool calls alone do not match. |
+| `image_content` | — | Counts image content parts independently of whether the image can be decoded by a local embedding model. |
 
 ## Decision Usage
 

@@ -44,27 +44,16 @@ func TestShouldSkipCacheWriteForStatus(t *testing.T) {
 	}
 }
 
-func statusCacheRouter() (*mockStreamingCache, *OpenAIRouter) {
-	mockCache := &mockStreamingCache{}
-	router := &OpenAIRouter{
-		Cache: mockCache,
-		Config: &config.RouterConfig{
-			SemanticCache: config.SemanticCache{Enabled: true},
-			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
-			},
-		},
-	}
-	return mockCache, router
+func statusCacheRouter() (*mockStreamingCache, *OpenAIRouter, *config.Decision) {
+	return cacheRouterForDecision(retentionCacheDecision("cache-decision", true))
 }
 
 func TestUpdateResponseCacheSkipsNon2xx(t *testing.T) {
-	mockCache, router := statusCacheRouter()
-	ctx := &RequestContext{
-		RequestID:               "req-status-400",
-		VSRSelectedDecisionName: "cache-decision",
-		UpstreamStatusCode:      400,
-	}
+	mockCache, router, decision := statusCacheRouter()
+	ctx := withSelectedDecision(&RequestContext{
+		RequestID:          "req-status-400",
+		UpstreamStatusCode: 400,
+	}, decision)
 	router.updateResponseCache(ctx, []byte(`{"error":{"message":"bad model"}}`))
 	if mockCache.updateCalled {
 		t.Fatal("a non-2xx upstream response must not be cached (cache poisoning)")
@@ -72,12 +61,11 @@ func TestUpdateResponseCacheSkipsNon2xx(t *testing.T) {
 }
 
 func TestUpdateResponseCacheWritesOn2xx(t *testing.T) {
-	mockCache, router := statusCacheRouter()
-	ctx := &RequestContext{
-		RequestID:               "req-status-200",
-		VSRSelectedDecisionName: "cache-decision",
-		UpstreamStatusCode:      200,
-	}
+	mockCache, router, decision := statusCacheRouter()
+	ctx := withSelectedDecision(&RequestContext{
+		RequestID:          "req-status-200",
+		UpstreamStatusCode: 200,
+	}, decision)
 	router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
 	if !mockCache.updateCalled {
 		t.Fatal("a 2xx upstream response must still be cached")
@@ -85,12 +73,11 @@ func TestUpdateResponseCacheWritesOn2xx(t *testing.T) {
 }
 
 func TestUpdateResponseCacheWritesWhenStatusUnknown(t *testing.T) {
-	mockCache, router := statusCacheRouter()
-	ctx := &RequestContext{
-		RequestID:               "req-status-unknown",
-		VSRSelectedDecisionName: "cache-decision",
+	mockCache, router, decision := statusCacheRouter()
+	ctx := withSelectedDecision(&RequestContext{
+		RequestID: "req-status-unknown",
 		// UpstreamStatusCode left 0: never observed (e.g. headers not processed).
-	}
+	}, decision)
 	router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
 	if !mockCache.updateCalled {
 		t.Fatal("unknown upstream status must not block caching (backward compatible)")
@@ -98,8 +85,8 @@ func TestUpdateResponseCacheWritesWhenStatusUnknown(t *testing.T) {
 }
 
 func TestCacheStreamingResponseSkipsNon2xx(t *testing.T) {
-	mockCache, router := statusCacheRouter()
-	ctx := retentionStreamingContext("cache-decision")
+	mockCache, router, decision := statusCacheRouter()
+	ctx := withSelectedDecision(retentionStreamingContext(), decision)
 	ctx.UpstreamStatusCode = 502
 	if err := router.cacheStreamingResponse(ctx); err != nil {
 		t.Fatalf("cacheStreamingResponse() error = %v", err)

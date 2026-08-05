@@ -62,8 +62,8 @@ export function readConditions(value: unknown): DecisionCondition[] {
 
 export function normalizeConditions(value: unknown): DecisionCondition[] {
   const conditions = readConditions(value).map((condition) => ({
-    type: condition.type.trim(),
-    name: condition.name.trim(),
+    type: (condition.type || '').trim(),
+    name: (condition.name || '').trim(),
   }))
   if (conditions.some((condition) => !condition.type || !condition.name)) {
     throw new Error('Every composer condition needs both a type and a signal name.')
@@ -238,6 +238,8 @@ const SIGNAL_CONFIG_TYPES: Record<SignalType, string> = {
   Jailbreak: 'jailbreak',
   PII: 'pii',
   KB: 'kb',
+  Metadata: 'metadata',
+  Classifier: 'classifier',
 }
 
 function countReferences(value: unknown, type: string, name: string): number {
@@ -273,6 +275,7 @@ export function getSignalReferenceCount(
     ) +
     countReferences(config.routing?.decisions, type, signalName) +
     countReferences(config.routing?.projections?.scores, type, signalName) +
+    countReferences(config.recipes, type, signalName) +
     countReferences(
       config.routing?.signals?.complexity?.map((signal) => signal.composer),
       type,

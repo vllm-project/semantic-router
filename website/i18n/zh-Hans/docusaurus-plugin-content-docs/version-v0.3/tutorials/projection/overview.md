@@ -98,7 +98,7 @@ sidebar_position: 1
 
 ## Balance 配方示例
 
-维护中的 [`deploy/recipes/balance.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.yaml) 展示了预期模式：
+维护中的 [`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml) 展示了预期模式：
 
 - `balance_domain_partition` 在维护的路由域中解析唯一领域胜者
 - `balance_intent_partition` 在嵌入意图通道中解析唯一胜者

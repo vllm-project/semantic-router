@@ -23,9 +23,12 @@ def render_markdown_summary(
         lines.extend(_render_validate_section(validate_result))
     after_eval = post_eval or pre_eval or {}
     decision_summaries = after_eval.get("decisions", [])
+    tag_summaries = after_eval.get("tags", [])
     after_results = after_eval.get("results", [])
     acceptance = after_eval.get("acceptance", {})
+    lines.extend(_render_performance_section(after_eval.get("performance", {})))
     lines.extend(_render_decision_section(decision_summaries, acceptance))
+    lines.extend(_render_tag_section(tag_summaries))
     lines.extend(_render_variant_section(after_results))
     lines.extend(_render_review_queue(decision_summaries, after_results))
     return "\n".join(lines).rstrip() + "\n"
@@ -50,6 +53,21 @@ def _render_header(
         version = deploy_result.get("version") or "unknown"
         lines.append(f"- Deploy version: `{version}`")
     return lines
+
+
+def _render_performance_section(performance: dict[str, Any]) -> list[str]:
+    if not performance:
+        return []
+    latency = performance.get("latency_ms") or {}
+    return [
+        "## Eval Performance",
+        "",
+        f"- Concurrency: `{performance.get('concurrency', 1)}`",
+        f"- Requests / errors: `{performance.get('requests', 0)} / {performance.get('errors', 0)}`",
+        f"- Throughput: `{performance.get('throughput_rps', 0)} req/s`",
+        f"- End-to-end latency p50 / p95 / p99: `{latency.get('p50', 0)} / {latency.get('p95', 0)} / {latency.get('p99', 0)} ms`",
+        "",
+    ]
 
 
 def _render_eval_summary(label: str, evaluation: dict[str, Any]) -> list[str]:
@@ -120,6 +138,25 @@ def _render_variant_section(after_results: list[dict[str, Any]]) -> list[str]:
         tags = ",".join(result.get("tags") or []) or "-"
         lines.append(
             f"| `{result['id']}` | `{result['expected_decision']}` | `{actual}` | `{tags}` | `{status}` |"
+        )
+    lines.append("")
+    return lines
+
+
+def _render_tag_section(tag_summaries: list[dict[str, Any]]) -> list[str]:
+    if not tag_summaries:
+        return []
+    lines = [
+        "## Robustness Dimensions",
+        "",
+        "| Tag | Variants | Pass rate | Result |",
+        "|---|---|---|---|",
+    ]
+    for summary in tag_summaries:
+        status = "pass" if summary["passed"] else "review"
+        lines.append(
+            f"| `{summary['tag']}` | `{summary['matched']}/{summary['total']}` | "
+            f"`{summary['pass_rate']}%` | `{status}` |"
         )
     lines.append("")
     return lines

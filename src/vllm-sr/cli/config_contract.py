@@ -8,12 +8,17 @@ from typing import Any
 
 CANONICAL_VERSION = "v0.3"
 
+CONDITION_TYPE_DOMAIN = "domain"
+CONDITION_TYPE_PROJECTION = "projection"
+
 CANONICAL_TOP_LEVEL_KEYS = frozenset(
     {
         "version",
         "listeners",
         "providers",
         "routing",
+        "entrypoints",
+        "recipes",
         "global",
         "setup",
     }
@@ -64,7 +69,7 @@ class SignalFamilySpec:
 SIGNAL_FAMILY_SPECS = (
     SignalFamilySpec("keywords", "keywords", "keyword", "keyword_rules"),
     SignalFamilySpec("embeddings", "embeddings", "embedding", "embedding_rules"),
-    SignalFamilySpec("domains", "domains", "domain", "categories"),
+    SignalFamilySpec("domains", "domains", CONDITION_TYPE_DOMAIN, "categories"),
     SignalFamilySpec("fact_check", "fact_check", "fact_check", "fact_check_rules"),
     SignalFamilySpec(
         "user_feedbacks",
@@ -91,6 +96,8 @@ SIGNAL_FAMILY_SPECS = (
     SignalFamilySpec("kb", "kb", "kb", "kb"),
     SignalFamilySpec("conversation", "conversation", "conversation", "conversation"),
     SignalFamilySpec("events", "events", "event", "events"),
+    SignalFamilySpec("metadata", "metadata", "metadata", "metadata"),
+    SignalFamilySpec("classifiers", "classifiers", "classifier", "classifiers"),
 )
 
 LEGACY_SIGNAL_KEY_TO_CANONICAL = {
@@ -108,6 +115,23 @@ _SIGNAL_FAMILY_BY_CONDITION_TYPE = {
 }
 
 
+def iter_routing_profiles(config: Any) -> Iterable[tuple[str, Any]]:
+    """Yield the default and named routing profiles through one contract."""
+    yield "default", config.routing
+    for recipe in config.recipes:
+        yield recipe.name, recipe.routing
+
+
+def iter_condition_leaves(conditions: Any) -> Iterable[Any]:
+    """Yield leaf conditions from a nested decision expression."""
+    for condition in conditions or ():
+        children = getattr(condition, "conditions", None)
+        if children:
+            yield from iter_condition_leaves(children)
+        else:
+            yield condition
+
+
 def iter_named_signal_entries(signals: Any) -> Iterable[tuple[str, str]]:
     """Yield canonical signal family keys and declared signal names."""
     if not signals:
@@ -119,22 +143,23 @@ def iter_named_signal_entries(signals: Any) -> Iterable[tuple[str, str]]:
                 yield spec.canonical_key, name
 
 
-def build_signal_reference_index(signals: Any) -> set[str]:
-    """Build the valid decision reference names for declared signals."""
-    names: set[str] = set()
+def build_signal_reference_index(signals: Any) -> dict[str, set[str]]:
+    """Index valid decision references by canonical condition type."""
+    names: dict[str, set[str]] = {}
     if not signals:
         return names
 
     for spec in SIGNAL_FAMILY_SPECS:
+        family_names = names.setdefault(spec.condition_type, set())
         for signal in getattr(signals, spec.signal_attr, None) or []:
             name = getattr(signal, "name", None)
             if not name:
                 continue
             if spec.reference_suffixes:
                 for suffix in spec.reference_suffixes:
-                    names.add(f"{name}:{suffix}")
+                    family_names.add(f"{name}:{suffix}")
                 continue
-            names.add(name)
+            family_names.add(name)
 
     return names
 
@@ -162,7 +187,9 @@ def is_signal_condition_type(condition_type: str | None) -> bool:
 
 
 def signal_reference_exists(
-    signal_names: set[str], condition_type: str | None, raw_name: str | None
+    signal_names: dict[str, set[str]],
+    condition_type: str | None,
+    raw_name: str | None,
 ) -> bool:
     """Return whether a decision condition references a known signal."""
     if not raw_name or not is_signal_condition_type(condition_type):
@@ -170,6 +197,5 @@ def signal_reference_exists(
 
     normalized_type = condition_type.strip().lower()
     spec = _SIGNAL_FAMILY_BY_CONDITION_TYPE[normalized_type]
-    if spec.reference_suffixes:
-        return raw_name in signal_names
-    return raw_name.split(":", 1)[0] in signal_names
+    family_names = signal_names.get(spec.condition_type, set())
+    return raw_name in family_names

@@ -79,7 +79,7 @@ func TestPrepareAnthropicRoutingRequestSetsAnthropicContext(t *testing.T) {
 	}
 
 	ctx := &RequestContext{Headers: map[string]string{"x-user-anthropic-key": "anthropic-test-key"}}
-	_, body, response := router.prepareAnthropicRoutingRequest(request, "claude-3-5-sonnet", "", ctx)
+	_, body, response := router.prepareAnthropicRoutingRequest(request, "claude-3-5-sonnet", ctx)
 	if response != nil {
 		t.Fatal("did not expect immediate error response")
 	}

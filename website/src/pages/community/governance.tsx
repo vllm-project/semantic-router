@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import Link from '@docusaurus/Link'
 import Layout from '@theme/Layout'
 import React from 'react'
+import CommunityLayout from '@site/src/components/community/CommunityLayout'
 import { committerActivityWindow } from '@site/src/data/committerActivity.generated'
 import styles from './governance.module.css'
 
@@ -32,25 +33,12 @@ export default function Governance(): ReactNode {
       title="Community Roles & Governance"
       description="Roles, promotion, duties, and emeritus policy for vLLM Semantic Router"
     >
-      <div className={styles.container}>
-        <header className={styles.hero}>
-          <span className={styles.eyebrow}>Community / Governance</span>
-          <div className={styles.heroGrid}>
-            <h1>Roles & Governance</h1>
-            <div>
-              <p>
-                A clear path from contribution to project stewardship, with
-                active responsibility separated from long-term recognition.
-              </p>
-              <Link to="/community/team">
-                View the current team
-                <span aria-hidden="true">→</span>
-              </Link>
-            </div>
-          </div>
-        </header>
-
-        <main className={styles.main}>
+      <CommunityLayout
+        activeKey="governance"
+        title="Roles & Governance"
+        description="A clear path from contribution to project stewardship, with active responsibility separated from long-term recognition."
+      >
+        <div className={styles.main}>
           <GovernanceSection index="01" title="Operating principles">
             <div className={styles.principles}>
               <Principle title="Earned authority">
@@ -237,8 +225,8 @@ export default function Governance(): ReactNode {
             </p>
           </GovernanceSection>
 
-        </main>
-      </div>
+        </div>
+      </CommunityLayout>
     </Layout>
   )
 }

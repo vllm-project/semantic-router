@@ -22,8 +22,7 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	if ctx.RequestID == "" || responseBody == nil {
 		return
 	}
-	decisionName := ctx.VSRSelectedDecisionName
-	if !r.semanticCacheEnabledForScope(decisionName) {
+	if !r.semanticCacheEnabledForRequest(ctx) {
 		return
 	}
 
@@ -62,7 +61,7 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 
 	ttlSeconds := -1
 	if r != nil && r.Config != nil {
-		ttlSeconds = r.Config.GetCacheTTLSecondsForDecision(decisionName)
+		ttlSeconds = r.Config.GetCacheTTLSecondsForDecisionObject(ctx.VSRSelectedDecision)
 	}
 	// Retention ttl_turns (when set) overrides the decision/global default,
 	// scoping this entry to a turn-bounded lifetime (§2.8 order: ... -> TTL -> write).
@@ -84,8 +83,7 @@ func (r *OpenAIRouter) cacheStreamingResponse(ctx *RequestContext) error {
 		return nil
 	}
 
-	decisionName := ctx.VSRSelectedDecisionName
-	if !r.semanticCacheEnabledForScope(decisionName) {
+	if !r.semanticCacheEnabledForRequest(ctx) {
 		return nil
 	}
 
@@ -265,14 +263,13 @@ func (r *OpenAIRouter) cacheReconstructedStreamingResponse(
 	ctx *RequestContext,
 	reconstructedJSON []byte,
 ) error {
-	decisionName := ctx.VSRSelectedDecisionName
-	if !r.semanticCacheEnabledForScope(decisionName) {
+	if !r.semanticCacheEnabledForRequest(ctx) {
 		return nil
 	}
 
 	ttlSeconds := -1
 	if r != nil && r.Config != nil {
-		ttlSeconds = r.Config.GetCacheTTLSecondsForDecision(decisionName)
+		ttlSeconds = r.Config.GetCacheTTLSecondsForDecisionObject(ctx.VSRSelectedDecision)
 	}
 	// Retention ttl_turns (when set) overrides the decision/global default for
 	// the reconstructed streaming entry, mirroring the non-streaming path.

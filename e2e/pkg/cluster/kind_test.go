@@ -49,3 +49,15 @@ func TestCreateClusterConfigWithWorkspaceModelsMount(t *testing.T) {
 		t.Fatalf("expected config to include workspace models host path %q, got:\n%s", workspaceModelsDir, config)
 	}
 }
+
+func TestWorkspaceModelsMountDoesNotOverlapKindStorageMount(t *testing.T) {
+	storagePath := strings.TrimSuffix(kindStorageNodeMountPath, "/") + "/"
+	modelsPath := strings.TrimSuffix(WorkspaceModelsNodeMountPath, "/") + "/"
+	if strings.HasPrefix(modelsPath, storagePath) || strings.HasPrefix(storagePath, modelsPath) {
+		t.Fatalf(
+			"workspace models mount %q must not overlap kind storage mount %q",
+			WorkspaceModelsNodeMountPath,
+			kindStorageNodeMountPath,
+		)
+	}
+}

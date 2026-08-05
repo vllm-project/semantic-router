@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -21,9 +22,25 @@ var (
 // ClassificationService provides classification functionality
 type ClassificationService struct {
 	classifier        *classification.Classifier
+	recipeClassifiers *classification.RecipeClassifiers
 	unifiedClassifier *classification.UnifiedClassifier // New unified classifier
 	config            *config.RouterConfig
 	configMutex       sync.RWMutex // Protects config access
+}
+
+// NewRecipeClassificationService creates a model-aware service backed by
+// isolated recipe classifiers. The default classifier remains available for
+// callers that do not provide a routing model.
+func NewRecipeClassificationService(classifiers *classification.RecipeClassifiers, routerConfig *config.RouterConfig) *ClassificationService {
+	var defaultClassifier *classification.Classifier
+	if classifiers != nil {
+		defaultClassifier = classifiers.Default()
+	}
+	return &ClassificationService{
+		classifier:        defaultClassifier,
+		recipeClassifiers: classifiers,
+		config:            routerConfig,
+	}
 }
 
 // NewClassificationService creates a new classification service
@@ -99,7 +116,21 @@ func GetGlobalClassificationService() *ClassificationService {
 
 // HasClassifier returns true if the service has a real classifier (not placeholder)
 func (s *ClassificationService) HasClassifier() bool {
-	return s.classifier != nil
+	return s.classifierSnapshot() != nil
+}
+
+func (s *ClassificationService) classifierSnapshot() *classification.Classifier {
+	classifier, _ := s.runtimeSnapshot()
+	return classifier
+}
+
+func (s *ClassificationService) runtimeSnapshot() (
+	*classification.Classifier,
+	*config.RouterConfig,
+) {
+	s.configMutex.RLock()
+	defer s.configMutex.RUnlock()
+	return s.classifier, s.config
 }
 
 // NewPlaceholderClassificationService creates a placeholder service for API-only mode
@@ -118,9 +149,14 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	if err != nil {
 		return nil, err
 	}
-
+	classifier, runtimeConfig, err := s.runtimeSnapshotForRequestModel(
+		req.Model,
+	)
+	if err != nil {
+		return nil, err
+	}
 	// Check if classifier is available
-	if s.classifier == nil {
+	if classifier == nil {
 		// Return placeholder response
 		processingTime := time.Since(start).Milliseconds()
 		return &IntentResponse{
@@ -137,7 +173,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	// Use signal-driven architecture: evaluate all signals first
 	// Check if we should force evaluate all signals (for eval scenarios)
 	forceEvaluateAll := req.Options != nil && req.Options.EvaluateAllSignals
-	signals := s.classifier.EvaluateAllSignalsWithContext(
+	signals := classifier.EvaluateAllSignalsWithRequestFacts(
 		input.evaluationText,
 		input.contextText,
 		input.currentUserText,
@@ -147,15 +183,16 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		forceEvaluateAll,
 		"",
 		nil,
-		classification.ConversationFacts{},
+		input.conversationFacts,
 		input.imageURL,
+		input.requestFacts,
 	)
 
 	// Evaluate decision with engine (if decisions are configured)
 	// Pass pre-computed signals to avoid re-evaluation
 	var decisionResult *decision.DecisionResult
-	if s.config != nil && len(s.config.Decisions) > 0 {
-		decisionResult, err = s.classifier.EvaluateDecisionWithEngine(signals)
+	if classifier.Config != nil && len(classifier.Config.Decisions) > 0 {
+		decisionResult, err = classifier.EvaluateDecisionWithEngine(signals)
 		if err != nil {
 			// Log error but continue with classification
 			// Note: "no decisions configured" error is expected when decisions list is empty
@@ -165,32 +202,58 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		}
 	}
 
-	// Get category classification (for backward compatibility and when no decision matches)
-	var category string
-	var confidence float64
-	if decisionResult != nil && decisionResult.Decision != nil {
-		// Use decision name as category
-		category = decisionResult.Decision.Name
-		confidence = decisionResult.Confidence
-	} else {
-		// Fallback to traditional classification
-		category, confidence, _, err = s.classifier.ClassifyCategoryWithEntropy(input.evaluationText)
-		if err != nil {
-			// Graceful fallback when classification fails
-			// When domain signal was skipped due to low confidence and no decision matches,
-			// fall back to "other" category instead of returning an error
-			logging.Warnf("Classification fallback failed: %v, using default 'other' category", err)
-			category = "other"
-			confidence = 0.0
-		}
-	}
+	category, confidence := resolveIntentCategory(
+		classifier,
+		decisionResult,
+		input.evaluationText,
+	)
 
 	processingTime := time.Since(start).Milliseconds()
 
 	// Build response from signals and decision
-	response := s.buildIntentResponseFromSignals(signals, decisionResult, category, confidence, processingTime, req)
+	response := s.buildIntentResponseFromSignals(
+		signals,
+		decisionResult,
+		category,
+		confidence,
+		processingTime,
+		req,
+		classifier,
+		runtimeConfig,
+	)
 
 	return response, nil
+}
+
+func (s *ClassificationService) runtimeSnapshotForRequestModel(
+	modelName string,
+) (*classification.Classifier, *config.RouterConfig, error) {
+	s.configMutex.RLock()
+	defer s.configMutex.RUnlock()
+	classifier, err := s.classifierForRequestModel(modelName)
+	return classifier, s.config, err
+}
+
+func (s *ClassificationService) classifierForRequestModel(modelName string) (*classification.Classifier, error) {
+	if s == nil || s.recipeClassifiers == nil || s.config == nil {
+		if s == nil {
+			return nil, nil
+		}
+		return s.classifier, nil
+	}
+	trimmed := strings.TrimSpace(modelName)
+	if trimmed == "" {
+		trimmed = config.DefaultVSRAutoModelName
+	}
+	recipe, ok := s.config.RecipeForRoutingModel(trimmed)
+	if !ok {
+		return nil, fmt.Errorf("%w %q", ErrUnknownRoutingModel, trimmed)
+	}
+	classifier, ok := s.recipeClassifiers.ForRecipe(recipe.Name)
+	if !ok {
+		return nil, fmt.Errorf("classifier for routing recipe %q is unavailable", recipe.Name)
+	}
+	return classifier, nil
 }
 
 // NOTE: ClassifyIntentUnified removed - ClassifyIntent now always uses signal-driven architecture
@@ -198,7 +261,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 
 // GetClassifier returns the classifier instance (for signal-driven methods)
 func (s *ClassificationService) GetClassifier() *classification.Classifier {
-	return s.classifier
+	return s.classifierSnapshot()
 }
 
 // GetConfig returns the current configuration

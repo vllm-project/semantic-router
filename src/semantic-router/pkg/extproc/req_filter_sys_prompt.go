@@ -20,7 +20,7 @@ func (r *OpenAIRouter) addSystemPromptIfConfigured(modifiedBody []byte, category
 		return modifiedBody, nil
 	}
 
-	decision := r.decisionByName(categoryName)
+	decision := ctx.VSRSelectedDecision
 	if decision == nil {
 		return modifiedBody, nil
 	}

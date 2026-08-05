@@ -5,6 +5,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
@@ -161,8 +162,14 @@ func (r *Registry) RefreshRuntimeConfig(newCfg *config.RouterConfig) {
 	if r == nil {
 		return
 	}
-	r.UpdateConfig(newCfg)
 	if service := r.ClassificationService(); service != nil {
-		service.RefreshRuntimeConfig(newCfg)
+		if err := service.TryRefreshRuntimeConfig(newCfg); err != nil {
+			logging.Errorf(
+				"Runtime config refresh rejected; retaining previous registry snapshot: %v",
+				err,
+			)
+			return
+		}
 	}
+	r.UpdateConfig(newCfg)
 }

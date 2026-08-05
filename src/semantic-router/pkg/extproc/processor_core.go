@@ -81,7 +81,8 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 
 	// Initialize request context
 	ctx := &RequestContext{
-		Headers: make(map[string]string),
+		Headers:      make(map[string]string),
+		TraceContext: stream.Context(),
 	}
 
 	for {

@@ -1,12 +1,19 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type KeyboardEventHandler, type Ref } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEventHandler,
+  type Ref,
+} from 'react'
 
 import styles from './ChatComponent.module.css'
 import ChatComposerAddMenu from './ChatComposerAddMenu'
+import ChatComposerModelSelect from './ChatComposerModelSelect'
 import { useSpeechDictation } from '../hooks/useSpeechDictation'
-import {
-  formatPlaygroundFileSize,
-  type PlaygroundAttachment,
-} from './playgroundFileAttachments'
+import type { RouterModelOption } from '../utils/routerModelSelection'
+import { formatPlaygroundFileSize, type PlaygroundAttachment } from './playgroundFileAttachments'
 
 interface ChatComponentInputBarProps {
   attachments: PlaygroundAttachment[]
@@ -18,10 +25,14 @@ interface ChatComponentInputBarProps {
   isLoading: boolean
   isTogglingClawMode: boolean
   modeToggleDisabled: boolean
+  modelOptions: RouterModelOption[]
+  modelSelectDisabled: boolean
+  selectedModel: string
   voiceInputDisabled: boolean
   onAttachFiles: (files: FileList | File[]) => void
   onChangeInput: (value: string) => void
   onKeyDown: KeyboardEventHandler<HTMLTextAreaElement>
+  onModelChange: (model: string) => void
   onRemoveAttachment: (attachmentId: string) => void
   onSend: () => void
   onStop: () => void
@@ -43,10 +54,14 @@ export default function ChatComponentInputBar({
   isLoading,
   isTogglingClawMode,
   modeToggleDisabled,
+  modelOptions,
+  modelSelectDisabled,
+  selectedModel,
   voiceInputDisabled,
   onAttachFiles,
   onChangeInput,
   onKeyDown,
+  onModelChange,
   onRemoveAttachment,
   onSend,
   onStop,
@@ -60,7 +75,12 @@ export default function ChatComponentInputBar({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const canSend = Boolean(inputValue.trim()) || attachments.length > 0
   const [isComposing, setIsComposing] = useState(false)
-  const { isSupported: voiceSupported, isListening, toggleListening, stopListening } = useSpeechDictation(onChangeInput)
+  const {
+    isSupported: voiceSupported,
+    isListening,
+    toggleListening,
+    stopListening,
+  } = useSpeechDictation(onChangeInput)
 
   useEffect(() => {
     if (voiceInputDisabled && isListening) {
@@ -68,33 +88,42 @@ export default function ChatComponentInputBar({
     }
   }, [isListening, stopListening, voiceInputDisabled])
 
-  const handleChangeInput = useCallback((value: string) => {
-    if (isListening) {
-      stopListening()
-    }
-    onChangeInput(value)
-  }, [isListening, onChangeInput, stopListening])
+  const handleChangeInput = useCallback(
+    (value: string) => {
+      if (isListening) {
+        stopListening()
+      }
+      onChangeInput(value)
+    },
+    [isListening, onChangeInput, stopListening],
+  )
 
-  const handleKeyDown = useCallback<KeyboardEventHandler<HTMLTextAreaElement>>((event) => {
-    const nativeEvent = event.nativeEvent as KeyboardEvent & {
-      isComposing?: boolean
-      keyCode?: number
-    }
+  const handleKeyDown = useCallback<KeyboardEventHandler<HTMLTextAreaElement>>(
+    (event) => {
+      const nativeEvent = event.nativeEvent as KeyboardEvent & {
+        isComposing?: boolean
+        keyCode?: number
+      }
 
-    if (nativeEvent.isComposing || isComposing || nativeEvent.keyCode === 229) {
-      return
-    }
+      if (nativeEvent.isComposing || isComposing || nativeEvent.keyCode === 229) {
+        return
+      }
 
-    onKeyDown(event)
-  }, [isComposing, onKeyDown])
+      onKeyDown(event)
+    },
+    [isComposing, onKeyDown],
+  )
 
-  const handleFileInputChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const { files } = event.target
-    if (files && files.length > 0) {
-      onAttachFiles(files)
-    }
-    event.target.value = ''
-  }, [onAttachFiles])
+  const handleFileInputChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const { files } = event.target
+      if (files && files.length > 0) {
+        onAttachFiles(files)
+      }
+      event.target.value = ''
+    },
+    [onAttachFiles],
+  )
 
   const handleAttachClick = useCallback(() => {
     fileInputRef.current?.click()
@@ -105,7 +134,7 @@ export default function ChatComponentInputBar({
       <div className={`${styles.inputWrapper} ${canSend ? styles.hasContent : ''}`}>
         {attachments.length > 0 ? (
           <div className={styles.attachmentList} data-testid="playground-attachment-list">
-            {attachments.map(attachment => (
+            {attachments.map((attachment) => (
               <div
                 key={attachment.id}
                 className={styles.attachmentChip}
@@ -133,7 +162,7 @@ export default function ChatComponentInputBar({
         <textarea
           ref={inputRef}
           value={inputValue}
-          onChange={event => handleChangeInput(event.target.value)}
+          onChange={(event) => handleChangeInput(event.target.value)}
           onCompositionStart={() => setIsComposing(true)}
           onCompositionEnd={() => setIsComposing(false)}
           onKeyDown={handleKeyDown}
@@ -157,18 +186,26 @@ export default function ChatComponentInputBar({
               attachFilesDisabled={attachFilesDisabled || isLoading || isTogglingClawMode}
               clawModeDisabled={modeToggleDisabled}
               clawModeEnabled={enableClawMode}
-              clawRoom={showClawRoom
-                ? {
-                    active: false,
-                    disabled: modeToggleDisabled,
-                    onToggle: onToggleClawRoom,
-                  }
-                : undefined}
+              clawRoom={
+                showClawRoom
+                  ? {
+                      active: false,
+                      disabled: modeToggleDisabled,
+                      onToggle: onToggleClawRoom,
+                    }
+                  : undefined
+              }
               onAttachFiles={handleAttachClick}
               onToggleClawMode={onToggleClawMode}
               onToggleWebSearch={onToggleWebSearch}
               webSearchDisabled={isLoading || isTogglingClawMode}
               webSearchEnabled={enableWebSearch}
+            />
+            <ChatComposerModelSelect
+              disabled={modelSelectDisabled}
+              models={modelOptions}
+              onChange={onModelChange}
+              value={selectedModel}
             />
           </div>
           <div className={styles.composerButtons}>
@@ -194,13 +231,24 @@ export default function ChatComponentInputBar({
                 aria-label={isListening ? 'Stop voice input' : 'Voice input'}
                 aria-pressed={isListening}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                >
                   <path
                     d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path
+                    d="M19 10v2a7 7 0 0 1-14 0v-2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                   <line x1="12" y1="19" x2="12" y2="23" strokeLinecap="round" />
                   <line x1="8" y1="23" x2="16" y2="23" strokeLinecap="round" />
                 </svg>
@@ -213,7 +261,14 @@ export default function ChatComponentInputBar({
               title={sendDisabled ? sendDisabledReason : 'Send message'}
               aria-label="Send message"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
                 <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>

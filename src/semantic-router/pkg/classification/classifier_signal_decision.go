@@ -27,6 +27,15 @@ func (c *Classifier) EvaluateDecisionWithEngineAndTrace(signals *SignalResults) 
 	return c.evaluateDecisionInternal(signals, true, nil)
 }
 
+// EvaluateDecisionWithEngineAndTraceForDecisions evaluates only the supplied
+// decision candidates and returns their trace trees.
+func (c *Classifier) EvaluateDecisionWithEngineAndTraceForDecisions(
+	signals *SignalResults,
+	decisions []config.Decision,
+) (*decision.DecisionResult, []decision.DecisionTrace, error) {
+	return c.evaluateDecisionInternal(signals, true, decisions)
+}
+
 func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool, candidates []config.Decision) (*decision.DecisionResult, []decision.DecisionTrace, error) {
 	decisions := c.Config.Decisions
 	if candidates != nil {
@@ -50,7 +59,7 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		c.Config.Categories,
 		decisions,
 		c.Config.Strategy,
-	)
+	).WithRoutingScope(c.Config.RoutingScope)
 
 	sm := &decision.SignalMatches{
 		KeywordRules:      signals.MatchedKeywordRules,
@@ -72,7 +81,11 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		KBRules:           signals.MatchedKBRules,
 		ConversationRules: signals.MatchedConversationRules,
 		EventRules:        signals.MatchedEventRules,
+		MetadataRules:     signals.MatchedMetadataRules,
+		ClassifierRules:   signals.MatchedClassifierRules,
 		ProjectionRules:   signals.MatchedProjectionRules,
+		SignalValues:      signals.SignalValues,
+		SignalErrors:      signals.SignalErrors,
 	}
 
 	var result *decision.DecisionResult

@@ -38,6 +38,9 @@ func TestGenerateRouterFragmentRoleMappings(t *testing.T) {
 	if fragment.RoleBindings[0].Role != "premium_tier" {
 		t.Fatalf("expected role premium_tier, got %q", fragment.RoleBindings[0].Role)
 	}
+	if fragment.RoleBindings[0].Name != "premium" {
+		t.Fatalf("expected binding name premium, got %q", fragment.RoleBindings[0].Name)
+	}
 	if len(fragment.RoleBindings[1].Subjects) != 2 {
 		t.Fatalf("expected 2 subjects for internal binding, got %d", len(fragment.RoleBindings[1].Subjects))
 	}

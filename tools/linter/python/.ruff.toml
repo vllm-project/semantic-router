@@ -98,6 +98,17 @@ max-nested-blocks = 4
 ]
 "tools/agent/scripts/tuning/scenarios/*.py" = ["PLR2004"]
 "tools/agent/scripts/tuning/tests/*.py" = ["PLC0415", "PLR2004"]
+"tools/mcp-classifier-server/server_*.py" = [
+  "C901",     # JSON-RPC request dispatch is intentionally explicit
+  "N812",     # torch.nn.functional as F is the PyTorch convention
+  "PLC0415",  # aiohttp is an optional dependency used only in HTTP mode
+  "PLR0911",  # protocol dispatch has one response path per JSON-RPC outcome
+  "PLR0912",  # protocol dispatch keeps method/error branches visible
+  "PLR0915",  # standalone server startup wires the complete HTTP transport
+]
+"tools/models/*.py" = [
+  "PLR0915",  # one-shot export/reference generators are linear pipelines
+]
 "src/vllm-sr/tests/*.py" = ["PLR2004"]
 "e2e/testing/anthropic-shim/tests/*.py" = ["PLR2004"]
 "bench/grounded_fusion/test_*.py" = ["PLR2004"]

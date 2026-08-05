@@ -10,6 +10,15 @@ from typing import Any
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+PADDING_PLACEMENTS = frozenset({"before", "after", "around"})
+MAX_PROBE_REPEAT = 10_000
+
+
+@dataclass(frozen=True)
+class ProbePadding:
+    text: str
+    repeat: int
+    placement: str
 
 
 @dataclass
@@ -18,8 +27,16 @@ class Probe:
     variant_id: str
     probe_id: str
     expected_decision: str
+    model: str | None = None
+    expected_recipe: str | None = None
+    expected_algorithm: str | None = None
+    expected_plugins: tuple[str, ...] = ()
+    expected_signals: tuple[tuple[str, str], ...] = ()
     query: str | None = None
+    repeat: int = 1
+    padding: ProbePadding | None = None
     messages: tuple[dict[str, Any], ...] = ()
+    tools: tuple[dict[str, Any], ...] = ()
     expected_alias: str | None = None
     notes: str | None = None
     tags: tuple[str, ...] = ()
@@ -38,10 +55,19 @@ def _load_grouped_probes(raw_decisions: list[Any]) -> list[Probe]:
     probes: list[Probe] = []
     for index, item in enumerate(raw_decisions):
         if not isinstance(item, dict):
-            raise ValueError(f"decision[{index}] must be a mapping")
+            raise TypeError(f"decision[{index}] must be a mapping")
         decision_id = str(item.get("id") or item.get("expected_decision") or "").strip()
         expected = str(item.get("expected_decision") or decision_id).strip()
+        model = str(item.get("model") or "").strip() or None
+        expected_recipe = str(item.get("expected_recipe") or "").strip() or None
+        expected_algorithm = str(item.get("expected_algorithm") or "").strip() or None
+        expected_plugins = _normalize_string_list(
+            item.get("expected_plugins"), "expected_plugins"
+        )
         expected_alias = str(item.get("expected_alias") or "").strip() or None
+        decision_expected_signals = _normalize_expected_signals(
+            item.get("expected_signals"), decision_id
+        )
         decision_notes = str(item.get("notes") or item.get("objective") or "").strip()
         raw_variants = item.get("variants")
         if not decision_id or not expected:
@@ -54,12 +80,17 @@ def _load_grouped_probes(raw_decisions: list[Any]) -> list[Probe]:
             )
         for variant_index, variant in enumerate(raw_variants):
             if not isinstance(variant, dict):
-                raise ValueError(
+                raise TypeError(
                     f"decision[{index}].variants[{variant_index}] must be a mapping"
                 )
             variant_id = str(variant.get("id") or f"v{variant_index + 1}").strip()
             query = str(variant.get("query") or "").strip()
+            repeat = _normalize_repeat(variant.get("repeat"), decision_id, variant_id)
+            padding = _normalize_padding(
+                variant.get("padding"), decision_id, variant_id
+            )
             messages = _normalize_messages(variant.get("messages"))
+            tools = _normalize_objects(variant.get("tools"), "tools")
             if not variant_id or (not query and not messages):
                 raise ValueError(
                     f"decision[{index}].variants[{variant_index}] must include non-empty id and either query or messages"
@@ -70,8 +101,20 @@ def _load_grouped_probes(raw_decisions: list[Any]) -> list[Probe]:
                     variant_id=variant_id,
                     probe_id=f"{decision_id}:{variant_id}",
                     expected_decision=expected,
+                    model=model,
+                    expected_recipe=expected_recipe,
+                    expected_algorithm=expected_algorithm,
+                    expected_plugins=expected_plugins,
+                    expected_signals=_normalize_expected_signals(
+                        variant.get("expected_signals"),
+                        f"{decision_id}:{variant_id}",
+                        default=decision_expected_signals,
+                    ),
                     query=query or None,
+                    repeat=repeat,
+                    padding=padding,
                     messages=messages,
+                    tools=tools,
                     expected_alias=expected_alias,
                     notes=(
                         str(variant.get("notes") or "").strip()
@@ -109,6 +152,9 @@ def summarize_decision_results(
             {
                 "decision_id": decision_id,
                 "expected_decision": variants[0]["expected_decision"],
+                "model": variants[0].get("model"),
+                "expected_recipe": variants[0].get("expected_recipe"),
+                "expected_algorithm": variants[0].get("expected_algorithm"),
                 "expected_alias": variants[0].get("expected_alias"),
                 "matched": matched,
                 "total": total,
@@ -124,9 +170,39 @@ def summarize_decision_results(
                         "variant_id": variant["variant_id"],
                         "matched": variant["matched"],
                         "actual_decision": variant["actual_decision"],
+                        "actual_recipe": variant.get("actual_recipe"),
+                        "actual_algorithm": variant.get("actual_algorithm"),
+                        "error": variant.get("error"),
                         "tags": variant.get("tags") or [],
                     }
                     for variant in variants
+                ],
+            }
+        )
+    return summaries
+
+
+def summarize_tag_results(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Summarize robustness dimensions encoded as stable manifest tags."""
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for result in results:
+        for tag in result.get("tags") or []:
+            grouped[str(tag)].append(result)
+
+    summaries: list[dict[str, Any]] = []
+    for tag in sorted(grouped):
+        variants = grouped[tag]
+        matched = sum(1 for variant in variants if variant["matched"])
+        total = len(variants)
+        summaries.append(
+            {
+                "tag": tag,
+                "matched": matched,
+                "total": total,
+                "pass_rate": round((matched / total) * 100, 1) if total else 0.0,
+                "passed": matched == total,
+                "failing_variants": [
+                    variant["id"] for variant in variants if not variant["matched"]
                 ],
             }
         )
@@ -175,13 +251,95 @@ def _normalize_tags(raw_tags: Any) -> tuple[str, ...]:
     return tuple(normalized)
 
 
+def _normalize_string_list(raw_items: Any, label: str) -> tuple[str, ...]:
+    if raw_items is None:
+        return ()
+    if not isinstance(raw_items, list):
+        raise TypeError(f"{label} must be a list")
+    normalized = tuple(str(item).strip() for item in raw_items if str(item).strip())
+    if len(normalized) != len(set(normalized)):
+        raise ValueError(f"{label} must not contain duplicates")
+    return normalized
+
+
+def _normalize_expected_signals(
+    raw_signals: Any,
+    label: str,
+    *,
+    default: tuple[tuple[str, str], ...] = (),
+) -> tuple[tuple[str, str], ...]:
+    if raw_signals is None:
+        return default
+    if not isinstance(raw_signals, dict):
+        raise TypeError(f"{label} expected_signals must be a mapping")
+
+    normalized: list[tuple[str, str]] = []
+    for signal_type, raw_names in raw_signals.items():
+        normalized_type = str(signal_type).strip()
+        if not normalized_type:
+            raise ValueError(f"{label} expected_signals contains an empty type")
+        names = _normalize_string_list(
+            raw_names, f"{label} expected_signals.{normalized_type}"
+        )
+        if not names:
+            raise ValueError(
+                f"{label} expected_signals.{normalized_type} must not be empty"
+            )
+        normalized.extend((normalized_type, name) for name in names)
+    return tuple(normalized)
+
+
+def _normalize_repeat(raw_repeat: Any, decision_id: str, variant_id: str) -> int:
+    if raw_repeat is None:
+        return 1
+    try:
+        repeat = int(raw_repeat)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{decision_id}:{variant_id} repeat must be an integer"
+        ) from exc
+    if repeat < 1 or repeat > MAX_PROBE_REPEAT:
+        raise ValueError(
+            f"{decision_id}:{variant_id} repeat must be between 1 and {MAX_PROBE_REPEAT}"
+        )
+    return repeat
+
+
+def _normalize_padding(
+    raw_padding: Any, decision_id: str, variant_id: str
+) -> ProbePadding | None:
+    if raw_padding is None:
+        return None
+    if not isinstance(raw_padding, dict):
+        raise TypeError(f"{decision_id}:{variant_id} padding must be a mapping")
+
+    text = str(raw_padding.get("text") or "").strip()
+    if not text:
+        raise ValueError(f"{decision_id}:{variant_id} padding.text is required")
+    repeat = _normalize_repeat(
+        raw_padding.get("repeat"), decision_id, f"{variant_id} padding"
+    )
+    placement = str(raw_padding.get("placement") or "before").strip().lower()
+    if placement not in PADDING_PLACEMENTS:
+        supported = ", ".join(sorted(PADDING_PLACEMENTS))
+        raise ValueError(
+            f"{decision_id}:{variant_id} padding.placement must be one of: {supported}"
+        )
+    return ProbePadding(text=text, repeat=repeat, placement=placement)
+
+
 def _normalize_messages(raw_messages: Any) -> tuple[dict[str, Any], ...]:
-    if not isinstance(raw_messages, list):
+
+    return _normalize_objects(raw_messages, "messages")
+
+
+def _normalize_objects(raw_items: Any, label: str) -> tuple[dict[str, Any], ...]:
+    if not isinstance(raw_items, list):
         return ()
     normalized: list[dict[str, Any]] = []
-    for index, item in enumerate(raw_messages):
+    for index, item in enumerate(raw_items):
         if not isinstance(item, dict):
-            raise ValueError(f"messages[{index}] must be a mapping")
+            raise TypeError(f"{label}[{index}] must be a mapping")
         normalized.append(item)
     return tuple(normalized)
 

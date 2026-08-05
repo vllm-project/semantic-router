@@ -27,8 +27,8 @@ description: Modifies the fleet simulator package, API service, release wiring, 
 ## Must Read
 
 - [src/fleet-sim/AGENTS.md](../../../../src/fleet-sim/AGENTS.md)
-- [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
-- [docs/agent/repo-map.md](../../../../docs/agent/repo-map.md)
+- [tools/agent/docs/change-surfaces.md](../../../../tools/agent/docs/change-surfaces.md)
+- [tools/agent/docs/repo-map.md](../../../../tools/agent/docs/repo-map.md)
 
 ## Standard Commands
 

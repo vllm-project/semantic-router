@@ -120,12 +120,12 @@ test-binding-multimodal: $(if $(CI),rust-ci,rust) ## Run the multimodal model-ga
 
 # Exploratory lane for the #[ignore] Rust multimodal unit tests. Kept OUT of
 # test-binding-multimodal so that target stays a pass/fail receipt: this suite
-# has a known-red baseline (see docs/agent/testing-strategy.md, "Model-Gated
+# has a known-red baseline (see tools/agent/docs/testing-strategy.md, "Model-Gated
 # Multimodal Tests") and is expected to exit non-zero until those pre-existing
 # defects are fixed.
 test-binding-multimodal-rust-baseline: $(if $(CI),rust-ci,rust) ## Run the ignored Rust multimodal unit tests (known-red baseline)
 	@$(LOG_TARGET)
-	@echo "Running ignored Rust multimodal unit tests (known-red baseline; see docs/agent/testing-strategy.md)..."
+	@echo "Running ignored Rust multimodal unit tests (known-red baseline; see tools/agent/docs/testing-strategy.md)..."
 	@cd candle-binding && \
 		MULTIMODAL_MODEL_PATH=$${MULTIMODAL_MODEL_PATH:-$(CURDIR)/models/mom-embedding-multimodal} \
 		cargo test --release --no-default-features --lib multimodal_embedding::integration_tests -- --ignored --test-threads=1

@@ -503,7 +503,7 @@ ENV AI_BINDING=candle
 EXPOSE 50051
 
 # Copy entrypoint which selects binary via AI_BINDING env var
-COPY scripts/entrypoint.sh /app/entrypoint.sh
+COPY tools/docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 ENTRYPOINT ["/app/entrypoint.sh"]

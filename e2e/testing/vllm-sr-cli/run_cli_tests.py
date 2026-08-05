@@ -183,7 +183,12 @@ def check_prerequisites(*, require_runtime_access: bool) -> bool:
     """Check that all prerequisites are met for running CLI tests."""
     print_section_header("Pre-flight Checks")
     container_runtime = detect_container_runtime()
-    all_ok = container_runtime is not None
+    all_ok = container_runtime is not None or not require_runtime_access
+    if container_runtime is None and not require_runtime_access:
+        print(
+            "⚠️  Continuing without a container runtime because integration "
+            "tests are disabled."
+        )
 
     if container_runtime:
         all_ok = (

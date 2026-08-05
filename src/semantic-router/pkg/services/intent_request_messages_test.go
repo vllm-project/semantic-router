@@ -2,6 +2,7 @@ package services
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -55,6 +56,40 @@ func TestIntentRequestResolveSignalInput_UsesMessagesConversationHistory(t *test
 	)
 }
 
+func TestIntentRequestResolveSignalInput_ExtractsConversationAndToolFacts(t *testing.T) {
+	req := IntentRequest{
+		Tools: []json.RawMessage{
+			mustMessageContent(t, map[string]any{"type": "function", "name": "search"}),
+			mustMessageContent(t, map[string]any{"type": "function", "name": "edit"}),
+		},
+		Messages: []IntentMessage{
+			{Role: "developer", Content: mustMessageContent(t, "Use tools when needed.")},
+			{Role: "user", Content: mustMessageContent(t, "Investigate the failure.")},
+			{
+				Role:      "assistant",
+				Content:   mustMessageContent(t, ""),
+				ToolCalls: []json.RawMessage{mustMessageContent(t, map[string]any{"id": "call-1"})},
+			},
+			{Role: "tool", ToolCallID: "call-1", Content: mustMessageContent(t, "failure log")},
+			{Role: "user", Content: mustMessageContent(t, "Now implement the fix.")},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	facts := input.conversationFacts
+	assert.True(t, facts.HasDeveloperMessage)
+	assert.Equal(t, 2, facts.UserMessageCount)
+	assert.Equal(t, 1, facts.AssistantMessageCount)
+	assert.Equal(t, 1, facts.ToolMessageCount)
+	assert.Equal(t, 2, facts.ToolDefinitionCount)
+	assert.Equal(t, 1, facts.AssistantToolCallCount)
+	assert.Equal(t, 1, facts.ToolResultCount)
+	assert.Equal(t, "user", facts.LastMessageRole)
+	assert.True(t, facts.LastUserAfterToolResult)
+}
+
 func TestIntentRequestResolveSignalInput_FallsBackToText(t *testing.T) {
 	req := IntentRequest{Text: "Fallback single-turn request"}
 
@@ -88,6 +123,8 @@ func TestIntentRequestResolveSignalInput_ExtractsImageFromCurrentUserTurn(t *tes
 
 	assert.Equal(t, "What does this screenshot show?", input.evaluationText)
 	assert.Equal(t, dataURI, input.imageURL)
+	assert.Equal(t, 1, input.conversationFacts.ImageContentCount)
+	assert.Equal(t, 1, input.conversationFacts.UserMessageCount)
 }
 
 func TestIntentRequestResolveSignalInput_AcceptsImageOnlyUserTurn(t *testing.T) {
@@ -108,6 +145,7 @@ func TestIntentRequestResolveSignalInput_AcceptsImageOnlyUserTurn(t *testing.T) 
 
 	assert.Empty(t, input.evaluationText)
 	assert.Equal(t, dataURI, input.imageURL)
+	assert.Equal(t, 1, input.conversationFacts.ImageContentCount)
 }
 
 func TestIntentRequestResolveSignalInput_CanonicalizesUppercaseImageURL(t *testing.T) {
@@ -249,6 +287,51 @@ func TestIntentRequestResolveSignalInput_DropsUnsafeImageURL(t *testing.T) {
 
 	assert.Equal(t, "Describe it.", input.evaluationText)
 	assert.Empty(t, input.imageURL, "non-data-URI image references must be rejected to prevent SSRF")
+	assert.Equal(t, 1, input.conversationFacts.ImageContentCount,
+		"image_content is a shape fact and must not depend on URL fetch safety")
+}
+
+func TestIntentRequestResolveSignalInput_AcceptsMetadataOnly(t *testing.T) {
+	req := IntentRequest{Metadata: map[string]string{"cohort": "canary"}}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Empty(t, input.evaluationText)
+	assert.Equal(t, "canary", input.requestFacts.Metadata["cohort"])
+}
+
+func TestIntentRequestResolveSignalInput_PreservesWhitespaceForTextBytes(t *testing.T) {
+	req := IntentRequest{
+		Messages: []IntentMessage{{
+			Role:    "user",
+			Content: mustMessageContent(t, " \t \n"),
+		}},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Empty(t, input.evaluationText)
+	assert.Equal(t, " \t \n", input.currentUserText)
+	assert.Equal(t, 1, input.conversationFacts.UserMessageCount)
+}
+
+func TestIntentRequestResolveSignalInput_PreservesTopLevelWhitespaceForTextBytes(t *testing.T) {
+	input, err := (IntentRequest{Text: " \t \n"}).resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Empty(t, input.evaluationText)
+	assert.Equal(t, " \t \n", input.currentUserText)
+}
+
+func TestIntentRequestResolveSignalInput_RejectsOversizedMetadata(t *testing.T) {
+	req := IntentRequest{
+		Metadata: map[string]string{"cohort": strings.Repeat("x", maxIntentMetadataValueBytes+1)},
+	}
+
+	_, err := req.resolveSignalInput()
+	require.ErrorIs(t, err, ErrInvalidRequestFacts)
 }
 
 func TestClassificationServiceClassifyIntentForEval_AcceptsMessagesWithoutText(t *testing.T) {

@@ -7,15 +7,15 @@ This repository uses an agent harness. Treat reviews and code suggestions as par
 When reviewing or generating changes, follow the repository rule layers in this order:
 
 1. `AGENTS.md`
-2. `docs/agent/README.md`
-3. relevant docs under `docs/agent/*`
+2. `tools/agent/docs/README.md`
+3. relevant docs under `tools/agent/docs/*`
 4. executable rule sources usnder `tools/agent/*`, `tools/make/agent.mk`, and `.github/workflows/*`
 5. nearest local `AGENTS.md` for hotspot directories
 
 Interpret them this way:
 
 - `AGENTS.md` is a short entrypoint, not the full handbook.
-- `docs/agent/*` is the human-readable system of record.
+- `tools/agent/docs/*` is the human-readable system of record.
 - manifests, scripts, Make targets, and CI workflows are the executable rule layer.
 - local `AGENTS.md` files are narrow hotspot supplements, not alternate truth.
 
@@ -35,21 +35,21 @@ Then review the code change itself for bugs, regressions, missing validation, an
 ## Harness-Specific Things to Check
 
 - For harness changes, verify alignment with:
-  - `docs/agent/governance.md`
-  - `docs/agent/testing-strategy.md`
-  - `docs/agent/feature-complete-checklist.md`
-  - `docs/agent/skill-catalog.md`
+  - `tools/agent/docs/governance.md`
+  - `tools/agent/docs/testing-strategy.md`
+  - `tools/agent/docs/feature-complete-checklist.md`
+  - `tools/agent/docs/skill-catalog.md`
   - `tools/agent/repo-manifest.yaml`
   - `tools/agent/task-matrix.yaml`
   - `tools/agent/skill-registry.yaml`
 - For hotspot changes, verify the nearest local `AGENTS.md` was respected.
-- For long-horizon work, verify active loop execution lives under `docs/agent/plans/*.md` instead of ad hoc notes.
-- For durable unresolved code/spec mismatches, verify the gap is promoted to an indexed debt entry under `docs/agent/tech-debt/`.
-- For durable governance or architecture decisions, verify they are recorded in `docs/agent/adr/` when needed.
+- For long-horizon work, verify active loop execution lives under `tools/agent/docs/plans/*.md` instead of ad hoc notes.
+- For durable unresolved code/spec mismatches, verify the gap is promoted to an indexed debt entry under `tools/agent/docs/tech-debt/`.
+- For durable governance or architecture decisions, verify they are recorded in `tools/agent/docs/adr/` when needed.
 
 ## Architecture and Modularity Checks
 
-Review changes against `docs/agent/architecture-guardrails.md` and `docs/agent/module-boundaries.md`.
+Review changes against `tools/agent/docs/architecture-guardrails.md` and `tools/agent/docs/module-boundaries.md`.
 
 Flag issues when a change:
 
@@ -66,7 +66,7 @@ Flag issues when a change:
 
 ## Validation Expectations
 
-Review whether the change matches the repository validation ladder in `docs/agent/testing-strategy.md`.
+Review whether the change matches the repository validation ladder in `tools/agent/docs/testing-strategy.md`.
 
 Flag missing validation when:
 

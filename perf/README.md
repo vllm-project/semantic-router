@@ -2,6 +2,16 @@
 
 This directory contains the performance testing infrastructure for vLLM Semantic Router.
 
+> **Looking for end-to-end benchmarks?** This directory holds **component
+> micro-benchmarks**: Go benchmarks over classification, the decision engine, the
+> cache, the ext_proc hot path, and the Looper. They need no running router and
+> gate every PR.
+>
+> To measure routing *quality* instead — accuracy across reasoning datasets,
+> session-aware routing under load, hallucination detection, or grounded fusion —
+> see [`bench/`](../bench/README.md). For a map of every suite across both
+> layers, see the [Benchmarking guide](https://vllm-sr.ai/docs/benchmarking/overview).
+
 ## Overview
 
 The performance testing framework provides:

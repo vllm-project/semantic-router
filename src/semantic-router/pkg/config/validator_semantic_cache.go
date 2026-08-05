@@ -14,16 +14,26 @@ import "fmt"
 // This mirrors the bound the RAG plugin already enforces
 // (validateRAGSimilarityThreshold).
 func validateSemanticCacheContracts(cfg *RouterConfig) error {
+	if err := validateGlobalSemanticCacheContracts(cfg); err != nil {
+		return err
+	}
+	return validateDecisionSemanticCacheContracts(cfg)
+}
+
+func validateGlobalSemanticCacheContracts(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
+	return validateCacheThreshold(cfg.SemanticCache.SimilarityThreshold, "global semantic_cache")
+}
 
-	if err := validateCacheThreshold(cfg.SemanticCache.SimilarityThreshold, "global semantic_cache"); err != nil {
-		return err
+func validateDecisionSemanticCacheContracts(cfg *RouterConfig) error {
+	if cfg == nil {
+		return nil
 	}
-
-	for i := range cfg.Decisions {
-		decision := &cfg.Decisions[i]
+	decisions := cfg.Decisions
+	for i := range decisions {
+		decision := &decisions[i]
 		pluginCfg := decision.GetSemanticCacheConfig()
 		if pluginCfg == nil {
 			continue

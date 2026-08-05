@@ -25,8 +25,10 @@ func (c *Classifier) buildSignalDispatchers(
 	imgArg string,
 	imgCache *requestImageEmbeddingCache, // may be nil; both image-consuming evaluators handle nil via cache.resolve's nil-receiver fallthrough
 	convFacts ConversationFacts,
+	requestFacts RequestFacts,
+	usedSignals map[string]bool,
 ) []signalDispatch {
-	return []signalDispatch{
+	dispatchers := []signalDispatch{
 		{
 			config.SignalTypeKeyword, "Keyword",
 			func() { c.evaluateKeywordSignal(results, mu, textForSignal(config.SignalTypeKeyword)) },
@@ -58,7 +60,7 @@ func (c *Classifier) buildSignalDispatchers(
 		},
 		{
 			config.SignalTypeReask, "Reask",
-			func() { c.evaluateReaskSignal(results, mu, currentUserText, priorUserMessages) },
+			func() { c.evaluateBoundedReaskSignal(results, mu, currentUserText, priorUserMessages) },
 		},
 		{
 			config.SignalTypePreference, "Preference",
@@ -74,7 +76,14 @@ func (c *Classifier) buildSignalDispatchers(
 		},
 		{
 			config.SignalTypeStructure, "Structure",
-			func() { c.evaluateStructureSignal(results, mu, textForSignal(config.SignalTypeStructure)) },
+			func() {
+				c.evaluateStructureSignal(
+					results,
+					mu,
+					textForSignal(config.SignalTypeStructure),
+					currentUserText,
+				)
+			},
 		},
 		{
 			config.SignalTypeComplexity, "Complexity",
@@ -86,31 +95,42 @@ func (c *Classifier) buildSignalDispatchers(
 			config.SignalTypeModality, "Modality",
 			func() { c.evaluateModalitySignal(results, mu, textForSignal(config.SignalTypeModality)) },
 		},
-		{
-			config.SignalTypeJailbreak, "Jailbreak",
-			func() {
-				c.evaluateJailbreakSignal(results, mu, textForSignal(config.SignalTypeJailbreak), historyForHistoryAwareSignals(priorUserMessages, nonUserMessages))
-			},
-		},
-		{
-			config.SignalTypePII, "PII",
-			func() {
-				c.evaluatePIISignal(results, mu, textForSignal(config.SignalTypePII), historyForHistoryAwareSignals(priorUserMessages, nonUserMessages))
-			},
-		},
-		{
-			config.SignalTypeKB, "KB",
-			func() { c.evaluateKBSignals(results, mu, textForSignal(config.SignalTypeKB)) },
-		},
-		{
-			config.SignalTypeConversation, "Conversation",
-			func() { c.evaluateConversationSignal(results, mu, convFacts) },
-		},
-		{
-			config.SignalTypeEvent, "Event",
-			func() { c.evaluateEventSignal(results, mu, textForSignal(config.SignalTypeEvent)) },
-		},
 	}
+	return append(
+		dispatchers,
+		c.buildPolicySignalDispatchers(
+			results,
+			mu,
+			textForSignal,
+			priorUserMessages,
+			nonUserMessages,
+			convFacts,
+			requestFacts,
+			usedSignals,
+		)...,
+	)
+}
+
+func (c *Classifier) evaluateBoundedReaskSignal(
+	results *SignalResults,
+	mu *sync.Mutex,
+	currentUserText string,
+	priorUserMessages []string,
+) {
+	c.evaluateReaskSignal(
+		results,
+		mu,
+		textForRoutingSignal(config.SignalTypeReask, currentUserText),
+		boundedReaskMessages(priorUserMessages),
+	)
+}
+
+func boundedReaskMessages(messages []string) []string {
+	bounded := make([]string, len(messages))
+	for index, message := range messages {
+		bounded[index] = textForRoutingSignal(config.SignalTypeReask, message)
+	}
+	return bounded
 }
 
 func runSignalDispatchers(dispatchers []signalDispatch, usedSignals map[string]bool, ready map[string]bool, wg *sync.WaitGroup) {

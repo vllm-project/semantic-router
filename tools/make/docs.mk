@@ -78,7 +78,7 @@ docs-crd: install-crd-ref-docs markdown-lint-fix ## Generate CRD API reference d
 	@if [ -d "src/semantic-router/pkg/apis/vllm.ai/v1alpha1" ]; then \
 		crd-ref-docs \
 			--source-path=./src/semantic-router/pkg/apis/vllm.ai/v1alpha1 \
-			--config=.crd-ref-docs.yaml \
+			--config=tools/crd/ref-docs.yaml \
 			--renderer=markdown \
 			--output-path=./website/docs/api/crd-reference.md; \
 		echo "CRD documentation generated at website/docs/api/crd-reference.md"; \

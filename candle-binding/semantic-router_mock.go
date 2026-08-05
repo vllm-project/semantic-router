@@ -301,6 +301,15 @@ func InitClassifier(modelPath string, numClasses int, useCPU bool) error {
 	return ErrBackendUnavailable
 }
 
+// InitGenericClassifier initializes the generic classifier.
+func InitGenericClassifier(
+	modelPath string,
+	numClasses int,
+	useCPU bool,
+) error {
+	return ErrBackendUnavailable
+}
+
 // InitPIIClassifier initializes the PII classifier
 func InitPIIClassifier(modelPath string, numClasses int, useCPU bool) error {
 	return ErrBackendUnavailable
@@ -561,6 +570,7 @@ const (
 	NLIEntailment    NLILabel = 0
 	NLINeutral       NLILabel = 1
 	NLIContradiction NLILabel = 2
+	NLIUnknown       NLILabel = 3
 	NLIError         NLILabel = -1
 )
 
