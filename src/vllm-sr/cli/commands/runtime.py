@@ -21,6 +21,7 @@ from cli.commands.runtime_help import SERVE_HELP
 from cli.commands.runtime_support import (
     append_passthrough_env_vars,
     apply_container_runtime_override,
+    apply_management_api_publish_env,
     apply_runtime_mode_env_vars,
     configure_runtime_override_env_vars,
     log_bootstrap_result,
@@ -89,6 +90,7 @@ def _execute_serve(
     profile: str | None,
     chart_dir: str | None,
     runtime: str | None,
+    publish_management_api: bool = False,
 ) -> None:
     """Bootstrap workspace, resolve config, and delegate to the deployment backend."""
     apply_container_runtime_override(runtime)
@@ -113,6 +115,7 @@ def _execute_serve(
         algorithm,
         log_level=log_level,
     )
+    apply_management_api_publish_env(env_vars, publish_management_api)
 
     effective_config_path = resolve_effective_config_path(
         config_path, algorithm, setup_mode, platform
@@ -245,6 +248,17 @@ def _execute_serve(
     default=None,
     help=RUNTIME_HELP,
 )
+@click.option(
+    "--publish-management-api",
+    is_flag=True,
+    default=False,
+    help=(
+        "Publish the router management API (:8080) to the host. "
+        "Default is off: the listener stays reachable only on the docker "
+        "network (dashboard/envoy). Needed for host curl/eval/rag against "
+        "localhost:8080 (#2463)."
+    ),
+)
 @exit_with_logged_error(log, interrupt_message="\nInterrupted by user")
 def serve(
     config: str,
@@ -265,6 +279,7 @@ def serve(
     profile: str | None,
     chart_dir: str | None,
     runtime: str | None,
+    publish_management_api: bool,
 ) -> None:
     _execute_serve(
         config,
@@ -285,6 +300,7 @@ def serve(
         profile,
         chart_dir,
         runtime,
+        publish_management_api,
     )
 
 

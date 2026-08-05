@@ -56,7 +56,7 @@ spec:
           protocol: TCP
         env:
         - name: TARGET_ROUTER_API_URL
-          value: "http://{{ include "semantic-router.fullname" . }}:{{ .Values.service.api.port }}"
+          value: "http://{{ include "semantic-router.fullname" . }}-management:{{ .Values.service.api.port }}"
         - name: TARGET_ROUTER_METRICS_URL
           value: "http://{{ include "semantic-router.fullname" . }}-metrics:{{ .Values.service.metrics.port }}/metrics"
         {{- if .Values.dashboard.jwtSecret.existingSecret }}

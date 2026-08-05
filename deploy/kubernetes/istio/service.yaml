@@ -12,10 +12,8 @@ spec:
     targetPort: grpc
     protocol: TCP
     name: grpc
-  - port: 8080
-    targetPort: 8080
-    protocol: TCP
-    name: classify-api
+  # Management / classify-api (:8080) is not advertised here by default (#2463).
+  # Apply service-management.yaml for in-cluster or port-forward access.
   selector:
     app: semantic-router
 ---

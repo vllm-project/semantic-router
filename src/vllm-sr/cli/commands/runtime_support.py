@@ -175,6 +175,42 @@ def apply_runtime_mode_env_vars(
         log.info(f"Router log level: {normalized_log_level}")
 
 
+def apply_management_api_publish_env(
+    env_vars: dict[str, str], publish_management_api: bool
+) -> None:
+    """Opt-in host publish of the management API (:8080) for local docker serve.
+
+    Default is off: dashboard and peers still reach the listener on the docker
+    network. Set ``--publish-management-api`` (or
+    ``VLLM_SR_PUBLISH_MANAGEMENT_API=true``) when host tools need
+    ``localhost:8080`` (#2463 Phase 4).
+    """
+    from cli.consts import PUBLISH_MANAGEMENT_API_ENV
+
+    if publish_management_api:
+        env_vars[PUBLISH_MANAGEMENT_API_ENV] = "true"
+        log.info(
+            "Management API host publish: ENABLED (router :8080 mapped to localhost)"
+        )
+        return
+
+    # Preserve an explicit host env opt-in when the CLI flag was not passed.
+    if env_vars.get(PUBLISH_MANAGEMENT_API_ENV):
+        return
+    raw = os.getenv(PUBLISH_MANAGEMENT_API_ENV, "").strip()
+    if raw:
+        env_vars[PUBLISH_MANAGEMENT_API_ENV] = raw
+        log.info(
+            f"Management API host publish: ENABLED via {PUBLISH_MANAGEMENT_API_ENV}={raw}"
+        )
+        return
+
+    log.info(
+        "Management API host publish: disabled "
+        "(use --publish-management-api to expose :8080 on localhost)"
+    )
+
+
 def resolve_effective_config_path(
     config_path: Path, algorithm: str | None, setup_mode: bool, platform: str | None
 ) -> Path:

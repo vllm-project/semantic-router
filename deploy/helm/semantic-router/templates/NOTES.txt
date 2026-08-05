@@ -13,16 +13,27 @@
      NOTE: It may take a few minutes for the LoadBalancer IP to be available.
            You can watch the status of by running 'kubectl get --namespace {{ include "semantic-router.namespace" . }} svc -w {{ include "semantic-router.fullname" . }}'
   export SERVICE_IP=$(kubectl get svc --namespace {{ include "semantic-router.namespace" . }} {{ include "semantic-router.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+{{- $mgmt := .Values.managementApi | default dict }}
+{{- if $mgmt.expose }}
   echo http://$SERVICE_IP:{{ .Values.service.api.port }}
+{{- else }}
+  echo "Primary Service LoadBalancer IP: $SERVICE_IP (gRPC). Management API is on the ClusterIP {{ include "semantic-router.fullname" . }}-management service."
+{{- end }}
 {{- else if contains "ClusterIP" .Values.service.type }}
   export POD_NAME=$(kubectl get pods --namespace {{ include "semantic-router.namespace" . }} -l "app.kubernetes.io/name={{ include "semantic-router.name" . }},app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}")
-  export CONTAINER_PORT=$(kubectl get pod --namespace {{ include "semantic-router.namespace" . }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
-  echo "Visit http://127.0.0.1:8080 to use your application"
-  kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward $POD_NAME 8080:$CONTAINER_PORT
+  echo "Visit http://127.0.0.1:8080 after port-forwarding the management service (see below)"
 {{- end }}
 
-2. Test the Classification API:
-  # Health check
+2. Management API access (#2463):
+{{- $mgmt := .Values.managementApi | default dict }}
+{{- if $mgmt.expose }}
+  # classify-api is also on the primary Service
+  kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward svc/{{ include "semantic-router.fullname" . }} 8080:{{ .Values.service.api.port }}
+{{- else }}
+  # classify-api is omitted from the primary Service by default.
+  # Use the dedicated ClusterIP management Service:
+  kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward svc/{{ include "semantic-router.fullname" . }}-management 8080:{{ .Values.service.api.port }}
+{{- end }}
   curl http://localhost:8080/health
 
   # Intent classification

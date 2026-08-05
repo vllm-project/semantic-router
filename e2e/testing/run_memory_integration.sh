@@ -21,13 +21,33 @@ PID_FILE="${TEST_DIR}/serve.pid"
 SERVE_LOG="${TEST_DIR}/serve.log"
 CONFIG_FILE="${TEST_DIR}/config.yaml"
 KEEP_TEST_DIR="${KEEP_MEMORY_TEST_DIR:-0}"
-ROUTER_API_HEALTH_URL="${ROUTER_API_HEALTH_URL:-http://localhost:8080/ready}"
+ROUTER_API_HEALTH_URL="${ROUTER_API_HEALTH_URL:-}"
 MODEL_DIR="${MEMORY_TEST_MODEL_DIR:-${TEST_DIR}/models}"
 if [[ "${MODEL_DIR}" != /* ]]; then
     MODEL_DIR="${REPO_ROOT}/${MODEL_DIR}"
 fi
 MODEL_MOUNT_DIR="${TEST_DIR}/models"
 USE_DETERMINISTIC_MEMORY_EMBEDDINGS="${USE_DETERMINISTIC_MEMORY_EMBEDDINGS:-0}"
+
+if [[ "${VLLM_SR_STACK_NAME}" == "vllm-sr" ]]; then
+    ROUTER_CONTAINER_NAME="${ROUTER_CONTAINER_NAME:-vllm-sr-router-container}"
+else
+    ROUTER_CONTAINER_NAME="${ROUTER_CONTAINER_NAME:-${VLLM_SR_STACK_NAME}-vllm-sr-router-container}"
+fi
+
+# Prefer docker-exec readiness against the container-local management listener.
+# Host publish of :8080 is opt-in (#2463 Phase 4); do not require localhost:8080.
+router_api_ready() {
+    if [[ -n "${ROUTER_API_HEALTH_URL}" ]]; then
+        local http_code
+        http_code="$(curl -s -o /dev/null -w "%{http_code}" "${ROUTER_API_HEALTH_URL}" 2>/dev/null || echo "000")"
+        [[ "${http_code}" == "200" ]]
+        return
+    fi
+
+    "${CONTAINER_RUNTIME}" exec "${ROUTER_CONTAINER_NAME}" \
+        curl -fsS "http://localhost:8080/ready" >/dev/null 2>&1
+}
 
 VLLM_SR_PID=""
 
@@ -282,8 +302,7 @@ fi
 VLLM_SR_PID="$(cat "${PID_FILE}")"
 
 for _ in $(seq 1 300); do
-    http_code="$(curl -s -o /dev/null -w "%{http_code}" "${ROUTER_API_HEALTH_URL}" 2>/dev/null || echo "000")"
-    if [[ "${http_code}" == "200" ]]; then
+    if router_api_ready; then
         echo "vllm-sr router API ready"
         break
     fi
@@ -297,8 +316,7 @@ for _ in $(seq 1 300); do
     sleep 2
 done
 
-http_code="$(curl -s -o /dev/null -w "%{http_code}" "${ROUTER_API_HEALTH_URL}" 2>/dev/null || echo "000")"
-if [[ "${http_code}" != "200" ]]; then
+if ! router_api_ready; then
     echo "vllm-sr router API did not become healthy"
     cat "${SERVE_LOG}" || true
     exit 1
@@ -307,7 +325,6 @@ fi
 cd "${REPO_ROOT}/e2e/testing"
 PYTHONUNBUFFERED=1 \
 ROUTER_ENDPOINT=http://localhost:8888 \
-ROUTER_HEALTH_ENDPOINT="${ROUTER_API_HEALTH_URL}" \
 MILVUS_ADDRESS=localhost:19530 \
 MILVUS_COLLECTION=memory_test_ci \
 python3 09-memory-features-test.py
