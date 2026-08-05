@@ -44,6 +44,50 @@ func TestRouterLearningRuntimeUpdateOutcomeUsesTargetRefAndTier(t *testing.T) {
 	}
 }
 
+func TestRouterLearningRuntimeExperienceSnapshots(t *testing.T) {
+	rt := newRouterLearningRuntime(nil, nil, nil)
+
+	rt.UpdateOutcome(context.Background(), &routerruntime.RouterOutcome{
+		ReplayID:  "replay-1",
+		Source:    routerruntime.RouterOutcomeSourceAgent,
+		Target:    routerruntime.RouterOutcomeTargetModel,
+		TargetRef: "model-a",
+		Verdict:   routerruntime.RouterOutcomeVerdictGoodFit,
+		Score:     1,
+		Metadata: map[string]string{
+			"decision":      "domain_code",
+			"decision_tier": "4",
+		},
+	})
+
+	snapshots := rt.ExperienceSnapshots()
+	if len(snapshots) != 3 {
+		t.Fatalf("expected exact/tier/global fallback entries, got %d: %#v", len(snapshots), snapshots)
+	}
+
+	var exact *routerruntime.RouterExperienceSnapshot
+	for i := range snapshots {
+		if snapshots[i].Decision == "domain_code" {
+			exact = &snapshots[i]
+		}
+	}
+	if exact == nil {
+		t.Fatalf("expected a snapshot for decision domain_code, got %#v", snapshots)
+	}
+	if exact.SchemaVersion != routerruntime.RouterExperienceSnapshotSchemaVersion {
+		t.Fatalf("unexpected schema version: %d", exact.SchemaVersion)
+	}
+	if exact.Tier != 4 || exact.Model != "model-a" {
+		t.Fatalf("unexpected identity: %#v", exact)
+	}
+	if exact.GoodFitCount != 1 || exact.SampleCount != 1 {
+		t.Fatalf("unexpected evidence: %#v", exact)
+	}
+	if exact.Source != routerruntime.RouterExperienceSourceRuntime {
+		t.Fatalf("unexpected source: %q", exact.Source)
+	}
+}
+
 func TestRouterLearningRuntimeIgnoresNonModelOutcomes(t *testing.T) {
 	rt := newRouterLearningRuntime(nil, nil, nil)
 

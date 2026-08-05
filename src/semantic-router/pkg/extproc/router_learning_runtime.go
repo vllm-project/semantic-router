@@ -17,7 +17,16 @@ type routerLearningRuntime struct {
 	config          *config.RouterConfig
 	replayRecorder  *routerreplay.Recorder
 	replayRecorders map[string]*routerreplay.Recorder
-	experience      map[string]*routerLearningModelExperience
+	experience      map[routerLearningExperienceKey]*routerLearningModelExperience
+}
+
+// routerLearningExperienceKey identifies one decision/tier/model experience
+// context. decision is "_global" when the entry is decision-agnostic, mirroring
+// the existing tier/model fallback in experienceSnapshot.
+type routerLearningExperienceKey struct {
+	decision string
+	tier     int
+	model    string
 }
 
 func (rt *routerLearningRuntime) UpdateOutcome(
@@ -274,7 +283,7 @@ func newRouterLearningRuntime(
 		config:          cfg,
 		replayRecorder:  replayRecorder,
 		replayRecorders: replayRecorders,
-		experience:      map[string]*routerLearningModelExperience{},
+		experience:      map[routerLearningExperienceKey]*routerLearningModelExperience{},
 	}
 }
 
@@ -360,7 +369,7 @@ func (rt *routerLearningRuntime) experienceSnapshot(decisionName string, decisio
 	}
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
-	for _, key := range []string{
+	for _, key := range []routerLearningExperienceKey{
 		modelExperienceKey(decisionName, decisionTier, model),
 		modelExperienceKey("", decisionTier, model),
 		modelExperienceKey("", 0, model),
@@ -379,11 +388,10 @@ func defaultRouterLearningModelExperience() routerLearningModelExperience {
 	}
 }
 
-func modelExperienceKey(decisionName string, decisionTier int, model string) string {
+func modelExperienceKey(decisionName string, decisionTier int, model string) routerLearningExperienceKey {
 	decisionName = strings.TrimSpace(decisionName)
-	model = strings.TrimSpace(model)
 	if decisionName == "" {
 		decisionName = "_global"
 	}
-	return decisionName + "|" + strconv.Itoa(decisionTier) + "|" + model
+	return routerLearningExperienceKey{decision: decisionName, tier: decisionTier, model: strings.TrimSpace(model)}
 }
