@@ -339,7 +339,6 @@ func truncateString(s string, maxBytes int) (string, bool) {
 	return strings.Clone(s[:maxBytes]), true
 }
 
-
 func logSignalFields(signals Signal) map[string]interface{} {
 	return map[string]interface{}{
 		"keyword":       signals.Keyword,
