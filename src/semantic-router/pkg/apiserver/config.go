@@ -28,6 +28,9 @@ type ClassificationAPIServer struct {
 	// its storage contract stable across live config swaps so /ready does not
 	// start reading from a different backend after a successful reload.
 	startupStatusConfig *config.StartupStatusConfig
+	// learningOutcomePolicy gates POST /v1/router/outcomes (idempotency + rate limit).
+	learningOutcomePolicyOnce sync.Once
+	learningOutcomePolicy     *learningOutcomeIngestPolicy
 }
 
 type (
